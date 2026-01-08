@@ -51,12 +51,12 @@ interface CaseStaff {
 // Define which milestones are paired (start/stop)
 const PAIRED_MILESTONES = {
   anesthesia: { start: 'anes_start', end: 'anes_end', displayName: 'Anesthesia' },
-  draping: { start: 'prepped', end: 'incision', displayName: 'Prep & Drape' },
+  draping: { start: 'prepped', end: 'draping_complete', displayName: 'Prep & Drape' },
   closing: { start: 'closing', end: 'closing_complete', displayName: 'Closing' },
 }
 
 // Milestones to skip in the regular list (they're handled as pairs)
-const SKIP_IN_LIST = ['anes_start', 'anes_end', 'prepped', 'closing', 'closing_complete']
+const SKIP_IN_LIST = ['anes_start', 'anes_end', 'prepped', 'draping_complete', 'closing', 'closing_complete']
 
 // Helper to safely get first item from array or object
 function getFirst<T>(data: T[] | T | null | undefined): T | null {
@@ -587,12 +587,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               )
             })()}
 
-            {/* Prep & Drape (Paired: prepped -> incision) */}
+            {/* Prep & Drape (Paired: prepped -> draping_complete) */}
             {(() => {
               const startType = getMilestoneTypeByName('prepped')
-              const endType = getMilestoneTypeByName('incision')
+              const endType = getMilestoneTypeByName('draping_complete')
               const startMilestone = getMilestoneByName('prepped')
-              const endMilestone = getMilestoneByName('incision')
+              const endMilestone = getMilestoneByName('draping_complete')
               if (!startType || !endType) return null
               return (
                 <PairedMilestoneButton
@@ -604,6 +604,23 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   onRecordEnd={() => recordMilestone(endType.id)}
                   onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
                   onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
+                />
+              )
+            })()}
+
+            {/* Incision (Standalone - starts surgical time) */}
+            {(() => {
+              const type = getMilestoneTypeByName('incision')
+              const milestone = getMilestoneByName('incision')
+              if (!type) return null
+              return (
+                <MilestoneButton
+                  key={type.id}
+                  name={type.name}
+                  displayName={type.display_name}
+                  recordedAt={milestone?.recorded_at}
+                  onRecord={() => recordMilestone(type.id)}
+                  onUndo={() => milestone && undoMilestone(milestone.id)}
                 />
               )
             })()}
@@ -631,7 +648,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
             {/* Remaining Single Milestones */}
             {singleMilestones
-              .filter(type => !['patient_in', 'incision'].includes(type.name)) // incision is handled in Prep & Drape
+              .filter(type => !['patient_in', 'incision'].includes(type.name)) // patient_in and incision are rendered explicitly above
               .map(type => {
                 const milestone = caseMilestones.find(m => m.milestone_type_id === type.id)
                 return (
