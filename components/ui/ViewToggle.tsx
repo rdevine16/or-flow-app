@@ -1,9 +1,7 @@
-'use client'
-
 interface ViewOption {
   id: string
   label: string
-  icon: React.ReactNode
+  icon?: React.ReactNode
 }
 
 interface ViewToggleProps {
@@ -19,7 +17,7 @@ export default function ViewToggle({ options, activeView, onChange }: ViewToggle
         <button
           key={option.id}
           onClick={() => onChange(option.id)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
             activeView === option.id
               ? 'bg-white text-slate-900 shadow-sm'
               : 'text-slate-600 hover:text-slate-900'

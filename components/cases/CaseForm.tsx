@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
+import { getLocalDateString } from '../../lib/date-utils'
 
 interface CaseFormProps {
   caseId?: string
@@ -31,7 +32,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
   const [formData, setFormData] = useState<FormData>({
     case_number: '',
-    scheduled_date: new Date().toISOString().split('T')[0],
+    scheduled_date: '',
     start_time: '07:30',
     or_room_id: '',
     procedure_type_id: '',
@@ -48,54 +49,63 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
 
   useEffect(() => {
-    async function fetchOptions() {
-      const facilityId = 'a1111111-1111-1111-1111-111111111111'
+  async function fetchOptions() {
+    const facilityId = 'a1111111-1111-1111-1111-111111111111'
 
-      const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
-        supabase.from('or_rooms').select('id, name').eq('facility_id', facilityId).order('name'),
-        supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).order('name'),
-        supabase.from('case_statuses').select('id, name').order('display_order'),
-        supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', facilityId),
-      ])
+    const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
+      supabase.from('or_rooms').select('id, name').eq('facility_id', facilityId).order('name'),
+      supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).order('name'),
+      supabase.from('case_statuses').select('id, name').order('display_order'),
+      supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', facilityId),
+    ])
 
-      setOrRooms(roomsRes.data || [])
-      setProcedureTypes(proceduresRes.data || [])
-      setStatuses(statusesRes.data || [])
+    setOrRooms(roomsRes.data || [])
+    setProcedureTypes(proceduresRes.data || [])
+    setStatuses(statusesRes.data || [])
 
-      // Get surgeon role ID
-      const { data: surgeonRole } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('name', 'surgeon')
-        .single()
+    // Get surgeon role ID
+    const { data: surgeonRole } = await supabase
+      .from('user_roles')
+      .select('id')
+      .eq('name', 'surgeon')
+      .single()
 
-      // Get anesthesiologist role ID
-      const { data: anesthRole } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('name', 'anesthesiologist')
-        .single()
+    // Get anesthesiologist role ID
+    const { data: anesthRole } = await supabase
+      .from('user_roles')
+      .select('id')
+      .eq('name', 'anesthesiologist')
+      .single()
 
-      if (usersRes.data) {
-        if (surgeonRole) {
-          setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
-        }
-        if (anesthRole) {
-          setAnesthesiologists(usersRes.data.filter(u => u.role_id === anesthRole.id))
-        }
+    if (usersRes.data) {
+      if (surgeonRole) {
+        setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
       }
+      if (anesthRole) {
+        setAnesthesiologists(usersRes.data.filter(u => u.role_id === anesthRole.id))
+      }
+    }
 
-      // Set default status to 'scheduled' for new cases
-      if (mode === 'create' && statusesRes.data) {
+    // Set defaults for new cases
+    if (mode === 'create') {
+      // Set default date using local timezone
+      setFormData(prev => ({
+        ...prev,
+        scheduled_date: getLocalDateString(),
+      }))
+      
+      // Set default status to 'scheduled'
+      if (statusesRes.data) {
         const scheduledStatus = statusesRes.data.find(s => s.name === 'scheduled')
         if (scheduledStatus) {
           setFormData(prev => ({ ...prev, status_id: scheduledStatus.id }))
         }
       }
     }
+  }
 
-    fetchOptions()
-  }, [mode])
+  fetchOptions()
+}, [mode])
 
   useEffect(() => {
     async function fetchCase() {
