@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 
@@ -48,13 +48,69 @@ const navigation = [
   },
 ]
 
+// ORbit Logo - Icon Only (for collapsed sidebar)
+const LogoIcon = () => (
+  <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Core circle */}
+    <circle cx="32" cy="32" r="12" stroke="#3b82f6" strokeWidth="4" fill="none"/>
+    {/* Orbital ring */}
+    <ellipse cx="32" cy="32" rx="22" ry="8" stroke="#60a5fa" strokeWidth="2" fill="none" transform="rotate(-25 32 32)"/>
+    {/* Tracking dot */}
+    <circle cx="50" cy="20" r="5" fill="#10b981"/>
+  </svg>
+)
+
+// ORbit Logo - Full with text (for expanded sidebar)
+const LogoFull = () => (
+  <svg width="110" height="32" viewBox="0 0 220 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Icon part */}
+    <circle cx="32" cy="32" r="12" stroke="#3b82f6" strokeWidth="4" fill="none"/>
+    <ellipse cx="32" cy="32" rx="22" ry="8" stroke="#60a5fa" strokeWidth="2" fill="none" transform="rotate(-25 32 32)"/>
+    <circle cx="50" cy="20" r="5" fill="#10b981"/>
+    {/* Text: "OR" in blue */}
+    <text x="70" y="42" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="700" fill="#3b82f6">OR</text>
+    {/* Text: "bit" in slate */}
+    <text x="113" y="42" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="600" fill="#94a3b8">bit</text>
+  </svg>
+)
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  // Load collapsed state from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebar-collapsed')
+    if (saved !== null) {
+      setCollapsed(JSON.parse(saved))
+    }
+    setMounted(true)
+  }, [])
+
+  // Save collapsed state to localStorage when it changes
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('sidebar-collapsed', JSON.stringify(collapsed))
+    }
+  }, [collapsed, mounted])
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
+  }
+
+  // Prevent flash of wrong state on initial load
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex">
+        <aside className="fixed top-0 left-0 h-full bg-slate-900 w-56 z-40" />
+        <div className="flex-1 ml-56">
+          <header className="h-14 bg-white border-b border-slate-200" />
+          <main className="p-6">{children}</main>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -67,14 +123,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       >
         {/* Logo */}
         <div className={`h-14 flex items-center border-b border-slate-800 ${collapsed ? 'justify-center px-2' : 'px-4'}`}>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            {!collapsed && <span className="font-semibold text-sm">OR Flow</span>}
-          </div>
+          <Link href="/dashboard" className="flex items-center">
+            {collapsed ? <LogoIcon /> : <LogoFull />}
+          </Link>
         </div>
 
         {/* Navigation */}
@@ -160,7 +211,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
             {/* User Menu */}
             <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
-              <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-xs font-medium text-slate-600">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-600">
                 AD
               </div>
               <div className="text-sm">
