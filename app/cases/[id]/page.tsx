@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '../../../lib/supabase'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Badge from '../../../components/ui/Badge'
-import MilestoneButton from '../../../components/ui/MilestoneButton'
+import MilestoneButton, { PairedMilestoneButton } from '../../../components/ui/MilestoneButton'
 import SearchableDropdown from '../../../components/ui/SearchableDropdown'
 import StaffPopover from '../../../components/ui/StaffPopover'
 
@@ -47,6 +47,15 @@ interface CaseStaff {
   users: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
   user_roles: { name: string }[] | { name: string } | null
 }
+
+// Define which milestones are paired (start/stop)
+const PAIRED_MILESTONES = {
+  anesthesia: { start: 'anes_start', end: 'anes_end', displayName: 'Anesthesia' },
+  draping: { start: 'prepped', end: 'incision', displayName: 'Prep & Drape' },
+}
+
+// Milestones to skip in the regular list (they're handled as pairs)
+const SKIP_IN_LIST = ['anes_start', 'anes_end', 'prepped']
 
 export default function CasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -232,10 +241,19 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     setCaseStaff(caseStaff.filter(s => s.id !== staffId))
   }
 
-  const getMilestoneTime = (name: string): string | null => {
+  // Helper to get milestone by name
+  const getMilestoneByName = (name: string) => {
     const type = milestoneTypes.find(m => m.name === name)
     if (!type) return null
-    const milestone = caseMilestones.find(m => m.milestone_type_id === type.id)
+    return caseMilestones.find(m => m.milestone_type_id === type.id)
+  }
+
+  const getMilestoneTypeByName = (name: string) => {
+    return milestoneTypes.find(m => m.name === name)
+  }
+
+  const getMilestoneTime = (name: string): string | null => {
+    const milestone = getMilestoneByName(name)
     return milestone?.recorded_at || null
   }
 
@@ -254,22 +272,22 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   const calculateRunningTime = (startName: string): string => {
-  const startTime = getMilestoneTime(startName)
-  if (!startTime) return '--:--:--'
+    const startTime = getMilestoneTime(startName)
+    if (!startTime) return '--:--:--'
 
-  const diffMs = currentTime - new Date(startTime).getTime()
-  const hours = Math.floor(diffMs / (1000 * 60 * 60))
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
+    const diffMs = currentTime - new Date(startTime).getTime()
+    const hours = Math.floor(diffMs / (1000 * 60 * 60))
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
 
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-}
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
 
-const [currentTime, setCurrentTime] = useState(Date.now())
-useEffect(() => {
-  const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
-  return () => clearInterval(interval)
-}, [])
+  const [currentTime, setCurrentTime] = useState(Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   const totalTime = getMilestoneTime('patient_out')
     ? calculateDuration('patient_in', 'patient_out')
@@ -293,11 +311,14 @@ useEffect(() => {
     }
   }
 
+  // Get milestones for display (excluding paired ones that are handled separately)
+  const singleMilestones = milestoneTypes.filter(m => !SKIP_IN_LIST.includes(m.name))
+
   if (loading) {
     return (
       <DashboardLayout>
         <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-          <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
+          <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
@@ -311,7 +332,7 @@ useEffect(() => {
       <DashboardLayout>
         <div className="h-[calc(100vh-4rem)] flex flex-col items-center justify-center">
           <h2 className="text-xl font-semibold text-slate-900">Case not found</h2>
-          <button onClick={() => router.push('/dashboard')} className="mt-4 text-teal-600 hover:text-teal-700">
+          <button onClick={() => router.push('/dashboard')} className="mt-4 text-blue-600 hover:text-blue-700">
             ← Back to Dashboard
           </button>
         </div>
@@ -319,15 +340,15 @@ useEffect(() => {
     )
   }
 
-const staffForPopover = caseStaff.map(s => {
-  const user = Array.isArray(s.users) ? s.users[0] : s.users
-  const role = Array.isArray(s.user_roles) ? s.user_roles[0] : s.user_roles
-  return {
-    id: s.id,
-    name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-    role: role?.name || 'Staff',
-  }
-})
+  const staffForPopover = caseStaff.map(s => {
+    const user = Array.isArray(s.users) ? s.users[0] : s.users
+    const role = Array.isArray(s.user_roles) ? s.user_roles[0] : s.user_roles
+    return {
+      id: s.id,
+      name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+      role: role?.name || 'Staff',
+    }
+  })
 
   const availableStaffOptions = availableStaff
     .filter(s => !caseStaff.some(cs => cs.user_id === s.id))
@@ -339,7 +360,7 @@ const staffForPopover = caseStaff.map(s => {
 
   return (
     <DashboardLayout>
-      <div className="h-[calc(100vh-4rem)] flex flex-col p-6 overflow-hidden">
+      <div className="h-[calc(100vh-4rem)] flex flex-col p-6 overflow-auto">
         
         {/* Top Bar - Case Info */}
         <div className="flex-shrink-0 mb-6">
@@ -421,47 +442,100 @@ const staffForPopover = caseStaff.map(s => {
             <p className="text-5xl lg:text-6xl font-bold text-white font-mono tracking-wider relative">{totalTime}</p>
             <p className="text-slate-500 text-xs mt-2">Patient In → Patient Out</p>
           </div>
-          <div className="bg-gradient-to-br from-teal-600 via-teal-500 to-cyan-500 rounded-2xl p-6 text-center relative overflow-hidden">
+          <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-sky-500 rounded-2xl p-6 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.1),transparent)]" />
-            <p className="text-teal-100 text-sm font-medium tracking-wider mb-1">SURGICAL TIME</p>
+            <p className="text-blue-100 text-sm font-medium tracking-wider mb-1">SURGICAL TIME</p>
             <p className="text-5xl lg:text-6xl font-bold text-white font-mono tracking-wider relative">{surgicalTime}</p>
-            <p className="text-teal-200 text-xs mt-2">Incision → Closing</p>
+            <p className="text-blue-200 text-xs mt-2">Incision → Closing</p>
           </div>
         </div>
 
-        {/* Milestones - Horizontal Scroll */}
-        <div className="flex-1 bg-white rounded-2xl border border-slate-200 p-6 overflow-hidden flex flex-col min-h-0">
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
-            <h2 className="text-lg font-semibold text-slate-900">Milestones</h2>
-            <span className="text-sm text-slate-400">Scroll to see all →</span>
+        {/* Milestones - Responsive Grid */}
+        <div className="flex-1 bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-slate-900">Case Milestones</h2>
+            <div className="text-sm text-slate-400">
+              {caseMilestones.length} of {milestoneTypes.length} recorded
+            </div>
           </div>
           
-          <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
-            <div className="flex gap-4 h-full min-w-max">
-              {milestoneTypes.map((type, index) => {
+          {/* Responsive Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {/* Patient In */}
+            {(() => {
+              const type = getMilestoneTypeByName('patient_in')
+              const milestone = getMilestoneByName('patient_in')
+              if (!type) return null
+              return (
+                <MilestoneButton
+                  key={type.id}
+                  name={type.name}
+                  displayName={type.display_name}
+                  recordedAt={milestone?.recorded_at}
+                  onRecord={() => recordMilestone(type.id)}
+                  onUndo={() => milestone && undoMilestone(milestone.id)}
+                />
+              )
+            })()}
+
+            {/* Anesthesia (Paired) */}
+            {(() => {
+              const startType = getMilestoneTypeByName('anes_start')
+              const endType = getMilestoneTypeByName('anes_end')
+              const startMilestone = getMilestoneByName('anes_start')
+              const endMilestone = getMilestoneByName('anes_end')
+              if (!startType || !endType) return null
+              return (
+                <PairedMilestoneButton
+                  key="anesthesia"
+                  displayName="Anesthesia"
+                  startRecordedAt={startMilestone?.recorded_at}
+                  endRecordedAt={endMilestone?.recorded_at}
+                  onRecordStart={() => recordMilestone(startType.id)}
+                  onRecordEnd={() => recordMilestone(endType.id)}
+                  onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
+                  onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
+                />
+              )
+            })()}
+
+            {/* Prep & Drape (Paired: prepped -> incision) */}
+            {(() => {
+              const startType = getMilestoneTypeByName('prepped')
+              const endType = getMilestoneTypeByName('incision')
+              const startMilestone = getMilestoneByName('prepped')
+              const endMilestone = getMilestoneByName('incision')
+              if (!startType || !endType) return null
+              return (
+                <PairedMilestoneButton
+                  key="draping"
+                  displayName="Prep & Drape"
+                  startRecordedAt={startMilestone?.recorded_at}
+                  endRecordedAt={endMilestone?.recorded_at}
+                  onRecordStart={() => recordMilestone(startType.id)}
+                  onRecordEnd={() => recordMilestone(endType.id)}
+                  onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
+                  onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
+                />
+              )
+            })()}
+
+            {/* Remaining Single Milestones */}
+            {singleMilestones
+              .filter(type => !['patient_in', 'incision'].includes(type.name)) // incision is handled in Prep & Drape
+              .map(type => {
                 const milestone = caseMilestones.find(m => m.milestone_type_id === type.id)
                 return (
-                  <div key={type.id} className="flex items-center gap-4">
-                    <div className="w-44 flex-shrink-0 h-full">
-                      <MilestoneButton
-                        name={type.name}
-                        displayName={type.display_name}
-                        recordedAt={milestone?.recorded_at}
-                        onRecord={() => recordMilestone(type.id)}
-                        onUndo={() => milestone && undoMilestone(milestone.id)}
-                      />
-                    </div>
-                    {index < milestoneTypes.length - 1 && (
-                      <div className="flex-shrink-0 w-8 flex items-center justify-center">
-                        <svg className="w-6 h-6 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
+                  <MilestoneButton
+                    key={type.id}
+                    name={type.name}
+                    displayName={type.display_name}
+                    recordedAt={milestone?.recorded_at}
+                    onRecord={() => recordMilestone(type.id)}
+                    onUndo={() => milestone && undoMilestone(milestone.id)}
+                  />
                 )
               })}
-            </div>
           </div>
         </div>
       </div>
