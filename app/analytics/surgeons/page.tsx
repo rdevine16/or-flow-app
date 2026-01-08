@@ -275,7 +275,7 @@ export default function SurgeonAnalysisPage() {
                       title="Avg Total Time"
                       value={formatMinutes(metrics.avgTotalTime)}
                       subtitle="Per case"
-                      color="teal"
+                      color="emerald"
                     />
                     <MetricCard
                       title="Avg Surgical Time"

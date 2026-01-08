@@ -16,6 +16,7 @@ interface Case {
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
+  surgeon: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
 }
 
 interface Room {
@@ -73,20 +74,21 @@ export default function DashboardPage() {
 
       setLoading(true)
 
-      const { data: casesData } = await supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          start_time,
-          or_rooms (name),
-          procedure_types (name),
-          case_statuses (name)
-        `)
-        .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
-        .eq('scheduled_date', selectedDate)
-        .order('start_time', { ascending: true, nullsFirst: false })
+const { data: casesData } = await supabase
+  .from('cases')
+  .select(`
+    id,
+    case_number,
+    scheduled_date,
+    start_time,
+    or_rooms (name),
+    procedure_types (name),
+    case_statuses (name),
+    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+  `)
+  .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+  .eq('scheduled_date', selectedDate)
+  .order('start_time', { ascending: true, nullsFirst: false })
 
       const { data: roomsData } = await supabase
         .from('or_rooms')

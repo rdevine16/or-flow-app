@@ -146,7 +146,7 @@ export default function AnalyticsOverviewPage() {
                   title="Avg Total Case Time"
                   value={formatMinutes(avgTotalTime)}
                   subtitle="Patient In → Out"
-                  color="teal"
+                  color="emerald"
                 />
                 <MetricCard
                   title="Avg Surgical Time"

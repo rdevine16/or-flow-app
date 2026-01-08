@@ -90,9 +90,8 @@ export default function ProceduresSettingsPage() {
             <EditableList
               items={procedures}
               onAdd={handleAdd}
-              onEdit={handleEdit}
+              onUpdate={handleEdit}
               onDelete={handleDelete}
-              itemLabel="Procedure"
               placeholder="Enter procedure name (e.g., Total Hip Replacement)"
             />
           )}

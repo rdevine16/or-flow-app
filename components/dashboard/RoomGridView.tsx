@@ -1,4 +1,4 @@
-import Badge from '../ui/Badge'
+'use client'
 
 interface Case {
   id: string
@@ -8,6 +8,7 @@ interface Case {
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
+  surgeon?: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
 }
 
 interface Room {
@@ -20,122 +21,216 @@ interface RoomGridViewProps {
   cases: Case[]
 }
 
-const getValue = <T extends { name: string }>(data: T[] | T | null): string | null => {
+const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
   if (!data) return null
   if (Array.isArray(data)) return data[0]?.name || null
   return data.name
 }
 
-const getStatusVariant = (status: string | null): 'default' | 'success' | 'warning' | 'error' | 'info' => {
+const getSurgeonName = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null | undefined): string | null => {
+  if (!data) return null
+  if (Array.isArray(data)) {
+    const surgeon = data[0]
+    return surgeon ? `Dr. ${surgeon.last_name}` : null
+  }
+  return `Dr. ${data.last_name}`
+}
+
+const formatTime = (time: string | null): string => {
+  if (!time) return ''
+  const [hours, minutes] = time.split(':')
+  const hour = parseInt(hours)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minutes} ${ampm}`
+}
+
+const getStatusColor = (status: string | null): string => {
   switch (status) {
-    case 'completed':
-      return 'success'
     case 'in_progress':
-      return 'warning'
+      return 'bg-amber-500'
+    case 'completed':
+      return 'bg-emerald-500'
     case 'delayed':
-      return 'error'
+      return 'bg-red-500'
     case 'cancelled':
-      return 'error'
+      return 'bg-slate-400'
     case 'scheduled':
+      return 'bg-blue-500'
     default:
-      return 'info'
+      return 'bg-slate-300'
   }
 }
 
-const getRoomStatusColor = (cases: Case[]): string => {
-  const inProgress = cases.find(c => getValue(c.case_statuses) === 'in_progress')
-  if (inProgress) return 'border-amber-400 bg-amber-50'
-
-  const hasScheduled = cases.some(c => getValue(c.case_statuses) === 'scheduled')
-  if (hasScheduled) return 'border-sky-400 bg-sky-50'
-
-  const allCompleted = cases.length > 0 && cases.every(c => getValue(c.case_statuses) === 'completed')
-  if (allCompleted) return 'border-emerald-400 bg-emerald-50'
-
-  return 'border-slate-200 bg-white'
+const getStatusBgColor = (status: string | null): string => {
+  switch (status) {
+    case 'in_progress':
+      return 'bg-amber-50 border-amber-200'
+    case 'completed':
+      return 'bg-emerald-50 border-emerald-200'
+    case 'delayed':
+      return 'bg-red-50 border-red-200'
+    default:
+      return 'bg-white border-slate-200'
+  }
 }
 
 export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
-  const casesByRoom = rooms.map(room => ({
-    room,
-    cases: cases.filter(c => getValue(c.or_rooms) === room.name)
-  }))
+  const getCasesForRoom = (roomName: string) => {
+    return cases
+      .filter(c => getValue(c.or_rooms) === roomName)
+      .sort((a, b) => {
+        if (!a.start_time) return 1
+        if (!b.start_time) return -1
+        return a.start_time.localeCompare(b.start_time)
+      })
+  }
+
+  const getActiveCase = (roomCases: Case[]) => {
+    return roomCases.find(c => getValue(c.case_statuses) === 'in_progress')
+  }
+
+  const getUpNextCases = (roomCases: Case[]) => {
+    return roomCases.filter(c => getValue(c.case_statuses) === 'scheduled').slice(0, 3)
+  }
+
+  const getCompletedCount = (roomCases: Case[]) => {
+    return roomCases.filter(c => getValue(c.case_statuses) === 'completed').length
+  }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {casesByRoom.map(({ room, cases: roomCases }) => {
-        const currentCase = roomCases.find(c => getValue(c.case_statuses) === 'in_progress')
-        const upcomingCases = roomCases.filter(c => getValue(c.case_statuses) === 'scheduled')
-        const completedCases = roomCases.filter(c => getValue(c.case_statuses) === 'completed')
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {rooms.map((room) => {
+        const roomCases = getCasesForRoom(room.name)
+        const activeCase = getActiveCase(roomCases)
+        const upNextCases = getUpNextCases(roomCases)
+        const completedCount = getCompletedCount(roomCases)
+        const totalCases = roomCases.length
 
         return (
           <div
             key={room.id}
-            className={`rounded-xl border-2 p-5 transition-all duration-300 ${getRoomStatusColor(roomCases)}`}
+            className="bg-white rounded-lg border border-slate-200 overflow-hidden"
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  currentCase ? 'bg-amber-400 text-white' : 'bg-slate-200 text-slate-600'
-                }`}>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
+            {/* Room Header */}
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-900">{room.name}</h3>
+              <span className="text-xs text-slate-500">
+                {completedCount}/{totalCases} done
+              </span>
+            </div>
+
+            {/* Room Content */}
+            <div className="p-4 space-y-4">
+              {/* Active Case */}
+              {activeCase ? (
+                <div className={`rounded-lg border p-3 ${getStatusBgColor(getValue(activeCase.case_statuses))}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">Active</span>
+                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(getValue(activeCase.case_statuses))}`} title="In Progress" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <a
+                        href={`/cases/${activeCase.id}`}
+                        className="font-semibold text-slate-900 hover:text-blue-600 transition-colors"
+                      >
+                        {activeCase.case_number}
+                      </a>
+                      <span className="text-xs text-slate-500">{formatTime(activeCase.start_time)}</span>
+                    </div>
+                    <p className="text-sm text-slate-700 truncate">
+                      {getValue(activeCase.procedure_types) || 'No procedure'}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      {getSurgeonName(activeCase.surgeon) || 'No surgeon'}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900">{room.name}</h3>
-              </div>
-              {currentCase && (
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                  <span className="text-xs font-medium text-amber-700">LIVE</span>
-                </span>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 p-3 text-center">
+                  <p className="text-sm text-slate-400">No active case</p>
+                </div>
+              )}
+
+              {/* Up Next */}
+              {upNextCases.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Up Next</p>
+                  <div className="space-y-2">
+                    {upNextCases.map((c) => {
+                      const status = getValue(c.case_statuses)
+                      return (
+                        <div
+                          key={c.id}
+                          className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors group"
+                        >
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getStatusColor(status)}`} title={status || 'Unknown'} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <a
+                                href={`/cases/${c.id}`}
+                                className="text-sm font-medium text-slate-900 hover:text-blue-600 transition-colors truncate"
+                              >
+                                {c.case_number}
+                              </a>
+                              <span className="text-xs text-slate-400 flex-shrink-0">
+                                {formatTime(c.start_time)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-600 truncate">
+                              {getValue(c.procedure_types) || 'No procedure'}
+                            </p>
+                            <p className="text-xs text-slate-400 truncate">
+                              {getSurgeonName(c.surgeon) || 'No surgeon'}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!activeCase && upNextCases.length === 0 && (
+                <div className="text-center py-4">
+                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 12H4" />
+                    </svg>
+                  </div>
+                  <p className="text-sm text-slate-500">No cases scheduled</p>
+                </div>
+              )}
+
+              {/* Completed Summary */}
+              {completedCount > 0 && (
+                <div className="pt-2 border-t border-slate-100">
+                  <p className="text-xs text-slate-400">
+                    {completedCount} case{completedCount !== 1 ? 's' : ''} completed today
+                  </p>
+                </div>
               )}
             </div>
-
-            {currentCase ? (
-              <div className="mb-4 p-3 bg-white rounded-lg border border-amber-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-slate-900">{currentCase.case_number}</span>
-                  <Badge variant="warning" size="sm">In Progress</Badge>
-                </div>
-                <p className="text-sm text-slate-600 line-clamp-1">{getValue(currentCase.procedure_types)}</p>
-              </div>
-            ) : (
-              <div className="mb-4 p-3 bg-slate-100/50 rounded-lg border border-dashed border-slate-300">
-                <p className="text-sm text-slate-500 text-center">No active case</p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="text-center p-2 bg-white/60 rounded-lg">
-                <p className="text-2xl font-bold text-slate-900">{upcomingCases.length}</p>
-                <p className="text-xs text-slate-500">Upcoming</p>
-              </div>
-              <div className="text-center p-2 bg-white/60 rounded-lg">
-                <p className="text-2xl font-bold text-slate-900">{completedCases.length}</p>
-                <p className="text-xs text-slate-500">Completed</p>
-              </div>
-            </div>
-
-            {upcomingCases.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-200/50">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Up Next</p>
-                <div className="space-y-2">
-                  {upcomingCases.slice(0, 2).map((c) => (
-                    <div key={c.id} className="flex items-center justify-between text-sm">
-                      <span className="text-slate-700 truncate">{c.case_number}</span>
-                      <Badge variant="info" size="sm">Scheduled</Badge>
-                    </div>
-                  ))}
-                  {upcomingCases.length > 2 && (
-                    <p className="text-xs text-slate-400">+{upcomingCases.length - 2} more</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         )
       })}
+
+      {/* Empty Rooms State */}
+      {rooms.length === 0 && (
+        <div className="col-span-full text-center py-12">
+          <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <p className="text-sm text-slate-500">No OR rooms configured</p>
+          <a href="/settings/rooms" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+            Add rooms in Settings →
+          </a>
+        </div>
+      )}
     </div>
   )
 }
