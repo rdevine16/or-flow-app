@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { useState, useRef, useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '../../lib/supabase'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -48,70 +49,55 @@ const navigation = [
   },
 ]
 
-// ORbit Logo - Icon Only (for collapsed sidebar)
-const LogoIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    {/* Core circle */}
-    <circle cx="32" cy="32" r="12" stroke="#3b82f6" strokeWidth="4" fill="none"/>
-    {/* Orbital ring */}
-    <ellipse cx="32" cy="32" rx="22" ry="8" stroke="#60a5fa" strokeWidth="2" fill="none" transform="rotate(-25 32 32)"/>
-    {/* Tracking dot */}
-    <circle cx="50" cy="20" r="5" fill="#10b981"/>
-  </svg>
-)
-
-// ORbit Logo - Full with text (for expanded sidebar)
-const LogoFull = () => (
-  <svg width="110" height="32" viewBox="0 0 220 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    {/* Icon part */}
-    <circle cx="32" cy="32" r="12" stroke="#3b82f6" strokeWidth="4" fill="none"/>
-    <ellipse cx="32" cy="32" rx="22" ry="8" stroke="#60a5fa" strokeWidth="2" fill="none" transform="rotate(-25 32 32)"/>
-    <circle cx="50" cy="20" r="5" fill="#10b981"/>
-    {/* Text: "OR" in blue */}
-    <text x="70" y="42" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="700" fill="#3b82f6">OR</text>
-    {/* Text: "bit" in slate */}
-    <text x="113" y="42" fontFamily="system-ui, -apple-system, sans-serif" fontSize="28" fontWeight="600" fill="#94a3b8">bit</text>
-  </svg>
-)
-
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
-  // Start with null so we know when localStorage has been checked
-  const [collapsed, setCollapsed] = useState<boolean | null>(null)
+  const router = useRouter()
+  const supabase = createClient()
+  const [collapsed, setCollapsed] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [userName, setUserName] = useState('User')
+  const [userInitials, setUserInitials] = useState('U')
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  // Load collapsed state from localStorage on mount
+  // Fetch current user info
   useEffect(() => {
-    const saved = localStorage.getItem('sidebar-collapsed')
-    // If there's a saved preference, use it; otherwise default to false (expanded)
-    setCollapsed(saved !== null ? JSON.parse(saved) : false)
+    async function fetchUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single()
+        
+        if (userData) {
+          setUserName(`${userData.first_name} ${userData.last_name}`)
+          setUserInitials(`${userData.first_name[0]}${userData.last_name[0]}`.toUpperCase())
+        }
+      }
+    }
+    fetchUser()
   }, [])
 
-  // Save collapsed state to localStorage when it changes
+  // Close menu when clicking outside
   useEffect(() => {
-    // Only save after initial load (when collapsed is not null)
-    if (collapsed !== null) {
-      localStorage.setItem('sidebar-collapsed', JSON.stringify(collapsed))
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false)
+      }
     }
-  }, [collapsed])
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
-  }
-
-  // Don't render until we've loaded the preference from localStorage
-  // This prevents the flash of wrong state
-  if (collapsed === null) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex">
-        {/* Empty placeholder that matches the layout structure */}
-        <aside className="fixed top-0 left-0 h-full bg-slate-900 w-16 z-40" />
-        <div className="flex-1 ml-16">
-          <header className="h-14 bg-white border-b border-slate-200" />
-          <main className="p-6" />
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -124,9 +110,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       >
         {/* Logo */}
         <div className={`h-14 flex items-center border-b border-slate-800 ${collapsed ? 'justify-center px-2' : 'px-4'}`}>
-          <Link href="/dashboard" className="flex items-center">
-            {collapsed ? <LogoIcon /> : <LogoFull />}
-          </Link>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            {!collapsed && <span className="font-semibold text-sm">OR Flow</span>}
+          </div>
         </div>
 
         {/* Navigation */}
@@ -210,14 +201,59 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
 
-            {/* User Menu */}
-            <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-600">
-                AD
-              </div>
-              <div className="text-sm">
-                <p className="font-medium text-slate-700">Admin</p>
-              </div>
+            {/* User Menu with Dropdown */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="flex items-center gap-2 pl-3 border-l border-slate-200 hover:bg-slate-50 rounded-lg pr-2 py-1 transition-colors"
+              >
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-xs font-medium text-blue-600">
+                  {userInitials}
+                </div>
+                <div className="text-sm text-left">
+                  <p className="font-medium text-slate-700">{userName}</p>
+                </div>
+                <svg 
+                  className={`w-4 h-4 text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {/* Dropdown Menu */}
+              {userMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+                  <div className="px-4 py-2 border-b border-slate-100">
+                    <p className="text-sm font-medium text-slate-900">{userName}</p>
+                    <p className="text-xs text-slate-500">Administrator</p>
+                  </div>
+                  
+                  <Link
+                    href="/settings"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Settings
+                  </Link>
+                  
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>

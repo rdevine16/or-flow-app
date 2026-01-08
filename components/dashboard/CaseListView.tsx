@@ -1,4 +1,5 @@
 import Badge from '../ui/Badge'
+import Link from 'next/link'
 
 interface Case {
   id: string
@@ -8,6 +9,7 @@ interface Case {
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
+  surgeon: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
 }
 
 interface CaseListViewProps {
@@ -51,6 +53,15 @@ const getValue = (data: { name: string }[] | { name: string } | null): string | 
   return data.name
 }
 
+const getSurgeon = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): string | null => {
+  if (!data) return null
+  if (Array.isArray(data)) {
+    const surgeon = data[0]
+    return surgeon ? `Dr. ${surgeon.last_name}` : null
+  }
+  return `Dr. ${data.last_name}`
+}
+
 export default function CaseListView({ cases }: CaseListViewProps) {
   if (cases.length === 0) {
     return (
@@ -71,10 +82,11 @@ export default function CaseListView({ cases }: CaseListViewProps) {
       <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200">
         <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</div>
         <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Case #</div>
-        <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</div>
-        <div className="col-span-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
-        <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</div>
-        <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
+        <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</div>
+        <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
+        <div className="col-span-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
+        <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</div>
+        <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
       </div>
 
       <div className="divide-y divide-slate-100">
@@ -82,38 +94,46 @@ export default function CaseListView({ cases }: CaseListViewProps) {
           const roomName = getValue(caseItem.or_rooms)
           const procedureName = getValue(caseItem.procedure_types)
           const statusName = getValue(caseItem.case_statuses)
+          const surgeonName = getSurgeon(caseItem.surgeon)
           const caseUrl = '/cases/' + caseItem.id
 
           return (
-            <div key={caseItem.id} className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors">
+            <Link 
+              key={caseItem.id} 
+              href={caseUrl}
+              className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors cursor-pointer"
+            >
               <div className="col-span-1">
                 <span className="text-sm font-semibold text-slate-900">{formatTime(caseItem.start_time)}</span>
               </div>
               <div className="col-span-2">
                 <span className="font-semibold text-slate-900">{caseItem.case_number}</span>
               </div>
-              <div className="col-span-2">
+              <div className="col-span-1">
                 <span className="inline-flex items-center gap-1.5 text-slate-600">
                   <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  {roomName || 'Unassigned'}
+                  {roomName || '-'}
                 </span>
               </div>
-              <div className="col-span-4">
-                <span className="text-slate-700">{procedureName || 'Not specified'}</span>
+              <div className="col-span-2">
+                <span className="text-slate-700 font-medium">{surgeonName || 'Unassigned'}</span>
               </div>
-              <div className="col-span-1">
+              <div className="col-span-3">
+                <span className="text-slate-600">{procedureName || 'Not specified'}</span>
+              </div>
+              <div className="col-span-2">
                 <Badge variant={getStatusVariant(statusName || undefined)}>
                   {formatStatus(statusName || undefined)}
                 </Badge>
               </div>
-              <div className="col-span-2 text-right">
-                <a href={caseUrl} className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
-                  View details
-                </a>
+              <div className="col-span-1 text-right">
+                <span className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
+                  View
+                </span>
               </div>
-            </div>
+            </Link>
           )
         })}
       </div>
