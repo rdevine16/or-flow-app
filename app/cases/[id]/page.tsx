@@ -27,18 +27,18 @@ interface CaseData {
   case_number: string
   scheduled_date: string
   notes: string | null
-  or_rooms: { name: string } | null
-  procedure_types: { name: string } | null
-  case_statuses: { id: string; name: string } | null
-  surgeon: { id: string; first_name: string; last_name: string } | null
-  anesthesiologist: { id: string; first_name: string; last_name: string } | null
+  or_rooms: { name: string }[] | null
+  procedure_types: { name: string }[] | null
+  case_statuses: { id: string; name: string }[] | null
+  surgeon: { id: string; first_name: string; last_name: string }[] | null
+  anesthesiologist: { id: string; first_name: string; last_name: string }[] | null
 }
 
 interface User {
   id: string
   first_name: string
   last_name: string
-  user_roles: { name: string } | null
+  user_roles: { name: string }[] | null
 }
 
 interface CaseStaff {
@@ -161,7 +161,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
         if (statusData) {
           await supabase.from('cases').update({ status_id: statusData.id }).eq('id', id)
-          setCaseData(prev => prev ? { ...prev, case_statuses: { id: statusData.id, name: 'in_progress' } } : null)
+          setCaseData(prev => prev ? { ...prev, case_statuses: [{ id: statusData.id, name: 'in_progress' }] } : null)
         }
       }
 
@@ -175,7 +175,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
         if (statusData) {
           await supabase.from('cases').update({ status_id: statusData.id }).eq('id', id)
-          setCaseData(prev => prev ? { ...prev, case_statuses: { id: statusData.id, name: 'completed' } } : null)
+          setCaseData(prev => prev ? { ...prev, case_statuses: [{ id: statusData.id, name: 'completed' }] } : null)
         }
       }
     }
@@ -192,7 +192,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (user) {
       setCaseData(prev => prev ? {
         ...prev,
-        anesthesiologist: { id: user.id, first_name: user.first_name, last_name: user.last_name }
+        anesthesiologist: [{ id: user.id, first_name: user.first_name, last_name: user.last_name }]
       } : null)
     }
   }
@@ -334,7 +334,7 @@ const staffForPopover = caseStaff.map(s => {
     .map(s => ({
       id: s.id,
       label: `${s.first_name} ${s.last_name}`,
-      subtitle: s.user_roles?.name || 'Staff',
+      subtitle: s.user_roles?.[0]?.name || 'Staff',
     }))
 
   return (
@@ -357,12 +357,12 @@ const staffForPopover = caseStaff.map(s => {
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-bold text-slate-900">{caseData.case_number}</h1>
                   <span className="text-slate-300">•</span>
-                  <span className="text-lg text-slate-600">{caseData.procedure_types?.name}</span>
+                  <span className="text-lg text-slate-600">{caseData.procedure_types?.[0]?.name}</span>
                 </div>
               </div>
             </div>
-            <Badge variant={getStatusVariant(caseData.case_statuses?.name)} size="md">
-              {caseData.case_statuses?.name?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Unknown'}
+            <Badge variant={getStatusVariant(caseData.case_statuses?.[0]?.name)} size="md">
+              {caseData.case_statuses?.[0]?.name?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Unknown'}
             </Badge>
           </div>
 
@@ -373,7 +373,7 @@ const staffForPopover = caseStaff.map(s => {
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              <span className="text-sm font-semibold text-slate-700">{caseData.or_rooms?.name || 'No Room'}</span>
+              <span className="text-sm font-semibold text-slate-700">{caseData.or_rooms?.[0]?.name || 'No Room'}</span>
             </div>
 
             {/* Surgeon */}
@@ -384,7 +384,7 @@ const staffForPopover = caseStaff.map(s => {
               <div>
                 <span className="text-xs text-slate-400">Surgeon</span>
                 <p className="text-sm font-semibold text-slate-700">
-                  {caseData.surgeon ? `Dr. ${caseData.surgeon.first_name} ${caseData.surgeon.last_name}` : 'Not assigned'}
+                  {caseData.surgeon?.[0] ? `Dr. ${caseData.surgeon[0].first_name} ${caseData.surgeon[0].last_name}` : 'Not assigned'}
                 </p>
               </div>
             </div>
@@ -393,7 +393,7 @@ const staffForPopover = caseStaff.map(s => {
             <div className="min-w-[200px]">
               <SearchableDropdown
                 placeholder="Select Anesthesiologist"
-                value={caseData.anesthesiologist?.id}
+                value={caseData.anesthesiologist?.[0]?.id}
                 onChange={updateAnesthesiologist}
                 options={anesthesiologists.map(a => ({
                   id: a.id,
