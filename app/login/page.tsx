@@ -4,6 +4,34 @@ import { useState } from 'react'
 import { createClient } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 
+// ORbit Logo - Full with text
+const LogoFull = () => (
+  <svg width="160" height="48" viewBox="0 0 280 75" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Icon part */}
+    <circle cx="38" cy="38" r="14" stroke="#3b82f6" strokeWidth="4" fill="none"/>
+    <ellipse cx="38" cy="38" rx="26" ry="10" stroke="#60a5fa" strokeWidth="2.5" fill="none" transform="rotate(-25 38 38)"/>
+    <circle cx="58" cy="24" r="6" fill="#10b981"/>
+    {/* Text: "OR" in blue */}
+    <text x="85" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="700" fill="#3b82f6">OR</text>
+    {/* Text: "bit" in white */}
+    <text x="138" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="600" fill="#ffffff">bit</text>
+  </svg>
+)
+
+// ORbit Logo - For light backgrounds (mobile)
+const LogoFullDark = () => (
+  <svg width="140" height="42" viewBox="0 0 280 75" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Icon part */}
+    <circle cx="38" cy="38" r="14" stroke="#3b82f6" strokeWidth="4" fill="none"/>
+    <ellipse cx="38" cy="38" rx="26" ry="10" stroke="#60a5fa" strokeWidth="2.5" fill="none" transform="rotate(-25 38 38)"/>
+    <circle cx="58" cy="24" r="6" fill="#10b981"/>
+    {/* Text: "OR" in blue */}
+    <text x="85" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="700" fill="#3b82f6">OR</text>
+    {/* Text: "bit" in slate */}
+    <text x="138" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="600" fill="#64748b">bit</text>
+  </svg>
+)
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -43,27 +71,20 @@ export default function LoginPage() {
           }}
         />
         
-        {/* Accent glow */}
-        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl" />
+        {/* Accent glow - Updated to blue */}
+        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl" />
         
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <span className="text-2xl font-semibold text-white tracking-tight">OR Flow</span>
-            </div>
+            <LogoFull />
           </div>
           
           <div className="space-y-6">
             <h1 className="text-4xl font-light text-white leading-tight">
               Surgical efficiency,<br />
-              <span className="text-teal-400 font-medium">measured and improved.</span>
+              <span className="text-blue-400 font-medium">measured and improved.</span>
             </h1>
             <p className="text-slate-400 text-lg max-w-md leading-relaxed">
               Track every milestone. Identify bottlenecks. Optimize your operating room workflow with precision timing.
@@ -72,15 +93,15 @@ export default function LoginPage() {
           
           <div className="flex items-center gap-8 text-sm text-slate-500">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-teal-500 rounded-full" />
+              <div className="w-2 h-2 bg-blue-500 rounded-full" />
               <span>Real-time tracking</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-teal-500 rounded-full" />
+              <div className="w-2 h-2 bg-blue-500 rounded-full" />
               <span>Efficiency analytics</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-teal-500 rounded-full" />
+              <div className="w-2 h-2 bg-emerald-500 rounded-full" />
               <span>HIPAA compliant</span>
             </div>
           </div>
@@ -91,13 +112,8 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-slate-50">
         <div className="w-full max-w-md">
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-lg flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <span className="text-2xl font-semibold text-slate-900 tracking-tight">OR Flow</span>
+          <div className="lg:hidden flex items-center justify-center mb-12">
+            <LogoFullDark />
           </div>
 
           <div className="mb-10">
@@ -116,7 +132,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                 placeholder="you@hospital.org"
               />
             </div>
@@ -131,7 +147,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all duration-200"
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                 placeholder="••••••••••••"
               />
             </div>
@@ -145,7 +161,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white font-medium rounded-xl hover:from-slate-800 hover:to-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-slate-900/10"
+              className="w-full py-3.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
