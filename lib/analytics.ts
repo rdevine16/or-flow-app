@@ -76,11 +76,29 @@ export function formatMinutes(minutes: number | null): string {
 }
 
 // Format time from timestamp to display time (e.g., "06:06 am")
+// Extracts the time portion directly from the ISO string to avoid timezone conversion issues
 export function formatTimeFromTimestamp(timestamp: string | null): string {
   if (!timestamp) return '--:-- --'
-  const date = new Date(timestamp)
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
+  
+  // Parse the timestamp - if it contains 'T', extract time from ISO format
+  // The database stores times that represent local time, so we extract directly
+  let hours: number
+  let minutes: number
+  
+  if (timestamp.includes('T')) {
+    // ISO format: "2024-01-15T06:22:00.000Z" or "2024-01-15T06:22:00+00:00"
+    const timePart = timestamp.split('T')[1]
+    const timeOnly = timePart.split(/[Z+\-]/)[0] // Remove timezone suffix
+    const [h, m] = timeOnly.split(':')
+    hours = parseInt(h)
+    minutes = parseInt(m)
+  } else {
+    // Fallback to Date parsing for other formats
+    const date = new Date(timestamp)
+    hours = date.getUTCHours()
+    minutes = date.getUTCMinutes()
+  }
+  
   const ampm = hours >= 12 ? 'pm' : 'am'
   const displayHour = hours % 12 || 12
   return `${displayHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`
@@ -192,60 +210,63 @@ export function getMilestoneDuration(
 // ============================================
 
 // Calculate turnover time between consecutive cases in the same room
+// Turnover = patient_out of case N to patient_in of case N+1 (same room, same day)
 export function calculateRoomTurnovers(
-  cases: CaseWithMilestones[],
-  roomId: string
+  cases: CaseWithMilestones[]
 ): number[] {
-  // Get cases for this room, sorted by start time
-  const roomCases = cases
-    .filter(c => {
-      const room = Array.isArray(c.or_rooms) ? c.or_rooms[0] : c.or_rooms
-      return room?.id === roomId
-    })
-    .sort((a, b) => {
+  // Group cases by room AND date
+  const casesByRoomAndDate: { [key: string]: CaseWithMilestones[] } = {}
+  
+  cases.forEach(c => {
+    const room = Array.isArray(c.or_rooms) ? c.or_rooms[0] : c.or_rooms
+    if (!room?.id) return
+    
+    const key = `${room.id}_${c.scheduled_date}`
+    if (!casesByRoomAndDate[key]) {
+      casesByRoomAndDate[key] = []
+    }
+    casesByRoomAndDate[key].push(c)
+  })
+
+  const turnovers: number[] = []
+
+  // For each room+date combination, calculate turnovers between consecutive cases
+  Object.values(casesByRoomAndDate).forEach(roomCases => {
+    // Sort by start time
+    const sortedCases = roomCases.sort((a, b) => {
       const aTime = a.start_time || ''
       const bTime = b.start_time || ''
       return aTime.localeCompare(bTime)
     })
 
-  const turnovers: number[] = []
-
-  for (let i = 0; i < roomCases.length - 1; i++) {
-    const currentCase = roomCases[i]
-    const nextCase = roomCases[i + 1]
-    
-    const currentMilestones = getMilestoneMap(currentCase)
-    const nextMilestones = getMilestoneMap(nextCase)
-    
-    // Turnover = current patient_out -> next patient_in
-    const turnoverTime = calculateDurationMinutes(
-      currentMilestones.patient_out,
-      nextMilestones.patient_in
-    )
-    
-    if (turnoverTime !== null && turnoverTime > 0) {
-      turnovers.push(turnoverTime)
+    // Calculate turnover between consecutive cases
+    for (let i = 0; i < sortedCases.length - 1; i++) {
+      const currentCase = sortedCases[i]
+      const nextCase = sortedCases[i + 1]
+      
+      const currentMilestones = getMilestoneMap(currentCase)
+      const nextMilestones = getMilestoneMap(nextCase)
+      
+      // Turnover = current patient_out -> next patient_in
+      if (currentMilestones.patient_out && nextMilestones.patient_in) {
+        const turnoverTime = calculateDurationMinutes(
+          currentMilestones.patient_out,
+          nextMilestones.patient_in
+        )
+        
+        // Only include reasonable turnover times (between 5 and 120 minutes)
+        // This filters out bad data or cases that aren't truly consecutive
+        if (turnoverTime !== null && turnoverTime >= 5 && turnoverTime <= 120) {
+          turnovers.push(turnoverTime)
+        }
+      }
     }
-  }
+  })
 
   return turnovers
 }
 
-// Get all turnovers for a set of cases across all rooms
+// Get all turnovers for a set of cases (convenience function)
 export function getAllTurnovers(cases: CaseWithMilestones[]): number[] {
-  // Get unique room IDs
-  const roomIds = new Set<string>()
-  cases.forEach(c => {
-    const room = Array.isArray(c.or_rooms) ? c.or_rooms[0] : c.or_rooms
-    if (room?.id) roomIds.add(room.id)
-  })
-
-  // Calculate turnovers for each room and combine
-  const allTurnovers: number[] = []
-  roomIds.forEach(roomId => {
-    const roomTurnovers = calculateRoomTurnovers(cases, roomId)
-    allTurnovers.push(...roomTurnovers)
-  })
-
-  return allTurnovers
+  return calculateRoomTurnovers(cases)
 }
