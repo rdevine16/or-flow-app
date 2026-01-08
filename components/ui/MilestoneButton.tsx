@@ -2,6 +2,12 @@
 
 import { useState, useEffect } from 'react'
 
+// Modern monospace font style
+const monoFontStyle = { 
+  fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', 'Roboto Mono', monospace", 
+  fontVariantNumeric: 'tabular-nums' 
+}
+
 interface MilestoneButtonProps {
   name: string
   displayName: string
@@ -52,7 +58,7 @@ function RunningTimer({ startTime }: { startTime: string }) {
     return () => clearInterval(interval)
   }, [startTime])
 
-  return <span className="font-mono text-amber-600">{elapsed}</span>
+  return <span style={monoFontStyle}>{elapsed}</span>
 }
 
 // Single milestone (non-paired)
@@ -94,7 +100,7 @@ export default function MilestoneButton({
       <div className="flex-1 p-4 flex flex-col items-center justify-center">
         {isRecorded ? (
           <>
-            <div className="text-xl font-bold text-emerald-700 font-mono">
+            <div className="text-xl font-bold text-emerald-700" style={monoFontStyle}>
               {formatTime(recordedAt)}
             </div>
             <button
@@ -218,11 +224,11 @@ export function PairedMilestoneButton({
         {state === 'running' && (
           <>
             <div className="text-xs text-amber-600 mb-1">Started</div>
-            <div className="text-lg font-bold text-amber-700 font-mono mb-2">
+            <div className="text-lg font-bold text-amber-700" style={monoFontStyle}>
               {formatTime(startRecordedAt!)}
             </div>
-            <div className="text-xs text-amber-600 mb-1">Elapsed</div>
-            <div className="text-lg font-bold mb-3">
+            <div className="text-xs text-amber-600 mb-1 mt-2">Elapsed</div>
+            <div className="text-lg font-bold text-amber-600 mb-3">
               <RunningTimer startTime={startRecordedAt!} />
             </div>
             <button
@@ -248,13 +254,13 @@ export function PairedMilestoneButton({
         {state === 'complete' && (
           <>
             <div className="flex items-center gap-2 text-emerald-700 mb-2">
-              <span className="text-lg font-bold font-mono">{formatTime(startRecordedAt!)}</span>
+              <span className="text-lg font-bold" style={monoFontStyle}>{formatTime(startRecordedAt!)}</span>
               <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
               </svg>
-              <span className="text-lg font-bold font-mono">{formatTime(endRecordedAt!)}</span>
+              <span className="text-lg font-bold" style={monoFontStyle}>{formatTime(endRecordedAt!)}</span>
             </div>
-            <div className="text-sm text-emerald-600 font-medium">
+            <div className="text-sm text-emerald-600 font-medium" style={monoFontStyle}>
               {formatDuration(startRecordedAt!, endRecordedAt!)} duration
             </div>
             <button

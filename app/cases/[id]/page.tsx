@@ -27,11 +27,11 @@ interface CaseData {
   case_number: string
   scheduled_date: string
   notes: string | null
-  or_rooms: { name: string }[] | null
-  procedure_types: { name: string }[] | null
-  case_statuses: { id: string; name: string }[] | null
-  surgeon: { id: string; first_name: string; last_name: string }[] | null
-  anesthesiologist: { id: string; first_name: string; last_name: string }[] | null
+  or_rooms: { name: string }[] | { name: string } | null
+  procedure_types: { name: string }[] | { name: string } | null
+  case_statuses: { id: string; name: string }[] | { id: string; name: string } | null
+  surgeon: { id: string; first_name: string; last_name: string }[] | { id: string; first_name: string; last_name: string } | null
+  anesthesiologist: { id: string; first_name: string; last_name: string }[] | { id: string; first_name: string; last_name: string } | null
 }
 
 interface User {
@@ -52,10 +52,18 @@ interface CaseStaff {
 const PAIRED_MILESTONES = {
   anesthesia: { start: 'anes_start', end: 'anes_end', displayName: 'Anesthesia' },
   draping: { start: 'prepped', end: 'incision', displayName: 'Prep & Drape' },
+  closing: { start: 'closing', end: 'closing_complete', displayName: 'Closing' },
 }
 
 // Milestones to skip in the regular list (they're handled as pairs)
-const SKIP_IN_LIST = ['anes_start', 'anes_end', 'prepped']
+const SKIP_IN_LIST = ['anes_start', 'anes_end', 'prepped', 'closing', 'closing_complete']
+
+// Helper to safely get first item from array or object
+function getFirst<T>(data: T[] | T | null | undefined): T | null {
+  if (!data) return null
+  if (Array.isArray(data)) return data[0] || null
+  return data
+}
 
 export default function CasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -69,6 +77,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [availableStaff, setAvailableStaff] = useState<User[]>([])
   const [anesthesiologists, setAnesthesiologists] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [surgeonAverages, setSurgeonAverages] = useState<{ avgTotalTime: number | null; avgSurgicalTime: number | null }>({
+    avgTotalTime: null,
+    avgSurgicalTime: null,
+  })
 
   useEffect(() => {
     async function fetchData() {
@@ -141,6 +153,60 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       setCaseStaff(staffResult as CaseStaff[] || [])
       setAvailableStaff(availableResult as User[] || [])
       setAnesthesiologists(anesthResult as User[] || [])
+
+      // Fetch surgeon's historical averages (last 30 days)
+      const surgeonData = Array.isArray(caseResult?.surgeon) ? caseResult?.surgeon[0] : caseResult?.surgeon
+      if (surgeonData?.id) {
+        const surgeonId = surgeonData.id
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+        const { data: surgeonCases } = await supabase
+          .from('cases')
+          .select(`
+            id,
+            case_milestones (
+              recorded_at,
+              milestone_types (name)
+            )
+          `)
+          .eq('surgeon_id', surgeonId)
+          .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+          .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0])
+
+        if (surgeonCases && surgeonCases.length > 0) {
+          const totalTimes: number[] = []
+          const surgicalTimes: number[] = []
+
+          surgeonCases.forEach((sc) => {
+            const milestones: { [key: string]: string } = {}
+            sc.case_milestones?.forEach((m) => {
+              // Handle both array and object formats for milestone_types
+              const milestoneType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
+              const name = milestoneType?.name
+              if (name) milestones[name] = m.recorded_at
+            })
+
+            // Total time: patient_in -> patient_out
+            if (milestones.patient_in && milestones.patient_out) {
+              const diff = new Date(milestones.patient_out).getTime() - new Date(milestones.patient_in).getTime()
+              totalTimes.push(Math.round(diff / (1000 * 60)))
+            }
+
+            // Surgical time: incision -> closing
+            if (milestones.incision && milestones.closing) {
+              const diff = new Date(milestones.closing).getTime() - new Date(milestones.incision).getTime()
+              surgicalTimes.push(Math.round(diff / (1000 * 60)))
+            }
+          })
+
+          setSurgeonAverages({
+            avgTotalTime: totalTimes.length > 0 ? Math.round(totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length) : null,
+            avgSurgicalTime: surgicalTimes.length > 0 ? Math.round(surgicalTimes.reduce((a, b) => a + b, 0) / surgicalTimes.length) : null,
+          })
+        }
+      }
+
       setLoading(false)
     }
 
@@ -378,12 +444,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-bold text-slate-900">{caseData.case_number}</h1>
                   <span className="text-slate-300">•</span>
-                  <span className="text-lg text-slate-600">{caseData.procedure_types?.[0]?.name}</span>
+                  <span className="text-lg text-slate-600">{getFirst(caseData.procedure_types)?.name}</span>
                 </div>
               </div>
             </div>
-            <Badge variant={getStatusVariant(caseData.case_statuses?.[0]?.name)} size="md">
-              {caseData.case_statuses?.[0]?.name?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Unknown'}
+            <Badge variant={getStatusVariant(getFirst(caseData.case_statuses)?.name)} size="md">
+              {getFirst(caseData.case_statuses)?.name?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Unknown'}
             </Badge>
           </div>
 
@@ -394,7 +460,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              <span className="text-sm font-semibold text-slate-700">{caseData.or_rooms?.[0]?.name || 'No Room'}</span>
+              <span className="text-sm font-semibold text-slate-700">{getFirst(caseData.or_rooms)?.name || 'No Room'}</span>
             </div>
 
             {/* Surgeon */}
@@ -405,7 +471,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               <div>
                 <span className="text-xs text-slate-400">Surgeon</span>
                 <p className="text-sm font-semibold text-slate-700">
-                  {caseData.surgeon?.[0] ? `Dr. ${caseData.surgeon[0].first_name} ${caseData.surgeon[0].last_name}` : 'Not assigned'}
+                  {getFirst(caseData.surgeon) ? `Dr. ${getFirst(caseData.surgeon)!.first_name} ${getFirst(caseData.surgeon)!.last_name}` : 'Not assigned'}
                 </p>
               </div>
             </div>
@@ -414,7 +480,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             <div className="min-w-[200px]">
               <SearchableDropdown
                 placeholder="Select Anesthesiologist"
-                value={caseData.anesthesiologist?.[0]?.id}
+                value={getFirst(caseData.anesthesiologist)?.id}
                 onChange={updateAnesthesiologist}
                 options={anesthesiologists.map(a => ({
                   id: a.id,
@@ -439,14 +505,36 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.05),transparent)]" />
             <p className="text-slate-400 text-sm font-medium tracking-wider mb-1">TOTAL TIME</p>
-            <p className="text-5xl lg:text-6xl font-bold text-white font-mono tracking-wider relative">{totalTime}</p>
+            <p className="text-5xl lg:text-6xl font-bold text-white tracking-tight relative" style={{ fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', 'Roboto Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+              {totalTime}
+            </p>
             <p className="text-slate-500 text-xs mt-2">Patient In → Patient Out</p>
+            {surgeonAverages.avgTotalTime && (
+              <div className="mt-3 pt-3 border-t border-slate-700/50">
+                <p className="text-slate-400 text-xs">
+                  Avg: <span className="text-slate-300 font-medium" style={{ fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
+                    {Math.floor(surgeonAverages.avgTotalTime / 60).toString().padStart(2, '0')}:{(surgeonAverages.avgTotalTime % 60).toString().padStart(2, '0')}:00
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
           <div className="bg-gradient-to-br from-blue-600 via-blue-500 to-sky-500 rounded-2xl p-6 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(255,255,255,0.1),transparent)]" />
             <p className="text-blue-100 text-sm font-medium tracking-wider mb-1">SURGICAL TIME</p>
-            <p className="text-5xl lg:text-6xl font-bold text-white font-mono tracking-wider relative">{surgicalTime}</p>
+            <p className="text-5xl lg:text-6xl font-bold text-white tracking-tight relative" style={{ fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', 'Roboto Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+              {surgicalTime}
+            </p>
             <p className="text-blue-200 text-xs mt-2">Incision → Closing</p>
+            {surgeonAverages.avgSurgicalTime && (
+              <div className="mt-3 pt-3 border-t border-blue-400/30">
+                <p className="text-blue-200 text-xs">
+                  Avg: <span className="text-white font-medium" style={{ fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
+                    {Math.floor(surgeonAverages.avgSurgicalTime / 60).toString().padStart(2, '0')}:{(surgeonAverages.avgSurgicalTime % 60).toString().padStart(2, '0')}:00
+                  </span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -510,6 +598,27 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 <PairedMilestoneButton
                   key="draping"
                   displayName="Prep & Drape"
+                  startRecordedAt={startMilestone?.recorded_at}
+                  endRecordedAt={endMilestone?.recorded_at}
+                  onRecordStart={() => recordMilestone(startType.id)}
+                  onRecordEnd={() => recordMilestone(endType.id)}
+                  onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
+                  onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
+                />
+              )
+            })()}
+
+            {/* Closing (Paired: closing -> closing_complete) */}
+            {(() => {
+              const startType = getMilestoneTypeByName('closing')
+              const endType = getMilestoneTypeByName('closing_complete')
+              const startMilestone = getMilestoneByName('closing')
+              const endMilestone = getMilestoneByName('closing_complete')
+              if (!startType || !endType) return null
+              return (
+                <PairedMilestoneButton
+                  key="closing"
+                  displayName="Closing"
                   startRecordedAt={startMilestone?.recorded_at}
                   endRecordedAt={endMilestone?.recorded_at}
                   onRecordStart={() => recordMilestone(startType.id)}
