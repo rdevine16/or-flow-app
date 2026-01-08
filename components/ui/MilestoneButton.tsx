@@ -24,8 +24,8 @@ interface MilestoneButtonProps {
 
 function formatTime(dateString: string): string {
   const date = new Date(dateString)
-  const hours = date.getUTCHours()
-  const minutes = date.getUTCMinutes()
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
   const ampm = hours >= 12 ? 'PM' : 'AM'
   const displayHour = hours % 12 || 12
   return `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`
