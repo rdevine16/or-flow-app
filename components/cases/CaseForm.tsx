@@ -13,6 +13,7 @@ interface CaseFormProps {
 interface FormData {
   case_number: string
   scheduled_date: string
+  start_time: string
   or_room_id: string
   procedure_type_id: string
   status_id: string
@@ -31,6 +32,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [formData, setFormData] = useState<FormData>({
     case_number: '',
     scheduled_date: new Date().toISOString().split('T')[0],
+    start_time: '07:30',
     or_room_id: '',
     procedure_type_id: '',
     status_id: '',
@@ -39,42 +41,48 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     notes: '',
   })
 
-  // Options for dropdowns
   const [orRooms, setOrRooms] = useState<{ id: string; name: string }[]>([])
   const [procedureTypes, setProcedureTypes] = useState<{ id: string; name: string }[]>([])
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
   const [surgeons, setSurgeons] = useState<{ id: string; first_name: string; last_name: string }[]>([])
   const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
 
-  // Fetch dropdown options
   useEffect(() => {
     async function fetchOptions() {
       const facilityId = 'a1111111-1111-1111-1111-111111111111'
 
-      const [roomsRes, proceduresRes, statusesRes, surgeonsRes, anesthRes] = await Promise.all([
+      const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', facilityId).order('name'),
         supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
         supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', facilityId),
-        supabase.from('user_roles').select('id').eq('name', 'surgeon').single(),
       ])
 
       setOrRooms(roomsRes.data || [])
       setProcedureTypes(proceduresRes.data || [])
       setStatuses(statusesRes.data || [])
 
-      // Filter surgeons
-      if (surgeonsRes.data && anesthRes.data) {
-        const surgeonRoleId = anesthRes.data.id
-        const surgeonsList = surgeonsRes.data.filter(u => u.role_id === surgeonRoleId)
-        setSurgeons(surgeonsList)
-      }
+      // Get surgeon role ID
+      const { data: surgeonRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'surgeon')
+        .single()
 
-      // Get anesthesiologists
-      const { data: anesthRoleData } = await supabase.from('user_roles').select('id').eq('name', 'anesthesiologist').single()
-      if (surgeonsRes.data && anesthRoleData) {
-        const anesthList = surgeonsRes.data.filter(u => u.role_id === anesthRoleData.id)
-        setAnesthesiologists(anesthList)
+      // Get anesthesiologist role ID
+      const { data: anesthRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'anesthesiologist')
+        .single()
+
+      if (usersRes.data) {
+        if (surgeonRole) {
+          setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
+        }
+        if (anesthRole) {
+          setAnesthesiologists(usersRes.data.filter(u => u.role_id === anesthRole.id))
+        }
       }
 
       // Set default status to 'scheduled' for new cases
@@ -89,7 +97,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     fetchOptions()
   }, [mode])
 
-  // Fetch existing case data for edit mode
   useEffect(() => {
     async function fetchCase() {
       if (mode !== 'edit' || !caseId) return
@@ -108,6 +115,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       setFormData({
         case_number: data.case_number || '',
         scheduled_date: data.scheduled_date || '',
+        start_time: data.start_time ? data.start_time.slice(0, 5) : '07:30',
         or_room_id: data.or_room_id || '',
         procedure_type_id: data.procedure_type_id || '',
         status_id: data.status_id || '',
@@ -129,6 +137,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     const caseData = {
       case_number: formData.case_number,
       scheduled_date: formData.scheduled_date,
+      start_time: formData.start_time,
       or_room_id: formData.or_room_id || null,
       procedure_type_id: formData.procedure_type_id || null,
       status_id: formData.status_id,
@@ -174,8 +183,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* Case Number & Date */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Case Number, Date & Start Time */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Case Number <span className="text-red-500">*</span>
@@ -197,6 +206,18 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             type="date"
             value={formData.scheduled_date}
             onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
+            required
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Start Time <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="time"
+            value={formData.start_time}
+            onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
             required
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
           />
@@ -239,17 +260,19 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         />
       </div>
 
-      {/* Status */}
-      <SearchableDropdown
-        label="Status"
-        placeholder="Select Status"
-        value={formData.status_id}
-        onChange={(id) => setFormData({ ...formData, status_id: id })}
-        options={statuses.map(s => ({ 
-          id: s.id, 
-          label: s.name.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) 
-        }))}
-      />
+      {/* Status - Only show in edit mode */}
+      {mode === 'edit' && (
+        <SearchableDropdown
+          label="Status"
+          placeholder="Select Status"
+          value={formData.status_id}
+          onChange={(id) => setFormData({ ...formData, status_id: id })}
+          options={statuses.map(s => ({
+            id: s.id,
+            label: s.name.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())
+          }))}
+        />
+      )}
 
       {/* Notes */}
       <div>

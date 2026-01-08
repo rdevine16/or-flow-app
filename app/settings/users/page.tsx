@@ -1,28 +1,394 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+import { createClient } from '../../../lib/supabase'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
+import SearchableDropdown from '../../../components/ui/SearchableDropdown'
+import Badge from '../../../components/ui/Badge'
+
+interface User {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  role_id: string
+  user_roles: { name: string }[] | { name: string } | null
+}
+
+interface UserRole {
+  id: string
+  name: string
+}
+
+const getRoleName = (userRoles: { name: string }[] | { name: string } | null): string | null => {
+  if (!userRoles) return null
+  if (Array.isArray(userRoles)) return userRoles[0]?.name || null
+  return userRoles.name
+}
 
 export default function UsersSettingsPage() {
+  const supabase = createClient()
+  const [users, setUsers] = useState<User[]>([])
+  const [roles, setRoles] = useState<UserRole[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    role_id: '',
+  })
+
+  const facilityId = 'a1111111-1111-1111-1111-111111111111'
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    setLoading(true)
+
+    const [usersRes, rolesRes] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, first_name, last_name, email, role_id, user_roles (name)')
+        .eq('facility_id', facilityId)
+        .order('last_name'),
+      supabase.from('user_roles').select('id, name').order('name'),
+    ])
+
+    setUsers((usersRes.data as User[]) || [])
+    setRoles(rolesRes.data || [])
+    setLoading(false)
+  }
+
+  const handleAdd = async () => {
+    if (!formData.first_name || !formData.last_name || !formData.email || !formData.role_id) return
+
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        id: crypto.randomUUID(),
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        role_id: formData.role_id,
+        facility_id: facilityId,
+      })
+      .select('id, first_name, last_name, email, role_id, user_roles (name)')
+      .single()
+
+    if (!error && data) {
+      setUsers([...users, data as User].sort((a, b) => a.last_name.localeCompare(b.last_name)))
+      setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
+      setShowAddForm(false)
+    }
+  }
+
+  const handleEdit = async (id: string) => {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        role_id: formData.role_id,
+      })
+      .eq('id', id)
+
+    if (!error) {
+      const role = roles.find(r => r.id === formData.role_id)
+      setUsers(
+        users
+          .map(u => u.id === id ? {
+            ...u,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            email: formData.email,
+            role_id: formData.role_id,
+            user_roles: role ? { name: role.name } : null,
+          } : u)
+          .sort((a, b) => a.last_name.localeCompare(b.last_name))
+      )
+      setEditingId(null)
+      setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase.from('users').delete().eq('id', id)
+
+    if (!error) {
+      setUsers(users.filter(u => u.id !== id))
+      setDeleteConfirm(null)
+    }
+  }
+
+  const startEditing = (user: User) => {
+    setEditingId(user.id)
+    setFormData({
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      role_id: user.role_id,
+    })
+    setShowAddForm(false)
+  }
+
+  const cancelEditing = () => {
+    setEditingId(null)
+    setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
+  }
+
+  const getRoleBadgeVariant = (role: string | null): 'default' | 'success' | 'warning' | 'error' | 'info' => {
+    switch (role) {
+      case 'surgeon': return 'info'
+      case 'anesthesiologist': return 'warning'
+      case 'nurse': return 'success'
+      case 'tech': return 'default'
+      case 'admin': return 'error'
+      default: return 'default'
+    }
+  }
+
   return (
     <DashboardLayout>
       <Container className="py-8">
         <SettingsLayout
           title="Users & Roles"
-          description="Manage staff members and their permissions."
+          description="Manage staff members who can be assigned to surgical cases."
         >
-          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">Coming Soon</h3>
-            <p className="text-slate-500 max-w-sm mx-auto">
-              User management will allow you to add, edit, and manage staff members and their roles.
-            </p>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              {!showAddForm ? (
+                <button
+                  onClick={() => {
+                    setShowAddForm(true)
+                    setEditingId(null)
+                    setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
+                  }}
+                  className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-teal-500 hover:text-teal-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add New User
+                </button>
+              ) : (
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <input
+                      type="text"
+                      value={formData.first_name}
+                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                      placeholder="First Name"
+                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    />
+                    <input
+                      type="text"
+                      value={formData.last_name}
+                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                      placeholder="Last Name"
+                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="Email"
+                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                    />
+                    <SearchableDropdown
+                      placeholder="Select Role"
+                      value={formData.role_id}
+                      onChange={(id) => setFormData({ ...formData, role_id: id })}
+                      options={roles.map(r => ({
+                        id: r.id,
+                        label: r.name.charAt(0).toUpperCase() + r.name.slice(1),
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setShowAddForm(false)
+                        setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
+                      }}
+                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAdd}
+                      disabled={!formData.first_name || !formData.last_name || !formData.email || !formData.role_id}
+                      className="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
+                    >
+                      Add User
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {users.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-xl border border-slate-200">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-500 text-sm">No users yet</p>
+                  <p className="text-slate-400 text-xs mt-1">Add surgeons, nurses, and staff above</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                  {users.map((user) => {
+                    const roleName = getRoleName(user.user_roles)
+
+                    return (
+                      <div key={user.id} className="p-4 hover:bg-slate-50 transition-colors group">
+                        {editingId === user.id ? (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <input
+                                type="text"
+                                value={formData.first_name}
+                                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                                placeholder="First Name"
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                              />
+                              <input
+                                type="text"
+                                value={formData.last_name}
+                                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                                placeholder="Last Name"
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <input
+                                type="email"
+                                value={formData.email}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                placeholder="Email"
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                              />
+                              <SearchableDropdown
+                                placeholder="Select Role"
+                                value={formData.role_id}
+                                onChange={(id) => setFormData({ ...formData, role_id: id })}
+                                options={roles.map(r => ({
+                                  id: r.id,
+                                  label: r.name.charAt(0).toUpperCase() + r.name.slice(1),
+                                }))}
+                              />
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={cancelEditing}
+                                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleEdit(user.id)}
+                                className="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                              >
+                                Save Changes
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center text-sm font-semibold text-slate-600">
+                                {user.first_name[0]}{user.last_name[0]}
+                              </div>
+                              <div>
+                                <p className="font-medium text-slate-900">
+                                  {roleName === 'surgeon' || roleName === 'anesthesiologist'
+                                    ? `Dr. ${user.first_name} ${user.last_name}`
+                                    : `${user.first_name} ${user.last_name}`
+                                  }
+                                </p>
+                                <p className="text-sm text-slate-500">{user.email}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
+                                {roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : 'Unknown'}
+                              </Badge>
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {deleteConfirm === user.id ? (
+                                  <>
+                                    <span className="text-xs text-slate-500 mr-2">Delete?</span>
+                                    <button
+                                      onClick={() => handleDelete(user.id)}
+                                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => setDeleteConfirm(null)}
+                                      className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => startEditing(user)}
+                                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => setDeleteConfirm(user.id)}
+                                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {users.length > 0 && (
+                <p className="text-sm text-slate-400">
+                  {users.length} user{users.length !== 1 ? 's' : ''} total
+                </p>
+              )}
+            </div>
+          )}
         </SettingsLayout>
       </Container>
     </DashboardLayout>

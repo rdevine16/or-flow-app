@@ -12,9 +12,10 @@ interface Case {
   id: string
   case_number: string
   scheduled_date: string
-  or_rooms: { name: string } | null
-  procedure_types: { name: string } | null
-  case_statuses: { name: string } | null
+  start_time: string | null
+  or_rooms: { name: string }[] | { name: string } | null
+  procedure_types: { name: string }[] | { name: string } | null
+  case_statuses: { name: string }[] | { name: string } | null
 }
 
 interface Room {
@@ -43,74 +44,87 @@ const viewOptions = [
   },
 ]
 
+const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
+  if (!data) return null
+  if (Array.isArray(data)) return data[0]?.name || null
+  return data.name
+}
+
 export default function DashboardPage() {
   const [activeView, setActiveView] = useState('cases')
   const [cases, setCases] = useState<Case[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
+  const [formattedDate, setFormattedDate] = useState('')
+  const [todayISO, setTodayISO] = useState('')
   const supabase = createClient()
 
   useEffect(() => {
+    // Set date on client side only to avoid hydration mismatch
+    const today = new Date()
+    setFormattedDate(today.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    }))
+    setTodayISO(today.toISOString().split('T')[0])
+  }, [])
+
+  useEffect(() => {
     async function fetchData() {
+      if (!todayISO) return
+      
       setLoading(true)
 
-      // Fetch today's cases
-      const today = new Date().toISOString().split('T')[0]
       const { data: casesData } = await supabase
         .from('cases')
         .select(`
           id,
           case_number,
           scheduled_date,
+          start_time,
           or_rooms (name),
           procedure_types (name),
           case_statuses (name)
         `)
         .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
-        .eq('scheduled_date', today)
-        .order('case_number')
+        .eq('scheduled_date', todayISO)
+        .order('start_time', { ascending: true, nullsFirst: false })
 
-      // Fetch rooms
       const { data: roomsData } = await supabase
         .from('or_rooms')
         .select('id, name')
         .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
         .order('name')
 
-      setCases(casesData || [])
+      setCases((casesData as Case[]) || [])
       setRooms(roomsData || [])
       setLoading(false)
     }
 
     fetchData()
-  }, [])
+  }, [todayISO])
 
-  // Get today's date formatted nicely
-  const today = new Date()
-  const formattedDate = today.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  const getStatusCount = (statusName: string) => {
+    return cases.filter(c => getValue(c.case_statuses) === statusName).length
+  }
 
   return (
     <DashboardLayout>
       <Container className="py-8">
-        {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">Today's Schedule</h1>
-            <p className="text-slate-500 mt-1">{formattedDate}</p>
+            <h1 className="text-2xl font-semibold text-slate-900">Today&apos;s Schedule</h1>
+            <p className="text-slate-500 mt-1">{formattedDate || 'Loading...'}</p>
           </div>
-          <ViewToggle 
-            options={viewOptions} 
-            activeView={activeView} 
-            onChange={setActiveView} 
+          <ViewToggle
+            options={viewOptions}
+            activeView={activeView}
+            onChange={setActiveView}
           />
         </div>
 
-        {/* Stats Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-sm text-slate-500 mb-1">Total Cases</p>
@@ -118,25 +132,18 @@ export default function DashboardPage() {
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-sm text-slate-500 mb-1">In Progress</p>
-            <p className="text-2xl font-bold text-amber-600">
-              {cases.filter(c => c.case_statuses?.name === 'in_progress').length}
-            </p>
+            <p className="text-2xl font-bold text-amber-600">{getStatusCount('in_progress')}</p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-sm text-slate-500 mb-1">Completed</p>
-            <p className="text-2xl font-bold text-emerald-600">
-              {cases.filter(c => c.case_statuses?.name === 'completed').length}
-            </p>
+            <p className="text-2xl font-bold text-emerald-600">{getStatusCount('completed')}</p>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-sm text-slate-500 mb-1">Scheduled</p>
-            <p className="text-2xl font-bold text-sky-600">
-              {cases.filter(c => c.case_statuses?.name === 'scheduled').length}
-            </p>
+            <p className="text-2xl font-bold text-sky-600">{getStatusCount('scheduled')}</p>
           </div>
         </div>
 
-        {/* Loading State */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
@@ -146,10 +153,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
-            {/* Case List View */}
             {activeView === 'cases' && <CaseListView cases={cases} />}
-
-            {/* Room Grid View */}
             {activeView === 'rooms' && <RoomGridView rooms={rooms} cases={cases} />}
           </>
         )}
