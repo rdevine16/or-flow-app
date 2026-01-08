@@ -1,39 +1,26 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '../../../lib/supabase'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
-import DateFilter from '../../../components/ui/DateFilter'
-import MetricCard from '../../../components/ui/MetricCard'
 import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
 import {
   getMilestoneMap,
-  getTotalCaseTime,
+  getTotalORTime,
   getSurgicalTime,
-  getPreOpTime,
-  getAnesthesiaTime,
+  getWheelsInToIncision,
+  getIncisionToClosing,
   getClosingTime,
+  getClosedToWheelsOut,
   calculateAverage,
-  calculateStdDev,
-  formatMinutes,
+  calculateSum,
+  calculatePercentageChange,
+  formatMinutesToHHMMSS,
+  formatTimeFromTimestamp,
+  getAllTurnovers,
   CaseWithMilestones,
 } from '../../../lib/analytics'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-} from 'recharts'
 
 interface Surgeon {
   id: string
@@ -41,405 +28,739 @@ interface Surgeon {
   last_name: string
 }
 
+interface ProcedureType {
+  id: string
+  name: string
+}
+
+// Helper to get today's date in YYYY-MM-DD format
+function getLocalDateString(date?: Date): string {
+  const d = date || new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// Format date for display
+function formatDateDisplay(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { 
+    month: 'numeric', 
+    day: 'numeric', 
+    year: 'numeric' 
+  })
+}
+
 export default function SurgeonAnalysisPage() {
   const supabase = createClient()
-  const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dateFilter, setDateFilter] = useState('month')
+  const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString())
+  const [selectedProcedureFilter, setSelectedProcedureFilter] = useState<string>('all')
+  
+  // Cases for different time periods
+  const [dayCases, setDayCases] = useState<CaseWithMilestones[]>([])
+  const [last30DaysCases, setLast30DaysCases] = useState<CaseWithMilestones[]>([])
+  const [allTimeCases, setAllTimeCases] = useState<CaseWithMilestones[]>([])
+  
+  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
 
   const facilityId = 'a1111111-1111-1111-1111-111111111111'
 
-  const fetchData = async (startDate?: string, endDate?: string) => {
-    setLoading(true)
-
-    let query = supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        scheduled_date,
-        start_time,
-        surgeon_id,
-        surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-        procedure_types (id, name),
-        or_rooms (name),
-        case_milestones (
-          milestone_type_id,
-          recorded_at,
-          milestone_types (name)
-        )
-      `)
-      .eq('facility_id', facilityId)
-      .order('scheduled_date', { ascending: false })
-
-    if (startDate && endDate) {
-      query = query.gte('scheduled_date', startDate).lte('scheduled_date', endDate)
-    }
-
-    const { data: casesData } = await query
-
-    const { data: surgeonsData } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, role_id')
-      .eq('facility_id', facilityId)
-
-    const { data: surgeonRole } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('name', 'surgeon')
-      .single()
-
-    setCases((casesData as unknown as CaseWithMilestones[]) || [])
-    setSurgeons(
-      (surgeonsData?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || []
-    )
-    setLoading(false)
-  }
-
+  // Fetch surgeons on mount
   useEffect(() => {
-    const today = new Date()
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
+    async function fetchSurgeons() {
+      const { data: surgeonRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'surgeon')
+        .single()
+
+      const { data: surgeonsData } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, role_id')
+        .eq('facility_id', facilityId)
+
+      const { data: proceduresData } = await supabase
+        .from('procedure_types')
+        .select('id, name')
+        .eq('facility_id', facilityId)
+        .order('name')
+
+      setSurgeons(
+        (surgeonsData?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || []
+      )
+      setProcedures(proceduresData || [])
+      setInitialLoading(false)
+    }
+    fetchSurgeons()
   }, [])
 
-  const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
-    setDateFilter(filter)
-    fetchData(startDate, endDate)
-  }
+  // Fetch cases when surgeon or date changes
+  useEffect(() => {
+    if (!selectedSurgeon) {
+      setDayCases([])
+      setLast30DaysCases([])
+      setAllTimeCases([])
+      setLoading(false)
+      return
+    }
 
-  // Get surgeon's cases
-  const getSurgeonCases = (surgeonId: string) => {
-    return cases.filter(c => c.surgeon_id === surgeonId)
-  }
+    async function fetchCases() {
+      setLoading(true)
 
-  // Get completed cases for a surgeon
-  const getSurgeonCompletedCases = (surgeonId: string) => {
-    return getSurgeonCases(surgeonId).filter(c => {
+      // Calculate date ranges
+      const today = new Date()
+      const thirtyDaysAgo = new Date(today)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+      // Query for selected day
+      const { data: dayData } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          scheduled_date,
+          start_time,
+          surgeon_id,
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+          procedure_types (id, name),
+          or_rooms (id, name),
+          case_milestones (
+            milestone_type_id,
+            recorded_at,
+            milestone_types (name)
+          )
+        `)
+        .eq('facility_id', facilityId)
+        .eq('surgeon_id', selectedSurgeon)
+        .eq('scheduled_date', selectedDate)
+        .order('start_time', { ascending: true })
+
+      // Query for last 30 days
+      const { data: last30Data } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          scheduled_date,
+          start_time,
+          surgeon_id,
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+          procedure_types (id, name),
+          or_rooms (id, name),
+          case_milestones (
+            milestone_type_id,
+            recorded_at,
+            milestone_types (name)
+          )
+        `)
+        .eq('facility_id', facilityId)
+        .eq('surgeon_id', selectedSurgeon)
+        .gte('scheduled_date', getLocalDateString(thirtyDaysAgo))
+        .lte('scheduled_date', getLocalDateString(today))
+
+      // Query for all time
+      const { data: allTimeData } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          scheduled_date,
+          start_time,
+          surgeon_id,
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+          procedure_types (id, name),
+          or_rooms (id, name),
+          case_milestones (
+            milestone_type_id,
+            recorded_at,
+            milestone_types (name)
+          )
+        `)
+        .eq('facility_id', facilityId)
+        .eq('surgeon_id', selectedSurgeon)
+
+      setDayCases((dayData as unknown as CaseWithMilestones[]) || [])
+      setLast30DaysCases((last30Data as unknown as CaseWithMilestones[]) || [])
+      setAllTimeCases((allTimeData as unknown as CaseWithMilestones[]) || [])
+      setLoading(false)
+    }
+
+    fetchCases()
+  }, [selectedSurgeon, selectedDate])
+
+  // Get completed cases (have patient_in and patient_out milestones)
+  const getCompletedCases = (cases: CaseWithMilestones[]) => {
+    return cases.filter(c => {
       const milestones = getMilestoneMap(c)
       return milestones.patient_in && milestones.patient_out
     })
   }
 
-  // Calculate surgeon metrics
-  const getSurgeonMetrics = (surgeonId: string) => {
-    const completedCases = getSurgeonCompletedCases(surgeonId)
+  // Calculate metrics for a set of cases
+  const calculateMetrics = (cases: CaseWithMilestones[]) => {
+    const completedCases = getCompletedCases(cases)
     
-    const totalTimes = completedCases.map(c => getTotalCaseTime(getMilestoneMap(c)))
+    const orTimes = completedCases.map(c => getTotalORTime(getMilestoneMap(c)))
     const surgicalTimes = completedCases.map(c => getSurgicalTime(getMilestoneMap(c)))
-    const preOpTimes = completedCases.map(c => getPreOpTime(getMilestoneMap(c)))
-    const anesthesiaTimes = completedCases.map(c => getAnesthesiaTime(getMilestoneMap(c)))
+    const wheelsInToIncisionTimes = completedCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
+    const incisionToClosingTimes = completedCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
     const closingTimes = completedCases.map(c => getClosingTime(getMilestoneMap(c)))
+    const closedToWheelsOutTimes = completedCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
+    
+    // Get first case start time
+    const firstCaseTime = completedCases.length > 0 
+      ? getMilestoneMap(completedCases[0]).patient_in 
+      : null
+
+    // Calculate turnovers
+    const turnovers = getAllTurnovers(completedCases)
 
     return {
-      totalCases: getSurgeonCases(surgeonId).length,
-      completedCases: completedCases.length,
-      avgTotalTime: calculateAverage(totalTimes),
+      totalCases: completedCases.length,
+      firstCaseStartTime: firstCaseTime,
+      totalORTime: calculateSum(orTimes),
+      totalSurgicalTime: calculateSum(surgicalTimes),
+      avgORTime: calculateAverage(orTimes),
       avgSurgicalTime: calculateAverage(surgicalTimes),
-      avgPreOpTime: calculateAverage(preOpTimes),
-      avgAnesthesiaTime: calculateAverage(anesthesiaTimes),
+      avgWheelsInToIncision: calculateAverage(wheelsInToIncisionTimes),
+      avgIncisionToClosing: calculateAverage(incisionToClosingTimes),
       avgClosingTime: calculateAverage(closingTimes),
-      variance: calculateStdDev(totalTimes),
+      avgClosedToWheelsOut: calculateAverage(closedToWheelsOutTimes),
+      avgRoomTurnover: calculateAverage(turnovers),
     }
   }
 
-  // Get milestone breakdown by procedure for selected surgeon
-  const getMilestoneBreakdownByProcedure = (surgeonId: string) => {
-    const completedCases = getSurgeonCompletedCases(surgeonId)
+  // Memoized metrics
+  const dayMetrics = useMemo(() => calculateMetrics(dayCases), [dayCases])
+  const last30Metrics = useMemo(() => calculateMetrics(last30DaysCases), [last30DaysCases])
+  const allTimeMetrics = useMemo(() => calculateMetrics(allTimeCases), [allTimeCases])
+
+  // Calculate percentage improvements
+  const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
+  const turnoverVsAllTime = calculatePercentageChange(dayMetrics.avgRoomTurnover, allTimeMetrics.avgRoomTurnover)
+
+  // Get case breakdown for the stacked bar chart
+  const getCaseBreakdown = () => {
+    const completedCases = getCompletedCases(dayCases)
     
-    const byProcedure: { 
-      [key: string]: { 
-        preOp: number[]
-        anesthesia: number[]
-        surgical: number[]
-        closing: number[]
-        total: number[]
-      } 
-    } = {}
-    
-    completedCases.forEach(c => {
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      const procName = procType?.name || 'Unknown'
+    return completedCases.map(c => {
       const milestones = getMilestoneMap(c)
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
       
-      if (!byProcedure[procName]) {
-        byProcedure[procName] = { preOp: [], anesthesia: [], surgical: [], closing: [], total: [] }
+      return {
+        id: c.id,
+        caseNumber: c.case_number,
+        procedureName: procType?.name || 'Unknown',
+        totalORTime: getTotalORTime(milestones) || 0,
+        wheelsInToIncision: getWheelsInToIncision(milestones) || 0,
+        incisionToClosing: getIncisionToClosing(milestones) || 0,
+        closingTime: getClosingTime(milestones) || 0,
+        closedToWheelsOut: getClosedToWheelsOut(milestones) || 0,
       }
-      
-      const preOp = getPreOpTime(milestones)
-      const anesthesia = getAnesthesiaTime(milestones)
-      const surgical = getSurgicalTime(milestones)
-      const closing = getClosingTime(milestones)
-      const total = getTotalCaseTime(milestones)
-      
-      if (preOp) byProcedure[procName].preOp.push(preOp)
-      if (anesthesia) byProcedure[procName].anesthesia.push(anesthesia)
-      if (surgical) byProcedure[procName].surgical.push(surgical)
-      if (closing) byProcedure[procName].closing.push(closing)
-      if (total) byProcedure[procName].total.push(total)
     })
-
-    return Object.entries(byProcedure).map(([procedure, times]) => ({
-      procedure: procedure.length > 25 ? procedure.substring(0, 25) + '...' : procedure,
-      fullName: procedure,
-      caseCount: times.total.length,
-      'Pre-Op': calculateAverage(times.preOp) || 0,
-      'Anesthesia': calculateAverage(times.anesthesia) || 0,
-      'Surgical': calculateAverage(times.surgical) || 0,
-      'Closing': calculateAverage(times.closing) || 0,
-      'Total': calculateAverage(times.total) || 0,
-    })).sort((a, b) => b.caseCount - a.caseCount)
   }
 
-  // Get radar chart data for surgeon performance
-  const getRadarData = (surgeonId: string) => {
-    const metrics = getSurgeonMetrics(surgeonId)
+  // Get procedure performance data
+  const getProcedurePerformance = () => {
+    const completedCases = getCompletedCases(dayCases)
     
-    // Normalize values (lower is better for time metrics)
-    // Using inverse scaling so "better" points outward
-    const maxTime = 120 // Assuming 120 min as baseline
-    
-    return [
-      { metric: 'Pre-Op Speed', value: metrics.avgPreOpTime ? Math.max(0, 100 - (metrics.avgPreOpTime / maxTime * 100)) : 0 },
-      { metric: 'Surgical Speed', value: metrics.avgSurgicalTime ? Math.max(0, 100 - (metrics.avgSurgicalTime / maxTime * 100)) : 0 },
-      { metric: 'Closing Speed', value: metrics.avgClosingTime ? Math.max(0, 100 - (metrics.avgClosingTime / maxTime * 100)) : 0 },
-      { metric: 'Consistency', value: metrics.variance ? Math.max(0, 100 - metrics.variance) : 0 },
-      { metric: 'Volume', value: Math.min(100, metrics.completedCases * 10) },
-    ]
+    // Filter by selected procedure if not "all"
+    const filteredCases = selectedProcedureFilter === 'all' 
+      ? completedCases 
+      : completedCases.filter(c => {
+          const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+          return procType?.id === selectedProcedureFilter
+        })
+
+    const allCompletedCases = getCompletedCases(dayCases)
+
+    // Calculate averages for filtered cases
+    const filteredOrTimes = filteredCases.map(c => getTotalORTime(getMilestoneMap(c)))
+    const filteredSurgicalTimes = filteredCases.map(c => getSurgicalTime(getMilestoneMap(c)))
+    const filteredWheelsIn = filteredCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
+    const filteredIncisionClosing = filteredCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
+    const filteredClosing = filteredCases.map(c => getClosingTime(getMilestoneMap(c)))
+    const filteredWheelsOut = filteredCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
+
+    // Calculate averages for all cases (baseline)
+    const allOrTimes = allCompletedCases.map(c => getTotalORTime(getMilestoneMap(c)))
+    const allSurgicalTimes = allCompletedCases.map(c => getSurgicalTime(getMilestoneMap(c)))
+    const allWheelsIn = allCompletedCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
+    const allIncisionClosing = allCompletedCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
+    const allClosing = allCompletedCases.map(c => getClosingTime(getMilestoneMap(c)))
+    const allWheelsOut = allCompletedCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
+
+    return {
+      procedure: {
+        avgORTime: calculateAverage(filteredOrTimes),
+        avgSurgicalTime: calculateAverage(filteredSurgicalTimes),
+        avgWheelsInToIncision: calculateAverage(filteredWheelsIn),
+        avgIncisionToClosing: calculateAverage(filteredIncisionClosing),
+        avgClosingTime: calculateAverage(filteredClosing),
+        avgClosedToWheelsOut: calculateAverage(filteredWheelsOut),
+      },
+      overall: {
+        avgORTime: calculateAverage(allOrTimes),
+        avgSurgicalTime: calculateAverage(allSurgicalTimes),
+        avgWheelsInToIncision: calculateAverage(allWheelsIn),
+        avgIncisionToClosing: calculateAverage(allIncisionClosing),
+        avgClosingTime: calculateAverage(allClosing),
+        avgClosedToWheelsOut: calculateAverage(allWheelsOut),
+      }
+    }
   }
+
+  const caseBreakdown = useMemo(() => getCaseBreakdown(), [dayCases])
+  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, selectedProcedureFilter])
 
   const selectedSurgeonData = selectedSurgeon ? surgeons.find(s => s.id === selectedSurgeon) : null
-  const metrics = selectedSurgeon ? getSurgeonMetrics(selectedSurgeon) : null
-  const procedureBreakdown = selectedSurgeon ? getMilestoneBreakdownByProcedure(selectedSurgeon) : []
+
+  // Calculate max time for scaling bars
+  const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
 
   return (
     <DashboardLayout>
       <Container className="py-8">
         <AnalyticsLayout
           title="Surgeon Analysis"
-          description="Deep dive into individual surgeon performance metrics"
+          description="Individual surgeon performance metrics"
           actions={
-            <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
+            <div className="flex items-center gap-4">
+              {/* Surgeon Dropdown */}
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Select Surgeon</label>
+                <select
+                  value={selectedSurgeon || ''}
+                  onChange={(e) => setSelectedSurgeon(e.target.value || null)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  <option value="">Choose surgeon...</option>
+                  {surgeons.map(s => (
+                    <option key={s.id} value={s.id}>
+                      Dr. {s.first_name} {s.last_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Date Picker */}
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Select Date</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+            </div>
           }
         >
-          {loading ? (
+          {initialLoading ? (
             <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            </div>
+          ) : !selectedSurgeon ? (
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-12 text-center">
+              <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Surgeon</h3>
+              <p className="text-slate-500">Choose a surgeon from the dropdown above to view their analytics</p>
+            </div>
+          ) : loading ? (
+            <div className="flex items-center justify-center py-24">
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
           ) : (
             <>
-              {/* Surgeon Selector */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
-                <label className="block text-sm font-medium text-slate-700 mb-3">Select Surgeon</label>
-                <div className="flex flex-wrap gap-2">
-                  {surgeons.map(surgeon => (
-                    <button
-                      key={surgeon.id}
-                      onClick={() => setSelectedSurgeon(surgeon.id)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        selectedSurgeon === surgeon.id
-                          ? 'bg-slate-900 text-white'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      Dr. {surgeon.first_name} {surgeon.last_name}
-                    </button>
-                  ))}
+              {/* Surgeon Header */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-slate-900 uppercase tracking-wide">
+                  {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
+                </h2>
+              </div>
+
+              {/* Day Overview Section */}
+              <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">Day Overview</h3>
+                    <p className="text-sm text-slate-500">Track your efficiency in the operating room by measuring key time metrics, optimizing workflows, and reducing delays.</p>
+                  </div>
+                </div>
+
+                {/* Top Metrics Row */}
+                <div className="grid grid-cols-4 gap-4 mt-6">
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      First Case Start Time
+                    </div>
+                    <div className="text-3xl font-bold text-slate-900">
+                      {formatTimeFromTimestamp(dayMetrics.firstCaseStartTime)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Total Case Count
+                    </div>
+                    <div className="text-3xl font-bold text-slate-900">
+                      {dayMetrics.totalCases}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Total OR Time
+                    </div>
+                    <div className="text-3xl font-bold text-slate-900">
+                      {formatMinutesToHHMMSS(dayMetrics.totalORTime)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Total Surgical Time
+                    </div>
+                    <div className="text-3xl font-bold text-slate-900">
+                      {formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Second Row - Room Turnover */}
+                <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+                  <div className="bg-slate-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Avg. Room Turnover
+                    </div>
+                    <div className="text-3xl font-bold text-slate-900">
+                      {formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-sm">
+                      {turnoverVs30Day !== null && (
+                        <span className={`flex items-center gap-1 ${turnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={turnoverVs30Day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
+                          </svg>
+                          {Math.abs(turnoverVs30Day)}%
+                        </span>
+                      )}
+                      <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Placeholder for future metrics */}
+                  <div className="bg-slate-50 rounded-lg p-4 opacity-50">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Uptime vs Downtime
+                    </div>
+                    <div className="text-2xl font-bold text-slate-400">Coming Soon</div>
+                  </div>
+                  
+                  <div></div>
                 </div>
               </div>
 
-              {selectedSurgeon && metrics ? (
-                <>
-                  {/* Surgeon Header */}
-                  <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-xl p-6 mb-8 text-white">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center text-2xl font-bold">
-                        {selectedSurgeonData?.first_name[0]}{selectedSurgeonData?.last_name[0]}
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold">
-                          Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
-                        </h2>
-                        <p className="text-slate-300">{metrics.totalCases} cases in selected period</p>
-                      </div>
+              {/* Cases and Procedure Performance */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Cases List with Stacked Bars */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">Cases</h3>
+                      <p className="text-sm text-slate-500">{dayMetrics.totalCases} cases completed</p>
                     </div>
                   </div>
 
-                  {/* Key Metrics */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                    <MetricCard
-                      title="Avg Total Time"
-                      value={formatMinutes(metrics.avgTotalTime)}
-                      subtitle="Per case"
-                      color="emerald"
-                    />
-                    <MetricCard
-                      title="Avg Surgical Time"
-                      value={formatMinutes(metrics.avgSurgicalTime)}
-                      subtitle="Incision → Closing"
-                      color="emerald"
-                    />
-                    <MetricCard
-                      title="Completed Cases"
-                      value={metrics.completedCases}
-                      subtitle={`of ${metrics.totalCases} total`}
-                    />
-                    <MetricCard
-                      title="Consistency"
-                      value={metrics.variance ? `±${metrics.variance}m` : '-'}
-                      subtitle="Time variance"
-                    />
-                  </div>
-
-                  {/* Phase Metrics */}
-                  <div className="grid grid-cols-3 gap-4 mb-8">
-                    <MetricCard
-                      title="Avg Pre-Op"
-                      value={formatMinutes(metrics.avgPreOpTime)}
-                      subtitle="Patient In → Incision"
-                    />
-                    <MetricCard
-                      title="Avg Anesthesia"
-                      value={formatMinutes(metrics.avgAnesthesiaTime)}
-                      subtitle="Anes Start → End"
-                    />
-                    <MetricCard
-                      title="Avg Closing"
-                      value={formatMinutes(metrics.avgClosingTime)}
-                      subtitle="Closing → Patient Out"
-                    />
-                  </div>
-
-                  {/* Charts */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    {/* Radar Chart */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Performance Profile</h3>
-                      <ResponsiveContainer width="100%" height={300}>
-                        <RadarChart data={getRadarData(selectedSurgeon)}>
-                          <PolarGrid stroke="#e2e8f0" />
-                          <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12, fill: '#64748b' }} />
-                          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 10, fill: '#94a3b8' }} />
-                          <Radar
-                            name="Performance"
-                            dataKey="value"
-                            stroke="#0d9488"
-                            fill="#0d9488"
-                            fillOpacity={0.3}
-                            strokeWidth={2}
-                          />
-                        </RadarChart>
-                      </ResponsiveContainer>
-                      <p className="text-xs text-slate-400 text-center mt-2">
-                        Higher values = better performance
-                      </p>
+                  {caseBreakdown.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400">
+                      No completed cases for this date
                     </div>
-
-                    {/* Procedure Distribution */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Cases by Procedure</h3>
-                      {procedureBreakdown.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={300}>
-                          <BarChart data={procedureBreakdown} layout="vertical">
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis type="number" stroke="#64748b" fontSize={12} />
-                            <YAxis dataKey="procedure" type="category" width={120} stroke="#64748b" fontSize={11} />
-                            <Tooltip
-                              formatter={(value) => [value, 'Cases']}
-                              contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' } as React.CSSProperties}
-                            />
-                            <Bar dataKey="caseCount" fill="#0d9488" radius={[0, 4, 4, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-[300px] flex items-center justify-center text-slate-400">
-                          No completed cases
+                  ) : (
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                      {caseBreakdown.map((c, idx) => (
+                        <div key={c.id} className="flex items-center gap-3">
+                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-medium text-slate-900 truncate">
+                                {c.procedureName}
+                              </span>
+                              <span className="text-sm text-slate-500">
+                                {formatMinutesToHHMMSS(c.totalORTime)}
+                              </span>
+                            </div>
+                            {/* Stacked Bar */}
+                            <div className="h-4 bg-slate-100 rounded-full overflow-hidden flex">
+                              {c.wheelsInToIncision > 0 && (
+                                <div 
+                                  className="h-full bg-blue-600" 
+                                  style={{ width: `${(c.wheelsInToIncision / maxCaseTime) * 100}%` }}
+                                  title={`Wheels-in to Incision: ${formatMinutesToHHMMSS(c.wheelsInToIncision)}`}
+                                />
+                              )}
+                              {c.incisionToClosing > 0 && (
+                                <div 
+                                  className="h-full bg-blue-400" 
+                                  style={{ width: `${(c.incisionToClosing / maxCaseTime) * 100}%` }}
+                                  title={`Incision to Closing: ${formatMinutesToHHMMSS(c.incisionToClosing)}`}
+                                />
+                              )}
+                              {c.closingTime > 0 && (
+                                <div 
+                                  className="h-full bg-emerald-500" 
+                                  style={{ width: `${(c.closingTime / maxCaseTime) * 100}%` }}
+                                  title={`Closing Time: ${formatMinutesToHHMMSS(c.closingTime)}`}
+                                />
+                              )}
+                              {c.closedToWheelsOut > 0 && (
+                                <div 
+                                  className="h-full bg-amber-400" 
+                                  style={{ width: `${(c.closedToWheelsOut / maxCaseTime) * 100}%` }}
+                                  title={`Closed to Wheels-Out: ${formatMinutesToHHMMSS(c.closedToWheelsOut)}`}
+                                />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Milestone Breakdown by Procedure */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-6">
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Milestone Averages by Procedure</h3>
-                    <p className="text-sm text-slate-500 mb-6">Average time (in minutes) spent in each phase per procedure type</p>
-                    
-                    {procedureBreakdown.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={400}>
-                        <BarChart data={procedureBreakdown}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="procedure" stroke="#64748b" fontSize={11} angle={-20} textAnchor="end" height={80} />
-                          <YAxis stroke="#64748b" fontSize={12} label={{ value: 'Minutes', angle: -90, position: 'insideLeft', style: { fontSize: 12, fill: '#64748b' } }} />
-                          <Tooltip
-                            formatter={(value: number | undefined, name?: string) => [value !== undefined ? formatMinutes(value) : '-', name || '']}
-                            contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' } as React.CSSProperties}
-                          />
-                          <Legend />
-                          <Bar dataKey="Pre-Op" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Anesthesia" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Surgical" fill="#0d9488" radius={[4, 4, 0, 0]} />
-                          <Bar dataKey="Closing" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-[400px] flex items-center justify-center text-slate-400">
-                        No completed cases for this surgeon
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Procedure Details Table */}
-                  {procedureBreakdown.length > 0 && (
-                    <div className="bg-white rounded-xl border border-slate-200 mt-6 overflow-hidden">
-                      <div className="px-6 py-4 border-b border-slate-200">
-                        <h3 className="text-lg font-semibold text-slate-900">Detailed Breakdown</h3>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Pre-Op</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Anesthesia</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Surgical</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Closing</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {procedureBreakdown.map((proc, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50">
-                                <td className="px-6 py-4 text-sm font-medium text-slate-900">{proc.fullName}</td>
-                                <td className="px-6 py-4 text-sm text-center text-slate-600">{proc.caseCount}</td>
-                                <td className="px-6 py-4 text-sm text-center text-slate-600">{formatMinutes(proc['Pre-Op'])}</td>
-                                <td className="px-6 py-4 text-sm text-center text-slate-600">{formatMinutes(proc['Anesthesia'])}</td>
-                                <td className="px-6 py-4 text-sm text-center text-slate-600">{formatMinutes(proc['Surgical'])}</td>
-                                <td className="px-6 py-4 text-sm text-center text-slate-600">{formatMinutes(proc['Closing'])}</td>
-                                <td className="px-6 py-4 text-sm text-center font-semibold text-slate-900">{formatMinutes(proc['Total'])}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      ))}
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="bg-slate-50 rounded-xl border border-slate-200 p-12 text-center">
-                  <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+
+                  {/* Legend */}
+                  <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100 text-xs">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-blue-600 rounded" />
+                      <span className="text-slate-500">Wheels-in to Incision</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-blue-400 rounded" />
+                      <span className="text-slate-500">Incision to Closing</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-emerald-500 rounded" />
+                      <span className="text-slate-500">Closing Time</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-amber-400 rounded" />
+                      <span className="text-slate-500">Closed to Wheels-O...</span>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Surgeon</h3>
-                  <p className="text-slate-500">Choose a surgeon above to view their detailed analytics</p>
                 </div>
-              )}
+
+                {/* Procedure Performance */}
+                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <h3 className="font-semibold text-slate-900">Procedure Performance</h3>
+                    </div>
+                    <select
+                      value={selectedProcedureFilter}
+                      onChange={(e) => setSelectedProcedureFilter(e.target.value)}
+                      className="px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="all">All</option>
+                      {procedures.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Overall Section */}
+                  <div className="mb-6">
+                    <h4 className="font-semibold text-slate-900 mb-3">Overall</h4>
+                    
+                    {/* Total OR Time */}
+                    <div className="mb-4">
+                      <div className="text-sm text-slate-500 mb-1">Total OR Time</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-600 rounded"
+                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.overall.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgORTime)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                            <div 
+                              className="h-full bg-slate-300 rounded"
+                              style={{ width: `${Math.min(100, ((procedurePerformance.overall.avgORTime || 0) / Math.max(procedurePerformance.overall.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm text-slate-400 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgORTime)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Surgical Time */}
+                    <div>
+                      <div className="text-sm text-slate-500 mb-1">Surgical Time</div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-600 rounded"
+                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.overall.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgSurgicalTime)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                            <div 
+                              className="h-full bg-slate-300 rounded"
+                              style={{ width: `${Math.min(100, ((procedurePerformance.overall.avgSurgicalTime || 0) / Math.max(procedurePerformance.overall.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm text-slate-400 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgSurgicalTime)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Section */}
+                  <div className="pt-4 border-t border-slate-100">
+                    <h4 className="font-semibold text-slate-900 mb-3">Summary</h4>
+                    
+                    <div className="space-y-3">
+                      {/* Wheels-in to Incision */}
+                      <div>
+                        <div className="text-sm text-slate-500 mb-1">Wheels-in to Incision</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-blue-600 rounded" style={{ width: '70%' }} />
+                            </div>
+                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgWheelsInToIncision)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-slate-300 rounded" style={{ width: '80%' }} />
+                            </div>
+                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgWheelsInToIncision)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Incision to Closing */}
+                      <div>
+                        <div className="text-sm text-slate-500 mb-1">Incision to Closing</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-blue-600 rounded" style={{ width: '75%' }} />
+                            </div>
+                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgIncisionToClosing)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-slate-300 rounded" style={{ width: '85%' }} />
+                            </div>
+                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgIncisionToClosing)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Closing Time */}
+                      <div>
+                        <div className="text-sm text-slate-500 mb-1">Closing Time</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded" style={{ width: '60%' }} />
+                            </div>
+                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosingTime)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-slate-300 rounded" style={{ width: '70%' }} />
+                            </div>
+                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgClosingTime)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Closed to Wheels-Out */}
+                      <div>
+                        <div className="text-sm text-slate-500 mb-1">Closed to Wheels-Out</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-amber-400 rounded" style={{ width: '30%' }} />
+                            </div>
+                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosedToWheelsOut)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
+                              <div className="h-full bg-slate-300 rounded" style={{ width: '40%' }} />
+                            </div>
+                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgClosedToWheelsOut)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-blue-600 rounded" />
+                        <span className="text-slate-500">Procedure Time</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-slate-300 rounded" />
+                        <span className="text-slate-500">Overall Average</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </AnalyticsLayout>
