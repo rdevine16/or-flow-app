@@ -76,38 +76,39 @@ const LogoFull = () => (
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  // Start with null so we know when localStorage has been checked
+  const [collapsed, setCollapsed] = useState<boolean | null>(null)
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
-    if (saved !== null) {
-      setCollapsed(JSON.parse(saved))
-    }
-    setMounted(true)
+    // If there's a saved preference, use it; otherwise default to false (expanded)
+    setCollapsed(saved !== null ? JSON.parse(saved) : false)
   }, [])
 
   // Save collapsed state to localStorage when it changes
   useEffect(() => {
-    if (mounted) {
+    // Only save after initial load (when collapsed is not null)
+    if (collapsed !== null) {
       localStorage.setItem('sidebar-collapsed', JSON.stringify(collapsed))
     }
-  }, [collapsed, mounted])
+  }, [collapsed])
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
   }
 
-  // Prevent flash of wrong state on initial load
-  if (!mounted) {
+  // Don't render until we've loaded the preference from localStorage
+  // This prevents the flash of wrong state
+  if (collapsed === null) {
     return (
       <div className="min-h-screen bg-slate-50 flex">
-        <aside className="fixed top-0 left-0 h-full bg-slate-900 w-56 z-40" />
-        <div className="flex-1 ml-56">
+        {/* Empty placeholder that matches the layout structure */}
+        <aside className="fixed top-0 left-0 h-full bg-slate-900 w-16 z-40" />
+        <div className="flex-1 ml-16">
           <header className="h-14 bg-white border-b border-slate-200" />
-          <main className="p-6">{children}</main>
+          <main className="p-6" />
         </div>
       </div>
     )
