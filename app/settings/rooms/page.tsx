@@ -90,9 +90,8 @@ export default function RoomsSettingsPage() {
             <EditableList
               items={rooms}
               onAdd={handleAdd}
-              onEdit={handleEdit}
+              onUpdate={handleEdit}
               onDelete={handleDelete}
-              itemLabel="Room"
               placeholder="Enter room name (e.g., OR 1, OR 2)"
             />
           )}
