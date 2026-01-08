@@ -267,8 +267,11 @@ export default function SurgeonAnalysisPage() {
   }
 
   // Get procedure performance data
+  // When "All" is selected, compare today vs 30-day average
+  // When a specific procedure is selected, compare that procedure vs overall day average
   const getProcedurePerformance = () => {
     const completedCases = getCompletedCases(dayCases)
+    const completed30DayCases = getCompletedCases(last30DaysCases)
     
     // Filter by selected procedure if not "all"
     const filteredCases = selectedProcedureFilter === 'all' 
@@ -278,9 +281,7 @@ export default function SurgeonAnalysisPage() {
           return procType?.id === selectedProcedureFilter
         })
 
-    const allCompletedCases = getCompletedCases(dayCases)
-
-    // Calculate averages for filtered cases
+    // Calculate averages for filtered/today's cases
     const filteredOrTimes = filteredCases.map(c => getTotalORTime(getMilestoneMap(c)))
     const filteredSurgicalTimes = filteredCases.map(c => getSurgicalTime(getMilestoneMap(c)))
     const filteredWheelsIn = filteredCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
@@ -288,13 +289,14 @@ export default function SurgeonAnalysisPage() {
     const filteredClosing = filteredCases.map(c => getClosingTime(getMilestoneMap(c)))
     const filteredWheelsOut = filteredCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
 
-    // Calculate averages for all cases (baseline)
-    const allOrTimes = allCompletedCases.map(c => getTotalORTime(getMilestoneMap(c)))
-    const allSurgicalTimes = allCompletedCases.map(c => getSurgicalTime(getMilestoneMap(c)))
-    const allWheelsIn = allCompletedCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
-    const allIncisionClosing = allCompletedCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
-    const allClosing = allCompletedCases.map(c => getClosingTime(getMilestoneMap(c)))
-    const allWheelsOut = allCompletedCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
+    // For baseline: use 30-day average when "All" selected, otherwise use today's overall
+    const baselineCases = selectedProcedureFilter === 'all' ? completed30DayCases : completedCases
+    const baselineOrTimes = baselineCases.map(c => getTotalORTime(getMilestoneMap(c)))
+    const baselineSurgicalTimes = baselineCases.map(c => getSurgicalTime(getMilestoneMap(c)))
+    const baselineWheelsIn = baselineCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
+    const baselineIncisionClosing = baselineCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
+    const baselineClosing = baselineCases.map(c => getClosingTime(getMilestoneMap(c)))
+    const baselineWheelsOut = baselineCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
 
     return {
       procedure: {
@@ -305,19 +307,20 @@ export default function SurgeonAnalysisPage() {
         avgClosingTime: calculateAverage(filteredClosing),
         avgClosedToWheelsOut: calculateAverage(filteredWheelsOut),
       },
-      overall: {
-        avgORTime: calculateAverage(allOrTimes),
-        avgSurgicalTime: calculateAverage(allSurgicalTimes),
-        avgWheelsInToIncision: calculateAverage(allWheelsIn),
-        avgIncisionToClosing: calculateAverage(allIncisionClosing),
-        avgClosingTime: calculateAverage(allClosing),
-        avgClosedToWheelsOut: calculateAverage(allWheelsOut),
-      }
+      baseline: {
+        avgORTime: calculateAverage(baselineOrTimes),
+        avgSurgicalTime: calculateAverage(baselineSurgicalTimes),
+        avgWheelsInToIncision: calculateAverage(baselineWheelsIn),
+        avgIncisionToClosing: calculateAverage(baselineIncisionClosing),
+        avgClosingTime: calculateAverage(baselineClosing),
+        avgClosedToWheelsOut: calculateAverage(baselineWheelsOut),
+      },
+      // Label changes based on filter
+      baselineLabel: selectedProcedureFilter === 'all' ? '30-Day Avg' : 'Day Average'
     }
   }
-
   const caseBreakdown = useMemo(() => getCaseBreakdown(), [dayCases])
-  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, selectedProcedureFilter])
+  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases, selectedProcedureFilter])
 
   const selectedSurgeonData = selectedSurgeon ? surgeons.find(s => s.id === selectedSurgeon) : null
 
@@ -622,7 +625,7 @@ export default function SurgeonAnalysisPage() {
                           <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
                             <div 
                               className="h-full bg-blue-600 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.overall.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
+                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
                             />
                           </div>
                           <span className="text-sm font-medium w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgORTime)}</span>
@@ -630,11 +633,11 @@ export default function SurgeonAnalysisPage() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
                             <div 
-                              className="h-full bg-slate-300 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.overall.avgORTime || 0) / Math.max(procedurePerformance.overall.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
+                              className="h-full bg-slate-400 rounded"
+                              style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm text-slate-400 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgORTime)}</span>
+                          <span className="text-sm text-slate-600 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgORTime)}</span>
                         </div>
                       </div>
                     </div>
@@ -647,7 +650,7 @@ export default function SurgeonAnalysisPage() {
                           <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
                             <div 
                               className="h-full bg-blue-600 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.overall.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
+                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
                             />
                           </div>
                           <span className="text-sm font-medium w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgSurgicalTime)}</span>
@@ -655,11 +658,11 @@ export default function SurgeonAnalysisPage() {
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
                             <div 
-                              className="h-full bg-slate-300 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.overall.avgSurgicalTime || 0) / Math.max(procedurePerformance.overall.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
+                              className="h-full bg-slate-400 rounded"
+                              style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm text-slate-400 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgSurgicalTime)}</span>
+                          <span className="text-sm text-slate-600 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgSurgicalTime)}</span>
                         </div>
                       </div>
                     </div>
@@ -676,15 +679,21 @@ export default function SurgeonAnalysisPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-blue-600 rounded" style={{ width: '70%' }} />
+                              <div 
+                                className="h-full bg-blue-600 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgWheelsInToIncision || 0) / Math.max(procedurePerformance.baseline.avgWheelsInToIncision || 1, procedurePerformance.procedure.avgWheelsInToIncision || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgWheelsInToIncision)}</span>
+                            <span className="text-xs font-medium w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgWheelsInToIncision)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-slate-300 rounded" style={{ width: '80%' }} />
+                              <div 
+                                className="h-full bg-slate-400 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgWheelsInToIncision || 0) / Math.max(procedurePerformance.baseline.avgWheelsInToIncision || 1, procedurePerformance.procedure.avgWheelsInToIncision || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgWheelsInToIncision)}</span>
+                            <span className="text-xs text-slate-600 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgWheelsInToIncision)}</span>
                           </div>
                         </div>
                       </div>
@@ -695,15 +704,21 @@ export default function SurgeonAnalysisPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-blue-600 rounded" style={{ width: '75%' }} />
+                              <div 
+                                className="h-full bg-blue-600 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgIncisionToClosing || 0) / Math.max(procedurePerformance.baseline.avgIncisionToClosing || 1, procedurePerformance.procedure.avgIncisionToClosing || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgIncisionToClosing)}</span>
+                            <span className="text-xs font-medium w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgIncisionToClosing)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-slate-300 rounded" style={{ width: '85%' }} />
+                              <div 
+                                className="h-full bg-slate-400 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgIncisionToClosing || 0) / Math.max(procedurePerformance.baseline.avgIncisionToClosing || 1, procedurePerformance.procedure.avgIncisionToClosing || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgIncisionToClosing)}</span>
+                            <span className="text-xs text-slate-600 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgIncisionToClosing)}</span>
                           </div>
                         </div>
                       </div>
@@ -714,15 +729,21 @@ export default function SurgeonAnalysisPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded" style={{ width: '60%' }} />
+                              <div 
+                                className="h-full bg-emerald-500 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgClosingTime || 0) / Math.max(procedurePerformance.baseline.avgClosingTime || 1, procedurePerformance.procedure.avgClosingTime || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosingTime)}</span>
+                            <span className="text-xs font-medium w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosingTime)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-slate-300 rounded" style={{ width: '70%' }} />
+                              <div 
+                                className="h-full bg-slate-400 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgClosingTime || 0) / Math.max(procedurePerformance.baseline.avgClosingTime || 1, procedurePerformance.procedure.avgClosingTime || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgClosingTime)}</span>
+                            <span className="text-xs text-slate-600 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgClosingTime)}</span>
                           </div>
                         </div>
                       </div>
@@ -733,15 +754,21 @@ export default function SurgeonAnalysisPage() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-amber-400 rounded" style={{ width: '30%' }} />
+                              <div 
+                                className="h-full bg-amber-400 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgClosedToWheelsOut || 0) / Math.max(procedurePerformance.baseline.avgClosedToWheelsOut || 1, procedurePerformance.procedure.avgClosedToWheelsOut || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosedToWheelsOut)}</span>
+                            <span className="text-xs font-medium w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosedToWheelsOut)}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div className="h-full bg-slate-300 rounded" style={{ width: '40%' }} />
+                              <div 
+                                className="h-full bg-slate-400 rounded" 
+                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgClosedToWheelsOut || 0) / Math.max(procedurePerformance.baseline.avgClosedToWheelsOut || 1, procedurePerformance.procedure.avgClosedToWheelsOut || 1)) * 100)}%` }} 
+                              />
                             </div>
-                            <span className="text-xs text-slate-400 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.overall.avgClosedToWheelsOut)}</span>
+                            <span className="text-xs text-slate-600 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgClosedToWheelsOut)}</span>
                           </div>
                         </div>
                       </div>
@@ -751,11 +778,11 @@ export default function SurgeonAnalysisPage() {
                     <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs">
                       <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-blue-600 rounded" />
-                        <span className="text-slate-500">Procedure Time</span>
+                        <span className="text-slate-600">{selectedProcedureFilter === 'all' ? 'Today' : 'Procedure'}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-slate-300 rounded" />
-                        <span className="text-slate-500">Overall Average</span>
+                        <div className="w-3 h-3 bg-slate-400 rounded" />
+                        <span className="text-slate-600">{procedurePerformance.baselineLabel}</span>
                       </div>
                     </div>
                   </div>
