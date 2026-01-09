@@ -5,7 +5,6 @@ import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import Container from '../../components/ui/Container'
 import DateFilter from '../../components/ui/DateFilter'
-import MetricCard from '../../components/ui/MetricCard'
 import AnalyticsLayout from '../../components/analytics/AnalyticsLayout'
 import {
   getMilestoneMap,
@@ -31,6 +30,26 @@ import {
   Line,
 } from 'recharts'
 
+// Inline MetricCard component with consistent styling
+interface MetricCardProps {
+  title: string
+  value: string | number
+  subtitle: string
+  highlighted?: boolean
+}
+
+function MetricCard({ title, value, subtitle, highlighted = false }: MetricCardProps) {
+  return (
+    <div className={`rounded-xl border p-5 ${highlighted ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
+      <p className="text-sm font-medium text-slate-600 mb-1">{title}</p>
+      <p className={`text-2xl font-bold mb-1 ${highlighted ? 'text-blue-600' : 'text-slate-900'}`}>
+        {value}
+      </p>
+      <p className="text-sm text-slate-500">{subtitle}</p>
+    </div>
+  )
+}
+
 export default function AnalyticsOverviewPage() {
   const supabase = createClient()
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
@@ -52,7 +71,7 @@ export default function AnalyticsOverviewPage() {
         surgeon_id,
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
         procedure_types (id, name),
-        or_rooms (name),
+        or_rooms (id, name),
         case_milestones (
           milestone_type_id,
           recorded_at,
@@ -113,12 +132,12 @@ export default function AnalyticsOverviewPage() {
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-14)
 
-  // Milestone phase breakdown
+  // Milestone phase breakdown - FIXED descriptions
   const phaseData = [
     { phase: 'Pre-Op', avgTime: avgPreOpTime || 0, description: 'Patient In → Incision' },
-    { phase: 'Anesthesia', avgTime: avgAnesthesiaTime || 0, description: 'Anes Start → End' },
+    { phase: 'Anesthesia', avgTime: avgAnesthesiaTime || 0, description: 'Anes Start → Anes End' },
     { phase: 'Surgical', avgTime: avgSurgicalTime || 0, description: 'Incision → Closing' },
-    { phase: 'Closing', avgTime: avgClosingTime || 0, description: 'Closing → Patient Out' },
+    { phase: 'Closing', avgTime: avgClosingTime || 0, description: 'Closing → Closing Complete' },
   ]
 
   return (
@@ -133,7 +152,7 @@ export default function AnalyticsOverviewPage() {
         >
           {loading ? (
             <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
+              <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
@@ -146,13 +165,13 @@ export default function AnalyticsOverviewPage() {
                   title="Avg Total Case Time"
                   value={formatMinutes(avgTotalTime)}
                   subtitle="Patient In → Out"
-                  color="emerald"
+                  highlighted
                 />
                 <MetricCard
                   title="Avg Surgical Time"
                   value={formatMinutes(avgSurgicalTime)}
                   subtitle="Incision → Closing"
-                  color="emerald"
+                  highlighted
                 />
                 <MetricCard
                   title="Total Cases"
@@ -174,13 +193,18 @@ export default function AnalyticsOverviewPage() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={phaseData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis dataKey="phase" stroke="#64748b" fontSize={12} />
-                      <YAxis stroke="#64748b" fontSize={12} />
+                      <XAxis dataKey="phase" stroke="#334155" fontSize={12} tick={{ fill: '#334155' }} />
+                      <YAxis stroke="#334155" fontSize={12} tick={{ fill: '#334155' }} />
                       <Tooltip
-  formatter={(value) => [formatMinutes(value as number), 'Avg Time']}
-                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                        formatter={(value) => [formatMinutes(value as number), 'Avg Time']}
+                        contentStyle={{ 
+                          borderRadius: '8px', 
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        }}
+                        labelStyle={{ color: '#1e293b', fontWeight: 600 }}
                       />
-                      <Bar dataKey="avgTime" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="avgTime" fill="#2563eb" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -194,21 +218,34 @@ export default function AnalyticsOverviewPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis
                           dataKey="date"
-                          stroke="#64748b"
+                          stroke="#334155"
                           fontSize={12}
+                          tick={{ fill: '#334155' }}
                           tickFormatter={(date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         />
-                        <YAxis stroke="#64748b" fontSize={12} />
+                        <YAxis stroke="#334155" fontSize={12} tick={{ fill: '#334155' }} />
                         <Tooltip
-  labelFormatter={(date) => new Date(date as string).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-  formatter={(value) => [value, 'Cases']}
-                          contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                          labelFormatter={(date) => new Date(date as string).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                          formatter={(value) => [value, 'Cases']}
+                          contentStyle={{ 
+                            borderRadius: '8px', 
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                          }}
+                          labelStyle={{ color: '#1e293b', fontWeight: 600 }}
                         />
-                        <Line type="monotone" dataKey="count" stroke="#0d9488" strokeWidth={2} dot={{ fill: '#0d9488' }} />
+                        <Line 
+                          type="monotone" 
+                          dataKey="count" 
+                          stroke="#2563eb" 
+                          strokeWidth={2} 
+                          dot={{ fill: '#2563eb', strokeWidth: 2 }} 
+                          activeDot={{ r: 6, fill: '#2563eb' }}
+                        />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="h-[300px] flex items-center justify-center text-slate-400">
+                    <div className="h-[300px] flex items-center justify-center text-slate-500">
                       No data available
                     </div>
                   )}
@@ -220,17 +257,17 @@ export default function AnalyticsOverviewPage() {
                 <MetricCard
                   title="Avg Pre-Op"
                   value={formatMinutes(avgPreOpTime)}
-                  subtitle="Setup time"
+                  subtitle="Patient In → Incision"
                 />
                 <MetricCard
                   title="Avg Anesthesia"
                   value={formatMinutes(avgAnesthesiaTime)}
-                  subtitle="Induction time"
+                  subtitle="Anes Start → End"
                 />
                 <MetricCard
                   title="Avg Closing"
                   value={formatMinutes(avgClosingTime)}
-                  subtitle="Wrap-up time"
+                  subtitle="Closing → Complete"
                 />
                 <MetricCard
                   title="Completed"
