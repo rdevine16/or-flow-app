@@ -19,6 +19,18 @@ interface Case {
   surgeon: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
 }
 
+type StatusFilter = 'active' | 'all' | 'completed' | 'cancelled'
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'active', label: 'Active' },
+  { value: 'all', label: 'All' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
+// Which statuses count as "active"
+const ACTIVE_STATUSES = ['scheduled', 'in_progress', 'delayed']
+
 const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
   if (!data) return null
   if (Array.isArray(data)) return data[0]?.name || null
@@ -77,7 +89,11 @@ export default function CasesPage() {
   const [cases, setCases] = useState<Case[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  // Store current date range for re-filtering
+  const [currentDateRange, setCurrentDateRange] = useState<{ start?: string; end?: string }>({})
 
   const fetchCases = async (startDate?: string, endDate?: string) => {
     setLoading(true)
@@ -112,6 +128,7 @@ export default function CasesPage() {
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
     setDateFilter(filter)
+    setCurrentDateRange({ start: startDate, end: endDate })
     fetchCases(startDate, endDate)
   }
 
@@ -121,13 +138,45 @@ export default function CasesPage() {
     setDeleteConfirm(null)
   }
 
+  // Filter cases by status (client-side filtering)
+  const filteredCases = cases.filter(c => {
+    const statusName = getValue(c.case_statuses)
+    
+    switch (statusFilter) {
+      case 'active':
+        return statusName ? ACTIVE_STATUSES.includes(statusName) : true
+      case 'completed':
+        return statusName === 'completed'
+      case 'cancelled':
+        return statusName === 'cancelled'
+      case 'all':
+      default:
+        return true
+    }
+  })
+
+  // Count cases by status for filter badges
+  const statusCounts = {
+    active: cases.filter(c => {
+      const status = getValue(c.case_statuses)
+      return status ? ACTIVE_STATUSES.includes(status) : true
+    }).length,
+    all: cases.length,
+    completed: cases.filter(c => getValue(c.case_statuses) === 'completed').length,
+    cancelled: cases.filter(c => getValue(c.case_statuses) === 'cancelled').length,
+  }
+
   return (
     <DashboardLayout>
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">All Cases</h1>
-          <p className="text-sm text-slate-500">{cases.length} cases found</p>
+          <p className="text-sm text-slate-500">
+            {filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'} 
+            {statusFilter !== 'all' && ` (${statusFilter})`}
+            {cases.length !== filteredCases.length && ` of ${cases.length} total`}
+          </p>
         </div>
         <button
           onClick={() => router.push('/cases/new')}
@@ -141,8 +190,40 @@ export default function CasesPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-6">
+      <div className="mb-6 space-y-4">
+        {/* Date Filter */}
         <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
+        
+        {/* Status Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-600 mr-2">Status:</span>
+          <div className="flex flex-wrap gap-2">
+            {STATUS_FILTERS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(value)}
+                className={`
+                  inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
+                  ${statusFilter === value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }
+                `}
+              >
+                {label}
+                <span className={`
+                  text-xs px-1.5 py-0.5 rounded-full
+                  ${statusFilter === value
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-slate-100 text-slate-500'
+                  }
+                `}>
+                  {statusCounts[value]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Cases Table */}
@@ -154,21 +235,37 @@ export default function CasesPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
           </div>
-        ) : cases.length === 0 ? (
+        ) : filteredCases.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
               <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-1">No cases found</h3>
-            <p className="text-sm text-slate-500 mb-4">Try adjusting your date filter or create a new case.</p>
-            <button
-              onClick={() => router.push('/cases/new')}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Create your first case →
-            </button>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">
+              {cases.length === 0 ? 'No cases found' : `No ${statusFilter} cases`}
+            </h3>
+            <p className="text-sm text-slate-500 mb-4">
+              {cases.length === 0 
+                ? 'Try adjusting your date filter or create a new case.'
+                : `Try selecting a different status filter.`
+              }
+            </p>
+            {cases.length === 0 ? (
+              <button
+                onClick={() => router.push('/cases/new')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Create your first case →
+              </button>
+            ) : (
+              <button
+                onClick={() => setStatusFilter('all')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                View all cases →
+              </button>
+            )}
           </div>
         ) : (
           <table className="w-full">
@@ -185,7 +282,7 @@ export default function CasesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {cases.map((c) => {
+              {filteredCases.map((c) => {
                 const roomName = getValue(c.or_rooms)
                 const procedureName = getValue(c.procedure_types)
                 const statusName = getValue(c.case_statuses)
