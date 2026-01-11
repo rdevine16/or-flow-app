@@ -90,7 +90,8 @@ export default function FacilitiesSettingsPage() {
       .order('last_name')
 
     if (data) {
-      setFacilityUsers(prev => ({ ...prev, [facilityId]: data as User[] }))
+setFacilityUsers(prev => ({ ...prev, [facilityId]: data as unknown as User[] }))
+
     }
     
     setLoadingUsers(null)
