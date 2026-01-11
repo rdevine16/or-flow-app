@@ -61,9 +61,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        console.log('Auth user:', user)
+        console.log('Auth error:', authError)
+        
         if (user) {
-          const { data: userRecord } = await supabase
+          const { data: userRecord, error: dbError } = await supabase
             .from('users')
             .select(`
               first_name,
@@ -76,6 +79,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             `)
             .eq('id', user.id)
             .single()
+          
+          console.log('User record:', userRecord)
+          console.log('DB error:', dbError)
           
           if (userRecord) {
             // Handle the facilities join - Supabase returns array for joins
@@ -172,11 +178,77 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = getNavigation()
 
+  // ============================================
+  // LOADING STATE - Shows while fetching user
+  // ============================================
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex">
+        {/* Sidebar Skeleton */}
+        <aside className="fixed left-0 top-0 h-screen w-56 bg-slate-900 text-white flex flex-col">
+          {/* Logo */}
+          <div className="h-14 flex items-center border-b border-slate-800 px-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <span className="font-semibold text-sm">ORbit</span>
+            </div>
+          </div>
+
+          {/* Loading shimmer for nav items */}
+          <nav className="flex-1 py-4">
+            <ul className="space-y-1 px-2">
+              {[1, 2, 3, 4].map((i) => (
+                <li key={i}>
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                    <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
+                    <div className="h-4 bg-slate-700 rounded w-20 animate-pulse" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
+
+        {/* Main Content */}
+        <div className="flex-1 ml-56">
+          {/* Top Bar Skeleton */}
+          <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
+            <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />
+            <div className="flex items-center gap-3">
+              <div className="w-64 h-8 bg-slate-100 rounded-lg animate-pulse" />
+              <div className="w-8 h-8 bg-slate-100 rounded-lg animate-pulse" />
+              <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
+                <div className="w-8 h-8 bg-slate-200 rounded-full animate-pulse" />
+                <div className="h-4 bg-slate-200 rounded w-20 animate-pulse" />
+              </div>
+            </div>
+          </header>
+
+          {/* Page Content Loading */}
+          <main className="p-6">
+            <div className="flex items-center justify-center h-64">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-slate-500">Loading...</p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================
+  // MAIN LAYOUT - Shows after user data loaded
+  // ============================================
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full bg-slate-900 text-white transition-all duration-300 z-40 flex flex-col ${
+      <aside className={`fixed left-0 top-0 h-screen bg-slate-900 text-white flex flex-col transition-all duration-300 ${
           collapsed ? 'w-16' : 'w-56'
         }`}
       >
