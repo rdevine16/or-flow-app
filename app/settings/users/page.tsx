@@ -7,7 +7,7 @@ import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import SearchableDropdown from '../../../components/ui/SearchableDropdown'
 import Badge from '../../../components/ui/Badge'
-import InviteUserModal from '../../../components/InviteUserModal'
+import InviteUserModal from '@/components/InviteUserModal'
 
 interface User {
   id: string
