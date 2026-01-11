@@ -9,45 +9,14 @@ interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
-const navigation = [
-  {
-    name: 'Dashboard',
-    href: '/dashboard',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Cases',
-    href: '/cases',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Analytics',
-    href: '/analytics',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Settings',
-    href: '/settings',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      </svg>
-    ),
-  },
-]
+// User data type
+interface UserData {
+  firstName: string
+  lastName: string
+  accessLevel: 'global_admin' | 'facility_admin' | 'user'
+  facilityId: string | null
+  facilityName: string | null
+}
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
@@ -55,25 +24,73 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const supabase = createClient()
   const [collapsed, setCollapsed] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [userName, setUserName] = useState('User')
-  const [userInitials, setUserInitials] = useState('U')
+  const [userData, setUserData] = useState<UserData>({
+    firstName: '',
+    lastName: '',
+    accessLevel: 'user',
+    facilityId: null,
+    facilityName: null,
+  })
+  const [loading, setLoading] = useState(true)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Fetch current user info
+  // Computed values
+  const userName = `${userData.firstName} ${userData.lastName}`.trim() || 'User'
+  const userInitials = userData.firstName && userData.lastName 
+    ? `${userData.firstName[0]}${userData.lastName[0]}`.toUpperCase() 
+    : 'U'
+  
+  // Access level helpers
+  const isGlobalAdmin = userData.accessLevel === 'global_admin'
+  const isFacilityAdmin = userData.accessLevel === 'facility_admin'
+  const isAdmin = isGlobalAdmin || isFacilityAdmin
+
+  // Get display role for user menu
+  const getRoleDisplay = () => {
+    switch (userData.accessLevel) {
+      case 'global_admin':
+        return 'Global Administrator'
+      case 'facility_admin':
+        return 'Facility Administrator'
+      default:
+        return 'Staff'
+    }
+  }
+
+  // Fetch current user info including access_level
   useEffect(() => {
     async function fetchUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single()
-        
-        if (userData) {
-          setUserName(`${userData.first_name} ${userData.last_name}`)
-          setUserInitials(`${userData.first_name[0]}${userData.last_name[0]}`.toUpperCase())
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: userRecord } = await supabase
+            .from('users')
+            .select(`
+              first_name,
+              last_name,
+              access_level,
+              facility_id,
+              facilities (
+                name
+              )
+            `)
+            .eq('id', user.id)
+            .single()
+          
+          if (userRecord) {
+            setUserData({
+              firstName: userRecord.first_name,
+              lastName: userRecord.last_name,
+              accessLevel: userRecord.access_level,
+              facilityId: userRecord.facility_id,
+              facilityName: userRecord.facilities?.name || null,
+            })
+          }
         }
+      } catch (error) {
+        console.error('Error fetching user:', error)
+      } finally {
+        setLoading(false)
       }
     }
     fetchUser()
@@ -100,6 +117,58 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return pathname.startsWith(href)
   }
 
+  // Build navigation based on access level
+  const getNavigation = () => {
+    const baseNav = [
+      {
+        name: 'Dashboard',
+        href: '/dashboard',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+        ),
+        allowedRoles: ['global_admin', 'facility_admin', 'user'],
+      },
+      {
+        name: 'Cases',
+        href: '/cases',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+          </svg>
+        ),
+        allowedRoles: ['global_admin', 'facility_admin', 'user'],
+      },
+      {
+        name: 'Analytics',
+        href: '/analytics',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        ),
+        allowedRoles: ['global_admin', 'facility_admin'], // Only admins see Analytics
+      },
+      {
+        name: 'Settings',
+        href: '/settings',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        ),
+        allowedRoles: ['global_admin', 'facility_admin'], // Only admins see Settings
+      },
+    ]
+
+    // Filter navigation based on user's access level
+    return baseNav.filter(item => item.allowedRoles.includes(userData.accessLevel))
+  }
+
+  const navigation = getNavigation()
+
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
@@ -116,9 +185,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            {!collapsed && <span className="font-semibold text-sm">OR Flow</span>}
+            {!collapsed && <span className="font-semibold text-sm">ORbit</span>}
           </div>
         </div>
+
+        {/* Facility indicator for Global Admin */}
+        {isGlobalAdmin && !collapsed && (
+          <div className="px-4 py-2 border-b border-slate-800">
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Viewing</p>
+            <p className="text-sm text-slate-300 truncate">All Facilities</p>
+          </div>
+        )}
+
+        {/* Facility indicator for Facility users */}
+        {!isGlobalAdmin && userData.facilityName && !collapsed && (
+          <div className="px-4 py-2 border-b border-slate-800">
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Facility</p>
+            <p className="text-sm text-slate-300 truncate">{userData.facilityName}</p>
+          </div>
+        )}
 
         {/* Navigation */}
         <nav className="flex-1 py-4">
@@ -225,23 +310,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
               {/* Dropdown Menu */}
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
                   <div className="px-4 py-2 border-b border-slate-100">
                     <p className="text-sm font-medium text-slate-900">{userName}</p>
-                    <p className="text-xs text-slate-500">Administrator</p>
+                    <p className="text-xs text-slate-500">{getRoleDisplay()}</p>
+                    {userData.facilityName && (
+                      <p className="text-xs text-slate-400 mt-0.5">{userData.facilityName}</p>
+                    )}
                   </div>
                   
-                  <Link
-                    href="/settings"
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                    onClick={() => setUserMenuOpen(false)}
-                  >
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Settings
-                  </Link>
+                  {/* Settings link - only for admins */}
+                  {isAdmin && (
+                    <Link
+                      href="/settings"
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      Settings
+                    </Link>
+                  )}
                   
                   <button
                     onClick={handleLogout}
