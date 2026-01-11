@@ -7,6 +7,7 @@ import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import SearchableDropdown from '../../../components/ui/SearchableDropdown'
 import Badge from '../../../components/ui/Badge'
+import InviteUserModal from '../../../components/InviteUserModal'
 
 interface User {
   id: string
@@ -14,6 +15,7 @@ interface User {
   last_name: string
   email: string
   role_id: string
+  access_level: string
   user_roles: { name: string }[] | { name: string } | null
 }
 
@@ -33,9 +35,12 @@ export default function UsersSettingsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<UserRole[]>([])
   const [loading, setLoading] = useState(true)
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [currentUserFacilityId, setCurrentUserFacilityId] = useState<string | null>(null)
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -44,21 +49,42 @@ export default function UsersSettingsPage() {
     role_id: '',
   })
 
-  const facilityId = 'a1111111-1111-1111-1111-111111111111'
-
   useEffect(() => {
-    fetchData()
+    fetchCurrentUser()
   }, [])
 
-  const fetchData = async () => {
+  const fetchCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id, access_level')
+        .eq('id', user.id)
+        .single()
+
+      if (userData) {
+        setCurrentUserFacilityId(userData.facility_id)
+        setIsGlobalAdmin(userData.access_level === 'global_admin')
+        fetchData(userData.facility_id, userData.access_level === 'global_admin')
+      }
+    }
+  }
+
+  const fetchData = async (facilityId: string | null, isGlobal: boolean) => {
     setLoading(true)
 
+    let usersQuery = supabase
+      .from('users')
+      .select('id, first_name, last_name, email, role_id, access_level, user_roles (name)')
+      .order('last_name')
+
+    // If not global admin, filter by facility
+    if (!isGlobal && facilityId) {
+      usersQuery = usersQuery.eq('facility_id', facilityId)
+    }
+
     const [usersRes, rolesRes] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id, first_name, last_name, email, role_id, user_roles (name)')
-        .eq('facility_id', facilityId)
-        .order('last_name'),
+      usersQuery,
       supabase.from('user_roles').select('id, name').order('name'),
     ])
 
@@ -67,27 +93,12 @@ export default function UsersSettingsPage() {
     setLoading(false)
   }
 
-  const handleAdd = async () => {
-    if (!formData.first_name || !formData.last_name || !formData.email || !formData.role_id) return
-
-    const { data, error } = await supabase
-      .from('users')
-      .insert({
-        id: crypto.randomUUID(),
-        first_name: formData.first_name,
-        last_name: formData.last_name,
-        email: formData.email,
-        role_id: formData.role_id,
-        facility_id: facilityId,
-      })
-      .select('id, first_name, last_name, email, role_id, user_roles (name)')
-      .single()
-
-    if (!error && data) {
-      setUsers([...users, data as User].sort((a, b) => a.last_name.localeCompare(b.last_name)))
-      setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
-      setShowAddForm(false)
-    }
+  const handleInviteSuccess = () => {
+    setSuccessMessage('Invitation sent successfully! The user will receive an email to set their password.')
+    fetchData(currentUserFacilityId, isGlobalAdmin)
+    
+    // Clear success message after 5 seconds
+    setTimeout(() => setSuccessMessage(null), 5000)
   }
 
   const handleEdit = async (id: string) => {
@@ -137,7 +148,6 @@ export default function UsersSettingsPage() {
       email: user.email,
       role_id: user.role_id,
     })
-    setShowAddForm(false)
   }
 
   const cancelEditing = () => {
@@ -156,93 +166,65 @@ export default function UsersSettingsPage() {
     }
   }
 
+  const getAccessLevelBadge = (accessLevel: string) => {
+    switch (accessLevel) {
+      case 'global_admin':
+        return <Badge variant="error" size="sm">Global Admin</Badge>
+      case 'facility_admin':
+        return <Badge variant="warning" size="sm">Facility Admin</Badge>
+      default:
+        return null
+    }
+  }
+
   return (
     <DashboardLayout>
       <Container className="py-8">
         <SettingsLayout
           title="Users & Roles"
-          description="Manage staff members who can be assigned to surgical cases."
+          description="Manage staff members who can access this facility."
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
           ) : (
             <div className="space-y-4">
-              {!showAddForm ? (
-                <button
-                  onClick={() => {
-                    setShowAddForm(true)
-                    setEditingId(null)
-                    setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
-                  }}
-                  className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-teal-500 hover:text-teal-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              {/* Success Message */}
+              {successMessage && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
+                  <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Add New User
-                </button>
-              ) : (
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <input
-                      type="text"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                      placeholder="First Name"
-                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
-                    <input
-                      type="text"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                      placeholder="Last Name"
-                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">{successMessage}</p>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="Email"
-                      className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-                    />
-                    <SearchableDropdown
-                      placeholder="Select Role"
-                      value={formData.role_id}
-                      onChange={(id) => setFormData({ ...formData, role_id: id })}
-                      options={roles.map(r => ({
-                        id: r.id,
-                        label: r.name.charAt(0).toUpperCase() + r.name.slice(1),
-                      }))}
-                    />
-                  </div>
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setShowAddForm(false)
-                        setFormData({ first_name: '', last_name: '', email: '', role_id: '' })
-                      }}
-                      className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleAdd}
-                      disabled={!formData.first_name || !formData.last_name || !formData.email || !formData.role_id}
-                      className="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
-                    >
-                      Add User
-                    </button>
-                  </div>
+                  <button 
+                    onClick={() => setSuccessMessage(null)}
+                    className="ml-auto text-green-500 hover:text-green-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               )}
 
+              {/* Invite Button */}
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Invite New User
+              </button>
+
+              {/* Users List */}
               {users.length === 0 ? (
                 <div className="text-center py-8 bg-white rounded-xl border border-slate-200">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -251,7 +233,7 @@ export default function UsersSettingsPage() {
                     </svg>
                   </div>
                   <p className="text-slate-500 text-sm">No users yet</p>
-                  <p className="text-slate-400 text-xs mt-1">Add surgeons, nurses, and staff above</p>
+                  <p className="text-slate-400 text-xs mt-1">Invite surgeons, nurses, and staff to get started</p>
                 </div>
               ) : (
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
@@ -268,14 +250,14 @@ export default function UsersSettingsPage() {
                                 value={formData.first_name}
                                 onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                                 placeholder="First Name"
-                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                               />
                               <input
                                 type="text"
                                 value={formData.last_name}
                                 onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                                 placeholder="Last Name"
-                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                               />
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -284,7 +266,7 @@ export default function UsersSettingsPage() {
                                 value={formData.email}
                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                 placeholder="Email"
-                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                               />
                               <SearchableDropdown
                                 placeholder="Select Role"
@@ -305,7 +287,7 @@ export default function UsersSettingsPage() {
                               </button>
                               <button
                                 onClick={() => handleEdit(user.id)}
-                                className="px-4 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                               >
                                 Save Changes
                               </button>
@@ -318,12 +300,15 @@ export default function UsersSettingsPage() {
                                 {user.first_name[0]}{user.last_name[0]}
                               </div>
                               <div>
-                                <p className="font-medium text-slate-900">
-                                  {roleName === 'surgeon' || roleName === 'anesthesiologist'
-                                    ? `Dr. ${user.first_name} ${user.last_name}`
-                                    : `${user.first_name} ${user.last_name}`
-                                  }
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-slate-900">
+                                    {roleName === 'surgeon' || roleName === 'anesthesiologist'
+                                      ? `Dr. ${user.first_name} ${user.last_name}`
+                                      : `${user.first_name} ${user.last_name}`
+                                    }
+                                  </p>
+                                  {getAccessLevelBadge(user.access_level)}
+                                </div>
                                 <p className="text-sm text-slate-500">{user.email}</p>
                               </div>
                             </div>
@@ -391,6 +376,15 @@ export default function UsersSettingsPage() {
           )}
         </SettingsLayout>
       </Container>
+
+      {/* Invite User Modal */}
+      <InviteUserModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        onSuccess={handleInviteSuccess}
+        facilityId={currentUserFacilityId}
+        roles={roles}
+      />
     </DashboardLayout>
   )
 }
