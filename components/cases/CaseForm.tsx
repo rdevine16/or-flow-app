@@ -27,8 +27,11 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(mode === 'edit')
+  const [initialLoading, setInitialLoading] = useState(true) // Start true to fetch user first
   const [error, setError] = useState<string | null>(null)
+  
+  // Store the user's facility ID
+  const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<FormData>({
     case_number: '',
@@ -48,65 +51,102 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [surgeons, setSurgeons] = useState<{ id: string; first_name: string; last_name: string }[]>([])
   const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
 
+  // First, get the current user's facility
   useEffect(() => {
-  async function fetchOptions() {
-    const facilityId = 'a1111111-1111-1111-1111-111111111111'
-
-    const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
-      supabase.from('or_rooms').select('id, name').eq('facility_id', facilityId).order('name'),
-      supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).order('name'),
-      supabase.from('case_statuses').select('id, name').order('display_order'),
-      supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', facilityId),
-    ])
-
-    setOrRooms(roomsRes.data || [])
-    setProcedureTypes(proceduresRes.data || [])
-    setStatuses(statusesRes.data || [])
-
-    // Get surgeon role ID
-    const { data: surgeonRole } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('name', 'surgeon')
-      .single()
-
-    // Get anesthesiologist role ID
-    const { data: anesthRole } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('name', 'anesthesiologist')
-      .single()
-
-    if (usersRes.data) {
-      if (surgeonRole) {
-        setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
+    async function fetchUserFacility() {
+      // Get the logged-in user
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        setError('You must be logged in to create a case')
+        setInitialLoading(false)
+        return
       }
-      if (anesthRole) {
-        setAnesthesiologists(usersRes.data.filter(u => u.role_id === anesthRole.id))
+
+      // Get the user's facility_id from the users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userError || !userData?.facility_id) {
+        setError('Could not determine your facility. Please contact an administrator.')
+        setInitialLoading(false)
+        return
       }
+
+      setUserFacilityId(userData.facility_id)
     }
 
-    // Set defaults for new cases
-    if (mode === 'create') {
-      // Set default date using local timezone
-      setFormData(prev => ({
-        ...prev,
-        scheduled_date: getLocalDateString(),
-      }))
-      
-      // Set default status to 'scheduled'
-      if (statusesRes.data) {
-        const scheduledStatus = statusesRes.data.find(s => s.name === 'scheduled')
-        if (scheduledStatus) {
-          setFormData(prev => ({ ...prev, status_id: scheduledStatus.id }))
+    fetchUserFacility()
+  }, [])
+
+  // Once we have the facility ID, fetch the dropdown options
+  useEffect(() => {
+    async function fetchOptions() {
+      // Wait until we have the facility ID
+      if (!userFacilityId) return
+
+      const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
+        supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
+        supabase.from('procedure_types').select('id, name').eq('facility_id', userFacilityId).order('name'),
+        supabase.from('case_statuses').select('id, name').order('display_order'),
+        supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', userFacilityId),
+      ])
+
+      setOrRooms(roomsRes.data || [])
+      setProcedureTypes(proceduresRes.data || [])
+      setStatuses(statusesRes.data || [])
+
+      // Get surgeon role ID
+      const { data: surgeonRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'surgeon')
+        .single()
+
+      // Get anesthesiologist role ID
+      const { data: anesthRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'anesthesiologist')
+        .single()
+
+      if (usersRes.data) {
+        if (surgeonRole) {
+          setSurgeons(usersRes.data.filter(u => u.role_id === surgeonRole.id))
+        }
+        if (anesthRole) {
+          setAnesthesiologists(usersRes.data.filter(u => u.role_id === anesthRole.id))
         }
       }
+
+      // Set defaults for new cases
+      if (mode === 'create') {
+        // Set default date using local timezone
+        setFormData(prev => ({
+          ...prev,
+          scheduled_date: getLocalDateString(),
+        }))
+        
+        // Set default status to 'scheduled'
+        if (statusesRes.data) {
+          const scheduledStatus = statusesRes.data.find(s => s.name === 'scheduled')
+          if (scheduledStatus) {
+            setFormData(prev => ({ ...prev, status_id: scheduledStatus.id }))
+          }
+        }
+        
+        // Done loading for create mode
+        setInitialLoading(false)
+      }
     }
-  }
 
-  fetchOptions()
-}, [mode])
+    fetchOptions()
+  }, [userFacilityId, mode])
 
+  // Fetch existing case data for edit mode
   useEffect(() => {
     async function fetchCase() {
       if (mode !== 'edit' || !caseId) return
@@ -136,13 +176,23 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       setInitialLoading(false)
     }
 
-    fetchCase()
-  }, [caseId, mode])
+    // Only fetch case after we have the facility ID (so dropdowns are ready)
+    if (userFacilityId) {
+      fetchCase()
+    }
+  }, [caseId, mode, userFacilityId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
+
+    // Make sure we have a facility ID
+    if (!userFacilityId) {
+      setError('Could not determine your facility. Please try again.')
+      setLoading(false)
+      return
+    }
 
     const caseData = {
       case_number: formData.case_number,
@@ -154,7 +204,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       surgeon_id: formData.surgeon_id || null,
       anesthesiologist_id: formData.anesthesiologist_id || null,
       notes: formData.notes || null,
-      facility_id: 'a1111111-1111-1111-1111-111111111111',
+      facility_id: userFacilityId,  // Use the user's actual facility!
     }
 
     let result
