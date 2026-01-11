@@ -18,6 +18,7 @@ interface User {
   facility_id: string | null
   user_roles: { name: string }[] | { name: string } | null
   facilities?: { name: string } | null
+  email_confirmed?: boolean // We'll fetch this from auth
 }
 
 interface UserRole {
@@ -46,9 +47,12 @@ export default function UsersSettingsPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [currentUserFacilityId, setCurrentUserFacilityId] = useState<string | null>(null)
   const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [resendingInvite, setResendingInvite] = useState<string | null>(null)
+  const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set())
 
   // Edit form state
   const [editFormData, setEditFormData] = useState({
@@ -103,16 +107,66 @@ export default function UsersSettingsPage() {
         : Promise.resolve({ data: [] }),
     ])
 
-    setUsers((usersRes.data as unknown as User[]) || [])
+    const usersData = (usersRes.data as unknown as User[]) || []
+    setUsers(usersData)
     setRoles(rolesRes.data || [])
     setFacilities(facilitiesRes.data || [])
+
+    // Fetch pending status for all users
+    await fetchPendingStatus(usersData.map(u => u.email))
+
     setLoading(false)
+  }
+
+  const fetchPendingStatus = async (emails: string[]) => {
+    try {
+      const response = await fetch('/api/check-user-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setPendingUserIds(new Set(data.pendingUserIds || []))
+      }
+    } catch (error) {
+      console.error('Error fetching pending status:', error)
+    }
   }
 
   const handleInviteSuccess = () => {
     setSuccessMessage('Invitation sent successfully!')
     fetchData(currentUserFacilityId, isGlobalAdmin)
     setTimeout(() => setSuccessMessage(null), 5000)
+  }
+
+  const handleResendInvite = async (user: User) => {
+    setResendingInvite(user.id)
+    setErrorMessage(null)
+
+    try {
+      const response = await fetch('/api/resend-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setErrorMessage(data.error || 'Failed to resend invite')
+        setTimeout(() => setErrorMessage(null), 5000)
+      } else {
+        setSuccessMessage(`Invite resent to ${user.email}`)
+        setTimeout(() => setSuccessMessage(null), 5000)
+      }
+    } catch (error) {
+      setErrorMessage('Failed to resend invite')
+      setTimeout(() => setErrorMessage(null), 5000)
+    }
+
+    setResendingInvite(null)
   }
 
   const openEditModal = (user: User) => {
@@ -203,13 +257,7 @@ export default function UsersSettingsPage() {
     }
   }
 
-  const getAccessLevelLabel = (level: string) => {
-    switch (level) {
-      case 'global_admin': return 'Global Admin'
-      case 'facility_admin': return 'Facility Admin'
-      default: return 'Staff'
-    }
-  }
+  const isPending = (userId: string) => pendingUserIds.has(userId)
 
   return (
     <DashboardLayout>
@@ -245,6 +293,24 @@ export default function UsersSettingsPage() {
                 </div>
               )}
 
+              {/* Error Message */}
+              {errorMessage && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                  <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-medium text-red-800">{errorMessage}</p>
+                  <button 
+                    onClick={() => setErrorMessage(null)}
+                    className="ml-auto text-red-500 hover:text-red-700"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
               {/* Invite Button */}
               <button
                 onClick={() => setShowInviteModal(true)}
@@ -272,12 +338,17 @@ export default function UsersSettingsPage() {
                   {users.map((user) => {
                     const roleName = getRoleName(user.user_roles)
                     const isCurrentUser = user.id === currentUserId
+                    const userIsPending = isPending(user.id)
 
                     return (
                       <div key={user.id} className="p-4 hover:bg-slate-50 transition-colors group">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center text-sm font-semibold text-slate-600">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${
+                              userIsPending 
+                                ? 'bg-amber-100 text-amber-600' 
+                                : 'bg-slate-200 text-slate-600'
+                            }`}>
                               {user.first_name[0]}{user.last_name[0]}
                             </div>
                             <div>
@@ -288,6 +359,9 @@ export default function UsersSettingsPage() {
                                     : `${user.first_name} ${user.last_name}`
                                   }
                                 </p>
+                                {userIsPending && (
+                                  <Badge variant="warning" size="sm">Pending</Badge>
+                                )}
                                 {getAccessLevelBadge(user.access_level)}
                                 {isCurrentUser && (
                                   <span className="text-xs text-slate-400">(you)</span>
@@ -328,6 +402,26 @@ export default function UsersSettingsPage() {
                                 </>
                               ) : (
                                 <>
+                                  {/* Resend Invite Button (only for pending users) */}
+                                  {userIsPending && (
+                                    <button
+                                      onClick={() => handleResendInvite(user)}
+                                      disabled={resendingInvite === user.id}
+                                      className="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                                      title="Resend invite email"
+                                    >
+                                      {resendingInvite === user.id ? (
+                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                      ) : (
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => openEditModal(user)}
                                     className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -360,6 +454,9 @@ export default function UsersSettingsPage() {
               {users.length > 0 && (
                 <p className="text-sm text-slate-400">
                   {users.length} user{users.length !== 1 ? 's' : ''} total
+                  {pendingUserIds.size > 0 && (
+                    <span className="text-amber-500"> · {pendingUserIds.size} pending</span>
+                  )}
                 </p>
               )}
             </div>
@@ -466,7 +563,7 @@ export default function UsersSettingsPage() {
                   value={editFormData.access_level}
                   onChange={(e) => setEditFormData({ ...editFormData, access_level: e.target.value })}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                  disabled={editingUser.id === currentUserId} // Can't change your own access level
+                  disabled={editingUser.id === currentUserId}
                 >
                   <option value="user">Staff — View cases, record milestones</option>
                   <option value="facility_admin">Facility Admin — Full facility access</option>
