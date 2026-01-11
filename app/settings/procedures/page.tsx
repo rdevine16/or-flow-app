@@ -27,6 +27,11 @@ interface ProcedureType {
   procedure_techniques: ProcedureTechnique[] | null
 }
 
+interface Facility {
+  id: string
+  name: string
+}
+
 interface ModalState {
   isOpen: boolean
   mode: 'add' | 'edit'
@@ -38,18 +43,56 @@ export default function ProceduresSettingsPage() {
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [techniques, setTechniques] = useState<ProcedureTechnique[]>([])
+  const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', procedure: null })
   const [formData, setFormData] = useState({ name: '', body_region_id: '', technique_id: '' })
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const facilityId = 'a1111111-1111-1111-1111-111111111111'
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null)
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
 
   useEffect(() => {
-    fetchData()
+    fetchCurrentUser()
   }, [])
 
-  const fetchData = async () => {
+  const fetchCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id, access_level')
+        .eq('id', user.id)
+        .single()
+
+      if (userData) {
+        const isGlobal = userData.access_level === 'global_admin'
+        setIsGlobalAdmin(isGlobal)
+
+        if (isGlobal) {
+          // Fetch all facilities for global admin
+          const { data: facilitiesData } = await supabase
+            .from('facilities')
+            .select('id, name')
+            .order('name')
+
+          if (facilitiesData && facilitiesData.length > 0) {
+            setFacilities(facilitiesData)
+            setSelectedFacilityId(facilitiesData[0].id)
+            fetchData(facilitiesData[0].id)
+          } else {
+            setLoading(false)
+          }
+        } else {
+          // Regular user - use their facility
+          setSelectedFacilityId(userData.facility_id)
+          fetchData(userData.facility_id)
+        }
+      }
+    }
+  }
+
+  const fetchData = async (facilityId: string) => {
     setLoading(true)
     
     // Fetch procedures with joined data
@@ -84,6 +127,11 @@ export default function ProceduresSettingsPage() {
     setLoading(false)
   }
 
+  const handleFacilityChange = (facilityId: string) => {
+    setSelectedFacilityId(facilityId)
+    fetchData(facilityId)
+  }
+
   const openAddModal = () => {
     setFormData({ name: '', body_region_id: '', technique_id: '' })
     setModal({ isOpen: true, mode: 'add', procedure: null })
@@ -104,7 +152,7 @@ export default function ProceduresSettingsPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.name.trim()) return
+    if (!formData.name.trim() || !selectedFacilityId) return
     
     setSaving(true)
 
@@ -113,7 +161,7 @@ export default function ProceduresSettingsPage() {
         .from('procedure_types')
         .insert({
           name: formData.name.trim(),
-          facility_id: facilityId,
+          facility_id: selectedFacilityId,
           body_region_id: formData.body_region_id || null,
           technique_id: formData.technique_id || null,
         })
@@ -190,19 +238,51 @@ export default function ProceduresSettingsPage() {
     return technique?.display_name || '—'
   }
 
+  const selectedFacility = facilities.find(f => f.id === selectedFacilityId)
+
   return (
     <DashboardLayout>
       <Container className="py-8">
         <SettingsLayout
           title="Procedure Types"
-          description="Manage the surgical procedures available for case creation at your facility."
+          description={isGlobalAdmin 
+            ? "Manage surgical procedures across all facilities." 
+            : "Manage the surgical procedures available for case creation at your facility."
+          }
         >
+          {/* Facility Selector (Global Admin Only) */}
+          {isGlobalAdmin && facilities.length > 0 && (
+            <div className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Select Facility
+              </label>
+              <select
+                value={selectedFacilityId || ''}
+                onChange={(e) => handleFacilityChange(e.target.value)}
+                className="w-full md:w-80 px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+              >
+                {facilities.map((facility) => (
+                  <option key={facility.id} value={facility.id}>
+                    {facility.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-slate-500">
+                Managing procedures for: <span className="font-medium text-slate-700">{selectedFacility?.name}</span>
+              </p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
+            </div>
+          ) : !selectedFacilityId ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+              <p className="text-slate-500">No facility selected</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -298,6 +378,13 @@ export default function ProceduresSettingsPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Count */}
+              {procedures.length > 0 && (
+                <p className="text-sm text-slate-400">
+                  {procedures.length} procedure{procedures.length !== 1 ? 's' : ''} total
+                </p>
+              )}
             </div>
           )}
         </SettingsLayout>
