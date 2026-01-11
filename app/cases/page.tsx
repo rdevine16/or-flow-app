@@ -91,11 +91,42 @@ export default function CasesPage() {
   const [dateFilter, setDateFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  
+  // Store the user's facility ID
+  const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
 
   // Store current date range for re-filtering
   const [currentDateRange, setCurrentDateRange] = useState<{ start?: string; end?: string }>({})
 
+  // First, get the current user's facility
+  useEffect(() => {
+    async function fetchUserFacility() {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userData?.facility_id) {
+        setUserFacilityId(userData.facility_id)
+      } else {
+        setLoading(false)
+      }
+    }
+
+    fetchUserFacility()
+  }, [])
+
   const fetchCases = async (startDate?: string, endDate?: string) => {
+    if (!userFacilityId) return
+    
     setLoading(true)
 
     let query = supabase
@@ -110,7 +141,7 @@ export default function CasesPage() {
         case_statuses (name),
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
       `)
-      .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+      .eq('facility_id', userFacilityId)  // Use dynamic facility ID!
       .order('scheduled_date', { ascending: false })
 
     if (startDate && endDate) {
@@ -122,9 +153,12 @@ export default function CasesPage() {
     setLoading(false)
   }
 
+  // Fetch cases when facility ID is loaded
   useEffect(() => {
-    fetchCases()
-  }, [])
+    if (userFacilityId) {
+      fetchCases(currentDateRange.start, currentDateRange.end)
+    }
+  }, [userFacilityId])
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
     setDateFilter(filter)
