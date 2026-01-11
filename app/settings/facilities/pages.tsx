@@ -13,7 +13,7 @@ interface User {
   last_name: string
   email: string
   access_level: string
-  user_roles: { name: string } | null
+  user_roles: { name: string }[] | null
 }
 
 interface Facility {
@@ -189,8 +189,8 @@ export default function FacilitiesSettingsPage() {
     }
   }
 
-  const getRoleName = (userRoles: { name: string } | null): string => {
-    return userRoles?.name || 'Unknown'
+  const getRoleName = (userRoles: { name: string }[] | null): string => {
+    return userRoles?.[0]?.name || 'Unknown'
   }
 
   return (
