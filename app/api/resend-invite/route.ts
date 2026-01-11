@@ -76,9 +76,9 @@ export async function POST(request: NextRequest) {
     const redirectTo = `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?type=invite`
     console.log('Redirect URL:', redirectTo)
 
-    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo,
-    })
+const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+  redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?type=invite`,
+})
 
     if (inviteError) {
       console.error('Error resending invite:', inviteError)
