@@ -78,12 +78,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             .single()
           
           if (userRecord) {
+            // Handle the facilities join - Supabase returns array for joins
+            const facilities = userRecord.facilities as { name: string }[] | null
+            const facility = facilities?.[0] || null
             setUserData({
               firstName: userRecord.first_name,
               lastName: userRecord.last_name,
               accessLevel: userRecord.access_level,
               facilityId: userRecord.facility_id,
-              facilityName: userRecord.facilities?.name || null,
+              facilityName: facility?.name || null,
             })
           }
         }
