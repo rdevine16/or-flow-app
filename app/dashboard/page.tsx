@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
-import ViewToggle from '../../components/ui/ViewToggle'
 import CaseListView from '../../components/dashboard/CaseListView'
 import RoomGridView from '../../components/dashboard/RoomGridView'
 import { getLocalDateString, formatDateWithWeekday } from '../../lib/date-utils'
@@ -24,27 +23,6 @@ interface Room {
   name: string
 }
 
-const viewOptions = [
-  {
-    id: 'cases',
-    label: 'List',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-      </svg>
-    ),
-  },
-  {
-    id: 'rooms',
-    label: 'Rooms',
-    icon: (
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-      </svg>
-    ),
-  },
-]
-
 const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
   if (!data) return null
   if (Array.isArray(data)) return data[0]?.name || null
@@ -52,48 +30,65 @@ const getValue = (data: { name: string }[] | { name: string } | null): string | 
 }
 
 export default function DashboardPage() {
-  const [activeView, setActiveView] = useState('cases')
   const [cases, setCases] = useState<Case[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState('')
   const [todayDate, setTodayDate] = useState('')
+  const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
+  const [roomsCollapsed, setRoomsCollapsed] = useState(false)
   const supabase = createClient()
 
-  // Initialize with today's date
+  // Initialize with today's date and fetch user's facility
   useEffect(() => {
     const today = getLocalDateString()
     setTodayDate(today)
     setSelectedDate(today)
+    fetchCurrentUser()
   }, [])
 
-  // Fetch cases when date changes
+  const fetchCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userData?.facility_id) {
+        setUserFacilityId(userData.facility_id)
+      }
+    }
+  }
+
+  // Fetch cases when date or facility changes
   useEffect(() => {
     async function fetchData() {
-      if (!selectedDate) return
+      if (!selectedDate || !userFacilityId) return
 
       setLoading(true)
 
-const { data: casesData } = await supabase
-  .from('cases')
-  .select(`
-    id,
-    case_number,
-    scheduled_date,
-    start_time,
-    or_rooms (name),
-    procedure_types (name),
-    case_statuses (name),
-    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-  `)
-  .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
-  .eq('scheduled_date', selectedDate)
-  .order('start_time', { ascending: true, nullsFirst: false })
+      const { data: casesData } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          scheduled_date,
+          start_time,
+          or_rooms (name),
+          procedure_types (name),
+          case_statuses (name),
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+        `)
+        .eq('facility_id', userFacilityId)
+        .eq('scheduled_date', selectedDate)
+        .order('start_time', { ascending: true, nullsFirst: false })
 
       const { data: roomsData } = await supabase
         .from('or_rooms')
         .select('id, name')
-        .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+        .eq('facility_id', userFacilityId)
         .order('name')
 
       setCases((casesData as Case[]) || [])
@@ -102,7 +97,7 @@ const { data: casesData } = await supabase
     }
 
     fetchData()
-  }, [selectedDate])
+  }, [selectedDate, userFacilityId])
 
   const getStatusCount = (statusName: string) => {
     return cases.filter(c => getValue(c.case_statuses) === statusName).length
@@ -190,12 +185,6 @@ const { data: casesData } = await supabase
             </button>
           </div>
         </div>
-
-        <ViewToggle
-          options={viewOptions}
-          activeView={activeView}
-          onChange={setActiveView}
-        />
       </div>
 
       {/* Stats Row */}
@@ -263,10 +252,55 @@ const { data: casesData } = await supabase
           </svg>
         </div>
       ) : (
-        <>
-          {activeView === 'cases' && <CaseListView cases={cases} />}
-          {activeView === 'rooms' && <RoomGridView rooms={rooms} cases={cases} />}
-        </>
+        <div className="space-y-6">
+          {/* Room Grid Section */}
+          {rooms.length > 0 && (
+            <div>
+              <div 
+                className="flex items-center justify-between mb-4 cursor-pointer group"
+                onClick={() => setRoomsCollapsed(!roomsCollapsed)}
+              >
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold text-slate-900">OR Rooms</h2>
+                  <span className="text-sm text-slate-500">
+                    {rooms.length} room{rooms.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <button 
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  title={roomsCollapsed ? 'Expand rooms' : 'Collapse rooms'}
+                >
+                  <svg 
+                    className={`w-5 h-5 transition-transform ${roomsCollapsed ? '' : 'rotate-180'}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {!roomsCollapsed && (
+                <RoomGridView rooms={rooms} cases={cases} />
+              )}
+            </div>
+          )}
+
+          {/* Case List Section */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-slate-900">All Cases</h2>
+                <span className="text-sm text-slate-500">
+                  {cases.length} case{cases.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+            
+            <CaseListView cases={cases} />
+          </div>
+        </div>
       )}
     </DashboardLayout>
   )
