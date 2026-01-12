@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
-import Badge from '../../components/ui/Badge'
-import DateFilter from '../../components/ui/DateFilter'
+import SurgeonAvatar from '../../components/ui/SurgeonAvatar'
 import { getLocalDateString } from '../../lib/date-utils'
 
 interface Case {
@@ -20,15 +20,8 @@ interface Case {
 }
 
 type StatusFilter = 'active' | 'all' | 'completed' | 'cancelled'
+type DateFilter = 'today' | 'week' | 'month' | 'all'
 
-const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'all', label: 'All' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
-
-// Which statuses count as "active"
 const ACTIVE_STATUSES = ['scheduled', 'in_progress', 'delayed']
 
 const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
@@ -37,50 +30,139 @@ const getValue = (data: { name: string }[] | { name: string } | null): string | 
   return data.name
 }
 
-const getSurgeonName = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) {
-    const surgeon = data[0]
-    return surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : null
+const getSurgeon = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): { name: string; fullName: string } => {
+  if (!data) return { name: 'Unassigned', fullName: 'Unassigned' }
+  const surgeon = Array.isArray(data) ? data[0] : data
+  if (!surgeon) return { name: 'Unassigned', fullName: 'Unassigned' }
+  return { 
+    name: `Dr. ${surgeon.last_name}`,
+    fullName: `${surgeon.first_name} ${surgeon.last_name}`
   }
-  return `Dr. ${data.first_name} ${data.last_name}`
 }
 
 const formatTime = (time: string | null): string => {
-  if (!time) return '-'
+  if (!time) return '--:--'
   const parts = time.split(':')
   const hour = parseInt(parts[0])
   const minutes = parts[1]
   const ampm = hour >= 12 ? 'PM' : 'AM'
   const displayHour = hour % 12 || 12
-  return displayHour + ':' + minutes + ' ' + ampm
+  return `${displayHour}:${minutes} ${ampm}`
 }
 
 const formatDate = (dateString: string): string => {
   const [year, month, day] = dateString.split('-').map(Number)
   const date = new Date(year, month - 1, day)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const caseDate = new Date(year, month - 1, day)
+  
+  // Check if it's today
+  if (caseDate.getTime() === today.getTime()) {
+    return 'Today'
+  }
+  
+  // Check if it's yesterday
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (caseDate.getTime() === yesterday.getTime()) {
+    return 'Yesterday'
+  }
+  
+  // Check if it's tomorrow
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  if (caseDate.getTime() === tomorrow.getTime()) {
+    return 'Tomorrow'
+  }
+  
   return date.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
   })
 }
 
-const getStatusVariant = (status: string | null): 'default' | 'success' | 'warning' | 'error' | 'info' => {
+const getStatusConfig = (status: string | null) => {
   switch (status) {
-    case 'completed': return 'success'
-    case 'in_progress': return 'warning'
-    case 'delayed': return 'error'
-    case 'cancelled': return 'error'
-    case 'scheduled': return 'info'
-    default: return 'default'
+    case 'in_progress':
+      return {
+        label: 'In Progress',
+        bgColor: 'bg-emerald-50',
+        textColor: 'text-emerald-700',
+        borderColor: 'border-emerald-200',
+        dotColor: 'bg-emerald-500',
+        lineColor: 'bg-emerald-500'
+      }
+    case 'completed':
+      return {
+        label: 'Completed',
+        bgColor: 'bg-slate-50',
+        textColor: 'text-slate-600',
+        borderColor: 'border-slate-200',
+        dotColor: 'bg-slate-400',
+        lineColor: 'bg-slate-400'
+      }
+    case 'delayed':
+      return {
+        label: 'Delayed',
+        bgColor: 'bg-amber-50',
+        textColor: 'text-amber-700',
+        borderColor: 'border-amber-200',
+        dotColor: 'bg-amber-500',
+        lineColor: 'bg-amber-500'
+      }
+    case 'cancelled':
+      return {
+        label: 'Cancelled',
+        bgColor: 'bg-red-50',
+        textColor: 'text-red-700',
+        borderColor: 'border-red-200',
+        dotColor: 'bg-red-500',
+        lineColor: 'bg-red-500'
+      }
+    case 'scheduled':
+    default:
+      return {
+        label: 'Scheduled',
+        bgColor: 'bg-blue-50',
+        textColor: 'text-blue-700',
+        borderColor: 'border-blue-200',
+        dotColor: 'bg-blue-500',
+        lineColor: 'bg-blue-500'
+      }
   }
 }
 
-const formatStatus = (status: string | null): string => {
-  if (!status) return 'Unknown'
-  return status.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+function getDateRange(filter: DateFilter): { start?: string; end?: string } {
+  const today = getLocalDateString()
+  const todayDate = new Date()
+  
+  switch (filter) {
+    case 'today':
+      return { start: today, end: today }
+    case 'week': {
+      const weekStart = new Date(todayDate)
+      weekStart.setDate(todayDate.getDate() - todayDate.getDay())
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekStart.getDate() + 6)
+      return {
+        start: weekStart.toISOString().split('T')[0],
+        end: weekEnd.toISOString().split('T')[0]
+      }
+    }
+    case 'month': {
+      const monthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)
+      const monthEnd = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0)
+      return {
+        start: monthStart.toISOString().split('T')[0],
+        end: monthEnd.toISOString().split('T')[0]
+      }
+    }
+    case 'all':
+    default:
+      return {}
+  }
 }
 
 export default function CasesPage() {
@@ -88,15 +170,10 @@ export default function CasesPage() {
   const supabase = createClient()
   const [cases, setCases] = useState<Case[]>([])
   const [loading, setLoading] = useState(true)
-  const [dateFilter, setDateFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('week')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  
-  // Store the user's facility ID
   const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
-
-  // Store current date range for re-filtering
-  const [currentDateRange, setCurrentDateRange] = useState<{ start?: string; end?: string }>({})
 
   // First, get the current user's facility
   useEffect(() => {
@@ -124,7 +201,7 @@ export default function CasesPage() {
     fetchUserFacility()
   }, [])
 
-  const fetchCases = async (startDate?: string, endDate?: string) => {
+  const fetchCases = async (dateRange: { start?: string; end?: string }) => {
     if (!userFacilityId) return
     
     setLoading(true)
@@ -141,11 +218,12 @@ export default function CasesPage() {
         case_statuses (name),
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
       `)
-      .eq('facility_id', userFacilityId)  // Use dynamic facility ID!
+      .eq('facility_id', userFacilityId)
       .order('scheduled_date', { ascending: false })
+      .order('start_time', { ascending: true })
 
-    if (startDate && endDate) {
-      query = query.gte('scheduled_date', startDate).lte('scheduled_date', endDate)
+    if (dateRange.start && dateRange.end) {
+      query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
     }
 
     const { data } = await query
@@ -153,18 +231,13 @@ export default function CasesPage() {
     setLoading(false)
   }
 
-  // Fetch cases when facility ID is loaded
+  // Fetch cases when facility ID or date filter changes
   useEffect(() => {
     if (userFacilityId) {
-      fetchCases(currentDateRange.start, currentDateRange.end)
+      const dateRange = getDateRange(dateFilter)
+      fetchCases(dateRange)
     }
-  }, [userFacilityId])
-
-  const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
-    setDateFilter(filter)
-    setCurrentDateRange({ start: startDate, end: endDate })
-    fetchCases(startDate, endDate)
-  }
+  }, [userFacilityId, dateFilter])
 
   const handleDelete = async (caseId: string) => {
     await supabase.from('cases').delete().eq('id', caseId)
@@ -172,7 +245,7 @@ export default function CasesPage() {
     setDeleteConfirm(null)
   }
 
-  // Filter cases by status (client-side filtering)
+  // Filter cases by status
   const filteredCases = cases.filter(c => {
     const statusName = getValue(c.case_statuses)
     
@@ -189,174 +262,289 @@ export default function CasesPage() {
     }
   })
 
-  // Count cases by status for filter badges
+  // Count cases by status
   const statusCounts = {
     active: cases.filter(c => {
-      const status = getValue(c.case_statuses)
-      return status ? ACTIVE_STATUSES.includes(status) : true
+      const s = getValue(c.case_statuses)
+      return s ? ACTIVE_STATUSES.includes(s) : true
     }).length,
     all: cases.length,
     completed: cases.filter(c => getValue(c.case_statuses) === 'completed').length,
     cancelled: cases.filter(c => getValue(c.case_statuses) === 'cancelled').length,
   }
 
+  const dateFilters: { key: DateFilter; label: string; icon: React.ReactNode }[] = [
+    { 
+      key: 'today', 
+      label: 'Today',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    { 
+      key: 'week', 
+      label: 'This Week',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      )
+    },
+    { 
+      key: 'month', 
+      label: 'This Month',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      )
+    },
+    { 
+      key: 'all', 
+      label: 'All Time',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      )
+    },
+  ]
+
+  const statusFilters: { key: StatusFilter; label: string }[] = [
+    { key: 'active', label: 'Active' },
+    { key: 'all', label: 'All' },
+    { key: 'completed', label: 'Completed' },
+    { key: 'cancelled', label: 'Cancelled' },
+  ]
+
   return (
     <DashboardLayout>
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">All Cases</h1>
-          <p className="text-sm text-slate-500">
-            {filteredCases.length} {filteredCases.length === 1 ? 'case' : 'cases'} 
-            {statusFilter !== 'all' && ` (${statusFilter})`}
-            {cases.length !== filteredCases.length && ` of ${cases.length} total`}
-          </p>
+      {/* Page Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Cases</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Manage and track surgical cases across your facility
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/cases/new')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/30"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Case
+          </button>
         </div>
-        <button
-          onClick={() => router.push('/cases/new')}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Case
-        </button>
       </div>
 
-      {/* Filters */}
-      <div className="mb-6 space-y-4">
-        {/* Date Filter */}
-        <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
-        
-        {/* Status Filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-600 mr-2">Status:</span>
-          <div className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setStatusFilter(value)}
-                className={`
-                  inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
-                  ${statusFilter === value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                  }
-                `}
-              >
-                {label}
-                <span className={`
-                  text-xs px-1.5 py-0.5 rounded-full
-                  ${statusFilter === value
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-slate-100 text-slate-500'
-                  }
-                `}>
-                  {statusCounts[value]}
-                </span>
-              </button>
-            ))}
+      {/* Filters Section */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 mb-6 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+          {/* Date Filters */}
+          <div className="flex-1">
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Date Range
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {dateFilters.map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setDateFilter(key)}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    dateFilter === key
+                      ? 'bg-slate-900 text-white shadow-md'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="hidden lg:block w-px h-12 bg-slate-200"></div>
+
+          {/* Status Filters */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Status
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {statusFilters.map(({ key, label }) => {
+                const count = statusCounts[key]
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setStatusFilter(key)}
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      statusFilter === key
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {label}
+                    <span className={`px-1.5 py-0.5 rounded-md text-xs font-semibold ${
+                      statusFilter === key ? 'bg-white/20 text-white' : 'bg-white text-slate-500'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Cases Table */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <svg className="animate-spin h-6 w-6 text-blue-600" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p className="text-sm text-slate-500">Loading cases...</p>
           </div>
         ) : filteredCases.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="text-center py-16 px-6">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-1">
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">
               {cases.length === 0 ? 'No cases found' : `No ${statusFilter} cases`}
             </h3>
-            <p className="text-sm text-slate-500 mb-4">
+            <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
               {cases.length === 0 
-                ? 'Try adjusting your date filter or create a new case.'
-                : `Try selecting a different status filter.`
+                ? 'Try adjusting your date filter or create a new case to get started.'
+                : 'Try selecting a different status filter to see more cases.'
               }
             </p>
             {cases.length === 0 ? (
               <button
                 onClick={() => router.push('/cases/new')}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
               >
-                Create your first case →
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create your first case
               </button>
             ) : (
               <button
                 onClick={() => setStatusFilter('all')}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
               >
                 View all cases →
               </button>
             )}
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Case #</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
+          <>
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50/80 border-b border-slate-200/80">
+              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Date</div>
+              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Time</div>
+              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Case</div>
+              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Room</div>
+              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
+              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
+              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</div>
+              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
+            </div>
+
+            {/* Table Body */}
+            <div className="divide-y divide-slate-100">
               {filteredCases.map((c) => {
                 const roomName = getValue(c.or_rooms)
                 const procedureName = getValue(c.procedure_types)
                 const statusName = getValue(c.case_statuses)
-                const surgeonName = getSurgeonName(c.surgeon)
+                const surgeon = getSurgeon(c.surgeon)
+                const statusConfig = getStatusConfig(statusName)
 
                 return (
-                  <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {formatDate(c.scheduled_date)}
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                      {formatTime(c.start_time)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
+                  <div 
+                    key={c.id} 
+                    className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/80 transition-all duration-200 group relative"
+                  >
+                    {/* Hover indicator */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusConfig.lineColor} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+                    
+                    {/* Date */}
+                    <div className="col-span-1">
+                      <span className="text-sm font-medium text-slate-600">{formatDate(c.scheduled_date)}</span>
+                    </div>
+                    
+                    {/* Time */}
+                    <div className="col-span-1">
+                      <span className="text-sm font-semibold text-slate-900 font-mono">{formatTime(c.start_time)}</span>
+                    </div>
+                    
+                    {/* Case Number */}
+                    <div className="col-span-2">
+                      <Link
                         href={`/cases/${c.id}`}
                         className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors"
                       >
                         {c.case_number}
-                      </a>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {roomName || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {procedureName || 'Not specified'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {surgeonName || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getStatusVariant(statusName)} size="sm">
-                        {formatStatus(statusName)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
+                      </Link>
+                    </div>
+                    
+                    {/* Room */}
+                    <div className="col-span-1">
+                      <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg">
+                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span className="text-xs font-medium text-slate-600">{roomName || '—'}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Surgeon */}
+                    <div className="col-span-2">
+                      <div className="flex items-center gap-2.5">
+                        <SurgeonAvatar name={surgeon.fullName} size="sm" />
+                        <span className="text-sm font-medium text-slate-700 truncate">{surgeon.name}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Procedure */}
+                    <div className="col-span-2">
+                      <span className="text-sm text-slate-600 truncate block">{procedureName || 'Not specified'}</span>
+                    </div>
+                    
+                    {/* Status */}
+                    <div className="col-span-2">
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${statusConfig.bgColor} ${statusConfig.borderColor}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotColor}`}></div>
+                        <span className={`text-xs font-semibold ${statusConfig.textColor}`}>
+                          {statusConfig.label}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div className="col-span-1">
                       <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={`/cases/${c.id}`}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                          title="View"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </Link>
                         <button
                           onClick={() => router.push(`/cases/${c.id}/edit`)}
-                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
                           title="Edit"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -367,7 +555,7 @@ export default function CasesPage() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleDelete(c.id)}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
                               title="Confirm Delete"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -376,7 +564,7 @@ export default function CasesPage() {
                             </button>
                             <button
                               onClick={() => setDeleteConfirm(null)}
-                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                              className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-all duration-200"
                               title="Cancel"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -387,7 +575,7 @@ export default function CasesPage() {
                         ) : (
                           <button
                             onClick={() => setDeleteConfirm(c.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
                             title="Delete"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -396,12 +584,35 @@ export default function CasesPage() {
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </div>
+                  </div>
                 )
               })}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Table Footer */}
+            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-200/80">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-500">
+                  Showing <span className="font-semibold text-slate-700">{filteredCases.length}</span> of <span className="font-semibold text-slate-700">{cases.length}</span> cases
+                </span>
+                <div className="flex items-center gap-4 text-sm text-slate-500">
+                  <span className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                    {statusCounts.active - cases.filter(c => getValue(c.case_statuses) === 'scheduled').length} in progress
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    {cases.filter(c => getValue(c.case_statuses) === 'scheduled').length} scheduled
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-slate-400"></div>
+                    {statusCounts.completed} completed
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </DashboardLayout>
