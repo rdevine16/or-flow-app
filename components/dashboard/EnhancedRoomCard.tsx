@@ -103,32 +103,34 @@ function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
   return (
     <Link 
       href={`/cases/${caseItem.id}`}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors group ${
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-100 transition-colors group ${
         isCompleted ? 'opacity-50' : ''
       }`}
     >
       {/* Time */}
-      <span className="text-xs font-mono font-semibold text-slate-500 w-16 flex-shrink-0">
+      <span className="text-xs font-mono font-semibold text-slate-500 w-14 flex-shrink-0">
         {formatTime(caseItem.start_time)}
       </span>
       
-      {/* Surgeon Avatar (small) */}
-      <div className="w-6 h-6 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-        {getSurgeonFullName(caseItem.surgeon).split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-      </div>
+      {/* Case ID */}
+      <span className={`text-xs font-semibold w-28 flex-shrink-0 truncate ${isCompleted ? 'text-slate-400' : 'text-slate-700'}`}>
+        {caseItem.case_number}
+      </span>
       
-      {/* Procedure & Surgeon */}
-      <div className="flex-1 min-w-0">
-        <p className={`text-sm font-medium truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-          {getProcedureName(caseItem.procedure_types)}
-        </p>
-        <p className="text-xs text-slate-400 truncate">{getSurgeonName(caseItem.surgeon)}</p>
-      </div>
+      {/* Surgeon */}
+      <span className={`text-xs w-24 flex-shrink-0 truncate ${isCompleted ? 'text-slate-400' : 'text-slate-600'}`}>
+        {getSurgeonName(caseItem.surgeon)}
+      </span>
       
-      {/* Status indicator */}
+      {/* Procedure */}
+      <span className={`text-xs flex-1 truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-600'}`}>
+        {getProcedureName(caseItem.procedure_types)}
+      </span>
+      
+      {/* Status indicator for completed */}
       {isCompleted && (
         <div className="flex-shrink-0">
-          <svg className="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+          <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
           </svg>
         </div>
