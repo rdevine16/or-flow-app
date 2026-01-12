@@ -81,8 +81,33 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     avgTotalTime: null,
     avgSurgicalTime: null,
   })
+  
+  // NEW: Store the logged-in user's facility ID
+  const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
 
+  // NEW: First, get the logged-in user's facility
   useEffect(() => {
+    async function fetchUserFacility() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userData?.facility_id) {
+        setUserFacilityId(userData.facility_id)
+      }
+    }
+    fetchUserFacility()
+  }, [])
+
+  // CHANGED: Only fetch data once we have the user's facility ID
+  useEffect(() => {
+    if (!userFacilityId) return  // Wait for facility ID
+
     async function fetchData() {
       setLoading(true)
 
@@ -122,6 +147,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         `)
         .eq('case_id', id)
 
+      // FIXED: Use dynamic facility ID instead of hardcoded test ID
       const { data: availableResult } = await supabase
         .from('users')
         .select(`
@@ -130,12 +156,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           last_name,
           user_roles (name)
         `)
-        .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+        .eq('facility_id', userFacilityId)  // ← DYNAMIC!
         .in('role_id', [
           (await supabase.from('user_roles').select('id').eq('name', 'nurse').single()).data?.id,
           (await supabase.from('user_roles').select('id').eq('name', 'tech').single()).data?.id,
         ].filter(Boolean))
 
+      // FIXED: Use dynamic facility ID instead of hardcoded test ID
       const { data: anesthResult } = await supabase
         .from('users')
         .select(`
@@ -144,7 +171,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           last_name,
           user_roles (name)
         `)
-        .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+        .eq('facility_id', userFacilityId)  // ← DYNAMIC!
         .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'anesthesiologist').single()).data?.id)
 
       setCaseData(caseResult as CaseData)
@@ -161,6 +188,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
+        // FIXED: Use dynamic facility ID instead of hardcoded test ID
         const { data: surgeonCases } = await supabase
           .from('cases')
           .select(`
@@ -171,7 +199,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             )
           `)
           .eq('surgeon_id', surgeonId)
-          .eq('facility_id', 'a1111111-1111-1111-1111-111111111111')
+          .eq('facility_id', userFacilityId)  // ← DYNAMIC!
           .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0])
 
         if (surgeonCases && surgeonCases.length > 0) {
@@ -211,7 +239,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     }
 
     fetchData()
-  }, [id])
+  }, [id, userFacilityId])  // ← Added userFacilityId dependency
 
   const recordMilestone = async (milestoneTypeId: string) => {
     const { data, error } = await supabase

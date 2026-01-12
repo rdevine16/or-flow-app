@@ -42,10 +42,32 @@ export default function SurgeonComparisonPage() {
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
   const [selectedSurgeons, setSelectedSurgeons] = useState<string[]>([])
+  
+  // NEW: Store the logged-in user's facility ID dynamically
+  const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
 
-  const facilityId = 'a1111111-1111-1111-1111-111111111111'
+  // NEW: First, get the logged-in user's facility
+  useEffect(() => {
+    async function fetchUserFacility() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+
+      if (userData?.facility_id) {
+        setUserFacilityId(userData.facility_id)
+      }
+    }
+    fetchUserFacility()
+  }, [])
 
   const fetchData = async (startDate?: string, endDate?: string) => {
+    if (!userFacilityId) return  // Wait for facility ID
+    
     setLoading(true)
 
     let query = supabase
@@ -65,7 +87,7 @@ export default function SurgeonComparisonPage() {
           milestone_types (name)
         )
       `)
-      .eq('facility_id', facilityId)
+      .eq('facility_id', userFacilityId)  // ← DYNAMIC!
       .order('scheduled_date', { ascending: false })
 
     if (startDate && endDate) {
@@ -77,7 +99,7 @@ export default function SurgeonComparisonPage() {
     const { data: surgeonsData } = await supabase
       .from('users')
       .select('id, first_name, last_name, role_id')
-      .eq('facility_id', facilityId)
+      .eq('facility_id', userFacilityId)  // ← DYNAMIC!
 
     const { data: surgeonRole } = await supabase
       .from('user_roles')
@@ -97,11 +119,14 @@ export default function SurgeonComparisonPage() {
     setLoading(false)
   }
 
+  // CHANGED: Fetch data when userFacilityId is available
   useEffect(() => {
+    if (!userFacilityId) return  // Wait for facility ID
+    
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
-  }, [])
+  }, [userFacilityId])  // ← Added dependency
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
     setDateFilter(filter)
@@ -174,21 +199,22 @@ export default function SurgeonComparisonPage() {
     name: d.name,
     completed: d.completedCases,
     total: d.totalCases,
-    fill: d.color,
   }))
 
   return (
     <DashboardLayout>
-      <Container className="py-8">
-        <AnalyticsLayout
-          title="Surgeon Comparison"
-          description="Compare performance metrics across surgeons"
-          actions={
-            <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
-          }
-        >
+      <Container>
+        <AnalyticsLayout>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900">Surgeon Comparison</h1>
+              <p className="text-slate-500">Compare performance metrics across surgeons</p>
+            </div>
+            <DateFilter activeFilter={dateFilter} onFilterChange={handleFilterChange} />
+          </div>
+
           {loading ? (
-            <div className="flex items-center justify-center py-24">
+            <div className="flex items-center justify-center py-12">
               <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -196,33 +222,23 @@ export default function SurgeonComparisonPage() {
             </div>
           ) : (
             <>
-              {/* Surgeon Selector */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 mb-8">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-slate-700">
-                    Select Surgeons to Compare (max 6)
-                  </label>
-                  <span className="text-sm text-slate-400">{selectedSurgeons.length} selected</span>
-                </div>
+              {/* Surgeon Selection */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+                <p className="text-sm font-medium text-slate-700 mb-3">Select Surgeons to Compare (max 6)</p>
                 <div className="flex flex-wrap gap-2">
-                  {surgeons.map((surgeon, index) => {
-                    const isSelected = selectedSurgeons.includes(surgeon.id)
-                    const colorIndex = selectedSurgeons.indexOf(surgeon.id)
-                    return (
-                      <button
-                        key={surgeon.id}
-                        onClick={() => toggleSurgeon(surgeon.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 ${
-                          isSelected
-                            ? 'text-white border-transparent'
-                            : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                        }`}
-                        style={isSelected ? { backgroundColor: COLORS[colorIndex % COLORS.length] } : {}}
-                      >
-                        Dr. {surgeon.first_name} {surgeon.last_name}
-                      </button>
-                    )
-                  })}
+                  {surgeons.map(surgeon => (
+                    <button
+                      key={surgeon.id}
+                      onClick={() => toggleSurgeon(surgeon.id)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        selectedSurgeons.includes(surgeon.id)
+                          ? 'bg-teal-600 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      Dr. {surgeon.first_name} {surgeon.last_name}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -233,7 +249,7 @@ export default function SurgeonComparisonPage() {
                     {comparisonData.map(d => (
                       <div
                         key={d.id}
-                        className="bg-white rounded-xl border-2 p-5"
+                        className="bg-white rounded-xl border-2 p-6"
                         style={{ borderColor: d.color }}
                       >
                         <div className="flex items-center gap-3 mb-4">
