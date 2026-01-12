@@ -4,18 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
+import { useUser } from '../../lib/UserContext'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
-}
-
-// User data type
-interface UserData {
-  firstName: string
-  lastName: string
-  accessLevel: 'global_admin' | 'facility_admin' | 'user'
-  facilityId: string | null
-  facilityName: string | null
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -24,26 +16,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const supabase = createClient()
   const [collapsed, setCollapsed] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [userData, setUserData] = useState<UserData>({
-    firstName: '',
-    lastName: '',
-    accessLevel: 'user',
-    facilityId: null,
-    facilityName: null,
-  })
-  const [loading, setLoading] = useState(true)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Get user data from context instead of fetching it here
+  const { userData, loading, isGlobalAdmin, isFacilityAdmin, isAdmin } = useUser()
 
   // Computed values
   const userName = `${userData.firstName} ${userData.lastName}`.trim() || 'User'
   const userInitials = userData.firstName && userData.lastName 
     ? `${userData.firstName[0]}${userData.lastName[0]}`.toUpperCase() 
     : 'U'
-  
-  // Access level helpers
-  const isGlobalAdmin = userData.accessLevel === 'global_admin'
-  const isFacilityAdmin = userData.accessLevel === 'facility_admin'
-  const isAdmin = isGlobalAdmin || isFacilityAdmin
 
   // Get display role for user menu
   const getRoleDisplay = () => {
@@ -56,54 +38,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         return 'Staff'
     }
   }
-
-  // Fetch current user info including access_level
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        console.log('Auth user:', user)
-        console.log('Auth error:', authError)
-        
-        if (user) {
-          const { data: userRecord, error: dbError } = await supabase
-            .from('users')
-            .select(`
-              first_name,
-              last_name,
-              access_level,
-              facility_id,
-              facilities (
-                name
-              )
-            `)
-            .eq('id', user.id)
-            .single()
-          
-          console.log('User record:', userRecord)
-          console.log('DB error:', dbError)
-          
-          if (userRecord) {
-            // Handle the facilities join - Supabase returns array for joins
-            const facilities = userRecord.facilities as { name: string }[] | null
-            const facility = facilities?.[0] || null
-            setUserData({
-              firstName: userRecord.first_name,
-              lastName: userRecord.last_name,
-              accessLevel: userRecord.access_level,
-              facilityId: userRecord.facility_id,
-              facilityName: facility?.name || null,
-            })
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching user:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchUser()
-  }, [])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -157,7 +91,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
         ),
-        allowedRoles: ['global_admin', 'facility_admin'], // Only admins see Analytics
+        allowedRoles: ['global_admin', 'facility_admin'],
       },
       {
         name: 'Settings',
@@ -168,87 +102,32 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
         ),
-        allowedRoles: ['global_admin', 'facility_admin'], // Only admins see Settings
+        allowedRoles: ['global_admin', 'facility_admin'],
       },
     ]
 
-    // Filter navigation based on user's access level
     return baseNav.filter(item => item.allowedRoles.includes(userData.accessLevel))
   }
 
   const navigation = getNavigation()
 
-  // ============================================
-  // LOADING STATE - Shows while fetching user
-  // ============================================
+  // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex">
-        {/* Sidebar Skeleton */}
-        <aside className="fixed left-0 top-0 h-screen w-56 bg-slate-900 text-white flex flex-col">
-          {/* Logo */}
-          <div className="h-14 flex items-center border-b border-slate-800 px-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <span className="font-semibold text-sm">ORbit</span>
-            </div>
-          </div>
-
-          {/* Loading shimmer for nav items */}
-          <nav className="flex-1 py-4">
-            <ul className="space-y-1 px-2">
-              {[1, 2, 3, 4].map((i) => (
-                <li key={i}>
-                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
-                    <div className="w-5 h-5 bg-slate-700 rounded animate-pulse" />
-                    <div className="h-4 bg-slate-700 rounded w-20 animate-pulse" />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <div className="flex-1 ml-56">
-          {/* Top Bar Skeleton */}
-          <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
-            <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />
-            <div className="flex items-center gap-3">
-              <div className="w-64 h-8 bg-slate-100 rounded-lg animate-pulse" />
-              <div className="w-8 h-8 bg-slate-100 rounded-lg animate-pulse" />
-              <div className="flex items-center gap-2 pl-3 border-l border-slate-200">
-                <div className="w-8 h-8 bg-slate-200 rounded-full animate-pulse" />
-                <div className="h-4 bg-slate-200 rounded w-20 animate-pulse" />
-              </div>
-            </div>
-          </header>
-
-          {/* Page Content Loading */}
-          <main className="p-6">
-            <div className="flex items-center justify-center h-64">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Loading...</p>
-              </div>
-            </div>
-          </main>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-slate-500">Loading...</p>
         </div>
       </div>
     )
   }
 
-  // ============================================
-  // MAIN LAYOUT - Shows after user data loaded
-  // ============================================
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-slate-100 flex">
       {/* Sidebar */}
-      <aside className={`fixed left-0 top-0 h-screen bg-slate-900 text-white flex flex-col transition-all duration-300 ${
+      <aside
+        className={`fixed top-0 left-0 h-full bg-slate-900 text-white flex flex-col transition-all duration-300 z-40 ${
           collapsed ? 'w-16' : 'w-56'
         }`}
       >

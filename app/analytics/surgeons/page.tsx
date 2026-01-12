@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '../../../lib/supabase'
+import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
@@ -55,6 +56,9 @@ function formatDateDisplay(dateStr: string): string {
 
 export default function SurgeonAnalysisPage() {
   const supabase = createClient()
+  const { userData, loading: userLoading } = useUser()
+  const facilityId = userData.facilityId
+  
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
@@ -69,10 +73,10 @@ export default function SurgeonAnalysisPage() {
   const [loading, setLoading] = useState(true)
   const [initialLoading, setInitialLoading] = useState(true)
 
-  const facilityId = 'a1111111-1111-1111-1111-111111111111'
-
   // Fetch surgeons on mount
   useEffect(() => {
+    if (!facilityId) return
+    
     async function fetchSurgeons() {
       const { data: surgeonRole } = await supabase
         .from('user_roles')
@@ -98,7 +102,7 @@ export default function SurgeonAnalysisPage() {
       setInitialLoading(false)
     }
     fetchSurgeons()
-  }, [])
+  }, [facilityId])
 
   // Fetch cases when surgeon or date changes
   useEffect(() => {
@@ -326,6 +330,38 @@ export default function SurgeonAnalysisPage() {
 
   // Calculate max time for scaling bars
   const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
+
+  // Early return for loading/no facility
+  if (userLoading) {
+    return (
+      <DashboardLayout>
+        <Container className="py-8">
+          <AnalyticsLayout title="Surgeon Analysis" description="">
+            <div className="flex items-center justify-center py-24">
+              <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            </div>
+          </AnalyticsLayout>
+        </Container>
+      </DashboardLayout>
+    )
+  }
+
+  if (!facilityId) {
+    return (
+      <DashboardLayout>
+        <Container className="py-8">
+          <AnalyticsLayout title="Surgeon Analysis" description="">
+            <div className="text-center py-24 text-slate-500">
+              No facility assigned to your account.
+            </div>
+          </AnalyticsLayout>
+        </Container>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
