@@ -64,6 +64,7 @@ export interface RoomWithCase {
   }
   currentCase: EnhancedCase | null
   nextCase: EnhancedCase | null
+  upcomingCases: EnhancedCase[]   // All scheduled cases (including next)
   caseStartTime: Date | null      // First milestone time (actual start)
   currentPhase: CasePhase | null
   paceData: CasePaceData | null

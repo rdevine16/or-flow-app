@@ -215,6 +215,10 @@ export default function DashboardPage() {
 
           const currentCase = roomCases.find(c => getValue(c.case_statuses) === 'in_progress') || null
           const nextCase = roomCases.find(c => getValue(c.case_statuses) === 'scheduled') || null
+          
+          // Get all cases that aren't the current in-progress case (for the schedule list)
+          // This includes scheduled, completed, delayed - everything except the active one
+          const upcomingCases = roomCases.filter(c => c.id !== currentCase?.id)
 
           const displayCase = currentCase || nextCase
           const isActive = !!currentCase
@@ -246,6 +250,7 @@ export default function DashboardPage() {
             room,
             currentCase,
             nextCase: currentCase ? null : nextCase,
+            upcomingCases,
             caseStartTime: startTime,
             currentPhase: phase,
             paceData

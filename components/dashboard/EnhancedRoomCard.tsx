@@ -1,5 +1,5 @@
 // components/dashboard/EnhancedRoomCard.tsx
-// Enhanced room card with progress bar, elapsed time, and professional styling
+// Enhanced room card showing all scheduled cases for the room
 
 'use client'
 
@@ -37,10 +37,23 @@ function getSurgeonName(surgeon: { first_name: string; last_name: string } | { f
   return `Dr. ${s.last_name}`
 }
 
+// Helper to get full surgeon name for avatar
+function getSurgeonFullName(surgeon: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null): string {
+  const s = getJoinedValue(surgeon)
+  if (!s) return 'Unassigned'
+  return `${s.first_name} ${s.last_name}`
+}
+
 // Helper to get procedure name
 function getProcedureName(procedureTypes: { name: string } | { name: string }[] | null): string {
   const p = getJoinedValue(procedureTypes)
   return p?.name || 'No procedure'
+}
+
+// Helper to get status name
+function getStatusName(caseStatuses: { name: string } | { name: string }[] | null): string | null {
+  const s = getJoinedValue(caseStatuses)
+  return s?.name || null
 }
 
 // Elapsed Time Display Component
@@ -82,14 +95,73 @@ function ScheduledTimeDisplay({ time }: { time: string | null }) {
   )
 }
 
+// Compact case row for the schedule list
+function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
+  const statusName = getStatusName(caseItem.case_statuses)
+  const isCompleted = statusName === 'completed'
+  
+  return (
+    <Link 
+      href={`/cases/${caseItem.id}`}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors group ${
+        isCompleted ? 'opacity-50' : ''
+      }`}
+    >
+      {/* Time */}
+      <span className="text-xs font-mono font-semibold text-slate-500 w-16 flex-shrink-0">
+        {formatTime(caseItem.start_time)}
+      </span>
+      
+      {/* Surgeon Avatar (small) */}
+      <div className="w-6 h-6 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+        {getSurgeonFullName(caseItem.surgeon).split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+      </div>
+      
+      {/* Procedure & Surgeon */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+          {getProcedureName(caseItem.procedure_types)}
+        </p>
+        <p className="text-xs text-slate-400 truncate">{getSurgeonName(caseItem.surgeon)}</p>
+      </div>
+      
+      {/* Status indicator */}
+      {isCompleted && (
+        <div className="flex-shrink-0">
+          <svg className="w-4 h-4 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </div>
+      )}
+      
+      {/* Chevron */}
+      <svg 
+        className="w-4 h-4 text-slate-300 group-hover:text-slate-400 flex-shrink-0 transition-colors" 
+        fill="none" 
+        stroke="currentColor" 
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
+    </Link>
+  )
+}
+
 export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps) {
-  const { room, currentCase, nextCase, caseStartTime, currentPhase, paceData } = roomWithCase
+  const { room, currentCase, nextCase, upcomingCases, caseStartTime, currentPhase, paceData } = roomWithCase
   const status = getRoomStatus(currentCase, nextCase)
-  const displayCase = currentCase || nextCase
+  const primaryCase = currentCase || nextCase
   const isActive = status === 'active'
   
-  // Card content
-  const cardContent = (
+  // Get other cases (exclude the primary case from the upcoming list)
+  const otherCases = upcomingCases.filter(c => c.id !== primaryCase?.id)
+  
+  // Calculate total cases for the day
+  const totalCases = upcomingCases.length + (currentCase ? 1 : 0)
+  const completedCases = upcomingCases.filter(c => getStatusName(c.case_statuses) === 'completed').length + 
+    (currentCase && getStatusName(currentCase.case_statuses) === 'completed' ? 1 : 0)
+  
+  return (
     <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
       {/* Header */}
       <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
@@ -99,25 +171,32 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
             <PhaseBadge phase={currentPhase} />
           )}
         </div>
-        <StatusIndicator status={status} />
+        <div className="flex items-center gap-2">
+          {totalCases > 0 && (
+            <span className="text-xs font-medium text-slate-400">
+              {completedCases}/{totalCases} done
+            </span>
+          )}
+          <StatusIndicator status={status} />
+        </div>
       </div>
       
-      {/* Content */}
+      {/* Primary Case Content */}
       <div className="p-4">
-        {displayCase ? (
-          <>
-            {/* Case info row */}
+        {primaryCase ? (
+          <Link href={`/cases/${primaryCase.id}`} className="block">
+            {/* Primary case info row */}
             <div className="flex items-center gap-3">
-              <SurgeonAvatar name={getSurgeonName(displayCase.surgeon)} size="md" />
+              <SurgeonAvatar name={getSurgeonFullName(primaryCase.surgeon)} size="md" />
               
               <div className="flex-1 min-w-0">
                 <h4 className="text-base font-semibold text-slate-900 truncate">
-                  {getProcedureName(displayCase.procedure_types)}
+                  {getProcedureName(primaryCase.procedure_types)}
                 </h4>
                 <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <span className="font-medium">{getSurgeonName(displayCase.surgeon)}</span>
+                  <span className="font-medium">{getSurgeonName(primaryCase.surgeon)}</span>
                   <span className="text-slate-300">•</span>
-                  <span className="text-slate-400">{displayCase.case_number}</span>
+                  <span className="text-slate-400">{primaryCase.case_number}</span>
                 </div>
               </div>
               
@@ -126,7 +205,7 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
                 {isActive ? (
                   <ElapsedTimeDisplay startTime={caseStartTime} isActive={true} />
                 ) : (
-                  <ScheduledTimeDisplay time={displayCase.start_time} />
+                  <ScheduledTimeDisplay time={primaryCase.start_time} />
                 )}
               </div>
               
@@ -147,7 +226,7 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
                 <PaceProgressBar paceData={paceData} />
               </div>
             )}
-          </>
+          </Link>
         ) : (
           /* Empty state */
           <div className="flex items-center gap-3 py-2">
@@ -160,17 +239,22 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
           </div>
         )}
       </div>
+      
+      {/* Upcoming Cases Section */}
+      {otherCases.length > 0 && (
+        <div className="border-t border-slate-100">
+          <div className="px-4 py-2 bg-slate-50/50">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              {isActive ? 'Up Next' : 'Schedule'} ({otherCases.length})
+            </p>
+          </div>
+          <div className="px-1 pb-2 max-h-48 overflow-y-auto">
+            {otherCases.map((caseItem) => (
+              <CompactCaseRow key={caseItem.id} caseItem={caseItem} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
-  
-  // Wrap in link if there's a case
-  if (displayCase) {
-    return (
-      <Link href={`/cases/${displayCase.id}`} className="block">
-        {cardContent}
-      </Link>
-    )
-  }
-  
-  return cardContent
 }
