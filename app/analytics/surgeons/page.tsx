@@ -228,8 +228,8 @@ export default function SurgeonAnalysisPage() {
     const turnovers = getAllTurnovers(completedCases)
 
     // Calculate total times for uptime calculation
-    const totalORTime = calculateSum(orTimes)
-    const totalSurgicalTime = calculateSum(incisionToClosingTimes) // Incision → Closing
+    const totalORTime = calculateSum(orTimes) || 0
+    const totalSurgicalTime = calculateSum(incisionToClosingTimes) || 0
     
     // Uptime percentage (surgical time / total OR time)
     const uptimePercent = totalORTime > 0 
