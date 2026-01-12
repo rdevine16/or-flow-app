@@ -21,6 +21,7 @@ import {
   formatMinutesToHHMMSS,
   formatTimeFromTimestamp,
   getAllTurnovers,
+  getAllSurgicalTurnovers,
   CaseWithMilestones,
 } from '../../../lib/analytics'
 
@@ -224,8 +225,9 @@ export default function SurgeonAnalysisPage() {
     const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
     const firstCaseScheduledTime = firstCase?.start_time || null
 
-    // Calculate turnovers
-    const turnovers = getAllTurnovers(completedCases)
+    // Calculate turnovers (both return seconds now)
+    const roomTurnovers = getAllTurnovers(completedCases)
+    const surgicalTurnovers = getAllSurgicalTurnovers(completedCases)
 
     // Calculate total times for uptime calculation
     const totalORTime = calculateSum(orTimes) || 0
@@ -249,8 +251,10 @@ export default function SurgeonAnalysisPage() {
       avgIncisionToClosing: calculateAverage(incisionToClosingTimes),
       avgClosingTime: calculateAverage(closingTimes),
       avgClosedToWheelsOut: calculateAverage(closedToWheelsOutTimes),
-      avgRoomTurnover: calculateAverage(turnovers),
-      turnoverCount: turnovers.length,
+      avgRoomTurnover: calculateAverage(roomTurnovers),
+      avgSurgicalTurnover: calculateAverage(surgicalTurnovers),
+      roomTurnoverCount: roomTurnovers.length,
+      surgicalTurnoverCount: surgicalTurnovers.length,
     }
   }
 
@@ -262,6 +266,9 @@ export default function SurgeonAnalysisPage() {
   // Calculate percentage improvements
   const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
   const turnoverVsAllTime = calculatePercentageChange(dayMetrics.avgRoomTurnover, allTimeMetrics.avgRoomTurnover)
+  
+  // Calculate surgical turnover improvement (today vs 30-day average)
+  const surgicalTurnoverVs30Day = calculatePercentageChange(dayMetrics.avgSurgicalTurnover, last30Metrics.avgSurgicalTurnover)
   
   // Calculate uptime improvement (today vs all-time average)
   const uptimeImprovement = allTimeMetrics.uptimePercent > 0 
@@ -526,8 +533,44 @@ export default function SurgeonAnalysisPage() {
                   </div>
                 </div>
 
-                {/* Second Row - Room Turnover */}
-                <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+                {/* Second Row - Turnovers and Uptime */}
+                <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+                  {/* Surgical Turnover */}
+                  <div className="bg-slate-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Avg. Surgical Turnover
+                    </div>
+                    {dayMetrics.surgicalTurnoverCount > 0 ? (
+                      <>
+                        <div className="text-3xl font-bold text-slate-900">
+                          {formatMinutesToHHMMSS(dayMetrics.avgSurgicalTurnover)}
+                        </div>
+                        <div className="flex items-center gap-4 mt-2 text-sm">
+                          {surgicalTurnoverVs30Day !== null && (
+                            <span className={`flex items-center gap-1 ${surgicalTurnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={surgicalTurnoverVs30Day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
+                              </svg>
+                              {Math.abs(surgicalTurnoverVs30Day)}%
+                            </span>
+                          )}
+                          <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgSurgicalTurnover)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold text-slate-400">N/A</div>
+                        <div className="text-xs text-slate-400 mt-1">
+                          Requires 2+ cases in same room
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Room Turnover */}
                   <div className="bg-slate-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -535,7 +578,7 @@ export default function SurgeonAnalysisPage() {
                       </svg>
                       Avg. Room Turnover
                     </div>
-                    {dayMetrics.turnoverCount > 0 ? (
+                    {dayMetrics.roomTurnoverCount > 0 ? (
                       <>
                         <div className="text-3xl font-bold text-slate-900">
                           {formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}
@@ -562,8 +605,8 @@ export default function SurgeonAnalysisPage() {
                     )}
                   </div>
                   
-                  {/* Uptime vs Downtime */}
-                  <div className="bg-slate-50 rounded-lg p-4">
+                  {/* Uptime vs Downtime - Spans 2 columns */}
+                  <div className="bg-slate-50 rounded-lg p-4 col-span-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -584,7 +627,7 @@ export default function SurgeonAnalysisPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={uptimeImprovement >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
                               </svg>
                               {Math.abs(uptimeImprovement).toFixed(1)}%
-                              <span className="text-slate-400 ml-1">in uptime</span>
+                              <span className="text-slate-400 ml-1">improvement in uptime</span>
                             </span>
                           )}
                         </div>
@@ -617,8 +660,6 @@ export default function SurgeonAnalysisPage() {
                       <div className="text-2xl font-bold text-slate-400">--</div>
                     )}
                   </div>
-                  
-                  <div></div>
                 </div>
               </div>
 

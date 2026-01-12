@@ -407,7 +407,7 @@ const TURNOVER_TARGET_MINUTES = 30
 export interface TurnoverData {
   fromCase: CaseWithMilestones
   toCase: CaseWithMilestones
-  turnoverMinutes: number
+  turnoverSeconds: number
   roomName: string
   date: string
   metTarget: boolean
@@ -415,8 +415,8 @@ export interface TurnoverData {
 
 export interface TurnoverAnalysis {
   totalTurnovers: number
-  avgTurnoverMinutes: number | null
-  medianTurnoverMinutes: number | null
+  avgTurnoverSeconds: number | null
+  medianTurnoverSeconds: number | null
   metTargetCount: number
   exceededTargetCount: number
   complianceRate: number // percentage meeting target
@@ -441,6 +441,7 @@ export function analyzeTurnovers(cases: CaseWithMilestones[], targetMinutes: num
   })
 
   const turnovers: TurnoverData[] = []
+  const targetSeconds = targetMinutes * 60
 
   Object.entries(casesByRoomAndDate).forEach(([key, roomCases]) => {
     const [roomId, date] = key.split('_')
@@ -460,51 +461,149 @@ export function analyzeTurnovers(cases: CaseWithMilestones[], targetMinutes: num
       const currentMilestones = getMilestoneMap(currentCase)
       const nextMilestones = getMilestoneMap(nextCase)
       
+      // Room Turnover: patient_out → patient_in
       if (currentMilestones.patient_out && nextMilestones.patient_in) {
-        const turnoverTime = calculateDurationMinutes(
+        const turnoverTime = calculateDurationSeconds(
           currentMilestones.patient_out,
           nextMilestones.patient_in
         )
         
-        // Only include reasonable turnover times (between 5 and 120 minutes)
-        if (turnoverTime !== null && turnoverTime >= 5 && turnoverTime <= 120) {
+        // Only include reasonable turnover times (between 5 and 120 minutes = 300-7200 seconds)
+        if (turnoverTime !== null && turnoverTime >= 300 && turnoverTime <= 7200) {
           const room = Array.isArray(currentCase.or_rooms) ? currentCase.or_rooms[0] : currentCase.or_rooms
           turnovers.push({
             fromCase: currentCase,
             toCase: nextCase,
-            turnoverMinutes: turnoverTime,
+            turnoverSeconds: turnoverTime,
             roomName: room?.name || 'Unknown',
             date: currentCase.scheduled_date,
-            metTarget: turnoverTime <= targetMinutes
+            metTarget: turnoverTime <= targetSeconds
           })
         }
       }
     }
   })
 
-  const turnoverTimes = turnovers.map(t => t.turnoverMinutes)
+  const turnoverTimes = turnovers.map(t => t.turnoverSeconds)
   const metTargetCount = turnovers.filter(t => t.metTarget).length
   
   return {
     totalTurnovers: turnovers.length,
-    avgTurnoverMinutes: calculateAverage(turnoverTimes),
-    medianTurnoverMinutes: calculateMedian(turnoverTimes),
+    avgTurnoverSeconds: calculateAverage(turnoverTimes),
+    medianTurnoverSeconds: calculateMedian(turnoverTimes),
     metTargetCount,
     exceededTargetCount: turnovers.length - metTargetCount,
     complianceRate: turnovers.length > 0 ? Math.round((metTargetCount / turnovers.length) * 100) : 0,
     longestTurnover: turnoverTimes.length > 0 ? Math.max(...turnoverTimes) : null,
     shortestTurnover: turnoverTimes.length > 0 ? Math.min(...turnoverTimes) : null,
-    turnovers: turnovers.sort((a, b) => b.turnoverMinutes - a.turnoverMinutes)
+    turnovers: turnovers.sort((a, b) => b.turnoverSeconds - a.turnoverSeconds)
   }
 }
 
-// Get all turnovers for a set of cases (convenience function - returns minutes)
+// Get all room turnovers for a set of cases (convenience function - returns seconds)
 export function getAllTurnovers(cases: CaseWithMilestones[]): number[] {
-  return analyzeTurnovers(cases).turnovers.map(t => t.turnoverMinutes)
+  return analyzeTurnovers(cases).turnovers.map(t => t.turnoverSeconds)
 }
 
 export function calculateRoomTurnovers(cases: CaseWithMilestones[]): number[] {
   return getAllTurnovers(cases)
+}
+
+// ============================================
+// SURGICAL TURNOVER CALCULATIONS
+// Surgical Turnover = closing_complete (Case 1) → incision (Case 2)
+// This is the surgeon's perspective of time between cases
+// ============================================
+
+export interface SurgicalTurnoverData {
+  fromCase: CaseWithMilestones
+  toCase: CaseWithMilestones
+  turnoverSeconds: number
+  roomName: string
+  date: string
+}
+
+export interface SurgicalTurnoverAnalysis {
+  totalTurnovers: number
+  avgTurnoverSeconds: number | null
+  medianTurnoverSeconds: number | null
+  longestTurnover: number | null
+  shortestTurnover: number | null
+  turnovers: SurgicalTurnoverData[]
+}
+
+export function analyzeSurgicalTurnovers(cases: CaseWithMilestones[]): SurgicalTurnoverAnalysis {
+  // Group cases by room AND date
+  const casesByRoomAndDate: { [key: string]: CaseWithMilestones[] } = {}
+  
+  cases.forEach(c => {
+    const room = Array.isArray(c.or_rooms) ? c.or_rooms[0] : c.or_rooms
+    if (!room?.id) return
+    
+    const key = `${room.id}_${c.scheduled_date}`
+    if (!casesByRoomAndDate[key]) {
+      casesByRoomAndDate[key] = []
+    }
+    casesByRoomAndDate[key].push(c)
+  })
+
+  const turnovers: SurgicalTurnoverData[] = []
+
+  Object.entries(casesByRoomAndDate).forEach(([key, roomCases]) => {
+    const [roomId, date] = key.split('_')
+    
+    // Sort by start time
+    const sortedCases = roomCases.sort((a, b) => {
+      const aTime = a.start_time || ''
+      const bTime = b.start_time || ''
+      return aTime.localeCompare(bTime)
+    })
+
+    // Calculate surgical turnover between consecutive cases
+    for (let i = 0; i < sortedCases.length - 1; i++) {
+      const currentCase = sortedCases[i]
+      const nextCase = sortedCases[i + 1]
+      
+      const currentMilestones = getMilestoneMap(currentCase)
+      const nextMilestones = getMilestoneMap(nextCase)
+      
+      // Surgical Turnover: closing_complete → incision
+      if (currentMilestones.closing_complete && nextMilestones.incision) {
+        const turnoverTime = calculateDurationSeconds(
+          currentMilestones.closing_complete,
+          nextMilestones.incision
+        )
+        
+        // Only include reasonable turnover times (between 5 min and 120 min)
+        if (turnoverTime !== null && turnoverTime >= 300 && turnoverTime <= 7200) {
+          const room = Array.isArray(currentCase.or_rooms) ? currentCase.or_rooms[0] : currentCase.or_rooms
+          turnovers.push({
+            fromCase: currentCase,
+            toCase: nextCase,
+            turnoverSeconds: turnoverTime,
+            roomName: room?.name || 'Unknown',
+            date: currentCase.scheduled_date,
+          })
+        }
+      }
+    }
+  })
+
+  const turnoverTimes = turnovers.map(t => t.turnoverSeconds)
+  
+  return {
+    totalTurnovers: turnovers.length,
+    avgTurnoverSeconds: calculateAverage(turnoverTimes),
+    medianTurnoverSeconds: calculateMedian(turnoverTimes),
+    longestTurnover: turnoverTimes.length > 0 ? Math.max(...turnoverTimes) : null,
+    shortestTurnover: turnoverTimes.length > 0 ? Math.min(...turnoverTimes) : null,
+    turnovers: turnovers.sort((a, b) => b.turnoverSeconds - a.turnoverSeconds)
+  }
+}
+
+// Get all surgical turnovers for a set of cases (convenience function - returns seconds)
+export function getAllSurgicalTurnovers(cases: CaseWithMilestones[]): number[] {
+  return analyzeSurgicalTurnovers(cases).turnovers.map(t => t.turnoverSeconds)
 }
 
 // ============================================
