@@ -437,7 +437,7 @@ export default function AnalyticsOverviewPage() {
                   {/* Average Turnover */}
                   <MetricCard
                     title="Avg Turnover Time"
-                    value={metrics.turnoverAnalysis.avgTurnoverMinutes ? `${metrics.turnoverAnalysis.avgTurnoverMinutes}m` : '-'}
+                    value={metrics.turnoverAnalysis.avgTurnoverSeconds ? formatSecondsToHHMMSS(metrics.turnoverAnalysis.avgTurnoverSeconds) : '-'}
                     subtitle={`${metrics.turnoverAnalysis.complianceRate}% under 30 min`}
                     target={{ value: 80, met: metrics.turnoverAnalysis.complianceRate >= 80 }}
                     highlighted
@@ -832,7 +832,7 @@ export default function AnalyticsOverviewPage() {
                     <div className="bg-blue-50 rounded-lg p-4">
                       <p className="text-sm text-blue-600">Average</p>
                       <p className="text-2xl font-bold text-blue-700">
-                        {metrics.turnoverAnalysis.avgTurnoverMinutes || 0}m
+                        {formatSecondsToHHMMSS(metrics.turnoverAnalysis.avgTurnoverSeconds)}
                       </p>
                     </div>
                     <div className="bg-emerald-50 rounded-lg p-4">
@@ -873,7 +873,7 @@ export default function AnalyticsOverviewPage() {
                                 </td>
                                 <td className="px-4 py-2 text-sm text-right">
                                   <span className={`font-medium ${turnover.metTarget ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {turnover.turnoverMinutes} min
+                                    {formatSecondsToHHMMSS(turnover.turnoverSeconds)}
                                   </span>
                                 </td>
                               </tr>
