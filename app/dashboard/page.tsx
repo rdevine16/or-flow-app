@@ -26,10 +26,10 @@ interface Room {
   name: string
 }
 
+// Helper to get name from joined data (uses getJoinedValue internally)
 const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0]?.name || null
-  return data.name
+  const joined = getJoinedValue(data)
+  return joined?.name || null
 }
 
 export default function DashboardPage() {
@@ -205,8 +205,8 @@ export default function DashboardPage() {
         // Build rooms with cases and fetch pace data for active cases
         const roomsWithCasesPromises = rooms.map(async (room) => {
           const roomCases = fetchedCases.filter(c => {
-            const roomName = c.or_rooms?.name
-            return roomName === room.name
+            const orRoom = getJoinedValue(c.or_rooms)
+            return orRoom?.name === room.name
           }).sort((a, b) => {
             if (!a.start_time) return 1
             if (!b.start_time) return -1
