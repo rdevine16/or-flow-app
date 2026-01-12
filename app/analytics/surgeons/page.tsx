@@ -214,24 +214,35 @@ export default function SurgeonAnalysisPage() {
     
     const orTimes = completedCases.map(c => getTotalORTime(getMilestoneMap(c)))
     const surgicalTimes = completedCases.map(c => getSurgicalTime(getMilestoneMap(c)))
-    const wheelsInToIncisionTimes = completedCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
     const incisionToClosingTimes = completedCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
+    const wheelsInToIncisionTimes = completedCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
     const closingTimes = completedCases.map(c => getClosingTime(getMilestoneMap(c)))
     const closedToWheelsOutTimes = completedCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
     
-    // Get first case start time
-    const firstCaseTime = completedCases.length > 0 
-      ? getMilestoneMap(completedCases[0]).patient_in 
-      : null
+    // Get first case info
+    const firstCase = completedCases.length > 0 ? completedCases[0] : null
+    const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
+    const firstCaseScheduledTime = firstCase?.start_time || null
 
     // Calculate turnovers
     const turnovers = getAllTurnovers(completedCases)
 
+    // Calculate total times for uptime calculation
+    const totalORTime = calculateSum(orTimes)
+    const totalSurgicalTime = calculateSum(incisionToClosingTimes) // Incision → Closing
+    
+    // Uptime percentage (surgical time / total OR time)
+    const uptimePercent = totalORTime > 0 
+      ? Math.round((totalSurgicalTime / totalORTime) * 100) 
+      : 0
+
     return {
       totalCases: completedCases.length,
       firstCaseStartTime: firstCaseTime,
-      totalORTime: calculateSum(orTimes),
-      totalSurgicalTime: calculateSum(surgicalTimes),
+      firstCaseScheduledTime: firstCaseScheduledTime,
+      totalORTime: totalORTime,
+      totalSurgicalTime: totalSurgicalTime,
+      uptimePercent: uptimePercent,
       avgORTime: calculateAverage(orTimes),
       avgSurgicalTime: calculateAverage(surgicalTimes),
       avgWheelsInToIncision: calculateAverage(wheelsInToIncisionTimes),
@@ -239,6 +250,7 @@ export default function SurgeonAnalysisPage() {
       avgClosingTime: calculateAverage(closingTimes),
       avgClosedToWheelsOut: calculateAverage(closedToWheelsOutTimes),
       avgRoomTurnover: calculateAverage(turnovers),
+      turnoverCount: turnovers.length,
     }
   }
 
@@ -250,6 +262,11 @@ export default function SurgeonAnalysisPage() {
   // Calculate percentage improvements
   const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
   const turnoverVsAllTime = calculatePercentageChange(dayMetrics.avgRoomTurnover, allTimeMetrics.avgRoomTurnover)
+  
+  // Calculate uptime improvement (today vs all-time average)
+  const uptimeImprovement = allTimeMetrics.uptimePercent > 0 
+    ? dayMetrics.uptimePercent - allTimeMetrics.uptimePercent
+    : null
 
   // Get case breakdown for the stacked bar chart
   const getCaseBreakdown = () => {
@@ -462,6 +479,17 @@ export default function SurgeonAnalysisPage() {
                     <div className="text-3xl font-bold text-slate-900">
                       {formatTimeInTimezone(dayMetrics.firstCaseStartTime, facilityTimezone)}
                     </div>
+                    {dayMetrics.firstCaseScheduledTime && (
+                      <div className="text-sm text-slate-500 mt-1">
+                        Scheduled: {(() => {
+                          const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
+                          const h = parseInt(hours)
+                          const suffix = h >= 12 ? 'pm' : 'am'
+                          const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
+                          return `${displayHour}:${minutes} ${suffix}`
+                        })()}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
@@ -507,31 +535,87 @@ export default function SurgeonAnalysisPage() {
                       </svg>
                       Avg. Room Turnover
                     </div>
-                    <div className="text-3xl font-bold text-slate-900">
-                      {formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-sm">
-                      {turnoverVs30Day !== null && (
-                        <span className={`flex items-center gap-1 ${turnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={turnoverVs30Day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
-                          </svg>
-                          {Math.abs(turnoverVs30Day)}%
-                        </span>
-                      )}
-                      <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
-                    </div>
+                    {dayMetrics.turnoverCount > 0 ? (
+                      <>
+                        <div className="text-3xl font-bold text-slate-900">
+                          {formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}
+                        </div>
+                        <div className="flex items-center gap-4 mt-2 text-sm">
+                          {turnoverVs30Day !== null && (
+                            <span className={`flex items-center gap-1 ${turnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={turnoverVs30Day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
+                              </svg>
+                              {Math.abs(turnoverVs30Day)}%
+                            </span>
+                          )}
+                          <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-2xl font-bold text-slate-400">N/A</div>
+                        <div className="text-xs text-slate-400 mt-1">
+                          Requires 2+ cases in same room
+                        </div>
+                      </>
+                    )}
                   </div>
                   
-                  {/* Placeholder for future metrics */}
-                  <div className="bg-slate-50 rounded-lg p-4 opacity-50">
+                  {/* Uptime vs Downtime */}
+                  <div className="bg-slate-50 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                       </svg>
                       Uptime vs Downtime
                     </div>
-                    <div className="text-2xl font-bold text-slate-400">Coming Soon</div>
+                    
+                    {dayMetrics.totalORTime > 0 ? (
+                      <>
+                        {/* Percentages */}
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <span className="text-2xl font-bold text-slate-900">{dayMetrics.uptimePercent}%</span>
+                          <span className="text-slate-400">vs.</span>
+                          <span className="text-xl font-semibold text-slate-600">{100 - dayMetrics.uptimePercent}%</span>
+                          {uptimeImprovement !== null && (
+                            <span className={`flex items-center gap-1 text-sm ml-2 ${uptimeImprovement >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={uptimeImprovement >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
+                              </svg>
+                              {Math.abs(uptimeImprovement).toFixed(1)}%
+                              <span className="text-slate-400 ml-1">in uptime</span>
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Stacked Bar */}
+                        <div className="h-3 w-full rounded-full overflow-hidden flex">
+                          <div 
+                            className="h-full bg-blue-600 transition-all"
+                            style={{ width: `${dayMetrics.uptimePercent}%` }}
+                          />
+                          <div 
+                            className="h-full bg-red-500 transition-all"
+                            style={{ width: `${100 - dayMetrics.uptimePercent}%` }}
+                          />
+                        </div>
+                        
+                        {/* Legend */}
+                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full bg-blue-600" />
+                            <span>Surgical</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
+                            <span>Other</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-2xl font-bold text-slate-400">--</div>
+                    )}
                   </div>
                   
                   <div></div>
