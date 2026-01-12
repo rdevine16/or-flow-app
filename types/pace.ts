@@ -3,6 +3,17 @@
 
 export type PaceStatus = 'ahead' | 'onPace' | 'slightlyBehind' | 'behind'
 
+// Helper type for Supabase joined data (can be array or single object)
+// MUST be defined before interfaces that use it
+type JoinedData<T> = T | T[] | null
+
+// Helper function to safely get value from Supabase joined data
+export function getJoinedValue<T>(data: JoinedData<T>): T | null {
+  if (!data) return null
+  if (Array.isArray(data)) return data[0] || null
+  return data
+}
+
 export interface SurgeonProcedureAverage {
   id: string
   surgeon_id: string
@@ -33,9 +44,7 @@ export interface CasePaceData {
 export interface MilestoneWithType {
   case_id: string
   recorded_at: string
-  milestone_types: {
-    name: string
-  } | null
+  milestone_types: JoinedData<{ name: string }>
 }
 
 export type CasePhase = 
@@ -60,9 +69,6 @@ export interface RoomWithCase {
   paceData: CasePaceData | null
 }
 
-// Helper type for Supabase joined data (can be array or single object)
-type JoinedData<T> = T | T[] | null
-
 export interface EnhancedCase {
   id: string
   case_number: string
@@ -77,11 +83,4 @@ export interface EnhancedCase {
   procedure_types: JoinedData<{ name: string }>
   case_statuses: JoinedData<{ name: string }>
   surgeon: JoinedData<{ first_name: string; last_name: string }>
-}
-
-// Helper function to safely get value from Supabase joined data
-export function getJoinedValue<T>(data: JoinedData<T>): T | null {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0] || null
-  return data
 }

@@ -16,7 +16,8 @@ import {
   CasePhase,
   MilestoneWithType,
   SurgeonProcedureAverage,
-  SurgeonMilestoneAverage
+  SurgeonMilestoneAverage,
+  getJoinedValue
 } from '../../types/pace'
 import { determinePhase, parseISODate, parseScheduledStartTime } from '../../lib/pace-utils'
 
@@ -172,7 +173,7 @@ export default function DashboardPage() {
             .order('recorded_at', { ascending: true })
 
           if (milestones) {
-            for (const milestone of milestones as MilestoneWithType[]) {
+            for (const milestone of milestones as unknown as MilestoneWithType[]) {
               const caseId = milestone.case_id
               
               // First milestone = patient in time (actual case start)
@@ -183,8 +184,9 @@ export default function DashboardPage() {
                 }
               }
               
-              if (milestone.milestone_types?.name) {
-                const name = milestone.milestone_types.name.toLowerCase()
+              const milestoneType = getJoinedValue(milestone.milestone_types)
+              if (milestoneType?.name) {
+                const name = milestoneType.name.toLowerCase()
                 if (!caseMilestoneNames[caseId]) {
                   caseMilestoneNames[caseId] = []
                 }
