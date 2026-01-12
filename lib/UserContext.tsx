@@ -10,6 +10,7 @@ interface UserData {
   accessLevel: 'global_admin' | 'facility_admin' | 'user'
   facilityId: string | null
   facilityName: string | null
+  facilityTimezone: string  // Added for timezone support
 }
 
 interface UserContextType {
@@ -26,6 +27,7 @@ const defaultUserData: UserData = {
   accessLevel: 'user',
   facilityId: null,
   facilityName: null,
+  facilityTimezone: 'America/New_York',  // Default fallback
 }
 
 const UserContext = createContext<UserContextType>({
@@ -54,13 +56,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
               last_name,
               access_level,
               facility_id,
-              facilities (name)
+              facilities (name, timezone)
             `)
             .eq('id', user.id)
             .single()
           
           if (userRecord) {
-            const facilities = userRecord.facilities as { name: string }[] | null
+            const facilities = userRecord.facilities as { name: string; timezone: string }[] | null
             const facility = facilities?.[0] || null
             setUserData({
               firstName: userRecord.first_name,
@@ -68,6 +70,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
               accessLevel: userRecord.access_level,
               facilityId: userRecord.facility_id,
               facilityName: facility?.name || null,
+              facilityTimezone: facility?.timezone || 'America/New_York',
             })
           }
         }

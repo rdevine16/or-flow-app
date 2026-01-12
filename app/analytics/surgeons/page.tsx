@@ -6,6 +6,7 @@ import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
+import { formatTimeInTimezone } from '../../../lib/date-utils'
 import {
   getMilestoneMap,
   getTotalORTime,
@@ -58,6 +59,7 @@ export default function SurgeonAnalysisPage() {
   const supabase = createClient()
   const { userData, loading: userLoading } = useUser()
   const facilityId = userData.facilityId
+  const facilityTimezone = userData.facilityTimezone
   
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
@@ -458,7 +460,7 @@ export default function SurgeonAnalysisPage() {
                       First Case Start Time
                     </div>
                     <div className="text-3xl font-bold text-slate-900">
-                      {formatTimeFromTimestamp(dayMetrics.firstCaseStartTime)}
+                      {formatTimeInTimezone(dayMetrics.firstCaseStartTime, facilityTimezone)}
                     </div>
                   </div>
                   <div>
