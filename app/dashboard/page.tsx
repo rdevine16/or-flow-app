@@ -151,8 +151,8 @@ export default function DashboardPage() {
           .eq('facility_id', userFacilityId)
           .order('name')
 
-        const fetchedCases = (casesData as EnhancedCase[]) || []
-        const rooms = (roomsData as Room[]) || []
+        const fetchedCases = (casesData as unknown as EnhancedCase[]) || []
+        const rooms = (roomsData as unknown as Room[]) || []
 
         setCases(fetchedCases)
 

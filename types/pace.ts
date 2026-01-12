@@ -60,6 +60,9 @@ export interface RoomWithCase {
   paceData: CasePaceData | null
 }
 
+// Helper type for Supabase joined data (can be array or single object)
+type JoinedData<T> = T | T[] | null
+
 export interface EnhancedCase {
   id: string
   case_number: string
@@ -69,8 +72,16 @@ export interface EnhancedCase {
   or_room_id: string | null
   procedure_type_id: string | null
   surgeon_id: string | null
-  or_rooms: { name: string } | null
-  procedure_types: { name: string } | null
-  case_statuses: { name: string } | null
-  surgeon: { first_name: string; last_name: string } | null
+  // Supabase can return these as arrays or single objects depending on the relationship
+  or_rooms: JoinedData<{ name: string }>
+  procedure_types: JoinedData<{ name: string }>
+  case_statuses: JoinedData<{ name: string }>
+  surgeon: JoinedData<{ first_name: string; last_name: string }>
+}
+
+// Helper function to safely get value from Supabase joined data
+export function getJoinedValue<T>(data: JoinedData<T>): T | null {
+  if (!data) return null
+  if (Array.isArray(data)) return data[0] || null
+  return data
 }

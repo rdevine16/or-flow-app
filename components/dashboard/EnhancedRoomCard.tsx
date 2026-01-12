@@ -4,7 +4,7 @@
 'use client'
 
 import Link from 'next/link'
-import { RoomWithCase, CasePhase, EnhancedCase } from '../../types/pace'
+import { RoomWithCase, CasePhase, EnhancedCase, getJoinedValue } from '../../types/pace'
 import { useElapsedTime } from '../../hooks/useElapsedTime'
 import { getRoomStatus } from '../../lib/pace-utils'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
@@ -31,14 +31,16 @@ function formatTime(time: string | null): string {
 }
 
 // Helper to get surgeon display name
-function getSurgeonName(surgeon: { first_name: string; last_name: string } | null): string {
-  if (!surgeon) return 'Unassigned'
-  return `Dr. ${surgeon.last_name}`
+function getSurgeonName(surgeon: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null): string {
+  const s = getJoinedValue(surgeon)
+  if (!s) return 'Unassigned'
+  return `Dr. ${s.last_name}`
 }
 
 // Helper to get procedure name
-function getProcedureName(procedureTypes: { name: string } | null): string {
-  return procedureTypes?.name || 'No procedure'
+function getProcedureName(procedureTypes: { name: string } | { name: string }[] | null): string {
+  const p = getJoinedValue(procedureTypes)
+  return p?.name || 'No procedure'
 }
 
 // Elapsed Time Display Component
