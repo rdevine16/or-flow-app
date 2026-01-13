@@ -9,7 +9,14 @@
 import { Resend } from 'resend'
 
 // Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend: Resend | null = null
+
+function getResendClient() {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resend
+}
 
 // Default sender - update with your verified domain
 const DEFAULT_FROM = 'ORbit <noreply@orbitsurgical.com>'
