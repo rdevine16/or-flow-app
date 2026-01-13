@@ -472,6 +472,14 @@ export const facilityAudit = {
     })
   },
 
+  async deleted(supabase: SupabaseClient, facilityName: string, facilityId: string) {
+    await log(supabase, 'facility.deleted', {
+      targetType: 'facility',
+      targetId: facilityId,
+      targetLabel: facilityName,
+    })
+  },
+
   async subscriptionChanged(
     supabase: SupabaseClient,
     facilityName: string,
@@ -507,6 +515,37 @@ export const adminAudit = {
       targetType: 'facility',
       targetId: facilityId,
       targetLabel: facilityName,
+    })
+  },
+
+  async defaultProcedureCreated(supabase: SupabaseClient, procedureName: string, procedureId: string) {
+    await log(supabase, 'admin.default_procedure_created', {
+      targetType: 'default_procedure',
+      targetId: procedureId,
+      targetLabel: procedureName,
+      newValues: { name: procedureName },
+    })
+  },
+
+  async defaultProcedureUpdated(
+    supabase: SupabaseClient,
+    procedureName: string,
+    procedureId: string,
+    changes?: Record<string, unknown>
+  ) {
+    await log(supabase, 'admin.default_procedure_updated', {
+      targetType: 'default_procedure',
+      targetId: procedureId,
+      targetLabel: procedureName,
+      newValues: changes,
+    })
+  },
+
+  async defaultProcedureDeleted(supabase: SupabaseClient, procedureName: string, procedureId: string) {
+    await log(supabase, 'admin.default_procedure_deleted', {
+      targetType: 'default_procedure',
+      targetId: procedureId,
+      targetLabel: procedureName,
     })
   },
 }

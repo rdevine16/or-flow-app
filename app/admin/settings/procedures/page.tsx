@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { createClient } from '../../../../lib/supabase'
 import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
+import { adminAudit } from '../../../../lib/audit-logger'
 
 interface DefaultProcedure {
   id: string
@@ -63,7 +64,6 @@ export default function DefaultProceduresPage() {
       setLoading(true)
 
       try {
-        // Fetch procedures
         const { data: proceduresData } = await supabase
           .from('default_procedure_types')
           .select('*, body_region:body_regions(name)')
@@ -73,7 +73,6 @@ export default function DefaultProceduresPage() {
           setProcedures(proceduresData)
         }
 
-        // Fetch body regions
         const { data: regionsData } = await supabase
           .from('body_regions')
           .select('id, name')
@@ -92,7 +91,6 @@ export default function DefaultProceduresPage() {
     fetchData()
   }, [isGlobalAdmin, supabase])
 
-  // Open modal for new procedure
   const handleNew = () => {
     setEditingProcedure(null)
     setFormName('')
@@ -101,7 +99,6 @@ export default function DefaultProceduresPage() {
     setShowModal(true)
   }
 
-  // Open modal for editing
   const handleEdit = (procedure: DefaultProcedure) => {
     setEditingProcedure(procedure)
     setFormName(procedure.name)
@@ -110,7 +107,6 @@ export default function DefaultProceduresPage() {
     setShowModal(true)
   }
 
-  // Save procedure (create or update)
   const handleSave = async () => {
     if (!formName.trim()) return
 
@@ -124,7 +120,6 @@ export default function DefaultProceduresPage() {
       }
 
       if (editingProcedure) {
-        // Update existing
         const { error } = await supabase
           .from('default_procedure_types')
           .update(data)
@@ -132,7 +127,13 @@ export default function DefaultProceduresPage() {
 
         if (error) throw error
 
-        // Update local state
+        // Audit log the update
+        await adminAudit.defaultProcedureUpdated(supabase, formName.trim(), editingProcedure.id, {
+          name: formName.trim(),
+          body_region_id: formBodyRegion || null,
+          is_active: formIsActive,
+        })
+
         setProcedures(procedures.map(p => 
           p.id === editingProcedure.id 
             ? { 
@@ -145,7 +146,6 @@ export default function DefaultProceduresPage() {
             : p
         ))
       } else {
-        // Create new
         const { data: newProcedure, error } = await supabase
           .from('default_procedure_types')
           .insert(data)
@@ -153,6 +153,9 @@ export default function DefaultProceduresPage() {
           .single()
 
         if (error) throw error
+
+        // Audit log the creation
+        await adminAudit.defaultProcedureCreated(supabase, formName.trim(), newProcedure.id)
 
         setProcedures([...procedures, newProcedure].sort((a, b) => a.name.localeCompare(b.name)))
       }
@@ -166,7 +169,6 @@ export default function DefaultProceduresPage() {
     }
   }
 
-  // Delete procedure
   const handleDelete = async (procedure: DefaultProcedure) => {
     if (!confirm(`Delete "${procedure.name}"? This cannot be undone.`)) return
 
@@ -178,6 +180,9 @@ export default function DefaultProceduresPage() {
 
       if (error) throw error
 
+      // Audit log the deletion
+      await adminAudit.defaultProcedureDeleted(supabase, procedure.name, procedure.id)
+
       setProcedures(procedures.filter(p => p.id !== procedure.id))
     } catch (error) {
       console.error('Error deleting procedure:', error)
@@ -185,7 +190,6 @@ export default function DefaultProceduresPage() {
     }
   }
 
-  // Toggle active status
   const handleToggleActive = async (procedure: DefaultProcedure) => {
     try {
       const { error } = await supabase
@@ -195,6 +199,11 @@ export default function DefaultProceduresPage() {
 
       if (error) throw error
 
+      // Audit log the status change
+      await adminAudit.defaultProcedureUpdated(supabase, procedure.name, procedure.id, {
+        is_active: !procedure.is_active,
+      })
+
       setProcedures(procedures.map(p =>
         p.id === procedure.id ? { ...p, is_active: !p.is_active } : p
       ))
@@ -203,7 +212,6 @@ export default function DefaultProceduresPage() {
     }
   }
 
-  // Filter procedures
   const filteredProcedures = procedures.filter(p => {
     if (filterRegion !== 'all' && p.body_region_id !== filterRegion) return false
     if (filterActive === 'active' && !p.is_active) return false
@@ -212,15 +220,13 @@ export default function DefaultProceduresPage() {
     return true
   })
 
-  // Group by body region for display
   const groupedProcedures = filteredProcedures.reduce((acc, proc) => {
-    const regionName = (proc.body_region as any)?.name || 'Uncategorized'
+    const regionName = (proc.body_region as { name: string } | null)?.name || 'Uncategorized'
     if (!acc[regionName]) acc[regionName] = []
     acc[regionName].push(proc)
     return acc
   }, {} as Record<string, DefaultProcedure[]>)
 
-  // Loading state
   if (userLoading || loading) {
     return (
       <DashboardLayout>
@@ -235,7 +241,6 @@ export default function DefaultProceduresPage() {
 
   return (
     <DashboardLayout>
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Link
@@ -262,10 +267,8 @@ export default function DefaultProceduresPage() {
         </button>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
         <div className="flex flex-wrap gap-4">
-          {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
             <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -279,7 +282,6 @@ export default function DefaultProceduresPage() {
             />
           </div>
 
-          {/* Body Region Filter */}
           <select
             value={filterRegion}
             onChange={(e) => setFilterRegion(e.target.value)}
@@ -291,7 +293,6 @@ export default function DefaultProceduresPage() {
             ))}
           </select>
 
-          {/* Active Filter */}
           <select
             value={filterActive}
             onChange={(e) => setFilterActive(e.target.value)}
@@ -304,7 +305,6 @@ export default function DefaultProceduresPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <p className="text-sm text-slate-500">Total Procedures</p>
@@ -320,7 +320,6 @@ export default function DefaultProceduresPage() {
         </div>
       </div>
 
-      {/* Procedures List */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {Object.keys(groupedProcedures).length === 0 ? (
           <div className="p-12 text-center">
@@ -399,7 +398,6 @@ export default function DefaultProceduresPage() {
         )}
       </div>
 
-      {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">

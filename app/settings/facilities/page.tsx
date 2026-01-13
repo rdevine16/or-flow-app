@@ -6,6 +6,7 @@ import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import Badge from '../../../components/ui/Badge'
+import { facilityAudit } from '../../../lib/audit-logger'
 
 interface User {
   id: string
@@ -51,14 +52,12 @@ export default function FacilitiesSettingsPage() {
   const fetchFacilities = async () => {
     setLoading(true)
     
-    // Fetch facilities with user count
     const { data: facilitiesData, error } = await supabase
       .from('facilities')
       .select('id, name, address, created_at')
       .order('name')
 
     if (facilitiesData) {
-      // Get user counts for each facility
       const facilitiesWithCounts = await Promise.all(
         facilitiesData.map(async (facility) => {
           const { count } = await supabase
@@ -77,7 +76,6 @@ export default function FacilitiesSettingsPage() {
 
   const fetchFacilityUsers = async (facilityId: string) => {
     if (facilityUsers[facilityId]) {
-      // Already loaded
       return
     }
     
@@ -90,8 +88,7 @@ export default function FacilitiesSettingsPage() {
       .order('last_name')
 
     if (data) {
-setFacilityUsers(prev => ({ ...prev, [facilityId]: data as unknown as User[] }))
-
+      setFacilityUsers(prev => ({ ...prev, [facilityId]: data as unknown as User[] }))
     }
     
     setLoadingUsers(null)
@@ -119,6 +116,9 @@ setFacilityUsers(prev => ({ ...prev, [facilityId]: data as unknown as User[] }))
       .single()
 
     if (!error && data) {
+      // Audit log the creation
+      await facilityAudit.created(supabase, formData.name.trim(), data.id)
+
       setFacilities([...facilities, { ...data, _count: 0 }].sort((a, b) => a.name.localeCompare(b.name)))
       setFormData({ name: '', address: '' })
       setShowAddModal(false)
@@ -137,6 +137,19 @@ setFacilityUsers(prev => ({ ...prev, [facilityId]: data as unknown as User[] }))
       .eq('id', editingFacility.id)
 
     if (!error) {
+      // Audit log the update
+      const changes: Record<string, unknown> = {}
+      if (formData.name.trim() !== editingFacility.name) {
+        changes.name = formData.name.trim()
+      }
+      if ((formData.address.trim() || null) !== editingFacility.address) {
+        changes.address = formData.address.trim() || null
+      }
+
+      if (Object.keys(changes).length > 0) {
+        await facilityAudit.updated(supabase, formData.name.trim(), editingFacility.id, changes)
+      }
+
       setFacilities(
         facilities
           .map(f => f.id === editingFacility.id 
@@ -151,12 +164,19 @@ setFacilityUsers(prev => ({ ...prev, [facilityId]: data as unknown as User[] }))
   }
 
   const handleDelete = async (id: string) => {
+    // Get facility name for audit log
+    const facility = facilities.find(f => f.id === id)
+    const facilityName = facility?.name || ''
+
     const { error } = await supabase
       .from('facilities')
       .delete()
       .eq('id', id)
 
     if (!error) {
+      // Audit log the deletion
+      await facilityAudit.deleted(supabase, facilityName, id)
+
       setFacilities(facilities.filter(f => f.id !== id))
       setDeleteConfirm(null)
       if (expandedFacility === id) {

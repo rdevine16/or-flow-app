@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
 import { getLocalDateString } from '../../lib/date-utils'
+import { caseAudit } from '../../lib/audit-logger'
 
 interface CaseFormProps {
   caseId?: string
@@ -27,10 +28,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true) // Start true to fetch user first
+  const [initialLoading, setInitialLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
-  // Store the user's facility ID
   const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState<FormData>({
@@ -45,6 +45,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     notes: '',
   })
 
+  // Store original data for edit mode to track changes
+  const [originalData, setOriginalData] = useState<FormData | null>(null)
+
   const [orRooms, setOrRooms] = useState<{ id: string; name: string }[]>([])
   const [procedureTypes, setProcedureTypes] = useState<{ id: string; name: string }[]>([])
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
@@ -54,7 +57,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // First, get the current user's facility
   useEffect(() => {
     async function fetchUserFacility() {
-      // Get the logged-in user
       const { data: { user } } = await supabase.auth.getUser()
       
       if (!user) {
@@ -63,7 +65,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         return
       }
 
-      // Get the user's facility_id from the users table
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('facility_id')
@@ -85,7 +86,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // Once we have the facility ID, fetch the dropdown options
   useEffect(() => {
     async function fetchOptions() {
-      // Wait until we have the facility ID
       if (!userFacilityId) return
 
       const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
@@ -99,14 +99,12 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       setProcedureTypes(proceduresRes.data || [])
       setStatuses(statusesRes.data || [])
 
-      // Get surgeon role ID
       const { data: surgeonRole } = await supabase
         .from('user_roles')
         .select('id')
         .eq('name', 'surgeon')
         .single()
 
-      // Get anesthesiologist role ID
       const { data: anesthRole } = await supabase
         .from('user_roles')
         .select('id')
@@ -122,15 +120,12 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         }
       }
 
-      // Set defaults for new cases
       if (mode === 'create') {
-        // Set default date using local timezone
         setFormData(prev => ({
           ...prev,
           scheduled_date: getLocalDateString(),
         }))
         
-        // Set default status to 'scheduled'
         if (statusesRes.data) {
           const scheduledStatus = statusesRes.data.find(s => s.name === 'scheduled')
           if (scheduledStatus) {
@@ -138,7 +133,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           }
         }
         
-        // Done loading for create mode
         setInitialLoading(false)
       }
     }
@@ -162,7 +156,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         return
       }
 
-      setFormData({
+      const caseFormData = {
         case_number: data.case_number || '',
         scheduled_date: data.scheduled_date || '',
         start_time: data.start_time ? data.start_time.slice(0, 5) : '07:30',
@@ -172,11 +166,13 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         surgeon_id: data.surgeon_id || '',
         anesthesiologist_id: data.anesthesiologist_id || '',
         notes: data.notes || '',
-      })
+      }
+
+      setFormData(caseFormData)
+      setOriginalData(caseFormData) // Store original for comparison
       setInitialLoading(false)
     }
 
-    // Only fetch case after we have the facility ID (so dropdowns are ready)
     if (userFacilityId) {
       fetchCase()
     }
@@ -187,7 +183,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     setLoading(true)
     setError(null)
 
-    // Make sure we have a facility ID
     if (!userFacilityId) {
       setError('Could not determine your facility. Please try again.')
       setLoading(false)
@@ -204,15 +199,74 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       surgeon_id: formData.surgeon_id || null,
       anesthesiologist_id: formData.anesthesiologist_id || null,
       notes: formData.notes || null,
-      facility_id: userFacilityId,  // Use the user's actual facility!
+      facility_id: userFacilityId,
     }
 
     let result
 
     if (mode === 'create') {
       result = await supabase.from('cases').insert(caseData).select().single()
+      
+      if (!result.error && result.data) {
+        // Get procedure name for better audit log
+        const procedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
+        
+        // Audit log the case creation
+        await caseAudit.created(supabase, {
+          id: result.data.id,
+          case_number: formData.case_number,
+          procedure_name: procedure?.name,
+        })
+      }
     } else {
       result = await supabase.from('cases').update(caseData).eq('id', caseId).select().single()
+      
+      if (!result.error && result.data && originalData) {
+        // Calculate changes
+        const changes: Record<string, unknown> = {}
+        const oldValues: Record<string, unknown> = {}
+        
+        if (formData.case_number !== originalData.case_number) {
+          oldValues.case_number = originalData.case_number
+          changes.case_number = formData.case_number
+        }
+        if (formData.scheduled_date !== originalData.scheduled_date) {
+          oldValues.scheduled_date = originalData.scheduled_date
+          changes.scheduled_date = formData.scheduled_date
+        }
+        if (formData.start_time !== originalData.start_time) {
+          oldValues.start_time = originalData.start_time
+          changes.start_time = formData.start_time
+        }
+        if (formData.or_room_id !== originalData.or_room_id) {
+          oldValues.or_room = orRooms.find(r => r.id === originalData.or_room_id)?.name
+          changes.or_room = orRooms.find(r => r.id === formData.or_room_id)?.name
+        }
+        if (formData.procedure_type_id !== originalData.procedure_type_id) {
+          oldValues.procedure = procedureTypes.find(p => p.id === originalData.procedure_type_id)?.name
+          changes.procedure = procedureTypes.find(p => p.id === formData.procedure_type_id)?.name
+        }
+        if (formData.status_id !== originalData.status_id) {
+          oldValues.status = statuses.find(s => s.id === originalData.status_id)?.name
+          changes.status = statuses.find(s => s.id === formData.status_id)?.name
+        }
+        if (formData.surgeon_id !== originalData.surgeon_id) {
+          const oldSurgeon = surgeons.find(s => s.id === originalData.surgeon_id)
+          const newSurgeon = surgeons.find(s => s.id === formData.surgeon_id)
+          oldValues.surgeon = oldSurgeon ? `Dr. ${oldSurgeon.first_name} ${oldSurgeon.last_name}` : null
+          changes.surgeon = newSurgeon ? `Dr. ${newSurgeon.first_name} ${newSurgeon.last_name}` : null
+        }
+
+        // Only log if there are actual changes
+        if (Object.keys(changes).length > 0) {
+          await caseAudit.updated(
+            supabase,
+            { id: result.data.id, case_number: formData.case_number },
+            oldValues,
+            changes
+          )
+        }
+      }
     }
 
     if (result.error) {

@@ -596,8 +596,24 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Assigned Staff</p>
               <StaffPopover
-                availableStaff={availableStaff.filter(s => !caseStaff.some(cs => cs.user_id === s.id))}
-                onAddStaff={addStaff}
+                staff={caseStaff.map(cs => {
+                  const user = cs.users ? (Array.isArray(cs.users) ? cs.users[0] : cs.users) : null
+                  const role = cs.user_roles ? (Array.isArray(cs.user_roles) ? cs.user_roles[0] : cs.user_roles) : null
+                  return {
+                    id: cs.id,
+                    name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+                    role: role?.name || 'Staff',
+                  }
+                })}
+                availableStaff={availableStaff
+                  .filter(s => !caseStaff.some(cs => cs.user_id === s.id))
+                  .map(s => ({
+                    id: s.id,
+                    label: `${s.first_name} ${s.last_name}`,
+                    subtitle: Array.isArray(s.user_roles) ? s.user_roles[0]?.name || '' : (s.user_roles as { name: string } | null)?.name || '',
+                  }))}
+                onAdd={addStaff}
+                onRemove={removeStaff}
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -607,11 +623,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   {anesthesiologist ? `${anesthesiologist.first_name} ${anesthesiologist.last_name}` : 'No Anesthesiologist'}
                 </span>
                 <SearchableDropdown
-                  options={anesthesiologists.map(a => ({ value: a.id, label: `${a.first_name} ${a.last_name}` }))}
+                  options={anesthesiologists.map(a => ({ id: a.id, label: `${a.first_name} ${a.last_name}` }))}
                   value={anesthesiologist?.id || ''}
                   onChange={updateAnesthesiologist}
                   placeholder="Select..."
-                  size="sm"
                 />
               </div>
 
