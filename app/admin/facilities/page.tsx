@@ -98,19 +98,20 @@ export default function FacilitiesListPage() {
 
   // Handle impersonation
   const handleImpersonate = async (facility: Facility) => {
-    const result = await startImpersonation(
-      supabase,
-      userData.id,
-      facility.id,
-      facility.name
-    )
+const { data: { user: currentUser } } = await supabase.auth.getUser()
 
-    if (result.success) {
-      // Log the action
-      await quickAuditLog(
-        supabase,
-        userData.id,
-        userData.email || '',
+const result = await startImpersonation(
+  supabase,
+  currentUser?.id || '',
+  facility.id,
+  facility.name
+)
+
+if (result.success) {
+  await quickAuditLog(
+    supabase,
+    currentUser?.id || '',
+    currentUser?.email || '',
         'admin.impersonation_started',
         {
           facilityId: facility.id,
