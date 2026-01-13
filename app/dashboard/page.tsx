@@ -9,6 +9,7 @@ import DashboardLayout from '../../components/layouts/DashboardLayout'
 import CaseListView from '../../components/dashboard/CaseListView'
 import EnhancedRoomGridView from '../../components/dashboard/EnhancedRoomGridView'
 import { getLocalDateString, formatDateWithWeekday } from '../../lib/date-utils'
+import { getImpersonationState } from '../../lib/impersonation'
 import { 
   RoomWithCase, 
   EnhancedCase, 
@@ -51,19 +52,27 @@ export default function DashboardPage() {
   }, [])
 
   const fetchCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
+  // Check for impersonation first
+  const impersonation = getImpersonationState()
+  if (impersonation) {
+    setUserFacilityId(impersonation.facilityId)
+    return
+  }
 
-      if (userData?.facility_id) {
-        setUserFacilityId(userData.facility_id)
-      }
+  // Otherwise use user's actual facility
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: userData } = await supabase
+      .from('users')
+      .select('facility_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userData?.facility_id) {
+      setUserFacilityId(userData.facility_id)
     }
   }
+}
 
   // Fetch pace data for a specific case
   const fetchPaceData = useCallback(async (
