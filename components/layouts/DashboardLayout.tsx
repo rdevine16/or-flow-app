@@ -334,21 +334,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }
 
-  // Redirect global admin to /admin if accessing facility pages without impersonation
-  const facilityPages = ['/dashboard', '/cases', '/analytics', '/settings']
-  const isOnFacilityPage = facilityPages.some(page => pathname === page || pathname.startsWith(page + '/'))
-  
-  if (effectiveIsGlobalAdmin && !impersonation && isOnFacilityPage) {
-    router.push('/admin')
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm text-slate-500 font-medium">Redirecting...</p>
-        </div>
-      </div>
-    )
-  }
+  // Note: Global admins without impersonation will only see "Admin" in nav
+  // No auto-redirect needed - they'll naturally navigate to /admin
 
   // Trial Expired Block Screen
   if (isTrialExpired() && !effectiveIsGlobalAdmin) {

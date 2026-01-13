@@ -84,8 +84,19 @@ export default function LoginPage() {
         // Update last login timestamp
         await updateLastLogin(supabase, data.user.id)
 
-        // Redirect to dashboard
-        router.push('/dashboard')
+        // Check access level to determine redirect
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('access_level')
+          .eq('id', data.user.id)
+          .single()
+
+        // Redirect based on role
+        if (userRecord?.access_level === 'global_admin') {
+          router.push('/admin')
+        } else {
+          router.push('/dashboard')
+        }
         router.refresh()
       }
     } catch (err) {
