@@ -9,6 +9,7 @@ import MilestoneButton, { PairedMilestoneButton } from '../../../components/ui/M
 import SearchableDropdown from '../../../components/ui/SearchableDropdown'
 import StaffPopover from '../../../components/ui/StaffPopover'
 import SurgeonAvatar from '../../../components/ui/SurgeonAvatar'
+import { milestoneAudit, staffAudit, caseAudit } from '../../../lib/audit-logger'
 
 interface MilestoneType {
   id: string
@@ -200,7 +201,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       const { data: milestoneTypesResult } = await supabase
         .from('milestone_types')
-        .select('*')
+        .select('id, name, display_name, display_order')
         .order('display_order')
 
       const { data: milestonesResult } = await supabase
@@ -218,42 +219,27 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         `)
         .eq('case_id', id)
 
-      const { data: availableResult } = await supabase
+      const { data: allStaff } = await supabase
         .from('users')
-        .select(`
-          id,
-          first_name,
-          last_name,
-          user_roles (name)
-        `)
+        .select('id, first_name, last_name, user_roles (name)')
         .eq('facility_id', userFacilityId)
-        .in('role_id', [
-          (await supabase.from('user_roles').select('id').eq('name', 'nurse').single()).data?.id,
-          (await supabase.from('user_roles').select('id').eq('name', 'tech').single()).data?.id,
-        ].filter(Boolean))
 
-      const { data: anesthResult } = await supabase
+      const { data: anesthesiologistsData } = await supabase
         .from('users')
-        .select(`
-          id,
-          first_name,
-          last_name,
-          user_roles (name)
-        `)
+        .select('id, first_name, last_name, user_roles!inner (name)')
         .eq('facility_id', userFacilityId)
-        .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'anesthesiologist').single()).data?.id)
+        .eq('user_roles.name', 'anesthesiologist')
 
-      setCaseData(caseResult as CaseData)
+      setCaseData(caseResult)
       setMilestoneTypes(milestoneTypesResult || [])
       setCaseMilestones(milestonesResult || [])
       setCaseStaff(staffResult as CaseStaff[] || [])
-      setAvailableStaff(availableResult as User[] || [])
-      setAnesthesiologists(anesthResult as User[] || [])
+      setAvailableStaff(allStaff as User[] || [])
+      setAnesthesiologists(anesthesiologistsData as User[] || [])
 
-      // Fetch surgeon's historical averages
-      const surgeonData = Array.isArray(caseResult?.surgeon) ? caseResult?.surgeon[0] : caseResult?.surgeon
-      if (surgeonData?.id) {
-        const surgeonId = surgeonData.id
+      // Fetch surgeon averages
+      const surgeon = getFirst(caseResult?.surgeon)
+      if (surgeon) {
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
@@ -266,7 +252,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               milestone_types (name)
             )
           `)
-          .eq('surgeon_id', surgeonId)
+          .eq('surgeon_id', surgeon.id)
+          .neq('id', id)
           .eq('facility_id', userFacilityId)
           .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0])
 
@@ -308,12 +295,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   // Milestone functions
   const recordMilestone = async (milestoneTypeId: string) => {
+    const timestamp = new Date().toISOString()
     const { data, error } = await supabase
       .from('case_milestones')
       .insert({
         case_id: id,
         milestone_type_id: milestoneTypeId,
-        recorded_at: new Date().toISOString(),
+        recorded_at: timestamp,
       })
       .select()
       .single()
@@ -321,6 +309,21 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (!error && data) {
       setCaseMilestones([...caseMilestones, data])
 
+      // Get milestone type name for audit log
+      const milestoneType = milestoneTypes.find(m => m.id === milestoneTypeId)
+      
+      // Audit log the milestone recording
+      if (milestoneType && caseData) {
+        await milestoneAudit.recorded(
+          supabase,
+          caseData.case_number,
+          milestoneType.display_name,
+          data.id,
+          timestamp
+        )
+      }
+
+      // Update case status to in_progress on first milestone
       if (caseMilestones.length === 0) {
         const { data: statusData } = await supabase
           .from('case_statuses')
@@ -328,14 +331,22 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           .eq('name', 'in_progress')
           .single()
 
-        if (statusData) {
+        if (statusData && caseData) {
           await supabase.from('cases').update({ status_id: statusData.id }).eq('id', id)
           setCaseData(prev => prev ? { ...prev, case_statuses: [{ id: statusData.id, name: 'in_progress' }] } : null)
+          
+          // Audit log status change
+          await caseAudit.statusChanged(
+            supabase,
+            { id: caseData.id, case_number: caseData.case_number },
+            'scheduled',
+            'in_progress'
+          )
         }
       }
 
-      const milestoneType = milestoneTypes.find(m => m.id === milestoneTypeId)
-      if (milestoneType?.name === 'patient_out') {
+      // Update case status to completed on patient_out
+      if (milestoneType?.name === 'patient_out' && caseData) {
         const { data: statusData } = await supabase
           .from('case_statuses')
           .select('id')
@@ -345,14 +356,36 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         if (statusData) {
           await supabase.from('cases').update({ status_id: statusData.id }).eq('id', id)
           setCaseData(prev => prev ? { ...prev, case_statuses: [{ id: statusData.id, name: 'completed' }] } : null)
+          
+          // Audit log status change
+          await caseAudit.statusChanged(
+            supabase,
+            { id: caseData.id, case_number: caseData.case_number },
+            'in_progress',
+            'completed'
+          )
         }
       }
     }
   }
 
   const undoMilestone = async (milestoneId: string) => {
+    // Get milestone info for audit log before deleting
+    const milestone = caseMilestones.find(m => m.id === milestoneId)
+    const milestoneType = milestone ? milestoneTypes.find(mt => mt.id === milestone.milestone_type_id) : null
+
     await supabase.from('case_milestones').delete().eq('id', milestoneId)
     setCaseMilestones(caseMilestones.filter(m => m.id !== milestoneId))
+
+    // Audit log the milestone deletion
+    if (milestoneType && caseData) {
+      await milestoneAudit.deleted(
+        supabase,
+        caseData.case_number,
+        milestoneType.display_name,
+        milestoneId
+      )
+    }
   }
 
   const updateAnesthesiologist = async (userId: string) => {
@@ -393,245 +426,219 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
     if (!error && data) {
       setCaseStaff([...caseStaff, data as CaseStaff])
+
+      // Audit log staff addition
+      if (caseData) {
+        const roleName = getFirst(user.user_roles)?.name || 'Staff'
+        await staffAudit.added(
+          supabase,
+          caseData.case_number,
+          `${user.first_name} ${user.last_name}`,
+          roleName,
+          data.id
+        )
+      }
     }
   }
 
   const removeStaff = async (staffId: string) => {
+    // Get staff info for audit log before removing
+    const staffMember = caseStaff.find(s => s.id === staffId)
+    const staffUser = staffMember ? getFirst(staffMember.users) : null
+    const staffRole = staffMember ? getFirst(staffMember.user_roles)?.name : null
+
     await supabase.from('case_staff').delete().eq('id', staffId)
     setCaseStaff(caseStaff.filter(s => s.id !== staffId))
+
+    // Audit log staff removal
+    if (caseData && staffUser) {
+      await staffAudit.removed(
+        supabase,
+        caseData.case_number,
+        `${staffUser.first_name} ${staffUser.last_name}`,
+        staffRole || 'Staff',
+        staffId
+      )
+    }
   }
 
   // Helper functions
   const getMilestoneByName = (name: string) => {
-    const type = milestoneTypes.find(m => m.name === name)
-    if (!type) return null
-    return caseMilestones.find(m => m.milestone_type_id === type.id)
+    const type = milestoneTypes.find(t => t.name === name)
+    return type ? caseMilestones.find(m => m.milestone_type_id === type.id) : undefined
   }
 
   const getMilestoneTypeByName = (name: string) => {
-    return milestoneTypes.find(m => m.name === name)
+    return milestoneTypes.find(t => t.name === name)
   }
 
-  const getMilestoneTime = (name: string): string | null => {
-    const milestone = getMilestoneByName(name)
-    return milestone?.recorded_at || null
-  }
-
-  const calculateDuration = (startName: string, endName: string): string => {
-    const startTime = getMilestoneTime(startName)
-    const endTime = getMilestoneTime(endName)
-
-    if (!startTime || !endTime) return '--:--:--'
-
-    const diffMs = new Date(endTime).getTime() - new Date(startTime).getTime()
+  // Calculate times
+  const calculateDuration = (start: CaseMilestone | undefined, end: CaseMilestone | undefined, live = false): string => {
+    if (!start) return '--:--:--'
+    const startTime = new Date(start.recorded_at).getTime()
+    const endTime = end ? new Date(end.recorded_at).getTime() : (live ? currentTime : startTime)
+    const diffMs = endTime - startTime
     const hours = Math.floor(diffMs / (1000 * 60 * 60))
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
-
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    const secs = Math.floor((diffMs % (1000 * 60)) / 1000)
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const calculateRunningTime = (startName: string): string => {
-    const startTime = getMilestoneTime(startName)
-    if (!startTime) return '--:--:--'
+  const patientIn = getMilestoneByName('patient_in')
+  const patientOut = getMilestoneByName('patient_out')
+  const incision = getMilestoneByName('incision')
+  const closing = getMilestoneByName('closing')
 
-    const diffMs = currentTime - new Date(startTime).getTime()
-    const hours = Math.floor(diffMs / (1000 * 60 * 60))
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
+  const totalTime = calculateDuration(patientIn, patientOut, patientIn && !patientOut)
+  const surgicalTime = calculateDuration(incision, closing, incision && !closing)
 
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-  }
-
-  const totalTime = getMilestoneTime('patient_out')
-    ? calculateDuration('patient_in', 'patient_out')
-    : getMilestoneTime('patient_in')
-    ? calculateRunningTime('patient_in')
-    : '--:--:--'
-
-  const surgicalTime = getMilestoneTime('closing')
-    ? calculateDuration('incision', 'closing')
-    : getMilestoneTime('incision')
-    ? calculateRunningTime('incision')
-    : '--:--:--'
-
-  const singleMilestones = milestoneTypes.filter(m => !SKIP_IN_LIST.includes(m.name))
-
-  // Progress calculation
+  // Calculate progress
+  const singleMilestones = milestoneTypes.filter(t => !SKIP_IN_LIST.includes(t.name))
   const completedMilestones = caseMilestones.length
   const totalMilestoneTypes = milestoneTypes.length
-  const progressPercentage = totalMilestoneTypes > 0 ? Math.round((completedMilestones / totalMilestoneTypes) * 100) : 0
+  const progressPercentage = totalMilestoneTypes > 0 ? (completedMilestones / totalMilestoneTypes) * 100 : 0
 
-  // Loading state
+  // Get display values
+  const room = getFirst(caseData?.or_rooms)
+  const procedure = getFirst(caseData?.procedure_types)
+  const status = getFirst(caseData?.case_statuses)
+  const surgeon = getFirst(caseData?.surgeon)
+  const anesthesiologist = getFirst(caseData?.anesthesiologist)
+  const statusConfig = getStatusConfig(status?.name || null)
+
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="h-[calc(100vh-6rem)] flex flex-col items-center justify-center">
-          <div className="w-12 h-12 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-sm text-slate-500 font-medium">Loading case details...</p>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="w-10 h-10 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin" />
         </div>
       </DashboardLayout>
     )
   }
 
-  // Not found state
   if (!caseData) {
     return (
       <DashboardLayout>
-        <div className="h-[calc(100vh-6rem)] flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">Case not found</h2>
-          <p className="text-sm text-slate-500 mb-6">The case you're looking for doesn't exist or you don't have access.</p>
-          <Link 
-            href="/dashboard"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Dashboard
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <p className="text-slate-500">Case not found</p>
+          <Link href="/cases" className="text-blue-600 hover:underline">
+            Back to cases
           </Link>
         </div>
       </DashboardLayout>
     )
   }
 
-  const statusConfig = getStatusConfig(getFirst(caseData.case_statuses)?.name || null)
-  const surgeon = getFirst(caseData.surgeon)
-  const surgeonName = surgeon ? `${surgeon.first_name} ${surgeon.last_name}` : 'Unassigned'
-
-  const staffForPopover = caseStaff.map(s => {
-    const user = Array.isArray(s.users) ? s.users[0] : s.users
-    const role = Array.isArray(s.user_roles) ? s.user_roles[0] : s.user_roles
-    return {
-      id: s.id,
-      name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-      role: role?.name || 'Staff',
-    }
-  })
-
-  const availableStaffOptions = availableStaff
-    .filter(s => !caseStaff.some(cs => cs.user_id === s.id))
-    .map(s => ({
-      id: s.id,
-      label: `${s.first_name} ${s.last_name}`,
-      subtitle: s.user_roles?.[0]?.name || 'Staff',
-    }))
-
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Page Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-4">
-            {/* Back Button */}
+      <div className="max-w-6xl mx-auto p-4 lg:p-6 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             <button
-              onClick={() => router.back()}
-              className="mt-1 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all duration-200"
+              onClick={() => router.push('/cases')}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            
             <div>
-              {/* Breadcrumb */}
-              <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
-                <Link href="/cases" className="hover:text-slate-700 transition-colors">Cases</Link>
-                <svg className="w-4 h-4 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-                <span className="text-slate-700 font-medium">{caseData.case_number}</span>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl font-bold text-slate-900">{caseData.case_number}</h1>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium border ${statusConfig.bgColor} ${statusConfig.textColor} ${statusConfig.borderColor}`}>
+                  <span className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`} />
+                  {statusConfig.label}
+                </span>
               </div>
-              
-              {/* Title Row */}
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-slate-900">{getFirst(caseData.procedure_types)?.name || 'Untitled Procedure'}</h1>
-              </div>
-              
-              {/* Meta Info */}
-              <p className="text-sm text-slate-500 mt-1">
-                {formatDate(caseData.scheduled_date)} • {formatTime(caseData.start_time)}
-              </p>
+              <p className="text-slate-500 mt-1">{formatDate(caseData.scheduled_date)}</p>
             </div>
           </div>
-          
-          {/* Status Badge & Actions */}
-          <div className="flex items-center gap-3">
-            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border ${statusConfig.bgColor} ${statusConfig.borderColor}`}>
-              <div className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`}></div>
-              <span className={`text-sm font-semibold ${statusConfig.textColor}`}>{statusConfig.label}</span>
-            </div>
-            
-            <button
-              onClick={() => router.push(`/cases/${id}/edit`)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-50 transition-all duration-200"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              Edit
-            </button>
-          </div>
+          <Link
+            href={`/cases/${id}/edit`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors text-sm font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit Case
+          </Link>
         </div>
 
-        {/* Info Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* OR Room Card */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+        {/* Case Info Card */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Room</p>
+              <p className="text-lg font-semibold text-slate-900">{room?.name || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Procedure</p>
+              <p className="text-lg font-semibold text-slate-900">{procedure?.name || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Surgeon</p>
+              <div className="flex items-center gap-2">
+                {surgeon && <SurgeonAvatar name={`${surgeon.first_name} ${surgeon.last_name}`} size="sm" />}
+                <p className="text-lg font-semibold text-slate-900">
+                  {surgeon ? `Dr. ${surgeon.last_name}` : '—'}
+                </p>
               </div>
-              <div>
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Room</p>
-                <p className="text-base font-semibold text-slate-900">{getFirst(caseData.or_rooms)?.name || 'Not assigned'}</p>
-              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Start Time</p>
+              <p className="text-lg font-semibold text-slate-900">{formatTime(caseData.start_time)}</p>
             </div>
           </div>
 
-          {/* Surgeon Card */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              <SurgeonAvatar name={surgeonName} size="md" />
-              <div>
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Surgeon</p>
-                <p className="text-base font-semibold text-slate-900">{surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'}</p>
-              </div>
+          {/* Staff Section */}
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Assigned Staff</p>
+              <StaffPopover
+                availableStaff={availableStaff.filter(s => !caseStaff.some(cs => cs.user_id === s.id))}
+                onAddStaff={addStaff}
+              />
             </div>
-          </div>
+            <div className="flex flex-wrap gap-2">
+              {/* Anesthesiologist */}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <span className="text-sm text-amber-700">
+                  {anesthesiologist ? `${anesthesiologist.first_name} ${anesthesiologist.last_name}` : 'No Anesthesiologist'}
+                </span>
+                <SearchableDropdown
+                  options={anesthesiologists.map(a => ({ value: a.id, label: `${a.first_name} ${a.last_name}` }))}
+                  value={anesthesiologist?.id || ''}
+                  onChange={updateAnesthesiologist}
+                  placeholder="Select..."
+                  size="sm"
+                />
+              </div>
 
-          {/* Anesthesiologist Card */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Anesthesiologist</p>
-            <SearchableDropdown
-              placeholder="Select Anesthesiologist"
-              value={getFirst(caseData.anesthesiologist)?.id}
-              onChange={updateAnesthesiologist}
-              options={anesthesiologists.map(a => ({
-                id: a.id,
-                label: `Dr. ${a.first_name} ${a.last_name}`,
-                subtitle: 'Anesthesiologist',
-              }))}
-            />
-          </div>
-
-          {/* Staff Card */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Assigned Staff</p>
-            <StaffPopover
-              staff={staffForPopover}
-              availableStaff={availableStaffOptions}
-              onAdd={addStaff}
-              onRemove={removeStaff}
-            />
+              {/* Other Staff */}
+              {caseStaff.map(staff => {
+                const staffUser = getFirst(staff.users)
+                const staffRole = getFirst(staff.user_roles)
+                return (
+                  <div key={staff.id} className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg group">
+                    <span className="text-sm text-slate-700">
+                      {staffUser ? `${staffUser.first_name} ${staffUser.last_name}` : 'Unknown'}
+                    </span>
+                    {staffRole && (
+                      <span className="text-xs text-slate-500 capitalize">{staffRole.name}</span>
+                    )}
+                    <button
+                      onClick={() => removeStaff(staff.id)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 

@@ -6,6 +6,7 @@ import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import EditableList from '../../../components/settings/EditableList'
+import { roomAudit } from '../../../lib/audit-logger'
 
 interface ORRoom {
   id: string
@@ -95,10 +96,17 @@ export default function RoomsSettingsPage() {
 
     if (!error && data) {
       setRooms([...rooms, data].sort((a, b) => a.name.localeCompare(b.name)))
+      
+      // Audit log
+      await roomAudit.created(supabase, name, data.id)
     }
   }
 
   const handleEdit = async (id: string, name: string) => {
+    // Get old name for audit log
+    const oldRoom = rooms.find(r => r.id === id)
+    const oldName = oldRoom?.name || ''
+
     const { error } = await supabase
       .from('or_rooms')
       .update({ name })
@@ -110,10 +118,19 @@ export default function RoomsSettingsPage() {
           .map(r => r.id === id ? { ...r, name } : r)
           .sort((a, b) => a.name.localeCompare(b.name))
       )
+      
+      // Audit log
+      if (oldName !== name) {
+        await roomAudit.updated(supabase, id, oldName, name)
+      }
     }
   }
 
   const handleDelete = async (id: string) => {
+    // Get room name for audit log
+    const room = rooms.find(r => r.id === id)
+    const roomName = room?.name || ''
+
     const { error } = await supabase
       .from('or_rooms')
       .delete()
@@ -121,6 +138,9 @@ export default function RoomsSettingsPage() {
 
     if (!error) {
       setRooms(rooms.filter(r => r.id !== id))
+      
+      // Audit log
+      await roomAudit.deleted(supabase, roomName, id)
     }
   }
 

@@ -7,6 +7,7 @@ import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import Badge from '../../../components/ui/Badge'
 import InviteUserModal from '../../../components/InviteUserModal'
+import { userAudit } from '../../../lib/audit-logger'
 
 interface User {
   id: string
@@ -18,7 +19,7 @@ interface User {
   facility_id: string | null
   user_roles: { name: string }[] | { name: string } | null
   facilities?: { name: string } | null
-  email_confirmed?: boolean // We'll fetch this from auth
+  email_confirmed?: boolean
 }
 
 interface UserRole {
@@ -88,13 +89,11 @@ export default function UsersSettingsPage() {
   const fetchData = async (facilityId: string | null, isGlobal: boolean) => {
     setLoading(true)
 
-    // Build users query
     let usersQuery = supabase
       .from('users')
       .select('id, first_name, last_name, email, role_id, access_level, facility_id, user_roles(name), facilities(name)')
       .order('last_name')
 
-    // If not global admin, filter by facility
     if (!isGlobal && facilityId) {
       usersQuery = usersQuery.eq('facility_id', facilityId)
     }
@@ -112,7 +111,6 @@ export default function UsersSettingsPage() {
     setRoles(rolesRes.data || [])
     setFacilities(facilitiesRes.data || [])
 
-    // Fetch pending status for all users
     await fetchPendingStatus(usersData.map(u => u.email))
 
     setLoading(false)
@@ -201,7 +199,6 @@ export default function UsersSettingsPage() {
       access_level: editFormData.access_level,
     }
 
-    // Only global admins can change facility
     if (isGlobalAdmin && editFormData.facility_id) {
       updateData.facility_id = editFormData.facility_id
     }
@@ -212,6 +209,28 @@ export default function UsersSettingsPage() {
       .eq('id', editingUser.id)
 
     if (!error) {
+      // Audit log the update
+      const changes: Record<string, { old: string; new: string }> = {}
+      if (editFormData.first_name !== editingUser.first_name) {
+        changes.first_name = { old: editingUser.first_name, new: editFormData.first_name }
+      }
+      if (editFormData.last_name !== editingUser.last_name) {
+        changes.last_name = { old: editingUser.last_name, new: editFormData.last_name }
+      }
+      if (editFormData.access_level !== editingUser.access_level) {
+        changes.access_level = { old: editingUser.access_level, new: editFormData.access_level }
+      }
+
+      if (Object.keys(changes).length > 0) {
+        await userAudit.updated(
+          supabase,
+          `${editFormData.first_name} ${editFormData.last_name}`,
+          editingUser.email,
+          editingUser.id,
+          changes
+        )
+      }
+
       setSuccessMessage('User updated successfully!')
       fetchData(currentUserFacilityId, isGlobalAdmin)
       closeEditModal()
@@ -220,14 +239,21 @@ export default function UsersSettingsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    // Don't allow deleting yourself
     if (id === currentUserId) {
       return
     }
 
+    // Get user info for audit log before deleting
+    const user = users.find(u => u.id === id)
+    const userName = user ? `${user.first_name} ${user.last_name}` : 'Unknown'
+    const userEmail = user?.email || ''
+
     const { error } = await supabase.from('users').delete().eq('id', id)
 
     if (!error) {
+      // Audit log the deletion
+      await userAudit.deleted(supabase, userName, userEmail, id)
+
       setUsers(users.filter(u => u.id !== id))
       setDeleteConfirm(null)
       setSuccessMessage('User deleted successfully!')
@@ -402,7 +428,6 @@ export default function UsersSettingsPage() {
                                 </>
                               ) : (
                                 <>
-                                  {/* Resend Invite Button (only for pending users) */}
                                   {userIsPending && (
                                     <button
                                       onClick={() => handleResendInvite(user)}
@@ -477,7 +502,6 @@ export default function UsersSettingsPage() {
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Edit User</h2>
@@ -493,9 +517,7 @@ export default function UsersSettingsPage() {
               </button>
             </div>
 
-            {/* Form */}
             <div className="p-6 space-y-4">
-              {/* Name Fields */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -521,7 +543,6 @@ export default function UsersSettingsPage() {
                 </div>
               </div>
 
-              {/* Email (Read-only) */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Email Address
@@ -535,7 +556,6 @@ export default function UsersSettingsPage() {
                 <p className="mt-1 text-xs text-slate-400">Email cannot be changed</p>
               </div>
 
-              {/* Staff Role */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Staff Role
@@ -554,7 +574,6 @@ export default function UsersSettingsPage() {
                 </select>
               </div>
 
-              {/* Access Level */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Permissions
@@ -576,7 +595,6 @@ export default function UsersSettingsPage() {
                 )}
               </div>
 
-              {/* Facility (Global Admin Only) */}
               {isGlobalAdmin && facilities.length > 0 && editFormData.access_level !== 'global_admin' && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -598,7 +616,6 @@ export default function UsersSettingsPage() {
                 </div>
               )}
 
-              {/* Actions */}
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={closeEditModal}

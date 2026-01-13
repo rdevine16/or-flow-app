@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { authAudit } from '@/lib/audit-logger'
 
 export default function SetPasswordPage() {
   const router = useRouter()
@@ -58,6 +59,9 @@ export default function SetPasswordPage() {
         setError(updateError.message)
         return
       }
+
+      // Audit log password set
+      await authAudit.passwordChanged(supabase)
 
       setSuccess(true)
       

@@ -5,6 +5,7 @@ import { createClient } from '../../../lib/supabase'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
+import { procedureAudit } from '../../../lib/audit-logger'
 
 interface BodyRegion {
   id: string
@@ -94,36 +95,27 @@ export default function ProceduresSettingsPage() {
 
   const fetchData = async (facilityId: string) => {
     setLoading(true)
-    
-    // Fetch procedures with joined data
-    const { data: proceduresData } = await supabase
-      .from('procedure_types')
-      .select(`
-        id, 
-        name, 
-        body_region_id,
-        technique_id,
-        body_regions (id, name, display_name),
-        procedure_techniques (id, name, display_name)
-      `)
-      .eq('facility_id', facilityId)
-      .order('name')
-    
-    // Fetch body regions
-    const { data: regionsData } = await supabase
-      .from('body_regions')
-      .select('id, name, display_name')
-      .order('display_order')
-    
-    // Fetch techniques
-    const { data: techniquesData } = await supabase
-      .from('procedure_techniques')
-      .select('id, name, display_name')
-      .order('display_order')
 
-    setProcedures(proceduresData as ProcedureType[] || [])
-    setBodyRegions(regionsData || [])
-    setTechniques(techniquesData || [])
+    const [proceduresResult, regionsResult, techniquesResult] = await Promise.all([
+      supabase
+        .from('procedure_types')
+        .select(`
+          id, 
+          name, 
+          body_region_id,
+          technique_id,
+          body_regions (id, name, display_name),
+          procedure_techniques (id, name, display_name)
+        `)
+        .eq('facility_id', facilityId)
+        .order('name'),
+      supabase.from('body_regions').select('id, name, display_name').order('display_name'),
+      supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
+    ])
+
+    setProcedures(proceduresResult.data as ProcedureType[] || [])
+    setBodyRegions(regionsResult.data || [])
+    setTechniques(techniquesResult.data || [])
     setLoading(false)
   }
 
@@ -178,8 +170,13 @@ export default function ProceduresSettingsPage() {
       if (!error && data) {
         setProcedures([...procedures, data as ProcedureType].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
+        
+        // Audit log
+        await procedureAudit.created(supabase, formData.name.trim(), data.id)
       }
     } else if (modal.mode === 'edit' && modal.procedure) {
+      const oldName = modal.procedure.name
+      
       const { data, error } = await supabase
         .from('procedure_types')
         .update({
@@ -205,6 +202,11 @@ export default function ProceduresSettingsPage() {
             .sort((a, b) => a.name.localeCompare(b.name))
         )
         closeModal()
+        
+        // Audit log if name changed
+        if (oldName !== formData.name.trim()) {
+          await procedureAudit.updated(supabase, modal.procedure.id, oldName, formData.name.trim())
+        }
       }
     }
 
@@ -212,6 +214,10 @@ export default function ProceduresSettingsPage() {
   }
 
   const handleDelete = async (id: string) => {
+    // Get procedure name for audit log
+    const procedure = procedures.find(p => p.id === id)
+    const procedureName = procedure?.name || ''
+
     const { error } = await supabase
       .from('procedure_types')
       .delete()
@@ -219,6 +225,9 @@ export default function ProceduresSettingsPage() {
 
     if (!error) {
       setProcedures(procedures.filter(p => p.id !== id))
+      
+      // Audit log
+      await procedureAudit.deleted(supabase, procedureName, id)
     } else {
       alert('Cannot delete this procedure type. It may be in use by existing cases.')
     }
@@ -246,8 +255,8 @@ export default function ProceduresSettingsPage() {
         <SettingsLayout
           title="Procedure Types"
           description={isGlobalAdmin 
-            ? "Manage surgical procedures across all facilities." 
-            : "Manage the surgical procedures available for case creation at your facility."
+            ? "Manage procedure types across all facilities." 
+            : "Manage the procedure types available at your facility."
           }
         >
           {/* Facility Selector (Global Admin Only) */}
@@ -285,12 +294,16 @@ export default function ProceduresSettingsPage() {
               <p className="text-slate-500">No facility selected</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Add Button */}
-              <div className="flex justify-end">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-slate-900">Procedures</h3>
+                  <p className="text-sm text-slate-500">{procedures.length} procedure types</p>
+                </div>
                 <button
                   onClick={openAddModal}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -299,206 +312,151 @@ export default function ProceduresSettingsPage() {
                 </button>
               </div>
 
-              {/* Table */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
-                      <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Body Region</th>
-                      <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Technique</th>
-                      <th className="text-right px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {procedures.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
-                          No procedure types yet. Click "Add Procedure" to create one.
-                        </td>
-                      </tr>
-                    ) : (
-                      procedures.map((procedure) => (
-                        <tr key={procedure.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <span className="font-medium text-slate-900">{procedure.name}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`text-sm ${getRegionName(procedure) === '—' ? 'text-slate-400' : 'text-slate-600'}`}>
-                              {getRegionName(procedure)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`text-sm ${getTechniqueName(procedure) === '—' ? 'text-slate-400' : 'text-slate-600'}`}>
-                              {getTechniqueName(procedure)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => openEditModal(procedure)}
-                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
-                              {deleteConfirm === procedure.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDelete(procedure.id)}
-                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-1 text-xs bg-slate-200 text-slate-600 rounded hover:bg-slate-300 transition-colors"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirm(procedure.id)}
-                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Count */}
-              {procedures.length > 0 && (
-                <p className="text-sm text-slate-400">
-                  {procedures.length} procedure{procedures.length !== 1 ? 's' : ''} total
-                </p>
+              {/* List */}
+              {procedures.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-slate-500">No procedures defined yet.</p>
+                  <button
+                    onClick={openAddModal}
+                    className="mt-2 text-blue-600 hover:underline text-sm"
+                  >
+                    Add your first procedure
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {procedures.map((procedure) => (
+                    <div key={procedure.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-medium text-slate-900">{procedure.name}</p>
+                        <div className="flex items-center gap-4 mt-1">
+                          <span className="text-xs text-slate-500">
+                            Region: <span className="text-slate-700">{getRegionName(procedure)}</span>
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            Technique: <span className="text-slate-700">{getTechniqueName(procedure)}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openEditModal(procedure)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        {deleteConfirm === procedure.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleDelete(procedure.id)}
+                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(null)}
+                              className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setDeleteConfirm(procedure.id)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
+            </div>
+          )}
+
+          {/* Modal */}
+          {modal.isOpen && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {modal.mode === 'add' ? 'Add Procedure' : 'Edit Procedure'}
+                  </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Procedure Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      placeholder="e.g., Total Hip Replacement"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Body Region
+                    </label>
+                    <select
+                      value={formData.body_region_id}
+                      onChange={(e) => setFormData({ ...formData, body_region_id: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      <option value="">Select region...</option>
+                      {bodyRegions.map((region) => (
+                        <option key={region.id} value={region.id}>
+                          {region.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Technique
+                    </label>
+                    <select
+                      value={formData.technique_id}
+                      onChange={(e) => setFormData({ ...formData, technique_id: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      <option value="">Select technique...</option>
+                      {techniques.map((technique) => (
+                        <option key={technique.id} value={technique.id}>
+                          {technique.display_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button
+                    onClick={closeModal}
+                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !formData.name.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Procedure' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </SettingsLayout>
       </Container>
-
-      {/* Modal */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-black/50 transition-opacity"
-            onClick={closeModal}
-          />
-          
-          {/* Modal Content */}
-          <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md transform transition-all">
-              {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-                <h3 className="text-lg font-semibold text-slate-900">
-                  {modal.mode === 'add' ? 'Add Procedure Type' : 'Edit Procedure Type'}
-                </h3>
-                <button
-                  onClick={closeModal}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="px-6 py-4 space-y-4">
-                {/* Name Field */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Procedure Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Total Hip Arthroplasty"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
-                    autoFocus
-                  />
-                </div>
-
-                {/* Body Region Field */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Body Region
-                  </label>
-                  <select
-                    value={formData.body_region_id}
-                    onChange={(e) => setFormData({ ...formData, body_region_id: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white"
-                  >
-                    <option value="">Select body region...</option>
-                    {bodyRegions.map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Technique Field */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Technique
-                  </label>
-                  <select
-                    value={formData.technique_id}
-                    onChange={(e) => setFormData({ ...formData, technique_id: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white"
-                  >
-                    <option value="">Select technique...</option>
-                    {techniques.map((technique) => (
-                      <option key={technique.id} value={technique.id}>
-                        {technique.display_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-2xl">
-                <button
-                  onClick={closeModal}
-                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={!formData.name.trim() || saving}
-                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {saving && (
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  )}
-                  {modal.mode === 'add' ? 'Add Procedure' : 'Save Changes'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   )
 }

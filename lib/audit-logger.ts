@@ -418,6 +418,30 @@ export const userAudit = {
       newValues: { access_level: newRole },
     })
   },
+
+  async updated(
+    supabase: SupabaseClient,
+    userName: string,
+    userEmail: string,
+    userId: string,
+    changes?: Record<string, { old: string; new: string }>
+  ) {
+    await log(supabase, 'user.updated', {
+      targetType: 'user',
+      targetId: userId,
+      targetLabel: `${userName} (${userEmail})`,
+      oldValues: changes ? Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.old])) : undefined,
+      newValues: changes ? Object.fromEntries(Object.entries(changes).map(([k, v]) => [k, v.new])) : undefined,
+    })
+  },
+
+  async deleted(supabase: SupabaseClient, userName: string, userEmail: string, userId: string) {
+    await log(supabase, 'user.deleted', {
+      targetType: 'user',
+      targetId: userId,
+      targetLabel: `${userName} (${userEmail})`,
+    })
+  },
 }
 
 // ============================================
