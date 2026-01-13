@@ -10,7 +10,7 @@ import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import { generateTemporaryPassword } from '../../../../lib/passwords'
 import { sendWelcomeEmail } from '../../../../lib/email'
-import { quickAuditLog } from '../../../../lib/audit'
+import { facilityAudit, userAudit } from '../../../../lib/audit-logger'
 
 interface FacilityData {
   name: string
@@ -224,38 +224,12 @@ export default function CreateFacilityPage() {
       }
 
       // 8. Log audit events
-const { data: { user: currentUser } } = await supabase.auth.getUser()
-
-await quickAuditLog(
-  supabase,
-  currentUser?.id || '',
-  currentUser?.email || '',
-  'facility.created',
-        {
-          facilityId: facility.id,
-          targetType: 'facility',
-          targetId: facility.id,
-          newValues: {
-            name: facilityData.name,
-            subscription_status: facilityData.subscriptionStatus,
-          },
-        }
-      )
-
-await quickAuditLog(
-  supabase,
-  currentUser?.id || '',
-  currentUser?.email || '',
-  'user.created',
-        {
-          facilityId: facility.id,
-          targetType: 'user',
-          targetId: authData.user.id,
-          newValues: {
-            email: adminData.email,
-            access_level: 'facility_admin',
-          },
-        }
+      await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
+      await userAudit.created(
+        supabase,
+        `${adminData.firstName} ${adminData.lastName}`,
+        adminData.email,
+        authData.user.id
       )
 
       // Success! Redirect to facility detail page

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '../../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { checkPasswordStrength } from '../../../lib/passwords'
+import { authAudit } from '../../../lib/audit-logger'
 
 // ORbit Logo - For light backgrounds
 const LogoFullDark = () => (
@@ -87,6 +88,9 @@ export default function ResetPasswordPage() {
           .update({ must_change_password: false })
           .eq('id', user.id)
       }
+
+      // Log password change
+      await authAudit.passwordChanged(supabase)
 
       setSuccess(true)
 

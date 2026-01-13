@@ -10,7 +10,8 @@ import { createClient } from '../../../../lib/supabase'
 import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import { startImpersonation } from '../../../../lib/impersonation'
-import { quickAuditLog, formatAuditAction } from '../../../../lib/audit'
+import { formatAuditAction } from '../../../../lib/audit'
+import { facilityAudit, userAudit, adminAudit } from '../../../../lib/audit-logger'
 import { generateInvitationToken } from '../../../../lib/passwords'
 import { sendInvitationEmail } from '../../../../lib/email'
 import { formatLastLogin } from '../../../../lib/auth-helpers'
@@ -222,20 +223,7 @@ export default function FacilityDetailPage() {
       if (error) throw error
 
       // Log audit
-      const { data: { user } } = await supabase.auth.getUser()
-      await quickAuditLog(
-        supabase,
-        user?.id || '',
-        user?.email || '',
-        'facility.updated',
-        {
-          facilityId: facility.id,
-          targetType: 'facility',
-          targetId: facility.id,
-          oldValues: { name: facility.name, subscription_status: facility.subscription_status },
-          newValues: updates,
-        }
-      )
+      await facilityAudit.updated(supabase, facility.name, facility.id, updates)
 
       // Update local state
       setFacility({ ...facility, ...updates })
@@ -294,18 +282,7 @@ export default function FacilityDetailPage() {
       )
 
       // Log audit
-      await quickAuditLog(
-        supabase,
-        currentUser?.id || '',
-        currentUser?.email || '',
-        'user.invited',
-        {
-          facilityId: facility.id,
-          targetType: 'user',
-          targetId: newUser.id,
-          newValues: { email: inviteEmail, access_level: inviteAccessLevel },
-        }
-      )
+      await userAudit.invited(supabase, inviteEmail.trim(), newUser.id)
 
       // Update local state
       setUsers([newUser, ...users])
@@ -445,19 +422,12 @@ export default function FacilityDetailPage() {
       ))
 
       // Log the action
-      const { data: { user: currentUser } } = await supabase.auth.getUser()
-      await quickAuditLog(
-        supabase,
-        currentUser?.id || '',
-        currentUser?.email || '',
-        `user.${action}d`,
-        {
-          facilityId: facility?.id,
-          targetType: 'user',
-          targetId: user.id,
-          metadata: { userEmail: user.email },
-        }
-      )
+      const userName = `${user.first_name} ${user.last_name}`
+      if (newStatus) {
+        await userAudit.reactivated(supabase, userName, user.email, user.id)
+      } else {
+        await userAudit.deactivated(supabase, userName, user.email, user.id)
+      }
     } catch (error) {
       console.error('Error updating user status:', error)
       alert('Failed to update user status')
@@ -478,17 +448,7 @@ export default function FacilityDetailPage() {
     )
 
     if (result.success) {
-      await quickAuditLog(
-        supabase,
-        user?.id || '',
-        user?.email || '',
-        'admin.impersonation_started',
-        {
-          facilityId: facility.id,
-          targetType: 'facility',
-          targetId: facility.id,
-        }
-      )
+      await adminAudit.impersonationStarted(supabase, facility.name, facility.id)
 
       router.push('/dashboard')
       router.refresh()

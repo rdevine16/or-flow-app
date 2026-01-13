@@ -8,7 +8,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '../../../lib/supabase'
 import { checkPasswordStrength } from '../../../lib/passwords'
-import { quickAuditLog } from '../../../lib/audit'
+import { userAudit } from '../../../lib/audit-logger'
 
 interface InvitationData {
   id: string
@@ -195,16 +195,10 @@ export default function AcceptInvitationPage() {
       }
 
       // Log the action
-      await quickAuditLog(
+      await userAudit.invitationAccepted(
         supabase,
-        invitation.id,
-        invitation.email,
-        'user.invitation_accepted',
-        {
-          facilityId: invitation.facility_id,
-          targetType: 'user',
-          targetId: invitation.id,
-        }
+        `${invitation.first_name} ${invitation.last_name}`,
+        invitation.id
       )
 
       // Sign in

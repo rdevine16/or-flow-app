@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import { checkPasswordStrength } from '../../lib/passwords'
+import { authAudit } from '../../lib/audit-logger'
 
 interface UserProfile {
   id: string
@@ -156,6 +157,9 @@ export default function ProfilePage() {
 
       if (updateError) throw updateError
 
+      // Log password change
+      await authAudit.passwordChanged(supabase)
+
       // Clear form
       setCurrentPassword('')
       setNewPassword('')
@@ -172,6 +176,7 @@ export default function ProfilePage() {
 
   // Sign out
   const handleSignOut = async () => {
+    await authAudit.logout(supabase)
     await supabase.auth.signOut()
     router.push('/login')
   }

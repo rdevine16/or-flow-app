@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../../../lib/supabase'
 import { checkPasswordStrength } from '../../../lib/passwords'
-import { quickAuditLog } from '../../../lib/audit'
+import { authAudit } from '../../../lib/audit-logger'
 
 export default function ChangePasswordPage() {
   const router = useRouter()
@@ -118,15 +118,7 @@ export default function ChangePasswordPage() {
           .eq('id', user.id)
 
         // Log the action
-        await quickAuditLog(
-          supabase,
-          user.id,
-          user.email || '',
-          'auth.password_changed',
-          {
-            metadata: { forced: mustChange },
-          }
-        )
+        await authAudit.passwordChanged(supabase)
       }
 
       setSuccess(true)

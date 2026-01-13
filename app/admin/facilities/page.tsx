@@ -10,7 +10,7 @@ import { createClient } from '../../../lib/supabase'
 import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import { startImpersonation } from '../../../lib/impersonation'
-import { quickAuditLog } from '../../../lib/audit'
+import { adminAudit } from '../../../lib/audit-logger'
 
 interface Facility {
   id: string
@@ -98,28 +98,16 @@ export default function FacilitiesListPage() {
 
   // Handle impersonation
   const handleImpersonate = async (facility: Facility) => {
-const { data: { user: currentUser } } = await supabase.auth.getUser()
+    const result = await startImpersonation(
+      supabase,
+      userData.id,
+      facility.id,
+      facility.name
+    )
 
-const result = await startImpersonation(
-  supabase,
-  currentUser?.id || '',
-  facility.id,
-  facility.name
-)
-
-if (result.success) {
-  await quickAuditLog(
-    supabase,
-    currentUser?.id || '',
-    currentUser?.email || '',
-        'admin.impersonation_started',
-        {
-          facilityId: facility.id,
-          targetType: 'facility',
-          targetId: facility.id,
-          metadata: { facility_name: facility.name },
-        }
-      )
+    if (result.success) {
+      // Log the action
+      await adminAudit.impersonationStarted(supabase, facility.name, facility.id)
 
       // Redirect to dashboard with the impersonated facility
       router.push('/dashboard')

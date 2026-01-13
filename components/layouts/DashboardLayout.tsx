@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import { useUser } from '../../lib/UserContext'
 import { getImpersonationState, endImpersonation } from '../../lib/impersonation'
+import { authAudit, adminAudit } from '../../lib/audit-logger'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -153,6 +154,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Handle ending impersonation
   const handleEndImpersonation = async () => {
+    if (impersonation) {
+      await adminAudit.impersonationEnded(supabase, impersonation.facilityName, impersonation.facilityId)
+    }
     await endImpersonation(supabase)
     setImpersonation(null)
     router.push('/admin/facilities')
@@ -214,10 +218,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [])
 
   const handleLogout = async () => {
-    // Clear impersonation on logout
+    // Log impersonation end if active
     if (impersonation) {
+      await adminAudit.impersonationEnded(supabase, impersonation.facilityName, impersonation.facilityId)
       await endImpersonation(supabase)
     }
+    
+    // Log sign out
+    await authAudit.logout(supabase)
+    
     await supabase.auth.signOut()
     router.push('/login')
   }

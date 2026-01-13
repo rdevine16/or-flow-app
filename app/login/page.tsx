@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '../../lib/supabase'
 import { useRouter } from 'next/navigation'
 import { updateLastLogin, checkUserActive } from '../../lib/auth-helpers'
+import { authAudit } from '../../lib/audit-logger'
 
 // ORbit Logo - Full with text
 const LogoFull = () => (
@@ -59,6 +60,9 @@ export default function LoginPage() {
       })
 
       if (signInError) {
+        // Log failed login attempt
+        await authAudit.login(supabase, email, false, signInError.message)
+        
         // Provide friendlier error messages
         if (signInError.message.includes('Invalid login credentials')) {
           setError('Invalid email or password. Please try again.')
@@ -74,6 +78,8 @@ export default function LoginPage() {
         const { isActive, error: activeError } = await checkUserActive(supabase, data.user.id)
         
         if (!isActive) {
+          // Log deactivated user login attempt
+          await authAudit.login(supabase, email, false, 'Account deactivated')
           // Sign them out immediately if deactivated
           await supabase.auth.signOut()
           setError(activeError || 'Your account has been deactivated. Please contact your administrator.')
@@ -83,6 +89,9 @@ export default function LoginPage() {
 
         // Update last login timestamp
         await updateLastLogin(supabase, data.user.id)
+
+        // Log successful login
+        await authAudit.login(supabase, email, true)
 
         // Check access level to determine redirect
         const { data: userRecord } = await supabase
