@@ -120,9 +120,9 @@ export default function AdminDashboardPage() {
           .order('created_at', { ascending: false })
           .limit(10)
 
-        if (auditData) {
-          setRecentActivity(auditData as AuditEntry[])
-        }
+if (auditData) {
+  setRecentActivity(auditData as unknown as AuditEntry[])
+}
       } catch (error) {
         console.error('Error fetching admin dashboard data:', error)
       } finally {
