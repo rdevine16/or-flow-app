@@ -1,3 +1,11 @@
+// components/layouts/DashboardLayout.tsx
+// Enhanced with Admin navigation and impersonation banner
+// 
+// CHANGES FROM ORIGINAL:
+// 1. Added "Admin" nav item (global_admin only)
+// 2. Added impersonation banner at top when viewing another facility
+// 3. Import impersonation helpers
+
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
@@ -5,6 +13,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import { useUser } from '../../lib/UserContext'
+import { getImpersonationState, endImpersonation } from '../../lib/impersonation'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -20,24 +29,49 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  
+  // Impersonation state
+  const [impersonation, setImpersonation] = useState<{
+    facilityId: string
+    facilityName: string
+    sessionId: string
+  } | null>(null)
 
   // Get user data from context
   const { userData, loading, isGlobalAdmin, isFacilityAdmin, isAdmin } = useUser()
 
-  // Load collapsed state from localStorage on mount
+  // Load collapsed state and impersonation state on mount
   useEffect(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
     if (saved !== null) {
       setCollapsed(saved === 'true')
     }
+    
+    // Check for impersonation
+    const impState = getImpersonationState()
+    if (impState && isGlobalAdmin) {
+      setImpersonation({
+        facilityId: impState.facilityId,
+        facilityName: impState.facilityName,
+        sessionId: impState.sessionId,
+      })
+    }
+    
     setMounted(true)
-  }, [])
+  }, [isGlobalAdmin])
 
   // Save collapsed state to localStorage
   const handleToggleCollapse = () => {
     const newCollapsed = !collapsed
     setCollapsed(newCollapsed)
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(newCollapsed))
+  }
+
+  // Handle ending impersonation
+  const handleEndImpersonation = async () => {
+    await endImpersonation(supabase)
+    setImpersonation(null)
+    router.push('/admin/facilities')
   }
 
   // Computed values
@@ -69,6 +103,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [])
 
   const handleLogout = async () => {
+    // Clear impersonation on logout
+    if (impersonation) {
+      await endImpersonation(supabase)
+    }
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -124,6 +162,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       },
     ]
 
+    // Add Admin section for global admins only
+    if (isGlobalAdmin) {
+      baseNav.push({
+        name: 'Admin',
+        href: '/admin',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        ),
+        allowedRoles: ['global_admin'],
+      })
+    }
+
     return baseNav.filter(item => item.allowedRoles.includes(userData.accessLevel))
   }
 
@@ -158,89 +210,42 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               </svg>
             </div>
             {!collapsed && (
-              <div className="flex flex-col">
-                <span className="font-bold text-white text-lg tracking-tight">ORbit</span>
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Surgical Suite</span>
-              </div>
+              <span className="text-lg font-bold text-white tracking-tight">ORbit</span>
             )}
           </Link>
         </div>
 
-        {/* Facility Indicator */}
-        {!collapsed && (
-          <div className="px-5 py-3 border-b border-slate-800/50">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50"></div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">
-                {isGlobalAdmin ? 'All Facilities' : 'Facility'}
-              </p>
-            </div>
-            <p className="text-sm text-slate-300 font-medium mt-1 truncate">
-              {isGlobalAdmin ? 'Global Access' : userData.facilityName || 'Unknown'}
-            </p>
-          </div>
-        )}
-
         {/* Navigation */}
-        <nav className="flex-1 py-4 overflow-y-auto">
-          <div className={`${collapsed ? 'px-2' : 'px-3'}`}>
-            {!collapsed && (
-              <p className="text-[10px] text-slate-600 uppercase tracking-wider font-semibold mb-2 px-3">
-                Navigation
-              </p>
-            )}
-            <ul className="space-y-1">
-              {navigation.map((item) => {
-                const active = isActive(item.href)
-                return (
-                  <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                        active
-                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/70'
-                      } ${collapsed ? 'justify-center' : ''}`}
-                      title={collapsed ? item.name : undefined}
-                    >
-                      <span className={`transition-transform duration-200 ${active ? '' : 'group-hover:scale-110'}`}>
-                        {item.icon}
-                      </span>
-                      {!collapsed && <span>{item.name}</span>}
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
+        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+          {navigation.map((item) => {
+            const active = isActive(item.href)
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                } ${collapsed ? 'justify-center' : ''}`}
+                title={collapsed ? item.name : undefined}
+              >
+                <div className={`flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+                  {item.icon}
+                </div>
+                {!collapsed && (
+                  <span className="text-sm font-medium">{item.name}</span>
+                )}
+              </Link>
+            )
+          })}
         </nav>
-
-        {/* User Section (collapsed only shows avatar) */}
-        {collapsed ? (
-          <div className="p-3 border-t border-slate-800/50">
-            <div className="w-10 h-10 mx-auto bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-blue-500/20">
-              {userInitials}
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 border-t border-slate-800/50">
-            <div className="flex items-center gap-3 px-2 py-2 rounded-xl bg-slate-800/50">
-              <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-md shadow-blue-500/20">
-                {userInitials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{userName}</p>
-                <p className="text-xs text-slate-500 truncate">{getRoleDisplay()}</p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Collapse Toggle */}
         <div className="p-3 border-t border-slate-800/50">
           <button
             onClick={handleToggleCollapse}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800/70 transition-all duration-200 ${
+            className={`flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all duration-200 ${
               collapsed ? 'justify-center' : ''
             }`}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -253,25 +258,54 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
             </svg>
-            {!collapsed && <span className="font-medium">Collapse</span>}
+            {!collapsed && <span className="text-sm font-medium">Collapse</span>}
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${collapsed ? 'ml-[72px]' : 'ml-[240px]'}`}>
-        {/* Top Navigation Bar */}
-        <header className="h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 sticky top-0 z-30 shadow-sm">
-          {/* Left Side - Breadcrumb / Page Title */}
-          <div className="flex items-center gap-3">
+      <div
+        className={`flex-1 transition-all duration-300 ease-in-out ${
+          collapsed ? 'ml-[72px]' : 'ml-[240px]'
+        }`}
+      >
+        {/* Impersonation Banner */}
+        {impersonation && (
+          <div className="bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              <span className="font-semibold">
+                Viewing as: {impersonation.facilityName}
+              </span>
+              <span className="text-amber-800 text-sm">
+                All data shown is from this facility
+              </span>
+            </div>
+            <button
+              onClick={handleEndImpersonation}
+              className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Exit
+            </button>
+          </div>
+        )}
+
+        {/* Header */}
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
+          {/* Left Side - Breadcrumb/Title */}
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm">
-              <Link href="/dashboard" className="text-slate-400 hover:text-slate-600 transition-colors">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                </svg>
-              </Link>
-              <svg className="w-4 h-4 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              <span className="text-slate-400">
+                {impersonation ? impersonation.facilityName : userData.facilityName}
+              </span>
+              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
               <span className="font-semibold text-slate-900">
                 {navigation.find(n => isActive(n.href))?.name || 'Dashboard'}
@@ -390,6 +424,20 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                         <span>Settings</span>
+                      </Link>
+                    )}
+
+                    {/* Admin link - only for global admins */}
+                    {isGlobalAdmin && (
+                      <Link
+                        href="/admin"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                        <span>Admin Dashboard</span>
                       </Link>
                     )}
 
