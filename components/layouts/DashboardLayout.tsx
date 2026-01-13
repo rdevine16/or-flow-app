@@ -1,10 +1,5 @@
 // components/layouts/DashboardLayout.tsx
-// Enhanced with Admin navigation and impersonation banner
-// 
-// CHANGES FROM ORIGINAL:
-// 1. Added "Admin" nav item (global_admin only)
-// 2. Added impersonation banner at top when viewing another facility
-// 3. Import impersonation helpers
+// Enhanced with Admin navigation, impersonation banner, and trial expiration blocking
 
 'use client'
 
@@ -37,8 +32,66 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     sessionId: string
   } | null>(null)
 
+  // Trial/subscription state
+  const [facilityStatus, setFacilityStatus] = useState<{
+    subscriptionStatus: string | null
+    trialEndsAt: string | null
+    facilityName: string | null
+  } | null>(null)
+  const [checkingAccess, setCheckingAccess] = useState(true)
+
   // Get user data from context
   const { userData, loading, isGlobalAdmin, isFacilityAdmin, isAdmin } = useUser()
+
+  // Check facility subscription status
+  useEffect(() => {
+    async function checkFacilityAccess() {
+      // Global admins always have access
+      if (isGlobalAdmin) {
+        setCheckingAccess(false)
+        return
+      }
+
+      // Get user's facility
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setCheckingAccess(false)
+        return
+      }
+
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+
+      if (!userRecord?.facility_id) {
+        setCheckingAccess(false)
+        return
+      }
+
+      // Get facility status
+      const { data: facility } = await supabase
+        .from('facilities')
+        .select('name, subscription_status, trial_ends_at')
+        .eq('id', userRecord.facility_id)
+        .single()
+
+      if (facility) {
+        setFacilityStatus({
+          subscriptionStatus: facility.subscription_status,
+          trialEndsAt: facility.trial_ends_at,
+          facilityName: facility.name,
+        })
+      }
+
+      setCheckingAccess(false)
+    }
+
+    if (!loading) {
+      checkFacilityAccess()
+    }
+  }, [loading, isGlobalAdmin, supabase])
 
   // Load collapsed state and impersonation state on mount
   useEffect(() => {
@@ -90,6 +143,33 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         return 'Staff'
     }
   }
+
+  // Check if trial is expired
+  const isTrialExpired = () => {
+    if (!facilityStatus) return false
+    if (facilityStatus.subscriptionStatus !== 'trial') return false
+    if (!facilityStatus.trialEndsAt) return false
+    
+    return new Date(facilityStatus.trialEndsAt) < new Date()
+  }
+
+  // Check if facility is disabled
+  const isDisabled = () => {
+    if (!facilityStatus) return false
+    return facilityStatus.subscriptionStatus === 'disabled'
+  }
+
+  // Get days until trial ends (for warning banner)
+  const getTrialDaysRemaining = () => {
+    if (!facilityStatus?.trialEndsAt) return null
+    if (facilityStatus.subscriptionStatus !== 'trial') return null
+    
+    const diff = new Date(facilityStatus.trialEndsAt).getTime() - Date.now()
+    return Math.ceil(diff / 86400000)
+  }
+
+  const trialDaysRemaining = getTrialDaysRemaining()
+  const showTrialWarning = trialDaysRemaining !== null && trialDaysRemaining > 0 && trialDaysRemaining <= 7
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -182,12 +262,83 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigation = getNavigation()
 
   // Loading state
-  if (loading || !mounted) {
+  if (loading || !mounted || checkingAccess) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm text-slate-500 font-medium">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Trial Expired Block Screen
+  if (isTrialExpired() && !isGlobalAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Trial Expired</h1>
+          <p className="text-slate-600 mb-6">
+            Your trial period for <strong>{facilityStatus?.facilityName}</strong> has ended.
+          </p>
+          <p className="text-slate-600 mb-6">
+            To continue using ORbit and access your data, please contact us to activate your subscription.
+          </p>
+          <a
+            href="mailto:sales@orbitsurgical.com?subject=Activate%20ORbit%20Subscription"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Contact Sales
+          </a>
+          <button
+            onClick={handleLogout}
+            className="block w-full mt-4 text-slate-500 hover:text-slate-700 text-sm"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Disabled Block Screen
+  if (isDisabled() && !isGlobalAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Account Disabled</h1>
+          <p className="text-slate-600 mb-6">
+            Access to <strong>{facilityStatus?.facilityName}</strong> has been disabled.
+          </p>
+          <p className="text-slate-600 mb-6">
+            Please contact your administrator or our support team for assistance.
+          </p>
+          <a
+            href="mailto:support@orbitsurgical.com"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+          >
+            Contact Support
+          </a>
+          <button
+            onClick={handleLogout}
+            className="block w-full mt-4 text-slate-500 hover:text-slate-700 text-sm"
+          >
+            Sign out
+          </button>
         </div>
       </div>
     )
@@ -269,6 +420,34 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           collapsed ? 'ml-[72px]' : 'ml-[240px]'
         }`}
       >
+        {/* Trial Warning Banner */}
+        {showTrialWarning && !isGlobalAdmin && (
+          <div className={`px-4 py-2.5 flex items-center justify-between ${
+            trialDaysRemaining && trialDaysRemaining <= 3 ? 'bg-red-500 text-white' : 'bg-amber-500 text-amber-950'
+          }`}>
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="font-medium">
+                {trialDaysRemaining === 1 
+                  ? 'Your trial expires tomorrow!' 
+                  : `Your trial expires in ${trialDaysRemaining} days`}
+              </span>
+            </div>
+            <a
+              href="mailto:sales@orbitsurgical.com?subject=Activate%20ORbit%20Subscription"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                trialDaysRemaining && trialDaysRemaining <= 3 
+                  ? 'bg-white text-red-600 hover:bg-red-50' 
+                  : 'bg-amber-600 hover:bg-amber-700 text-white'
+              }`}
+            >
+              Contact Sales
+            </a>
+          </div>
+        )}
+
         {/* Impersonation Banner */}
         {impersonation && (
           <div className="bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between">
