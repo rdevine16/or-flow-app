@@ -224,11 +224,13 @@ export default function CreateFacilityPage() {
       }
 
       // 8. Log audit events
-      await quickAuditLog(
-        supabase,
-        userData.id,
-        userData.email || '',
-        'facility.created',
+const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+await quickAuditLog(
+  supabase,
+  currentUser?.id || '',
+  currentUser?.email || '',
+  'facility.created',
         {
           facilityId: facility.id,
           targetType: 'facility',
@@ -240,11 +242,11 @@ export default function CreateFacilityPage() {
         }
       )
 
-      await quickAuditLog(
-        supabase,
-        userData.id,
-        userData.email || '',
-        'user.created',
+await quickAuditLog(
+  supabase,
+  currentUser?.id || '',
+  currentUser?.email || '',
+  'user.created',
         {
           facilityId: facility.id,
           targetType: 'user',
