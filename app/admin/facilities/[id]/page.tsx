@@ -13,6 +13,7 @@ import { startImpersonation } from '../../../../lib/impersonation'
 import { quickAuditLog, formatAuditAction } from '../../../../lib/audit'
 import { generateInvitationToken } from '../../../../lib/passwords'
 import { sendInvitationEmail } from '../../../../lib/email'
+import { formatLastLogin } from '../../../../lib/auth-helpers'
 import FacilityLogoUpload from '../../../../components/FacilityLogoUpload'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
@@ -37,6 +38,8 @@ interface User {
   access_level: string
   role_id: string
   created_at: string
+  last_login_at: string | null
+  is_active: boolean
   invitation_token: string | null
   user_roles?: { name: string }
 }
@@ -419,6 +422,48 @@ export default function FacilityDetailPage() {
     }
   }
 
+  // Toggle user active status
+  const handleToggleUserActive = async (user: User) => {
+    const newStatus = !user.is_active
+    const action = newStatus ? 'reactivate' : 'deactivate'
+    
+    if (!confirm(`${newStatus ? 'Reactivate' : 'Deactivate'} ${user.first_name} ${user.last_name}?${!newStatus ? ' They will not be able to log in.' : ''}`)) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: newStatus })
+        .eq('id', user.id)
+
+      if (error) throw error
+
+      // Update local state
+      setUsers(users.map(u => 
+        u.id === user.id ? { ...u, is_active: newStatus } : u
+      ))
+
+      // Log the action
+      const { data: { user: currentUser } } = await supabase.auth.getUser()
+      await quickAuditLog(
+        supabase,
+        currentUser?.id || '',
+        currentUser?.email || '',
+        `user.${action}d`,
+        {
+          facilityId: facility?.id,
+          targetType: 'user',
+          targetId: user.id,
+          metadata: { userEmail: user.email },
+        }
+      )
+    } catch (error) {
+      console.error('Error updating user status:', error)
+      alert('Failed to update user status')
+    }
+  }
+
   // Impersonate
   const handleImpersonate = async () => {
     if (!facility) return
@@ -610,7 +655,7 @@ export default function FacilityDetailPage() {
         {activeTab === 'users' && (
           <div>
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="font-semibold text-slate-900">Users</h2>
+              <h2 className="font-semibold text-slate-900">Users ({users.length})</h2>
               <button
                 onClick={() => setShowInviteModal(true)}
                 className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -629,13 +674,27 @@ export default function FacilityDetailPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Access</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Last Login</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {user.first_name} {user.last_name}
+                  <tr 
+                    key={user.id} 
+                    className={`hover:bg-slate-50 ${!user.is_active ? 'opacity-50' : ''}`}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-900">
+                          {user.first_name} {user.last_name}
+                        </span>
+                        {!user.is_active && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
+                            Deactivated
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{user.email}</td>
                     <td className="px-4 py-3 text-slate-600 capitalize">
@@ -649,16 +708,38 @@ export default function FacilityDetailPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {user.invitation_token ? (
+                      {!user.is_active ? (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">Inactive</span>
+                      ) : user.invitation_token ? (
                         <span className="px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">Pending</span>
                       ) : (
                         <span className="px-2 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Active</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-slate-500 text-sm">
+                      {formatLastLogin(user.last_login_at)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleToggleUserActive(user)}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                          user.is_active
+                            ? 'text-red-600 hover:bg-red-50'
+                            : 'text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {user.is_active ? 'Deactivate' : 'Reactivate'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {users.length === 0 && (
+              <div className="p-8 text-center text-slate-500">
+                No users yet. Invite someone to get started.
+              </div>
+            )}
           </div>
         )}
 
