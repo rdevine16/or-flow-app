@@ -98,9 +98,12 @@ export default function FacilitiesListPage() {
 
   // Handle impersonation
   const handleImpersonate = async (facility: Facility) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
     const result = await startImpersonation(
       supabase,
-      userData.id,
+      user.id,
       facility.id,
       facility.name
     )
