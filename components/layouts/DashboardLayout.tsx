@@ -29,6 +29,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [impersonation, setImpersonation] = useState<{
     facilityId: string
     facilityName: string
+    facilityLogo: string | null
     sessionId: string
   } | null>(null)
 
@@ -37,6 +38,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     subscriptionStatus: string | null
     trialEndsAt: string | null
     facilityName: string | null
+    facilityLogo: string | null
   } | null>(null)
   const [mustChangePassword, setMustChangePassword] = useState(false)
   const [checkingAccess, setCheckingAccess] = useState(true)
@@ -81,7 +83,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       // Get facility status
       const { data: facility } = await supabase
         .from('facilities')
-        .select('name, subscription_status, trial_ends_at')
+        .select('name, subscription_status, trial_ends_at, logo_url')
         .eq('id', userRecord.facility_id)
         .single()
 
@@ -90,6 +92,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           subscriptionStatus: facility.subscription_status,
           trialEndsAt: facility.trial_ends_at,
           facilityName: facility.name,
+          facilityLogo: facility.logo_url,
         })
       }
 
@@ -108,18 +111,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       setCollapsed(saved === 'true')
     }
     
-    // Check for impersonation
-    const impState = getImpersonationState()
-    if (impState && isGlobalAdmin) {
-      setImpersonation({
-        facilityId: impState.facilityId,
-        facilityName: impState.facilityName,
-        sessionId: impState.sessionId,
-      })
+    // Check for impersonation and fetch logo
+    async function loadImpersonation() {
+      const impState = getImpersonationState()
+      if (impState && isGlobalAdmin) {
+        // Fetch logo for impersonated facility
+        const { data: facility } = await supabase
+          .from('facilities')
+          .select('logo_url')
+          .eq('id', impState.facilityId)
+          .single()
+        
+        setImpersonation({
+          facilityId: impState.facilityId,
+          facilityName: impState.facilityName,
+          facilityLogo: facility?.logo_url || null,
+          sessionId: impState.sessionId,
+        })
+      }
     }
     
+    loadImpersonation()
     setMounted(true)
-  }, [isGlobalAdmin])
+  }, [isGlobalAdmin, supabase])
 
   // Save collapsed state to localStorage
   const handleToggleCollapse = () => {
@@ -533,6 +547,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
           {/* Left Side - Breadcrumb/Title */}
           <div className="flex items-center gap-4">
+            {/* Facility Logo */}
+            {(impersonation?.facilityLogo || facilityStatus?.facilityLogo) && (
+              <div className="w-8 h-8 rounded-lg border border-slate-200 bg-white p-1 flex items-center justify-center">
+                <img
+                  src={impersonation?.facilityLogo || facilityStatus?.facilityLogo || ''}
+                  alt="Facility logo"
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm">
               <span className="text-slate-400">
                 {impersonation ? impersonation.facilityName : userData.facilityName}

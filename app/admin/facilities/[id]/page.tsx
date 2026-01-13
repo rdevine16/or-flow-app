@@ -13,6 +13,7 @@ import { startImpersonation } from '../../../../lib/impersonation'
 import { quickAuditLog, formatAuditAction } from '../../../../lib/audit'
 import { generateInvitationToken } from '../../../../lib/passwords'
 import { sendInvitationEmail } from '../../../../lib/email'
+import FacilityLogoUpload from '../../../../components/FacilityLogoUpload'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -20,6 +21,7 @@ interface Facility {
   id: string
   name: string
   address: string | null
+  logo_url: string | null
   subscription_status: string
   trial_ends_at: string | null
   subscription_started_at: string | null
@@ -549,37 +551,57 @@ export default function FacilityDetailPage() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Details</h2>
-            <div className="space-y-4 max-w-lg">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Left Column - Facility Details */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Details</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                    <input
+                      type="text"
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Created</label>
+                    <p className="text-slate-600">{formatDate(facility.created_at)}</p>
+                  </div>
+                  <button
+                    onClick={handleSaveFacility}
+                    disabled={saving}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column - Logo Upload */}
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Logo</h2>
+                <p className="text-sm text-slate-500 mb-4">
+                  Upload a logo to display in the header when viewing this facility.
+                </p>
+                <FacilityLogoUpload
+                  facilityId={facility.id}
+                  currentLogoUrl={facility.logo_url}
+                  onLogoChange={(newUrl) => {
+                    setFacility({ ...facility, logo_url: newUrl })
+                  }}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={editAddress}
-                  onChange={(e) => setEditAddress(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Created</label>
-                <p className="text-slate-600">{formatDate(facility.created_at)}</p>
-              </div>
-              <button
-                onClick={handleSaveFacility}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
             </div>
           </div>
         )}
