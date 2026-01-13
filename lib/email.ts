@@ -41,7 +41,7 @@ export async function sendWelcomeEmail(
   temporaryPassword: string
 ): Promise<EmailResult> {
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: DEFAULT_FROM,
       to: [to],
       subject: 'Welcome to ORbit — Your account is ready',
@@ -151,7 +151,7 @@ export async function sendInvitationEmail(
   const inviteUrl = `${APP_URL}/invite/${invitationToken}`
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: DEFAULT_FROM,
       to: [to],
       subject: `You're invited to join ${facilityName} on ORbit`,
@@ -239,7 +239,7 @@ export async function sendTrialWarningEmail(
   daysRemaining: number
 ): Promise<EmailResult> {
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: DEFAULT_FROM,
       to: [to],
       subject: `Your ORbit trial expires in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}`,
@@ -318,7 +318,7 @@ export async function sendPasswordResetEmail(
   const resetUrl = `${APP_URL}/auth/reset-password/${resetToken}`
 
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResendClient().emails.send({
       from: DEFAULT_FROM,
       to: [to],
       subject: 'Reset your ORbit password',
