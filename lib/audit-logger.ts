@@ -281,6 +281,51 @@ export const delayAudit = {
 }
 
 // ============================================
+// MILESTONE TYPES (Global Configuration)
+// ============================================
+
+export const milestoneTypeAudit = {
+  async created(supabase: SupabaseClient, displayName: string, milestoneTypeId: string) {
+    await log(supabase, 'milestone_type.created', {
+      targetType: 'milestone_type',
+      targetId: milestoneTypeId,
+      targetLabel: displayName,
+      newValues: { display_name: displayName },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    milestoneTypeId: string,
+    oldDisplayName: string,
+    newDisplayName: string
+  ) {
+    await log(supabase, 'milestone_type.updated', {
+      targetType: 'milestone_type',
+      targetId: milestoneTypeId,
+      targetLabel: newDisplayName,
+      oldValues: { display_name: oldDisplayName },
+      newValues: { display_name: newDisplayName },
+    })
+  },
+
+  async deleted(supabase: SupabaseClient, displayName: string, milestoneTypeId: string) {
+    await log(supabase, 'milestone_type.deleted', {
+      targetType: 'milestone_type',
+      targetId: milestoneTypeId,
+      targetLabel: displayName,
+    })
+  },
+
+  async reordered(supabase: SupabaseClient, count: number) {
+    await log(supabase, 'milestone_type.reordered', {
+      targetType: 'milestone_type',
+      metadata: { items_reordered: count },
+    })
+  },
+}
+
+// ============================================
 // ROOMS
 // ============================================
 

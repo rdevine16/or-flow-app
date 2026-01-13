@@ -6,6 +6,7 @@ import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import SortableList from '../../../components/settings/SortableList'
+import { milestoneTypeAudit } from '../../../lib/audit-logger'
 
 interface MilestoneType {
   id: string
@@ -50,17 +51,29 @@ export default function MilestonesSettingsPage() {
       .single()
 
     if (!error && data) {
+      // Audit log the creation
+      await milestoneTypeAudit.created(supabase, displayName, data.id)
+
       setMilestones([...milestones, data])
     }
   }
 
   const handleEdit = async (id: string, name: string, displayName: string) => {
+    // Get old display name for audit log
+    const oldMilestone = milestones.find(m => m.id === id)
+    const oldDisplayName = oldMilestone?.display_name || ''
+
     const { error } = await supabase
       .from('milestone_types')
       .update({ display_name: displayName })
       .eq('id', id)
 
     if (!error) {
+      // Audit log the update if display name changed
+      if (oldDisplayName !== displayName) {
+        await milestoneTypeAudit.updated(supabase, id, oldDisplayName, displayName)
+      }
+
       setMilestones(
         milestones.map(m => m.id === id ? { ...m, display_name: displayName } : m)
       )
@@ -68,12 +81,19 @@ export default function MilestonesSettingsPage() {
   }
 
   const handleDelete = async (id: string) => {
+    // Get milestone info for audit log
+    const milestone = milestones.find(m => m.id === id)
+    const displayName = milestone?.display_name || ''
+
     const { error } = await supabase
       .from('milestone_types')
       .delete()
       .eq('id', id)
 
     if (!error) {
+      // Audit log the deletion
+      await milestoneTypeAudit.deleted(supabase, displayName, id)
+
       setMilestones(milestones.filter(m => m.id !== id))
     }
   }
@@ -91,6 +111,9 @@ export default function MilestonesSettingsPage() {
     )
 
     await Promise.all(updates)
+
+    // Audit log the reorder
+    await milestoneTypeAudit.reordered(supabase, newItems.length)
   }
 
   return (
