@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import { useUser } from '../../lib/UserContext'
+import { getImpersonationState } from '../../lib/impersonation'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import Container from '../../components/ui/Container'
 import DateFilter from '../../components/ui/DateFilter'
@@ -207,8 +209,12 @@ function DrillDownModal({ isOpen, onClose, title, children }: DrillDownModalProp
 export default function AnalyticsOverviewPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, loading: userLoading } = useUser()
-  const facilityId = userData.facilityId
+  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
+  
+  // Effective facility ID (handles impersonation for global admins)
+  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
+  const [noFacilitySelected, setNoFacilitySelected] = useState(false)
+  const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
   
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [loading, setLoading] = useState(true)
@@ -220,7 +226,29 @@ export default function AnalyticsOverviewPage() {
   const [showTurnoverDrill, setShowTurnoverDrill] = useState(false)
   const [showSurgeonDrill, setShowSurgeonDrill] = useState(false)
 
+  // Determine effective facility ID (check for impersonation if global admin)
+  useEffect(() => {
+    if (userLoading) return
+    
+    // Check if global admin
+    if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
+      const impersonation = getImpersonationState()
+      if (impersonation?.facilityId) {
+        setEffectiveFacilityId(impersonation.facilityId)
+      } else {
+        setNoFacilitySelected(true)
+      }
+    } else if (userData.facilityId) {
+      // Regular user - use their facility
+      setEffectiveFacilityId(userData.facilityId)
+    }
+    
+    setFacilityCheckComplete(true)
+  }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
+
   const fetchData = async (startDate?: string, endDate?: string) => {
+    if (!effectiveFacilityId) return
+    
     setLoading(true)
 
     let query = supabase
@@ -240,7 +268,7 @@ export default function AnalyticsOverviewPage() {
           milestone_types (name)
         )
       `)
-      .eq('facility_id', facilityId)
+      .eq('facility_id', effectiveFacilityId)
       .order('scheduled_date', { ascending: false })
 
     if (startDate && endDate) {
@@ -253,11 +281,11 @@ export default function AnalyticsOverviewPage() {
   }
 
   useEffect(() => {
-    if (!facilityId) return
+    if (!effectiveFacilityId) return
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
-  }, [facilityId])
+  }, [effectiveFacilityId])
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
     setDateFilter(filter)
@@ -359,8 +387,8 @@ export default function AnalyticsOverviewPage() {
     { phase: 'Post-Close', avgTime: metrics.avgPostClosingTime ? Math.round(metrics.avgPostClosingTime / 60) : 0 },
   ]
 
-  // Early return for loading/no facility
-  if (userLoading) {
+  // Early return for loading
+  if (userLoading || !facilityCheckComplete) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-24">
@@ -373,7 +401,45 @@ export default function AnalyticsOverviewPage() {
     )
   }
 
-  if (!facilityId) {
+  // Show message for global admin without facility selected
+  if (noFacilitySelected) {
+    return (
+      <DashboardLayout>
+        <Container className="py-8">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">Analytics</h1>
+            <p className="text-slate-500 mt-1">OR efficiency metrics and insights</p>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
+              <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                As a global admin, select a facility to view to see their analytics.
+              </p>
+              <Link
+                href="/admin/facilities"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View Facilities
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </DashboardLayout>
+    )
+  }
+
+  if (!effectiveFacilityId) {
     return (
       <DashboardLayout>
         <div className="text-center py-24 text-slate-500">
@@ -550,20 +616,22 @@ export default function AnalyticsOverviewPage() {
                           formatter={(value) => [value, 'Cases']}
                           contentStyle={{ 
                             borderRadius: '8px', 
-                            border: '1px solid #e2e8f0'
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
                           }}
                         />
                         <Line 
                           type="monotone" 
                           dataKey="count" 
                           stroke="#2563eb" 
-                          strokeWidth={2} 
-                          dot={{ fill: '#2563eb', strokeWidth: 2 }} 
+                          strokeWidth={2}
+                          dot={{ fill: '#2563eb', strokeWidth: 2, r: 4 }}
+                          activeDot={{ r: 6, fill: '#2563eb' }}
                         />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="h-[280px] flex items-center justify-center text-slate-500">
+                    <div className="flex items-center justify-center h-[280px] text-slate-400">
                       No data available
                     </div>
                   )}
@@ -576,99 +644,69 @@ export default function AnalyticsOverviewPage() {
               <div className="mb-8">
                 <SectionHeader 
                   title="Surgeon Performance" 
-                  subtitle="Case counts and on-time start rates by surgeon"
+                  subtitle="Top performers by case volume"
                 />
                 
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Case Time</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Surgical</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">On-Time Rate</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Late Starts</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {metrics.surgeonPerformance.slice(0, 10).map((surgeon) => (
-                        <tr key={surgeon.surgeonId} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 text-sm font-medium text-slate-900">{surgeon.surgeonName}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600 text-center">{surgeon.caseCount}</td>
-                          <td className="px-4 py-3 text-sm text-slate-600 text-center">
-                            {formatSecondsToHHMMSS(surgeon.avgCaseTime)}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-slate-600 text-center">
-                            {formatSecondsToHHMMSS(surgeon.avgSurgicalTime)}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              surgeon.onTimeRate >= 85 
-                                ? 'bg-emerald-100 text-emerald-800' 
-                                : surgeon.onTimeRate >= 70 
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-red-100 text-red-800'
-                            }`}>
-                              {surgeon.onTimeRate}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-center">
-                            {surgeon.lateStartCount > 0 ? (
-                              <span className="text-red-600 font-medium">{surgeon.lateStartCount}</span>
-                            ) : (
-                              <span className="text-emerald-600">0</span>
-                            )}
-                          </td>
+                {metrics.surgeonPerformance.length > 0 ? (
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-slate-50">
+                        <tr className="border-b border-slate-200">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Surgeon</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Avg Case Time</th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">On-Time Rate</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  
-                  {metrics.surgeonPerformance.length > 10 && (
-                    <div className="px-4 py-3 bg-slate-50 border-t border-slate-200">
-                      <button 
-                        onClick={() => setShowSurgeonDrill(true)}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        View all {metrics.surgeonPerformance.length} surgeons →
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* ============================================ */}
-              {/* QUICK STATS ROW */}
-              {/* ============================================ */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <MetricCard
-                  title="Total Cases"
-                  value={metrics.totalCases}
-                  subtitle="In selected period"
-                />
-                <MetricCard
-                  title="Completed"
-                  value={metrics.completedCases}
-                  subtitle={`${metrics.totalCases > 0 ? Math.round((metrics.completedCases / metrics.totalCases) * 100) : 0}% of total`}
-                />
-                <MetricCard
-                  title="Total Turnovers"
-                  value={metrics.turnoverAnalysis.totalTurnovers}
-                  subtitle={`${metrics.turnoverAnalysis.exceededTargetCount} exceeded target`}
-                />
-                <MetricCard
-                  title="Procedures"
-                  value={metrics.procedureAnalytics.length}
-                  subtitle="Unique types performed"
-                />
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {metrics.surgeonPerformance.slice(0, 5).map((surgeon) => (
+                          <tr key={surgeon.surgeonId} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 text-sm font-medium text-slate-900">{surgeon.surgeonName}</td>
+                            <td className="px-4 py-3 text-sm text-slate-600 text-center">{surgeon.caseCount}</td>
+                            <td className="px-4 py-3 text-sm text-slate-600 text-center">
+                              {formatSecondsToHHMMSS(surgeon.avgCaseTime)}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                surgeon.onTimeRate >= 85 
+                                  ? 'bg-emerald-100 text-emerald-800' 
+                                  : surgeon.onTimeRate >= 70 
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-red-100 text-red-800'
+                              }`}>
+                                {surgeon.onTimeRate}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {metrics.surgeonPerformance.length > 5 && (
+                      <div className="px-4 py-3 bg-slate-50 border-t border-slate-200">
+                        <button
+                          onClick={() => setShowSurgeonDrill(true)}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center"
+                        >
+                          View all {metrics.surgeonPerformance.length} surgeons
+                          <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
+                    No surgeon data available
+                  </div>
+                )}
               </div>
 
               {/* ============================================ */}
               {/* DRILL-DOWN MODALS */}
               {/* ============================================ */}
               
-              {/* First Case On-Time Drill-Down */}
+              {/* First Case Drill-Down */}
               <DrillDownModal
                 isOpen={showFirstCaseDrill}
                 onClose={() => setShowFirstCaseDrill(false)}
@@ -691,15 +729,14 @@ export default function AnalyticsOverviewPage() {
                     </div>
                   </div>
                   
-                  {/* Late Cases List */}
+                  {/* Late Cases Table */}
                   {metrics.firstCaseAnalysis.lateCases.length > 0 && (
                     <div>
-                      <h4 className="font-medium text-slate-900 mb-3">Late First Case Starts</h4>
+                      <h4 className="font-medium text-slate-900 mb-3">Late First Cases</h4>
                       <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
                         <table className="w-full">
-                          <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200">
-                              <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
+                          <thead className="bg-slate-50">
+                            <tr className="border-b border-slate-200">
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Case #</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Room</th>
                               <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Surgeon</th>
@@ -707,17 +744,14 @@ export default function AnalyticsOverviewPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {metrics.firstCaseAnalysis.lateCases.slice(0, 20).map((lateCase, idx) => (
+                            {metrics.firstCaseAnalysis.lateCases.map((lateCase, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
-                                <td className="px-4 py-2 text-sm text-slate-600">{lateCase.caseData.scheduled_date}</td>
-                                <td className="px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700">
+                                <td className="px-4 py-2 text-sm font-medium text-blue-600">
                                   <a href={`/cases/${lateCase.caseData.id}`}>{lateCase.caseData.case_number}</a>
                                 </td>
                                 <td className="px-4 py-2 text-sm text-slate-600">{lateCase.roomName}</td>
                                 <td className="px-4 py-2 text-sm text-slate-600">{lateCase.surgeonName}</td>
-                                <td className="px-4 py-2 text-sm text-right">
-                                  <span className="text-red-600 font-medium">+{lateCase.delayMinutes} min</span>
-                                </td>
+                                <td className="px-4 py-2 text-sm text-right text-red-600 font-medium">+{lateCase.delayMinutes} min</td>
                               </tr>
                             ))}
                           </tbody>
@@ -728,7 +762,7 @@ export default function AnalyticsOverviewPage() {
                 </div>
               </DrillDownModal>
 
-              {/* Overall On-Time Drill-Down */}
+              {/* On-Time Start Drill-Down */}
               <DrillDownModal
                 isOpen={showOnTimeDrill}
                 onClose={() => setShowOnTimeDrill(false)}
@@ -736,7 +770,7 @@ export default function AnalyticsOverviewPage() {
               >
                 <div className="space-y-6">
                   {/* Summary */}
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="bg-slate-50 rounded-lg p-4">
                       <p className="text-sm text-slate-500">Total Cases</p>
                       <p className="text-2xl font-bold text-slate-900">{metrics.onTimeAnalysis.totalCases}</p>
@@ -748,28 +782,6 @@ export default function AnalyticsOverviewPage() {
                     <div className="bg-red-50 rounded-lg p-4">
                       <p className="text-sm text-red-600">Late</p>
                       <p className="text-2xl font-bold text-red-700">{metrics.onTimeAnalysis.lateCount}</p>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg p-4">
-                      <p className="text-sm text-amber-600">Avg Delay</p>
-                      <p className="text-2xl font-bold text-amber-700">
-                        {metrics.onTimeAnalysis.avgDelayMinutes ? `${metrics.onTimeAnalysis.avgDelayMinutes}m` : '-'}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Late Cases by First Case vs Non-First */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white rounded-lg border border-slate-200 p-4">
-                      <h4 className="font-medium text-slate-900 mb-2">First Case Late Starts</h4>
-                      <p className="text-3xl font-bold text-slate-900">
-                        {metrics.onTimeAnalysis.lateCases.filter(c => c.isFirstCase).length}
-                      </p>
-                    </div>
-                    <div className="bg-white rounded-lg border border-slate-200 p-4">
-                      <h4 className="font-medium text-slate-900 mb-2">Subsequent Case Late Starts</h4>
-                      <p className="text-3xl font-bold text-slate-900">
-                        {metrics.onTimeAnalysis.lateCases.filter(c => !c.isFirstCase).length}
-                      </p>
                     </div>
                   </div>
                   
