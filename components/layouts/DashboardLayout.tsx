@@ -38,32 +38,40 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     trialEndsAt: string | null
     facilityName: string | null
   } | null>(null)
+  const [mustChangePassword, setMustChangePassword] = useState(false)
   const [checkingAccess, setCheckingAccess] = useState(true)
 
   // Get user data from context
   const { userData, loading, isGlobalAdmin, isFacilityAdmin, isAdmin } = useUser()
 
-  // Check facility subscription status
+  // Check facility subscription status and password change requirement
   useEffect(() => {
     async function checkFacilityAccess() {
-      // Global admins always have access
-      if (isGlobalAdmin) {
-        setCheckingAccess(false)
-        return
-      }
-
-      // Get user's facility
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setCheckingAccess(false)
         return
       }
 
+      // Get user record to check must_change_password and facility_id
       const { data: userRecord } = await supabase
         .from('users')
-        .select('facility_id')
+        .select('facility_id, must_change_password')
         .eq('id', user.id)
         .single()
+
+      // Check if password change is required
+      if (userRecord?.must_change_password) {
+        setMustChangePassword(true)
+        setCheckingAccess(false)
+        return
+      }
+
+      // Global admins always have access (skip facility check)
+      if (isGlobalAdmin) {
+        setCheckingAccess(false)
+        return
+      }
 
       if (!userRecord?.facility_id) {
         setCheckingAccess(false)
@@ -268,6 +276,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-sm text-slate-500 font-medium">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Redirect to password change if required
+  if (mustChangePassword) {
+    router.push('/auth/change-password')
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-slate-500 font-medium">Redirecting...</p>
         </div>
       </div>
     )
