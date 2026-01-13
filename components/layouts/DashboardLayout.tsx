@@ -42,9 +42,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   } | null>(null)
   const [mustChangePassword, setMustChangePassword] = useState(false)
   const [checkingAccess, setCheckingAccess] = useState(true)
+  const [userAccessLevel, setUserAccessLevel] = useState<string | null>(null)
 
   // Get user data from context
   const { userData, loading, isGlobalAdmin, isFacilityAdmin, isAdmin } = useUser()
+
+  // Computed: use local access level if available, fallback to context
+  const effectiveIsGlobalAdmin = userAccessLevel === 'global_admin' || isGlobalAdmin
 
   // Check facility subscription status and password change requirement
   useEffect(() => {
@@ -55,12 +59,17 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         return
       }
 
-      // Get user record to check must_change_password and facility_id
+      // Get user record to check access_level, must_change_password and facility_id
       const { data: userRecord } = await supabase
         .from('users')
-        .select('facility_id, must_change_password')
+        .select('facility_id, must_change_password, access_level')
         .eq('id', user.id)
         .single()
+
+      // Store access level locally for immediate use
+      if (userRecord?.access_level) {
+        setUserAccessLevel(userRecord.access_level)
+      }
 
       // Check if password change is required
       if (userRecord?.must_change_password) {
@@ -70,7 +79,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       }
 
       // Global admins always have access (skip facility check)
-      if (isGlobalAdmin) {
+      if (userRecord?.access_level === 'global_admin') {
         setCheckingAccess(false)
         return
       }
@@ -102,7 +111,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     if (!loading) {
       checkFacilityAccess()
     }
-  }, [loading, isGlobalAdmin, supabase])
+  }, [loading, supabase])
 
   // Load collapsed state and impersonation state on mount
   useEffect(() => {
@@ -114,7 +123,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     // Check for impersonation and fetch logo
     async function loadImpersonation() {
       const impState = getImpersonationState()
-      if (impState && isGlobalAdmin) {
+      if (impState && effectiveIsGlobalAdmin) {
         // Fetch logo for impersonated facility
         const { data: facility } = await supabase
           .from('facilities')
@@ -133,7 +142,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     
     loadImpersonation()
     setMounted(true)
-  }, [isGlobalAdmin, supabase])
+  }, [effectiveIsGlobalAdmin, supabase])
 
   // Save collapsed state to localStorage
   const handleToggleCollapse = () => {
@@ -221,7 +230,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Navigation items
   const getNavigation = () => {
     // Global admin NOT impersonating = Admin only
-    if (isGlobalAdmin && !impersonation) {
+    if (effectiveIsGlobalAdmin && !impersonation) {
       return [
         {
           name: 'Admin',
@@ -282,7 +291,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     ]
 
     // Add Admin to nav for global admin while impersonating
-    if (isGlobalAdmin && impersonation) {
+    if (effectiveIsGlobalAdmin && impersonation) {
       baseNav.push({
         name: 'Admin',
         href: '/admin',
@@ -329,7 +338,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const facilityPages = ['/dashboard', '/cases', '/analytics', '/settings']
   const isOnFacilityPage = facilityPages.some(page => pathname === page || pathname.startsWith(page + '/'))
   
-  if (isGlobalAdmin && !impersonation && isOnFacilityPage) {
+  if (effectiveIsGlobalAdmin && !impersonation && isOnFacilityPage) {
     router.push('/admin')
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -342,7 +351,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // Trial Expired Block Screen
-  if (isTrialExpired() && !isGlobalAdmin) {
+  if (isTrialExpired() && !effectiveIsGlobalAdmin) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
@@ -379,7 +388,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // Disabled Block Screen
-  if (isDisabled() && !isGlobalAdmin) {
+  if (isDisabled() && !effectiveIsGlobalAdmin) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
@@ -489,7 +498,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         }`}
       >
         {/* Trial Warning Banner */}
-        {showTrialWarning && !isGlobalAdmin && (
+        {showTrialWarning && !effectiveIsGlobalAdmin && (
           <div className={`px-4 py-2.5 flex items-center justify-between ${
             trialDaysRemaining && trialDaysRemaining <= 3 ? 'bg-red-500 text-white' : 'bg-amber-500 text-amber-950'
           }`}>
@@ -685,7 +694,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     )}
 
                     {/* Admin link - only for global admins */}
-                    {isGlobalAdmin && (
+                    {effectiveIsGlobalAdmin && (
                       <Link
                         href="/admin"
                         className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
