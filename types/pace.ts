@@ -76,6 +76,7 @@ export interface EnhancedCase {
   scheduled_date: string
   start_time: string | null
   facility_id: string
+  operative_side?: string | null
   or_room_id: string | null
   procedure_type_id: string | null
   surgeon_id: string | null
