@@ -2,12 +2,6 @@
 
 import { useState, useEffect } from 'react'
 
-// Modern monospace font style
-const monoFontStyle = { 
-  fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', 'Roboto Mono', monospace", 
-  fontVariantNumeric: 'tabular-nums' 
-}
-
 interface MilestoneButtonProps {
   name: string
   displayName: string
@@ -15,11 +9,6 @@ interface MilestoneButtonProps {
   onRecord: () => void
   onUndo: () => void
   disabled?: boolean
-  // For paired milestones (start/stop)
-  isPaired?: boolean
-  pairType?: 'start' | 'end'
-  pairedRecordedAt?: string | null // The other milestone's time
-  onRecordPaired?: () => void // Record the paired milestone
 }
 
 function formatTime(dateString: string): string {
@@ -43,14 +32,14 @@ function formatDuration(startTime: string, endTime: string): string {
 }
 
 function RunningTimer({ startTime }: { startTime: string }) {
-  const [elapsed, setElapsed] = useState('00:00')
+  const [elapsed, setElapsed] = useState('0:00')
 
   useEffect(() => {
     const updateTimer = () => {
       const diffMs = Date.now() - new Date(startTime).getTime()
       const minutes = Math.floor(diffMs / (1000 * 60))
       const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
-      setElapsed(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`)
+      setElapsed(`${minutes}:${seconds.toString().padStart(2, '0')}`)
     }
     
     updateTimer()
@@ -58,10 +47,10 @@ function RunningTimer({ startTime }: { startTime: string }) {
     return () => clearInterval(interval)
   }, [startTime])
 
-  return <span style={monoFontStyle}>{elapsed}</span>
+  return <span>{elapsed}</span>
 }
 
-// Single milestone (non-paired)
+// Single milestone button - clean compact design
 export default function MilestoneButton({
   name,
   displayName,
@@ -72,65 +61,49 @@ export default function MilestoneButton({
 }: MilestoneButtonProps) {
   const isRecorded = !!recordedAt
 
+  if (isRecorded) {
+    return (
+      <div className="group relative">
+        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-lg">
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium opacity-90 truncate">{displayName}</p>
+            <p className="text-sm font-bold tabular-nums">{formatTime(recordedAt)}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onUndo}
+          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200"
+        >
+          <svg className="w-3 h-3 text-slate-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div
-      className={`relative rounded-xl border h-full flex flex-col transition-all duration-200 ${
-        isRecorded
-          ? 'bg-emerald-50 border-emerald-200'
-          : 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-md'
+    <button
+      type="button"
+      onClick={onRecord}
+      disabled={disabled}
+      className={`w-full px-3 py-3 rounded-lg border-2 border-dashed transition-all text-left ${
+        disabled
+          ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+          : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-600 hover:text-blue-600'
       }`}
     >
-      {/* Header */}
-      <div className={`px-4 py-2 border-b ${isRecorded ? 'border-emerald-200 bg-emerald-100/50' : 'border-slate-100 bg-slate-50'}`}>
-        <div className="flex items-center justify-between">
-          <span className={`text-sm font-semibold ${isRecorded ? 'text-emerald-800' : 'text-slate-700'}`}>
-            {displayName}
-          </span>
-          {isRecorded && (
-            <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
-              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 p-4 flex flex-col items-center justify-center">
-        {isRecorded ? (
-          <>
-            <div className="text-xl font-bold text-emerald-700" style={monoFontStyle}>
-              {formatTime(recordedAt)}
-            </div>
-            <button
-              type="button"
-              onClick={onUndo}
-              className="mt-2 text-xs text-slate-400 hover:text-red-500 transition-colors"
-            >
-              Undo
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onRecord}
-            disabled={disabled}
-            className={`w-full py-3 px-4 rounded-lg font-medium text-sm transition-all ${
-              disabled
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm'
-            }`}
-          >
-            Record
-          </button>
-        )}
-      </div>
-    </div>
+      <p className="text-xs font-medium opacity-70">{displayName}</p>
+      <p className="text-sm font-semibold">Tap to record</p>
+    </button>
   )
 }
 
-// Paired milestone (start/stop like Anesthesia, Draping)
+// Paired milestone button (start/stop) - clean compact design
 export function PairedMilestoneButton({
   displayName,
   startRecordedAt,
@@ -155,124 +128,87 @@ export function PairedMilestoneButton({
   const isRunning = hasStarted && !hasEnded
   const isComplete = hasStarted && hasEnded
 
-  // Determine state
-  let state: 'pending' | 'running' | 'complete' = 'pending'
-  if (isComplete) state = 'complete'
-  else if (isRunning) state = 'running'
-
-  const bgColors = {
-    pending: 'bg-white border-slate-200 hover:border-blue-300 hover:shadow-md',
-    running: 'bg-amber-50 border-amber-300',
-    complete: 'bg-emerald-50 border-emerald-200',
-  }
-
-  const headerColors = {
-    pending: 'border-slate-100 bg-slate-50',
-    running: 'border-amber-200 bg-amber-100/50',
-    complete: 'border-emerald-200 bg-emerald-100/50',
-  }
-
-  const textColors = {
-    pending: 'text-slate-700',
-    running: 'text-amber-800',
-    complete: 'text-emerald-800',
-  }
-
-  return (
-    <div className={`relative rounded-xl border h-full flex flex-col transition-all duration-200 ${bgColors[state]}`}>
-      {/* Header */}
-      <div className={`px-4 py-2 border-b ${headerColors[state]}`}>
-        <div className="flex items-center justify-between">
-          <span className={`text-sm font-semibold ${textColors[state]}`}>
-            {displayName}
-          </span>
-          {isComplete && (
-            <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
-              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-          )}
-          {isRunning && (
-            <div className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            </div>
-          )}
+  // Complete state
+  if (isComplete) {
+    return (
+      <div className="group relative">
+        <div className="px-3 py-2 bg-emerald-500 text-white rounded-lg">
+          <div className="flex items-center gap-2 mb-1">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            <p className="text-xs font-medium opacity-90">{displayName}</p>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-bold tabular-nums">{formatTime(startRecordedAt!)}</span>
+            <span className="text-emerald-200 text-xs">→</span>
+            <span className="font-bold tabular-nums">{formatTime(endRecordedAt!)}</span>
+          </div>
+          <p className="text-xs text-emerald-100 mt-1 tabular-nums">{formatDuration(startRecordedAt!, endRecordedAt!)}</p>
         </div>
+        <button
+          type="button"
+          onClick={onUndoEnd}
+          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200"
+        >
+          <svg className="w-3 h-3 text-slate-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
+    )
+  }
 
-      {/* Body */}
-      <div className="flex-1 p-4 flex flex-col items-center justify-center min-h-[120px]">
-        {state === 'pending' && (
+  // Running state
+  if (isRunning) {
+    return (
+      <div className="group relative">
+        <div className="px-3 py-2 bg-amber-500 text-white rounded-lg">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+            <p className="text-xs font-medium opacity-90">{displayName}</p>
+          </div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-bold tabular-nums">{formatTime(startRecordedAt!)}</span>
+            <span className="text-sm font-bold tabular-nums text-amber-100">
+              <RunningTimer startTime={startRecordedAt!} />
+            </span>
+          </div>
           <button
             type="button"
-            onClick={onRecordStart}
-            disabled={disabled}
-            className={`w-full py-3 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
-              disabled
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm'
-            }`}
+            onClick={onRecordEnd}
+            className="w-full py-1.5 bg-white/20 hover:bg-white/30 rounded text-xs font-semibold transition-colors"
           >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            Start
+            Stop
           </button>
-        )}
-
-        {state === 'running' && (
-          <>
-            <div className="text-xs text-amber-600 mb-1">Started</div>
-            <div className="text-lg font-bold text-amber-700" style={monoFontStyle}>
-              {formatTime(startRecordedAt!)}
-            </div>
-            <div className="text-xs text-amber-600 mb-1 mt-2">Elapsed</div>
-            <div className="text-lg font-bold text-amber-600 mb-3">
-              <RunningTimer startTime={startRecordedAt!} />
-            </div>
-            <button
-              type="button"
-              onClick={onRecordEnd}
-              className="w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 bg-red-500 text-white hover:bg-red-600 active:scale-95 shadow-sm"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="6" y="6" width="12" height="12" rx="1" />
-              </svg>
-              Stop
-            </button>
-            <button
-              type="button"
-              onClick={onUndoStart}
-              className="mt-2 text-xs text-slate-400 hover:text-red-500 transition-colors"
-            >
-              Undo Start
-            </button>
-          </>
-        )}
-
-        {state === 'complete' && (
-          <>
-            <div className="flex items-center gap-2 text-emerald-700 mb-2">
-              <span className="text-lg font-bold" style={monoFontStyle}>{formatTime(startRecordedAt!)}</span>
-              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-              <span className="text-lg font-bold" style={monoFontStyle}>{formatTime(endRecordedAt!)}</span>
-            </div>
-            <div className="text-sm text-emerald-600 font-medium" style={monoFontStyle}>
-              {formatDuration(startRecordedAt!, endRecordedAt!)} duration
-            </div>
-            <button
-              type="button"
-              onClick={onUndoEnd}
-              className="mt-2 text-xs text-slate-400 hover:text-red-500 transition-colors"
-            >
-              Undo
-            </button>
-          </>
-        )}
+        </div>
+        <button
+          type="button"
+          onClick={onUndoStart}
+          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200"
+        >
+          <svg className="w-3 h-3 text-slate-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-    </div>
+    )
+  }
+
+  // Pending state
+  return (
+    <button
+      type="button"
+      onClick={onRecordStart}
+      disabled={disabled}
+      className={`w-full px-3 py-3 rounded-lg border-2 border-dashed transition-all text-left ${
+        disabled
+          ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+          : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-600 hover:text-blue-600'
+      }`}
+    >
+      <p className="text-xs font-medium opacity-70">{displayName}</p>
+      <p className="text-sm font-semibold">Tap to start</p>
+    </button>
   )
 }
