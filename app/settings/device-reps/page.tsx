@@ -190,6 +190,7 @@ export default function DeviceRepsPage() {
 
     // Generate invite token
     const inviteToken = crypto.randomUUID()
+    const companyName = companies.find(c => c.id === inviteForm.implant_company_id)?.name || 'Unknown'
 
     // Create invite record
     const { data, error } = await supabase
@@ -225,8 +226,27 @@ export default function DeviceRepsPage() {
       setPendingInvites([newInvite, ...pendingInvites])
       closeInviteModal()
 
+      // Send invite email via API
+      try {
+        const emailResponse = await fetch('/api/send-rep-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: inviteForm.email.trim().toLowerCase(),
+            facilityName,
+            companyName,
+            inviteToken,
+          }),
+        })
+
+        if (!emailResponse.ok) {
+          console.error('Failed to send invite email')
+        }
+      } catch (emailError) {
+        console.error('Error sending invite email:', emailError)
+      }
+
       // Audit log
-      const companyName = companies.find(c => c.id === inviteForm.implant_company_id)?.name || 'Unknown'
       await deviceRepAudit.invited(
         supabase,
         inviteForm.email,
@@ -235,7 +255,7 @@ export default function DeviceRepsPage() {
         facilityName
       )
 
-      // Show invite link modal
+      // Show invite link modal (as backup / confirmation)
       setInviteLinkModal({
         isOpen: true,
         link: `${window.location.origin}/invite/accept/${inviteToken}`,
@@ -538,17 +558,28 @@ export default function DeviceRepsPage() {
                       </svg>
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-900">Invite Created!</h3>
-                      <p className="text-sm text-slate-500">Send this link to the device rep</p>
+                      <h3 className="text-lg font-semibold text-slate-900">Invite Sent!</h3>
+                      <p className="text-sm text-slate-500">Email sent to the device rep</p>
                     </div>
                   </div>
                 </div>
                 <div className="p-6">
-                  <p className="text-sm text-slate-600 mb-3">
-                    Share this link with <span className="font-medium">{inviteLinkModal.email}</span>:
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      <p className="text-sm text-green-700">
+                        Invitation email sent to <span className="font-medium">{inviteLinkModal.email}</span>
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-slate-600 mb-2">
+                    Backup link (if email doesn't arrive):
                   </p>
                   <div className="bg-slate-50 rounded-lg p-3 mb-4">
-                    <p className="text-sm text-slate-700 break-all font-mono">{inviteLinkModal.link}</p>
+                    <p className="text-xs text-slate-600 break-all font-mono">{inviteLinkModal.link}</p>
                   </div>
                   <button
                     onClick={() => {
@@ -561,7 +592,7 @@ export default function DeviceRepsPage() {
                       }
                     }}
                     id="copy-link-btn"
-                    className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -575,7 +606,7 @@ export default function DeviceRepsPage() {
                 <div className="px-6 py-4 border-t border-slate-200">
                   <button
                     onClick={() => setInviteLinkModal({ isOpen: false, link: '', email: '' })}
-                    className="w-full py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
                     Done
                   </button>
