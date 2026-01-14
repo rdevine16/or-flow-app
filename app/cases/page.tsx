@@ -14,6 +14,7 @@ interface Case {
   case_number: string
   scheduled_date: string
   start_time: string | null
+  operative_side: string | null  // ADD THIS
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
@@ -223,18 +224,19 @@ export default function CasesPage() {
     
     setLoading(true)
 
-    let query = supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        scheduled_date,
-        start_time,
-        or_rooms (name),
-        procedure_types (name),
-        case_statuses (name),
-        surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-      `)
+let query = supabase
+  .from('cases')
+  .select(`
+    id,
+    case_number,
+    scheduled_date,
+    start_time,
+    operative_side,
+    or_rooms (name),
+    procedure_types (name),
+    case_statuses (name),
+    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+  `)
       .eq('facility_id', effectiveFacilityId)
       .order('scheduled_date', { ascending: false })
       .order('start_time', { ascending: true })
