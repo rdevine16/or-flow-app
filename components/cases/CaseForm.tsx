@@ -1,3 +1,8 @@
+// ============================================
+// FILE: components/cases/CaseForm.tsx
+// UPDATED: Added operative_side field
+// ============================================
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -23,8 +28,17 @@ interface FormData {
   status_id: string
   surgeon_id: string
   anesthesiologist_id: string
+  operative_side: string  // NEW
   notes: string
 }
+
+// Operative side options
+const OPERATIVE_SIDE_OPTIONS = [
+  { id: 'left', label: 'Left' },
+  { id: 'right', label: 'Right' },
+  { id: 'bilateral', label: 'Bilateral' },
+  { id: 'n/a', label: 'N/A' },
+]
 
 export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const router = useRouter()
@@ -44,6 +58,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     status_id: '',
     surgeon_id: '',
     anesthesiologist_id: '',
+    operative_side: '',  // NEW
     notes: '',
   })
 
@@ -183,6 +198,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         status_id: data.status_id || '',
         surgeon_id: data.surgeon_id || '',
         anesthesiologist_id: data.anesthesiologist_id || '',
+        operative_side: data.operative_side || '',  // NEW
         notes: data.notes || '',
       }
 
@@ -235,6 +251,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       status_id: formData.status_id,
       surgeon_id: formData.surgeon_id || null,
       anesthesiologist_id: formData.anesthesiologist_id || null,
+      operative_side: formData.operative_side || null,  // NEW
       notes: formData.notes || null,
       facility_id: userFacilityId,
     }
@@ -288,44 +305,58 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         // Calculate changes for audit
         const changes: Record<string, unknown> = {}
         const oldValues: Record<string, unknown> = {}
-        
+
+        // Compare each field
         if (formData.case_number !== originalData.case_number) {
-          oldValues.case_number = originalData.case_number
           changes.case_number = formData.case_number
+          oldValues.case_number = originalData.case_number
         }
         if (formData.scheduled_date !== originalData.scheduled_date) {
-          oldValues.scheduled_date = originalData.scheduled_date
           changes.scheduled_date = formData.scheduled_date
+          oldValues.scheduled_date = originalData.scheduled_date
         }
         if (formData.start_time !== originalData.start_time) {
-          oldValues.start_time = originalData.start_time
           changes.start_time = formData.start_time
+          oldValues.start_time = originalData.start_time
         }
         if (formData.or_room_id !== originalData.or_room_id) {
-          oldValues.or_room = orRooms.find(r => r.id === originalData.or_room_id)?.name
-          changes.or_room = orRooms.find(r => r.id === formData.or_room_id)?.name
+          const newRoom = orRooms.find(r => r.id === formData.or_room_id)
+          const oldRoom = orRooms.find(r => r.id === originalData.or_room_id)
+          changes.or_room = newRoom?.name || 'None'
+          oldValues.or_room = oldRoom?.name || 'None'
         }
         if (formData.procedure_type_id !== originalData.procedure_type_id) {
-          oldValues.procedure = procedureTypes.find(p => p.id === originalData.procedure_type_id)?.name
-          changes.procedure = procedureTypes.find(p => p.id === formData.procedure_type_id)?.name
-        }
-        if (formData.status_id !== originalData.status_id) {
-          oldValues.status = statuses.find(s => s.id === originalData.status_id)?.name
-          changes.status = statuses.find(s => s.id === formData.status_id)?.name
+          const newProcedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
+          const oldProcedure = procedureTypes.find(p => p.id === originalData.procedure_type_id)
+          changes.procedure = newProcedure?.name || 'None'
+          oldValues.procedure = oldProcedure?.name || 'None'
         }
         if (formData.surgeon_id !== originalData.surgeon_id) {
-          const oldSurgeon = surgeons.find(s => s.id === originalData.surgeon_id)
           const newSurgeon = surgeons.find(s => s.id === formData.surgeon_id)
-          oldValues.surgeon = oldSurgeon ? `Dr. ${oldSurgeon.first_name} ${oldSurgeon.last_name}` : null
-          changes.surgeon = newSurgeon ? `Dr. ${newSurgeon.first_name} ${newSurgeon.last_name}` : null
+          const oldSurgeon = surgeons.find(s => s.id === originalData.surgeon_id)
+          changes.surgeon = newSurgeon ? `Dr. ${newSurgeon.first_name} ${newSurgeon.last_name}` : 'None'
+          oldValues.surgeon = oldSurgeon ? `Dr. ${oldSurgeon.first_name} ${oldSurgeon.last_name}` : 'None'
+        }
+        if (formData.status_id !== originalData.status_id) {
+          const newStatus = statuses.find(s => s.id === formData.status_id)
+          const oldStatus = statuses.find(s => s.id === originalData.status_id)
+          changes.status = newStatus?.name || 'None'
+          oldValues.status = oldStatus?.name || 'None'
+        }
+        // NEW: Track operative side changes
+        if (formData.operative_side !== originalData.operative_side) {
+          changes.operative_side = formData.operative_side || 'None'
+          oldValues.operative_side = originalData.operative_side || 'None'
         }
 
+        // Only log if there were changes
         if (Object.keys(changes).length > 0) {
           await caseAudit.updated(
             supabase,
-            { id: result.data.id, case_number: formData.case_number },
-            oldValues,
-            changes
+            savedCaseId,
+            formData.case_number,
+            changes,
+            oldValues
           )
         }
 
@@ -394,7 +425,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   if (initialLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <svg className="animate-spin h-8 w-8 text-teal-500" viewBox="0 0 24 24">
+        <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
         </svg>
@@ -422,7 +453,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             onChange={(e) => setFormData({ ...formData, case_number: e.target.value })}
             required
             placeholder="e.g., C-2025-001"
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
         </div>
         <div>
@@ -434,7 +465,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             value={formData.scheduled_date}
             onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
             required
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
         </div>
         <div>
@@ -446,7 +477,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             value={formData.start_time}
             onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
             required
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
         </div>
       </div>
@@ -478,14 +509,36 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         />
       )}
 
-      {/* Procedure Type */}
-      <SearchableDropdown
-        label="Procedure Type"
-        placeholder="Select Procedure"
-        value={formData.procedure_type_id}
-        onChange={(id) => setFormData({ ...formData, procedure_type_id: id })}
-        options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
-      />
+      {/* Procedure Type & Operative Side */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2">
+          <SearchableDropdown
+            label="Procedure Type"
+            placeholder="Select Procedure"
+            value={formData.procedure_type_id}
+            onChange={(id) => setFormData({ ...formData, procedure_type_id: id })}
+            options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
+          />
+        </div>
+        {/* NEW: Operative Side */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Operative Side
+          </label>
+          <select
+            value={formData.operative_side}
+            onChange={(e) => setFormData({ ...formData, operative_side: e.target.value })}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+          >
+            <option value="">Select Side</option>
+            {OPERATIVE_SIDE_OPTIONS.map(option => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {/* NEW: Implant Companies */}
       {userFacilityId && (
@@ -535,7 +588,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
           rows={4}
           placeholder="Any additional notes..."
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all resize-none"
+          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
         />
       </div>
 
@@ -551,7 +604,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="px-6 py-3 bg-teal-600 text-white font-medium rounded-xl hover:bg-teal-700 transition-colors shadow-lg shadow-teal-600/20 disabled:opacity-50"
+          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 disabled:opacity-50"
         >
           {loading ? 'Saving...' : mode === 'create' ? 'Create Case' : 'Update Case'}
         </button>

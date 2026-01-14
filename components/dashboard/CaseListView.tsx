@@ -1,3 +1,6 @@
+// components/cases/CaseListView.tsx
+// UPDATED: Added Side column for operative_side
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,6 +12,7 @@ interface Case {
   case_number: string
   scheduled_date: string
   start_time: string | null
+  operative_side: string | null  // NEW
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
@@ -47,6 +51,19 @@ const formatTime = (time: string | null): string => {
   const ampm = hour >= 12 ? 'PM' : 'AM'
   const displayHour = hour % 12 || 12
   return `${displayHour}:${minutes} ${ampm}`
+}
+
+// NEW: Format operative side for display
+const formatSide = (side: string | null): { label: string; color: string } | null => {
+  if (!side || side === 'n/a') return null
+  
+  const config: Record<string, { label: string; color: string }> = {
+    left: { label: 'Left', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+    right: { label: 'Right', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+    bilateral: { label: 'Bilateral', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  }
+  
+  return config[side] || null
 }
 
 const getStatusConfig = (status: string | null) => {
@@ -202,12 +219,13 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
 
       {/* Case List */}
       <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
-        {/* Table Header */}
+        {/* Table Header - UPDATED: Added Side column */}
         <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50/80 border-b border-slate-200/80">
           <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Time</div>
           <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Case</div>
           <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Room</div>
-          <div className="col-span-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
+          <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Side</div>
+          <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
           <div className="col-span-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
           <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</div>
         </div>
@@ -220,6 +238,7 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
             const statusName = getValue(caseItem.case_statuses)
             const surgeon = getSurgeon(caseItem.surgeon)
             const statusConfig = getStatusConfig(statusName)
+            const sideConfig = formatSide(caseItem.operative_side)  // NEW
 
             return (
               <Link 
@@ -252,8 +271,19 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
                   </div>
                 </div>
                 
+                {/* NEW: Side */}
+                <div className="col-span-1">
+                  {sideConfig ? (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-lg border text-xs font-medium ${sideConfig.color}`}>
+                      {sideConfig.label}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">—</span>
+                  )}
+                </div>
+                
                 {/* Surgeon with Avatar */}
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <div className="flex items-center gap-2.5">
                     <SurgeonAvatar name={surgeon.fullName} size="sm" />
                     <span className="text-sm font-medium text-slate-700 truncate">{surgeon.name}</span>

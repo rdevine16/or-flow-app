@@ -1,5 +1,6 @@
 // components/dashboard/EnhancedRoomCard.tsx
 // Enhanced room card showing all scheduled cases for the room
+// UPDATED: Added operative side badge display
 
 'use client'
 
@@ -54,6 +55,26 @@ function getProcedureName(procedureTypes: { name: string } | { name: string }[] 
 function getStatusName(caseStatuses: { name: string } | { name: string }[] | null): string | null {
   const s = getJoinedValue(caseStatuses)
   return s?.name || null
+}
+
+// NEW: Operative Side Badge Component
+function OperativeSideBadge({ side }: { side: string | null | undefined }) {
+  if (!side || side === 'n/a') return null
+  
+  const config: Record<string, { label: string; color: string }> = {
+    left: { label: 'L', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+    right: { label: 'R', color: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+    bilateral: { label: 'B', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+  }
+  
+  const cfg = config[side]
+  if (!cfg) return null
+  
+  return (
+    <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded border ${cfg.color}`}>
+      {cfg.label}
+    </span>
+  )
 }
 
 // Elapsed Time Display Component
@@ -112,9 +133,13 @@ function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
       
       {/* Case Info */}
       <div className="flex-1 min-w-0">
-        <h4 className={`text-sm font-semibold truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-          {getProcedureName(caseItem.procedure_types)}
-        </h4>
+        {/* UPDATED: Added operative side badge */}
+        <div className="flex items-center gap-2">
+          <h4 className={`text-sm font-semibold truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+            {getProcedureName(caseItem.procedure_types)}
+          </h4>
+          <OperativeSideBadge side={(caseItem as any).operative_side} />
+        </div>
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span className="font-medium">{getSurgeonName(caseItem.surgeon)}</span>
           <span className="text-slate-300">•</span>
@@ -195,9 +220,13 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
               <SurgeonAvatar name={getSurgeonFullName(primaryCase.surgeon)} size="md" />
               
               <div className="flex-1 min-w-0">
-                <h4 className="text-base font-semibold text-slate-900 truncate">
-                  {getProcedureName(primaryCase.procedure_types)}
-                </h4>
+                {/* UPDATED: Added operative side badge */}
+                <div className="flex items-center gap-2">
+                  <h4 className="text-base font-semibold text-slate-900 truncate">
+                    {getProcedureName(primaryCase.procedure_types)}
+                  </h4>
+                  <OperativeSideBadge side={(primaryCase as any).operative_side} />
+                </div>
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <span className="font-medium">{getSurgeonName(primaryCase.surgeon)}</span>
                   <span className="text-slate-300">•</span>
