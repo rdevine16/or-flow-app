@@ -410,34 +410,51 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // Staff functions
-  const addStaff = async (userId: string, roleId: string) => {
-    const { data, error } = await supabase
-      .from('case_staff')
-      .insert({ case_id: id, user_id: userId, role_id: roleId })
-      .select(`
-        id,
-        user_id,
-        users (first_name, last_name),
-        user_roles (name)
-      `)
+const addStaff = async (userId: string) => {
+  // Get the user's role from availableStaff
+  const staffMember = availableStaff.find(s => s.id === userId)
+  const roleName = Array.isArray(staffMember?.user_roles) 
+    ? staffMember.user_roles[0]?.name 
+    : null
+
+  // Look up role_id
+  let roleId = null
+  if (roleName) {
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('id')
+      .eq('name', roleName)
       .single()
+    roleId = roleData?.id
+  }
 
-    if (!error && data) {
-      setCaseStaff([...caseStaff, data as CaseStaff])
+  const { data, error } = await supabase
+    .from('case_staff')
+    .insert({ case_id: id, user_id: userId, role_id: roleId })
+    .select(`
+      id,
+      user_id,
+      users (first_name, last_name),
+      user_roles (name)
+    `)
+    .single()
 
-      const staffUser = getFirst((data as CaseStaff).users)
-      const staffRole = getFirst((data as CaseStaff).user_roles)
-      if (caseData && staffUser) {
-await staffAudit.added(
-  supabase,
-  caseData.case_number,
-  `${staffUser.first_name} ${staffUser.last_name}`,
-  staffRole?.name || 'staff',
-  data.id
-)
-      }
+  if (!error && data) {
+    setCaseStaff([...caseStaff, data as CaseStaff])
+
+    const staffUser = getFirst((data as CaseStaff).users)
+    const staffRole = getFirst((data as CaseStaff).user_roles)
+    if (caseData && staffUser) {
+      await staffAudit.added(
+        supabase,
+        caseData.case_number,
+        `${staffUser.first_name} ${staffUser.last_name}`,
+        staffRole?.name || 'staff',
+        data.id
+      )
     }
   }
+}
 
   const removeStaff = async (staffId: string) => {
     const staffToRemove = caseStaff.find(s => s.id === staffId)
