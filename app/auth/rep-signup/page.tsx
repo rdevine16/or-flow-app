@@ -110,21 +110,16 @@ setLoading(false)
       if (authError) throw authError
       if (!authData.user) throw new Error('Failed to create account')
 
-      // 2. Create user profile with device_rep access level
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: formData.email,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          phone: formData.phone,
-          access_level: 'device_rep',
-          implant_company_id: invite.implant_company_id,
-          facility_id: null, // Device reps don't belong to a facility
-        })
+// 2. Create user profile with device_rep access level (using function to bypass RLS)
+const { error: profileError } = await supabase.rpc('create_device_rep_profile', {
+  user_id: authData.user.id,
+  user_email: formData.email,
+  first_name: formData.firstName,
+  last_name: formData.lastName,
+  phone_number: formData.phone || null,
+})
 
-      if (profileError) throw profileError
+if (profileError) throw profileError
 
       // 3. Grant access to the facility
       const { error: accessError } = await supabase
