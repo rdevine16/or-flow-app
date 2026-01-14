@@ -6,6 +6,8 @@ import { createClient } from '../../lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
 import { getLocalDateString } from '../../lib/date-utils'
 import { caseAudit } from '../../lib/audit-logger'
+import ImplantCompanySelect from '../cases/ImplantCompanySelect'
+import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 
 interface CaseFormProps {
   caseId?: string
@@ -45,6 +47,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     notes: '',
   })
 
+  // NEW: State for implant companies
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([])
+  const [originalCompanyIds, setOriginalCompanyIds] = useState<string[]>([])
+
   // Store original data for edit mode to track changes
   const [originalData, setOriginalData] = useState<FormData | null>(null)
 
@@ -53,6 +59,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
   const [surgeons, setSurgeons] = useState<{ id: string; first_name: string; last_name: string }[]>([])
   const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
+  
+  // NEW: Store implant companies for audit logging
+  const [implantCompanies, setImplantCompanies] = useState<{ id: string; name: string }[]>([])
 
   // First, get the current user's facility
   useEffect(() => {
@@ -88,16 +97,24 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     async function fetchOptions() {
       if (!userFacilityId) return
 
-      const [roomsRes, proceduresRes, statusesRes, usersRes] = await Promise.all([
+      const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
-        supabase.from('procedure_types').select('id, name').eq('facility_id', userFacilityId).order('name'),
+        // UPDATED: Fetch both global (NULL) and facility-specific procedures
+        supabase.from('procedure_types').select('id, name')
+          .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
+          .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
         supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', userFacilityId),
+        // NEW: Fetch implant companies for audit logging
+        supabase.from('implant_companies').select('id, name')
+          .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
+          .order('name'),
       ])
 
       setOrRooms(roomsRes.data || [])
       setProcedureTypes(proceduresRes.data || [])
       setStatuses(statusesRes.data || [])
+      setImplantCompanies(companiesRes.data || [])
 
       const { data: surgeonRole } = await supabase
         .from('user_roles')
@@ -145,6 +162,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     async function fetchCase() {
       if (mode !== 'edit' || !caseId) return
 
+      // Fetch case data
       const { data, error } = await supabase
         .from('cases')
         .select('*')
@@ -169,7 +187,20 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       }
 
       setFormData(caseFormData)
-      setOriginalData(caseFormData) // Store original for comparison
+      setOriginalData(caseFormData)
+
+      // NEW: Fetch existing implant companies for this case
+      const { data: caseCompanies } = await supabase
+        .from('case_implant_companies')
+        .select('implant_company_id')
+        .eq('case_id', caseId)
+
+      if (caseCompanies) {
+        const companyIds = caseCompanies.map(cc => cc.implant_company_id)
+        setSelectedCompanyIds(companyIds)
+        setOriginalCompanyIds(companyIds)
+      }
+
       setInitialLoading(false)
     }
 
@@ -177,6 +208,12 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       fetchCase()
     }
   }, [caseId, mode, userFacilityId])
+
+  // NEW: Handle surgeon preference selection (quick-fill)
+  const handlePreferenceSelect = (preference: { procedureTypeId: string; implantCompanyIds: string[] }) => {
+    setFormData(prev => ({ ...prev, procedure_type_id: preference.procedureTypeId }))
+    setSelectedCompanyIds(preference.implantCompanyIds)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,26 +240,52 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }
 
     let result
+    let savedCaseId: string
 
     if (mode === 'create') {
       result = await supabase.from('cases').insert(caseData).select().single()
       
       if (!result.error && result.data) {
-        // Get procedure name for better audit log
+        savedCaseId = result.data.id
         const procedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
         
-        // Audit log the case creation
         await caseAudit.created(supabase, {
           id: result.data.id,
           case_number: formData.case_number,
           procedure_name: procedure?.name,
         })
+
+        // NEW: Save implant companies
+        if (selectedCompanyIds.length > 0) {
+          await supabase.from('case_implant_companies').insert(
+            selectedCompanyIds.map(companyId => ({
+              case_id: savedCaseId,
+              implant_company_id: companyId,
+            }))
+          )
+
+          // Audit log each company added
+          for (const companyId of selectedCompanyIds) {
+            const company = implantCompanies.find(c => c.id === companyId)
+            if (company) {
+              await caseAudit.implantCompanyAdded(
+                supabase,
+                savedCaseId,
+                formData.case_number,
+                company.name,
+                companyId,
+                userFacilityId
+              )
+            }
+          }
+        }
       }
     } else {
       result = await supabase.from('cases').update(caseData).eq('id', caseId).select().single()
+      savedCaseId = caseId!
       
       if (!result.error && result.data && originalData) {
-        // Calculate changes
+        // Calculate changes for audit
         const changes: Record<string, unknown> = {}
         const oldValues: Record<string, unknown> = {}
         
@@ -257,7 +320,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           changes.surgeon = newSurgeon ? `Dr. ${newSurgeon.first_name} ${newSurgeon.last_name}` : null
         }
 
-        // Only log if there are actual changes
         if (Object.keys(changes).length > 0) {
           await caseAudit.updated(
             supabase,
@@ -265,6 +327,57 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             oldValues,
             changes
           )
+        }
+
+        // NEW: Handle implant company changes
+        const addedCompanies = selectedCompanyIds.filter(id => !originalCompanyIds.includes(id))
+        const removedCompanies = originalCompanyIds.filter(id => !selectedCompanyIds.includes(id))
+
+        // Remove old companies
+        if (removedCompanies.length > 0) {
+          await supabase
+            .from('case_implant_companies')
+            .delete()
+            .eq('case_id', savedCaseId)
+            .in('implant_company_id', removedCompanies)
+
+          for (const companyId of removedCompanies) {
+            const company = implantCompanies.find(c => c.id === companyId)
+            if (company) {
+              await caseAudit.implantCompanyRemoved(
+                supabase,
+                savedCaseId,
+                formData.case_number,
+                company.name,
+                companyId,
+                userFacilityId
+              )
+            }
+          }
+        }
+
+        // Add new companies
+        if (addedCompanies.length > 0) {
+          await supabase.from('case_implant_companies').insert(
+            addedCompanies.map(companyId => ({
+              case_id: savedCaseId,
+              implant_company_id: companyId,
+            }))
+          )
+
+          for (const companyId of addedCompanies) {
+            const company = implantCompanies.find(c => c.id === companyId)
+            if (company) {
+              await caseAudit.implantCompanyAdded(
+                supabase,
+                savedCaseId,
+                formData.case_number,
+                company.name,
+                companyId,
+                userFacilityId
+              )
+            }
+          }
         }
       }
     }
@@ -338,7 +451,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       </div>
 
-      {/* OR Room & Procedure */}
+      {/* OR Room & Surgeon */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SearchableDropdown
           label="OR Room"
@@ -348,31 +461,57 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           options={orRooms.map(r => ({ id: r.id, label: r.name }))}
         />
         <SearchableDropdown
-          label="Procedure Type"
-          placeholder="Select Procedure"
-          value={formData.procedure_type_id}
-          onChange={(id) => setFormData({ ...formData, procedure_type_id: id })}
-          options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
-        />
-      </div>
-
-      {/* Surgeon & Anesthesiologist */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SearchableDropdown
           label="Surgeon"
           placeholder="Select Surgeon"
           value={formData.surgeon_id}
           onChange={(id) => setFormData({ ...formData, surgeon_id: id })}
           options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
         />
-        <SearchableDropdown
-          label="Anesthesiologist"
-          placeholder="Select Anesthesiologist"
-          value={formData.anesthesiologist_id}
-          onChange={(id) => setFormData({ ...formData, anesthesiologist_id: id })}
-          options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
-        />
       </div>
+
+      {/* NEW: Surgeon Preference Quick-Fill */}
+      {userFacilityId && (
+        <SurgeonPreferenceSelect
+          surgeonId={formData.surgeon_id || null}
+          facilityId={userFacilityId}
+          onSelect={handlePreferenceSelect}
+        />
+      )}
+
+      {/* Procedure Type */}
+      <SearchableDropdown
+        label="Procedure Type"
+        placeholder="Select Procedure"
+        value={formData.procedure_type_id}
+        onChange={(id) => setFormData({ ...formData, procedure_type_id: id })}
+        options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
+      />
+
+      {/* NEW: Implant Companies */}
+      {userFacilityId && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Implant Companies
+          </label>
+          <ImplantCompanySelect
+            facilityId={userFacilityId}
+            selectedIds={selectedCompanyIds}
+            onChange={setSelectedCompanyIds}
+          />
+          <p className="text-xs text-slate-500 mt-1.5">
+            Select all vendors providing implants for this case
+          </p>
+        </div>
+      )}
+
+      {/* Anesthesiologist */}
+      <SearchableDropdown
+        label="Anesthesiologist"
+        placeholder="Select Anesthesiologist"
+        value={formData.anesthesiologist_id}
+        onChange={(id) => setFormData({ ...formData, anesthesiologist_id: id })}
+        options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
+      />
 
       {/* Status - Only show in edit mode */}
       {mode === 'edit' && (
