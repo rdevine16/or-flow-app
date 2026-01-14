@@ -10,6 +10,10 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Allow invite routes for device reps (they need to sign up)
+if (pathname.startsWith('/invite/')) {
+  return NextResponse.next()
+}
   // Allow API routes to handle their own auth
   if (pathname.startsWith('/api/')) {
     return NextResponse.next()
