@@ -340,7 +340,7 @@ export default function DefaultProceduresPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {Object.keys(groupedProcedures).length === 0 ? (
+          {filteredProcedures.length === 0 ? (
             <div className="p-12 text-center">
               <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -354,77 +354,109 @@ export default function DefaultProceduresPage() {
               </button>
             </div>
           ) : (
-            Object.entries(groupedProcedures)
-              .sort(([a], [b]) => a === 'Uncategorized' ? 1 : b === 'Uncategorized' ? -1 : a.localeCompare(b))
-              .map(([regionName, procs]) => (
-                <div key={regionName}>
-                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                    <h3 className="font-semibold text-slate-700">{regionName}</h3>
-                    <p className="text-xs text-slate-500">{procs.length} procedure{procs.length !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div className="divide-y divide-slate-100">
-                    {procs.map((procedure) => (
-                      <div
-                        key={procedure.id}
-                        className={`px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                          !procedure.is_active ? 'opacity-50' : ''
+            <div className="overflow-x-auto">
+              {/* Table Header */}
+              <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <div className="col-span-1">Active</div>
+                <div className="col-span-4">Procedure Name</div>
+                <div className="col-span-2">Body Region</div>
+                <div className="col-span-2">Implant Tracking</div>
+                <div className="col-span-1">Status</div>
+                <div className="col-span-2 text-right">Actions</div>
+              </div>
+
+              {/* Table Body */}
+              <div className="divide-y divide-slate-100">
+                {filteredProcedures.map((procedure) => (
+                  <div
+                    key={procedure.id}
+                    className={`grid grid-cols-12 gap-4 px-6 py-3 items-center hover:bg-slate-50 transition-colors ${
+                      !procedure.is_active ? 'opacity-60' : ''
+                    }`}
+                  >
+                    {/* Active Toggle */}
+                    <div className="col-span-1">
+                      <button
+                        onClick={() => handleToggleActive(procedure)}
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          procedure.is_active
+                            ? 'border-emerald-500 bg-emerald-500'
+                            : 'border-slate-300 hover:border-slate-400'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => handleToggleActive(procedure)}
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              procedure.is_active
-                                ? 'border-emerald-500 bg-emerald-500'
-                                : 'border-slate-300 hover:border-slate-400'
-                            }`}
-                          >
-                            {procedure.is_active && (
-                              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </button>
-                          <div>
-                            <span className={`font-medium ${procedure.is_active ? 'text-slate-900' : 'text-slate-500'}`}>
-                              {procedure.name}
-                            </span>
-                            {procedure.implant_category && (
-                              <span className={`ml-2 inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-                                procedure.implant_category === 'total_hip' 
-                                  ? 'bg-purple-100 text-purple-700' 
-                                  : 'bg-indigo-100 text-indigo-700'
-                              }`}>
-                                {getImplantCategoryLabel(procedure.implant_category)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEdit(procedure)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(procedure)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        {procedure.is_active && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Procedure Name */}
+                    <div className="col-span-4">
+                      <span className={`font-medium ${procedure.is_active ? 'text-slate-900' : 'text-slate-500'}`}>
+                        {procedure.name}
+                      </span>
+                    </div>
+
+                    {/* Body Region */}
+                    <div className="col-span-2">
+                      <span className="text-sm text-slate-600">
+                        {procedure.body_region?.name || '—'}
+                      </span>
+                    </div>
+
+                    {/* Implant Tracking */}
+                    <div className="col-span-2">
+                      {procedure.implant_category ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                          procedure.implant_category === 'total_hip' 
+                            ? 'bg-purple-100 text-purple-700' 
+                            : 'bg-indigo-100 text-indigo-700'
+                        }`}>
+                          {getImplantCategoryLabel(procedure.implant_category)}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <div className="col-span-1">
+                      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                        procedure.is_active 
+                          ? 'bg-emerald-100 text-emerald-700' 
+                          : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {procedure.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-2 flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleEdit(procedure)}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(procedure)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
+            </div>
           )}
         </div>
 

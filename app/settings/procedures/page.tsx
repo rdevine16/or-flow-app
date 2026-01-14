@@ -24,6 +24,7 @@ interface ProcedureType {
   name: string
   body_region_id: string | null
   technique_id: string | null
+  implant_category: string | null
   body_regions: BodyRegion[] | null
   procedure_techniques: ProcedureTechnique[] | null
 }
@@ -39,6 +40,12 @@ interface ModalState {
   procedure: ProcedureType | null
 }
 
+const IMPLANT_CATEGORIES = [
+  { value: '', label: 'None' },
+  { value: 'total_hip', label: 'Total Hip' },
+  { value: 'total_knee', label: 'Total Knee' },
+]
+
 export default function ProceduresSettingsPage() {
   const supabase = createClient()
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
@@ -47,7 +54,7 @@ export default function ProceduresSettingsPage() {
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', procedure: null })
-  const [formData, setFormData] = useState({ name: '', body_region_id: '', technique_id: '' })
+  const [formData, setFormData] = useState({ name: '', body_region_id: '', technique_id: '', implant_category: '' })
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null)
@@ -104,6 +111,7 @@ export default function ProceduresSettingsPage() {
           name, 
           body_region_id,
           technique_id,
+          implant_category,
           body_regions (id, name, display_name),
           procedure_techniques (id, name, display_name)
         `)
@@ -125,7 +133,7 @@ export default function ProceduresSettingsPage() {
   }
 
   const openAddModal = () => {
-    setFormData({ name: '', body_region_id: '', technique_id: '' })
+    setFormData({ name: '', body_region_id: '', technique_id: '', implant_category: '' })
     setModal({ isOpen: true, mode: 'add', procedure: null })
   }
 
@@ -134,13 +142,14 @@ export default function ProceduresSettingsPage() {
       name: procedure.name,
       body_region_id: procedure.body_region_id || '',
       technique_id: procedure.technique_id || '',
+      implant_category: procedure.implant_category || '',
     })
     setModal({ isOpen: true, mode: 'edit', procedure })
   }
 
   const closeModal = () => {
     setModal({ isOpen: false, mode: 'add', procedure: null })
-    setFormData({ name: '', body_region_id: '', technique_id: '' })
+    setFormData({ name: '', body_region_id: '', technique_id: '', implant_category: '' })
   }
 
   const handleSave = async () => {
@@ -156,12 +165,14 @@ export default function ProceduresSettingsPage() {
           facility_id: selectedFacilityId,
           body_region_id: formData.body_region_id || null,
           technique_id: formData.technique_id || null,
+          implant_category: formData.implant_category || null,
         })
         .select(`
           id, 
           name, 
           body_region_id,
           technique_id,
+          implant_category,
           body_regions (id, name, display_name),
           procedure_techniques (id, name, display_name)
         `)
@@ -183,6 +194,7 @@ export default function ProceduresSettingsPage() {
           name: formData.name.trim(),
           body_region_id: formData.body_region_id || null,
           technique_id: formData.technique_id || null,
+          implant_category: formData.implant_category || null,
         })
         .eq('id', modal.procedure.id)
         .select(`
@@ -190,6 +202,7 @@ export default function ProceduresSettingsPage() {
           name, 
           body_region_id,
           technique_id,
+          implant_category,
           body_regions (id, name, display_name),
           procedure_techniques (id, name, display_name)
         `)
@@ -245,6 +258,12 @@ export default function ProceduresSettingsPage() {
     if (!procedure.procedure_techniques) return '—'
     const technique = Array.isArray(procedure.procedure_techniques) ? procedure.procedure_techniques[0] : procedure.procedure_techniques
     return technique?.display_name || '—'
+  }
+
+  const getImplantCategoryLabel = (category: string | null): string => {
+    if (!category) return '—'
+    const found = IMPLANT_CATEGORIES.find(c => c.value === category)
+    return found?.label || '—'
   }
 
   const selectedFacility = facilities.find(f => f.id === selectedFacilityId)
@@ -312,7 +331,7 @@ export default function ProceduresSettingsPage() {
                 </button>
               </div>
 
-              {/* List */}
+              {/* Table */}
               {procedures.length === 0 ? (
                 <div className="px-6 py-12 text-center">
                   <p className="text-slate-500">No procedures defined yet.</p>
@@ -324,57 +343,94 @@ export default function ProceduresSettingsPage() {
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100">
-                  {procedures.map((procedure) => (
-                    <div key={procedure.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-900">{procedure.name}</p>
-                        <div className="flex items-center gap-4 mt-1">
-                          <span className="text-xs text-slate-500">
-                            Region: <span className="text-slate-700">{getRegionName(procedure)}</span>
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            Technique: <span className="text-slate-700">{getTechniqueName(procedure)}</span>
-                          </span>
+                <div className="overflow-x-auto">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <div className="col-span-4">Procedure Name</div>
+                    <div className="col-span-2">Body Region</div>
+                    <div className="col-span-2">Technique</div>
+                    <div className="col-span-2">Implant Tracking</div>
+                    <div className="col-span-2 text-right">Actions</div>
+                  </div>
+
+                  {/* Table Body */}
+                  <div className="divide-y divide-slate-100">
+                    {procedures.map((procedure) => (
+                      <div 
+                        key={procedure.id} 
+                        className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                      >
+                        {/* Procedure Name */}
+                        <div className="col-span-4">
+                          <p className="font-medium text-slate-900">{procedure.name}</p>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => openEditModal(procedure)}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        {deleteConfirm === procedure.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDelete(procedure.id)}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
+
+                        {/* Body Region */}
+                        <div className="col-span-2">
+                          <span className="text-sm text-slate-600">{getRegionName(procedure)}</span>
+                        </div>
+
+                        {/* Technique */}
+                        <div className="col-span-2">
+                          <span className="text-sm text-slate-600">{getTechniqueName(procedure)}</span>
+                        </div>
+
+                        {/* Implant Tracking */}
+                        <div className="col-span-2">
+                          {procedure.implant_category ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                              procedure.implant_category === 'total_hip' 
+                                ? 'bg-purple-100 text-purple-700' 
+                                : 'bg-indigo-100 text-indigo-700'
+                            }`}>
+                              {getImplantCategoryLabel(procedure.implant_category)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-400">—</span>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="col-span-2 flex items-center justify-end gap-1">
                           <button
-                            onClick={() => setDeleteConfirm(procedure.id)}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            onClick={() => openEditModal(procedure)}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                        )}
+                          {deleteConfirm === procedure.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleDelete(procedure.id)}
+                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteConfirm(procedure.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -392,7 +448,7 @@ export default function ProceduresSettingsPage() {
                 <div className="p-6 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Procedure Name
+                      Procedure Name *
                     </label>
                     <input
                       type="text"
@@ -435,6 +491,25 @@ export default function ProceduresSettingsPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Implant Tracking
+                    </label>
+                    <select
+                      value={formData.implant_category}
+                      onChange={(e) => setFormData({ ...formData, implant_category: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      {IMPLANT_CATEGORIES.map((category) => (
+                        <option key={category.value} value={category.value}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      Enable implant size tracking for hip or knee procedures
+                    </p>
                   </div>
                 </div>
                 <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
