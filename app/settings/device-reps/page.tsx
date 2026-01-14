@@ -546,61 +546,23 @@ export default function DeviceRepsPage() {
             </div>
           )}
 
-          {/* Invite Link Modal */}
+          {/* Success Modal */}
           {inviteLinkModal.isOpen && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900">Invite Sent!</h3>
-                      <p className="text-sm text-slate-500">Email sent to the device rep</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-6">
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-sm text-green-700">
-                        Invitation email sent to <span className="font-medium">{inviteLinkModal.email}</span>
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-sm text-slate-600 mb-2">
-                    Backup link (if email doesn't arrive):
-                  </p>
-                  <div className="bg-slate-50 rounded-lg p-3 mb-4">
-                    <p className="text-xs text-slate-600 break-all font-mono">{inviteLinkModal.link}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(inviteLinkModal.link)
-                      // Brief feedback
-                      const btn = document.getElementById('copy-link-btn')
-                      if (btn) {
-                        btn.textContent = 'Copied!'
-                        setTimeout(() => { btn.textContent = 'Copy Link' }, 2000)
-                      }
-                    }}
-                    id="copy-link-btn"
-                    className="w-full py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm text-center">
+                <div className="p-8">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
-                    Copy Link
-                  </button>
-                  <p className="text-xs text-slate-400 text-center mt-3">
-                    Link expires in 7 days
+                  </div>
+                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Invite Sent!</h3>
+                  <p className="text-slate-600">
+                    An invitation email has been sent to<br />
+                    <span className="font-medium text-slate-900">{inviteLinkModal.email}</span>
+                  </p>
+                  <p className="text-sm text-slate-500 mt-3">
+                    The invite expires in 7 days.
                   </p>
                 </div>
                 <div className="px-6 py-4 border-t border-slate-200">
