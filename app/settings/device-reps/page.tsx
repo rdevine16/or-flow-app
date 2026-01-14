@@ -12,7 +12,7 @@ interface DeviceRep {
   user_id: string
   facility_id: string
   status: 'pending' | 'accepted' | 'revoked'
-  invited_at: string
+  created_at: string
   accepted_at: string | null
   user_first_name: string
   user_last_name: string
@@ -25,7 +25,7 @@ interface PendingInvite {
   id: string
   email: string
   facility_id: string
-  invited_at: string
+  created_at: string
   expires_at: string
   company_name: string
 }
@@ -94,7 +94,7 @@ export default function DeviceRepsPage() {
         user_id,
         facility_id,
         status,
-        invited_at,
+        created_at,
         accepted_at,
         users (
           id,
@@ -107,7 +107,7 @@ export default function DeviceRepsPage() {
       `)
       .eq('facility_id', userData.facility_id)
       .neq('status', 'revoked')
-      .order('invited_at', { ascending: false })
+      .order('created_at', { ascending: false })
 
     // Transform reps data - Supabase returns joined tables as arrays
     const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
@@ -118,7 +118,7 @@ export default function DeviceRepsPage() {
         user_id: rep.user_id,
         facility_id: rep.facility_id,
         status: rep.status,
-        invited_at: rep.invited_at,
+        created_at: rep.created_at,
         accepted_at: rep.accepted_at,
         user_first_name: user?.first_name || '',
         user_last_name: user?.last_name || '',
@@ -137,14 +137,14 @@ export default function DeviceRepsPage() {
         id,
         email,
         facility_id,
-        invited_at,
+        created_at,
         expires_at,
         implant_companies (name)
       `)
       .eq('facility_id', userData.facility_id)
       .is('accepted_at', null)
       .gt('expires_at', new Date().toISOString())
-      .order('invited_at', { ascending: false })
+      .order('created_at', { ascending: false })
 
     // Transform invites data
     const transformedInvites: PendingInvite[] = (invitesData || []).map((invite: any) => {
@@ -153,7 +153,7 @@ export default function DeviceRepsPage() {
         id: invite.id,
         email: invite.email,
         facility_id: invite.facility_id,
-        invited_at: invite.invited_at,
+        created_at: invite.created_at,
         expires_at: invite.expires_at,
         company_name: company?.name || 'Unknown Company',
       }
@@ -204,7 +204,7 @@ export default function DeviceRepsPage() {
         id,
         email,
         facility_id,
-        invited_at,
+        created_at,
         expires_at,
         implant_companies (name)
       `)
@@ -217,7 +217,7 @@ export default function DeviceRepsPage() {
         id: data.id,
         email: data.email,
         facility_id: data.facility_id,
-        invited_at: data.invited_at,
+        created_at: data.created_at,
         expires_at: data.expires_at,
         company_name: company?.name || 'Unknown Company',
       }
@@ -413,7 +413,7 @@ export default function DeviceRepsPage() {
                             </span>
                             <span className="text-slate-300">•</span>
                             <span className="text-sm text-slate-400">
-                              Invited {formatDate(invite.invited_at)}
+                              Invited {formatDate(invite.created_at)}
                             </span>
                             <span className="text-slate-300">•</span>
                             <span className="text-sm text-amber-600">
