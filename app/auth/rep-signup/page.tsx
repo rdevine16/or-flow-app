@@ -70,9 +70,17 @@ function RepSignupForm() {
       return
     }
 
-    setInvite(data)
-    setFormData(prev => ({ ...prev, email: data.email }))
-    setLoading(false)
+// Extract names from joined data (Supabase can return as array or object)
+const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
+const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
+
+setInvite({
+  ...data,
+  facility_name: facility?.name || 'Unknown Facility',
+  company_name: company?.name || 'Unknown Company',
+})
+setFormData(prev => ({ ...prev, email: data.email }))
+setLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
