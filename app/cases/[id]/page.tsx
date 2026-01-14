@@ -428,7 +428,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const staffUser = getFirst((data as CaseStaff).users)
       const staffRole = getFirst((data as CaseStaff).user_roles)
       if (caseData && staffUser) {
-        await staffAudit.assigned(
+        await staffAudit.added(
           supabase,
           caseData.id,
           caseData.case_number,
