@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
-import { implantCompanyAudit } from '@/lib/audit-logger-additions'
+import { implantCompanyAudit } from '@/lib/audit-logger'
 
 interface ImplantCompany {
   id: string
