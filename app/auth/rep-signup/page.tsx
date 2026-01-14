@@ -85,67 +85,51 @@ setLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
+  e.preventDefault()
+  
+  if (formData.password !== formData.confirmPassword) {
+    setError('Passwords do not match')
+    return
+  }
 
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
+  if (formData.password.length < 8) {
+    setError('Password must be at least 8 characters')
+    return
+  }
 
-    setSubmitting(true)
-    setError(null)
+  setSubmitting(true)
+  setError(null)
 
-    try {
-      // 1. Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+  try {
+    // Call API to create device rep with auto-confirmed email
+    const response = await fetch('/api/create-device-rep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         email: formData.email,
         password: formData.password,
-      })
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        inviteId: invite.id,
+        facilityId: invite.facility_id,
+        implantCompanyId: invite.implant_company_id,
+      }),
+    })
 
-      if (authError) throw authError
-      if (!authData.user) throw new Error('Failed to create account')
+    const result = await response.json()
 
-// 2. Create user profile with device_rep access level (using function to bypass RLS)
-const { error: profileError } = await supabase.rpc('create_device_rep_profile', {
-  user_id: authData.user.id,
-  user_email: formData.email,
-  first_name: formData.firstName,
-  last_name: formData.lastName,
-  phone_number: formData.phone || null,
-})
-
-if (profileError) throw profileError
-
-      // 3. Grant access to the facility
-      const { error: accessError } = await supabase
-        .from('facility_device_reps')
-        .insert({
-          facility_id: invite.facility_id,
-          user_id: authData.user.id,
-          status: 'accepted',
-          accepted_at: new Date().toISOString(),
-        })
-
-      if (accessError) throw accessError
-
-      // 4. Mark invite as accepted
-      await supabase
-        .from('device_rep_invites')
-        .update({ accepted_at: new Date().toISOString() })
-        .eq('id', invite.id)
-
-      // 5. Redirect to success page
-      router.push('/invite/success')
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account')
-      setSubmitting(false)
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to create account')
     }
+
+    // Redirect to success page
+    router.push('/invite/success')
+  } catch (err: any) {
+    setError(err.message || 'Failed to create account')
+    setSubmitting(false)
   }
+}
 
   if (loading) {
     return (
