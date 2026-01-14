@@ -57,6 +57,7 @@ export default function DeviceRepsPage() {
   const [inviteForm, setInviteForm] = useState({ email: '', implant_company_id: '' })
   const [sending, setSending] = useState(false)
   const [revokeConfirm, setRevokeConfirm] = useState<string | null>(null)
+  const [inviteLinkModal, setInviteLinkModal] = useState<{ isOpen: boolean; link: string; email: string }>({ isOpen: false, link: '', email: '' })
 
   useEffect(() => {
     fetchData()
@@ -234,9 +235,12 @@ export default function DeviceRepsPage() {
         facilityName
       )
 
-      // TODO: Send actual email invite
-      // For now, show the invite link
-      alert(`Invite created! Send this link to the rep:\n\n${window.location.origin}/invite/accept/${inviteToken}`)
+      // Show invite link modal
+      setInviteLinkModal({
+        isOpen: true,
+        link: `${window.location.origin}/invite/accept/${inviteToken}`,
+        email: inviteForm.email.trim().toLowerCase()
+      })
     }
 
     setSending(false)
@@ -516,6 +520,64 @@ export default function DeviceRepsPage() {
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
                     {sending ? 'Sending...' : 'Send Invite'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Invite Link Modal */}
+          {inviteLinkModal.isOpen && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">Invite Created!</h3>
+                      <p className="text-sm text-slate-500">Send this link to the device rep</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-6">
+                  <p className="text-sm text-slate-600 mb-3">
+                    Share this link with <span className="font-medium">{inviteLinkModal.email}</span>:
+                  </p>
+                  <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-slate-700 break-all font-mono">{inviteLinkModal.link}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(inviteLinkModal.link)
+                      // Brief feedback
+                      const btn = document.getElementById('copy-link-btn')
+                      if (btn) {
+                        btn.textContent = 'Copied!'
+                        setTimeout(() => { btn.textContent = 'Copy Link' }, 2000)
+                      }
+                    }}
+                    id="copy-link-btn"
+                    className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy Link
+                  </button>
+                  <p className="text-xs text-slate-400 text-center mt-3">
+                    Link expires in 7 days
+                  </p>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200">
+                  <button
+                    onClick={() => setInviteLinkModal({ isOpen: false, link: '', email: '' })}
+                    className="w-full py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Done
                   </button>
                 </div>
               </div>
