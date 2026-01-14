@@ -428,13 +428,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const staffUser = getFirst((data as CaseStaff).users)
       const staffRole = getFirst((data as CaseStaff).user_roles)
       if (caseData && staffUser) {
-        await staffAudit.added(
-          supabase,
-          caseData.id,
-          caseData.case_number,
-          `${staffUser.first_name} ${staffUser.last_name}`,
-          staffRole?.name || 'staff'
-        )
+await staffAudit.added(
+  supabase,
+  caseData.case_number,
+  `${staffUser.first_name} ${staffUser.last_name}`,
+  staffRole?.name || 'staff',
+  data.id
+)
       }
     }
   }
@@ -453,13 +453,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       setCaseStaff(caseStaff.filter(s => s.id !== staffId))
 
       if (caseData && staffUser) {
-        await staffAudit.removed(
-          supabase,
-          caseData.id,
-          caseData.case_number,
-          `${staffUser.first_name} ${staffUser.last_name}`,
-          staffRole?.name || 'staff'
-        )
+await staffAudit.removed(
+  supabase,
+  caseData.case_number,
+  `${staffUser.first_name} ${staffUser.last_name}`,
+  staffRole?.name || 'staff',
+  staffId
+)
       }
     }
   }
