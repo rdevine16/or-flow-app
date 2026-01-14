@@ -1,3 +1,10 @@
+// ============================================
+// FILE: app/auth/rep-signup/page.tsx
+// ROUTE: /auth/rep-signup?token=xxx&email=xxx
+// PURPOSE: Device rep account creation form
+// FLOW: Step 2 - Rep fills out name/password to create account
+// ============================================
+
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
