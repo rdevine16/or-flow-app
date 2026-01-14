@@ -403,18 +403,20 @@ export const milestoneAudit = {
     })
   },
 
-  async deleted(
-    supabase: SupabaseClient,
-    caseNumber: string,
-    milestoneName: string,
-    milestoneId: string
-  ) {
-    await log(supabase, 'milestone.deleted', {
-      targetType: 'milestone',
-      targetId: milestoneId,
-      targetLabel: `${milestoneName} on Case #${caseNumber}`,
-    })
-  },
+async deleted(
+  supabase: SupabaseClient,
+  caseNumber: string,
+  milestoneName: string,
+  milestoneId: string,
+  recordedAt?: string  // ADD THIS PARAMETER
+) {
+  await log(supabase, 'milestone.deleted', {
+    targetType: 'milestone',
+    targetId: milestoneId,
+    targetLabel: `${milestoneName} on Case #${caseNumber}`,
+    oldValues: recordedAt ? { recorded_at: recordedAt } : undefined,  // ADD THIS
+  })
+},
 }
 
 // =====================================================
