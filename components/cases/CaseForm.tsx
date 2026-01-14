@@ -351,13 +351,12 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
         // Only log if there were changes
         if (Object.keys(changes).length > 0) {
-          await caseAudit.updated(
-            supabase,
-            savedCaseId,
-            formData.case_number,
-            changes,
-            oldValues
-          )
+  await caseAudit.updated(
+  supabase,
+  { id: savedCaseId, case_number: formData.case_number },
+  oldValues,
+  changes
+)
         }
 
         // NEW: Handle implant company changes
