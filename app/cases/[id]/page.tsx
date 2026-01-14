@@ -10,6 +10,7 @@ import SearchableDropdown from '../../../components/ui/SearchableDropdown'
 import StaffPopover from '../../../components/ui/StaffPopover'
 import SurgeonAvatar from '../../../components/ui/SurgeonAvatar'
 import { milestoneAudit, staffAudit, caseAudit } from '../../../lib/audit-logger'
+import ImplantSection from '../../../components/cases/ImplantSection'
 
 interface MilestoneType {
   id: string
@@ -29,7 +30,8 @@ interface CaseData {
   case_number: string
   scheduled_date: string
   start_time: string | null
-  operative_side: string | null  // NEW
+  operative_side: string | null
+  procedure_type_id: string | null
   notes: string | null
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
@@ -203,7 +205,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     async function fetchData() {
       setLoading(true)
 
-      // UPDATED: Added operative_side to query
+      // UPDATED: Added operative_side and procedure_type_id to query
       const { data: caseResult } = await supabase
         .from('cases')
         .select(`
@@ -212,6 +214,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           scheduled_date,
           start_time,
           operative_side,
+          procedure_type_id,
           notes,
           or_rooms (name),
           procedure_types (name),
@@ -745,6 +748,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 <p className="text-sm text-slate-600 whitespace-pre-wrap">{caseData.notes}</p>
               </div>
             )}
+
+            {/* Implant Section - Shows for hip/knee procedures */}
+            <ImplantSection
+              caseId={caseData.id}
+              procedureTypeId={caseData.procedure_type_id}
+              supabase={supabase}
+            />
           </div>
 
           {/* Right Column - Times & Milestones */}
