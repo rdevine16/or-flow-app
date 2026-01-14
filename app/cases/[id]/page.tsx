@@ -242,12 +242,20 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         `)
         .eq('case_id', id)
 
-      // Fetch all staff (nurses, techs) for assignment
-      const { data: allStaff } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, user_roles!inner (name)')
-        .eq('facility_id', userFacilityId)
-        .in('user_roles.name', ['nurse', 'tech', 'staff'])
+      // Get role IDs for nurse and tech
+const { data: staffRoles } = await supabase
+  .from('user_roles')
+  .select('id')
+  .in('name', ['nurse', 'tech'])
+
+const staffRoleIds = staffRoles?.map(r => r.id) || []
+
+// Fetch staff (nurses, techs) for assignment
+const { data: allStaff } = await supabase
+  .from('users')
+  .select('id, first_name, last_name, role_id, user_roles(name)')
+  .eq('facility_id', userFacilityId)
+  .in('role_id', staffRoleIds)
 
       const { data: anesthesiologistsData } = await supabase
         .from('users')
