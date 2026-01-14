@@ -1,3 +1,5 @@
+// Route: /invite/accept/[token]
+// Example: /invite/accept/abc123-def456-...
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -5,14 +7,16 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
+// Transformed invite data for display
 interface InviteData {
   id: string
   email: string
   facility_id: string
   implant_company_id: string
   expires_at: string
-  facilities: { name: string; address: string | null }[] | null
-  implant_companies: { name: string }[] | null
+  facility_name: string
+  facility_address: string | null
+  company_name: string
 }
 
 export default function AcceptInvitePage() {
@@ -61,7 +65,20 @@ export default function AcceptInvitePage() {
       return
     }
 
-    setInvite(data as InviteData)
+    // Transform data - Supabase returns joined tables as arrays
+    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
+    const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
+
+    setInvite({
+      id: data.id,
+      email: data.email,
+      facility_id: data.facility_id,
+      implant_company_id: data.implant_company_id,
+      expires_at: data.expires_at,
+      facility_name: facility?.name || 'Unknown Facility',
+      facility_address: facility?.address || null,
+      company_name: company?.name || 'Unknown Company',
+    })
 
     // Check if user already exists
     const { data: existingUserData } = await supabase
@@ -174,9 +191,9 @@ export default function AcceptInvitePage() {
               </svg>
             </div>
             <div>
-              <p className="font-semibold text-slate-900">{invite?.facilities?.[0]?.name}</p>
-              {invite?.facilities?.[0]?.address && (
-                <p className="text-sm text-slate-500">{invite.facilities[0].address}</p>
+              <p className="font-semibold text-slate-900">{invite?.facility_name}</p>
+              {invite?.facility_address && (
+                <p className="text-sm text-slate-500">{invite.facility_address}</p>
               )}
             </div>
           </div>
@@ -184,7 +201,7 @@ export default function AcceptInvitePage() {
           <div className="mt-4 pt-4 border-t border-slate-200">
             <div className="flex items-center gap-2">
               <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
-                {invite?.implant_companies?.[0]?.name}
+                {invite?.company_name}
               </span>
               <span className="text-xs text-slate-500">Device Rep</span>
             </div>
@@ -199,7 +216,7 @@ export default function AcceptInvitePage() {
               <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              View cases using {invite?.implant_companies?.[0]?.name} implants
+              View cases using {invite?.company_name} implants
             </li>
             <li className="flex items-start gap-2">
               <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
