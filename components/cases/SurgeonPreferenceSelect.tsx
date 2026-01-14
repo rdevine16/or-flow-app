@@ -3,14 +3,12 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 
+// Transformed preference for display
 interface SurgeonPreference {
   id: string
   procedure_type_id: string
-  procedure_types: { id: string; name: string } | null
-  surgeon_preference_companies: {
-    implant_company_id: string
-    implant_companies: { id: string; name: string } | null
-  }[]
+  procedure_name: string
+  companies: { id: string; name: string }[]
 }
 
 interface SurgeonPreferenceSelectProps {
@@ -20,6 +18,12 @@ interface SurgeonPreferenceSelectProps {
     procedureTypeId: string
     implantCompanyIds: string[]
   }) => void
+}
+
+// Helper to extract first item from Supabase joined array
+function getFirst<T>(arr: T[] | T | null | undefined): T | null {
+  if (Array.isArray(arr)) return arr[0] || null
+  return arr || null
 }
 
 export default function SurgeonPreferenceSelect({
@@ -60,7 +64,23 @@ export default function SurgeonPreferenceSelect({
       .eq('facility_id', facilityId)
       .order('created_at')
 
-    setPreferences(data as SurgeonPreference[] || [])
+    // Transform data - Supabase returns joined tables as arrays
+    const transformed: SurgeonPreference[] = (data || []).map((pref: any) => {
+      const procedure = getFirst(pref.procedure_types)
+      const companies = (pref.surgeon_preference_companies || []).map((spc: any) => {
+        const company = getFirst(spc.implant_companies)
+        return company ? { id: company.id, name: company.name } : null
+      }).filter(Boolean)
+
+      return {
+        id: pref.id,
+        procedure_type_id: pref.procedure_type_id,
+        procedure_name: procedure?.name || 'Unknown Procedure',
+        companies,
+      }
+    })
+
+    setPreferences(transformed)
     setLoading(false)
   }
 
@@ -68,7 +88,7 @@ export default function SurgeonPreferenceSelect({
     setSelectedId(pref.id)
     onSelect({
       procedureTypeId: pref.procedure_type_id,
-      implantCompanyIds: pref.surgeon_preference_companies.map(spc => spc.implant_company_id),
+      implantCompanyIds: pref.companies.map(c => c.id),
     })
   }
 
@@ -103,10 +123,7 @@ export default function SurgeonPreferenceSelect({
       
       <div className="flex flex-wrap gap-2">
         {preferences.map((pref) => {
-          const companyNames = pref.surgeon_preference_companies
-            .map(spc => spc.implant_companies?.name)
-            .filter(Boolean)
-            .join(', ')
+          const companyNames = pref.companies.map(c => c.name).join(', ')
 
           return (
             <button
@@ -120,7 +137,7 @@ export default function SurgeonPreferenceSelect({
               }`}
             >
               <p className={`text-sm font-medium ${selectedId === pref.id ? 'text-white' : 'text-slate-900'}`}>
-                {pref.procedure_types?.name || 'Unknown Procedure'}
+                {pref.procedure_name}
               </p>
               {companyNames && (
                 <p className={`text-xs mt-0.5 ${selectedId === pref.id ? 'text-blue-100' : 'text-slate-500'}`}>

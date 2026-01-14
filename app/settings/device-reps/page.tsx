@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
-import { deviceRepAudit } from '@/lib/audit-logger-additions'
+import { deviceRepAudit } from '@/lib/audit-logger'
 
 interface DeviceRep {
   id: string
@@ -14,14 +14,11 @@ interface DeviceRep {
   status: 'pending' | 'accepted' | 'revoked'
   invited_at: string
   accepted_at: string | null
-  users: {
-    id: string
-    first_name: string
-    last_name: string
-    email: string
-    phone: string | null
-    implant_companies: { name: string } | null
-  }
+  user_first_name: string
+  user_last_name: string
+  user_email: string
+  user_phone: string | null
+  company_name: string
 }
 
 interface PendingInvite {
@@ -30,7 +27,7 @@ interface PendingInvite {
   facility_id: string
   invited_at: string
   expires_at: string
-  implant_companies: { name: string } | null
+  company_name: string
 }
 
 interface ImplantCompany {
@@ -40,6 +37,12 @@ interface ImplantCompany {
 
 interface InviteModalState {
   isOpen: boolean
+}
+
+// Helper to extract first item from Supabase joined array
+function getFirst<T>(arr: T[] | T | null | undefined): T | null {
+  if (Array.isArray(arr)) return arr[0] || null
+  return arr || null
 }
 
 export default function DeviceRepsPage() {
@@ -106,17 +109,24 @@ export default function DeviceRepsPage() {
       .neq('status', 'revoked')
       .order('invited_at', { ascending: false })
 
-    const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => ({
-      ...rep,
-      users: Array.isArray(rep.users) && rep.users.length > 0
-        ? {
-            ...rep.users[0],
-            implant_companies: Array.isArray(rep.users[0].implant_companies) && rep.users[0].implant_companies.length > 0
-              ? rep.users[0].implant_companies[0]
-              : null,
-          }
-        : rep.users,
-    }))
+    // Transform reps data - Supabase returns joined tables as arrays
+    const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
+      const user = getFirst(rep.users)
+      const company = user ? getFirst(user.implant_companies) : null
+      return {
+        id: rep.id,
+        user_id: rep.user_id,
+        facility_id: rep.facility_id,
+        status: rep.status,
+        invited_at: rep.invited_at,
+        accepted_at: rep.accepted_at,
+        user_first_name: user?.first_name || '',
+        user_last_name: user?.last_name || '',
+        user_email: user?.email || '',
+        user_phone: user?.phone || null,
+        company_name: company?.name || 'Unknown Company',
+      }
+    })
 
     setReps(transformedReps)
 
@@ -136,7 +146,20 @@ export default function DeviceRepsPage() {
       .gt('expires_at', new Date().toISOString())
       .order('invited_at', { ascending: false })
 
-    setPendingInvites(invitesData as PendingInvite[] || [])
+    // Transform invites data
+    const transformedInvites: PendingInvite[] = (invitesData || []).map((invite: any) => {
+      const company = getFirst(invite.implant_companies)
+      return {
+        id: invite.id,
+        email: invite.email,
+        facility_id: invite.facility_id,
+        invited_at: invite.invited_at,
+        expires_at: invite.expires_at,
+        company_name: company?.name || 'Unknown Company',
+      }
+    })
+
+    setPendingInvites(transformedInvites)
 
     // Fetch implant companies for invite dropdown
     const { data: companiesData } = await supabase
@@ -188,13 +211,17 @@ export default function DeviceRepsPage() {
       .single()
 
     if (!error && data) {
-      const transformedData: PendingInvite = {
-        ...data,
-        implant_companies: Array.isArray(data.implant_companies) && data.implant_companies.length > 0
-          ? data.implant_companies[0]
-          : null,
+      // Transform the new invite
+      const company = getFirst((data as any).implant_companies)
+      const newInvite: PendingInvite = {
+        id: data.id,
+        email: data.email,
+        facility_id: data.facility_id,
+        invited_at: data.invited_at,
+        expires_at: data.expires_at,
+        company_name: company?.name || 'Unknown Company',
       }
-      setPendingInvites([transformedData, ...pendingInvites])
+      setPendingInvites([newInvite, ...pendingInvites])
       closeInviteModal()
 
       // Audit log
@@ -231,9 +258,9 @@ export default function DeviceRepsPage() {
       await deviceRepAudit.accessRevoked(
         supabase,
         rep.user_id,
-        rep.users.email,
-        `${rep.users.first_name} ${rep.users.last_name}`,
-        rep.users.implant_companies?.name || 'Unknown',
+        rep.user_email,
+        `${rep.user_first_name} ${rep.user_last_name}`,
+        rep.company_name,
         facilityId
       )
     }
@@ -311,19 +338,19 @@ export default function DeviceRepsPage() {
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                             <span className="text-sm font-semibold text-blue-600">
-                              {rep.users.first_name?.charAt(0)}{rep.users.last_name?.charAt(0)}
+                              {rep.user_first_name?.charAt(0)}{rep.user_last_name?.charAt(0)}
                             </span>
                           </div>
                           <div>
                             <p className="font-medium text-slate-900">
-                              {rep.users.first_name} {rep.users.last_name}
+                              {rep.user_first_name} {rep.user_last_name}
                             </p>
                             <div className="flex items-center gap-3 mt-0.5">
-                              <span className="text-sm text-slate-500">{rep.users.email}</span>
-                              {rep.users.phone && (
+                              <span className="text-sm text-slate-500">{rep.user_email}</span>
+                              {rep.user_phone && (
                                 <>
                                   <span className="text-slate-300">•</span>
-                                  <span className="text-sm text-slate-500">{rep.users.phone}</span>
+                                  <span className="text-sm text-slate-500">{rep.user_phone}</span>
                                 </>
                               )}
                             </div>
@@ -331,7 +358,7 @@ export default function DeviceRepsPage() {
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">
-                            {rep.users.implant_companies?.name || 'Unknown Company'}
+                            {rep.company_name}
                           </span>
                           {revokeConfirm === rep.id ? (
                             <div className="flex items-center gap-1">
@@ -382,7 +409,7 @@ export default function DeviceRepsPage() {
                           <p className="font-medium text-slate-900">{invite.email}</p>
                           <div className="flex items-center gap-3 mt-0.5">
                             <span className="text-sm text-slate-500">
-                              {invite.implant_companies?.name || 'Unknown Company'}
+                              {invite.company_name}
                             </span>
                             <span className="text-slate-300">•</span>
                             <span className="text-sm text-slate-400">

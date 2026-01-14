@@ -12,15 +12,19 @@ interface Surgeon {
   last_name: string
 }
 
+// Transformed preference for display
 interface SurgeonPreference {
   id: string
   surgeon_id: string
   procedure_type_id: string
-  procedure_types: { name: string } | null
-  surgeon_preference_companies: {
-    implant_company_id: string
-    implant_companies: { name: string } | null
-  }[]
+  procedure_name: string
+  companies: { id: string; name: string }[]
+}
+
+// Helper to extract first item from Supabase joined array
+function getFirst<T>(arr: T[] | T | null | undefined): T | null {
+  if (Array.isArray(arr)) return arr[0] || null
+  return arr || null
 }
 
 export default function SurgeonPreferencesPage() {
@@ -88,13 +92,30 @@ export default function SurgeonPreferencesPage() {
         procedure_types (name),
         surgeon_preference_companies (
           implant_company_id,
-          implant_companies (name)
+          implant_companies (id, name)
         )
       `)
       .eq('surgeon_id', surgeonId)
       .order('created_at')
 
-    setPreferences(data as SurgeonPreference[] || [])
+    // Transform data - Supabase returns joined tables as arrays
+    const transformed: SurgeonPreference[] = (data || []).map((pref: any) => {
+      const procedure = getFirst(pref.procedure_types)
+      const companies = (pref.surgeon_preference_companies || []).map((spc: any) => {
+        const company = getFirst(spc.implant_companies)
+        return company ? { id: company.id, name: company.name } : null
+      }).filter(Boolean)
+
+      return {
+        id: pref.id,
+        surgeon_id: pref.surgeon_id,
+        procedure_type_id: pref.procedure_type_id,
+        procedure_name: procedure?.name || 'Unknown Procedure',
+        companies,
+      }
+    })
+
+    setPreferences(transformed)
     setPrefsLoading(false)
   }
 
@@ -182,15 +203,15 @@ export default function SurgeonPreferencesPage() {
                           <div className="flex items-start justify-between">
                             <div>
                               <p className="font-medium text-slate-900">
-                                {pref.procedure_types?.name || 'Unknown Procedure'}
+                                {pref.procedure_name}
                               </p>
                               <div className="flex flex-wrap gap-2 mt-2">
-                                {pref.surgeon_preference_companies.map((spc) => (
+                                {pref.companies.map((company) => (
                                   <span
-                                    key={spc.implant_company_id}
+                                    key={company.id}
                                     className="inline-flex items-center px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full"
                                   >
-                                    {spc.implant_companies?.name || 'Unknown'}
+                                    {company.name}
                                   </span>
                                 ))}
                               </div>
