@@ -57,6 +57,7 @@ function RepSignupForm() {
       .eq('invite_token', token)
       .is('accepted_at', null)
       .single()
+    console.log('Raw invite data:', JSON.stringify(data, null, 2))
 
     if (error || !data) {
       setError('This invite link is invalid or has already been used.')
