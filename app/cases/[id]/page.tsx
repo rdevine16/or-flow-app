@@ -242,33 +242,34 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         `)
         .eq('case_id', id)
 
-      // Get role IDs for nurse and tech
-const { data: staffRoles } = await supabase
-  .from('user_roles')
-  .select('id')
-  .in('name', ['nurse', 'tech'])
-
-const staffRoleIds = staffRoles?.map(r => r.id) || []
-
-// Fetch staff (nurses, techs) for assignment
-const { data: allStaff } = await supabase
-  .from('users')
-  .select('id, first_name, last_name, role_id, user_roles(name)')
-  .eq('facility_id', userFacilityId)
-  .in('role_id', staffRoleIds)
-
-      const { data: anesthesiologistsData } = await supabase
+      // Fetch ALL users at this facility
+      const { data: allFacilityUsers } = await supabase
         .from('users')
-        .select('id, first_name, last_name, user_roles!inner (name)')
+        .select('id, first_name, last_name, role_id, user_roles(name)')
         .eq('facility_id', userFacilityId)
-        .eq('user_roles.name', 'anesthesiologist')
+
+      // Filter to just nurses and techs client-side
+      const staffUsers = (allFacilityUsers || []).filter(u => {
+        const roleName = Array.isArray(u.user_roles) 
+          ? u.user_roles[0]?.name 
+          : (u.user_roles as any)?.name
+        return roleName === 'nurse' || roleName === 'tech'
+      })
+
+      // Filter to just anesthesiologists client-side
+      const anesthUsers = (allFacilityUsers || []).filter(u => {
+        const roleName = Array.isArray(u.user_roles) 
+          ? u.user_roles[0]?.name 
+          : (u.user_roles as any)?.name
+        return roleName === 'anesthesiologist'
+      })
 
       setCaseData(caseResult)
       setMilestoneTypes(milestoneTypesResult || [])
       setCaseMilestones(milestonesResult || [])
       setCaseStaff(staffResult as CaseStaff[] || [])
-      setAvailableStaff(allStaff as User[] || [])
-      setAnesthesiologists(anesthesiologistsData as User[] || [])
+      setAvailableStaff(staffUsers as User[] || [])
+      setAnesthesiologists(anesthUsers as User[] || [])
 
       // Fetch surgeon averages
       const surgeon = getFirst(caseResult?.surgeon)
@@ -418,51 +419,51 @@ const { data: allStaff } = await supabase
   }
 
   // Staff functions
-const addStaff = async (userId: string) => {
-  // Get the user's role from availableStaff
-  const staffMember = availableStaff.find(s => s.id === userId)
-  const roleName = Array.isArray(staffMember?.user_roles) 
-    ? staffMember.user_roles[0]?.name 
-    : null
+  const addStaff = async (userId: string) => {
+    // Get the user's role from availableStaff
+    const staffMember = availableStaff.find(s => s.id === userId)
+    const roleName = Array.isArray(staffMember?.user_roles) 
+      ? staffMember.user_roles[0]?.name 
+      : (staffMember?.user_roles as any)?.name
 
-  // Look up role_id
-  let roleId = null
-  if (roleName) {
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('name', roleName)
+    // Look up role_id
+    let roleId = null
+    if (roleName) {
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', roleName)
+        .single()
+      roleId = roleData?.id
+    }
+
+    const { data, error } = await supabase
+      .from('case_staff')
+      .insert({ case_id: id, user_id: userId, role_id: roleId })
+      .select(`
+        id,
+        user_id,
+        users (first_name, last_name),
+        user_roles (name)
+      `)
       .single()
-    roleId = roleData?.id
-  }
 
-  const { data, error } = await supabase
-    .from('case_staff')
-    .insert({ case_id: id, user_id: userId, role_id: roleId })
-    .select(`
-      id,
-      user_id,
-      users (first_name, last_name),
-      user_roles (name)
-    `)
-    .single()
+    if (!error && data) {
+      setCaseStaff([...caseStaff, data as CaseStaff])
 
-  if (!error && data) {
-    setCaseStaff([...caseStaff, data as CaseStaff])
-
-    const staffUser = getFirst((data as CaseStaff).users)
-    const staffRole = getFirst((data as CaseStaff).user_roles)
-    if (caseData && staffUser) {
-      await staffAudit.added(
-        supabase,
-        caseData.case_number,
-        `${staffUser.first_name} ${staffUser.last_name}`,
-        staffRole?.name || 'staff',
-        data.id
-      )
+      const staffUser = getFirst((data as CaseStaff).users)
+      const staffRole = getFirst((data as CaseStaff).user_roles)
+      if (caseData && staffUser) {
+        await staffAudit.added(
+          supabase,
+          caseData.case_number,
+          `${staffUser.first_name} ${staffUser.last_name}`,
+          staffRole?.name || 'staff',
+          data.id
+        )
+      }
     }
   }
-}
 
   const removeStaff = async (staffId: string) => {
     const staffToRemove = caseStaff.find(s => s.id === staffId)
@@ -478,13 +479,13 @@ const addStaff = async (userId: string) => {
       setCaseStaff(caseStaff.filter(s => s.id !== staffId))
 
       if (caseData && staffUser) {
-await staffAudit.removed(
-  supabase,
-  caseData.case_number,
-  `${staffUser.first_name} ${staffUser.last_name}`,
-  staffRole?.name || 'staff',
-  staffId
-)
+        await staffAudit.removed(
+          supabase,
+          caseData.case_number,
+          `${staffUser.first_name} ${staffUser.last_name}`,
+          staffRole?.name || 'staff',
+          staffId
+        )
       }
     }
   }
