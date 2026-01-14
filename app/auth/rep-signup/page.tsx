@@ -183,10 +183,10 @@ setLoading(false)
     <>
       {/* Context Banner */}
       <div className="bg-blue-50 rounded-xl p-4 mb-6">
-        <p className="text-sm text-blue-800">
-          Creating account for <span className="font-medium">{invite?.implant_companies?.name}</span> rep 
-          at <span className="font-medium">{invite?.facilities?.name}</span>
-        </p>
+<p className="text-sm text-blue-800">
+  Creating account for <span className="font-medium">{invite?.company_name}</span> rep 
+  at <span className="font-medium">{invite?.facility_name}</span>
+</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
