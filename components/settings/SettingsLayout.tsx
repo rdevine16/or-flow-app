@@ -5,85 +5,204 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
-interface SettingsSection {
+// =====================================================
+// TYPES
+// =====================================================
+
+interface SettingsItem {
   id: string
   label: string
   href: string
   icon: React.ReactNode
   description: string
+  badge?: 'new' | 'admin'
   requiredAccess?: ('global_admin' | 'facility_admin' | 'user')[]
 }
 
-const settingsSections: SettingsSection[] = [
+interface SettingsGroup {
+  id: string
+  label: string
+  items: SettingsItem[]
+}
+
+// =====================================================
+// ICONS
+// =====================================================
+
+const icons = {
+  facilities: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ),
+  users: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+    </svg>
+  ),
+  procedures: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
+  milestones: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  surgeonPrefs: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+  ),
+  delays: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  ),
+  rooms: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+    </svg>
+  ),
+  implantCompanies: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+    </svg>
+  ),
+  deviceReps: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  ),
+  auditLog: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+}
+
+// =====================================================
+// SETTINGS CONFIGURATION
+// =====================================================
+
+const settingsGroups: SettingsGroup[] = [
   {
-    id: 'facilities',
-    label: 'Facilities',
-    href: '/settings/facilities',
-    description: 'Manage hospitals and surgery centers',
-    requiredAccess: ['global_admin'], // Only global admins see this
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-      </svg>
-    ),
+    id: 'organization',
+    label: 'Organization',
+    items: [
+      {
+        id: 'facilities',
+        label: 'Facilities',
+        href: '/settings/facilities',
+        description: 'Manage hospitals and surgery centers',
+        icon: icons.facilities,
+        badge: 'admin',
+        requiredAccess: ['global_admin'],
+      },
+      {
+        id: 'users',
+        label: 'Users & Roles',
+        href: '/settings/users',
+        description: 'Staff accounts and permissions',
+        icon: icons.users,
+      },
+    ],
   },
   {
-    id: 'procedures',
-    label: 'Procedure Types',
-    href: '/settings/procedures',
-    description: 'Manage surgical procedure types',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-      </svg>
-    ),
+    id: 'case-management',
+    label: 'Case Management',
+    items: [
+      {
+        id: 'procedures',
+        label: 'Procedure Types',
+        href: '/settings/procedures',
+        description: 'Surgical procedures for case creation',
+        icon: icons.procedures,
+      },
+      {
+        id: 'milestones',
+        label: 'Milestones',
+        href: '/settings/milestones',
+        description: 'Tracking points during cases',
+        icon: icons.milestones,
+      },
+      {
+        id: 'surgeon-preferences',
+        label: 'Surgeon Preferences',
+        href: '/settings/surgeon-preferences',
+        description: 'Quick-fill templates for surgeons',
+        icon: icons.surgeonPrefs,
+        badge: 'new',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'delay-types',
+        label: 'Delay Types',
+        href: '/settings/delay-types',
+        description: 'Categorize surgical delays',
+        icon: icons.delays,
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+    ],
   },
   {
-    id: 'rooms',
-    label: 'OR Rooms',
-    href: '/settings/rooms',
-    description: 'Manage operating rooms',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-      </svg>
-    ),
+    id: 'operations',
+    label: 'Operations',
+    items: [
+      {
+        id: 'rooms',
+        label: 'OR Rooms',
+        href: '/settings/rooms',
+        description: 'Operating rooms for scheduling',
+        icon: icons.rooms,
+      },
+      {
+        id: 'implant-companies',
+        label: 'Implant Companies',
+        href: '/settings/implant-companies',
+        description: 'Surgical implant vendors',
+        icon: icons.implantCompanies,
+        badge: 'new',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+    ],
   },
   {
-    id: 'milestones',
-    label: 'Milestones',
-    href: '/settings/milestones',
-    description: 'Configure surgical milestones',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
+    id: 'device-reps',
+    label: 'Device Reps',
+    items: [
+      {
+        id: 'rep-access',
+        label: 'Rep Access',
+        href: '/settings/device-reps',
+        description: 'Manage implant company rep access',
+        icon: icons.deviceReps,
+        badge: 'new',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+    ],
   },
   {
-    id: 'users',
-    label: 'Users & Roles',
-    href: '/settings/users',
-    description: 'Manage staff and permissions',
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'audit-log',
-    label: 'Audit Log',
-    href: '/settings/audit-log',
-    description: 'View system activity history',
-    requiredAccess: ['global_admin', 'facility_admin'], // Admins only
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
+    id: 'compliance',
+    label: 'Security & Compliance',
+    items: [
+      {
+        id: 'audit-log',
+        label: 'Audit Log',
+        href: '/settings/audit-log',
+        description: 'System activity history',
+        icon: icons.auditLog,
+        badge: 'admin',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+    ],
   },
 ]
+
+// =====================================================
+// COMPONENT
+// =====================================================
 
 interface SettingsLayoutProps {
   children: React.ReactNode
@@ -96,6 +215,7 @@ export default function SettingsLayout({ children, title, description }: Setting
   const supabase = createClient()
   const [accessLevel, setAccessLevel] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     async function fetchAccessLevel() {
@@ -116,75 +236,154 @@ export default function SettingsLayout({ children, title, description }: Setting
     fetchAccessLevel()
   }, [])
 
-  // Filter sections based on user's access level
-  const visibleSections = settingsSections.filter(section => {
-    if (!section.requiredAccess) return true // No restriction = everyone can see
-    if (!accessLevel) return false // Still loading or no access level
-    return section.requiredAccess.includes(accessLevel as any)
-  })
+  // Filter groups and items based on user's access level
+  const visibleGroups = settingsGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => {
+      if (!item.requiredAccess) return true
+      if (!accessLevel) return false
+      return item.requiredAccess.includes(accessLevel as any)
+    })
+  })).filter(group => group.items.length > 0)
+
+  // Render badge
+  const renderBadge = (badge?: 'new' | 'admin') => {
+    if (!badge) return null
+    
+    if (badge === 'new') {
+      return (
+        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-700 rounded">
+          New
+        </span>
+      )
+    }
+    
+    if (badge === 'admin') {
+      return (
+        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 rounded">
+          Admin
+        </span>
+      )
+    }
+  }
 
   return (
     <div className="flex gap-8">
       {/* Sidebar */}
-      <div className="w-64 flex-shrink-0">
+      <div className={`${sidebarCollapsed ? 'w-16' : 'w-72'} flex-shrink-0 transition-all duration-200`}>
         <div className="sticky top-24">
-          <nav className="space-y-1">
-            {loading ? (
-              // Loading skeleton
-              <>
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-xl">
-                    <div className="w-5 h-5 bg-slate-200 rounded animate-pulse" />
-                    <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />
+          {/* Collapse Toggle */}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="mb-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <svg 
+              className={`w-5 h-5 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+          </button>
+
+          {loading ? (
+            // Loading skeleton
+            <div className="space-y-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="space-y-2">
+                  <div className="h-3 bg-slate-200 rounded w-20 animate-pulse" />
+                  <div className="space-y-1">
+                    {[1, 2].map((j) => (
+                      <div key={j} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
+                        <div className="w-5 h-5 bg-slate-200 rounded animate-pulse" />
+                        {!sidebarCollapsed && <div className="h-4 bg-slate-200 rounded w-24 animate-pulse" />}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </>
-            ) : (
-              visibleSections.map((section) => {
-                const isActive = pathname === section.href
-                return (
-                  <Link
-                    key={section.id}
-                    href={section.href}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      isActive
-                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <span className={isActive ? 'text-white' : 'text-slate-400'}>
-                      {section.icon}
-                    </span>
-                    <div>
-                      <p className="font-medium text-sm">{section.label}</p>
-                    </div>
-                  </Link>
-                )
-              })
-            )}
-          </nav>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <nav className="space-y-6">
+              {visibleGroups.map((group) => (
+                <div key={group.id}>
+                  {/* Group Header */}
+                  {!sidebarCollapsed && (
+                    <h3 className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      {group.label}
+                    </h3>
+                  )}
+                  
+                  {/* Group Items */}
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const isActive = pathname === item.href
+                      
+                      return (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
+                            isActive
+                              ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10'
+                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          }`}
+                          title={sidebarCollapsed ? item.label : undefined}
+                        >
+                          <span className={`flex-shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                            {item.icon}
+                          </span>
+                          
+                          {!sidebarCollapsed && (
+                            <>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{item.label}</p>
+                                {!isActive && (
+                                  <p className="text-xs text-slate-400 truncate mt-0.5 group-hover:text-slate-500">
+                                    {item.description}
+                                  </p>
+                                )}
+                              </div>
+                              {renderBadge(item.badge)}
+                            </>
+                          )}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+          )}
 
           {/* Help Card */}
-          <div className="mt-8 p-4 bg-gradient-to-br from-slate-100 to-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2 text-slate-900 font-medium mb-2">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Need Help?
+          {!sidebarCollapsed && (
+            <div className="mt-8 p-4 bg-gradient-to-br from-slate-100 to-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2 text-slate-900 font-medium mb-2">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Need Help?
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Changes here apply to new cases. Existing cases won't be affected.
+              </p>
             </div>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              Changes made here will apply to all new cases. Existing cases won't be affected.
-            </p>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0">
+        {/* Page Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-semibold text-slate-900">{title}</h1>
           <p className="text-slate-500 mt-1">{description}</p>
         </div>
+        
+        {/* Page Content */}
         {children}
       </div>
     </div>

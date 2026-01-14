@@ -1,8 +1,12 @@
 // lib/audit-logger.ts
-// Simplified audit logging - easy to use throughout the app
-// Just import and call: await auditLog.caseCreated(supabase, caseData)
+// Unified audit logging for ORbit
+// Usage: import { caseAudit, deviceRepAudit } from '@/lib/audit-logger'
 
 import { SupabaseClient } from '@supabase/supabase-js'
+
+// =====================================================
+// TYPES
+// =====================================================
 
 interface AuditContext {
   userId: string
@@ -10,7 +14,181 @@ interface AuditContext {
   facilityId: string | null
 }
 
-// Get current user context for audit logging
+// All audit action types for type safety
+export type AuditAction =
+  // Auth
+  | 'auth.login'
+  | 'auth.login_failed'
+  | 'auth.logout'
+  | 'auth.password_changed'
+  | 'auth.password_reset'
+  // Cases
+  | 'case.created'
+  | 'case.updated'
+  | 'case.deleted'
+  | 'case.status_changed'
+  | 'case.implant_company_added'
+  | 'case.implant_company_removed'
+  // Milestones
+  | 'milestone.recorded'
+  | 'milestone.updated'
+  | 'milestone.deleted'
+  // Case Staff
+  | 'case_staff.added'
+  | 'case_staff.removed'
+  // Delays
+  | 'delay.added'
+  | 'delay.deleted'
+  // Milestone Types
+  | 'milestone_type.created'
+  | 'milestone_type.updated'
+  | 'milestone_type.deleted'
+  | 'milestone_type.reordered'
+  // Rooms
+  | 'room.created'
+  | 'room.updated'
+  | 'room.deleted'
+  // Procedure Types
+  | 'procedure_type.created'
+  | 'procedure_type.updated'
+  | 'procedure_type.deleted'
+  // Users
+  | 'user.created'
+  | 'user.invited'
+  | 'user.invitation_accepted'
+  | 'user.deactivated'
+  | 'user.reactivated'
+  | 'user.role_changed'
+  | 'user.updated'
+  | 'user.deleted'
+  // Facility
+  | 'facility.created'
+  | 'facility.updated'
+  | 'facility.deleted'
+  | 'facility.subscription_changed'
+  // Implant Companies
+  | 'implant_company.created'
+  | 'implant_company.updated'
+  | 'implant_company.deleted'
+  // Device Reps
+  | 'device_rep.invited'
+  | 'device_rep.invite_accepted'
+  | 'device_rep.access_revoked'
+  | 'device_rep.viewed_case'
+  // Surgeon Preferences
+  | 'surgeon_preference.created'
+  | 'surgeon_preference.updated'
+  | 'surgeon_preference.deleted'
+  // Delay Types
+  | 'delay_type.created'
+  | 'delay_type.updated'
+  | 'delay_type.deleted'
+  // Admin Actions
+  | 'admin.impersonation_started'
+  | 'admin.impersonation_ended'
+  | 'admin.default_procedure_created'
+  | 'admin.default_procedure_updated'
+  | 'admin.default_procedure_deleted'
+  | 'admin.implant_company_created'
+  | 'admin.implant_company_updated'
+  | 'admin.implant_company_deleted'
+  | 'admin.delay_type_created'
+  | 'admin.delay_type_updated'
+  | 'admin.delay_type_deleted'
+  | 'admin.procedure_type_created'
+  | 'admin.procedure_type_updated'
+  | 'admin.procedure_type_deleted'
+
+// Human-readable labels for audit log display
+export const auditActionLabels: Record<AuditAction, string> = {
+  // Auth
+  'auth.login': 'logged in',
+  'auth.login_failed': 'failed login attempt',
+  'auth.logout': 'logged out',
+  'auth.password_changed': 'changed password',
+  'auth.password_reset': 'requested password reset',
+  // Cases
+  'case.created': 'created a case',
+  'case.updated': 'updated a case',
+  'case.deleted': 'deleted a case',
+  'case.status_changed': 'changed case status',
+  'case.implant_company_added': 'added implant company to case',
+  'case.implant_company_removed': 'removed implant company from case',
+  // Milestones
+  'milestone.recorded': 'recorded a milestone',
+  'milestone.updated': 'updated a milestone',
+  'milestone.deleted': 'deleted a milestone',
+  // Case Staff
+  'case_staff.added': 'assigned staff to case',
+  'case_staff.removed': 'removed staff from case',
+  // Delays
+  'delay.added': 'recorded a delay',
+  'delay.deleted': 'removed a delay',
+  // Milestone Types
+  'milestone_type.created': 'created a milestone type',
+  'milestone_type.updated': 'updated a milestone type',
+  'milestone_type.deleted': 'deleted a milestone type',
+  'milestone_type.reordered': 'reordered milestone types',
+  // Rooms
+  'room.created': 'created an OR room',
+  'room.updated': 'updated an OR room',
+  'room.deleted': 'deleted an OR room',
+  // Procedure Types
+  'procedure_type.created': 'created a procedure type',
+  'procedure_type.updated': 'updated a procedure type',
+  'procedure_type.deleted': 'deleted a procedure type',
+  // Users
+  'user.created': 'created a user',
+  'user.invited': 'invited a user',
+  'user.invitation_accepted': 'accepted invitation',
+  'user.deactivated': 'deactivated a user',
+  'user.reactivated': 'reactivated a user',
+  'user.role_changed': 'changed user role',
+  'user.updated': 'updated a user',
+  'user.deleted': 'deleted a user',
+  // Facility
+  'facility.created': 'created a facility',
+  'facility.updated': 'updated facility settings',
+  'facility.deleted': 'deleted a facility',
+  'facility.subscription_changed': 'changed subscription',
+  // Implant Companies
+  'implant_company.created': 'created an implant company',
+  'implant_company.updated': 'updated an implant company',
+  'implant_company.deleted': 'deleted an implant company',
+  // Device Reps
+  'device_rep.invited': 'invited a device rep',
+  'device_rep.invite_accepted': 'accepted facility access',
+  'device_rep.access_revoked': 'revoked device rep access',
+  'device_rep.viewed_case': 'viewed case details',
+  // Surgeon Preferences
+  'surgeon_preference.created': 'created a surgeon preference',
+  'surgeon_preference.updated': 'updated a surgeon preference',
+  'surgeon_preference.deleted': 'deleted a surgeon preference',
+  // Delay Types
+  'delay_type.created': 'created a delay type',
+  'delay_type.updated': 'updated a delay type',
+  'delay_type.deleted': 'deleted a delay type',
+  // Admin Actions
+  'admin.impersonation_started': 'started facility impersonation',
+  'admin.impersonation_ended': 'ended facility impersonation',
+  'admin.default_procedure_created': 'created a default procedure',
+  'admin.default_procedure_updated': 'updated a default procedure',
+  'admin.default_procedure_deleted': 'deleted a default procedure',
+  'admin.implant_company_created': 'created a global implant company',
+  'admin.implant_company_updated': 'updated a global implant company',
+  'admin.implant_company_deleted': 'deleted a global implant company',
+  'admin.delay_type_created': 'created a global delay type',
+  'admin.delay_type_updated': 'updated a global delay type',
+  'admin.delay_type_deleted': 'deleted a global delay type',
+  'admin.procedure_type_created': 'created a global procedure type',
+  'admin.procedure_type_updated': 'updated a global procedure type',
+  'admin.procedure_type_deleted': 'deleted a global procedure type',
+}
+
+// =====================================================
+// CORE LOGGING FUNCTION (single source of truth)
+// =====================================================
+
 export async function getAuditContext(supabase: SupabaseClient): Promise<AuditContext | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -28,10 +206,9 @@ export async function getAuditContext(supabase: SupabaseClient): Promise<AuditCo
   }
 }
 
-// Core logging function
 async function log(
   supabase: SupabaseClient,
-  action: string,
+  action: AuditAction | string,
   options: {
     targetType?: string
     targetId?: string
@@ -41,6 +218,7 @@ async function log(
     metadata?: Record<string, unknown>
     success?: boolean
     errorMessage?: string
+    facilityId?: string // Override facility_id if needed
   } = {}
 ) {
   const context = await getAuditContext(supabase)
@@ -52,7 +230,7 @@ async function log(
   const entry = {
     user_id: context.userId,
     user_email: context.userEmail,
-    facility_id: context.facilityId,
+    facility_id: options.facilityId || context.facilityId,
     action,
     target_type: options.targetType,
     target_id: options.targetId,
@@ -65,29 +243,26 @@ async function log(
   }
 
   const { error } = await supabase.from('audit_log').insert(entry)
-  
+
   if (error) {
     console.error('[AUDIT] Failed to log:', error)
-    console.error('[AUDIT] Entry:', entry)
   }
 }
 
-// ============================================
+// =====================================================
 // AUTHENTICATION
-// ============================================
+// =====================================================
 
 export const authAudit = {
   async login(supabase: SupabaseClient, email: string, success: boolean, errorMessage?: string) {
-    // For login, we need to manually set user info since they might not be authenticated yet
     const entry = {
-      user_id: '00000000-0000-0000-0000-000000000000', // Will be updated after login
+      user_id: '00000000-0000-0000-0000-000000000000',
       user_email: email,
       facility_id: null,
       action: success ? 'auth.login' : 'auth.login_failed',
       success,
       error_message: errorMessage,
     }
-    
     await supabase.from('audit_log').insert(entry)
   },
 
@@ -100,15 +275,13 @@ export const authAudit = {
   },
 
   async passwordReset(supabase: SupabaseClient, email: string) {
-    await log(supabase, 'auth.password_reset', {
-      metadata: { email },
-    })
+    await log(supabase, 'auth.password_reset', { metadata: { email } })
   },
 }
 
-// ============================================
+// =====================================================
 // CASES
-// ============================================
+// =====================================================
 
 export const caseAudit = {
   async created(supabase: SupabaseClient, caseData: { id: string; case_number: string; procedure_name?: string }) {
@@ -149,20 +322,53 @@ export const caseAudit = {
     oldStatus: string,
     newStatus: string
   ) {
-    await log(supabase, 'case.updated', {
+    await log(supabase, 'case.status_changed', {
       targetType: 'case',
       targetId: caseData.id,
       targetLabel: `Case #${caseData.case_number}`,
       oldValues: { status: oldStatus },
       newValues: { status: newStatus },
-      metadata: { field: 'status' },
+    })
+  },
+
+  async implantCompanyAdded(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    companyId: string,
+    facilityId?: string
+  ) {
+    await log(supabase, 'case.implant_company_added', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      newValues: { implant_company: companyName, implant_company_id: companyId },
+    })
+  },
+
+  async implantCompanyRemoved(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    companyId: string,
+    facilityId?: string
+  ) {
+    await log(supabase, 'case.implant_company_removed', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      oldValues: { implant_company: companyName, implant_company_id: companyId },
     })
   },
 }
 
-// ============================================
+// =====================================================
 // MILESTONES
-// ============================================
+// =====================================================
 
 export const milestoneAudit = {
   async recorded(
@@ -211,9 +417,9 @@ export const milestoneAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // CASE STAFF
-// ============================================
+// =====================================================
 
 export const staffAudit = {
   async added(
@@ -246,9 +452,9 @@ export const staffAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // DELAYS
-// ============================================
+// =====================================================
 
 export const delayAudit = {
   async added(
@@ -280,9 +486,9 @@ export const delayAudit = {
   },
 }
 
-// ============================================
-// MILESTONE TYPES (Global Configuration)
-// ============================================
+// =====================================================
+// MILESTONE TYPES
+// =====================================================
 
 export const milestoneTypeAudit = {
   async created(supabase: SupabaseClient, displayName: string, milestoneTypeId: string) {
@@ -325,9 +531,9 @@ export const milestoneTypeAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // ROOMS
-// ============================================
+// =====================================================
 
 export const roomAudit = {
   async created(supabase: SupabaseClient, roomName: string, roomId: string) {
@@ -339,12 +545,7 @@ export const roomAudit = {
     })
   },
 
-  async updated(
-    supabase: SupabaseClient,
-    roomId: string,
-    oldName: string,
-    newName: string
-  ) {
+  async updated(supabase: SupabaseClient, roomId: string, oldName: string, newName: string) {
     await log(supabase, 'room.updated', {
       targetType: 'room',
       targetId: roomId,
@@ -363,9 +564,9 @@ export const roomAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // PROCEDURE TYPES
-// ============================================
+// =====================================================
 
 export const procedureAudit = {
   async created(supabase: SupabaseClient, procedureName: string, procedureId: string) {
@@ -377,12 +578,7 @@ export const procedureAudit = {
     })
   },
 
-  async updated(
-    supabase: SupabaseClient,
-    procedureId: string,
-    oldName: string,
-    newName: string
-  ) {
+  async updated(supabase: SupabaseClient, procedureId: string, oldName: string, newName: string) {
     await log(supabase, 'procedure_type.updated', {
       targetType: 'procedure_type',
       targetId: procedureId,
@@ -401,9 +597,9 @@ export const procedureAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // USERS
-// ============================================
+// =====================================================
 
 export const userAudit = {
   async created(supabase: SupabaseClient, userName: string, userEmail: string, userId: string) {
@@ -489,9 +685,9 @@ export const userAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // FACILITY
-// ============================================
+// =====================================================
 
 export const facilityAudit = {
   async created(supabase: SupabaseClient, facilityName: string, facilityId: string) {
@@ -542,9 +738,263 @@ export const facilityAudit = {
   },
 }
 
-// ============================================
+// =====================================================
+// IMPLANT COMPANIES
+// =====================================================
+
+export const implantCompanyAudit = {
+  async created(supabase: SupabaseClient, companyName: string, companyId: string, facilityId?: string) {
+    await log(supabase, 'implant_company.created', {
+      targetType: 'implant_company',
+      targetId: companyId,
+      targetLabel: companyName,
+      facilityId,
+      newValues: { name: companyName },
+    })
+  },
+
+  async updated(supabase: SupabaseClient, companyId: string, oldName: string, newName: string, facilityId?: string) {
+    await log(supabase, 'implant_company.updated', {
+      targetType: 'implant_company',
+      targetId: companyId,
+      targetLabel: newName,
+      facilityId,
+      oldValues: { name: oldName },
+      newValues: { name: newName },
+    })
+  },
+
+  async deleted(supabase: SupabaseClient, companyName: string, companyId: string, facilityId?: string) {
+    await log(supabase, 'implant_company.deleted', {
+      targetType: 'implant_company',
+      targetId: companyId,
+      targetLabel: companyName,
+      facilityId,
+    })
+  },
+
+  // Global admin versions
+  async adminCreated(supabase: SupabaseClient, companyName: string, companyId: string) {
+    await log(supabase, 'admin.implant_company_created', {
+      targetType: 'implant_company',
+      targetId: companyId,
+      targetLabel: companyName,
+      newValues: { name: companyName, scope: 'global' },
+    })
+  },
+
+  async adminUpdated(supabase: SupabaseClient, companyId: string, oldName: string, newName: string) {
+    await log(supabase, 'admin.implant_company_updated', {
+      targetType: 'implant_company',
+      targetId: companyId,
+      targetLabel: newName,
+      oldValues: { name: oldName },
+      newValues: { name: newName, scope: 'global' },
+    })
+  },
+
+  async adminDeleted(supabase: SupabaseClient, companyName: string, companyId: string) {
+    await log(supabase, 'admin.implant_company_deleted', {
+      targetType: 'implant_company',
+      targetId: companyId,
+      targetLabel: companyName,
+    })
+  },
+}
+
+// =====================================================
+// DEVICE REPS
+// =====================================================
+
+export const deviceRepAudit = {
+  async invited(
+    supabase: SupabaseClient,
+    repEmail: string,
+    companyName: string,
+    facilityId: string,
+    facilityName: string
+  ) {
+    await log(supabase, 'device_rep.invited', {
+      targetType: 'device_rep_invite',
+      targetLabel: `${repEmail} (${companyName}) to ${facilityName}`,
+      facilityId,
+      newValues: { rep_email: repEmail, implant_company: companyName, facility_name: facilityName },
+    })
+  },
+
+  async inviteAccepted(
+    supabase: SupabaseClient,
+    repId: string,
+    repEmail: string,
+    facilityId: string,
+    facilityName: string
+  ) {
+    await log(supabase, 'device_rep.invite_accepted', {
+      targetType: 'facility_device_rep',
+      targetId: repId,
+      targetLabel: `${repEmail} accepted ${facilityName}`,
+      facilityId,
+      newValues: { rep_email: repEmail, facility_name: facilityName },
+    })
+  },
+
+  async accessRevoked(
+    supabase: SupabaseClient,
+    repId: string,
+    repEmail: string,
+    repName: string,
+    companyName: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'device_rep.access_revoked', {
+      targetType: 'facility_device_rep',
+      targetId: repId,
+      targetLabel: `${repName} (${companyName})`,
+      facilityId,
+      oldValues: { rep_name: repName, rep_email: repEmail, implant_company: companyName },
+    })
+  },
+
+  async viewedCase(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    facilityId: string,
+    facilityName: string
+  ) {
+    await log(supabase, 'device_rep.viewed_case', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber} at ${facilityName}`,
+      facilityId,
+      metadata: { case_number: caseNumber, facility_name: facilityName },
+    })
+  },
+}
+
+// =====================================================
+// SURGEON PREFERENCES
+// =====================================================
+
+export const surgeonPrefAudit = {
+  async created(
+    supabase: SupabaseClient,
+    preferenceId: string,
+    surgeonName: string,
+    procedureName: string,
+    companyNames: string[],
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_preference.created', {
+      targetType: 'surgeon_preference',
+      targetId: preferenceId,
+      targetLabel: `${surgeonName} - ${procedureName}`,
+      facilityId,
+      newValues: { surgeon: surgeonName, procedure: procedureName, implant_companies: companyNames },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    preferenceId: string,
+    surgeonName: string,
+    oldValues: { procedure?: string; companies?: string[] },
+    newValues: { procedure?: string; companies?: string[] },
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_preference.updated', {
+      targetType: 'surgeon_preference',
+      targetId: preferenceId,
+      targetLabel: surgeonName,
+      facilityId,
+      oldValues,
+      newValues,
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    preferenceId: string,
+    surgeonName: string,
+    procedureName: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_preference.deleted', {
+      targetType: 'surgeon_preference',
+      targetId: preferenceId,
+      targetLabel: `${surgeonName} - ${procedureName}`,
+      facilityId,
+    })
+  },
+}
+
+// =====================================================
+// DELAY TYPES
+// =====================================================
+
+export const delayTypeAudit = {
+  async created(supabase: SupabaseClient, delayTypeName: string, delayTypeId: string, facilityId: string) {
+    await log(supabase, 'delay_type.created', {
+      targetType: 'delay_type',
+      targetId: delayTypeId,
+      targetLabel: delayTypeName,
+      facilityId,
+      newValues: { name: delayTypeName },
+    })
+  },
+
+  async updated(supabase: SupabaseClient, delayTypeId: string, oldName: string, newName: string, facilityId: string) {
+    await log(supabase, 'delay_type.updated', {
+      targetType: 'delay_type',
+      targetId: delayTypeId,
+      targetLabel: newName,
+      facilityId,
+      oldValues: { name: oldName },
+      newValues: { name: newName },
+    })
+  },
+
+  async deleted(supabase: SupabaseClient, delayTypeName: string, delayTypeId: string, facilityId: string) {
+    await log(supabase, 'delay_type.deleted', {
+      targetType: 'delay_type',
+      targetId: delayTypeId,
+      targetLabel: delayTypeName,
+      facilityId,
+    })
+  },
+
+  // Global admin versions
+  async adminCreated(supabase: SupabaseClient, delayTypeName: string, delayTypeId: string) {
+    await log(supabase, 'admin.delay_type_created', {
+      targetType: 'delay_type',
+      targetId: delayTypeId,
+      targetLabel: delayTypeName,
+      newValues: { name: delayTypeName, scope: 'global' },
+    })
+  },
+
+  async adminUpdated(supabase: SupabaseClient, delayTypeId: string, oldName: string, newName: string) {
+    await log(supabase, 'admin.delay_type_updated', {
+      targetType: 'delay_type',
+      targetId: delayTypeId,
+      targetLabel: newName,
+      oldValues: { name: oldName },
+      newValues: { name: newName, scope: 'global' },
+    })
+  },
+
+  async adminDeleted(supabase: SupabaseClient, delayTypeName: string, delayTypeId: string) {
+    await log(supabase, 'admin.delay_type_deleted', {
+      targetType: 'delay_type',
+      targetId: delayTypeId,
+      targetLabel: delayTypeName,
+    })
+  },
+}
+
+// =====================================================
 // ADMIN ACTIONS
-// ============================================
+// =====================================================
 
 export const adminAudit = {
   async impersonationStarted(supabase: SupabaseClient, facilityName: string, facilityId: string) {
@@ -595,9 +1045,9 @@ export const adminAudit = {
   },
 }
 
-// ============================================
+// =====================================================
 // GENERIC LOG (for custom actions)
-// ============================================
+// =====================================================
 
 export async function genericAuditLog(
   supabase: SupabaseClient,
@@ -609,6 +1059,7 @@ export async function genericAuditLog(
     oldValues?: Record<string, unknown>
     newValues?: Record<string, unknown>
     metadata?: Record<string, unknown>
+    facilityId?: string
   } = {}
 ) {
   await log(supabase, action, options)
