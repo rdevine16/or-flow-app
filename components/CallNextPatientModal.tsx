@@ -457,11 +457,19 @@ export default function CallNextPatientModal({
       const surgeonName = surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'
       const procedureName = (caseData?.procedure_types as any)?.name || call.procedure_name
 
-      // Delete the notification
-      await supabase
+      // Delete ALL recent notifications for this case (not just one)
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+      
+      const { error: deleteError } = await supabase
         .from('notifications')
         .delete()
-        .eq('id', call.id)
+        .eq('case_id', call.case_id)
+        .eq('type', 'patient_call')
+        .gte('created_at', thirtyMinutesAgo)
+
+      if (deleteError) {
+        console.error('Error deleting notifications:', deleteError)
+      }
 
       // Clear call_time from the case that has called_next_case_id pointing to this case
       await supabase
@@ -510,6 +518,8 @@ export default function CallNextPatientModal({
       })
 
       setToast({ message: 'Call cancelled', type: 'success' })
+      
+      // Refresh the recent calls list
       await loadRecentCalls()
 
     } catch (error) {
