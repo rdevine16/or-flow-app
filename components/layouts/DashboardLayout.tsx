@@ -1,21 +1,105 @@
 // components/layouts/DashboardLayout.tsx
-// Enhanced with Admin navigation, impersonation banner, and trial expiration blocking
+// Enhanced with Admin navigation, impersonation banner, trial expiration blocking, and BREADCRUMBS
 
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useState, useRef, useEffect, Suspense } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import { useUser } from '../../lib/UserContext'
 import { getImpersonationState, endImpersonation } from '../../lib/impersonation'
 import { authAudit, adminAudit } from '../../lib/audit-logger'
+import { getBreadcrumbsFromParam, BreadcrumbItem } from '../../lib/breadcrumbs'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'orbit-sidebar-collapsed'
+
+// Breadcrumb component that reads from URL
+function HeaderBreadcrumb({ 
+  facilityName,
+  fallbackPageName 
+}: { 
+  facilityName?: string | null
+  fallbackPageName: string 
+}) {
+  const searchParams = useSearchParams()
+  const breadcrumbs = getBreadcrumbsFromParam(searchParams.get('from'))
+  
+  // If no breadcrumbs from URL, show simple facility > page
+  if (breadcrumbs.length === 0) {
+    return (
+      <div className="flex items-center gap-2 text-sm">
+        {facilityName && (
+          <>
+            <span className="text-slate-400">{facilityName}</span>
+            <ChevronIcon />
+          </>
+        )}
+        <span className="font-semibold text-slate-900">{fallbackPageName}</span>
+      </div>
+    )
+  }
+
+  // Show full breadcrumb trail
+  return (
+    <nav className="flex items-center gap-2 text-sm" aria-label="Breadcrumb">
+      {facilityName && (
+        <>
+          <span className="text-slate-400">{facilityName}</span>
+          <ChevronIcon />
+        </>
+      )}
+      {breadcrumbs.map((crumb, index) => (
+        <span key={crumb.href} className="flex items-center gap-2">
+          {index > 0 && <ChevronIcon />}
+          <Link
+            href={crumb.href}
+            className="text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            {crumb.label}
+          </Link>
+        </span>
+      ))}
+    </nav>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    </svg>
+  )
+}
+
+// Wrapper to handle Suspense for useSearchParams
+function BreadcrumbWrapper({ 
+  facilityName, 
+  fallbackPageName 
+}: { 
+  facilityName?: string | null
+  fallbackPageName: string 
+}) {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center gap-2 text-sm">
+        {facilityName && (
+          <>
+            <span className="text-slate-400">{facilityName}</span>
+            <ChevronIcon />
+          </>
+        )}
+        <span className="font-semibold text-slate-900">{fallbackPageName}</span>
+      </div>
+    }>
+      <HeaderBreadcrumb facilityName={facilityName} fallbackPageName={fallbackPageName} />
+    </Suspense>
+  )
+}
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
@@ -318,6 +402,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const navigation = getNavigation()
 
+  // Get current page name for fallback
+  const currentPageName = navigation.find(n => isActive(n.href))?.name || 'Dashboard'
+  
+  // Get facility name to display
+  const displayFacilityName = impersonation ? impersonation.facilityName : userData.facilityName
+
   // Loading state
   if (loading || !mounted || checkingAccess) {
     return (
@@ -349,69 +439,82 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Trial Expired Block Screen
   if (isTrialExpired() && !effectiveIsGlobalAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-6">
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-white text-center">Trial Period Ended</h1>
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Trial Expired</h1>
-          <p className="text-slate-600 mb-6">
-            Your trial period for <strong>{facilityStatus?.facilityName}</strong> has ended.
-          </p>
-          <p className="text-slate-600 mb-6">
-            To continue using ORbit and access your data, please contact us to activate your subscription.
-          </p>
-          <a
-            href="mailto:sales@orbitsurgical.com?subject=Activate%20ORbit%20Subscription"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            Contact Sales
-          </a>
-          <button
-            onClick={handleLogout}
-            className="block w-full mt-4 text-slate-500 hover:text-slate-700 text-sm"
-          >
-            Sign out
-          </button>
+          
+          <div className="p-6">
+            <p className="text-slate-600 text-center mb-6">
+              Your trial for <span className="font-semibold">{facilityStatus?.facilityName}</span> has expired. 
+              Please contact your administrator to continue using ORbit.
+            </p>
+            
+            <div className="bg-slate-50 rounded-xl p-4 mb-6">
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">Need help?</h3>
+              <p className="text-sm text-slate-500">
+                Contact support at <a href="mailto:support@orbitsurgical.com" className="text-blue-600 hover:underline">support@orbitsurgical.com</a>
+              </p>
+            </div>
+            
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Disabled Block Screen
+  // Facility Disabled Block Screen
   if (isDisabled() && !effectiveIsGlobalAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-red-500 to-red-600 p-6">
+            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-white text-center">Account Disabled</h1>
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Account Disabled</h1>
-          <p className="text-slate-600 mb-6">
-            Access to <strong>{facilityStatus?.facilityName}</strong> has been disabled.
-          </p>
-          <p className="text-slate-600 mb-6">
-            Please contact your administrator or our support team for assistance.
-          </p>
-          <a
-            href="mailto:support@orbitsurgical.com"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
-          >
-            Contact Support
-          </a>
-          <button
-            onClick={handleLogout}
-            className="block w-full mt-4 text-slate-500 hover:text-slate-700 text-sm"
-          >
-            Sign out
-          </button>
+          
+          <div className="p-6">
+            <p className="text-slate-600 text-center mb-6">
+              Access to <span className="font-semibold">{facilityStatus?.facilityName}</span> has been disabled. 
+              Please contact your administrator for assistance.
+            </p>
+            
+            <div className="bg-slate-50 rounded-xl p-4 mb-6">
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">Need help?</h3>
+              <p className="text-sm text-slate-500">
+                Contact support at <a href="mailto:support@orbitsurgical.com" className="text-blue-600 hover:underline">support@orbitsurgical.com</a>
+              </p>
+            </div>
+            
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -420,120 +523,122 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 h-full bg-slate-900 flex flex-col transition-all duration-300 ease-in-out z-40 ${
-          collapsed ? 'w-[72px]' : 'w-[240px]'
-        }`}
+      <aside 
+        className={`${collapsed ? 'w-20' : 'w-64'} bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out fixed h-full z-40`}
       >
         {/* Logo Section */}
-        <div className={`h-16 flex items-center border-b border-slate-800/50 ${collapsed ? 'justify-center px-3' : 'px-5'}`}>
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/25">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+        <div className={`h-16 flex items-center ${collapsed ? 'justify-center px-2' : 'justify-between px-4'} border-b border-slate-200`}>
+          {!collapsed ? (
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
+                <span className="text-white font-bold text-lg">O</span>
+              </div>
+              <span className="text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                ORbit
+              </span>
             </div>
-            {!collapsed && (
-              <span className="text-lg font-bold text-white tracking-tight">ORbit</span>
-            )}
-          </Link>
+          ) : (
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <span className="text-white font-bold text-lg">O</span>
+            </div>
+          )}
+          
+          {!collapsed && (
+            <button
+              onClick={handleToggleCollapse}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              aria-label="Collapse sidebar"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
         </div>
 
+        {/* Expand button when collapsed */}
+        {collapsed && (
+          <button
+            onClick={handleToggleCollapse}
+            className="mx-auto mt-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Expand sidebar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          </button>
+        )}
+
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className={`flex-1 ${collapsed ? 'px-3' : 'px-4'} py-6 space-y-1.5 overflow-y-auto`}>
           {navigation.map((item) => {
             const active = isActive(item.href)
             return (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                } ${collapsed ? 'justify-center' : ''}`}
+                className={`flex items-center ${collapsed ? 'justify-center' : ''} gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
+                  ${active 
+                    ? 'bg-blue-50 text-blue-700' 
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
                 title={collapsed ? item.name : undefined}
               >
-                <div className={`flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-white'}`}>
+                <span className={`${active ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'} transition-colors`}>
                   {item.icon}
-                </div>
-                {!collapsed && (
-                  <span className="text-sm font-medium">{item.name}</span>
+                </span>
+                {!collapsed && item.name}
+                {active && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />
                 )}
               </Link>
             )
           })}
         </nav>
 
-        {/* Collapse Toggle */}
-        <div className="p-3 border-t border-slate-800/50">
-          <button
-            onClick={handleToggleCollapse}
-            className={`flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all duration-200 ${
-              collapsed ? 'justify-center' : ''
-            }`}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <svg
-              className={`w-5 h-5 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-            </svg>
-            {!collapsed && <span className="text-sm font-medium">Collapse</span>}
-          </button>
+        {/* Bottom Section - Version */}
+        <div className={`p-4 border-t border-slate-200 ${collapsed ? 'text-center' : ''}`}>
+          <p className="text-xs text-slate-400">
+            {collapsed ? 'v1.0' : 'Version 1.0.0'}
+          </p>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <div
-        className={`flex-1 transition-all duration-300 ease-in-out ${
-          collapsed ? 'ml-[72px]' : 'ml-[240px]'
-        }`}
-      >
+      <div className={`flex-1 flex flex-col ${collapsed ? 'ml-20' : 'ml-64'} transition-all duration-300 ease-in-out`}>
         {/* Trial Warning Banner */}
-        {showTrialWarning && !effectiveIsGlobalAdmin && (
-          <div className={`px-4 py-2.5 flex items-center justify-between ${
-            trialDaysRemaining && trialDaysRemaining <= 3 ? 'bg-red-500 text-white' : 'bg-amber-500 text-amber-950'
-          }`}>
+        {showTrialWarning && (
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="font-medium">
-                {trialDaysRemaining === 1 
-                  ? 'Your trial expires tomorrow!' 
-                  : `Your trial expires in ${trialDaysRemaining} days`}
+              <span className="text-sm font-medium">
+                Your trial expires in {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}. 
+                <span className="ml-1 opacity-90">Contact support to continue using ORbit.</span>
               </span>
             </div>
-            <a
-              href="mailto:sales@orbitsurgical.com?subject=Activate%20ORbit%20Subscription"
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                trialDaysRemaining && trialDaysRemaining <= 3 
-                  ? 'bg-white text-red-600 hover:bg-red-50' 
-                  : 'bg-amber-600 hover:bg-amber-700 text-white'
-              }`}
+            <a 
+              href="mailto:support@orbitsurgical.com"
+              className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
             >
-              Contact Sales
+              Contact Support
             </a>
           </div>
         )}
 
         {/* Impersonation Banner */}
-        {impersonation && (
-          <div className="bg-amber-500 text-amber-950 px-4 py-2.5 flex items-center justify-between">
+        {impersonation && effectiveIsGlobalAdmin && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              <span className="font-semibold">
-                Viewing as: {impersonation.facilityName}
-              </span>
-              <span className="text-amber-800 text-sm">
-                All data shown is from this facility
+              <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </div>
+              <span className="text-sm font-medium text-amber-800">
+                Viewing as: <span className="font-semibold">{impersonation.facilityName}</span>
               </span>
             </div>
             <button
@@ -550,11 +655,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-30">
-          {/* Left Side - Breadcrumb/Title */}
-          <div className="flex items-center gap-4">
+          {/* Left Side - Breadcrumb */}
+          <div className="flex items-center gap-4 min-w-0 flex-1">
             {/* Facility Logo */}
             {(impersonation?.facilityLogo || facilityStatus?.facilityLogo) && (
-              <div className="w-8 h-8 rounded-lg border border-slate-200 bg-white p-1 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg border border-slate-200 bg-white p-1 flex items-center justify-center flex-shrink-0">
                 <img
                   src={impersonation?.facilityLogo || facilityStatus?.facilityLogo || ''}
                   alt="Facility logo"
@@ -562,17 +667,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 />
               </div>
             )}
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-slate-400">
-                {impersonation ? impersonation.facilityName : userData.facilityName}
-              </span>
-              <svg className="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-              <span className="font-semibold text-slate-900">
-                {navigation.find(n => isActive(n.href))?.name || 'Dashboard'}
-              </span>
-            </div>
+            
+            {/* Smart Breadcrumb */}
+            <BreadcrumbWrapper 
+              facilityName={displayFacilityName}
+              fallbackPageName={currentPageName}
+            />
           </div>
 
           {/* Right Side - Search, Notifications, User */}
