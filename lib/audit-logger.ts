@@ -46,6 +46,7 @@ export type AuditAction =
   | 'milestone_type.reordered'
   | 'milestone_type.linked'
   | 'milestone_type.unlinked' 
+  | 'milestone_type.restored'
   // Rooms
   | 'room.created'
   | 'room.updated'
@@ -132,7 +133,8 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'milestone_type.deleted': 'deleted a milestone type',
   'milestone_type.reordered': 'reordered milestone types',
     'milestone_type.linked': 'linked milestone types',
-  'milestone_type.unlinked': 'unlinked milestone types', 
+  'milestone_type.unlinked': 'unlinked milestone types',
+    'milestone_type.restored': 'restored a milestone type',  
   // Rooms
   'room.created': 'created an OR room',
   'room.updated': 'updated an OR room',
@@ -550,6 +552,14 @@ export const milestoneTypeAudit = {
       targetType: 'milestone_type',
       targetLabel: `${milestoneName} ↔ ${partnerName}`,
       oldValues: { milestone: milestoneName, was_paired_with: partnerName },
+    })
+  },
+    async restored(supabase: SupabaseClient, milestoneName: string, milestoneId: string) {
+    await log(supabase, 'milestone_type.restored', {
+      targetType: 'milestone_type',
+      targetId: milestoneId,
+      targetLabel: milestoneName,
+      newValues: { restored: true },
     })
   },
 }

@@ -397,26 +397,29 @@ export default function MilestonesSettingsPage() {
   }
 
   // Restore deleted milestone
-  const handleRestore = async (milestone: FacilityMilestone) => {
-    setSaving(true)
-    
-    const { error } = await supabase
-      .from('facility_milestones')
-      .update({ 
-        deleted_at: null,
-        is_active: true,
-      })
-      .eq('id', milestone.id)
+const handleRestore = async (milestone: FacilityMilestone) => {
+  setSaving(true)
+  
+  const { error } = await supabase
+    .from('facility_milestones')
+    .update({ 
+      deleted_at: null,
+      is_active: true,
+    })
+    .eq('id', milestone.id)
 
-    if (!error) {
-      setMilestones(milestones.map(m => 
-        m.id === milestone.id 
-          ? { ...m, deleted_at: null, is_active: true } 
-          : m
-      ))
-    }
-    setSaving(false)
+  if (!error) {
+    // ADD THIS LINE:
+    await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
+    
+    setMilestones(milestones.map(m => 
+      m.id === milestone.id 
+        ? { ...m, deleted_at: null, is_active: true } 
+        : m
+    ))
   }
+  setSaving(false)
+}
 
   // Unlink milestones
   const handleUnlink = async (milestone: FacilityMilestone) => {
