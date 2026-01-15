@@ -120,9 +120,9 @@ export default function AdminDashboardPage() {
           .order('created_at', { ascending: false })
           .limit(10)
 
-if (auditData) {
-  setRecentActivity(auditData as unknown as AuditEntry[])
-}
+        if (auditData) {
+          setRecentActivity(auditData as unknown as AuditEntry[])
+        }
       } catch (error) {
         console.error('Error fetching admin dashboard data:', error)
       } finally {
@@ -191,176 +191,185 @@ if (auditData) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Total Facilities */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Facilities</p>
-              <p className="text-3xl font-bold text-slate-900 mt-2">{facilityMetrics.total}</p>
-            </div>
-            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-          </div>
-          <div className="mt-4 flex items-center gap-4 text-sm">
-            <span className="text-emerald-600 font-medium">{facilityMetrics.active} active</span>
-            <span className="text-blue-600 font-medium">{facilityMetrics.trial} trial</span>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{facilityMetrics.total}</p>
+              <p className="text-sm text-slate-500">Total Facilities</p>
+            </div>
           </div>
         </div>
 
-        {/* Active */}
+        {/* Active Facilities */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-2">{facilityMetrics.active}</p>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-          </div>
-          <p className="text-sm text-slate-500 mt-4">Paying customers</p>
-        </div>
-
-        {/* Trial */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Trial</p>
-              <p className="text-3xl font-bold text-blue-600 mt-2">{facilityMetrics.trial}</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <p className="text-2xl font-bold text-slate-900">{facilityMetrics.active}</p>
+              <p className="text-sm text-slate-500">Active</p>
             </div>
           </div>
-          <p className="text-sm text-slate-500 mt-4">Evaluating ORbit</p>
         </div>
 
         {/* Total Users */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Users</p>
-              <p className="text-3xl font-bold text-slate-900 mt-2">{userMetrics.total}</p>
-            </div>
-            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{userMetrics.total}</p>
+              <p className="text-sm text-slate-500">Total Users</p>
+            </div>
           </div>
-          <p className="text-sm text-slate-500 mt-4">Across all facilities</p>
+        </div>
+
+        {/* Cases This Month */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{caseMetrics.thisMonth}</p>
+              <p className="text-sm text-slate-500">Cases This Month</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Two Column Layout */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="font-semibold text-slate-900">Quick Actions</h2>
             </div>
-            <div className="p-4 space-y-2">
-  <Link
-    href="/admin/facilities/new"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
-  >
-    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-      </svg>
-    </div>
-    <div>
-      <p className="font-medium text-slate-900">Create Facility</p>
-      <p className="text-sm text-slate-500">Onboard a new customer</p>
-    </div>
-  </Link>
+            <div className="p-3 space-y-1">
+              <Link
+                href="/admin/facilities/new"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">Create Facility</p>
+                  <p className="text-sm text-slate-500">Onboard a new customer</p>
+                </div>
+              </Link>
 
-  <Link
-    href="/admin/facilities"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
-  >
-    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-slate-200 transition-colors">
-      <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-      </svg>
-    </div>
-    <div>
-      <p className="font-medium text-slate-900">View Facilities</p>
-      <p className="text-sm text-slate-500">Manage all customers</p>
-    </div>
-  </Link>
+              <Link
+                href="/admin/facilities"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">View Facilities</p>
+                  <p className="text-sm text-slate-500">Manage all customers</p>
+                </div>
+              </Link>
 
-  <Link
-    href="/admin/audit-log"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
-  >
-    <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-slate-200 transition-colors">
-      <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    </div>
-    <div>
-      <p className="font-medium text-slate-900">Audit Log</p>
-      <p className="text-sm text-slate-500">View all activity</p>
-    </div>
-  </Link>
+              <Link
+                href="/admin/audit-log"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">Audit Log</p>
+                  <p className="text-sm text-slate-500">View all activity</p>
+                </div>
+              </Link>
 
-  {/* Divider */}
-  <div className="pt-2 pb-1">
-    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider px-3">Global Settings</p>
-  </div>
+              {/* Divider */}
+              <div className="pt-2 pb-1">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider px-3">Global Settings</p>
+              </div>
 
-  <Link
-    href="/admin/settings/procedures"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
-  >
-    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-      </svg>
-    </div>
-    <div>
-      <p className="font-medium text-slate-900">Procedure Types</p>
-      <p className="text-sm text-slate-500">THA, TKA, ACL, etc.</p>
-    </div>
-  </Link>
+              {/* NEW: Milestones Link */}
+              <Link
+                href="/admin/settings/milestones"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                  <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">Milestones</p>
+                  <p className="text-sm text-slate-500">Global milestone templates</p>
+                </div>
+              </Link>
 
-  <Link
-    href="/admin/settings/implant-companies"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
-  >
-    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-      <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-      </svg>
-    </div>
-    <div>
-      <p className="font-medium text-slate-900">Implant Companies</p>
-      <p className="text-sm text-slate-500">Stryker, Zimmer, etc.</p>
-    </div>
-  </Link>
+              <Link
+                href="/admin/settings/procedures"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">Procedure Types</p>
+                  <p className="text-sm text-slate-500">THA, TKA, ACL, etc.</p>
+                </div>
+              </Link>
 
-  <Link
-    href="/admin/settings/delay-types"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
-  >
-    <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center group-hover:bg-amber-200 transition-colors">
-      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    </div>
-    <div>
-      <p className="font-medium text-slate-900">Delay Types</p>
-      <p className="text-sm text-slate-500">Standard delay reasons</p>
-    </div>
-  </Link>
-</div>
+              <Link
+                href="/admin/settings/implant-companies"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                  <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">Implant Companies</p>
+                  <p className="text-sm text-slate-500">Stryker, Zimmer, etc.</p>
+                </div>
+              </Link>
+
+              <Link
+                href="/admin/settings/delay-types"
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-900">Delay Types</p>
+                  <p className="text-sm text-slate-500">Standard delay reasons</p>
+                </div>
+              </Link>
+            </div>
           </div>
 
           {/* Alerts */}

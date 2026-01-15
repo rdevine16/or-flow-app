@@ -16,7 +16,7 @@ import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import AnesthesiaPopover from '../../../components/ui/AnesthesiaPopover'
 
 
-// UPDATED: Now includes pairing fields from facility_milestones
+// Now includes pairing fields from facility_milestones
 interface FacilityMilestone {
   id: string
   name: string
@@ -29,8 +29,8 @@ interface FacilityMilestone {
 
 interface CaseMilestone {
   id: string
-  milestone_type_id: string  // Legacy - still exists for backwards compatibility
-  facility_milestone_id: string | null  // NEW: references facility_milestones
+  milestone_type_id: string
+  facility_milestone_id: string | null
   recorded_at: string
 }
 
@@ -62,8 +62,6 @@ interface CaseStaff {
   users: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
   user_roles: { name: string }[] | { name: string } | null
 }
-
-// REMOVED: No more hardcoded SKIP_IN_LIST - pairing now comes from database
 
 // Helper to safely get first item from array or object
 function getFirst<T>(data: T[] | T | null | undefined): T | null {
@@ -142,7 +140,7 @@ function getStatusConfig(status: string | null) {
   }
 }
 
-// NEW: Operative Side Badge
+// Operative Side Badge
 function OperativeSideBadge({ side }: { side: string | null | undefined }) {
   if (!side || side === 'n/a') return null
   
@@ -168,7 +166,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const supabase = createClient()
 
   const [caseData, setCaseData] = useState<CaseData | null>(null)
-  // UPDATED: Now using FacilityMilestone type
   const [milestoneTypes, setMilestoneTypes] = useState<FacilityMilestone[]>([])
   const [caseMilestones, setCaseMilestones] = useState<CaseMilestone[]>([])
   const [caseStaff, setCaseStaff] = useState<CaseStaff[]>([])
@@ -199,7 +196,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Store user info for modal
       setUserId(user.id)
       setUserEmail(user.email || null)
 
@@ -223,7 +219,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     async function fetchData() {
       setLoading(true)
 
-      // Fetch case data
+      // Fetch case data first (we need procedure_type_id)
       const { data: caseResult } = await supabase
         .from('cases')
         .select(`
@@ -243,13 +239,50 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         .eq('id', id)
         .single()
 
-      // UPDATED: Fetch from facility_milestones instead of milestone_types
-      const { data: milestoneTypesResult } = await supabase
-        .from('facility_milestones')
-        .select('id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id')
-        .eq('facility_id', userFacilityId)
-        .eq('is_active', true)
-        .order('display_order')
+      // PHASE 2: Fetch procedure-specific milestones
+      let milestoneTypesResult: FacilityMilestone[] = []
+      
+      if (caseResult?.procedure_type_id) {
+        // Try to get milestones configured for this procedure
+        const { data: configuredMilestones } = await supabase
+          .from('procedure_milestone_config')
+          .select(`
+            facility_milestone_id,
+            display_order,
+            facility_milestones (
+              id,
+              name,
+              display_name,
+              display_order,
+              pair_with_id,
+              pair_position,
+              source_milestone_type_id
+            )
+          `)
+          .eq('procedure_type_id', caseResult.procedure_type_id)
+          .eq('facility_id', userFacilityId)
+          .order('display_order')
+
+        if (configuredMilestones && configuredMilestones.length > 0) {
+          // Use procedure-specific milestones
+          milestoneTypesResult = configuredMilestones
+            .map(cm => cm.facility_milestones as unknown as FacilityMilestone)
+            .filter(Boolean)
+            .sort((a, b) => a.display_order - b.display_order)
+        }
+      }
+
+      // Fallback: If no procedure-specific config, get all facility milestones
+      if (milestoneTypesResult.length === 0) {
+        const { data: allMilestones } = await supabase
+          .from('facility_milestones')
+          .select('id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id')
+          .eq('facility_id', userFacilityId)
+          .eq('is_active', true)
+          .order('display_order')
+
+        milestoneTypesResult = allMilestones || []
+      }
 
       const { data: milestonesResult } = await supabase
         .from('case_milestones')
@@ -289,7 +322,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       })
 
       setCaseData(caseResult)
-      setMilestoneTypes(milestoneTypesResult || [])
+      setMilestoneTypes(milestoneTypesResult)
       setCaseMilestones(milestonesResult || [])
       setCaseStaff(staffResult as CaseStaff[] || [])
       setAvailableStaff(staffUsers as User[] || [])
@@ -354,15 +387,14 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   // Milestone functions
   const recordMilestone = async (milestoneTypeId: string) => {
     const timestamp = new Date().toISOString()
-    // UPDATED: Now inserts both milestone_type_id (legacy) and facility_milestone_id
     const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
     
     const { data, error } = await supabase
       .from('case_milestones')
       .insert({ 
         case_id: id, 
-        milestone_type_id: milestoneType?.source_milestone_type_id || milestoneTypeId, // Legacy field
-        facility_milestone_id: milestoneTypeId, // New field
+        milestone_type_id: milestoneType?.source_milestone_type_id || milestoneTypeId,
+        facility_milestone_id: milestoneTypeId,
         recorded_at: timestamp 
       })
       .select()
@@ -371,14 +403,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (!error && data) {
       setCaseMilestones([...caseMilestones, data])
       
-      // Check if we need to update case status (milestoneType already looked up above)
       if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('in_progress')
       } else if (milestoneType?.name === 'patient_out') {
         await updateCaseStatus('completed')
       }
 
-      // Audit log
       if (milestoneType && caseData) {
         await milestoneAudit.recorded(
           supabase,
@@ -393,7 +423,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   const undoMilestone = async (milestoneId: string) => {
     const milestone = caseMilestones.find(m => m.id === milestoneId)
-    // UPDATED: Look up by facility_milestone_id first, fall back to milestone_type_id
     const milestoneType = milestone ? milestoneTypes.find(mt => 
       mt.id === milestone.facility_milestone_id || mt.id === milestone.milestone_type_id
     ) : null
@@ -406,7 +435,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (!error) {
       setCaseMilestones(caseMilestones.filter(m => m.id !== milestoneId))
 
-      // Audit log
       if (milestoneType && caseData && milestone) {
         await milestoneAudit.deleted(
           supabase,
@@ -453,8 +481,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // Staff functions
-  const addStaff = async (userId: string) => {
-    const staffMember = availableStaff.find(s => s.id === userId)
+  const addStaff = async (staffUserId: string) => {
+    const staffMember = availableStaff.find(s => s.id === staffUserId)
     const roleName = Array.isArray(staffMember?.user_roles) 
       ? staffMember.user_roles[0]?.name 
       : (staffMember?.user_roles as any)?.name
@@ -471,7 +499,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
     const { data, error } = await supabase
       .from('case_staff')
-      .insert({ case_id: id, user_id: userId, role_id: roleId })
+      .insert({ case_id: id, user_id: staffUserId, role_id: roleId })
       .select(`
         id,
         user_id,
@@ -589,7 +617,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // Helper functions for milestones
-  // UPDATED: Now checks facility_milestone_id first, falls back to milestone_type_id for legacy data
   const getMilestoneByTypeId = (typeId: string) => caseMilestones.find(m => 
     m.facility_milestone_id === typeId || m.milestone_type_id === typeId
   )
@@ -619,11 +646,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const totalTime = calculateElapsedTime(patientInMilestone, patientOutMilestone)
   const surgicalTime = calculateElapsedTime(incisionMilestone, closingMilestone)
 
-  // UPDATED: Dynamic milestone grouping based on database pairing
-  // Get paired milestones (start position only - we'll render them with their end partner)
+  // Dynamic milestone grouping based on database pairing
   const pairedMilestones = milestoneTypes.filter(mt => mt.pair_position === 'start')
-  
-  // Get single milestones (no pairing) and exclude "end" milestones (they're rendered with their start partner)
   const singleMilestones = milestoneTypes.filter(mt => !mt.pair_position)
 
   const completedMilestones = caseMilestones.length
@@ -668,14 +692,11 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // Helper to generate display name for paired milestone button
-  // e.g., "Anesthesia Start" + "Anesthesia End" -> "Anesthesia"
   const getPairDisplayName = (startMilestone: FacilityMilestone): string => {
-    // Try to create a cleaner name by removing "Start" suffix
     const name = startMilestone.display_name
     if (name.toLowerCase().endsWith(' start')) {
       return name.slice(0, -6)
     }
-    // If the start milestone is like "Prepped & Draped", use a custom name
     if (startMilestone.name === 'prepped') {
       return 'Prep & Drape'
     }
@@ -907,49 +928,56 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 </div>
               </div>
               
-              {/* Milestones Grid - UPDATED: Dynamic rendering based on database */}
+              {/* Milestones Grid - Dynamic rendering */}
               <div className="p-4">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {/* Render all milestones in order, handling pairs and singles dynamically */}
-                  {milestoneTypes
-                    .filter(mt => mt.pair_position !== 'end') // Skip "end" milestones - they're rendered with their "start" partner
-                    .map(milestone => {
-                      // Check if this is a paired milestone (start position)
-                      if (milestone.pair_position === 'start') {
-                        const endMilestone = getPartnerMilestone(milestone)
-                        if (!endMilestone) return null
+                {milestoneTypes.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">
+                    <svg className="w-10 h-10 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm">No milestones configured for this procedure.</p>
+                    <p className="text-xs mt-1">Configure milestones in Settings → Procedure Milestones</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                    {milestoneTypes
+                      .filter(mt => mt.pair_position !== 'end')
+                      .map(milestone => {
+                        if (milestone.pair_position === 'start') {
+                          const endMilestone = getPartnerMilestone(milestone)
+                          if (!endMilestone) return null
 
-                        const startRecorded = getMilestoneByTypeId(milestone.id)
-                        const endRecorded = getMilestoneByTypeId(endMilestone.id)
+                          const startRecorded = getMilestoneByTypeId(milestone.id)
+                          const endRecorded = getMilestoneByTypeId(endMilestone.id)
 
+                          return (
+                            <PairedMilestoneButton
+                              key={milestone.id}
+                              displayName={getPairDisplayName(milestone)}
+                              startRecordedAt={startRecorded?.recorded_at}
+                              endRecordedAt={endRecorded?.recorded_at}
+                              onRecordStart={() => recordMilestone(milestone.id)}
+                              onRecordEnd={() => recordMilestone(endMilestone.id)}
+                              onUndoStart={() => startRecorded && undoMilestone(startRecorded.id)}
+                              onUndoEnd={() => endRecorded && undoMilestone(endRecorded.id)}
+                            />
+                          )
+                        }
+
+                        const recorded = getMilestoneByTypeId(milestone.id)
                         return (
-                          <PairedMilestoneButton
+                          <MilestoneButton
                             key={milestone.id}
-                            displayName={getPairDisplayName(milestone)}
-                            startRecordedAt={startRecorded?.recorded_at}
-                            endRecordedAt={endRecorded?.recorded_at}
-                            onRecordStart={() => recordMilestone(milestone.id)}
-                            onRecordEnd={() => recordMilestone(endMilestone.id)}
-                            onUndoStart={() => startRecorded && undoMilestone(startRecorded.id)}
-                            onUndoEnd={() => endRecorded && undoMilestone(endRecorded.id)}
+                            name={milestone.name}
+                            displayName={milestone.display_name}
+                            recordedAt={recorded?.recorded_at}
+                            onRecord={() => recordMilestone(milestone.id)}
+                            onUndo={() => recorded && undoMilestone(recorded.id)}
                           />
                         )
-                      }
-
-                      // Single milestone (no pairing)
-                      const recorded = getMilestoneByTypeId(milestone.id)
-                      return (
-                        <MilestoneButton
-                          key={milestone.id}
-                          name={milestone.name}
-                          displayName={milestone.display_name}
-                          recordedAt={recorded?.recorded_at}
-                          onRecord={() => recordMilestone(milestone.id)}
-                          onUndo={() => recorded && undoMilestone(recorded.id)}
-                        />
-                      )
-                    })}
-                </div>
+                      })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
