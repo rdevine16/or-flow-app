@@ -62,6 +62,16 @@ const analyticsSections: AnalyticsSection[] = [
       </svg>
     ),
   },
+  {
+    id: 'financials',
+    label: 'Financials',
+    href: '/analytics/financials',
+    icon: (
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
 ]
 
 interface AnalyticsLayoutProps {
@@ -147,14 +157,14 @@ export default function AnalyticsLayout({ children, title, description, actions 
 
       {/* Horizontal Tab Navigation */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-1.5 shadow-sm">
-        <nav className="flex gap-1">
+        <nav className="flex gap-1 overflow-x-auto">
           {analyticsSections.map((section) => {
             const isActive = pathname === section.href
             return (
               <Link
                 key={section.id}
                 href={section.href}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                   isActive
                     ? 'bg-slate-900 text-white shadow-md'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
