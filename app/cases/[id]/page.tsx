@@ -14,6 +14,7 @@ import ImplantSection from '../../../components/cases/ImplantSection'
 import FloatingActionButton from '../../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import AnesthesiaPopover from '../../../components/ui/AnesthesiaPopover'
+import CaseSummary from '../../../components/cases/CaseSummary'
 
 
 // Now includes pairing fields from facility_milestones
@@ -665,6 +666,11 @@ setCaseMilestones(milestonesResult || [])
   const anesthesiologist = getFirst(caseData?.anesthesiologist)
   const statusConfig = getStatusConfig(status?.name || null)
 
+  // ============================================================================
+  // CHECK IF CASE IS COMPLETED - THIS IS THE KEY LOGIC
+  // ============================================================================
+  const isCompleted = status?.name === 'completed'
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -688,6 +694,53 @@ setCaseMilestones(milestonesResult || [])
     )
   }
 
+  // ============================================================================
+  // RENDER READ-ONLY SUMMARY VIEW FOR COMPLETED CASES
+  // ============================================================================
+  if (isCompleted) {
+    // Transform data for the CaseSummary component
+    const summaryProps = {
+      caseData: {
+        id: caseData.id,
+        caseNumber: caseData.case_number,
+        scheduledDate: caseData.scheduled_date,
+        startTime: caseData.start_time,
+        operativeSide: caseData.operative_side,
+        notes: caseData.notes,
+        room: room?.name || null,
+        procedure: procedure?.name || null,
+        status: status?.name || 'completed',
+        surgeon: surgeon ? { firstName: surgeon.first_name, lastName: surgeon.last_name } : null,
+        anesthesiologist: anesthesiologist ? { firstName: anesthesiologist.first_name, lastName: anesthesiologist.last_name } : null,
+      },
+      milestones: milestoneTypes.map(mt => ({
+        id: mt.id,
+        name: mt.name,
+        displayName: mt.display_name,
+        recordedAt: getMilestoneByTypeId(mt.id)?.recorded_at || null,
+        displayOrder: mt.display_order,
+      })),
+      staff: caseStaff.map(cs => {
+        const user = getFirst(cs.users)
+        const role = getFirst(cs.user_roles)
+        return {
+          id: cs.id,
+          name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+          role: role?.name || 'staff'
+        }
+      }),
+      totalTime,
+      surgicalTime,
+      surgeonAverages,
+    }
+
+    return <CaseSummary {...summaryProps} />
+  }
+
+  // ============================================================================
+  // RENDER EDITABLE VIEW FOR NON-COMPLETED CASES (existing code)
+  // ============================================================================
+  
   // Helper to get the partner milestone for a paired milestone
   const getPartnerMilestone = (milestone: FacilityMilestone): FacilityMilestone | undefined => {
     if (!milestone.pair_with_id) return undefined
@@ -700,159 +753,129 @@ setCaseMilestones(milestonesResult || [])
     if (name.toLowerCase().endsWith(' start')) {
       return name.slice(0, -6)
     }
-    if (startMilestone.name === 'prepped') {
-      return 'Prep & Drape'
-    }
-    if (startMilestone.name === 'closing') {
-      return 'Closing'
-    }
-    if (startMilestone.name === 'anes_start') {
-      return 'Anesthesia'
-    }
     return name
   }
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto p-4 lg:p-6 space-y-4">
-        {/* Header - Compact */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/cases')}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Link 
+              href="/cases" 
+              className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-            </button>
+            </Link>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-slate-900">{caseData.case_number}</h1>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.bgColor} ${statusConfig.textColor} ${statusConfig.borderColor}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotColor}`} />
-                  {statusConfig.label}
-                </span>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold text-slate-900">{caseData.case_number}</h1>
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${statusConfig.bgColor} ${statusConfig.borderColor}`}>
+                  <div className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`}></div>
+                  <span className={`text-xs font-semibold ${statusConfig.textColor}`}>{statusConfig.label}</span>
+                </div>
               </div>
-              <p className="text-sm text-slate-500">{formatDate(caseData.scheduled_date)}</p>
+              <p className="text-sm text-slate-500 mt-0.5">{formatDate(caseData.scheduled_date)}</p>
             </div>
           </div>
-          <Link
-            href={`/cases/${id}/edit`}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Edit
-          </Link>
         </div>
 
-        {/* Main Content Grid - Side by Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          
-          {/* Left Column - Case Info & Staff */}
-          <div className="space-y-4">
-            {/* Case Info Card - Compact */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <div className="p-4 space-y-3">
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Case Info */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* Case Details Card */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="space-y-4">
                 {/* Procedure */}
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500">Procedure</p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-slate-900 text-sm">{procedure?.name || 'Not specified'}</p>
-                      <OperativeSideBadge side={caseData.operative_side} />
-                    </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Procedure</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-semibold text-slate-900">{procedure?.name || 'Not specified'}</p>
+                    <OperativeSideBadge side={caseData.operative_side} />
                   </div>
                 </div>
 
-                {/* Room & Time Row */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* Room & Time */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Room</p>
+                    <div className="flex items-center gap-1.5">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Room</p>
-                      <p className="font-semibold text-slate-900 text-sm">{room?.name || '-'}</p>
+                      <span className="text-sm font-medium text-slate-700">{room?.name || '—'}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Start Time</p>
-                      <p className="font-semibold text-slate-900 text-sm">{formatTime(caseData.start_time)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Surgeon with Avatar */}
-                <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
-                  <SurgeonAvatar 
-                    name={surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : 'Unassigned'} 
-                    size="sm" 
-                  />
                   <div>
-                    <p className="text-xs text-slate-500">Surgeon</p>
-                    <p className="font-semibold text-slate-900 text-sm">
-                      {surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : 'Unassigned'}
-                    </p>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Scheduled</p>
+                    <p className="text-sm font-semibold text-slate-900 font-mono">{formatTime(caseData.start_time)}</p>
                   </div>
                 </div>
-
-{/* Anesthesiologist */}
-<div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-  <AnesthesiaPopover
-    currentAnesthesiologist={anesthesiologist}
-    availableAnesthesiologists={anesthesiologists.map(a => ({
-      id: a.id,
-      label: `${a.first_name} ${a.last_name}`
-    }))}
-    onChange={updateAnesthesiologist}
-    onRemove={removeAnesthesiologist}
-  />
-</div>
               </div>
             </div>
 
-{/* Staff Section */}
-<div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-  <StaffPopover
-    staff={caseStaff.map(cs => {
-      const user = getFirst(cs.users)
-      const role = getFirst(cs.user_roles)
-      return {
-        id: cs.id,
-        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-        role: role?.name || 'staff'
-      }
-    })}
-    availableStaff={availableStaff.map(s => {
-      const roleName = Array.isArray(s.user_roles) 
-        ? s.user_roles[0]?.name 
-        : (s.user_roles as any)?.name
-      return {
-        id: s.id,
-        label: `${s.first_name} ${s.last_name}`,
-        subtitle: roleName || 'Staff'
-      }
-    })}
-    onAdd={addStaff}
-    onRemove={removeStaff}
-  />
-</div>
+            {/* Surgeon Card */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">Surgeon</p>
+              <div className="flex items-center gap-3">
+                <SurgeonAvatar name={surgeon ? `${surgeon.first_name} ${surgeon.last_name}` : 'Unassigned'} size="lg" />
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'}
+                  </p>
+                  {surgeon && (
+                    <p className="text-xs text-slate-500">{surgeon.first_name} {surgeon.last_name}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Anesthesiologist Card */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Anesthesiologist</p>
+                <AnesthesiaPopover
+                  currentAnesthesiologist={anesthesiologist}
+                  availableAnesthesiologists={anesthesiologists.map(a => ({
+                    id: a.id,
+                    label: `${a.first_name} ${a.last_name}`
+                  }))}
+                  onChange={updateAnesthesiologist}
+                  onRemove={removeAnesthesiologist}
+                />
+              </div>
+            </div>
+
+            {/* Staff Section */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+              <StaffPopover
+                staff={caseStaff.map(cs => {
+                  const user = getFirst(cs.users)
+                  const role = getFirst(cs.user_roles)
+                  return {
+                    id: cs.id,
+                    name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+                    role: role?.name || 'staff'
+                  }
+                })}
+                availableStaff={availableStaff.map(s => {
+                  const roleName = Array.isArray(s.user_roles) 
+                    ? s.user_roles[0]?.name 
+                    : (s.user_roles as any)?.name
+                  return {
+                    id: s.id,
+                    label: `${s.first_name} ${s.last_name}`,
+                    subtitle: roleName || 'Staff'
+                  }
+                })}
+                onAdd={addStaff}
+                onRemove={removeStaff}
+              />
+            </div>
 
             {/* Implant Section */}
             <ImplantSection 
@@ -989,7 +1012,7 @@ setCaseMilestones(milestonesResult || [])
         </div>
       </div>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Only show for non-completed cases */}
       {userFacilityId && (
         <FloatingActionButton 
           actions={[
