@@ -291,12 +291,13 @@ export default function CallNextPatientModal({
 
       // 3. Trigger push notifications via edge function
       try {
+        console.log('Triggering push notification:', { facilityId, title, message, excludeUserId: userId })
         await supabase.functions.invoke('send-push-notification', {
           body: {
-            facilityId: facilityId,
+            facility_id: facilityId,  // snake_case to match edge function
             title: title,
             body: message,
-            excludeUserId: userId
+            exclude_user_id: userId   // snake_case to match edge function
           }
         })
       } catch (pushError) {
@@ -394,10 +395,10 @@ export default function CallNextPatientModal({
       try {
         await supabase.functions.invoke('send-push-notification', {
           body: {
-            facilityId: facilityId,
+            facility_id: facilityId,
             title: title,
             body: message,
-            excludeUserId: userId
+            exclude_user_id: userId
           }
         })
       } catch (pushError) {
@@ -475,10 +476,10 @@ export default function CallNextPatientModal({
       // Send cancellation push notification
       const { error: pushError } = await supabase.functions.invoke('send-push-notification', {
         body: {
-          facilityId: facilityId,
+          facility_id: facilityId,
           title: `${call.room_name} Call Cancelled`,
           body: `Patient call for ${call.case_number} has been cancelled`,
-          excludeUserId: userId
+          exclude_user_id: userId
         }
       })
       
