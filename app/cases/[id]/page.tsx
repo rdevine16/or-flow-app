@@ -13,6 +13,8 @@ import { milestoneAudit, staffAudit, caseAudit } from '../../../lib/audit-logger
 import ImplantSection from '../../../components/cases/ImplantSection'
 import FloatingActionButton from '../../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../../components/CallNextPatientModal'
+import AnesthesiaPopover from '../../../components/ui/AnesthesiaPopover'
+
 
 interface MilestoneType {
   id: string
@@ -689,31 +691,44 @@ useEffect(() => {
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-slate-700">Team</p>
-                <StaffPopover
-                  staff={caseStaff.map(cs => {
-                    const user = cs.users ? (Array.isArray(cs.users) ? cs.users[0] : cs.users) : null
-                    const role = cs.user_roles ? (Array.isArray(cs.user_roles) ? cs.user_roles[0] : cs.user_roles) : null
-                    return {
-                      id: cs.id,
-                      name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-                      role: role?.name || 'Staff',
-                    }
-                  })}
-                  availableStaff={availableStaff
-                    .filter(s => !caseStaff.some(cs => cs.user_id === s.id))
-                    .map(s => ({
-                      id: s.id,
-                      label: `${s.first_name} ${s.last_name}`,
-                      subtitle: Array.isArray(s.user_roles) ? s.user_roles[0]?.name || '' : '',
+                <div className="flex items-center gap-2">
+                  {/* Anesthesia Popover */}
+                  <AnesthesiaPopover
+                    currentAnesthesiologist={anesthesiologist}
+                    availableAnesthesiologists={anesthesiologists.map(a => ({ 
+                      id: a.id, 
+                      label: `${a.first_name} ${a.last_name}` 
                     }))}
-                  onAdd={addStaff}
-                  onRemove={removeStaff}
-                />
+                    onChange={updateAnesthesiologist}
+                  />
+                  
+                  {/* Staff Popover */}
+                  <StaffPopover
+                    staff={caseStaff.map(cs => {
+                      const user = cs.users ? (Array.isArray(cs.users) ? cs.users[0] : cs.users) : null
+                      const role = cs.user_roles ? (Array.isArray(cs.user_roles) ? cs.user_roles[0] : cs.user_roles) : null
+                      return {
+                        id: cs.id,
+                        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+                        role: role?.name || 'Staff',
+                      }
+                    })}
+                    availableStaff={availableStaff
+                      .filter(s => !caseStaff.some(cs => cs.user_id === s.id))
+                      .map(s => ({
+                        id: s.id,
+                        label: `${s.first_name} ${s.last_name}`,
+                        subtitle: Array.isArray(s.user_roles) ? s.user_roles[0]?.name || '' : '',
+                      }))}
+                    onAdd={addStaff}
+                    onRemove={removeStaff}
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">
-                {/* Anesthesiologist */}
-                <div className="flex items-center justify-between py-2 px-3 bg-amber-50 border border-amber-100 rounded-lg">
+                {/* Anesthesiologist Row */}
+                <div className="flex items-center py-2 px-3 bg-amber-50 border border-amber-100 rounded-lg">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center">
                       <span className="text-[10px] font-bold text-amber-700">A</span>
@@ -725,12 +740,6 @@ useEffect(() => {
                       <p className="text-[10px] text-amber-600">Anesthesiologist</p>
                     </div>
                   </div>
-                  <SearchableDropdown
-                    options={anesthesiologists.map(a => ({ id: a.id, label: `${a.first_name} ${a.last_name}` }))}
-                    value={anesthesiologist?.id || ''}
-                    onChange={updateAnesthesiologist}
-                    placeholder="Change"
-                  />
                 </div>
 
                 {/* Other Staff */}
@@ -753,31 +762,17 @@ useEffect(() => {
                           <p className="text-[10px] text-slate-500 capitalize">{staffRole?.name || 'Staff'}</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => removeStaff(staff.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-all"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
                     </div>
                   )
                 })}
 
+                {/* Empty state */}
                 {caseStaff.length === 0 && !anesthesiologist && (
-                  <p className="text-xs text-slate-400 text-center py-2">No staff assigned</p>
+                  <p className="text-xs text-slate-400 text-center py-2">No team members assigned</p>
                 )}
               </div>
             </div>
 
-            {/* Notes - Only if present */}
-            {caseData.notes && (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                <p className="text-xs font-semibold text-slate-700 mb-2">Notes</p>
-                <p className="text-sm text-slate-600 whitespace-pre-wrap">{caseData.notes}</p>
-              </div>
-            )}
 
             {/* Implant Section - Shows for hip/knee procedures */}
             <ImplantSection
