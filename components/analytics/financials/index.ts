@@ -1,0 +1,11 @@
+// Barrel exports for financials analytics components
+export * from './types'
+export * from './utils'
+export { useFinancialsMetrics } from './useFinancialsMetrics'
+export { default as DateRangeSelector } from './DateRangeSelector'
+export { default as MetricCard } from './MetricCard'
+export { default as IssuesBadge } from './IssuesBadge'
+export { default as OverviewTab } from './OverviewTab'
+export { default as ProcedureTab } from './ProcedureTab'
+export { default as SurgeonTab } from './SurgeonTab'
+export { default as OutliersTab } from './OutliersTab'
