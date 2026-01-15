@@ -516,7 +516,7 @@ let query = supabase
                       </div>
                     </div>
                     
-  {/* Actions */
+  {/* Actions */}
                     <div className="col-span-1">
                       <div className="flex items-center justify-end gap-1">
                         {/* View button - ALWAYS visible */}
