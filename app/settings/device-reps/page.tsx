@@ -88,24 +88,24 @@ export default function DeviceRepsPage() {
     }
 
     // Fetch device reps with access to this facility
-    const { data: repsData } = await supabase
-      .from('facility_device_reps')
-      .select(`
-        id,
-        user_id,
-        facility_id,
-        status,
-        created_at,
-        accepted_at,
-        users (
-          id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          implant_companies (name)
-        )
-      `)
+const { data: repsData } = await supabase
+  .from('facility_device_reps')
+  .select(`
+    id,
+    user_id,
+    facility_id,
+    status,
+    created_at,
+    accepted_at,
+    users!facility_device_reps_user_id_fkey (
+      id,
+      first_name,
+      last_name,
+      email,
+      phone,
+      implant_companies (name)
+    )
+  `)
       .eq('facility_id', userData.facility_id)
       .neq('status', 'revoked')
       .order('created_at', { ascending: false })
