@@ -1,6 +1,6 @@
 // ============================================
 // FILE: components/cases/CaseForm.tsx
-// UPDATED: Added operative_side field
+// UPDATED: Added payer_id field for financials
 // ============================================
 
 'use client'
@@ -28,7 +28,8 @@ interface FormData {
   status_id: string
   surgeon_id: string
   anesthesiologist_id: string
-  operative_side: string  // NEW
+  operative_side: string
+  payer_id: string  // NEW
   notes: string
 }
 
@@ -58,7 +59,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     status_id: '',
     surgeon_id: '',
     anesthesiologist_id: '',
-    operative_side: '',  // NEW
+    operative_side: '',
+    payer_id: '',  // NEW
     notes: '',
   })
 
@@ -74,6 +76,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
   const [surgeons, setSurgeons] = useState<{ id: string; first_name: string; last_name: string }[]>([])
   const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
+  
+  // NEW: Payers state
+  const [payers, setPayers] = useState<{ id: string; name: string }[]>([])
   
   // NEW: Store implant companies for audit logging
   const [implantCompanies, setImplantCompanies] = useState<{ id: string; name: string }[]>([])
@@ -112,7 +117,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     async function fetchOptions() {
       if (!userFacilityId) return
 
-      const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes] = await Promise.all([
+      const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
         // UPDATED: Fetch both global (NULL) and facility-specific procedures
         supabase.from('procedure_types').select('id, name')
@@ -124,12 +129,18 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         supabase.from('implant_companies').select('id, name')
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
+        // NEW: Fetch payers for the facility (only active ones)
+        supabase.from('payers').select('id, name')
+          .eq('facility_id', userFacilityId)
+          .is('deleted_at', null)
+          .order('name'),
       ])
 
       setOrRooms(roomsRes.data || [])
       setProcedureTypes(proceduresRes.data || [])
       setStatuses(statusesRes.data || [])
       setImplantCompanies(companiesRes.data || [])
+      setPayers(payersRes.data || [])
 
       const { data: surgeonRole } = await supabase
         .from('user_roles')
@@ -198,7 +209,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         status_id: data.status_id || '',
         surgeon_id: data.surgeon_id || '',
         anesthesiologist_id: data.anesthesiologist_id || '',
-        operative_side: data.operative_side || '',  // NEW
+        operative_side: data.operative_side || '',
+        payer_id: data.payer_id || '',  // NEW
         notes: data.notes || '',
       }
 
@@ -251,7 +263,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       status_id: formData.status_id,
       surgeon_id: formData.surgeon_id || null,
       anesthesiologist_id: formData.anesthesiologist_id || null,
-      operative_side: formData.operative_side || null,  // NEW
+      operative_side: formData.operative_side || null,
+      payer_id: formData.payer_id || null,  // NEW
       notes: formData.notes || null,
       facility_id: userFacilityId,
     }
@@ -343,23 +356,30 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           changes.status = newStatus?.name || 'None'
           oldValues.status = oldStatus?.name || 'None'
         }
-        // NEW: Track operative side changes
+        // Track operative side changes
         if (formData.operative_side !== originalData.operative_side) {
           changes.operative_side = formData.operative_side || 'None'
           oldValues.operative_side = originalData.operative_side || 'None'
         }
+        // NEW: Track payer changes
+        if (formData.payer_id !== originalData.payer_id) {
+          const newPayer = payers.find(p => p.id === formData.payer_id)
+          const oldPayer = payers.find(p => p.id === originalData.payer_id)
+          changes.payer = newPayer?.name || 'None (Default)'
+          oldValues.payer = oldPayer?.name || 'None (Default)'
+        }
 
         // Only log if there were changes
         if (Object.keys(changes).length > 0) {
-  await caseAudit.updated(
-  supabase,
-  { id: savedCaseId, case_number: formData.case_number },
-  oldValues,
-  changes
-)
+          await caseAudit.updated(
+            supabase,
+            { id: savedCaseId, case_number: formData.case_number },
+            oldValues,
+            changes
+          )
         }
 
-        // NEW: Handle implant company changes
+        // Handle implant company changes
         const addedCompanies = selectedCompanyIds.filter(id => !originalCompanyIds.includes(id))
         const removedCompanies = originalCompanyIds.filter(id => !selectedCompanyIds.includes(id))
 
@@ -519,7 +539,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
           />
         </div>
-        {/* NEW: Operative Side */}
+        {/* Operative Side */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Operative Side
@@ -556,14 +576,40 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* Anesthesiologist */}
-      <SearchableDropdown
-        label="Anesthesiologist"
-        placeholder="Select Anesthesiologist"
-        value={formData.anesthesiologist_id}
-        onChange={(id) => setFormData({ ...formData, anesthesiologist_id: id })}
-        options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
-      />
+      {/* Anesthesiologist & Payer */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <SearchableDropdown
+          label="Anesthesiologist"
+          placeholder="Select Anesthesiologist"
+          value={formData.anesthesiologist_id}
+          onChange={(id) => setFormData({ ...formData, anesthesiologist_id: id })}
+          options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
+        />
+        
+        {/* NEW: Payer Selection */}
+        {payers.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Payer
+            </label>
+            <select
+              value={formData.payer_id}
+              onChange={(e) => setFormData({ ...formData, payer_id: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            >
+              <option value="">Default Reimbursement</option>
+              {payers.map(payer => (
+                <option key={payer.id} value={payer.id}>
+                  {payer.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1.5">
+              Select payer for profitability tracking (optional)
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Status - Only show in edit mode */}
       {mode === 'edit' && (
