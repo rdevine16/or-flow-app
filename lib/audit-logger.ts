@@ -22,6 +22,15 @@ export type AuditAction =
   | 'auth.logout'
   | 'auth.password_changed'
   | 'auth.password_reset'
+  | 'payer.created'
+| 'payer.updated'
+| 'payer.deleted'
+| 'payer.restored'
+| 'procedure_reimbursement.created'
+| 'procedure_reimbursement.updated'
+| 'procedure_reimbursement.deleted'
+| 'facility.or_rate_updated'
+| 'procedure_type.costs_updated'
   // Cases
   | 'case.created'
   | 'case.updated'
@@ -189,6 +198,16 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'admin.procedure_type_created': 'created a global procedure type',
   'admin.procedure_type_updated': 'updated a global procedure type',
   'admin.procedure_type_deleted': 'deleted a global procedure type',
+  // Financials
+'payer.created': 'created a payer',
+'payer.updated': 'updated a payer',
+'payer.deleted': 'deleted a payer',
+'payer.restored': 'restored a payer',
+'procedure_reimbursement.created': 'created a reimbursement rate',
+'procedure_reimbursement.updated': 'updated a reimbursement rate',
+'procedure_reimbursement.deleted': 'deleted a reimbursement rate',
+'facility.or_rate_updated': 'updated OR hourly rate',
+'procedure_type.costs_updated': 'updated procedure costs',
 }
 
 // =====================================================

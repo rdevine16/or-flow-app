@@ -80,6 +80,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   ),
+  financials: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
 }
 
 // =====================================================
@@ -111,33 +116,32 @@ const settingsGroups: SettingsGroup[] = [
   },
   {
     id: 'case-management',
-  label: 'Case Management',
-  items: [
-    {
-      id: 'procedures',
-      label: 'Procedure Types',
-      href: '/settings/procedures',
-      description: 'Surgical procedures for case creation',
-      icon: icons.procedures,
-    },
-    {
-      id: 'milestones',
-      label: 'Milestones',
-      href: '/settings/milestones',
-      description: 'Tracking points during cases',
-      icon: icons.milestones,
-    },
-    // ADD THIS NEW ITEM:
-    {
-      id: 'procedure-milestones',
-      label: 'Procedure Milestones',
-      href: '/settings/procedure-milestones',
-      description: 'Which milestones appear per procedure',
-      icon: icons.milestones,  // reuse milestone icon
-      requiredAccess: ['global_admin', 'facility_admin'],
-    },
-    {
-      id: 'surgeon-preferences',
+    label: 'Case Management',
+    items: [
+      {
+        id: 'procedures',
+        label: 'Procedure Types',
+        href: '/settings/procedures',
+        description: 'Surgical procedures for case creation',
+        icon: icons.procedures,
+      },
+      {
+        id: 'milestones',
+        label: 'Milestones',
+        href: '/settings/milestones',
+        description: 'Tracking points during cases',
+        icon: icons.milestones,
+      },
+      {
+        id: 'procedure-milestones',
+        label: 'Procedure Milestones',
+        href: '/settings/procedure-milestones',
+        description: 'Which milestones appear per procedure',
+        icon: icons.milestones,
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'surgeon-preferences',
         label: 'Surgeon Preferences',
         href: '/settings/surgeon-preferences',
         description: 'Quick-fill templates for surgeons',
@@ -173,6 +177,14 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Surgical implant vendors',
         icon: icons.implantCompanies,
         badge: 'new',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'financials',
+        label: 'Financials',
+        href: '/settings/financials',
+        description: 'Procedure costs and reimbursements',
+        icon: icons.financials,
         requiredAccess: ['global_admin', 'facility_admin'],
       },
     ],
@@ -251,7 +263,7 @@ export default function SettingsLayout({ children, title, description }: Setting
     items: group.items.filter(item => {
       if (!item.requiredAccess) return true
       if (!accessLevel) return false
-      return item.requiredAccess.includes(accessLevel as any)
+      return item.requiredAccess.includes(accessLevel as 'global_admin' | 'facility_admin' | 'user')
     })
   })).filter(group => group.items.length > 0)
 
