@@ -11,6 +11,8 @@ import StaffPopover from '../../../components/ui/StaffPopover'
 import SurgeonAvatar from '../../../components/ui/SurgeonAvatar'
 import { milestoneAudit, staffAudit, caseAudit } from '../../../lib/audit-logger'
 import ImplantSection from '../../../components/cases/ImplantSection'
+import FloatingActionButton from '../../../components/ui/FloatingActionButton'
+import CallNextPatientModal from '../../../components/CallNextPatientModal'
 
 interface MilestoneType {
   id: string
@@ -173,7 +175,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
 
-  // Live clock
+  // FAB / Call Next Patient state
+const [userId, setUserId] = useState<string | null>(null)
+const [userEmail, setUserEmail] = useState<string | null>(null)
+const [showCallNextPatient, setShowCallNextPatient] = useState(false)
+  
+// Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => clearInterval(interval)
@@ -197,6 +204,29 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     }
     fetchUserFacility()
   }, [])
+
+  // Get logged-in user's facility
+useEffect(() => {
+  async function fetchUserFacility() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Store user info for modal
+    setUserId(user.id)
+    setUserEmail(user.email || null)
+
+    const { data: userData } = await supabase
+      .from('users')
+      .select('facility_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userData?.facility_id) {
+      setUserFacilityId(userData.facility_id)
+    }
+  }
+  fetchUserFacility()
+}, [])
 
   // Fetch data once we have the user's facility ID
   useEffect(() => {
@@ -942,6 +972,30 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
       </div>
+ {/* Floating Action Button */}
+      {userFacilityId && (
+        <FloatingActionButton 
+          actions={[
+            {
+              id: 'call-next-patient',
+              label: 'Call Next Patient',
+              icon: 'megaphone',
+              onClick: () => setShowCallNextPatient(true)
+            }
+          ]}
+        />
+      )}
+
+      {/* Call Next Patient Modal */}
+      {userFacilityId && userId && userEmail && (
+        <CallNextPatientModal
+          isOpen={showCallNextPatient}
+          onClose={() => setShowCallNextPatient(false)}
+          facilityId={userFacilityId}
+          userId={userId}
+          userEmail={userEmail}
+        />
+      )}
     </DashboardLayout>
   )
 }

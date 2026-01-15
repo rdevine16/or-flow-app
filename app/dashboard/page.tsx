@@ -502,9 +502,16 @@ export default function DashboardPage() {
       {/* Floating Action Button - Quick Actions */}
       {userFacilityId && (
         <FloatingActionButton 
-          onClick={() => setShowCallNextPatient(true)}
-          icon="plus"
-          label="Quick Actions"
+          actions={[
+            {
+              id: 'call-next-patient',
+              label: 'Call Next Patient',
+              icon: 'megaphone',
+              onClick: () => setShowCallNextPatient(true)
+            }
+            // Future actions can be added here:
+            // { id: 'add-case', label: 'Add Case', icon: 'clipboard', onClick: () => {}, disabled: true }
+          ]}
         />
       )}
 

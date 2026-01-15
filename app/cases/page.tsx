@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import SurgeonAvatar from '../../components/ui/SurgeonAvatar'
+import FloatingActionButton from '../../components/ui/FloatingActionButton'
+import CallNextPatientModal from '../../components/CallNextPatientModal'
 import { getLocalDateString } from '../../lib/date-utils'
 import { getImpersonationState } from '../../lib/impersonation'
 
@@ -177,6 +179,13 @@ export default function CasesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
+  
+  // User info for FAB/Modal
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  
+  // Call Next Patient modal
+  const [showCallNextPatient, setShowCallNextPatient] = useState(false)
 
   // Get the effective facility ID (handles impersonation for global admins)
   useEffect(() => {
@@ -187,6 +196,10 @@ export default function CasesPage() {
         setLoading(false)
         return
       }
+
+      // Store user info for modal
+      setUserId(user.id)
+      setUserEmail(user.email || null)
 
       const { data: userData } = await supabase
         .from('users')
@@ -258,113 +271,53 @@ let query = supabase
     }
   }, [effectiveFacilityId, dateFilter])
 
-  const handleDelete = async (caseId: string) => {
-    await supabase.from('cases').delete().eq('id', caseId)
-    setCases(cases.filter(c => c.id !== caseId))
+  const handleDelete = async (id: string) => {
+    await supabase.from('cases').delete().eq('id', id)
+    setCases(cases.filter(c => c.id !== id))
     setDeleteConfirm(null)
   }
 
   // Filter cases by status
   const filteredCases = cases.filter(c => {
-    const statusName = getValue(c.case_statuses)
-    
+    const status = getValue(c.case_statuses)
     switch (statusFilter) {
       case 'active':
-        return statusName ? ACTIVE_STATUSES.includes(statusName) : true
+        return ACTIVE_STATUSES.includes(status || '')
       case 'completed':
-        return statusName === 'completed'
+        return status === 'completed'
       case 'cancelled':
-        return statusName === 'cancelled'
+        return status === 'cancelled'
       case 'all':
       default:
         return true
     }
   })
 
-  // Count cases by status
+  // Count stats
   const statusCounts = {
-    active: cases.filter(c => {
-      const s = getValue(c.case_statuses)
-      return s ? ACTIVE_STATUSES.includes(s) : true
-    }).length,
-    all: cases.length,
+    active: cases.filter(c => ACTIVE_STATUSES.includes(getValue(c.case_statuses) || '')).length,
     completed: cases.filter(c => getValue(c.case_statuses) === 'completed').length,
     cancelled: cases.filter(c => getValue(c.case_statuses) === 'cancelled').length,
   }
 
-  const dateFilters: { key: DateFilter; label: string; icon: React.ReactNode }[] = [
-    { 
-      key: 'today', 
-      label: 'Today',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      )
-    },
-    { 
-      key: 'week', 
-      label: 'This Week',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      )
-    },
-    { 
-      key: 'month', 
-      label: 'This Month',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      )
-    },
-    { 
-      key: 'all', 
-      label: 'All Time',
-      icon: (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-        </svg>
-      )
-    },
-  ]
-
-  const statusFilters: { key: StatusFilter; label: string }[] = [
-    { key: 'active', label: 'Active' },
-    { key: 'all', label: 'All' },
-    { key: 'completed', label: 'Completed' },
-    { key: 'cancelled', label: 'Cancelled' },
-  ]
-
-  // Show message for global admin without facility selected
   if (noFacilitySelected) {
     return (
       <DashboardLayout>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Cases</h1>
-          <p className="text-slate-500 mt-1">View and manage surgical cases</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
-            <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-              As a global admin, select a facility to view to see their cases.
-            </p>
+            <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
+            <p className="text-slate-500 mb-6">Select a facility from the Admin panel to view its cases.</p>
             <Link
               href="/admin/facilities"
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
               View Facilities
             </Link>
@@ -376,111 +329,106 @@ let query = supabase
 
   return (
     <DashboardLayout>
-      {/* Header */}
+      {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Cases</h1>
-          <p className="text-slate-500 mt-1">View and manage surgical cases</p>
+          <p className="text-slate-500 text-sm mt-1">Manage surgical cases and track progress</p>
         </div>
         <Link
           href="/cases/new"
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 transition-all duration-200"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           New Case
         </Link>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-4 mb-6">
-        {/* Date Filters */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-xl">
-          {dateFilters.map((filter) => (
-            <button
-              key={filter.key}
-              onClick={() => setDateFilter(filter.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                dateFilter === filter.key
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
-            >
-              {filter.icon}
-              {filter.label}
-            </button>
-          ))}
-        </div>
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Date Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-500">Date:</span>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              {(['today', 'week', 'month', 'all'] as DateFilter[]).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setDateFilter(filter)}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors
+                    ${dateFilter === filter
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }
+                    ${filter !== 'all' ? 'border-r border-slate-200' : ''}
+                  `}
+                >
+                  {filter === 'today' ? 'Today' : filter === 'week' ? 'This Week' : filter === 'month' ? 'This Month' : 'All Time'}
+                </button>
+              ))}
+            </div>
+          </div>
 
-        {/* Status Filters */}
-        <div className="flex items-center gap-1 p-1 bg-slate-100/80 rounded-xl">
-          {statusFilters.map((filter) => (
-            <button
-              key={filter.key}
-              onClick={() => setStatusFilter(filter.key)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                statusFilter === filter.key
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-              }`}
-            >
-              {filter.label}
-              <span className={`ml-1.5 px-1.5 py-0.5 text-xs rounded-md ${
-                statusFilter === filter.key
-                  ? 'bg-blue-100 text-blue-600'
-                  : 'bg-slate-200/80 text-slate-500'
-              }`}>
-                {statusCounts[filter.key]}
-              </span>
-            </button>
-          ))}
+          {/* Status Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-500">Status:</span>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              {([
+                { key: 'active' as StatusFilter, label: 'Active', count: statusCounts.active },
+                { key: 'completed' as StatusFilter, label: 'Completed', count: statusCounts.completed },
+                { key: 'cancelled' as StatusFilter, label: 'Cancelled', count: statusCounts.cancelled },
+                { key: 'all' as StatusFilter, label: 'All', count: cases.length },
+              ]).map((filter, idx) => (
+                <button
+                  key={filter.key}
+                  onClick={() => setStatusFilter(filter.key)}
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5
+                    ${statusFilter === filter.key
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                    }
+                    ${idx !== 3 ? 'border-r border-slate-200' : ''}
+                  `}
+                >
+                  {filter.label}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full
+                    ${statusFilter === filter.key
+                      ? 'bg-blue-500 text-blue-100'
+                      : 'bg-slate-100 text-slate-500'
+                    }
+                  `}>
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Cases Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-500">Loading cases...</p>
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : filteredCases.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">No cases found</h3>
-            <p className="text-slate-500 mb-6">
-              {statusFilter !== 'all' || dateFilter !== 'all'
-                ? 'Try adjusting your filters to see more cases.'
-                : 'Get started by creating your first case.'}
-            </p>
-            {statusFilter === 'all' && dateFilter === 'all' && (
-              <Link
-                href="/cases/new"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Create Case
-              </Link>
-            )}
-            {(statusFilter !== 'all' || dateFilter !== 'all') && (
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">No cases found</h3>
+            <p className="text-slate-500 text-sm mb-4">Try adjusting your filters or create a new case</p>
+            {statusFilter !== 'all' && (
               <button
-                onClick={() => {
-                  setStatusFilter('all')
-                  setDateFilter('all')
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                onClick={() => setStatusFilter('all')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Clear Filters
+                Clear filters
               </button>
             )}
           </div>
@@ -654,6 +602,31 @@ let query = supabase
           </>
         )}
       </div>
+
+      {/* Floating Action Button */}
+      {effectiveFacilityId && (
+        <FloatingActionButton 
+          actions={[
+            {
+              id: 'call-next-patient',
+              label: 'Call Next Patient',
+              icon: 'megaphone',
+              onClick: () => setShowCallNextPatient(true)
+            }
+          ]}
+        />
+      )}
+
+      {/* Call Next Patient Modal */}
+      {effectiveFacilityId && userId && userEmail && (
+        <CallNextPatientModal
+          isOpen={showCallNextPatient}
+          onClose={() => setShowCallNextPatient(false)}
+          facilityId={effectiveFacilityId}
+          userId={userId}
+          userEmail={userEmail}
+        />
+      )}
     </DashboardLayout>
   )
 }
