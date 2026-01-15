@@ -111,24 +111,33 @@ const settingsGroups: SettingsGroup[] = [
   },
   {
     id: 'case-management',
-    label: 'Case Management',
-    items: [
-      {
-        id: 'procedures',
-        label: 'Procedure Types',
-        href: '/settings/procedures',
-        description: 'Surgical procedures for case creation',
-        icon: icons.procedures,
-      },
-      {
-        id: 'milestones',
-        label: 'Milestones',
-        href: '/settings/milestones',
-        description: 'Tracking points during cases',
-        icon: icons.milestones,
-      },
-      {
-        id: 'surgeon-preferences',
+  label: 'Case Management',
+  items: [
+    {
+      id: 'procedures',
+      label: 'Procedure Types',
+      href: '/settings/procedures',
+      description: 'Surgical procedures for case creation',
+      icon: icons.procedures,
+    },
+    {
+      id: 'milestones',
+      label: 'Milestones',
+      href: '/settings/milestones',
+      description: 'Tracking points during cases',
+      icon: icons.milestones,
+    },
+    // ADD THIS NEW ITEM:
+    {
+      id: 'procedure-milestones',
+      label: 'Procedure Milestones',
+      href: '/settings/procedure-milestones',
+      description: 'Which milestones appear per procedure',
+      icon: icons.milestones,  // reuse milestone icon
+      requiredAccess: ['global_admin', 'facility_admin'],
+    },
+    {
+      id: 'surgeon-preferences',
         label: 'Surgeon Preferences',
         href: '/settings/surgeon-preferences',
         description: 'Quick-fill templates for surgeons',

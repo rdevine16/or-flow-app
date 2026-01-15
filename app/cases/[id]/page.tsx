@@ -284,6 +284,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         milestoneTypesResult = allMilestones || []
       }
 
+      setMilestoneTypes(milestoneTypesResult)
+
+   // Fetch recorded milestones for this case
       const { data: milestonesResult } = await supabase
         .from('case_milestones')
         .select('id, milestone_type_id, facility_milestone_id, recorded_at')
@@ -321,9 +324,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         return roleName === 'anesthesiologist'
       })
 
-      setCaseData(caseResult)
-      setMilestoneTypes(milestoneTypesResult)
-      setCaseMilestones(milestonesResult || [])
+setCaseData(caseResult)
+setMilestoneTypes(milestoneTypesResult)      // milestone definitions
+setCaseMilestones(milestonesResult || []) 
       setCaseStaff(staffResult as CaseStaff[] || [])
       setAvailableStaff(staffUsers as User[] || [])
       setAnesthesiologists(anesthUsers as User[] || [])
