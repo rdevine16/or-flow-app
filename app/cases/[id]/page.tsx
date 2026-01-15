@@ -14,7 +14,8 @@ import ImplantSection from '../../../components/cases/ImplantSection'
 import FloatingActionButton from '../../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import AnesthesiaPopover from '../../../components/ui/AnesthesiaPopover'
-import CaseSummary from '../../../components/cases/CaseSummary'
+import CompletedCaseView from '../../../components/cases/CompletedCaseView'
+
 
 
 // Now includes pairing fields from facility_milestones
@@ -697,45 +698,6 @@ setCaseMilestones(milestonesResult || [])
   // ============================================================================
   // RENDER READ-ONLY SUMMARY VIEW FOR COMPLETED CASES
   // ============================================================================
-  if (isCompleted) {
-    // Transform data for the CaseSummary component
-    const summaryProps = {
-      caseData: {
-        id: caseData.id,
-        caseNumber: caseData.case_number,
-        scheduledDate: caseData.scheduled_date,
-        startTime: caseData.start_time,
-        operativeSide: caseData.operative_side,
-        notes: caseData.notes,
-        room: room?.name || null,
-        procedure: procedure?.name || null,
-        status: status?.name || 'completed',
-        surgeon: surgeon ? { firstName: surgeon.first_name, lastName: surgeon.last_name } : null,
-        anesthesiologist: anesthesiologist ? { firstName: anesthesiologist.first_name, lastName: anesthesiologist.last_name } : null,
-      },
-      milestones: milestoneTypes.map(mt => ({
-        id: mt.id,
-        name: mt.name,
-        displayName: mt.display_name,
-        recordedAt: getMilestoneByTypeId(mt.id)?.recorded_at || null,
-        displayOrder: mt.display_order,
-      })),
-      staff: caseStaff.map(cs => {
-        const user = getFirst(cs.users)
-        const role = getFirst(cs.user_roles)
-        return {
-          id: cs.id,
-          name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-          role: role?.name || 'staff'
-        }
-      }),
-      totalTime,
-      surgicalTime,
-      surgeonAverages,
-    }
-
-    return <CaseSummary {...summaryProps} />
-  }
 
   // ============================================================================
   // RENDER EDITABLE VIEW FOR NON-COMPLETED CASES (existing code)
@@ -782,8 +744,41 @@ setCaseMilestones(milestonesResult || [])
             </div>
           </div>
         </div>
-
-        {/* Main Content Grid */}
+      {isCompleted ? (
+        <CompletedCaseView
+          caseData={{
+            id: caseData.id,
+            caseNumber: caseData.case_number,
+            scheduledDate: caseData.scheduled_date,
+            startTime: caseData.start_time,
+            operativeSide: caseData.operative_side,
+            notes: caseData.notes,
+            room: room?.name || null,
+            procedure: procedure?.name || null,
+          }}
+          surgeon={surgeon ? { firstName: surgeon.first_name, lastName: surgeon.last_name } : null}
+          anesthesiologist={anesthesiologist ? { firstName: anesthesiologist.first_name, lastName: anesthesiologist.last_name } : null}
+          milestones={milestoneTypes.map(mt => ({
+            id: mt.id,
+            name: mt.name,
+            displayName: mt.display_name,
+            recordedAt: getMilestoneByTypeId(mt.id)?.recorded_at || null,
+          }))}
+          staff={caseStaff.map(cs => {
+            const user = getFirst(cs.users)
+            const role = getFirst(cs.user_roles)
+            return {
+              id: cs.id,
+              name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+              role: role?.name || 'staff'
+            }
+          })}
+          totalTime={totalTime}
+          surgicalTime={surgicalTime}
+          surgeonAverages={surgeonAverages}
+        />
+      ) : (
+          /* Main Content Grid */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Case Info */}
           <div className="lg:col-span-1 space-y-4">
