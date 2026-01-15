@@ -812,45 +812,47 @@ setCaseMilestones(milestonesResult || [])
                   </div>
                 </div>
 
-                {/* Anesthesiologist */}
-                <div className="flex items-center gap-3">
-                  <AnesthesiaPopover
-                    currentAnesthesiologist={anesthesiologist}
-                    availableAnesthesiologists={anesthesiologists.map(a => ({
-                      id: a.id,
-                      label: `${a.first_name} ${a.last_name}`
-                    }))}
-                    onChange={updateAnesthesiologist}
-                    onRemove={removeAnesthesiologist}
-                  />
-                </div>
+{/* Anesthesiologist */}
+<div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+  <AnesthesiaPopover
+    currentAnesthesiologist={anesthesiologist}
+    availableAnesthesiologists={anesthesiologists.map(a => ({
+      id: a.id,
+      label: `${a.first_name} ${a.last_name}`
+    }))}
+    onChange={updateAnesthesiologist}
+    onRemove={removeAnesthesiologist}
+  />
+</div>
               </div>
             </div>
 
-            {/* Staff Section - Compact */}
-            <StaffPopover
-              staff={caseStaff.map(cs => {
-                const user = getFirst(cs.users)
-                const role = getFirst(cs.user_roles)
-                return {
-                  id: cs.id,
-                  name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-                  role: role?.name || 'staff'
-                }
-              })}
-              availableStaff={availableStaff.map(s => {
-                const roleName = Array.isArray(s.user_roles) 
-                  ? s.user_roles[0]?.name 
-                  : (s.user_roles as any)?.name
-                return {
-                  id: s.id,
-                  label: `${s.first_name} ${s.last_name}`,
-                  subtitle: roleName || 'Staff'
-                }
-              })}
-              onAdd={addStaff}
-              onRemove={removeStaff}
-            />
+{/* Staff Section */}
+<div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+  <StaffPopover
+    staff={caseStaff.map(cs => {
+      const user = getFirst(cs.users)
+      const role = getFirst(cs.user_roles)
+      return {
+        id: cs.id,
+        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+        role: role?.name || 'staff'
+      }
+    })}
+    availableStaff={availableStaff.map(s => {
+      const roleName = Array.isArray(s.user_roles) 
+        ? s.user_roles[0]?.name 
+        : (s.user_roles as any)?.name
+      return {
+        id: s.id,
+        label: `${s.first_name} ${s.last_name}`,
+        subtitle: roleName || 'Staff'
+      }
+    })}
+    onAdd={addStaff}
+    onRemove={removeStaff}
+  />
+</div>
 
             {/* Implant Section */}
             <ImplantSection 
