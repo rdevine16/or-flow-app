@@ -14,7 +14,7 @@ interface FloatingActionButtonProps {
 export default function FloatingActionButton({ 
   onClick, 
   icon = 'plus',
-  label = 'Actions'
+  label = 'Quick Actions'
 }: FloatingActionButtonProps) {
   const [isHovered, setIsHovered] = useState(false)
 

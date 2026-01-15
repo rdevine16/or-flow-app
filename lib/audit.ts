@@ -37,6 +37,10 @@ export type AuditAction =
   | 'milestone.recorded'
   | 'milestone.updated'
   | 'milestone.deleted'
+  // Patient Calls
+  | 'patient_call.created'
+  | 'patient_call.resent'
+  | 'patient_call.cancelled'
   // Staff assignments
   | 'case_staff.added'
   | 'case_staff.removed'
@@ -68,6 +72,7 @@ export type TargetType =
   | 'room' 
   | 'procedure_type'
   | 'admin_session'
+  | 'patient_call'
 
 export interface AuditLogEntry {
   user_id: string
@@ -76,6 +81,7 @@ export interface AuditLogEntry {
   facility_id?: string | null
   target_type?: TargetType | null
   target_id?: string | null
+  target_label?: string | null
   old_values?: Record<string, unknown> | null
   new_values?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
@@ -114,6 +120,7 @@ export function createAuditLogger(context: AuditContext) {
       options: {
         targetType?: TargetType
         targetId?: string
+        targetLabel?: string
         oldValues?: Record<string, unknown>
         newValues?: Record<string, unknown>
         metadata?: Record<string, unknown>
@@ -126,6 +133,7 @@ export function createAuditLogger(context: AuditContext) {
         facility_id: context.facilityId,
         target_type: options.targetType,
         target_id: options.targetId,
+        target_label: options.targetLabel,
         old_values: options.oldValues,
         new_values: options.newValues,
         metadata: options.metadata,
@@ -148,6 +156,7 @@ export function createAuditLogger(context: AuditContext) {
       options: {
         targetType?: TargetType
         targetId?: string
+        targetLabel?: string
         metadata?: Record<string, unknown>
       } = {}
     ): Promise<void> {
@@ -158,6 +167,7 @@ export function createAuditLogger(context: AuditContext) {
         facility_id: context.facilityId,
         target_type: options.targetType,
         target_id: options.targetId,
+        target_label: options.targetLabel,
         metadata: options.metadata,
         ip_address: context.ipAddress,
         user_agent: context.userAgent,
@@ -208,6 +218,7 @@ export async function quickAuditLog(
     facilityId?: string
     targetType?: TargetType
     targetId?: string
+    targetLabel?: string
     oldValues?: Record<string, unknown>
     newValues?: Record<string, unknown>
     metadata?: Record<string, unknown>
@@ -222,6 +233,7 @@ export async function quickAuditLog(
     facility_id: options.facilityId,
     target_type: options.targetType,
     target_id: options.targetId,
+    target_label: options.targetLabel,
     old_values: options.oldValues,
     new_values: options.newValues,
     metadata: options.metadata,
@@ -261,8 +273,8 @@ export function getClientIP(headers: Headers): string | null {
 /**
  * Format audit log entry for display
  */
-export function formatAuditAction(action: AuditAction): string {
-  const actionMap: Record<AuditAction, string> = {
+export function formatAuditAction(action: AuditAction | string): string {
+  const actionMap: Record<string, string> = {
     'auth.login': 'Logged in',
     'auth.logout': 'Logged out',
     'auth.login_failed': 'Failed login attempt',
@@ -289,6 +301,11 @@ export function formatAuditAction(action: AuditAction): string {
     'milestone.recorded': 'Milestone recorded',
     'milestone.updated': 'Milestone updated',
     'milestone.deleted': 'Milestone deleted',
+    // Patient Call actions
+    'patient_call.created': 'Patient Call → Created',
+    'patient_call.resent': 'Patient Call → Resent',
+    'patient_call.cancelled': 'Patient Call → Cancelled',
+    // Staff assignments
     'case_staff.added': 'Staff added to case',
     'case_staff.removed': 'Staff removed from case',
     'delay.added': 'Delay recorded',
@@ -313,7 +330,7 @@ export function formatAuditAction(action: AuditAction): string {
 /**
  * Get action category for filtering
  */
-export function getActionCategory(action: AuditAction): string {
+export function getActionCategory(action: AuditAction | string): string {
   const prefix = action.split('.')[0]
   const categoryMap: Record<string, string> = {
     auth: 'Authentication',
@@ -321,6 +338,7 @@ export function getActionCategory(action: AuditAction): string {
     facility: 'Facility Management',
     case: 'Cases',
     milestone: 'Milestones',
+    patient_call: 'Patient Calls',
     case_staff: 'Staff Assignments',
     delay: 'Delays',
     room: 'Rooms',

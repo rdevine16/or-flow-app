@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../lib/supabase'
-import { quickAuditLog } from '../lib/audit'
 
 interface Room {
   id: string
@@ -304,31 +303,28 @@ export default function CallNextPatientModal({
         console.error('Push notification failed (non-critical):', pushError)
       }
 
-      // 4. HIPAA Audit Log
-      await quickAuditLog(
-        supabase,
-        userId,
-        userEmail,
-        'milestone.recorded', // Using existing audit action type
-        {
-          facilityId: facilityId,
-          targetType: 'case',
-          targetId: nextCase.id,
-          newValues: {
-            action: 'patient_call.created',
-            room_id: selectedRoom.id,
-            room_name: selectedRoom.name,
-            current_case_id: currentCase?.id || null,
-            next_case_id: nextCase.id,
-            case_number: nextCase.case_number,
-            platform: 'web'
-          },
-          metadata: {
-            description: `Called next patient for ${selectedRoom.name}`,
-            case_number: nextCase.case_number
-          }
-        }
-      )
+      // 4. HIPAA Audit Log - matches iOS format
+      await supabase.from('audit_log').insert({
+        user_id: userId,
+        user_email: userEmail,
+        action: 'patient_call.created',
+        facility_id: facilityId,
+        target_type: 'case',
+        target_id: nextCase.id,
+        target_label: `Case #${nextCase.case_number}`,
+        new_values: {
+          room_id: selectedRoom.id,
+          room_name: selectedRoom.name,
+          surgeon: nextCase.surgeon_name,
+          procedure: nextCase.procedure_name,
+          current_case_id: currentCase?.id || null,
+          next_case_id: nextCase.id
+        },
+        metadata: {
+          platform: 'web'
+        },
+        success: true
+      })
 
       setToast({ message: 'Patient call sent!', type: 'success' })
       
@@ -409,24 +405,25 @@ export default function CallNextPatientModal({
       }
 
       // Audit log
-      await quickAuditLog(
-        supabase,
-        userId,
-        userEmail,
-        'milestone.recorded',
-        {
-          facilityId: facilityId,
-          targetType: 'case',
-          targetId: call.case_id,
-          newValues: {
-            action: 'patient_call.resent',
-            room_id: call.room_id,
-            room_name: call.room_name,
-            case_number: caseData.case_number,
-            platform: 'web'
-          }
-        }
-      )
+      await supabase.from('audit_log').insert({
+        user_id: userId,
+        user_email: userEmail,
+        action: 'patient_call.resent',
+        facility_id: facilityId,
+        target_type: 'case',
+        target_id: call.case_id,
+        target_label: `Case #${caseData.case_number}`,
+        new_values: {
+          room_id: call.room_id,
+          room_name: call.room_name,
+          surgeon: surgeonName,
+          procedure: procedureName
+        },
+        metadata: {
+          platform: 'web'
+        },
+        success: true
+      })
 
       setToast({ message: 'Call resent!', type: 'success' })
       await loadRecentCalls()
@@ -443,6 +440,22 @@ export default function CallNextPatientModal({
   const undoCall = async (call: RecentCall) => {
     setIsSending(true)
     try {
+      // First, fetch the case data to get surgeon/procedure info for audit
+      const { data: caseData } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          procedure_types (name),
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+        `)
+        .eq('id', call.case_id)
+        .single()
+
+      const surgeon = caseData?.surgeon as any
+      const surgeonName = surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'
+      const procedureName = (caseData?.procedure_types as any)?.name || call.procedure_name
+
       // Delete the notification
       await supabase
         .from('notifications')
@@ -460,38 +473,40 @@ export default function CallNextPatientModal({
         .eq('called_next_case_id', call.case_id)
 
       // Send cancellation push notification
-      try {
-        await supabase.functions.invoke('send-push-notification', {
-          body: {
-            facilityId: facilityId,
-            title: `${call.room_name} Call Cancelled`,
-            body: `Patient call for ${call.case_number} has been cancelled`,
-            excludeUserId: userId
-          }
-        })
-      } catch (pushError) {
-        console.error('Push notification failed:', pushError)
+      const { error: pushError } = await supabase.functions.invoke('send-push-notification', {
+        body: {
+          facilityId: facilityId,
+          title: `${call.room_name} Call Cancelled`,
+          body: `Patient call for ${call.case_number} has been cancelled`,
+          excludeUserId: userId
+        }
+      })
+      
+      if (pushError) {
+        console.error('Push notification error:', pushError)
       }
 
-      // Audit log
-      await quickAuditLog(
-        supabase,
-        userId,
-        userEmail,
-        'milestone.deleted',
-        {
-          facilityId: facilityId,
-          targetType: 'case',
-          targetId: call.case_id,
-          oldValues: {
-            action: 'patient_call.cancelled',
-            room_id: call.room_id,
-            room_name: call.room_name,
-            case_number: call.case_number,
-            platform: 'web'
-          }
-        }
-      )
+      // Audit log - matches iOS format with old_values for cancelled actions
+      await supabase.from('audit_log').insert({
+        user_id: userId,
+        user_email: userEmail,
+        action: 'patient_call.cancelled',
+        facility_id: facilityId,
+        target_type: 'case',
+        target_id: call.case_id,
+        target_label: `Case #${call.case_number}`,
+        old_values: {
+          room_id: call.room_id,
+          surgeon: surgeonName,
+          procedure: procedureName,
+          room_name: call.room_name,
+          next_case_id: call.case_id
+        },
+        metadata: {
+          platform: 'web'
+        },
+        success: true
+      })
 
       setToast({ message: 'Call cancelled', type: 'success' })
       await loadRecentCalls()
