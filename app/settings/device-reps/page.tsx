@@ -103,12 +103,12 @@ const { data: repsData } = await supabase
       last_name,
       email,
       phone,
-      implant_companies (name)
+      implant_companies!users_implant_company_id_fkey (name)
     )
   `)
-      .eq('facility_id', userData.facility_id)
-      .neq('status', 'revoked')
-      .order('created_at', { ascending: false })
+  .eq('facility_id', userData.facility_id)
+  .neq('status', 'revoked')
+  .order('created_at', { ascending: false })
 
     // Transform reps data - Supabase returns joined tables as arrays
     const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
