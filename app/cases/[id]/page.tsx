@@ -1005,6 +1005,7 @@ setCaseMilestones(milestonesResult || [])
             </div>
           </div>
         </div>
+              )}  
       </div>
 
       {/* Floating Action Button - Only show for non-completed cases */}
