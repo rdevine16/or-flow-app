@@ -1,5 +1,5 @@
 // app/dashboard/page.tsx
-// Enhanced dashboard with pace tracking and polished room cards
+// Enhanced dashboard with pace tracking, polished room cards, and Call Next Patient FAB
 
 'use client'
 
@@ -8,6 +8,8 @@ import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import CaseListView from '../../components/dashboard/CaseListView'
 import EnhancedRoomGridView from '../../components/dashboard/EnhancedRoomGridView'
+import FloatingActionButton from '../../components/ui/FloatingActionButton'
+import CallNextPatientModal from '../../components/CallNextPatientModal'
 import { getLocalDateString, formatDateWithWeekday } from '../../lib/date-utils'
 import { getImpersonationState } from '../../lib/impersonation'
 import { 
@@ -41,6 +43,14 @@ export default function DashboardPage() {
   const [todayDate, setTodayDate] = useState('')
   const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
   const [roomsCollapsed, setRoomsCollapsed] = useState(false)
+  
+  // User info for Call Next Patient modal
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  
+  // Call Next Patient modal state
+  const [showCallNextPatient, setShowCallNextPatient] = useState(false)
+  
   const supabase = createClient()
 
   // Initialize with today's date and fetch user's facility
@@ -52,27 +62,36 @@ export default function DashboardPage() {
   }, [])
 
   const fetchCurrentUser = async () => {
-  // Check for impersonation first
-  const impersonation = getImpersonationState()
-  if (impersonation) {
-    setUserFacilityId(impersonation.facilityId)
-    return
-  }
+    // Check for impersonation first
+    const impersonation = getImpersonationState()
+    if (impersonation) {
+      setUserFacilityId(impersonation.facilityId)
+      // Still need user info for audit logs
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setUserId(user.id)
+        setUserEmail(user.email || null)
+      }
+      return
+    }
 
-  // Otherwise use user's actual facility
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) {
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
+    // Otherwise use user's actual facility
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      setUserId(user.id)
+      setUserEmail(user.email || null)
+      
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
 
-    if (userData?.facility_id) {
-      setUserFacilityId(userData.facility_id)
+      if (userData?.facility_id) {
+        setUserFacilityId(userData.facility_id)
+      }
     }
   }
-}
 
   // Fetch pace data for a specific case
   const fetchPaceData = useCallback(async (
@@ -134,23 +153,23 @@ export default function DashboardPage() {
 
       try {
         // Fetch cases
-const { data: casesData } = await supabase
-  .from('cases')
-  .select(`
-    id,
-    case_number,
-    scheduled_date,
-    start_time,
-    operative_side,
-    facility_id,
-    or_room_id,
-    procedure_type_id,
-    surgeon_id,
-    or_rooms (name),
-    procedure_types (name),
-    case_statuses (name),
-    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-  `)
+        const { data: casesData } = await supabase
+          .from('cases')
+          .select(`
+            id,
+            case_number,
+            scheduled_date,
+            start_time,
+            operative_side,
+            facility_id,
+            or_room_id,
+            procedure_type_id,
+            surgeon_id,
+            or_rooms (name),
+            procedure_types (name),
+            case_statuses (name),
+            surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+          `)
           .eq('facility_id', userFacilityId)
           .eq('scheduled_date', selectedDate)
           .order('start_time', { ascending: true, nullsFirst: false })
@@ -227,7 +246,6 @@ const { data: casesData } = await supabase
           const nextCase = roomCases.find(c => getValue(c.case_statuses) === 'scheduled') || null
           
           // Get all cases that aren't the current in-progress case (for the schedule list)
-          // This includes scheduled, completed, delayed - everything except the active one
           const upcomingCases = roomCases.filter(c => c.id !== currentCase?.id)
 
           const displayCase = currentCase || nextCase
@@ -480,6 +498,26 @@ const { data: casesData } = await supabase
           <CaseListView cases={cases as any} />
         </div>
       </div>
+
+      {/* Floating Action Button - Call Next Patient */}
+      {userFacilityId && (
+        <FloatingActionButton 
+          onClick={() => setShowCallNextPatient(true)}
+          icon="megaphone"
+          label="Call Next Patient"
+        />
+      )}
+
+      {/* Call Next Patient Modal */}
+      {userFacilityId && userId && userEmail && (
+        <CallNextPatientModal
+          isOpen={showCallNextPatient}
+          onClose={() => setShowCallNextPatient(false)}
+          facilityId={userFacilityId}
+          userId={userId}
+          userEmail={userEmail}
+        />
+      )}
     </DashboardLayout>
   )
 }
