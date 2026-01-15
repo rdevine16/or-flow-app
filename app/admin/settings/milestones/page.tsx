@@ -1,28 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '../../../lib/supabase'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import SettingsLayout from '../../../components/settings/SettingsLayout'
-import { milestoneTypeAudit } from '../../../lib/audit-logger'
+import { createClient } from '../../../../lib/supabase'
+import DashboardLayout from '../../../../components/layouts/DashboardLayout'
+import Container from '../../../../components/ui/Container'
+import SettingsLayout from '../../../../components/settings/SettingsLayout'
+import { milestoneTypeAudit } from '../../../../lib/audit-logger'
 
-interface FacilityMilestone {
+interface MilestoneType {
   id: string
-  facility_id: string
   name: string
   display_name: string
   display_order: number
   pair_with_id: string | null
   pair_position: 'start' | 'end' | null
-  source_milestone_type_id: string | null // If set, this is a global milestone
-  is_active: boolean
 }
 
-export default function MilestonesSettingsPage() {
+export default function AdminMilestonesSettingsPage() {
   const supabase = createClient()
-  const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
-  const [facilityId, setFacilityId] = useState<string | null>(null)
+  const [milestones, setMilestones] = useState<MilestoneType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
@@ -30,8 +26,8 @@ export default function MilestonesSettingsPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPairModal, setShowPairModal] = useState(false)
-  const [editingMilestone, setEditingMilestone] = useState<FacilityMilestone | null>(null)
-  const [pairingMilestone, setPairingMilestone] = useState<FacilityMilestone | null>(null)
+  const [editingMilestone, setEditingMilestone] = useState<MilestoneType | null>(null)
+  const [pairingMilestone, setPairingMilestone] = useState<MilestoneType | null>(null)
   
   // Form states
   const [newName, setNewName] = useState('')
@@ -40,36 +36,14 @@ export default function MilestonesSettingsPage() {
   const [selectedPairId, setSelectedPairId] = useState<string>('')
 
   useEffect(() => {
-    fetchUserFacility()
+    fetchMilestones()
   }, [])
-
-  useEffect(() => {
-    if (facilityId) {
-      fetchMilestones()
-    }
-  }, [facilityId])
-
-  const fetchUserFacility = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userData?.facility_id) {
-      setFacilityId(userData.facility_id)
-    }
-  }
 
   const fetchMilestones = async () => {
     setLoading(true)
     const { data } = await supabase
-      .from('facility_milestones')
-      .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active')
-      .eq('facility_id', facilityId)
+      .from('milestone_types')
+      .select('id, name, display_name, display_order, pair_with_id, pair_position')
       .order('display_order')
 
     setMilestones(data || [])
@@ -86,7 +60,7 @@ export default function MilestonesSettingsPage() {
   }
 
   const handleAdd = async () => {
-    if (!newDisplayName.trim() || !facilityId) return
+    if (!newDisplayName.trim()) return
     
     setSaving(true)
     const name = newName.trim() || generateName(newDisplayName)
@@ -95,26 +69,49 @@ export default function MilestonesSettingsPage() {
       : 0
 
     const { data, error } = await supabase
-      .from('facility_milestones')
+      .from('milestone_types')
       .insert({
-        facility_id: facilityId,
         name,
         display_name: newDisplayName.trim(),
         display_order: maxOrder + 1,
-        source_milestone_type_id: null, // Custom milestone
-        is_active: true,
       })
       .select()
       .single()
 
     if (!error && data) {
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
-      setMilestones([...milestones, data])
+      
+      // Propagate to all existing facilities
+      await propagateToFacilities(data)
+      
+      setMilestones([...milestones, { ...data, pair_with_id: null, pair_position: null }])
       setNewName('')
       setNewDisplayName('')
       setShowAddModal(false)
     }
     setSaving(false)
+  }
+
+  // Propagate new milestone to all existing facilities
+  const propagateToFacilities = async (milestone: MilestoneType) => {
+    const { data: facilities } = await supabase
+      .from('facilities')
+      .select('id')
+
+    if (facilities) {
+      const insertions = facilities.map(f => ({
+        facility_id: f.id,
+        name: milestone.name,
+        display_name: milestone.display_name,
+        display_order: milestone.display_order,
+        source_milestone_type_id: milestone.id,
+        is_active: true,
+      }))
+
+      await supabase
+        .from('facility_milestones')
+        .insert(insertions)
+    }
   }
 
   const handleEdit = async () => {
@@ -124,7 +121,7 @@ export default function MilestonesSettingsPage() {
     const oldDisplayName = editingMilestone.display_name
 
     const { error } = await supabase
-      .from('facility_milestones')
+      .from('milestone_types')
       .update({ display_name: editDisplayName.trim() })
       .eq('id', editingMilestone.id)
 
@@ -132,6 +129,12 @@ export default function MilestonesSettingsPage() {
       if (oldDisplayName !== editDisplayName.trim()) {
         await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, editDisplayName.trim())
       }
+
+      // Update in facility_milestones too (for ones linked to this global)
+      await supabase
+        .from('facility_milestones')
+        .update({ display_name: editDisplayName.trim() })
+        .eq('source_milestone_type_id', editingMilestone.id)
 
       setMilestones(
         milestones.map(m => m.id === editingMilestone.id 
@@ -145,18 +148,20 @@ export default function MilestonesSettingsPage() {
     setSaving(false)
   }
 
-  const handleDelete = async (milestone: FacilityMilestone) => {
-    const isGlobal = !!milestone.source_milestone_type_id
-    const message = isGlobal 
-      ? `Remove "${milestone.display_name}" from your facility? (This is a global milestone - it won't affect other facilities)`
-      : `Delete "${milestone.display_name}"?`
-    
-    if (!confirm(message)) return
+  const handleDelete = async (milestone: MilestoneType) => {
+    if (!confirm(`Delete "${milestone.display_name}"? This will also remove it from all facilities.`)) return
     
     setSaving(true)
     
-    const { error } = await supabase
+    // First delete from facility_milestones
+    await supabase
       .from('facility_milestones')
+      .delete()
+      .eq('source_milestone_type_id', milestone.id)
+
+    // Then delete from milestone_types
+    const { error } = await supabase
+      .from('milestone_types')
       .delete()
       .eq('id', milestone.id)
 
@@ -175,16 +180,22 @@ export default function MilestonesSettingsPage() {
     if (selectedPairId === '') {
       // Remove pairing
       await supabase
-        .from('facility_milestones')
+        .from('milestone_types')
         .update({ pair_with_id: null, pair_position: null })
         .eq('id', pairingMilestone.id)
 
       // If there was a partner, unlink them too
       if (pairingMilestone.pair_with_id) {
         await supabase
-          .from('facility_milestones')
+          .from('milestone_types')
           .update({ pair_with_id: null, pair_position: null })
           .eq('id', pairingMilestone.pair_with_id)
+      }
+
+      // Update facility_milestones
+      await updateFacilityPairing(pairingMilestone.id, null, null)
+      if (pairingMilestone.pair_with_id) {
+        await updateFacilityPairing(pairingMilestone.pair_with_id, null, null)
       }
 
       setMilestones(milestones.map(m => {
@@ -195,15 +206,20 @@ export default function MilestonesSettingsPage() {
       }))
     } else {
       // Create new pairing
+      // Current milestone becomes "start", selected becomes "end"
       await supabase
-        .from('facility_milestones')
+        .from('milestone_types')
         .update({ pair_with_id: selectedPairId, pair_position: 'start' })
         .eq('id', pairingMilestone.id)
 
       await supabase
-        .from('facility_milestones')
+        .from('milestone_types')
         .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
         .eq('id', selectedPairId)
+
+      // Update facility_milestones for both
+      await updateFacilityPairing(pairingMilestone.id, selectedPairId, 'start')
+      await updateFacilityPairing(selectedPairId, pairingMilestone.id, 'end')
 
       setMilestones(milestones.map(m => {
         if (m.id === pairingMilestone.id) {
@@ -226,6 +242,50 @@ export default function MilestonesSettingsPage() {
     setSaving(false)
   }
 
+  // Update pairing in facility_milestones across all facilities
+  const updateFacilityPairing = async (
+    sourceId: string, 
+    partnerSourceId: string | null, 
+    position: 'start' | 'end' | null
+  ) => {
+    if (partnerSourceId === null) {
+      // Clear pairing
+      await supabase
+        .from('facility_milestones')
+        .update({ pair_with_id: null, pair_position: null })
+        .eq('source_milestone_type_id', sourceId)
+    } else {
+      // Set up pairing - need to match by facility
+      const { data: facilities } = await supabase.from('facilities').select('id')
+      
+      if (facilities) {
+        for (const facility of facilities) {
+          // Get the facility milestone IDs
+          const { data: fm1 } = await supabase
+            .from('facility_milestones')
+            .select('id')
+            .eq('facility_id', facility.id)
+            .eq('source_milestone_type_id', sourceId)
+            .single()
+          
+          const { data: fm2 } = await supabase
+            .from('facility_milestones')
+            .select('id')
+            .eq('facility_id', facility.id)
+            .eq('source_milestone_type_id', partnerSourceId)
+            .single()
+          
+          if (fm1 && fm2) {
+            await supabase
+              .from('facility_milestones')
+              .update({ pair_with_id: fm2.id, pair_position: position })
+              .eq('id', fm1.id)
+          }
+        }
+      }
+    }
+  }
+
   const handleReorder = async (dragIndex: number, dropIndex: number) => {
     if (dragIndex === dropIndex) return
     
@@ -235,9 +295,10 @@ export default function MilestonesSettingsPage() {
     
     setMilestones(newMilestones)
 
+    // Update display_order in database
     const updates = newMilestones.map((item, index) =>
       supabase
-        .from('facility_milestones')
+        .from('milestone_types')
         .update({ display_order: index + 1 })
         .eq('id', item.id)
     )
@@ -246,20 +307,22 @@ export default function MilestonesSettingsPage() {
     await milestoneTypeAudit.reordered(supabase, newMilestones.length)
   }
 
+  // Get paired milestone display name
   const getPairedName = (pairWithId: string | null): string | null => {
     if (!pairWithId) return null
     const paired = milestones.find(m => m.id === pairWithId)
     return paired?.display_name || null
   }
 
-  const getAvailableForPairing = (currentId: string): FacilityMilestone[] => {
+  // Get available milestones for pairing (not already paired, not self)
+  const getAvailableForPairing = (currentId: string): MilestoneType[] => {
     return milestones.filter(m => 
       m.id !== currentId && 
-      !m.pair_with_id
+      !m.pair_with_id // Not already paired
     )
   }
 
-  // Drag and drop
+  // Drag and drop handlers
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -284,8 +347,8 @@ export default function MilestonesSettingsPage() {
     <DashboardLayout>
       <Container className="py-8">
         <SettingsLayout
-          title="Milestones"
-          description="Configure the surgical milestones tracked during cases. Drag to reorder."
+          title="Global Milestones"
+          description="Manage the default milestones that are copied to new facilities. Changes here affect the template - facilities can still customize their own milestones."
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -297,15 +360,14 @@ export default function MilestonesSettingsPage() {
           ) : (
             <>
               {/* Info Banner */}
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-                <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-medium text-amber-800">Order matters!</p>
-                  <p className="text-sm text-amber-700 mt-0.5">
-                    The order of milestones here determines how they appear on the case tracking page.
-                    Drag items to arrange them in the correct surgical workflow sequence.
+                  <p className="text-sm font-medium text-blue-800">Global Admin Settings</p>
+                  <p className="text-sm text-blue-700 mt-0.5">
+                    These are the template milestones. When you add a new milestone here, it will be automatically added to all existing facilities. Facilities can still add their own custom milestones.
                   </p>
                 </div>
               </div>
@@ -319,7 +381,7 @@ export default function MilestonesSettingsPage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  Add Custom Milestone
+                  Add Milestone
                 </button>
               </div>
 
@@ -351,28 +413,9 @@ export default function MilestonesSettingsPage() {
 
                       {/* Milestone Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-900">{milestone.display_name}</span>
-                          
-                          {/* Global Badge */}
-                          {milestone.source_milestone_type_id && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              Global
-                            </span>
-                          )}
-
-                          {/* Custom Badge */}
-                          {!milestone.source_milestone_type_id && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                              </svg>
-                              Custom
-                            </span>
-                          )}
+                          <span className="text-xs text-slate-400 font-mono">{milestone.name}</span>
                           
                           {/* Pair Badge */}
                           {milestone.pair_position && (
@@ -381,7 +424,22 @@ export default function MilestonesSettingsPage() {
                                 ? 'bg-emerald-100 text-emerald-700' 
                                 : 'bg-amber-100 text-amber-700'
                             }`}>
-                              {milestone.pair_position === 'start' ? 'Start' : 'End'}
+                              {milestone.pair_position === 'start' ? (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                  </svg>
+                                  Start
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                                  </svg>
+                                  End
+                                </>
+                              )}
                             </span>
                           )}
                         </div>
@@ -434,7 +492,7 @@ export default function MilestonesSettingsPage() {
                         <button
                           onClick={() => handleDelete(milestone)}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title={milestone.source_milestone_type_id ? 'Remove from facility' : 'Delete'}
+                          title="Delete"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -444,37 +502,19 @@ export default function MilestonesSettingsPage() {
                     </div>
                   </div>
                 ))}
-
-                {milestones.length === 0 && (
-                  <div className="text-center py-12 text-slate-500">
-                    <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <p>No milestones configured yet.</p>
-                    <p className="text-sm mt-1">Add custom milestones or contact your administrator.</p>
-                  </div>
-                )}
               </div>
 
               {/* Legend */}
               <div className="mt-6 p-4 bg-slate-50 rounded-xl">
-                <p className="text-xs font-medium text-slate-600 mb-2">Legend</p>
+                <p className="text-xs font-medium text-slate-600 mb-2">Pairing Legend</p>
                 <div className="flex flex-wrap gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">Global</span>
-                    <span className="text-slate-500">Provided by ORbit, shared across facilities</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">Custom</span>
-                    <span className="text-slate-500">Created by your facility</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Start</span>
-                    <span className="text-slate-500">First button in paired milestone</span>
+                    <span className="text-slate-500">First button in a paired milestone (e.g., "Closing")</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">End</span>
-                    <span className="text-slate-500">Second button in paired milestone</span>
+                    <span className="text-slate-500">Second button in a paired milestone (e.g., "Closing Complete")</span>
                   </div>
                 </div>
               </div>
@@ -487,7 +527,7 @@ export default function MilestonesSettingsPage() {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Custom Milestone</h3>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Global Milestone</h3>
             
             <div className="space-y-4">
               <div>
@@ -515,6 +555,7 @@ export default function MilestonesSettingsPage() {
                   placeholder={newDisplayName ? generateName(newDisplayName) : 'e.g., array_placement'}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                 />
+                <p className="text-xs text-slate-500 mt-1">Used for code references. Lowercase, underscores only.</p>
               </div>
             </div>
 
@@ -547,15 +588,19 @@ export default function MilestonesSettingsPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">Edit Milestone</h3>
             
-            {editingMilestone.source_milestone_type_id && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-700">
-                  This is a <span className="font-medium">global milestone</span>. Changes you make here will only affect your facility.
-                </p>
-              </div>
-            )}
-            
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Internal Name <span className="text-slate-400 font-normal">(read-only)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingMilestone.name}
+                  disabled
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
+                />
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Display Name <span className="text-red-500">*</span>
@@ -614,6 +659,7 @@ export default function MilestonesSettingsPage() {
                 {getAvailableForPairing(pairingMilestone.id).map(m => (
                   <option key={m.id} value={m.id}>{m.display_name}</option>
                 ))}
+                {/* Also show current pair if editing */}
                 {pairingMilestone.pair_with_id && (
                   <option value={pairingMilestone.pair_with_id}>
                     {getPairedName(pairingMilestone.pair_with_id)} (current)
