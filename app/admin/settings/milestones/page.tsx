@@ -16,6 +16,58 @@ interface MilestoneType {
   pair_position: 'start' | 'end' | null
 }
 
+// Confirmation Modal Component
+function ConfirmModal({
+  isOpen,
+  title,
+  message,
+  confirmLabel,
+  confirmVariant = 'danger',
+  onConfirm,
+  onCancel,
+  isLoading,
+}: {
+  isOpen: boolean
+  title: string
+  message: React.ReactNode
+  confirmLabel: string
+  confirmVariant?: 'danger' | 'primary'
+  onConfirm: () => void
+  onCancel: () => void
+  isLoading?: boolean
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+        <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
+        <div className="text-sm text-slate-600 mb-6">{message}</div>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+              confirmVariant === 'danger'
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {isLoading ? 'Processing...' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminMilestonesSettingsPage() {
   const supabase = createClient()
   const [milestones, setMilestones] = useState<MilestoneType[]>([])
@@ -28,6 +80,23 @@ export default function AdminMilestonesSettingsPage() {
   const [showPairModal, setShowPairModal] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState<MilestoneType | null>(null)
   const [pairingMilestone, setPairingMilestone] = useState<MilestoneType | null>(null)
+  
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: React.ReactNode
+    confirmLabel: string
+    confirmVariant: 'danger' | 'primary'
+    onConfirm: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: '',
+    confirmVariant: 'danger',
+    onConfirm: () => {},
+  })
   
   // Form states
   const [newName, setNewName] = useState('')
@@ -48,6 +117,10 @@ export default function AdminMilestonesSettingsPage() {
 
     setMilestones(data || [])
     setLoading(false)
+  }
+
+  const closeConfirmModal = () => {
+    setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
 
   // Generate internal name from display name
@@ -148,212 +221,221 @@ export default function AdminMilestonesSettingsPage() {
     setSaving(false)
   }
 
-  // FIXED: Handle delete for paired milestones
+  // Delete milestone with confirmation
   const handleDelete = async (milestone: MilestoneType) => {
-    const partnerName = milestone.pair_with_id 
-      ? milestones.find(m => m.id === milestone.pair_with_id)?.display_name 
+    const partner = milestone.pair_with_id 
+      ? milestones.find(m => m.id === milestone.pair_with_id) 
       : null
 
-    const confirmMessage = milestone.pair_with_id
-      ? `Delete "${milestone.display_name}"? This will also unlink it from "${partnerName}" and remove it from all facilities.`
-      : `Delete "${milestone.display_name}"? This will also remove it from all facilities.`
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Global Milestone',
+      message: (
+        <div>
+          <p>Permanently delete <strong>"{milestone.display_name}"</strong>?</p>
+          {partner && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-amber-800 text-sm">
+                This milestone is paired with <strong>"{partner.display_name}"</strong>. 
+                Deleting it will unlink the pair.
+              </p>
+            </div>
+          )}
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800 text-sm">
+              <strong>Warning:</strong> This will also remove this milestone from all facilities.
+            </p>
+          </div>
+        </div>
+      ),
+      confirmLabel: 'Delete',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setSaving(true)
 
-    if (!confirm(confirmMessage)) return
+        // If paired, unlink partner first
+        if (milestone.pair_with_id) {
+          await supabase
+            .from('milestone_types')
+            .update({ pair_with_id: null, pair_position: null })
+            .eq('id', milestone.pair_with_id)
+
+          // Also update facility milestones
+await updateFacilityPairing(milestone.pair_with_id!, null, null)
+
+
+          await milestoneTypeAudit.unlinked(
+            supabase,
+            milestone.display_name,
+            partner?.display_name || 'Unknown'
+          )
+        }
+        
+        // Delete from facility_milestones
+        await supabase
+          .from('facility_milestones')
+          .delete()
+          .eq('source_milestone_type_id', milestone.id)
+
+        // Delete from milestone_types
+        const { error } = await supabase
+          .from('milestone_types')
+          .delete()
+          .eq('id', milestone.id)
+
+        if (!error) {
+          await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
+          
+          // Update state
+          setMilestones(milestones
+            .filter(m => m.id !== milestone.id)
+            .map(m => {
+              if (m.id === milestone.pair_with_id) {
+                return { ...m, pair_with_id: null, pair_position: null }
+              }
+              return m
+            })
+          )
+        }
+
+        closeConfirmModal()
+        setShowEditModal(false)
+        setEditingMilestone(null)
+        setSaving(false)
+      },
+    })
+  }
+
+  // Unlink milestones
+  const handleUnlink = async (milestone: MilestoneType) => {
+    if (!milestone.pair_with_id) return
+
+    const partner = milestones.find(m => m.id === milestone.pair_with_id)
+    
+    setConfirmModal({
+      isOpen: true,
+      title: 'Unlink Milestones',
+      message: (
+        <div>
+          <p>Remove the pairing between these milestones?</p>
+          <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">Start</span>
+              <span className="font-medium text-slate-900">{milestone.pair_position === 'start' ? milestone.display_name : partner?.display_name}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">End</span>
+              <span className="font-medium text-slate-900">{milestone.pair_position === 'end' ? milestone.display_name : partner?.display_name}</span>
+            </div>
+          </div>
+          <p className="mt-3 text-slate-500">This will also update all facility milestones.</p>
+        </div>
+      ),
+      confirmLabel: 'Unlink',
+      confirmVariant: 'primary',
+      onConfirm: async () => {
+        setSaving(true)
+
+        // Unlink both milestones
+        await supabase
+          .from('milestone_types')
+          .update({ pair_with_id: null, pair_position: null })
+          .eq('id', milestone.id)
+
+        await supabase
+          .from('milestone_types')
+          .update({ pair_with_id: null, pair_position: null })
+          .eq('id', milestone.pair_with_id)
+
+        // Update facility milestones
+        await updateFacilityPairing(milestone.id, null, null)
+await updateFacilityPairing(milestone.pair_with_id!, null, null)
+
+        // Audit
+        await milestoneTypeAudit.unlinked(
+          supabase,
+          milestone.display_name,
+          partner?.display_name || 'Unknown'
+        )
+
+        // Update local state
+        setMilestones(milestones.map(m => {
+          if (m.id === milestone.id || m.id === milestone.pair_with_id) {
+            return { ...m, pair_with_id: null, pair_position: null }
+          }
+          return m
+        }))
+
+        closeConfirmModal()
+        setShowPairModal(false)
+        setPairingMilestone(null)
+        setSaving(false)
+      },
+    })
+  }
+
+  // Set up new pairing
+  const handleSetPair = async () => {
+    if (!pairingMilestone || !selectedPairId) return
     
     setSaving(true)
 
-    // STEP 1: If this milestone is paired, unlink the partner first
-    if (milestone.pair_with_id) {
-      // Unlink partner in milestone_types
+    const partner = milestones.find(m => m.id === selectedPairId)
+    const oldPartner = pairingMilestone.pair_with_id
+      ? milestones.find(m => m.id === pairingMilestone.pair_with_id)
+      : null
+
+    // If there was an old pairing, unlink it first
+    if (pairingMilestone.pair_with_id && pairingMilestone.pair_with_id !== selectedPairId) {
       await supabase
         .from('milestone_types')
         .update({ pair_with_id: null, pair_position: null })
-        .eq('id', milestone.pair_with_id)
+        .eq('id', pairingMilestone.pair_with_id)
 
-      // Unlink partner in facility_milestones
-      await updateFacilityPairing(milestone.pair_with_id, null, null)
+      await updateFacilityPairing(pairingMilestone.pair_with_id, null, null)
 
-      // Audit the unlink
       await milestoneTypeAudit.unlinked(
-        supabase, 
-        milestone.display_name, 
-        partnerName || 'Unknown'
+        supabase,
+        pairingMilestone.display_name,
+        oldPartner?.display_name || 'Unknown'
       )
-
-      // Update local state for partner
-      setMilestones(prev => prev.map(m => 
-        m.id === milestone.pair_with_id 
-          ? { ...m, pair_with_id: null, pair_position: null }
-          : m
-      ))
     }
-    
-    // STEP 2: Delete from facility_milestones
-    await supabase
-      .from('facility_milestones')
-      .delete()
-      .eq('source_milestone_type_id', milestone.id)
 
-    // STEP 3: Delete from milestone_types
-    const { error } = await supabase
-      .from('milestone_types')
-      .delete()
-      .eq('id', milestone.id)
-
-    if (!error) {
-      await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
-      setMilestones(milestones.filter(m => m.id !== milestone.id))
-    }
-    setSaving(false)
-  }
-
-  // Handle unlinking from edit modal
-  const handleUnlink = async () => {
-    if (!editingMilestone || !editingMilestone.pair_with_id) return
-
-    const partnerName = milestones.find(m => m.id === editingMilestone.pair_with_id)?.display_name
-
-    if (!confirm(`Unlink "${editingMilestone.display_name}" from "${partnerName}"?`)) return
-
-    setSaving(true)
-
-    // Unlink both milestones
+    // Create new pairing
     await supabase
       .from('milestone_types')
-      .update({ pair_with_id: null, pair_position: null })
-      .eq('id', editingMilestone.id)
+      .update({ pair_with_id: selectedPairId, pair_position: 'start' })
+      .eq('id', pairingMilestone.id)
 
     await supabase
       .from('milestone_types')
-      .update({ pair_with_id: null, pair_position: null })
-      .eq('id', editingMilestone.pair_with_id)
+      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
+      .eq('id', selectedPairId)
 
-    // Update facility_milestones
-    await updateFacilityPairing(editingMilestone.id, null, null)
-    await updateFacilityPairing(editingMilestone.pair_with_id, null, null)
+    // Update facility milestones
+    await updateFacilityPairing(pairingMilestone.id, selectedPairId, 'start')
+    await updateFacilityPairing(selectedPairId, pairingMilestone.id, 'end')
 
-    // Audit the unlink
-    await milestoneTypeAudit.unlinked(
+    await milestoneTypeAudit.linked(
       supabase,
-      editingMilestone.display_name,
-      partnerName || 'Unknown'
+      pairingMilestone.display_name,
+      partner?.display_name || 'Unknown'
     )
 
     // Update local state
     setMilestones(milestones.map(m => {
-      if (m.id === editingMilestone.id || m.id === editingMilestone.pair_with_id) {
+      if (m.id === pairingMilestone.id) {
+        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
+      }
+      if (m.id === selectedPairId) {
+        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
+      }
+      // Clear old partner's pairing
+      if (m.id === pairingMilestone.pair_with_id) {
         return { ...m, pair_with_id: null, pair_position: null }
       }
       return m
     }))
-
-    // Update editing milestone state
-    setEditingMilestone({ ...editingMilestone, pair_with_id: null, pair_position: null })
-
-    setSaving(false)
-  }
-
-  const handleSetPair = async () => {
-    if (!pairingMilestone) return
-    
-    setSaving(true)
-    
-    const partnerName = selectedPairId 
-      ? milestones.find(m => m.id === selectedPairId)?.display_name
-      : null
-    const oldPartnerName = pairingMilestone.pair_with_id
-      ? milestones.find(m => m.id === pairingMilestone.pair_with_id)?.display_name
-      : null
-
-    if (selectedPairId === '') {
-      // Remove pairing
-      await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: null, pair_position: null })
-        .eq('id', pairingMilestone.id)
-
-      // If there was a partner, unlink them too
-      if (pairingMilestone.pair_with_id) {
-        await supabase
-          .from('milestone_types')
-          .update({ pair_with_id: null, pair_position: null })
-          .eq('id', pairingMilestone.pair_with_id)
-
-        // Audit the unlink
-        await milestoneTypeAudit.unlinked(
-          supabase,
-          pairingMilestone.display_name,
-          oldPartnerName || 'Unknown'
-        )
-      }
-
-      // Update facility_milestones
-      await updateFacilityPairing(pairingMilestone.id, null, null)
-      if (pairingMilestone.pair_with_id) {
-        await updateFacilityPairing(pairingMilestone.pair_with_id, null, null)
-      }
-
-      setMilestones(milestones.map(m => {
-        if (m.id === pairingMilestone.id || m.id === pairingMilestone.pair_with_id) {
-          return { ...m, pair_with_id: null, pair_position: null }
-        }
-        return m
-      }))
-    } else {
-      // If there was an old pairing, unlink it first
-      if (pairingMilestone.pair_with_id && pairingMilestone.pair_with_id !== selectedPairId) {
-        await supabase
-          .from('milestone_types')
-          .update({ pair_with_id: null, pair_position: null })
-          .eq('id', pairingMilestone.pair_with_id)
-
-        await updateFacilityPairing(pairingMilestone.pair_with_id, null, null)
-
-        // Audit old unlink
-        await milestoneTypeAudit.unlinked(
-          supabase,
-          pairingMilestone.display_name,
-          oldPartnerName || 'Unknown'
-        )
-      }
-
-      // Create new pairing
-      // Current milestone becomes "start", selected becomes "end"
-      await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: selectedPairId, pair_position: 'start' })
-        .eq('id', pairingMilestone.id)
-
-      await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
-        .eq('id', selectedPairId)
-
-      // Update facility_milestones for both
-      await updateFacilityPairing(pairingMilestone.id, selectedPairId, 'start')
-      await updateFacilityPairing(selectedPairId, pairingMilestone.id, 'end')
-
-      // Audit the new link
-      await milestoneTypeAudit.linked(
-        supabase,
-        pairingMilestone.display_name,
-        partnerName || 'Unknown'
-      )
-
-      setMilestones(milestones.map(m => {
-        if (m.id === pairingMilestone.id) {
-          return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
-        }
-        if (m.id === selectedPairId) {
-          return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
-        }
-        // Clear old pairings if any
-        if (m.pair_with_id === pairingMilestone.id || m.pair_with_id === selectedPairId) {
-          return { ...m, pair_with_id: null, pair_position: null }
-        }
-        return m
-      }))
-    }
 
     setShowPairModal(false)
     setPairingMilestone(null)
@@ -379,7 +461,6 @@ export default function AdminMilestonesSettingsPage() {
       
       if (facilities) {
         for (const facility of facilities) {
-          // Get the facility milestone IDs
           const { data: fm1 } = await supabase
             .from('facility_milestones')
             .select('id')
@@ -405,7 +486,11 @@ export default function AdminMilestonesSettingsPage() {
     }
   }
 
-  // Get milestones available for pairing (not already paired)
+  const getPairedName = (pairedId: string | null) => {
+    if (!pairedId) return null
+    return milestones.find(m => m.id === pairedId)?.display_name || null
+  }
+
   const getAvailableForPairing = (excludeId: string) => {
     return milestones.filter(m => 
       m.id !== excludeId && 
@@ -413,19 +498,6 @@ export default function AdminMilestonesSettingsPage() {
     )
   }
 
-  // Get paired milestone name
-  const getPairedName = (pairedId: string) => {
-    return milestones.find(m => m.id === pairedId)?.display_name || 'Unknown'
-  }
-
-  // Open edit modal
-  const openEditModal = (milestone: MilestoneType) => {
-    setEditingMilestone(milestone)
-    setEditDisplayName(milestone.display_name)
-    setShowEditModal(true)
-  }
-
-  // Open pair modal
   const openPairModal = (milestone: MilestoneType) => {
     setPairingMilestone(milestone)
     setSelectedPairId(milestone.pair_with_id || '')
@@ -507,7 +579,7 @@ export default function AdminMilestonesSettingsPage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Pair Button */}
+                      {/* Pair/Unlink Button */}
                       <button
                         onClick={() => openPairModal(milestone)}
                         className={`p-2 rounded-lg transition-colors ${
@@ -515,7 +587,7 @@ export default function AdminMilestonesSettingsPage() {
                             ? 'text-blue-600 hover:bg-blue-50'
                             : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
                         }`}
-                        title={milestone.pair_with_id ? 'Edit pairing' : 'Set up pairing'}
+                        title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -524,7 +596,11 @@ export default function AdminMilestonesSettingsPage() {
 
                       {/* Edit Button */}
                       <button
-                        onClick={() => openEditModal(milestone)}
+                        onClick={() => {
+                          setEditingMilestone(milestone)
+                          setEditDisplayName(milestone.display_name)
+                          setShowEditModal(true)
+                        }}
                         className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                         title="Edit"
                       >
@@ -547,22 +623,22 @@ export default function AdminMilestonesSettingsPage() {
                     </div>
                   </div>
                 ))}
-              </div>
 
-              {milestones.length === 0 && (
-                <div className="text-center py-12 text-slate-500">
-                  <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p>No milestones configured yet.</p>
-                  <button
-                    onClick={() => setShowAddModal(true)}
-                    className="mt-2 text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Add your first milestone
-                  </button>
-                </div>
-              )}
+                {milestones.length === 0 && (
+                  <div className="text-center py-12 text-slate-500">
+                    <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p>No milestones configured yet.</p>
+                    <button
+                      onClick={() => setShowAddModal(true)}
+                      className="mt-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Add your first milestone
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Legend */}
               <div className="mt-6 p-4 bg-slate-50 rounded-xl">
@@ -570,11 +646,11 @@ export default function AdminMilestonesSettingsPage() {
                 <div className="flex flex-wrap gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Start</span>
-                    <span className="text-slate-500">First button in a paired milestone (e.g., "Closing")</span>
+                    <span className="text-slate-500">First button in a paired milestone</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">End</span>
-                    <span className="text-slate-500">Second button in a paired milestone (e.g., "Closing Complete")</span>
+                    <span className="text-slate-500">Second button in a paired milestone</span>
                   </div>
                 </div>
               </div>
@@ -642,7 +718,7 @@ export default function AdminMilestonesSettingsPage() {
         </div>
       )}
 
-      {/* Edit Modal - Now with Unlink button */}
+      {/* Edit Modal */}
       {showEditModal && editingMilestone && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
@@ -674,24 +750,16 @@ export default function AdminMilestonesSettingsPage() {
                 />
               </div>
 
-              {/* Pairing Info & Unlink Button */}
+              {/* Pairing Info */}
               {editingMilestone.pair_with_id && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">Paired Milestone</p>
-                      <p className="text-sm text-blue-700">
-                        {editingMilestone.pair_position === 'start' ? 'Start' : 'End'} of pair with: <span className="font-medium">{getPairedName(editingMilestone.pair_with_id)}</span>
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleUnlink}
-                      disabled={saving}
-                      className="px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      Unlink
-                    </button>
-                  </div>
+                  <p className="text-sm font-medium text-blue-900">Paired Milestone</p>
+                  <p className="text-sm text-blue-700 mt-1">
+                    {editingMilestone.pair_position === 'start' ? 'Start' : 'End'} of pair with: <span className="font-medium">{getPairedName(editingMilestone.pair_with_id)}</span>
+                  </p>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Use the link icon on the milestone row to manage pairing.
+                  </p>
                 </div>
               )}
             </div>
@@ -727,53 +795,79 @@ export default function AdminMilestonesSettingsPage() {
         </div>
       )}
 
-      {/* Pair Modal */}
+      {/* Pair/Unlink Modal */}
       {showPairModal && pairingMilestone && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">Set Up Pairing</h3>
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">
+              {pairingMilestone.pair_with_id ? 'Manage Pairing' : 'Set Up Pairing'}
+            </h3>
             <p className="text-sm text-slate-600 mb-4">
-              Pair "<span className="font-medium">{pairingMilestone.display_name}</span>" with another milestone to create a Start/End pair.
+              {pairingMilestone.pair_with_id 
+                ? `"${pairingMilestone.display_name}" is currently paired with "${getPairedName(pairingMilestone.pair_with_id)}".`
+                : `Pair "${pairingMilestone.display_name}" with another milestone to create a Start/End pair.`
+              }
             </p>
             
+            {/* Current Pairing - with Unlink option */}
+            {pairingMilestone.pair_with_id && (
+              <div className="mb-4 p-4 bg-slate-50 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-slate-700">Current Pairing</span>
+                  <button
+                    onClick={() => handleUnlink(pairingMilestone)}
+                    className="text-sm font-medium text-red-600 hover:text-red-700"
+                  >
+                    Unlink
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">Start</span>
+                    <span className="text-sm text-slate-900">
+                      {pairingMilestone.pair_position === 'start' 
+                        ? pairingMilestone.display_name 
+                        : getPairedName(pairingMilestone.pair_with_id)
+                      }
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">End</span>
+                    <span className="text-sm text-slate-900">
+                      {pairingMilestone.pair_position === 'end' 
+                        ? pairingMilestone.display_name 
+                        : getPairedName(pairingMilestone.pair_with_id)
+                      }
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* New Pairing Selection */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Pair with:
+                {pairingMilestone.pair_with_id ? 'Change pairing to:' : 'Pair with:'}
               </label>
               <select
                 value={selectedPairId}
                 onChange={(e) => setSelectedPairId(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">No pairing (single milestone)</option>
+                <option value="">Select a milestone...</option>
                 {getAvailableForPairing(pairingMilestone.id).map(m => (
                   <option key={m.id} value={m.id}>{m.display_name}</option>
                 ))}
-                {/* Also show current pair if editing */}
-                {pairingMilestone.pair_with_id && (
-                  <option value={pairingMilestone.pair_with_id}>
-                    {getPairedName(pairingMilestone.pair_with_id)} (current)
-                  </option>
-                )}
               </select>
               
-              {selectedPairId && (
-                <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-                  <p className="text-sm text-slate-600">
-                    <span className="font-medium text-emerald-700">{pairingMilestone.display_name}</span>
-                    {' → Start button'}
+              {selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800 mb-2">New pairing:</p>
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">{pairingMilestone.display_name}</span> → Start
                   </p>
-                  <p className="text-sm text-slate-600 mt-1">
-                    <span className="font-medium text-amber-700">{milestones.find(m => m.id === selectedPairId)?.display_name}</span>
-                    {' → End button'}
-                  </p>
-                </div>
-              )}
-
-              {pairingMilestone.pair_with_id && selectedPairId === '' && (
-                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-800">
-                    This will unlink "{pairingMilestone.display_name}" from "{getPairedName(pairingMilestone.pair_with_id)}".
+                  <p className="text-sm text-blue-700">
+                    <span className="font-medium">{milestones.find(m => m.id === selectedPairId)?.display_name}</span> → End
                   </p>
                 </div>
               )}
@@ -788,19 +882,33 @@ export default function AdminMilestonesSettingsPage() {
                 }}
                 className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                Cancel
+                {pairingMilestone.pair_with_id ? 'Close' : 'Cancel'}
               </button>
-              <button
-                onClick={handleSetPair}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Pairing'}
-              </button>
+              {selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
+                <button
+                  onClick={handleSetPair}
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {saving ? 'Saving...' : pairingMilestone.pair_with_id ? 'Change Pairing' : 'Create Pairing'}
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        confirmVariant={confirmModal.confirmVariant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+        isLoading={saving}
+      />
     </DashboardLayout>
   )
 }
