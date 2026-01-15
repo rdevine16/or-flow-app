@@ -585,7 +585,7 @@ export default function FinancialsAnalyticsPage() {
         gap: c.profit - expectedProfit,
         durationMinutes: c.duration || 0,
         expectedDurationMinutes: expectedDuration,
-        issue: (c.duration || 0) > expectedDuration * 1.3 ? 'time' : 'other',
+        issue: ((c.duration || 0) > expectedDuration * 1.3 ? 'time' : 'other') as 'time' | 'other',
       }
     }).sort((a, b) => a.gap - b.gap)
 
@@ -1216,11 +1216,12 @@ export default function FinancialsAnalyticsPage() {
                                 label={{ value: 'Avg Profit', angle: -90, position: 'left' }}
                               />
                               <Tooltip 
-                                formatter={(value: number, name: string) => {
+                                formatter={(value: any, name: any) => {
+                                  if (value === undefined) return '-'
                                   if (name === 'Avg Profit') return formatCurrency(value)
                                   return `${Math.round(value)} min`
                                 }}
-                                labelFormatter={(_, payload) => payload[0]?.payload?.surgeonName || ''}
+                                labelFormatter={(_, payload: any) => payload?.[0]?.payload?.surgeonName || ''}
                               />
                               <Scatter 
                                 data={metrics.surgeonStats.filter(s => s.caseCount >= 5)} 
