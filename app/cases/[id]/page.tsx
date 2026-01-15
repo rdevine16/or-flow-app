@@ -526,23 +526,73 @@ useEffect(() => {
   }
 
   const updateAnesthesiologist = async (anesthId: string) => {
-    const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
-    
-    const { error } = await supabase
-      .from('cases')
-      .update({ anesthesiologist_id: anesthId || null })
-      .eq('id', id)
+  const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
+  
+  const { error } = await supabase
+    .from('cases')
+    .update({ anesthesiologist_id: anesthId || null })
+    .eq('id', id)
 
-    if (!error) {
-      const newAnesth = anesthesiologists.find(a => a.id === anesthId)
-      if (caseData) {
-        setCaseData({
-          ...caseData,
-          anesthesiologist: newAnesth ? { id: newAnesth.id, first_name: newAnesth.first_name, last_name: newAnesth.last_name } : null
-        })
+  if (!error) {
+    const newAnesth = anesthesiologists.find(a => a.id === anesthId)
+    if (caseData) {
+      setCaseData({
+        ...caseData,
+        anesthesiologist: newAnesth ? { id: newAnesth.id, first_name: newAnesth.first_name, last_name: newAnesth.last_name } : null
+      })
+
+      // Audit log for anesthesiologist change
+      if (newAnesth) {
+        const newName = `${newAnesth.first_name} ${newAnesth.last_name}`
+        if (oldAnesthesiologist) {
+          // Changed from one to another
+          const oldName = `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`
+          await staffAudit.removed(
+            supabase,
+            caseData.case_number,
+            oldName,
+            'anesthesiologist',
+            oldAnesthesiologist.id
+          )
+        }
+        await staffAudit.added(
+          supabase,
+          caseData.case_number,
+          newName,
+          'anesthesiologist',
+          newAnesth.id
+        )
       }
     }
   }
+}
+
+const removeAnesthesiologist = async () => {
+  const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
+  
+  const { error } = await supabase
+    .from('cases')
+    .update({ anesthesiologist_id: null })
+    .eq('id', id)
+
+  if (!error && caseData) {
+    setCaseData({
+      ...caseData,
+      anesthesiologist: null
+    })
+
+    // Audit log for anesthesiologist removal
+    if (oldAnesthesiologist) {
+      await staffAudit.removed(
+        supabase,
+        caseData.case_number,
+        `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`,
+        'anesthesiologist',
+        oldAnesthesiologist.id
+      )
+    }
+  }
+}
 
   // Helper functions for milestones
   const getMilestoneByTypeId = (typeId: string) => caseMilestones.find(m => m.milestone_type_id === typeId)
@@ -687,7 +737,7 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* Staff Card - Compact */}
+             {/* Staff Card - Compact */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-slate-700">Team</p>
@@ -700,6 +750,7 @@ useEffect(() => {
                       label: `${a.first_name} ${a.last_name}` 
                     }))}
                     onChange={updateAnesthesiologist}
+                    onRemove={removeAnesthesiologist}
                   />
                   
                   {/* Staff Popover */}
@@ -772,7 +823,6 @@ useEffect(() => {
                 )}
               </div>
             </div>
-
 
             {/* Implant Section - Shows for hip/knee procedures */}
             <ImplantSection
