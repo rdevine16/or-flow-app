@@ -16,16 +16,21 @@ import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import AnesthesiaPopover from '../../../components/ui/AnesthesiaPopover'
 
 
-interface MilestoneType {
+// UPDATED: Now includes pairing fields from facility_milestones
+interface FacilityMilestone {
   id: string
   name: string
   display_name: string
   display_order: number
+  pair_with_id: string | null
+  pair_position: 'start' | 'end' | null
+  source_milestone_type_id: string | null
 }
 
 interface CaseMilestone {
   id: string
-  milestone_type_id: string
+  milestone_type_id: string  // Legacy - still exists for backwards compatibility
+  facility_milestone_id: string | null  // NEW: references facility_milestones
   recorded_at: string
 }
 
@@ -58,8 +63,7 @@ interface CaseStaff {
   user_roles: { name: string }[] | { name: string } | null
 }
 
-// Milestones to skip in the regular list (they're handled as pairs)
-const SKIP_IN_LIST = ['anes_start', 'anes_end', 'prepped', 'draping_complete', 'closing', 'closing_complete']
+// REMOVED: No more hardcoded SKIP_IN_LIST - pairing now comes from database
 
 // Helper to safely get first item from array or object
 function getFirst<T>(data: T[] | T | null | undefined): T | null {
@@ -164,7 +168,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const supabase = createClient()
 
   const [caseData, setCaseData] = useState<CaseData | null>(null)
-  const [milestoneTypes, setMilestoneTypes] = useState<MilestoneType[]>([])
+  // UPDATED: Now using FacilityMilestone type
+  const [milestoneTypes, setMilestoneTypes] = useState<FacilityMilestone[]>([])
   const [caseMilestones, setCaseMilestones] = useState<CaseMilestone[]>([])
   const [caseStaff, setCaseStaff] = useState<CaseStaff[]>([])
   const [availableStaff, setAvailableStaff] = useState<User[]>([])
@@ -178,11 +183,11 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [currentTime, setCurrentTime] = useState(Date.now())
 
   // FAB / Call Next Patient state
-const [userId, setUserId] = useState<string | null>(null)
-const [userEmail, setUserEmail] = useState<string | null>(null)
-const [showCallNextPatient, setShowCallNextPatient] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [showCallNextPatient, setShowCallNextPatient] = useState(false)
   
-// Live clock
+  // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => clearInterval(interval)
@@ -193,6 +198,10 @@ const [showCallNextPatient, setShowCallNextPatient] = useState(false)
     async function fetchUserFacility() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
+      // Store user info for modal
+      setUserId(user.id)
+      setUserEmail(user.email || null)
 
       const { data: userData } = await supabase
         .from('users')
@@ -207,29 +216,6 @@ const [showCallNextPatient, setShowCallNextPatient] = useState(false)
     fetchUserFacility()
   }, [])
 
-  // Get logged-in user's facility
-useEffect(() => {
-  async function fetchUserFacility() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    // Store user info for modal
-    setUserId(user.id)
-    setUserEmail(user.email || null)
-
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userData?.facility_id) {
-      setUserFacilityId(userData.facility_id)
-    }
-  }
-  fetchUserFacility()
-}, [])
-
   // Fetch data once we have the user's facility ID
   useEffect(() => {
     if (!userFacilityId) return
@@ -237,7 +223,7 @@ useEffect(() => {
     async function fetchData() {
       setLoading(true)
 
-      // UPDATED: Added operative_side and procedure_type_id to query
+      // Fetch case data
       const { data: caseResult } = await supabase
         .from('cases')
         .select(`
@@ -257,14 +243,17 @@ useEffect(() => {
         .eq('id', id)
         .single()
 
+      // UPDATED: Fetch from facility_milestones instead of milestone_types
       const { data: milestoneTypesResult } = await supabase
-        .from('milestone_types')
-        .select('id, name, display_name, display_order')
+        .from('facility_milestones')
+        .select('id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id')
+        .eq('facility_id', userFacilityId)
+        .eq('is_active', true)
         .order('display_order')
 
       const { data: milestonesResult } = await supabase
         .from('case_milestones')
-        .select('id, milestone_type_id, recorded_at')
+        .select('id, milestone_type_id, facility_milestone_id, recorded_at')
         .eq('case_id', id)
 
       const { data: staffResult } = await supabase
@@ -365,17 +354,24 @@ useEffect(() => {
   // Milestone functions
   const recordMilestone = async (milestoneTypeId: string) => {
     const timestamp = new Date().toISOString()
+    // UPDATED: Now inserts both milestone_type_id (legacy) and facility_milestone_id
+    const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
+    
     const { data, error } = await supabase
       .from('case_milestones')
-      .insert({ case_id: id, milestone_type_id: milestoneTypeId, recorded_at: timestamp })
+      .insert({ 
+        case_id: id, 
+        milestone_type_id: milestoneType?.source_milestone_type_id || milestoneTypeId, // Legacy field
+        facility_milestone_id: milestoneTypeId, // New field
+        recorded_at: timestamp 
+      })
       .select()
       .single()
 
     if (!error && data) {
       setCaseMilestones([...caseMilestones, data])
       
-      // Check if we need to update case status
-      const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
+      // Check if we need to update case status (milestoneType already looked up above)
       if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('in_progress')
       } else if (milestoneType?.name === 'patient_out') {
@@ -397,7 +393,10 @@ useEffect(() => {
 
   const undoMilestone = async (milestoneId: string) => {
     const milestone = caseMilestones.find(m => m.id === milestoneId)
-    const milestoneType = milestone ? milestoneTypes.find(mt => mt.id === milestone.milestone_type_id) : null
+    // UPDATED: Look up by facility_milestone_id first, fall back to milestone_type_id
+    const milestoneType = milestone ? milestoneTypes.find(mt => 
+      mt.id === milestone.facility_milestone_id || mt.id === milestone.milestone_type_id
+    ) : null
 
     const { error } = await supabase
       .from('case_milestones')
@@ -455,13 +454,11 @@ useEffect(() => {
 
   // Staff functions
   const addStaff = async (userId: string) => {
-    // Get the user's role from availableStaff
     const staffMember = availableStaff.find(s => s.id === userId)
     const roleName = Array.isArray(staffMember?.user_roles) 
       ? staffMember.user_roles[0]?.name 
       : (staffMember?.user_roles as any)?.name
 
-    // Look up role_id
     let roleId = null
     if (roleName) {
       const { data: roleData } = await supabase
@@ -526,76 +523,76 @@ useEffect(() => {
   }
 
   const updateAnesthesiologist = async (anesthId: string) => {
-  const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
-  
-  const { error } = await supabase
-    .from('cases')
-    .update({ anesthesiologist_id: anesthId || null })
-    .eq('id', id)
+    const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
+    
+    const { error } = await supabase
+      .from('cases')
+      .update({ anesthesiologist_id: anesthId || null })
+      .eq('id', id)
 
-  if (!error) {
-    const newAnesth = anesthesiologists.find(a => a.id === anesthId)
-    if (caseData) {
-      setCaseData({
-        ...caseData,
-        anesthesiologist: newAnesth ? { id: newAnesth.id, first_name: newAnesth.first_name, last_name: newAnesth.last_name } : null
-      })
+    if (!error) {
+      const newAnesth = anesthesiologists.find(a => a.id === anesthId)
+      if (caseData) {
+        setCaseData({
+          ...caseData,
+          anesthesiologist: newAnesth ? { id: newAnesth.id, first_name: newAnesth.first_name, last_name: newAnesth.last_name } : null
+        })
 
-      // Audit log for anesthesiologist change
-      if (newAnesth) {
-        const newName = `${newAnesth.first_name} ${newAnesth.last_name}`
-        if (oldAnesthesiologist) {
-          // Changed from one to another
-          const oldName = `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`
-          await staffAudit.removed(
+        if (newAnesth) {
+          const newName = `${newAnesth.first_name} ${newAnesth.last_name}`
+          if (oldAnesthesiologist) {
+            const oldName = `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`
+            await staffAudit.removed(
+              supabase,
+              caseData.case_number,
+              oldName,
+              'anesthesiologist',
+              oldAnesthesiologist.id
+            )
+          }
+          await staffAudit.added(
             supabase,
             caseData.case_number,
-            oldName,
+            newName,
             'anesthesiologist',
-            oldAnesthesiologist.id
+            newAnesth.id
           )
         }
-        await staffAudit.added(
+      }
+    }
+  }
+
+  const removeAnesthesiologist = async () => {
+    const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
+    
+    const { error } = await supabase
+      .from('cases')
+      .update({ anesthesiologist_id: null })
+      .eq('id', id)
+
+    if (!error && caseData) {
+      setCaseData({
+        ...caseData,
+        anesthesiologist: null
+      })
+
+      if (oldAnesthesiologist) {
+        await staffAudit.removed(
           supabase,
           caseData.case_number,
-          newName,
+          `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`,
           'anesthesiologist',
-          newAnesth.id
+          oldAnesthesiologist.id
         )
       }
     }
   }
-}
-
-const removeAnesthesiologist = async () => {
-  const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
-  
-  const { error } = await supabase
-    .from('cases')
-    .update({ anesthesiologist_id: null })
-    .eq('id', id)
-
-  if (!error && caseData) {
-    setCaseData({
-      ...caseData,
-      anesthesiologist: null
-    })
-
-    // Audit log for anesthesiologist removal
-    if (oldAnesthesiologist) {
-      await staffAudit.removed(
-        supabase,
-        caseData.case_number,
-        `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`,
-        'anesthesiologist',
-        oldAnesthesiologist.id
-      )
-    }
-  }
-}
 
   // Helper functions for milestones
-  const getMilestoneByTypeId = (typeId: string) => caseMilestones.find(m => m.milestone_type_id === typeId)
+  // UPDATED: Now checks facility_milestone_id first, falls back to milestone_type_id for legacy data
+  const getMilestoneByTypeId = (typeId: string) => caseMilestones.find(m => 
+    m.facility_milestone_id === typeId || m.milestone_type_id === typeId
+  )
   const getMilestoneByName = (name: string) => {
     const type = milestoneTypes.find(t => t.name === name)
     return type ? getMilestoneByTypeId(type.id) : undefined
@@ -622,8 +619,13 @@ const removeAnesthesiologist = async () => {
   const totalTime = calculateElapsedTime(patientInMilestone, patientOutMilestone)
   const surgicalTime = calculateElapsedTime(incisionMilestone, closingMilestone)
 
-  // Milestone progress
-  const singleMilestones = milestoneTypes.filter(mt => !SKIP_IN_LIST.includes(mt.name))
+  // UPDATED: Dynamic milestone grouping based on database pairing
+  // Get paired milestones (start position only - we'll render them with their end partner)
+  const pairedMilestones = milestoneTypes.filter(mt => mt.pair_position === 'start')
+  
+  // Get single milestones (no pairing) and exclude "end" milestones (they're rendered with their start partner)
+  const singleMilestones = milestoneTypes.filter(mt => !mt.pair_position)
+
   const completedMilestones = caseMilestones.length
   const totalMilestoneTypes = milestoneTypes.length
   const progressPercentage = totalMilestoneTypes > 0 ? (completedMilestones / totalMilestoneTypes) * 100 : 0
@@ -657,6 +659,33 @@ const removeAnesthesiologist = async () => {
         </div>
       </DashboardLayout>
     )
+  }
+
+  // Helper to get the partner milestone for a paired milestone
+  const getPartnerMilestone = (milestone: FacilityMilestone): FacilityMilestone | undefined => {
+    if (!milestone.pair_with_id) return undefined
+    return milestoneTypes.find(mt => mt.id === milestone.pair_with_id)
+  }
+
+  // Helper to generate display name for paired milestone button
+  // e.g., "Anesthesia Start" + "Anesthesia End" -> "Anesthesia"
+  const getPairDisplayName = (startMilestone: FacilityMilestone): string => {
+    // Try to create a cleaner name by removing "Start" suffix
+    const name = startMilestone.display_name
+    if (name.toLowerCase().endsWith(' start')) {
+      return name.slice(0, -6)
+    }
+    // If the start milestone is like "Prepped & Draped", use a custom name
+    if (startMilestone.name === 'prepped') {
+      return 'Prep & Drape'
+    }
+    if (startMilestone.name === 'closing') {
+      return 'Closing'
+    }
+    if (startMilestone.name === 'anes_start') {
+      return 'Anesthesia'
+    }
+    return name
   }
 
   return (
@@ -699,155 +728,138 @@ const removeAnesthesiologist = async () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           
           {/* Left Column - Case Info & Staff */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="space-y-4">
             {/* Case Info Card - Compact */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <div className="space-y-3">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div className="p-4 space-y-3">
+                {/* Procedure */}
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-slate-500">Procedure</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-slate-900 text-sm">{procedure?.name || 'Not specified'}</p>
+                      <OperativeSideBadge side={caseData.operative_side} />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Room & Time Row */}
-                <div className="flex justify-between items-start">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Room</p>
+                      <p className="font-semibold text-slate-900 text-sm">{room?.name || '-'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Start Time</p>
+                      <p className="font-semibold text-slate-900 text-sm">{formatTime(caseData.start_time)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Surgeon with Avatar */}
+                <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
+                  <SurgeonAvatar 
+                    name={surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : 'Unassigned'} 
+                    size="sm" 
+                  />
                   <div>
-                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Room</p>
-                    <p className="text-sm font-semibold text-slate-900">{room?.name || '—'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Start Time</p>
-                    <p className="text-sm font-semibold text-slate-900">{formatTime(caseData.start_time)}</p>
-                  </div>
-                </div>
-
-                {/* Procedure with Side Badge */}
-                <div>
-                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Procedure</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <p className="text-sm font-semibold text-slate-900">{procedure?.name || '—'}</p>
-                    <OperativeSideBadge side={caseData.operative_side} />
-                  </div>
-                </div>
-
-                {/* Surgeon */}
-                <div>
-                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Surgeon</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {surgeon && <SurgeonAvatar name={`${surgeon.first_name} ${surgeon.last_name}`} size="sm" />}
-                    <p className="text-sm font-semibold text-slate-900">
-                      {surgeon ? `Dr. ${surgeon.last_name}` : '—'}
+                    <p className="text-xs text-slate-500">Surgeon</p>
+                    <p className="font-semibold text-slate-900 text-sm">
+                      {surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : 'Unassigned'}
                     </p>
                   </div>
                 </div>
-              </div>
-            </div>
 
-             {/* Staff Card - Compact */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-slate-700">Team</p>
-                <div className="flex items-center gap-2">
-                  {/* Anesthesia Popover */}
+                {/* Anesthesiologist */}
+                <div className="flex items-center gap-3">
                   <AnesthesiaPopover
                     currentAnesthesiologist={anesthesiologist}
-                    availableAnesthesiologists={anesthesiologists.map(a => ({ 
-                      id: a.id, 
-                      label: `${a.first_name} ${a.last_name}` 
+                    availableAnesthesiologists={anesthesiologists.map(a => ({
+                      id: a.id,
+                      label: `${a.first_name} ${a.last_name}`
                     }))}
                     onChange={updateAnesthesiologist}
                     onRemove={removeAnesthesiologist}
                   />
-                  
-                  {/* Staff Popover */}
-                  <StaffPopover
-                    staff={caseStaff.map(cs => {
-                      const user = cs.users ? (Array.isArray(cs.users) ? cs.users[0] : cs.users) : null
-                      const role = cs.user_roles ? (Array.isArray(cs.user_roles) ? cs.user_roles[0] : cs.user_roles) : null
-                      return {
-                        id: cs.id,
-                        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-                        role: role?.name || 'Staff',
-                      }
-                    })}
-                    availableStaff={availableStaff
-                      .filter(s => !caseStaff.some(cs => cs.user_id === s.id))
-                      .map(s => ({
-                        id: s.id,
-                        label: `${s.first_name} ${s.last_name}`,
-                        subtitle: Array.isArray(s.user_roles) ? s.user_roles[0]?.name || '' : '',
-                      }))}
-                    onAdd={addStaff}
-                    onRemove={removeStaff}
-                  />
                 </div>
-              </div>
-              
-              <div className="space-y-2">
-                {/* Anesthesiologist Row */}
-                <div className="flex items-center py-2 px-3 bg-amber-50 border border-amber-100 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center">
-                      <span className="text-[10px] font-bold text-amber-700">A</span>
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium text-amber-900">
-                        {anesthesiologist ? `${anesthesiologist.first_name} ${anesthesiologist.last_name}` : 'Not assigned'}
-                      </p>
-                      <p className="text-[10px] text-amber-600">Anesthesiologist</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Other Staff */}
-                {caseStaff.map(staff => {
-                  const staffUser = getFirst(staff.users)
-                  const staffRole = getFirst(staff.user_roles)
-                  const roleInitial = staffRole?.name?.charAt(0).toUpperCase() || 'S'
-                  const roleColor = staffRole?.name === 'nurse' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                  
-                  return (
-                    <div key={staff.id} className="flex items-center justify-between py-2 px-3 bg-slate-50 border border-slate-100 rounded-lg group">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${roleColor}`}>
-                          <span className="text-[10px] font-bold">{roleInitial}</span>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-slate-900">
-                            {staffUser ? `${staffUser.first_name} ${staffUser.last_name}` : 'Unknown'}
-                          </p>
-                          <p className="text-[10px] text-slate-500 capitalize">{staffRole?.name || 'Staff'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {/* Empty state */}
-                {caseStaff.length === 0 && !anesthesiologist && (
-                  <p className="text-xs text-slate-400 text-center py-2">No team members assigned</p>
-                )}
               </div>
             </div>
 
-            {/* Implant Section - Shows for hip/knee procedures */}
-            <ImplantSection
-              caseId={caseData.id}
+            {/* Staff Section - Compact */}
+            <StaffPopover
+              staff={caseStaff.map(cs => {
+                const user = getFirst(cs.users)
+                const role = getFirst(cs.user_roles)
+                return {
+                  id: cs.id,
+                  name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+                  role: role?.name || 'staff'
+                }
+              })}
+              availableStaff={availableStaff.map(s => {
+                const roleName = Array.isArray(s.user_roles) 
+                  ? s.user_roles[0]?.name 
+                  : (s.user_roles as any)?.name
+                return {
+                  id: s.id,
+                  label: `${s.first_name} ${s.last_name}`,
+                  subtitle: roleName || 'Staff'
+                }
+              })}
+              onAdd={addStaff}
+              onRemove={removeStaff}
+            />
+
+            {/* Implant Section */}
+            <ImplantSection 
+              caseId={id} 
               procedureTypeId={caseData.procedure_type_id}
               supabase={supabase}
             />
+
+            {/* Notes Section */}
+            {caseData.notes && (
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm p-4">
+                <h3 className="text-sm font-semibold text-slate-900 mb-2">Notes</h3>
+                <p className="text-sm text-slate-600">{caseData.notes}</p>
+              </div>
+            )}
           </div>
 
-          {/* Right Column - Times & Milestones */}
+          {/* Right Column - Timers & Milestones */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Time Cards - Smaller */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Timer Cards */}
+            <div className="grid grid-cols-2 gap-3">
               {/* Total Time Card */}
-              <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl p-4 text-center relative overflow-hidden shadow-lg">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.05),transparent)]" />
-                <p className="text-slate-400 text-[10px] font-semibold tracking-wider uppercase mb-1">Total Time</p>
+              <div className="bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 rounded-xl p-4 text-center relative overflow-hidden shadow-lg shadow-emerald-600/20">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent)]" />
+                <p className="text-emerald-100 text-[10px] font-semibold tracking-wider uppercase mb-1">Total Time</p>
                 <p className="text-3xl lg:text-4xl font-bold text-white tracking-tight relative font-mono tabular-nums">
                   {totalTime}
                 </p>
-                <p className="text-slate-500 text-[10px] mt-1">Patient In → Out</p>
+                <p className="text-emerald-200 text-[10px] mt-1">Patient In → Patient Out</p>
                 {surgeonAverages.avgTotalTime && (
-                  <div className="mt-2 pt-2 border-t border-slate-700/50">
-                    <p className="text-slate-400 text-[10px]">
-                      Avg: <span className="text-slate-300 font-semibold font-mono">
+                  <div className="mt-2 pt-2 border-t border-emerald-400/30">
+                    <p className="text-emerald-200 text-[10px]">
+                      Avg: <span className="text-white font-semibold font-mono">
                         {Math.floor(surgeonAverages.avgTotalTime / 60).toString().padStart(2, '0')}:{(surgeonAverages.avgTotalTime % 60).toString().padStart(2, '0')}:00
                       </span>
                     </p>
@@ -895,119 +907,45 @@ const removeAnesthesiologist = async () => {
                 </div>
               </div>
               
-              {/* Milestones Grid */}
+              {/* Milestones Grid - UPDATED: Dynamic rendering based on database */}
               <div className="p-4">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                  {/* Patient In */}
-                  {(() => {
-                    const type = getMilestoneTypeByName('patient_in')
-                    const milestone = getMilestoneByName('patient_in')
-                    if (!type) return null
-                    return (
-                      <MilestoneButton
-                        key={type.id}
-                        name={type.name}
-                        displayName={type.display_name}
-                        recordedAt={milestone?.recorded_at}
-                        onRecord={() => recordMilestone(type.id)}
-                        onUndo={() => milestone && undoMilestone(milestone.id)}
-                      />
-                    )
-                  })()}
+                  {/* Render all milestones in order, handling pairs and singles dynamically */}
+                  {milestoneTypes
+                    .filter(mt => mt.pair_position !== 'end') // Skip "end" milestones - they're rendered with their "start" partner
+                    .map(milestone => {
+                      // Check if this is a paired milestone (start position)
+                      if (milestone.pair_position === 'start') {
+                        const endMilestone = getPartnerMilestone(milestone)
+                        if (!endMilestone) return null
 
-                  {/* Anesthesia (Paired) */}
-                  {(() => {
-                    const startType = getMilestoneTypeByName('anes_start')
-                    const endType = getMilestoneTypeByName('anes_end')
-                    const startMilestone = getMilestoneByName('anes_start')
-                    const endMilestone = getMilestoneByName('anes_end')
-                    if (!startType || !endType) return null
-                    return (
-                      <PairedMilestoneButton
-                        key="anesthesia"
-                        displayName="Anesthesia"
-                        startRecordedAt={startMilestone?.recorded_at}
-                        endRecordedAt={endMilestone?.recorded_at}
-                        onRecordStart={() => recordMilestone(startType.id)}
-                        onRecordEnd={() => recordMilestone(endType.id)}
-                        onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
-                        onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
-                      />
-                    )
-                  })()}
+                        const startRecorded = getMilestoneByTypeId(milestone.id)
+                        const endRecorded = getMilestoneByTypeId(endMilestone.id)
 
-                  {/* Prep & Drape (Paired) */}
-                  {(() => {
-                    const startType = getMilestoneTypeByName('prepped')
-                    const endType = getMilestoneTypeByName('draping_complete')
-                    const startMilestone = getMilestoneByName('prepped')
-                    const endMilestone = getMilestoneByName('draping_complete')
-                    if (!startType || !endType) return null
-                    return (
-                      <PairedMilestoneButton
-                        key="draping"
-                        displayName="Prep & Drape"
-                        startRecordedAt={startMilestone?.recorded_at}
-                        endRecordedAt={endMilestone?.recorded_at}
-                        onRecordStart={() => recordMilestone(startType.id)}
-                        onRecordEnd={() => recordMilestone(endType.id)}
-                        onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
-                        onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
-                      />
-                    )
-                  })()}
+                        return (
+                          <PairedMilestoneButton
+                            key={milestone.id}
+                            displayName={getPairDisplayName(milestone)}
+                            startRecordedAt={startRecorded?.recorded_at}
+                            endRecordedAt={endRecorded?.recorded_at}
+                            onRecordStart={() => recordMilestone(milestone.id)}
+                            onRecordEnd={() => recordMilestone(endMilestone.id)}
+                            onUndoStart={() => startRecorded && undoMilestone(startRecorded.id)}
+                            onUndoEnd={() => endRecorded && undoMilestone(endRecorded.id)}
+                          />
+                        )
+                      }
 
-                  {/* Incision */}
-                  {(() => {
-                    const type = getMilestoneTypeByName('incision')
-                    const milestone = getMilestoneByName('incision')
-                    if (!type) return null
-                    return (
-                      <MilestoneButton
-                        key={type.id}
-                        name={type.name}
-                        displayName={type.display_name}
-                        recordedAt={milestone?.recorded_at}
-                        onRecord={() => recordMilestone(type.id)}
-                        onUndo={() => milestone && undoMilestone(milestone.id)}
-                      />
-                    )
-                  })()}
-
-                  {/* Closing (Paired) */}
-                  {(() => {
-                    const startType = getMilestoneTypeByName('closing')
-                    const endType = getMilestoneTypeByName('closing_complete')
-                    const startMilestone = getMilestoneByName('closing')
-                    const endMilestone = getMilestoneByName('closing_complete')
-                    if (!startType || !endType) return null
-                    return (
-                      <PairedMilestoneButton
-                        key="closing"
-                        displayName="Closing"
-                        startRecordedAt={startMilestone?.recorded_at}
-                        endRecordedAt={endMilestone?.recorded_at}
-                        onRecordStart={() => recordMilestone(startType.id)}
-                        onRecordEnd={() => recordMilestone(endType.id)}
-                        onUndoStart={() => startMilestone && undoMilestone(startMilestone.id)}
-                        onUndoEnd={() => endMilestone && undoMilestone(endMilestone.id)}
-                      />
-                    )
-                  })()}
-
-                  {/* Remaining Single Milestones */}
-                  {singleMilestones
-                    .filter(type => !['patient_in', 'incision'].includes(type.name))
-                    .map(type => {
-                      const milestone = caseMilestones.find(m => m.milestone_type_id === type.id)
+                      // Single milestone (no pairing)
+                      const recorded = getMilestoneByTypeId(milestone.id)
                       return (
                         <MilestoneButton
-                          key={type.id}
-                          name={type.name}
-                          displayName={type.display_name}
-                          recordedAt={milestone?.recorded_at}
-                          onRecord={() => recordMilestone(type.id)}
-                          onUndo={() => milestone && undoMilestone(milestone.id)}
+                          key={milestone.id}
+                          name={milestone.name}
+                          displayName={milestone.display_name}
+                          recordedAt={recorded?.recorded_at}
+                          onRecord={() => recordMilestone(milestone.id)}
+                          onUndo={() => recorded && undoMilestone(recorded.id)}
                         />
                       )
                     })}
@@ -1017,7 +955,8 @@ const removeAnesthesiologist = async () => {
           </div>
         </div>
       </div>
- {/* Floating Action Button */}
+
+      {/* Floating Action Button */}
       {userFacilityId && (
         <FloatingActionButton 
           actions={[
