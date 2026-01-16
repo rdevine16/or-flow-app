@@ -467,7 +467,7 @@ function generateMilestones(
   const offsets = MILESTONE_OFFSETS[procedureType]
 
   // Add variance to times
-  const variance = isOutlier ? randomInt(15, 30) : randomInt(-3, 5)
+  const variance = isOutlier ? randomInt(25, 45) : randomInt(-3, 5)
 
   // Standard milestones to generate (must match names in facility_milestones)
   const milestoneNames = ['patient_in', 'anes_start', 'anes_end', 'prepped', 'draping_complete', 'incision', 'closing', 'closing_complete', 'patient_out']
@@ -700,6 +700,17 @@ export async function generateDemoData(
     const endDate = new Date(today)
     endDate.setDate(endDate.getDate() + 14)
 
+    // Pick one surgeon to be "chronically late" for first cases (for realistic analytics story)
+    // This surgeon will be late ~60% of the time for first cases
+    const problemSurgeonId = surgeonProfiles.length > 1 
+      ? surgeonProfiles[Math.floor(Math.random() * surgeonProfiles.length)].id 
+      : null
+    
+    // Track late starts per surgeon per month (for non-problem surgeons)
+    // Key: `${surgeonId}-${year}-${month}`, Value: count of late starts
+    const lateStartsPerMonth: Map<string, number> = new Map()
+    const MAX_LATE_STARTS_PER_MONTH = 3 // Max late starts for non-problem surgeons
+
     onProgress?.({ phase: 'generating', current: 5, total: 100, message: 'Generating cases...' })
 
     // Generate all cases
@@ -801,17 +812,39 @@ export async function generateDemoData(
           // FIRST CASE TIMING LOGIC
           let patientInTime = new Date(currentTime)
           if (i === 0) {
-            // First case of the day
-            const firstCaseRand = Math.random()
-            if (firstCaseRand < 0.70) {
-              // 70% - On time or early (patient in 5-12 minutes BEFORE scheduled start)
-              patientInTime = addMinutes(scheduledStartTime, -randomInt(5, 12))
-            } else if (firstCaseRand < 0.85) {
-              // 15% - Slightly early (1-4 minutes before)
-              patientInTime = addMinutes(scheduledStartTime, -randomInt(1, 4))
+            // First case of the day - timing depends on surgeon
+            const isProblemSurgeon = surgeon.id === problemSurgeonId
+            const monthKey = `${surgeon.id}-${currentDate.getFullYear()}-${currentDate.getMonth()}`
+            const currentMonthLateStarts = lateStartsPerMonth.get(monthKey) || 0
+            
+            let shouldBeLate = false
+            
+            if (isProblemSurgeon) {
+              // Problem surgeon: 60% late first cases
+              shouldBeLate = Math.random() < 0.60
             } else {
-              // 15% - Late start (15-30 minutes AFTER scheduled start)
+              // Other surgeons: only late if under monthly limit (2-3 per month)
+              // ~10% chance but capped at MAX_LATE_STARTS_PER_MONTH
+              if (currentMonthLateStarts < MAX_LATE_STARTS_PER_MONTH && Math.random() < 0.10) {
+                shouldBeLate = true
+              }
+            }
+            
+            if (shouldBeLate) {
+              // Late start: 15-30 minutes AFTER scheduled start
               patientInTime = addMinutes(scheduledStartTime, randomInt(15, 30))
+              // Track this late start
+              lateStartsPerMonth.set(monthKey, currentMonthLateStarts + 1)
+            } else {
+              // On time or early
+              const earlyRand = Math.random()
+              if (earlyRand < 0.75) {
+                // 75% - Patient in 5-12 minutes BEFORE scheduled start
+                patientInTime = addMinutes(scheduledStartTime, -randomInt(5, 12))
+              } else {
+                // 25% - Slightly early (1-4 minutes before)
+                patientInTime = addMinutes(scheduledStartTime, -randomInt(1, 4))
+              }
             }
           } else {
             // Subsequent cases - use current time (after previous case turnover)
@@ -822,12 +855,26 @@ export async function generateDemoData(
           const isOutlier = Math.random() < 0.08
 
           // Select payer based on distribution
-          const payerNames = Object.keys(PAYER_DISTRIBUTION)
-          const payerWeights = Object.values(PAYER_DISTRIBUTION)
-          const selectedPayerName = weightedRandomChoice(payerNames, payerWeights)
-          const selectedPayer = facilityData.payers.find((p: any) => 
-            p.name.toLowerCase().includes(selectedPayerName.toLowerCase())
-          )
+          // Outliers are more likely to have lower-paying payers (Medicaid, Self-Pay)
+          let selectedPayer = null
+          if (isOutlier && Math.random() < 0.50) {
+            // 50% of outliers get low-paying payers
+            const lowPayers = ['medicaid', 'self']
+            const lowPayerName = randomChoice(lowPayers)
+            selectedPayer = facilityData.payers.find((p: any) => 
+              p.name.toLowerCase().includes(lowPayerName)
+            )
+          }
+          
+          if (!selectedPayer) {
+            // Normal payer distribution
+            const payerNames = Object.keys(PAYER_DISTRIBUTION)
+            const payerWeights = Object.values(PAYER_DISTRIBUTION)
+            const selectedPayerName = weightedRandomChoice(payerNames, payerWeights)
+            selectedPayer = facilityData.payers.find((p: any) => 
+              p.name.toLowerCase().includes(selectedPayerName.toLowerCase())
+            )
+          }
 
           // Generate operative side
           let operativeSide: 'left' | 'right' | 'bilateral' | null = null
@@ -929,15 +976,41 @@ export async function generateDemoData(
             allImplants.push(implant)
           }
 
-          // Generate delays for outlier cases
+          // Generate delays for outlier cases - ALWAYS add a delay so the cause is clear
           if (isOutlier && isPastDate && facilityData.delayTypes.length > 0) {
-            const delayType = randomChoice(facilityData.delayTypes)
+            // Pick a delay type that makes sense
+            const delayCategories = [
+              { keywords: ['equipment', 'instrument'], notes: 'Equipment malfunction required troubleshooting' },
+              { keywords: ['staff', 'personnel'], notes: 'Staff availability delay' },
+              { keywords: ['patient', 'medical'], notes: 'Patient-related medical issue' },
+              { keywords: ['anesthesia'], notes: 'Anesthesia complications required additional time' },
+              { keywords: ['room', 'turnover'], notes: 'Room turnover delay from previous case' },
+            ]
+            
+            // Try to find a matching delay type, otherwise use random
+            let delayType = facilityData.delayTypes[0]
+            let delayNotes = 'Unexpected delay during procedure'
+            
+            const categoryIndex = randomInt(0, delayCategories.length - 1)
+            const category = delayCategories[categoryIndex]
+            
+            const matchingType = facilityData.delayTypes.find((dt: any) => 
+              category.keywords.some(kw => dt.name?.toLowerCase().includes(kw))
+            )
+            
+            if (matchingType) {
+              delayType = matchingType
+              delayNotes = category.notes
+            } else {
+              delayType = randomChoice(facilityData.delayTypes)
+            }
+            
             allDelays.push({
               id: generateUUID(),
               case_id: caseId,
               delay_type_id: delayType.id,
-              duration_minutes: randomInt(10, 45),
-              notes: 'Equipment issue required additional time',
+              duration_minutes: randomInt(15, 45),
+              notes: delayNotes,
             })
           }
 
@@ -946,7 +1019,7 @@ export async function generateDemoData(
             surgeon.profile === 'high_volume' ? 0 : surgeon.profile === 'medium_volume' ? 1 : 2
           ]
           const turnover = randomInt(profile.turnoverTime.min, profile.turnoverTime.max)
-          currentTime = addMinutes(patientInTime, caseEndOffset + turnover + (isOutlier ? randomInt(15, 30) : 0))
+          currentTime = addMinutes(patientInTime, caseEndOffset + turnover + (isOutlier ? randomInt(25, 45) : 0))
         }
       }
 
