@@ -94,8 +94,24 @@ const MILESTONE_OFFSETS = {
   },
 }
 
+// Implant component specification type
+interface ImplantComponent {
+  name: string
+  sizes: string[]
+  common: string[]
+}
+
+interface ProcedureImplants {
+  [key: string]: ImplantComponent
+}
+
+interface VendorImplants {
+  THA: ProcedureImplants
+  TKA: ProcedureImplants
+}
+
 // Implant specifications by vendor
-const IMPLANT_SPECS = {
+const IMPLANT_SPECS: Record<'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes', VendorImplants> = {
   'Stryker': {
     THA: {
       cup: { name: 'Tritanium Cup', sizes: ['44mm', '46mm', '48mm', '50mm', '52mm', '54mm', '56mm', '58mm', '60mm'], common: ['52mm', '54mm', '56mm'] },
@@ -175,6 +191,9 @@ function randomFloat(min: number, max: number): number {
 }
 
 function randomChoice<T>(array: T[]): T {
+  if (array.length === 0) {
+    throw new Error('Cannot select from empty array')
+  }
   return array[Math.floor(Math.random() * array.length)]
 }
 
@@ -456,32 +475,38 @@ function generateImplants(
   )
   if (!implantCompany) return implants
 
-  for (const [componentType, spec] of Object.entries(vendorSpecs)) {
-    const commonSizes = (spec as any).common
-    const allSizes = (spec as any).sizes
+  const componentTypes = Object.keys(vendorSpecs)
+  
+  for (const componentType of componentTypes) {
+    const spec = vendorSpecs[componentType]
+    const commonSizes: string[] = spec.common
+    const allSizes: string[] = spec.sizes
+    const componentName: string = spec.name
     
     // 70% chance of common size, 30% chance of any size
-    const templatedSize = Math.random() < 0.7 
-      ? randomChoice(commonSizes) 
-      : randomChoice(allSizes)
+    const sizePool = Math.random() < 0.7 ? commonSizes : allSizes
+    const randomIndex = Math.floor(Math.random() * sizePool.length)
+    const templatedSize: string = sizePool[randomIndex]
     
     // 30% chance final differs from templated by ±1 size
-    let finalSize = templatedSize
+    let finalSize: string = templatedSize
     if (Math.random() < 0.3) {
       const sizeIndex = allSizes.indexOf(templatedSize)
       const newIndex = Math.max(0, Math.min(allSizes.length - 1, sizeIndex + (Math.random() < 0.5 ? -1 : 1)))
       finalSize = allSizes[newIndex]
     }
 
-    implants.push({
+    const implant: GeneratedImplant = {
       id: generateUUID(),
       case_id: caseId,
       implant_company_id: implantCompany.id,
       component_type: componentType,
-      component_name: (spec as any).name,
+      component_name: componentName,
       templated_size: templatedSize,
       final_size: finalSize,
-    })
+    }
+    
+    implants.push(implant)
   }
 
   return implants
