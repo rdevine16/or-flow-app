@@ -72,50 +72,73 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  useEffect(() => {
-    async function fetchUser() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser()
+  // Extract fetchUser so we can call it from auth listener
+  const fetchUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (user) {
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select(`
+            first_name,
+            last_name,
+            access_level,
+            facility_id,
+            facilities (name, timezone)
+          `)
+          .eq('id', user.id)
+          .single()
         
-        if (user) {
-          const { data: userRecord } = await supabase
-            .from('users')
-            .select(`
-              first_name,
-              last_name,
-              access_level,
-              facility_id,
-              facilities (name, timezone)
-            `)
-            .eq('id', user.id)
-            .single()
-          
-          if (userRecord) {
-            const facilities = userRecord.facilities as { name: string; timezone: string }[] | null
-            const facility = facilities?.[0] || null
-            setUserData({
-              firstName: userRecord.first_name,
-              lastName: userRecord.last_name,
-              accessLevel: userRecord.access_level,
-              facilityId: userRecord.facility_id,
-              facilityName: facility?.name || null,
-              facilityTimezone: facility?.timezone || 'America/New_York',
-            })
-          }
+        if (userRecord) {
+          const facilities = userRecord.facilities as { name: string; timezone: string }[] | null
+          const facility = facilities?.[0] || null
+          setUserData({
+            firstName: userRecord.first_name,
+            lastName: userRecord.last_name,
+            accessLevel: userRecord.access_level,
+            facilityId: userRecord.facility_id,
+            facilityName: facility?.name || null,
+            facilityTimezone: facility?.timezone || 'America/New_York',
+          })
         }
-      } catch (error) {
-        console.error('Error fetching user:', error)
-      } finally {
-        setLoading(false)
+      } else {
+        // No user - reset to defaults
+        setUserData(defaultUserData)
       }
+    } catch (error) {
+      console.error('Error fetching user:', error)
+    } finally {
+      setLoading(false)
     }
-    
+  }
+
+  useEffect(() => {
+    // Initial fetch
     fetchUser()
     
     // Check impersonation state on mount
     refreshImpersonation()
     
-    // Listen for storage changes (in case impersonation starts/ends)
+    // Listen for auth state changes (login/logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          // Clear all user state
+          setUserData(defaultUserData)
+          setImpersonatedFacilityId(null)
+          setImpersonatedFacilityName(null)
+          setLoading(false)
+        } else if (event === 'SIGNED_IN' && session?.user) {
+          // New user signed in - re-fetch their data
+          setLoading(true)
+          await fetchUser()
+          refreshImpersonation()
+        }
+      }
+    )
+    
+    // Listen for storage changes (in case impersonation starts/ends in another tab)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'orbit-impersonation') {
         refreshImpersonation()
@@ -123,7 +146,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
     
     window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
+    
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('storage', handleStorageChange)
+    }
   }, [])
 
   const isGlobalAdmin = userData.accessLevel === 'global_admin'
