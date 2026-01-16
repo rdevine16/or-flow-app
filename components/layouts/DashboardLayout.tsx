@@ -136,8 +136,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const effectiveIsGlobalAdmin = userAccessLevel === 'global_admin' || isGlobalAdmin
 
   // Check facility subscription status and password change requirement
-  useEffect(() => {
-    async function checkFacilityAccess() {
+ useEffect(() => {
+  async function checkFacilityAccess() {
+    try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setCheckingAccess(false)
@@ -191,12 +192,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       }
 
       setCheckingAccess(false)
+    } catch (error) {
+      console.error('Error checking facility access:', error)
+      setCheckingAccess(false)  // ← IMPORTANT: Always stop loading even on error
     }
+  }
 
-    if (!loading) {
-      checkFacilityAccess()
-    }
-  }, [loading, supabase])
+  if (!loading) {
+    checkFacilityAccess()
+  }
+}, [loading, supabase])
 
   // Load collapsed state and impersonation state on mount
   useEffect(() => {
