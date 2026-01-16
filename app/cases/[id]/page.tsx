@@ -178,6 +178,26 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     avgTotalTime: null,
     avgSurgicalTime: null,
   })
+  const [delays, setDelays] = useState<{
+  id: string
+  typeName: string
+  durationMinutes: number | null
+  notes: string | null
+  recordedAt: string
+}[]>([])
+
+const [patientCallTime, setPatientCallTime] = useState<string | null>(null)
+
+const [surgeonProcedureAverage, setSurgeonProcedureAverage] = useState<{
+  avgTotalMinutes: number | null
+  sampleSize: number
+} | null>(null)
+
+const [milestoneAverages, setMilestoneAverages] = useState<{
+  milestoneName: string
+  avgMinutesFromStart: number
+}[]>([])
+
   const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
 
@@ -286,14 +306,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         milestoneTypesResult = allMilestones || []
       }
 
-      setMilestoneTypes(milestoneTypesResult)
-
-   // Fetch recorded milestones for this case
+      // Fetch recorded milestones for this case
       const { data: milestonesResult } = await supabase
         .from('case_milestones')
         .select('id, milestone_type_id, facility_milestone_id, recorded_at')
         .eq('case_id', id)
 
+      // Fetch case staff
       const { data: staffResult } = await supabase
         .from('case_staff')
         .select(`
@@ -326,15 +345,88 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         return roleName === 'anesthesiologist'
       })
 
-setCaseData(caseResult)
-setMilestoneTypes(milestoneTypesResult)      // milestone definitions
-setCaseMilestones(milestonesResult || []) 
-      setCaseStaff(staffResult as CaseStaff[] || [])
-      setAvailableStaff(staffUsers as User[] || [])
-      setAnesthesiologists(anesthUsers as User[] || [])
+      // ========================================
+      // NEW: Fetch delays for this case
+      // ========================================
+      const { data: delaysResult } = await supabase
+        .from('case_delays')
+        .select(`
+          id,
+          duration_minutes,
+          notes,
+          recorded_at,
+          delay_types (name)
+        `)
+        .eq('case_id', id)
+        .order('recorded_at', { ascending: true })
 
-      // Fetch surgeon averages
+      if (delaysResult) {
+        setDelays(delaysResult.map(d => ({
+          id: d.id,
+          typeName: (d.delay_types as any)?.name || 'Unknown',
+          durationMinutes: d.duration_minutes,
+          notes: d.notes,
+          recordedAt: d.recorded_at
+        })))
+      }
+
+      // ========================================
+      // NEW: Fetch patient call notification
+      // ========================================
+      const { data: callNotification } = await supabase
+        .from('notifications')
+        .select('created_at')
+        .eq('case_id', id)
+        .eq('type', 'patient_call')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      setPatientCallTime(callNotification?.created_at || null)
+
+      // Get surgeon reference for averages queries
       const surgeon = getFirst(caseResult?.surgeon)
+
+      // ========================================
+      // NEW: Fetch surgeon procedure average
+      // ========================================
+      if (caseResult?.procedure_type_id && surgeon) {
+        const { data: procAvg } = await supabase
+          .from('surgeon_procedure_averages')
+          .select('avg_total_minutes, sample_size')
+          .eq('surgeon_id', surgeon.id)
+          .eq('procedure_type_id', caseResult.procedure_type_id)
+          .maybeSingle()
+
+        if (procAvg) {
+          setSurgeonProcedureAverage({
+            avgTotalMinutes: Number(procAvg.avg_total_minutes),
+            sampleSize: procAvg.sample_size
+          })
+        }
+
+        // Fetch milestone averages for this surgeon + procedure
+        const { data: milestoneAvgs } = await supabase
+          .from('surgeon_milestone_averages')
+          .select(`
+            avg_minutes_from_start,
+            milestone_type_id,
+            milestone_types (name)
+          `)
+          .eq('surgeon_id', surgeon.id)
+          .eq('procedure_type_id', caseResult.procedure_type_id)
+
+        if (milestoneAvgs) {
+          setMilestoneAverages(milestoneAvgs.map(ma => ({
+            milestoneName: (ma.milestone_types as any)?.name || 'unknown',
+            avgMinutesFromStart: Number(ma.avg_minutes_from_start)
+          })))
+        }
+      }
+
+      // ========================================
+      // EXISTING: Fetch surgeon averages (for timer cards)
+      // ========================================
       if (surgeon) {
         const thirtyDaysAgo = new Date()
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
@@ -383,6 +475,16 @@ setCaseMilestones(milestonesResult || [])
         }
       }
 
+      // ========================================
+      // SET ALL STATE
+      // ========================================
+      setCaseData(caseResult)
+      setMilestoneTypes(milestoneTypesResult)
+      setCaseMilestones(milestonesResult || [])
+      setCaseStaff(staffResult as CaseStaff[] || [])
+      setAvailableStaff(staffUsers as User[] || [])
+      setAnesthesiologists(anesthUsers as User[] || [])
+
       setLoading(false)
     }
 
@@ -390,6 +492,7 @@ setCaseMilestones(milestonesResult || [])
   }, [id, userFacilityId])
 
   // Milestone functions
+
   const recordMilestone = async (milestoneTypeId: string) => {
     const timestamp = new Date().toISOString()
     const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
@@ -744,40 +847,41 @@ setCaseMilestones(milestonesResult || [])
             </div>
           </div>
         </div>
-      {isCompleted ? (
-        <CompletedCaseView
-          caseData={{
-            id: caseData.id,
-            caseNumber: caseData.case_number,
-            scheduledDate: caseData.scheduled_date,
-            startTime: caseData.start_time,
-            operativeSide: caseData.operative_side,
-            notes: caseData.notes,
-            room: room?.name || null,
-            procedure: procedure?.name || null,
-          }}
-          surgeon={surgeon ? { firstName: surgeon.first_name, lastName: surgeon.last_name } : null}
-          anesthesiologist={anesthesiologist ? { firstName: anesthesiologist.first_name, lastName: anesthesiologist.last_name } : null}
-          milestones={milestoneTypes.map(mt => ({
-            id: mt.id,
-            name: mt.name,
-            displayName: mt.display_name,
-            recordedAt: getMilestoneByTypeId(mt.id)?.recorded_at || null,
-          }))}
-          staff={caseStaff.map(cs => {
-            const user = getFirst(cs.users)
-            const role = getFirst(cs.user_roles)
-            return {
-              id: cs.id,
-              name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-              role: role?.name || 'staff'
-            }
-          })}
-          totalTime={totalTime}
-          surgicalTime={surgicalTime}
-          surgeonAverages={surgeonAverages}
-        />
-      ) : (
+{isCompleted ? (
+  <CompletedCaseView
+    caseData={{
+      id: caseData.id,
+      caseNumber: caseData.case_number,
+      scheduledDate: caseData.scheduled_date,
+      startTime: caseData.start_time,
+      operativeSide: caseData.operative_side,
+      notes: caseData.notes,
+      room: room?.name || null,
+      procedure: procedure?.name || null,
+    }}
+    surgeon={surgeon ? { firstName: surgeon.first_name, lastName: surgeon.last_name } : null}
+    anesthesiologist={anesthesiologist ? { firstName: anesthesiologist.first_name, lastName: anesthesiologist.last_name } : null}
+    milestones={milestoneTypes.map(mt => ({
+      id: mt.id,
+      name: mt.name,
+      displayName: mt.display_name,
+      recordedAt: getMilestoneByTypeId(mt.id)?.recorded_at || null,
+    }))}
+    staff={caseStaff.map(cs => {
+      const user = getFirst(cs.users)
+      const role = getFirst(cs.user_roles)
+      return {
+        id: cs.id,
+        name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
+        role: role?.name || 'staff'
+      }
+    })}
+    delays={delays}
+    patientCallTime={patientCallTime}
+    surgeonAverage={surgeonProcedureAverage}
+    milestoneAverages={milestoneAverages}
+  />
+) : (
           /* Main Content Grid */
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Case Info */}
