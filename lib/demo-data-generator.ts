@@ -546,7 +546,7 @@ function generateImplants(
     return {
       id: generateUUID(),
       case_id: caseId,
-      fixation_type: Math.random() < 0.85 ? 'cementless' : 'cemented',
+      fixation_type: Math.random() < 0.85 ? 'pressfit' : 'cemented',
       // THA components
       cup_brand: brands.cup,
       cup_size_templated: cup.templated,
@@ -585,7 +585,7 @@ function generateImplants(
     return {
       id: generateUUID(),
       case_id: caseId,
-      fixation_type: Math.random() < 0.7 ? 'cementless' : 'cemented',
+      fixation_type: Math.random() < 0.7 ? 'pressfit' : 'cemented',
       // THA components (null for TKA)
       cup_brand: null,
       cup_size_templated: null,
@@ -599,7 +599,7 @@ function generateImplants(
       liner_size_final: null,
       // TKA components
       femur_brand: brands.femur,
-      femur_type: Math.random() < 0.5 ? 'standard' : 'narrow',
+      femur_type: Math.random() < 0.6 ? 'PS' : 'CR',
       femur_size_templated: femur.templated,
       femur_size_final: femur.final,
       tibia_brand: brands.tibia,
@@ -609,7 +609,7 @@ function generateImplants(
       poly_size_templated: poly.templated,
       poly_size_final: poly.final,
       patella_brand: brands.patella,
-      patella_type: Math.random() < 0.8 ? 'resurfaced' : 'native',
+      patella_type: Math.random() < 0.7 ? 'asymmetric' : 'symmetric',
       patella_size_templated: patella.templated,
       patella_size_final: patella.final,
       rep_notes: null,
