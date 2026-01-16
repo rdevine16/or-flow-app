@@ -312,11 +312,14 @@ export default function AdminProcedureCategoriesPage() {
 
   return (
     <DashboardLayout>
-        title="Procedure Categories"
-        description="Define clinical groupings for analytics comparisons"
-        <Container>
-          <div className="max-w-4xl">
-            {/* Add Button */}
+      <Container className="py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900">Procedure Categories</h1>
+          <p className="text-slate-500 mt-1">Define clinical groupings for analytics comparisons</p>
+        </div>
+        <div className="max-w-4xl">
+          {/* Add Button */}
             <div className="flex justify-end mb-6">
               <button
                 onClick={openAddModal}
