@@ -608,13 +608,13 @@ export default function CompletedCaseView({
               <div>
                 <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Surgeon</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5">
-                  {surgeon ? `Dr. ${surgeon.lastName}` : '—'}
+                  {surgeon ? `Dr. ${surgeon.firstName} ${surgeon.lastName}` : '—'}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Anesthesiologist</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5">
-                  {anesthesiologist ? `Dr. ${anesthesiologist.lastName}` : '—'}
+                  {anesthesiologist ? `Dr. ${anesthesiologist.firstName} ${anesthesiologist.lastName}` : '—'}
                 </p>
               </div>
             </div>
@@ -820,7 +820,7 @@ export default function CompletedCaseView({
               <div className="flex items-center justify-between py-1">
                 <div className="flex items-center gap-2">
                   <SurgeonAvatar name={`${surgeon.firstName} ${surgeon.lastName}`} size="sm" />
-                  <span className="text-sm text-slate-700">Dr. {surgeon.lastName}</span>
+                  <span className="text-sm text-slate-700">Dr. {surgeon.firstName} {surgeon.lastName}</span>
                 </div>
                 <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getRoleBadgeClass('surgeon')}`}>
                   Surgeon
@@ -833,7 +833,7 @@ export default function CompletedCaseView({
               <div className="flex items-center justify-between py-1">
                 <div className="flex items-center gap-2">
                   <SurgeonAvatar name={`${anesthesiologist.firstName} ${anesthesiologist.lastName}`} size="sm" />
-                  <span className="text-sm text-slate-700">Dr. {anesthesiologist.lastName}</span>
+                  <span className="text-sm text-slate-700">Dr. {anesthesiologist.firstName} {anesthesiologist.lastName}</span>
                 </div>
                 <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getRoleBadgeClass('anesthesiologist')}`}>
                   Anesthesia
