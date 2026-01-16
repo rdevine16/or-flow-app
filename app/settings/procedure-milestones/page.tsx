@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '../../../lib/supabase'
+import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
@@ -31,59 +32,46 @@ interface ProcedureMilestoneConfig {
 
 export default function ProcedureMilestonesSettingsPage() {
   const supabase = createClient()
+  
+  // Use the context - this automatically handles impersonation!
+  const { effectiveFacilityId, loading: userLoading } = useUser()
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [facilityId, setFacilityId] = useState<string | null>(null)
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
   const [configs, setConfigs] = useState<ProcedureMilestoneConfig[]>([])
   const [expandedProcedure, setExpandedProcedure] = useState<string | null>(null)
 
-  // Get user's facility
+  // Fetch data once we have facility ID (from context, handles impersonation)
   useEffect(() => {
-    async function fetchFacility() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.facility_id) {
-        setFacilityId(userData.facility_id)
-      }
+    if (!userLoading && effectiveFacilityId) {
+      fetchData()
+    } else if (!userLoading && !effectiveFacilityId) {
+      setLoading(false)
     }
-    fetchFacility()
-  }, [])
-
-  // Fetch data once we have facility ID
-  useEffect(() => {
-    if (!facilityId) return
-    fetchData()
-  }, [facilityId])
+  }, [userLoading, effectiveFacilityId])
 
   const fetchData = async () => {
+    if (!effectiveFacilityId) return
     setLoading(true)
 
     const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
       supabase
         .from('procedure_types')
         .select('id, name, implant_category, source_template_id')
-        .eq('facility_id', facilityId)
+        .eq('facility_id', effectiveFacilityId)
         .order('name'),
       supabase
         .from('facility_milestones')
         .select('id, name, display_name, display_order, pair_position, pair_with_id, source_milestone_type_id')
-        .eq('facility_id', facilityId)
+        .eq('facility_id', effectiveFacilityId)
         .eq('is_active', true)
         .order('display_order'),
       supabase
         .from('procedure_milestone_config')
         .select('id, procedure_type_id, facility_milestone_id')
-        .eq('facility_id', facilityId)
+        .eq('facility_id', effectiveFacilityId)
     ])
 
     setProcedures(proceduresRes.data || [])
@@ -101,7 +89,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
   // Toggle milestone for procedure
   const toggleMilestone = async (procedureId: string, milestoneId: string) => {
-    if (!facilityId) return
+    if (!effectiveFacilityId) return
     setSaving(true)
     
     const isEnabled = isMilestoneEnabled(procedureId, milestoneId)
@@ -123,7 +111,7 @@ export default function ProcedureMilestonesSettingsPage() {
       const { data } = await supabase
         .from('procedure_milestone_config')
         .insert({
-          facility_id: facilityId,
+          facility_id: effectiveFacilityId,
           procedure_type_id: procedureId,
           facility_milestone_id: milestoneId,
           display_order: milestone?.display_order || 0
@@ -172,7 +160,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
   // Enable all milestones for a procedure
   const enableAllMilestones = async (procedureId: string) => {
-    if (!facilityId) return
+    if (!effectiveFacilityId) return
     setSaving(true)
 
     for (const m of milestones) {
@@ -180,7 +168,7 @@ export default function ProcedureMilestonesSettingsPage() {
         await supabase
           .from('procedure_milestone_config')
           .insert({
-            facility_id: facilityId,
+            facility_id: effectiveFacilityId,
             procedure_type_id: procedureId,
             facility_milestone_id: m.id,
             display_order: m.display_order
@@ -209,9 +197,13 @@ export default function ProcedureMilestonesSettingsPage() {
           title="Procedure Milestones"
           description="Configure which milestones appear for each procedure type. Click a procedure to customize its milestones."
         >
-          {loading ? (
+          {loading || userLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : !effectiveFacilityId ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+              <p className="text-slate-500">No facility selected</p>
             </div>
           ) : (
             <>
@@ -393,8 +385,8 @@ export default function ProcedureMilestonesSettingsPage() {
                     <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <p>No procedure types configured for your facility.</p>
-                    <p className="text-sm mt-1">Contact your administrator to add procedures.</p>
+                    <p>No procedure types configured for this facility.</p>
+                    <p className="text-sm mt-1">Add procedures in the Procedure Types settings first.</p>
                   </div>
                 )}
               </div>
