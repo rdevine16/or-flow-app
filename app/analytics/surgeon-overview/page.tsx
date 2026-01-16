@@ -1080,10 +1080,10 @@ export default function SurgeonOverviewPage() {
                               <td className="px-6 py-4 text-sm font-medium text-slate-900">{proc.procedure_name}</td>
                               <td className="px-6 py-4 text-sm text-slate-600 text-center">{proc.case_count}</td>
                               <td className="px-6 py-4 text-sm text-slate-600 text-center font-mono">
-                                {proc.avg_surgical_seconds ? formatSecondsToHHMMSS(proc.avg_surgical_seconds) : '--'}
+                                {proc.avg_surgical_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_surgical_seconds)) : '--'}
                               </td>
                               <td className="px-6 py-4 text-sm text-slate-600 text-center font-mono">
-                                {proc.avg_total_seconds ? formatSecondsToHHMMSS(proc.avg_total_seconds) : '--'}
+                                {proc.avg_total_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_total_seconds)) : '--'}
                               </td>
                               <td className="px-6 py-4 text-center">
                                 <span className={`text-sm font-medium ${consistency.color}`}>
@@ -1288,7 +1288,7 @@ export default function SurgeonOverviewPage() {
                     <p className="text-sm text-slate-500">Avg Surgical Time</p>
                     <p className="text-xl font-bold text-slate-900 font-mono">
                       {selectedProcedure?.avg_surgical_seconds 
-                        ? formatSecondsToHHMMSS(selectedProcedure.avg_surgical_seconds)
+                        ? formatSecondsToHHMMSS(Math.round(selectedProcedure.avg_surgical_seconds))
                         : '--'}
                     </p>
                   </div>
@@ -1296,7 +1296,7 @@ export default function SurgeonOverviewPage() {
                     <p className="text-sm text-slate-500">Avg Total Time</p>
                     <p className="text-xl font-bold text-slate-900 font-mono">
                       {selectedProcedure?.avg_total_seconds
-                        ? formatSecondsToHHMMSS(selectedProcedure.avg_total_seconds)
+                        ? formatSecondsToHHMMSS(Math.round(selectedProcedure.avg_total_seconds))
                         : '--'}
                     </p>
                   </div>
@@ -1307,7 +1307,7 @@ export default function SurgeonOverviewPage() {
                   <div className="bg-blue-50 rounded-lg p-4">
                     <p className="text-sm font-medium text-blue-800 mb-1">Surgical Time Range</p>
                     <p className="text-sm text-blue-700">
-                      {formatSecondsToHHMMSS(procedureCases[0].surgical_seconds || 0)} — {formatSecondsToHHMMSS(procedureCases[procedureCases.length - 1].surgical_seconds || 0)}
+                      {formatSecondsToHHMMSS(Math.round(procedureCases[0].surgical_seconds || 0))} — {formatSecondsToHHMMSS(Math.round(procedureCases[procedureCases.length - 1].surgical_seconds || 0))}
                     </p>
                   </div>
                 )}
@@ -1329,7 +1329,7 @@ export default function SurgeonOverviewPage() {
                           <p className="text-xs text-slate-500">{procedureCases[0].scheduled_date}</p>
                         </div>
                         <span className="font-mono text-emerald-700 font-semibold">
-                          {formatSecondsToHHMMSS(procedureCases[0].surgical_seconds || 0)}
+                          {formatSecondsToHHMMSS(Math.round(procedureCases[0].surgical_seconds || 0))}
                         </span>
                       </div>
                       
@@ -1345,7 +1345,7 @@ export default function SurgeonOverviewPage() {
                           <p className="text-xs text-slate-500">{procedureCases[procedureCases.length - 1].scheduled_date}</p>
                         </div>
                         <span className="font-mono text-amber-700 font-semibold">
-                          {formatSecondsToHHMMSS(procedureCases[procedureCases.length - 1].surgical_seconds || 0)}
+                          {formatSecondsToHHMMSS(Math.round(procedureCases[procedureCases.length - 1].surgical_seconds || 0))}
                         </span>
                       </div>
                     </div>
@@ -1374,7 +1374,7 @@ export default function SurgeonOverviewPage() {
                             </td>
                             <td className="px-4 py-2 text-sm text-slate-600">{c.scheduled_date}</td>
                             <td className="px-4 py-2 text-sm text-right font-mono text-slate-900">
-                              {c.surgical_seconds ? formatSecondsToHHMMSS(c.surgical_seconds) : '--'}
+                              {c.surgical_seconds ? formatSecondsToHHMMSS(Math.round(c.surgical_seconds)) : '--'}
                             </td>
                           </tr>
                         ))}
