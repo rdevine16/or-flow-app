@@ -94,9 +94,15 @@ export default function UsersSettingsPage() {
       .select('id, first_name, last_name, email, role_id, access_level, facility_id, user_roles(name), facilities(name)')
       .order('last_name')
 
-    if (!isGlobal && facilityId) {
-      usersQuery = usersQuery.eq('facility_id', facilityId)
-    }
+if (!isGlobal && facilityId) {
+  // Only show users who:
+  // 1. Belong to THIS facility
+  // 2. Are regular staff ('user') or facility admins — NOT device reps or global admins
+  usersQuery = usersQuery
+    .eq('facility_id', facilityId)
+    .in('access_level', ['user', 'facility_admin'])
+}
+
 
     const [usersRes, rolesRes, facilitiesRes] = await Promise.all([
       usersQuery,
