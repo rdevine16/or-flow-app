@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { createClient } from '../../../lib/supabase'
 import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
+import Container from '../../../components/ui/Container'
+
 
 interface AuditLogEntry {
   id: string
@@ -238,34 +240,25 @@ const csvContent = [
   if (userLoading || (!isGlobalAdmin && !userLoading)) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
+        <Container className="py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </Container>
       </DashboardLayout>
     )
   }
 
   return (
     <DashboardLayout>
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4 mb-2">
-          <Link
-            href="/admin"
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Global Audit Log</h1>
-            <p className="text-slate-500">View all system activity across all facilities</p>
-          </div>
+      <Container className="py-8">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900">Global Audit Log</h1>
+          <p className="text-slate-500 mt-1">View all system activity across all facilities</p>
         </div>
-      </div>
 
-      {/* Stats Cards */}
+        {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <p className="text-sm text-slate-500">Total Entries</p>
@@ -599,6 +592,7 @@ const csvContent = [
           </div>
         </div>
       </div>
+            </Container>
     </DashboardLayout>
   )
 }
