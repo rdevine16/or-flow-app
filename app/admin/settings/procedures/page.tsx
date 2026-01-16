@@ -16,15 +16,25 @@ interface DefaultProcedure {
   id: string
   name: string
   body_region_id: string | null
+  procedure_category_id: string | null
   implant_category: string | null
   is_active: boolean
   created_at: string
-  body_region?: { name: string } | null
+  body_region?: { name: string; display_name: string } | null
+  procedure_category?: { name: string; display_name: string } | null
 }
 
 interface BodyRegion {
   id: string
   name: string
+  display_name: string
+}
+
+interface ProcedureCategory {
+  id: string
+  name: string
+  display_name: string
+  body_region_id: string | null
 }
 
 interface MilestoneType {
@@ -54,6 +64,7 @@ export default function DefaultProceduresPage() {
 
   const [procedures, setProcedures] = useState<DefaultProcedure[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
+  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [milestoneTypes, setMilestoneTypes] = useState<MilestoneType[]>([])
   const [procedureMilestones, setProcedureMilestones] = useState<DefaultProcedureMilestone[]>([])
   const [loading, setLoading] = useState(true)
@@ -69,6 +80,7 @@ export default function DefaultProceduresPage() {
   // Form state
   const [formName, setFormName] = useState('')
   const [formBodyRegion, setFormBodyRegion] = useState<string>('')
+  const [formProcedureCategory, setFormProcedureCategory] = useState<string>('')
   const [formImplantCategory, setFormImplantCategory] = useState<string>('')
   const [formIsActive, setFormIsActive] = useState(true)
 
@@ -94,15 +106,19 @@ export default function DefaultProceduresPage() {
     setLoading(true)
 
     try {
-      const [proceduresRes, regionsRes, milestonesRes, procMilestonesRes] = await Promise.all([
+      const [proceduresRes, regionsRes, categoriesRes, milestonesRes, procMilestonesRes] = await Promise.all([
         supabase
           .from('default_procedure_types')
-          .select('*, body_region:body_regions(name)')
+          .select('*, body_region:body_regions(name, display_name), procedure_category:procedure_categories(name, display_name)')
           .order('name'),
         supabase
           .from('body_regions')
-          .select('id, name')
-          .order('name'),
+          .select('id, name, display_name')
+          .order('display_name'),
+        supabase
+          .from('procedure_categories')
+          .select('id, name, display_name, body_region_id')
+          .order('display_name'),
         supabase
           .from('milestone_types')
           .select('id, name, display_name, display_order, pair_position')
@@ -114,6 +130,7 @@ export default function DefaultProceduresPage() {
 
       if (proceduresRes.data) setProcedures(proceduresRes.data)
       if (regionsRes.data) setBodyRegions(regionsRes.data)
+      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
       if (milestonesRes.data) setMilestoneTypes(milestonesRes.data)
       if (procMilestonesRes.data) setProcedureMilestones(procMilestonesRes.data)
     } catch (error) {
@@ -127,6 +144,7 @@ export default function DefaultProceduresPage() {
     setEditingProcedure(null)
     setFormName('')
     setFormBodyRegion('')
+    setFormProcedureCategory('')
     setFormImplantCategory('')
     setFormIsActive(true)
     setShowModal(true)
@@ -137,6 +155,7 @@ export default function DefaultProceduresPage() {
     setEditingProcedure(procedure)
     setFormName(procedure.name)
     setFormBodyRegion(procedure.body_region_id || '')
+    setFormProcedureCategory(procedure.procedure_category_id || '')
     setFormImplantCategory(procedure.implant_category || '')
     setFormIsActive(procedure.is_active)
     setShowModal(true)
@@ -151,6 +170,7 @@ export default function DefaultProceduresPage() {
       const data = {
         name: formName.trim(),
         body_region_id: formBodyRegion || null,
+        procedure_category_id: formProcedureCategory || null,
         implant_category: formImplantCategory || null,
         is_active: formIsActive,
       }
@@ -166,6 +186,7 @@ export default function DefaultProceduresPage() {
         await adminAudit.defaultProcedureUpdated(supabase, formName.trim(), editingProcedure.id, {
           name: formName.trim(),
           body_region_id: formBodyRegion || null,
+          procedure_category_id: formProcedureCategory || null,
           implant_category: formImplantCategory || null,
           is_active: formIsActive,
         })
@@ -177,6 +198,9 @@ export default function DefaultProceduresPage() {
                 ...data,
                 body_region: formBodyRegion 
                   ? bodyRegions.find(r => r.id === formBodyRegion) || null
+                  : null,
+                procedure_category: formProcedureCategory
+                  ? procedureCategories.find(c => c.id === formProcedureCategory) || null
                   : null
               }
             : p
@@ -185,7 +209,7 @@ export default function DefaultProceduresPage() {
         const { data: newProcedure, error } = await supabase
           .from('default_procedure_types')
           .insert(data)
-          .select('*, body_region:body_regions(name)')
+          .select('*, body_region:body_regions(name, display_name), procedure_category:procedure_categories(name, display_name)')
           .single()
 
         if (error) throw error
@@ -508,6 +532,7 @@ export default function DefaultProceduresPage() {
                     <tr className="border-b border-slate-200 bg-slate-50">
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-16">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Procedure Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Category</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Region</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Implant</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-36">Milestones</th>
@@ -522,7 +547,7 @@ export default function DefaultProceduresPage() {
 
                       return (
                         <tr key={procedure.id} className="group">
-                          <td colSpan={6} className="p-0">
+                          <td colSpan={7} className="p-0">
                             {/* Main Row */}
                             <div
                               className={`flex items-center cursor-pointer hover:bg-slate-50 transition-colors ${
@@ -549,14 +574,21 @@ export default function DefaultProceduresPage() {
                               </div>
 
                               {/* Procedure Name */}
-                              <div className="px-4 py-3 flex-1">
-                                <span className="text-sm font-medium text-slate-900">{procedure.name}</span>
+                              <div className="px-4 py-3 flex-1 min-w-0">
+                                <span className="text-sm font-medium text-slate-900 truncate">{procedure.name}</span>
+                              </div>
+
+                              {/* Category */}
+                              <div className="px-4 py-3 w-40">
+                                <span className="text-sm text-slate-500 truncate">
+                                  {procedure.procedure_category?.display_name || '—'}
+                                </span>
                               </div>
 
                               {/* Region */}
                               <div className="px-4 py-3 w-32">
                                 <span className="text-sm text-slate-500">
-                                  {procedure.body_region?.name || '—'}
+                                  {procedure.body_region?.display_name || procedure.body_region?.name || '—'}
                                 </span>
                               </div>
 
@@ -762,14 +794,38 @@ export default function DefaultProceduresPage() {
                 </label>
                 <select
                   value={formBodyRegion}
-                  onChange={(e) => setFormBodyRegion(e.target.value)}
+                  onChange={(e) => {
+                    setFormBodyRegion(e.target.value)
+                    // Optionally auto-filter categories when region changes
+                  }}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="">None</option>
                   {bodyRegions.map((region) => (
-                    <option key={region.id} value={region.id}>{region.name}</option>
+                    <option key={region.id} value={region.id}>{region.display_name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Procedure Category
+                </label>
+                <select
+                  value={formProcedureCategory}
+                  onChange={(e) => setFormProcedureCategory(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">None</option>
+                  {procedureCategories
+                    .filter(c => !formBodyRegion || c.body_region_id === formBodyRegion || c.body_region_id === null)
+                    .map((category) => (
+                      <option key={category.id} value={category.id}>{category.display_name}</option>
+                    ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  Used for analytics grouping and comparisons
+                </p>
               </div>
               
               <div>
