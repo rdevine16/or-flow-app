@@ -506,13 +506,12 @@ const fetchMilestones = async () => {
   const inactiveCount = milestones.filter(m => !m.is_active).length
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-// WITH this:
-<div className="mb-6">
-  <h1 className="text-2xl font-semibold text-slate-900">Global Milestones</h1>
-  <p className="text-slate-500 mt-1">Manage milestone templates for new facilities. Deactivated milestones won't appear for new facilities.</p>
-</div>
+  <DashboardLayout>
+    <Container className="py-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-slate-900">Global Milestones</h1>
+        <p className="text-slate-500 mt-1">...</p>
+      </div>
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
