@@ -106,20 +106,10 @@ export function formatMinutes(minutes: number | null): string {
 export function formatTimeFromTimestamp(timestamp: string | null): string {
   if (!timestamp) return '--:-- --'
   
-  let hours: number
-  let minutes: number
-  
-  if (timestamp.includes('T')) {
-    const timePart = timestamp.split('T')[1]
-    const timeOnly = timePart.split(/[Z+\-]/)[0]
-    const [h, m] = timeOnly.split(':')
-    hours = parseInt(h)
-    minutes = parseInt(m)
-  } else {
-    const date = new Date(timestamp)
-    hours = date.getUTCHours()
-    minutes = date.getUTCMinutes()
-  }
+  // Parse as Date and use local time for display
+  const date = new Date(timestamp)
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
   
   const ampm = hours >= 12 ? 'pm' : 'am'
   const displayHour = hours % 12 || 12
@@ -240,13 +230,14 @@ export function isOnTimeStart(caseData: CaseWithMilestones, thresholdMinutes: nu
   const milestones = getMilestoneMap(caseData)
   if (!caseData.start_time || !milestones.patient_in) return null
   
-  // Parse scheduled start time (HH:MM:SS format)
+  // Parse scheduled start time (HH:MM:SS format) - this is stored as local time
   const [schedHours, schedMinutes] = caseData.start_time.split(':').map(Number)
   
   // Parse actual start time from patient_in milestone
+  // Use local time methods since scheduled time is in local time
   const actualStart = new Date(milestones.patient_in)
-  const actualHours = actualStart.getUTCHours()
-  const actualMinutes = actualStart.getUTCMinutes()
+  const actualHours = actualStart.getHours()
+  const actualMinutes = actualStart.getMinutes()
   
   // Calculate difference in minutes
   const scheduledTotalMinutes = schedHours * 60 + schedMinutes
@@ -262,10 +253,13 @@ export function getStartDelayMinutes(caseData: CaseWithMilestones): number | nul
   const milestones = getMilestoneMap(caseData)
   if (!caseData.start_time || !milestones.patient_in) return null
   
+  // Parse scheduled time - stored as local time
   const [schedHours, schedMinutes] = caseData.start_time.split(':').map(Number)
+  
+  // Parse actual time - use local time methods to match scheduled time
   const actualStart = new Date(milestones.patient_in)
-  const actualHours = actualStart.getUTCHours()
-  const actualMinutes = actualStart.getUTCMinutes()
+  const actualHours = actualStart.getHours()
+  const actualMinutes = actualStart.getMinutes()
   
   const scheduledTotalMinutes = schedHours * 60 + schedMinutes
   const actualTotalMinutes = actualHours * 60 + actualMinutes
