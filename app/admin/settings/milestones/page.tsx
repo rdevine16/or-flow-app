@@ -110,16 +110,20 @@ export default function AdminMilestonesSettingsPage() {
     fetchMilestones()
   }, [])
 
-  const fetchMilestones = async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('milestone_types')
-      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active')
-      .order('display_order')
+const fetchMilestones = async () => {
+  setLoading(true)
+  console.log('Fetching milestones...')  // ADD THIS
+  
+  const { data, error } = await supabase  // ADD error here
+    .from('milestone_types')
+    .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active')
+    .order('display_order')
 
-    setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
-    setLoading(false)
-  }
+  console.log('Milestones result:', { data, error })  // ADD THIS
+  
+  setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
+  setLoading(false)
+}
 
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
