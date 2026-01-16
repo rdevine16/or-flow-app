@@ -6,9 +6,16 @@
 interface SkeletonProps {
   className?: string
   rounded?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  style?: React.CSSProperties
 }
 
-export function Skeleton({ className = '', rounded = 'md' }: SkeletonProps) {
+interface SkeletonProps {
+  className?: string
+  rounded?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  style?: React.CSSProperties
+}
+
+export function Skeleton({ className = '', rounded = 'md', style }: SkeletonProps) {
   const roundedClasses = {
     sm: 'rounded',
     md: 'rounded-md',
@@ -22,6 +29,7 @@ export function Skeleton({ className = '', rounded = 'md' }: SkeletonProps) {
       className={`animate-pulse bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 bg-[length:200%_100%] ${roundedClasses[rounded]} ${className}`}
       style={{
         animation: 'shimmer 1.5s ease-in-out infinite',
+        ...style,
       }}
     />
   )
