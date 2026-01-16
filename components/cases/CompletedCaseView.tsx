@@ -144,13 +144,22 @@ function getVarianceIndicator(actualMinutes: number, avgMinutes: number, thresho
 function getStartVariance(scheduledTime: string | null, patientInTime: string | null, scheduledDate: string): { minutes: number; isLate: boolean } | null {
   if (!scheduledTime || !patientInTime) return null
   
-  // Parse scheduled time (HH:MM:SS) and combine with date
+  // Parse scheduled time (HH:MM:SS) - e.g., "13:26:00"
   const [hours, minutes, seconds] = scheduledTime.split(':').map(Number)
-  const scheduledDateTime = new Date(scheduledDate)
-  scheduledDateTime.setHours(hours, minutes, seconds || 0, 0)
   
+  // Parse the actual patient-in time (ISO string)
   const actualDateTime = new Date(patientInTime)
-  const diffMinutes = (actualDateTime.getTime() - scheduledDateTime.getTime()) / (1000 * 60)
+  
+  // Extract the local time components from the actual patient-in time
+  // and compare just the time portions (hours + minutes) from the same day
+  const actualHours = actualDateTime.getHours()
+  const actualMinutes = actualDateTime.getMinutes()
+  
+  // Convert both to minutes since midnight for comparison
+  const scheduledTotalMinutes = hours * 60 + minutes
+  const actualTotalMinutes = actualHours * 60 + actualMinutes
+  
+  const diffMinutes = actualTotalMinutes - scheduledTotalMinutes
   
   return {
     minutes: Math.abs(diffMinutes),
