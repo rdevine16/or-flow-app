@@ -8,6 +8,7 @@ import {
   OutlierCase,
   CaseIssue,
   FinancialsMetrics,
+  FinancialBreakdown,
 } from './types'
 import { getCaseDurationMinutes, calculateCaseProfit, CaseProfitResult } from './utils'
 
@@ -201,6 +202,18 @@ export function useFinancialsMetrics(
         issues.push({ type: 'unknown' })
       }
 
+      // BUILD FINANCIAL BREAKDOWN FOR DRAWER
+      const financialBreakdown: FinancialBreakdown = {
+        reimbursement: c.reimbursement,
+        softGoodsCost: c.procedure_types?.soft_goods_cost || 0,
+        hardGoodsCost: c.procedure_types?.hard_goods_cost || 0,
+        orCost: c.orCost,
+        orRate: orRate,
+        payerName: c.payers?.name || null,
+        defaultReimbursement: c.defaultReimbursement,
+        payerReimbursement: c.payerReimbursement,
+      }
+
       return {
         caseId: c.id,
         caseNumber: c.case_number,
@@ -213,6 +226,7 @@ export function useFinancialsMetrics(
         durationMinutes: actualDuration,
         expectedDurationMinutes: expectedDuration,
         issues,
+        financialBreakdown, // NEW: Include financial breakdown
       }
     }).sort((a, b) => a.gap - b.gap)
 

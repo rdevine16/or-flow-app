@@ -1,36 +1,44 @@
 // ============================================
-// FINANCIALS ANALYTICS TYPES
+// CASE AND FINANCIAL DATA TYPES
 // ============================================
-
-export interface CaseDelay {
-  id: string
-  delay_type_id: string
-  duration_minutes: number | null
-  notes: string | null
-  delay_types: { name: string } | null
-}
 
 export interface CaseWithFinancials {
   id: string
   case_number: string
   scheduled_date: string
   surgeon_id: string | null
-  surgeon: { first_name: string; last_name: string } | null
+  surgeon: {
+    first_name: string
+    last_name: string
+  } | null
   procedure_type_id: string | null
-  procedure_types: { 
+  procedure_types: {
     id: string
     name: string
     soft_goods_cost: number | null
     hard_goods_cost: number | null
   } | null
   payer_id: string | null
-  payers: { id: string; name: string } | null
-  case_milestones: Array<{
+  payers: {
+    id: string
+    name: string
+  } | null
+  case_milestones: {
     milestone_type_id: string
     recorded_at: string
-    milestone_types: { name: string } | null
-  }>
-  case_delays: CaseDelay[]
+    milestone_types: {
+      name: string
+    } | null
+  }[]
+  case_delays: {
+    id: string
+    delay_type_id: string
+    duration_minutes: number | null
+    notes: string | null
+    delay_types: {
+      name: string
+    } | null
+  }[]
 }
 
 export interface FacilitySettings {
@@ -42,6 +50,10 @@ export interface ProcedureReimbursement {
   payer_id: string | null
   reimbursement: number
 }
+
+// ============================================
+// STATS AND METRICS TYPES
+// ============================================
 
 export interface SurgeonStats {
   surgeonId: string
@@ -65,33 +77,51 @@ export interface ProcedureStats {
   surgeonBreakdown: SurgeonStats[]
 }
 
-// Issue detail types
-export interface OverTimeIssue {
-  type: 'overTime'
-  actualMinutes: number
-  expectedMinutes: number
-  percentOver: number
+// ============================================
+// ISSUE TYPES
+// ============================================
+
+export type CaseIssue = 
+  | { 
+      type: 'overTime'
+      actualMinutes: number
+      expectedMinutes: number
+      percentOver: number
+    }
+  | { 
+      type: 'delay'
+      delays: { name: string; minutes: number | null }[]
+      totalMinutes: number
+    }
+  | { 
+      type: 'lowPayer'
+      payerName: string
+      payerRate: number
+      defaultRate: number
+      percentBelow: number
+    }
+  | { 
+      type: 'unknown' 
+    }
+
+// ============================================
+// FINANCIAL BREAKDOWN (NEW)
+// ============================================
+
+export interface FinancialBreakdown {
+  reimbursement: number
+  softGoodsCost: number
+  hardGoodsCost: number
+  orCost: number
+  orRate: number
+  payerName: string | null
+  defaultReimbursement: number | null
+  payerReimbursement: number | null
 }
 
-export interface DelayIssue {
-  type: 'delay'
-  delays: Array<{ name: string; minutes: number | null }>
-  totalMinutes: number
-}
-
-export interface LowPayerIssue {
-  type: 'lowPayer'
-  payerName: string
-  payerRate: number
-  defaultRate: number
-  percentBelow: number
-}
-
-export interface UnknownIssue {
-  type: 'unknown'
-}
-
-export type CaseIssue = OverTimeIssue | DelayIssue | LowPayerIssue | UnknownIssue
+// ============================================
+// OUTLIER CASE (UPDATED)
+// ============================================
 
 export interface OutlierCase {
   caseId: string
@@ -105,7 +135,13 @@ export interface OutlierCase {
   durationMinutes: number
   expectedDurationMinutes: number
   issues: CaseIssue[]
+  // NEW: Financial breakdown for drawer
+  financialBreakdown: FinancialBreakdown | null
 }
+
+// ============================================
+// ISSUE STATS
+// ============================================
 
 export interface IssueStats {
   overTime: number
@@ -114,10 +150,18 @@ export interface IssueStats {
   unknown: number
 }
 
+// ============================================
+// PROFIT TREND
+// ============================================
+
 export interface ProfitTrendPoint {
   date: string
   profit: number
 }
+
+// ============================================
+// MAIN METRICS OBJECT
+// ============================================
 
 export interface FinancialsMetrics {
   totalCases: number
@@ -135,5 +179,9 @@ export interface FinancialsMetrics {
   profitTrend: ProfitTrendPoint[]
   orRate: number
 }
+
+// ============================================
+// UI TYPES
+// ============================================
 
 export type SubTab = 'overview' | 'procedure' | 'surgeon' | 'outliers'

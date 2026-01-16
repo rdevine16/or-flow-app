@@ -1,16 +1,38 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { FinancialsMetrics } from './types'
+import { FinancialsMetrics, OutlierCase } from './types'
 import { formatCurrency } from './utils'
 import MetricCard from './MetricCard'
 import IssuesBadge from './IssuesBadge'
+import OutlierDetailDrawer from './OutlierDetailDrawer'
 
 interface OutliersTabProps {
   metrics: FinancialsMetrics
 }
 
 export default function OutliersTab({ metrics }: OutliersTabProps) {
+  const [selectedOutlier, setSelectedOutlier] = useState<OutlierCase | null>(null)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+
+  const handleRowClick = (outlier: OutlierCase) => {
+    setSelectedOutlier(outlier)
+    setIsDrawerOpen(true)
+  }
+
+  const handleCloseDrawer = () => {
+    setIsDrawerOpen(false)
+    // Delay clearing the outlier to allow for close animation
+    setTimeout(() => setSelectedOutlier(null), 300)
+  }
+
+  // Get financial breakdown for selected outlier
+  const getFinancialBreakdown = (outlier: OutlierCase | null) => {
+    if (!outlier || !outlier.financialBreakdown) return null
+    return outlier.financialBreakdown
+  }
+
   return (
     <div className="space-y-6">
       {/* Summary */}
@@ -49,7 +71,7 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-200">
             <h3 className="text-lg font-semibold text-slate-900">Cases Below Expected Profit</h3>
-            <p className="text-sm text-slate-500">Sorted by largest gap from expected • Hover issues for details</p>
+            <p className="text-sm text-slate-500">Click a row to view financial breakdown</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -66,12 +88,16 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {metrics.outlierDetails.map(outlier => (
-                  <tr key={outlier.caseId} className="hover:bg-slate-50">
+                  <tr 
+                    key={outlier.caseId} 
+                    onClick={() => handleRowClick(outlier)}
+                    className="hover:bg-blue-50 cursor-pointer transition-colors group"
+                  >
                     <td className="px-6 py-4 text-sm text-slate-600">{outlier.date}</td>
                     <td className="px-6 py-4">
-                      <Link href={`/cases/${outlier.caseId}`} className="text-blue-600 hover:underline font-medium">
+                      <span className="text-blue-600 group-hover:underline font-medium">
                         {outlier.caseNumber}
-                      </Link>
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-900">{outlier.surgeonName}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{outlier.procedureName}</td>
@@ -81,7 +107,7 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
                     <td className="px-6 py-4 text-right text-sm font-semibold text-red-600">
                       {formatCurrency(outlier.gap)}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                       <IssuesBadge issues={outlier.issues} caseId={outlier.caseId} />
                     </td>
                   </tr>
@@ -101,6 +127,14 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
           <p className="text-slate-500">All cases are within expected profit ranges.</p>
         </div>
       )}
+
+      {/* Drawer */}
+      <OutlierDetailDrawer
+        outlier={selectedOutlier}
+        financials={getFinancialBreakdown(selectedOutlier)}
+        isOpen={isDrawerOpen}
+        onClose={handleCloseDrawer}
+      />
     </div>
   )
 }
