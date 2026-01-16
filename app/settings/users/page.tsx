@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '../../../lib/supabase'
+import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
@@ -40,6 +41,18 @@ const getRoleName = (userRoles: { name: string }[] | { name: string } | null): s
 
 export default function UsersSettingsPage() {
   const supabase = createClient()
+  
+  // =============================================
+  // USE THE CONTEXT instead of fetching our own user data
+  // This automatically handles impersonation!
+  // =============================================
+  const { 
+    isGlobalAdmin, 
+    effectiveFacilityId, 
+    isImpersonating,
+    loading: userLoading 
+  } = useUser()
+  
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<UserRole[]>([])
   const [facilities, setFacilities] = useState<Facility[]>([])
@@ -49,8 +62,6 @@ export default function UsersSettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [currentUserFacilityId, setCurrentUserFacilityId] = useState<string | null>(null)
-  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [resendingInvite, setResendingInvite] = useState<string | null>(null)
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set())
@@ -64,29 +75,25 @@ export default function UsersSettingsPage() {
     facility_id: '',
   })
 
+  // =============================================
+  // Fetch data when context is ready
+  // =============================================
   useEffect(() => {
-    fetchCurrentUser()
-  }, [])
+    if (!userLoading) {
+      fetchCurrentUserId()
+      fetchData()
+    }
+  }, [userLoading, effectiveFacilityId, isImpersonating])
 
-  const fetchCurrentUser = async () => {
+  // Just get the current user's ID for "is this me?" checks
+  const fetchCurrentUserId = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       setCurrentUserId(user.id)
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id, access_level')
-        .eq('id', user.id)
-        .single()
-
-      if (userData) {
-        setCurrentUserFacilityId(userData.facility_id)
-        setIsGlobalAdmin(userData.access_level === 'global_admin')
-        fetchData(userData.facility_id, userData.access_level === 'global_admin')
-      }
     }
   }
 
-  const fetchData = async (facilityId: string | null, isGlobal: boolean) => {
+  const fetchData = async () => {
     setLoading(true)
 
     let usersQuery = supabase
@@ -94,20 +101,27 @@ export default function UsersSettingsPage() {
       .select('id, first_name, last_name, email, role_id, access_level, facility_id, user_roles(name), facilities(name)')
       .order('last_name')
 
-if (!isGlobal && facilityId) {
-  // Only show users who:
-  // 1. Belong to THIS facility
-  // 2. Are regular staff ('user') or facility admins — NOT device reps or global admins
-  usersQuery = usersQuery
-    .eq('facility_id', facilityId)
-    .in('access_level', ['user', 'facility_admin'])
-}
+    // =============================================
+    // KEY FIX: Apply facility filter correctly
+    // =============================================
+    // Show all users only if:
+    // - User IS a global admin AND
+    // - User is NOT currently impersonating a facility
+    const showAllUsers = isGlobalAdmin && !isImpersonating
 
+    if (!showAllUsers && effectiveFacilityId) {
+      // Filter to facility users only
+      // Exclude device_rep (they have their own tab) and global_admin
+      usersQuery = usersQuery
+        .eq('facility_id', effectiveFacilityId)
+        .in('access_level', ['user', 'facility_admin'])
+    }
 
     const [usersRes, rolesRes, facilitiesRes] = await Promise.all([
       usersQuery,
       supabase.from('user_roles').select('id, name').order('name'),
-      isGlobal 
+      // Only fetch facilities list if showing all users (for the edit modal dropdown)
+      showAllUsers
         ? supabase.from('facilities').select('id, name').order('name')
         : Promise.resolve({ data: [] }),
     ])
@@ -141,7 +155,7 @@ if (!isGlobal && facilityId) {
 
   const handleInviteSuccess = () => {
     setSuccessMessage('Invitation sent successfully!')
-    fetchData(currentUserFacilityId, isGlobalAdmin)
+    fetchData()
     setTimeout(() => setSuccessMessage(null), 5000)
   }
 
@@ -198,6 +212,9 @@ if (!isGlobal && facilityId) {
   const handleEdit = async () => {
     if (!editingUser) return
 
+    // Only allow changing facility if global admin and NOT impersonating
+    const canChangeFacility = isGlobalAdmin && !isImpersonating
+
     const updateData: Record<string, string | null> = {
       first_name: editFormData.first_name,
       last_name: editFormData.last_name,
@@ -205,7 +222,7 @@ if (!isGlobal && facilityId) {
       access_level: editFormData.access_level,
     }
 
-    if (isGlobalAdmin && editFormData.facility_id) {
+    if (canChangeFacility && editFormData.facility_id) {
       updateData.facility_id = editFormData.facility_id
     }
 
@@ -238,7 +255,7 @@ if (!isGlobal && facilityId) {
       }
 
       setSuccessMessage('User updated successfully!')
-      fetchData(currentUserFacilityId, isGlobalAdmin)
+      fetchData()
       closeEditModal()
       setTimeout(() => setSuccessMessage(null), 5000)
     }
@@ -291,6 +308,9 @@ if (!isGlobal && facilityId) {
 
   const isPending = (userId: string) => pendingUserIds.has(userId)
 
+  // Determine if we should show the facility column/dropdown
+  const showAllUsers = isGlobalAdmin && !isImpersonating
+
   return (
     <DashboardLayout>
       <Container className="py-8">
@@ -298,7 +318,7 @@ if (!isGlobal && facilityId) {
           title="Users & Roles"
           description="Manage staff members who can access the system."
         >
-          {loading ? (
+          {loading || userLoading ? (
             <div className="flex items-center justify-center py-12">
               <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -400,7 +420,8 @@ if (!isGlobal && facilityId) {
                                 )}
                               </div>
                               <p className="text-sm text-slate-500">{user.email}</p>
-                              {isGlobalAdmin && user.facilities && (
+                              {/* Only show facility name when viewing ALL users (not impersonating) */}
+                              {showAllUsers && user.facilities && (
                                 <p className="text-xs text-slate-400 mt-0.5">
                                   {(user.facilities as { name: string }).name}
                                 </p>
@@ -500,7 +521,7 @@ if (!isGlobal && facilityId) {
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onSuccess={handleInviteSuccess}
-        facilityId={currentUserFacilityId}
+        facilityId={effectiveFacilityId}
         roles={roles}
       />
 
@@ -592,7 +613,8 @@ if (!isGlobal && facilityId) {
                 >
                   <option value="user">Staff — View cases, record milestones</option>
                   <option value="facility_admin">Facility Admin — Full facility access</option>
-                  {isGlobalAdmin && (
+                  {/* Only show global admin option if viewing all users (not impersonating) */}
+                  {showAllUsers && (
                     <option value="global_admin">Global Admin — All facilities access</option>
                   )}
                 </select>
@@ -601,7 +623,8 @@ if (!isGlobal && facilityId) {
                 )}
               </div>
 
-              {isGlobalAdmin && facilities.length > 0 && editFormData.access_level !== 'global_admin' && (
+              {/* Only show facility dropdown when viewing all users (not impersonating) */}
+              {showAllUsers && facilities.length > 0 && editFormData.access_level !== 'global_admin' && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Facility

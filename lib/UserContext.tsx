@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { createClient } from './supabase'
+import { getImpersonationState } from './impersonation'
 
 // User data type - matches what DashboardLayout uses
 interface UserData {
@@ -19,6 +20,12 @@ interface UserContextType {
   isGlobalAdmin: boolean
   isFacilityAdmin: boolean
   isAdmin: boolean
+  // NEW: Impersonation-aware properties
+  isImpersonating: boolean
+  impersonatedFacilityId: string | null
+  impersonatedFacilityName: string | null
+  effectiveFacilityId: string | null  // USE THIS for all queries
+  refreshImpersonation: () => void    // Call after starting/ending impersonation
 }
 
 const defaultUserData: UserData = {
@@ -36,12 +43,34 @@ const UserContext = createContext<UserContextType>({
   isGlobalAdmin: false,
   isFacilityAdmin: false,
   isAdmin: false,
+  // Impersonation defaults
+  isImpersonating: false,
+  impersonatedFacilityId: null,
+  impersonatedFacilityName: null,
+  effectiveFacilityId: null,
+  refreshImpersonation: () => {},
 })
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const supabase = createClient()
   const [userData, setUserData] = useState<UserData>(defaultUserData)
   const [loading, setLoading] = useState(true)
+  
+  // Impersonation state
+  const [impersonatedFacilityId, setImpersonatedFacilityId] = useState<string | null>(null)
+  const [impersonatedFacilityName, setImpersonatedFacilityName] = useState<string | null>(null)
+
+  // Function to check/refresh impersonation state from localStorage
+  const refreshImpersonation = () => {
+    const impersonation = getImpersonationState()
+    if (impersonation) {
+      setImpersonatedFacilityId(impersonation.facilityId)
+      setImpersonatedFacilityName(impersonation.facilityName)
+    } else {
+      setImpersonatedFacilityId(null)
+      setImpersonatedFacilityName(null)
+    }
+  }
 
   useEffect(() => {
     async function fetchUser() {
@@ -80,15 +109,49 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       }
     }
+    
     fetchUser()
+    
+    // Check impersonation state on mount
+    refreshImpersonation()
+    
+    // Listen for storage changes (in case impersonation starts/ends)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'orbit-impersonation') {
+        refreshImpersonation()
+      }
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const isGlobalAdmin = userData.accessLevel === 'global_admin'
   const isFacilityAdmin = userData.accessLevel === 'facility_admin'
   const isAdmin = isGlobalAdmin || isFacilityAdmin
+  
+  // Impersonation is only active for global admins
+  const isImpersonating = isGlobalAdmin && impersonatedFacilityId !== null
+  
+  // THE KEY: Use impersonated facility if active, otherwise user's actual facility
+  const effectiveFacilityId = isImpersonating 
+    ? impersonatedFacilityId 
+    : userData.facilityId
 
   return (
-    <UserContext.Provider value={{ userData, loading, isGlobalAdmin, isFacilityAdmin, isAdmin }}>
+    <UserContext.Provider value={{ 
+      userData, 
+      loading, 
+      isGlobalAdmin, 
+      isFacilityAdmin, 
+      isAdmin,
+      // Impersonation values
+      isImpersonating,
+      impersonatedFacilityId,
+      impersonatedFacilityName,
+      effectiveFacilityId,
+      refreshImpersonation,
+    }}>
       {children}
     </UserContext.Provider>
   )
