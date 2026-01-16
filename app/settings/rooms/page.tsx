@@ -124,8 +124,8 @@ const handleDelete = async (id: string) => {
         r.id === id ? { ...r, deleted_at: null } : r
       ))
       
-      // You could add an audit log for restore if desired
-      // await roomAudit.restored(supabase, roomName, id)
+      // Audit log
+      await roomAudit.restored(supabase, roomName, id)
     }
   }
 

@@ -60,6 +60,7 @@ export type AuditAction =
   | 'room.created'
   | 'room.updated'
   | 'room.deleted'
+  | 'room.restored'
   // Procedure Types
   | 'procedure_type.created'
   | 'procedure_type.updated'
@@ -148,6 +149,8 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'room.created': 'created an OR room',
   'room.updated': 'updated an OR room',
   'room.deleted': 'deleted an OR room',
+  'room.restored': 'restored an OR room',
+
   // Procedure Types
   'procedure_type.created': 'created a procedure type',
   'procedure_type.updated': 'updated a procedure type',
@@ -607,11 +610,20 @@ export const roomAudit = {
     })
   },
 
-  async deleted(supabase: SupabaseClient, roomName: string, roomId: string) {
+async deleted(supabase: SupabaseClient, roomName: string, roomId: string) {
     await log(supabase, 'room.deleted', {
       targetType: 'room',
       targetId: roomId,
       targetLabel: roomName,
+    })
+  },
+
+  async restored(supabase: SupabaseClient, roomName: string, roomId: string) {
+    await log(supabase, 'room.restored', {
+      targetType: 'room',
+      targetId: roomId,
+      targetLabel: roomName,
+      newValues: { restored: true },
     })
   },
 }
