@@ -76,7 +76,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 const fetchUser = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
-    console.log('Auth user:', user)  // ← Add this
+    console.log('Auth user:', user)
     
     if (user) {
       const { data: userRecord, error } = await supabase
@@ -91,30 +91,31 @@ const fetchUser = async () => {
         .eq('id', user.id)
         .single()
       
-      console.log('User record:', userRecord, 'Error:', error) 
+      console.log('User record:', userRecord, 'Error:', error)
         
-        if (userRecord) {
-          const facilities = userRecord.facilities as { name: string; timezone: string }[] | null
-          const facility = facilities?.[0] || null
-          setUserData({
-            firstName: userRecord.first_name,
-            lastName: userRecord.last_name,
-            accessLevel: userRecord.access_level,
-            facilityId: userRecord.facility_id,
-            facilityName: facility?.name || null,
-            facilityTimezone: facility?.timezone || 'America/New_York',
-          })
-        }
-      } else {
-        // No user - reset to defaults
-        setUserData(defaultUserData)
+      if (userRecord) {
+        const facilities = userRecord.facilities as { name: string; timezone: string }[] | null
+        const facility = facilities?.[0] || null
+        setUserData({
+          firstName: userRecord.first_name,
+          lastName: userRecord.last_name,
+          accessLevel: userRecord.access_level,
+          facilityId: userRecord.facility_id,
+          facilityName: facility?.name || null,
+          facilityTimezone: facility?.timezone || 'America/New_York',
+        })
       }
-    } catch (error) {
-      console.error('Error fetching user:', error)
-    } finally {
-      setLoading(false)
+    } else {
+      // No user - reset to defaults
+      setUserData(defaultUserData)
     }
+  } catch (error) {
+    console.error('Error fetching user:', error)
+  } finally {
+    console.log('Setting loading to false')
+    setLoading(false)
   }
+}
 
   useEffect(() => {
     // Initial fetch
