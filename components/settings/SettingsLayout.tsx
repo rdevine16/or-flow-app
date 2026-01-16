@@ -97,15 +97,6 @@ const settingsGroups: SettingsGroup[] = [
     label: 'Organization',
     items: [
       {
-        id: 'facilities',
-        label: 'Facilities',
-        href: '/settings/facilities',
-        description: 'Manage hospitals and surgery centers',
-        icon: icons.facilities,
-        badge: 'admin',
-        requiredAccess: ['global_admin'],
-      },
-      {
         id: 'users',
         label: 'Users & Roles',
         href: '/settings/users',
