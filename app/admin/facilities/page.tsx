@@ -118,7 +118,8 @@ if (result.success) {
   // Redirect to dashboard with the impersonated facility
   router.push('/dashboard')
   router.refresh()
-}
+    }
+  }
 
   // Filter facilities
   const filteredFacilities = facilities.filter(facility => {
@@ -390,5 +391,4 @@ if (result.success) {
       </div>
     </DashboardLayout>
   )
-}
 }
