@@ -206,7 +206,35 @@ const [milestoneAverages, setMilestoneAverages] = useState<{
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
-  
+  const [implants, setImplants] = useState<{
+  fixation_type: string | null
+  cup_brand: string | null
+  cup_size_templated: string | null
+  cup_size_final: string | null
+  stem_brand: string | null
+  stem_size_templated: string | null
+  stem_size_final: string | null
+  head_size_templated: string | null
+  head_size_final: string | null
+  liner_size_templated: string | null
+  liner_size_final: string | null
+  femur_brand: string | null
+  femur_type: string | null
+  femur_size_templated: string | null
+  femur_size_final: string | null
+  tibia_brand: string | null
+  tibia_size_templated: string | null
+  tibia_size_final: string | null
+  poly_brand: string | null
+  poly_size_templated: string | null
+  poly_size_final: string | null
+  patella_brand: string | null
+  patella_type: string | null
+  patella_size_templated: string | null
+  patella_size_final: string | null
+} | null>(null)
+
+const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | null>(null)
   // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
@@ -346,7 +374,31 @@ const { data: caseResult } = await supabase
           : (u.user_roles as any)?.name
         return roleName === 'anesthesiologist'
       })
+// ========================================
+// Fetch implant data for this case
+// ========================================
+const { data: implantData } = await supabase
+  .from('case_implants')
+  .select('*')
+  .eq('case_id', id)
+  .maybeSingle()
 
+if (implantData) {
+  setImplants(implantData)
+}
+
+// Fetch implant category from procedure type
+if (caseResult?.procedure_type_id) {
+  const { data: procData } = await supabase
+    .from('procedure_types')
+    .select('implant_category')
+    .eq('id', caseResult.procedure_type_id)
+    .single()
+  
+  if (procData?.implant_category) {
+    setImplantCategory(procData.implant_category as 'hip' | 'knee')
+  }
+}
       // ========================================
       // NEW: Fetch delays for this case
       // ========================================
@@ -882,6 +934,8 @@ setPatientCallTime(caseResult?.call_time || null)
     patientCallTime={patientCallTime}
     surgeonAverage={surgeonProcedureAverage}
     milestoneAverages={milestoneAverages}
+      implants={implants}
+  implantCategory={implantCategory} 
   />
 ) : (
           /* Main Content Grid */

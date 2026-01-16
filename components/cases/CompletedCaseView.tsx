@@ -39,6 +39,36 @@ interface MilestoneAverage {
   avgMinutesFromStart: number
 }
 
+interface ImplantData {
+  fixation_type: string | null
+  // Hip
+  cup_brand: string | null
+  cup_size_templated: string | null
+  cup_size_final: string | null
+  stem_brand: string | null
+  stem_size_templated: string | null
+  stem_size_final: string | null
+  head_size_templated: string | null
+  head_size_final: string | null
+  liner_size_templated: string | null
+  liner_size_final: string | null
+  // Knee
+  femur_brand: string | null
+  femur_type: string | null
+  femur_size_templated: string | null
+  femur_size_final: string | null
+  tibia_brand: string | null
+  tibia_size_templated: string | null
+  tibia_size_final: string | null
+  poly_brand: string | null
+  poly_size_templated: string | null
+  poly_size_final: string | null
+  patella_brand: string | null
+  patella_type: string | null
+  patella_size_templated: string | null
+  patella_size_final: string | null
+}
+
 interface CompletedCaseViewProps {
   caseData: {
     id: string
@@ -63,6 +93,9 @@ interface CompletedCaseViewProps {
   } | null
   // Averages from surgeon_milestone_averages (keyed by milestone name)
   milestoneAverages: MilestoneAverage[]
+  // Implant data
+  implants: ImplantData | null
+  implantCategory: 'hip' | 'knee' | null
 }
 
 // ============================================================================
@@ -242,6 +275,55 @@ function OperativeSideBadge({ side }: { side: string | null }) {
   )
 }
 
+// Implant Row Component
+function ImplantRow({ 
+  component, 
+  brand, 
+  type,
+  templated, 
+  final 
+}: { 
+  component: string
+  brand: string | null
+  type?: string | null
+  templated: string | null
+  final: string | null
+}) {
+  // Check if templated and final match
+  const sizesMatch = templated && final && templated === final
+  const sizesDiffer = templated && final && templated !== final
+  
+  return (
+    <div className="grid grid-cols-4 gap-2 py-1.5 border-b border-slate-50 last:border-0 items-center">
+      <div className="text-xs font-medium text-slate-700">{component}</div>
+      <div className="text-xs text-slate-600">
+        {brand || '—'}
+        {type && <span className="ml-1 text-slate-400">({type})</span>}
+      </div>
+      <div className="text-center">
+        <span className={`text-xs font-mono ${templated ? 'text-slate-700' : 'text-slate-400'}`}>
+          {templated || '—'}
+        </span>
+      </div>
+      <div className="text-center">
+        <span className={`text-xs font-mono font-semibold ${
+          sizesDiffer ? 'text-amber-600' : 
+          sizesMatch ? 'text-emerald-600' : 
+          final ? 'text-slate-700' : 'text-slate-400'
+        }`}>
+          {final || '—'}
+          {sizesDiffer && (
+            <span className="ml-1 text-[10px] text-amber-500">↑</span>
+          )}
+          {sizesMatch && (
+            <span className="ml-1 text-[10px] text-emerald-500">✓</span>
+          )}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // Metric Card Component
 function MetricCard({ 
   label, 
@@ -324,6 +406,8 @@ export default function CompletedCaseView({
   patientCallTime,
   surgeonAverage,
   milestoneAverages,
+  implants,
+  implantCategory,
 }: CompletedCaseViewProps) {
   
   // Sort milestones by recorded time
@@ -862,7 +946,112 @@ export default function CompletedCaseView({
       </div>
 
       {/* ================================================================== */}
-      {/* ROW 4: Notes */}
+      {/* ROW 4: Implants (if applicable) */}
+      {/* ================================================================== */}
+      {implants && implantCategory && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Implants</h3>
+          
+          {/* Fixation Type */}
+          {implants.fixation_type && (
+            <div className="mb-3 pb-3 border-b border-slate-100">
+              <span className="text-xs text-slate-500">Fixation: </span>
+              <span className="text-xs font-semibold text-slate-700 capitalize">{implants.fixation_type}</span>
+            </div>
+          )}
+
+          {/* Column Headers */}
+          <div className="grid grid-cols-4 gap-2 mb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            <div>Component</div>
+            <div>Brand/Type</div>
+            <div className="text-center">Templated</div>
+            <div className="text-center">Final</div>
+          </div>
+
+          <div className="space-y-1">
+            {/* Hip Components */}
+            {implantCategory === 'hip' && (
+              <>
+                {(implants.cup_brand || implants.cup_size_templated || implants.cup_size_final) && (
+                  <ImplantRow 
+                    component="Cup" 
+                    brand={implants.cup_brand} 
+                    templated={implants.cup_size_templated} 
+                    final={implants.cup_size_final} 
+                  />
+                )}
+                {(implants.stem_brand || implants.stem_size_templated || implants.stem_size_final) && (
+                  <ImplantRow 
+                    component="Stem" 
+                    brand={implants.stem_brand} 
+                    templated={implants.stem_size_templated} 
+                    final={implants.stem_size_final} 
+                  />
+                )}
+                {(implants.head_size_templated || implants.head_size_final) && (
+                  <ImplantRow 
+                    component="Head" 
+                    brand={null} 
+                    templated={implants.head_size_templated} 
+                    final={implants.head_size_final} 
+                  />
+                )}
+                {(implants.liner_size_templated || implants.liner_size_final) && (
+                  <ImplantRow 
+                    component="Liner" 
+                    brand={null} 
+                    templated={implants.liner_size_templated} 
+                    final={implants.liner_size_final} 
+                  />
+                )}
+              </>
+            )}
+
+            {/* Knee Components */}
+            {implantCategory === 'knee' && (
+              <>
+                {(implants.femur_brand || implants.femur_size_templated || implants.femur_size_final) && (
+                  <ImplantRow 
+                    component="Femur" 
+                    brand={implants.femur_brand} 
+                    type={implants.femur_type}
+                    templated={implants.femur_size_templated} 
+                    final={implants.femur_size_final} 
+                  />
+                )}
+                {(implants.tibia_brand || implants.tibia_size_templated || implants.tibia_size_final) && (
+                  <ImplantRow 
+                    component="Tibia" 
+                    brand={implants.tibia_brand} 
+                    templated={implants.tibia_size_templated} 
+                    final={implants.tibia_size_final} 
+                  />
+                )}
+                {(implants.poly_brand || implants.poly_size_templated || implants.poly_size_final) && (
+                  <ImplantRow 
+                    component="Poly" 
+                    brand={implants.poly_brand} 
+                    templated={implants.poly_size_templated} 
+                    final={implants.poly_size_final} 
+                  />
+                )}
+                {(implants.patella_brand || implants.patella_size_templated || implants.patella_size_final) && (
+                  <ImplantRow 
+                    component="Patella" 
+                    brand={implants.patella_brand} 
+                    type={implants.patella_type}
+                    templated={implants.patella_size_templated} 
+                    final={implants.patella_size_final} 
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* ROW 5: Notes */}
       {/* ================================================================== */}
       {caseData.notes && (
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
