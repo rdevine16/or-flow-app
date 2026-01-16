@@ -246,7 +246,6 @@ export default function AdminMilestonesSettingsPage() {
           .eq('id', milestone.id)
 
         if (!error) {
-          await milestoneTypeAudit.toggled(supabase, milestone.display_name, milestone.id, newIsActive)
           
           setMilestones(milestones.map(m => 
             m.id === milestone.id ? { ...m, is_active: newIsActive } : m
