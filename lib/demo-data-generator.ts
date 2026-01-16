@@ -667,6 +667,12 @@ export async function generateDemoData(
           // Determine status based on date
           const status = isPastDate ? completedStatus : scheduledStatus
 
+          // Skip case if no payer found (shouldn't happen if SQL migration ran)
+          if (!selectedPayer) {
+            console.warn(`No payer found for ${selectedPayerName}, skipping case`)
+            continue
+          }
+
           const newCase: GeneratedCase = {
             id: caseId,
             facility_id: facilityId,
@@ -683,7 +689,7 @@ export async function generateDemoData(
             call_time: callTime ? formatTimestampEST(callTime) : null,
             operative_side: operativeSide,
             notes: isOutlier ? 'Complex case - extended surgical time' : null,
-            payer_id: selectedPayer?.id,
+            payer_id: selectedPayer.id,
           }
 
           allCases.push(newCase)
@@ -702,27 +708,28 @@ export async function generateDemoData(
             allMilestones.push(...milestones)
           }
 
-          // Generate case staff
-          // Add surgeon
-          allCaseStaff.push({
-            id: generateUUID(),
-            case_id: caseId,
-            user_id: surgeon.id,
-            role_id: surgeonRole?.id,
-          })
+          // Generate case staff - only add if role exists
+          if (surgeonRole) {
+            allCaseStaff.push({
+              id: generateUUID(),
+              case_id: caseId,
+              user_id: surgeon.id,
+              role_id: surgeonRole.id,
+            })
+          }
 
           // Add anesthesiologist
-          if (anesthesiologists.length > 0) {
+          if (anesthesiologists.length > 0 && anesRole) {
             allCaseStaff.push({
               id: generateUUID(),
               case_id: caseId,
               user_id: randomChoice(anesthesiologists).id,
-              role_id: anesRole?.id,
+              role_id: anesRole.id,
             })
           }
 
           // Add nurses (1-2)
-          if (nurses.length > 0) {
+          if (nurses.length > 0 && nurseRole) {
             const numNurses = Math.min(nurses.length, randomInt(1, 2))
             const selectedNurses = [...nurses].sort(() => Math.random() - 0.5).slice(0, numNurses)
             for (const nurse of selectedNurses) {
@@ -730,18 +737,18 @@ export async function generateDemoData(
                 id: generateUUID(),
                 case_id: caseId,
                 user_id: nurse.id,
-                role_id: nurseRole?.id,
+                role_id: nurseRole.id,
               })
             }
           }
 
           // Add tech
-          if (techs.length > 0) {
+          if (techs.length > 0 && techRole) {
             allCaseStaff.push({
               id: generateUUID(),
               case_id: caseId,
               user_id: randomChoice(techs).id,
-              role_id: techRole?.id,
+              role_id: techRole.id,
             })
           }
 
