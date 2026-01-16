@@ -103,10 +103,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   
   // Sub-nav from context
-  //const { items: subNavItems, title: subNavTitle, isVisible: hasSubNav } = useSubNav()
-  const subNavItems: never[] = []
-const subNavTitle = ''
-const hasSubNav = false
+  const { items: subNavItems, title: subNavTitle, isVisible: hasSubNav } = useSubNav()
+  
   // Impersonation
   const [impersonation, setImpersonation] = useState<{
     facilityId: string
