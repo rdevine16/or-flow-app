@@ -19,6 +19,16 @@ interface GenerationResult {
     implants: number
     delays: number
   }
+  debug?: {
+    milestoneTypesFound: number
+    surgeonsFound: number
+    proceduresFound: number
+    roomsFound: number
+    payersFound: number
+    milestoneErrors: string[] | null
+    staffErrors: string[] | null
+    implantErrors: string[] | null
+  }
 }
 
 interface DemoStatus {
@@ -184,6 +194,15 @@ export default function DemoDataPage() {
                     <span>👥 {(result.details.staff ?? 0).toLocaleString()} staff</span>
                     <span>🦴 {(result.details.implants ?? 0).toLocaleString()} implants</span>
                     <span>⚠️ {(result.details.delays ?? 0).toLocaleString()} delays</span>
+                  </div>
+                )}
+                {result.debug && (
+                  <div className="mt-3 p-2 bg-gray-100 rounded text-xs text-gray-700 font-mono">
+                    <div><strong>Debug:</strong></div>
+                    <div>Milestone types: {result.debug.milestoneTypesFound} | Surgeons: {result.debug.surgeonsFound} | Procedures: {result.debug.proceduresFound} | Rooms: {result.debug.roomsFound} | Payers: {result.debug.payersFound}</div>
+                    {result.debug.milestoneErrors && <div className="text-red-600">Milestone errors: {result.debug.milestoneErrors.join(', ')}</div>}
+                    {result.debug.staffErrors && <div className="text-red-600">Staff errors: {result.debug.staffErrors.join(', ')}</div>}
+                    {result.debug.implantErrors && <div className="text-red-600">Implant errors: {result.debug.implantErrors.join(', ')}</div>}
                   </div>
                 )}
                 {result.error && !result.success && (

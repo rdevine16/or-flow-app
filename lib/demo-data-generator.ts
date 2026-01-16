@@ -235,19 +235,15 @@ function formatDateEST(date: Date): string {
 }
 
 function formatTimeEST(date: Date): string {
-  // Format as HH:MM:SS in EST
-  return date.toLocaleTimeString('en-GB', { 
-    timeZone: 'America/New_York',
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
+  // Format as HH:MM:SS - extract the time components we set, not timezone-converted
+  const hours = date.getUTCHours()
+  const minutes = date.getUTCMinutes()
+  const seconds = date.getUTCSeconds()
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
 function formatTimestampEST(date: Date): string {
-  // Format as ISO timestamp with EST offset
-  const estDate = new Date(date.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  // Format as ISO timestamp - the date already represents the correct EST time stored as UTC
   return date.toISOString()
 }
 
@@ -629,7 +625,7 @@ export async function generateDemoData(
   supabase: SupabaseClient,
   facilityId: string,
   onProgress?: ProgressCallback
-): Promise<{ success: boolean; casesGenerated: number; error?: string; details?: { milestones: number; staff: number; implants: number; delays: number } }> {
+): Promise<{ success: boolean; casesGenerated: number; error?: string; details?: { milestones: number; staff: number; implants: number; delays: number }; debug?: { milestoneTypesFound: number; surgeonsFound: number; proceduresFound: number; roomsFound: number; payersFound: number; milestoneErrors: string[] | null; staffErrors: string[] | null; implantErrors: string[] | null } }> {
   try {
     onProgress?.({ phase: 'setup', current: 0, total: 100, message: 'Loading facility data...' })
 
@@ -919,33 +915,39 @@ export async function generateDemoData(
     onProgress?.({ phase: 'inserting', current: 93, total: 100, message: 'Inserting milestones...' })
 
     // Insert milestones
+    let milestoneErrors: string[] = []
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
       const batch = allMilestones.slice(i, i + BATCH_SIZE)
       const { error } = await supabase.from('case_milestones').insert(batch)
       if (error) {
         console.error('Error inserting milestones:', error)
+        milestoneErrors.push(error.message)
       }
     }
 
     onProgress?.({ phase: 'inserting', current: 95, total: 100, message: 'Inserting staff assignments...' })
 
     // Insert case staff
+    let staffErrors: string[] = []
     for (let i = 0; i < allCaseStaff.length; i += BATCH_SIZE) {
       const batch = allCaseStaff.slice(i, i + BATCH_SIZE)
       const { error } = await supabase.from('case_staff').insert(batch)
       if (error) {
         console.error('Error inserting case staff:', error)
+        staffErrors.push(error.message)
       }
     }
 
     onProgress?.({ phase: 'inserting', current: 97, total: 100, message: 'Inserting implants...' })
 
     // Insert implants
+    let implantErrors: string[] = []
     for (let i = 0; i < allImplants.length; i += BATCH_SIZE) {
       const batch = allImplants.slice(i, i + BATCH_SIZE)
       const { error } = await supabase.from('case_implants').insert(batch)
       if (error) {
         console.error('Error inserting implants:', error)
+        implantErrors.push(error.message)
       }
     }
 
@@ -968,6 +970,27 @@ export async function generateDemoData(
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Demo data generation complete!' })
 
+    // Build debug info
+    const debugInfo = {
+      milestoneTypesFound: facilityData.milestoneTypes.length,
+      surgeonsFound: surgeonProfiles.length,
+      proceduresFound: facilityData.procedures.length,
+      roomsFound: facilityData.rooms.length,
+      payersFound: facilityData.payers.length,
+      milestoneErrors: milestoneErrors.length > 0 ? milestoneErrors.slice(0, 3) : null,
+      staffErrors: staffErrors.length > 0 ? staffErrors.slice(0, 3) : null,
+      implantErrors: implantErrors.length > 0 ? implantErrors.slice(0, 3) : null,
+    }
+
+    console.log('Generation debug info:', debugInfo)
+    console.log('Generated counts:', {
+      cases: allCases.length,
+      milestones: allMilestones.length,
+      staff: allCaseStaff.length,
+      implants: allImplants.length,
+      delays: allDelays.length,
+    })
+
     return { 
       success: true, 
       casesGenerated: allCases.length,
@@ -976,7 +999,8 @@ export async function generateDemoData(
         staff: allCaseStaff.length,
         implants: allImplants.length,
         delays: allDelays.length,
-      }
+      },
+      debug: debugInfo,
     }
   } catch (error) {
     console.error('Demo data generation error:', error)
