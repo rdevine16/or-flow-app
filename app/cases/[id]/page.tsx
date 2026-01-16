@@ -41,6 +41,7 @@ interface CaseData {
   case_number: string
   scheduled_date: string
   start_time: string | null
+  call_time: string | null
   operative_side: string | null
   procedure_type_id: string | null
   notes: string | null
@@ -242,24 +243,25 @@ const [milestoneAverages, setMilestoneAverages] = useState<{
       setLoading(true)
 
       // Fetch case data first (we need procedure_type_id)
-      const { data: caseResult } = await supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          start_time,
-          operative_side,
-          procedure_type_id,
-          notes,
-          or_rooms (name),
-          procedure_types (name),
-          case_statuses (id, name),
-          surgeon:users!cases_surgeon_id_fkey (id, first_name, last_name),
-          anesthesiologist:users!cases_anesthesiologist_id_fkey (id, first_name, last_name)
-        `)
-        .eq('id', id)
-        .single()
+const { data: caseResult } = await supabase
+  .from('cases')
+  .select(`
+    id,
+    case_number,
+    scheduled_date,
+    start_time,
+    operative_side,
+    procedure_type_id,
+    notes,
+    call_time,
+    or_rooms (name),
+    procedure_types (name),
+    case_statuses (id, name),
+    surgeon:users!cases_surgeon_id_fkey (id, first_name, last_name),
+    anesthesiologist:users!cases_anesthesiologist_id_fkey (id, first_name, last_name)
+  `)
+  .eq('id', id)
+  .single()
 
       // PHASE 2: Fetch procedure-specific milestones
       let milestoneTypesResult: FacilityMilestone[] = []
@@ -382,7 +384,7 @@ const [milestoneAverages, setMilestoneAverages] = useState<{
         .limit(1)
         .maybeSingle()
 
-      setPatientCallTime(callNotification?.created_at || null)
+setPatientCallTime(caseResult?.call_time || null)
 
       // Get surgeon reference for averages queries
       const surgeon = getFirst(caseResult?.surgeon)
