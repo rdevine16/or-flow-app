@@ -6,6 +6,8 @@ import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import { milestoneTypeAudit } from '../../../lib/audit-logger'
+import { useUser } from '../../../lib/UserContext'
+
 
 interface FacilityMilestone {
   id: string
@@ -74,8 +76,11 @@ function ConfirmModal({
 
 export default function MilestonesSettingsPage() {
   const supabase = createClient()
+  
+  // Use the context - this automatically handles impersonation!
+  const { effectiveFacilityId, loading: userLoading } = useUser()
+  
   const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
-  const [facilityId, setFacilityId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
@@ -115,37 +120,22 @@ export default function MilestonesSettingsPage() {
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
-    fetchUserFacility()
-  }, [])
-
-  useEffect(() => {
-    if (facilityId) {
+    if (!userLoading && effectiveFacilityId) {
       fetchMilestones()
       fetchUsageCounts()
+    } else if (!userLoading && !effectiveFacilityId) {
+      setLoading(false)
     }
-  }, [facilityId])
+  }, [userLoading, effectiveFacilityId])
 
-  const fetchUserFacility = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userData?.facility_id) {
-      setFacilityId(userData.facility_id)
-    }
-  }
 
   const fetchMilestones = async () => {
+    if (!effectiveFacilityId) return
     setLoading(true)
     const { data } = await supabase
       .from('facility_milestones')
       .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at')
-      .eq('facility_id', facilityId)
+      .eq('facility_id', effectiveFacilityId)
       .order('display_order')
 
     setMilestones(data || [])
@@ -183,7 +173,7 @@ export default function MilestonesSettingsPage() {
   }
 
   const handleAdd = async () => {
-    if (!newDisplayName.trim() || !facilityId) return
+    if (!newDisplayName.trim() || !effectiveFacilityId) return
     
     setSaving(true)
     const name = newName.trim() || generateName(newDisplayName)
@@ -194,7 +184,7 @@ export default function MilestonesSettingsPage() {
     const { data, error } = await supabase
       .from('facility_milestones')
       .insert({
-        facility_id: facilityId,
+        facility_id: effectiveFacilityId,
         name,
         display_name: newDisplayName.trim(),
         display_order: maxOrder + 1,
