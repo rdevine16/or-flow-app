@@ -4,7 +4,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
+import { useUser } from '../../lib/UserContext'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import CaseListView from '../../components/dashboard/CaseListView'
 import EnhancedRoomGridView from '../../components/dashboard/EnhancedRoomGridView'
@@ -36,6 +38,16 @@ const getValue = (data: { name: string }[] | { name: string } | null): string | 
 }
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const { isGlobalAdmin, isImpersonating, loading: userLoading } = useUser()
+  
+  // Redirect global admins (not impersonating) to admin page
+  useEffect(() => {
+    if (!userLoading && isGlobalAdmin && !isImpersonating) {
+      router.replace('/admin')
+    }
+  }, [userLoading, isGlobalAdmin, isImpersonating, router])
+
   const [cases, setCases] = useState<EnhancedCase[]>([])
   const [roomsWithCases, setRoomsWithCases] = useState<RoomWithCase[]>([])
   const [loading, setLoading] = useState(true)
@@ -323,6 +335,18 @@ export default function DashboardPage() {
   }
 
   const isToday = selectedDate === todayDate
+
+  // Show loading while checking user or redirecting global admin
+  if (userLoading || (isGlobalAdmin && !isImpersonating)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <DashboardLayout>
