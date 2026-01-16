@@ -95,7 +95,7 @@ interface CompletedCaseViewProps {
   milestoneAverages: MilestoneAverage[]
   // Implant data
   implants: ImplantData | null
-  implantCategory: 'hip' | 'knee' | null
+  implantCategory: 'hip' | 'knee' | 'total_hip' | 'total_knee' | null
 }
 
 // ============================================================================
@@ -970,7 +970,7 @@ export default function CompletedCaseView({
 
           <div className="space-y-1">
             {/* Hip Components */}
-            {implantCategory === 'hip' && (
+            {(implantCategory === 'hip' || implantCategory === 'total_hip') && (
               <>
                 {(implants.cup_brand || implants.cup_size_templated || implants.cup_size_final) && (
                   <ImplantRow 
@@ -1008,7 +1008,7 @@ export default function CompletedCaseView({
             )}
 
             {/* Knee Components */}
-            {implantCategory === 'knee' && (
+            {(implantCategory === 'knee' || implantCategory === 'total_knee') && (
               <>
                 {(implants.femur_brand || implants.femur_size_templated || implants.femur_size_final) && (
                   <ImplantRow 
