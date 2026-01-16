@@ -110,20 +110,17 @@ export default function AdminMilestonesSettingsPage() {
     fetchMilestones()
   }, [])
 
-const fetchMilestones = async () => {
-  setLoading(true)
-  console.log('Fetching milestones...')  // ADD THIS
-  
-  const { data, error } = await supabase  // ADD error here
-    .from('milestone_types')
-    .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active')
-    .order('display_order')
-
-  console.log('Milestones result:', { data, error })  // ADD THIS
-  
-  setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
-  setLoading(false)
-}
+  const fetchMilestones = async () => {
+    setLoading(true)
+    
+    const { data } = await supabase
+      .from('milestone_types')
+      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active')
+      .order('display_order')
+    
+    setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
+    setLoading(false)
+  }
 
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -160,8 +157,6 @@ const fetchMilestones = async () => {
 
     if (!error && data) {
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
-      
-      // Propagate to all existing facilities
       await propagateToFacilities(data)
       
       setMilestones([...milestones, { ...data, pair_with_id: null, pair_position: null, is_active: true }])
@@ -172,7 +167,6 @@ const fetchMilestones = async () => {
     setSaving(false)
   }
 
-  // Propagate new milestone to all existing facilities
   const propagateToFacilities = async (milestone: MilestoneType) => {
     const { data: facilities } = await supabase
       .from('facilities')
@@ -210,273 +204,59 @@ const fetchMilestones = async () => {
         await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, editDisplayName.trim())
       }
 
-      // Update in facility_milestones too (for ones linked to this global)
       await supabase
         .from('facility_milestones')
         .update({ display_name: editDisplayName.trim() })
         .eq('source_milestone_type_id', editingMilestone.id)
 
-      setMilestones(
-        milestones.map(m => m.id === editingMilestone.id 
-          ? { ...m, display_name: editDisplayName.trim() } 
+      setMilestones(milestones.map(m => 
+        m.id === editingMilestone.id 
+          ? { ...m, display_name: editDisplayName.trim() }
           : m
-        )
-      )
+      ))
       setShowEditModal(false)
       setEditingMilestone(null)
     }
     setSaving(false)
   }
 
-  // Toggle active/inactive for global milestones
   const handleToggleActive = async (milestone: MilestoneType) => {
-    const newActiveState = !milestone.is_active
-
-    // If deactivating a paired milestone, show confirmation
-    if (!newActiveState && milestone.pair_with_id) {
-      const partner = milestones.find(m => m.id === milestone.pair_with_id)
-      
-      setConfirmModal({
-        isOpen: true,
-        title: 'Deactivate Paired Milestone',
-        message: (
-          <div>
-            <p>This will deactivate both milestones in the pair:</p>
-            <ul className="mt-2 ml-4 list-disc text-slate-700">
-              <li><strong>{milestone.display_name}</strong></li>
-              {partner && <li><strong>{partner.display_name}</strong></li>}
-            </ul>
-            <p className="mt-3 text-slate-500">
-              Deactivated milestones won't appear for new facilities but existing facilities keep their own copy.
-            </p>
-          </div>
-        ),
-        confirmLabel: 'Deactivate Both',
-        confirmVariant: 'danger',
-        onConfirm: async () => {
-          setSaving(true)
-          
-          await supabase
-            .from('milestone_types')
-            .update({ is_active: false })
-            .eq('id', milestone.id)
-
-          if (partner) {
-            await supabase
-              .from('milestone_types')
-              .update({ is_active: false })
-              .eq('id', partner.id)
-          }
-
-          setMilestones(milestones.map(m => {
-            if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-              return { ...m, is_active: false }
-            }
-            return m
-          }))
-
-          closeConfirmModal()
-          setSaving(false)
-        },
-      })
-      return
-    }
-
-    // Simple toggle without confirmation
-    setSaving(true)
-    const { error } = await supabase
-      .from('milestone_types')
-      .update({ is_active: newActiveState })
-      .eq('id', milestone.id)
-
-    if (!error) {
-      setMilestones(milestones.map(m => 
-        m.id === milestone.id ? { ...m, is_active: newActiveState } : m
-      ))
-    }
-    setSaving(false)
-  }
-
-  // Unlink milestones
-  const handleUnlink = async (milestone: MilestoneType) => {
-    if (!milestone.pair_with_id) return
-
-    const partner = milestones.find(m => m.id === milestone.pair_with_id)
+    const newIsActive = !milestone.is_active
+    const action = newIsActive ? 'reactivate' : 'deactivate'
     
     setConfirmModal({
       isOpen: true,
-      title: 'Unlink Milestones',
+      title: `${newIsActive ? 'Activate' : 'Deactivate'} Milestone`,
       message: (
-        <div>
-          <p>Remove the pairing between these milestones?</p>
-          <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">Start</span>
-              <span className="font-medium text-slate-900">{milestone.pair_position === 'start' ? milestone.display_name : partner?.display_name}</span>
-            </div>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">End</span>
-              <span className="font-medium text-slate-900">{milestone.pair_position === 'end' ? milestone.display_name : partner?.display_name}</span>
-            </div>
-          </div>
-          <p className="mt-3 text-slate-500">This only affects how milestones display in the UI. Historical data is not affected.</p>
-        </div>
+        <p>
+          {newIsActive 
+            ? `Activate "${milestone.display_name}"? It will be included when new facilities are created.`
+            : `Deactivate "${milestone.display_name}"? It will be hidden from new facilities. Existing facilities are not affected.`
+          }
+        </p>
       ),
-      confirmLabel: 'Unlink',
-      confirmVariant: 'primary',
+      confirmLabel: newIsActive ? 'Activate' : 'Deactivate',
+      confirmVariant: newIsActive ? 'primary' : 'danger',
       onConfirm: async () => {
         setSaving(true)
-
-        // Unlink both milestones
-        await supabase
+        
+        const { error } = await supabase
           .from('milestone_types')
-          .update({ pair_with_id: null, pair_position: null })
+          .update({ is_active: newIsActive })
           .eq('id', milestone.id)
 
-        await supabase
-          .from('milestone_types')
-          .update({ pair_with_id: null, pair_position: null })
-          .eq('id', milestone.pair_with_id)
-
-        // Update facility milestones
-        await updateFacilityPairing(milestone.id, null, null)
-        if (milestone.pair_with_id) {
-          await updateFacilityPairing(milestone.pair_with_id, null, null)
+        if (!error) {
+          await milestoneTypeAudit.toggled(supabase, milestone.display_name, milestone.id, newIsActive)
+          
+          setMilestones(milestones.map(m => 
+            m.id === milestone.id ? { ...m, is_active: newIsActive } : m
+          ))
         }
-
-        // Audit
-        await milestoneTypeAudit.unlinked(
-          supabase,
-          milestone.display_name,
-          partner?.display_name || 'Unknown'
-        )
-
-        // Update local state
-        setMilestones(milestones.map(m => {
-          if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-            return { ...m, pair_with_id: null, pair_position: null }
-          }
-          return m
-        }))
-
-        closeConfirmModal()
-        setShowPairModal(false)
-        setPairingMilestone(null)
+        
         setSaving(false)
+        closeConfirmModal()
       },
     })
-  }
-
-  // Set up new pairing
-  const handleSetPair = async () => {
-    if (!pairingMilestone || !selectedPairId) return
-    
-    setSaving(true)
-
-    const partner = milestones.find(m => m.id === selectedPairId)
-    const oldPartner = pairingMilestone.pair_with_id
-      ? milestones.find(m => m.id === pairingMilestone.pair_with_id)
-      : null
-
-    // If there was an old pairing, unlink it first
-    if (pairingMilestone.pair_with_id && pairingMilestone.pair_with_id !== selectedPairId) {
-      await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: null, pair_position: null })
-        .eq('id', pairingMilestone.pair_with_id)
-
-      await updateFacilityPairing(pairingMilestone.pair_with_id, null, null)
-
-      await milestoneTypeAudit.unlinked(
-        supabase,
-        pairingMilestone.display_name,
-        oldPartner?.display_name || 'Unknown'
-      )
-    }
-
-    // Create new pairing
-    await supabase
-      .from('milestone_types')
-      .update({ pair_with_id: selectedPairId, pair_position: 'start' })
-      .eq('id', pairingMilestone.id)
-
-    await supabase
-      .from('milestone_types')
-      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
-      .eq('id', selectedPairId)
-
-    // Update facility milestones
-    await updateFacilityPairing(pairingMilestone.id, selectedPairId, 'start')
-    await updateFacilityPairing(selectedPairId, pairingMilestone.id, 'end')
-
-    await milestoneTypeAudit.linked(
-      supabase,
-      pairingMilestone.display_name,
-      partner?.display_name || 'Unknown'
-    )
-
-    // Update local state
-    setMilestones(milestones.map(m => {
-      if (m.id === pairingMilestone.id) {
-        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
-      }
-      if (m.id === selectedPairId) {
-        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
-      }
-      // Clear old partner's pairing
-      if (m.id === pairingMilestone.pair_with_id) {
-        return { ...m, pair_with_id: null, pair_position: null }
-      }
-      return m
-    }))
-
-    setShowPairModal(false)
-    setPairingMilestone(null)
-    setSelectedPairId('')
-    setSaving(false)
-  }
-
-  // Update pairing in facility_milestones across all facilities
-  const updateFacilityPairing = async (
-    sourceId: string, 
-    partnerSourceId: string | null, 
-    position: 'start' | 'end' | null
-  ) => {
-    if (partnerSourceId === null) {
-      // Clear pairing
-      await supabase
-        .from('facility_milestones')
-        .update({ pair_with_id: null, pair_position: null })
-        .eq('source_milestone_type_id', sourceId)
-    } else {
-      // Set up pairing - need to match by facility
-      const { data: facilities } = await supabase.from('facilities').select('id')
-      
-      if (facilities) {
-        for (const facility of facilities) {
-          const { data: fm1 } = await supabase
-            .from('facility_milestones')
-            .select('id')
-            .eq('facility_id', facility.id)
-            .eq('source_milestone_type_id', sourceId)
-            .single()
-          
-          const { data: fm2 } = await supabase
-            .from('facility_milestones')
-            .select('id')
-            .eq('facility_id', facility.id)
-            .eq('source_milestone_type_id', partnerSourceId)
-            .single()
-          
-          if (fm1 && fm2) {
-            await supabase
-              .from('facility_milestones')
-              .update({ pair_with_id: fm2.id, pair_position: position })
-              .eq('id', fm1.id)
-          }
-        }
-      }
-    }
   }
 
   const getPairedName = (pairedId: string | null) => {
@@ -498,234 +278,300 @@ const fetchMilestones = async () => {
     setShowPairModal(true)
   }
 
+  const handleSetPair = async () => {
+    if (!pairingMilestone || !selectedPairId) return
+    
+    setSaving(true)
+    const partner = milestones.find(m => m.id === selectedPairId)
+
+    // Clear any existing pairing for this milestone first
+    if (pairingMilestone.pair_with_id) {
+      await supabase
+        .from('milestone_types')
+        .update({ pair_with_id: null, pair_position: null })
+        .eq('id', pairingMilestone.pair_with_id)
+    }
+
+    // Set new pairing
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: selectedPairId, pair_position: 'start' })
+      .eq('id', pairingMilestone.id)
+
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
+      .eq('id', selectedPairId)
+
+    await milestoneTypeAudit.linked(
+      supabase,
+      pairingMilestone.display_name,
+      partner?.display_name || 'Unknown'
+    )
+
+    // Update local state
+    setMilestones(milestones.map(m => {
+      if (m.id === pairingMilestone.id) {
+        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
+      }
+      if (m.id === selectedPairId) {
+        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
+      }
+      if (m.id === pairingMilestone.pair_with_id) {
+        return { ...m, pair_with_id: null, pair_position: null }
+      }
+      return m
+    }))
+
+    setShowPairModal(false)
+    setPairingMilestone(null)
+    setSelectedPairId('')
+    setSaving(false)
+  }
+
+  const handleUnlink = async (milestone: MilestoneType) => {
+    if (!milestone.pair_with_id) return
+    
+    setSaving(true)
+    const partnerName = getPairedName(milestone.pair_with_id)
+
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: null, pair_position: null })
+      .eq('id', milestone.id)
+
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: null, pair_position: null })
+      .eq('id', milestone.pair_with_id)
+
+    await milestoneTypeAudit.unlinked(supabase, milestone.display_name, partnerName || 'Unknown')
+
+    setMilestones(milestones.map(m => {
+      if (m.id === milestone.id || m.id === milestone.pair_with_id) {
+        return { ...m, pair_with_id: null, pair_position: null }
+      }
+      return m
+    }))
+
+    setShowPairModal(false)
+    setPairingMilestone(null)
+    setSaving(false)
+  }
+
   // Filter based on showInactive
   const visibleMilestones = showInactive 
     ? milestones 
     : milestones.filter(m => m.is_active)
 
   const inactiveCount = milestones.filter(m => !m.is_active).length
+  const activeCount = milestones.filter(m => m.is_active).length
 
   return (
-  <DashboardLayout>
-    <Container className="py-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-900">Global Milestones</h1>
-      </div>
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    <DashboardLayout>
+      <Container className="py-8">
+        <div className="max-w-4xl">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-900">Global Milestones</h1>
+              <p className="text-slate-500 mt-1">
+                Milestone templates for new facilities. Changes here don't affect existing facilities.
+              </p>
             </div>
-          ) : (
-            <>
-              {/* Info Banner */}
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-                <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Milestone
+            </button>
+          </div>
+
+          {/* Stats Bar */}
+          <div className="flex items-center gap-4 mb-4">
+            <span className="text-sm text-slate-500">
+              {activeCount} active milestone{activeCount !== 1 ? 's' : ''}
+            </span>
+            {inactiveCount > 0 && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                />
+                <span className="text-sm text-slate-600">
+                  Show inactive ({inactiveCount})
+                </span>
+              </label>
+            )}
+          </div>
+
+          {/* Table */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+            {loading ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : visibleMilestones.length === 0 ? (
+              <div className="text-center py-16 text-slate-500">
+                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <div>
-                  <p className="text-sm font-medium text-amber-800">Global milestones cannot be deleted</p>
-                  <p className="text-sm text-amber-700 mt-0.5">
-                    These milestones are templates for new facilities. Deactivate them to hide from new facilities. 
-                    Existing facilities manage their own milestones independently.
-                  </p>
-                </div>
-              </div>
-
-              {/* Header Actions */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <p className="text-sm text-slate-500">
-                    {milestones.filter(m => m.is_active).length} active milestone{milestones.filter(m => m.is_active).length !== 1 ? 's' : ''}
-                  </p>
-                  {inactiveCount > 0 && (
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={showInactive}
-                        onChange={(e) => setShowInactive(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300"
-                      />
-                      <span className="text-sm text-slate-600">
-                        Show inactive ({inactiveCount})
-                      </span>
-                    </label>
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium text-sm"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Milestone
-                </button>
-              </div>
-
-              {/* Milestones List */}
-              <div className="space-y-2">
-                {visibleMilestones.map((milestone, index) => (
-                  <div
-                    key={milestone.id}
-                    className={`group flex items-center gap-4 p-4 bg-white border rounded-xl transition-all hover:shadow-md ${
-                      !milestone.is_active ? 'opacity-60 bg-slate-50' : ''
-                    } ${
-                      milestone.pair_with_id && milestone.is_active
-                        ? 'border-l-4 border-l-blue-400 border-slate-200' 
-                        : 'border-slate-200'
-                    }`}
+                <p>No milestones found</p>
+                {!showInactive && inactiveCount > 0 && (
+                  <button
+                    onClick={() => setShowInactive(true)}
+                    className="mt-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
                   >
-                    {/* Active Toggle */}
-                    <button
-                      onClick={() => handleToggleActive(milestone)}
-                      disabled={saving}
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors disabled:opacity-50 ${
-                        milestone.is_active
-                          ? 'border-emerald-500 bg-emerald-500'
-                          : 'border-slate-300 hover:border-slate-400'
-                      }`}
-                      title={milestone.is_active ? 'Deactivate' : 'Activate'}
-                    >
-                      {milestone.is_active && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </button>
-
-                    {/* Order Number */}
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-sm font-medium text-slate-500">
-                      {index + 1}
-                    </div>
-
-                    {/* Milestone Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-medium ${milestone.is_active ? 'text-slate-900' : 'text-slate-500'}`}>
-                          {milestone.display_name}
-                        </span>
-                        {!milestone.is_active && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
-                            Inactive
-                          </span>
-                        )}
-                        {milestone.pair_position === 'start' && milestone.is_active && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                            Start
-                          </span>
-                        )}
-                        {milestone.pair_position === 'end' && milestone.is_active && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                            End
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-slate-400 font-mono">{milestone.name}</span>
-                        {milestone.pair_with_id && milestone.is_active && (
-                          <>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-xs text-blue-600">
-                              Paired with: {getPairedName(milestone.pair_with_id)}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {/* Pair/Unlink Button - only for active */}
-                      {milestone.is_active && (
-                        <button
-                          onClick={() => openPairModal(milestone)}
-                          className={`p-2 rounded-lg transition-colors ${
-                            milestone.pair_with_id
-                              ? 'text-blue-600 hover:bg-blue-50'
-                              : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                          }`}
-                          title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                          </svg>
-                        </button>
-                      )}
-
-                      {/* Edit Button */}
-                      <button
-                        onClick={() => {
-                          setEditingMilestone(milestone)
-                          setEditDisplayName(milestone.display_name)
-                          setShowEditModal(true)
-                        }}
-                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
-
-                      {/* No delete button - global milestones can only be deactivated */}
-                    </div>
-                  </div>
-                ))}
-
-                {visibleMilestones.length === 0 && (
-                  <div className="text-center py-12 text-slate-500">
-                    <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p>No milestones to display.</p>
-                    {!showInactive && inactiveCount > 0 && (
-                      <button
-                        onClick={() => setShowInactive(true)}
-                        className="mt-2 text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Show {inactiveCount} inactive milestone{inactiveCount !== 1 ? 's' : ''}
-                      </button>
-                    )}
-                  </div>
+                    Show {inactiveCount} inactive
+                  </button>
                 )}
               </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-12">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-16">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Display Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Internal Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Pairing</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visibleMilestones.map((milestone, index) => (
+                    <tr 
+                      key={milestone.id} 
+                      className={`group hover:bg-slate-50 transition-colors ${!milestone.is_active ? 'opacity-50' : ''}`}
+                    >
+                      {/* Order */}
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-400 font-medium">{index + 1}</span>
+                      </td>
 
-              {/* Legend */}
-              <div className="mt-6 p-4 bg-slate-50 rounded-xl">
-                <p className="text-xs font-medium text-slate-600 mb-2">Legend</p>
-                <div className="flex flex-wrap gap-4 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-4 h-4 rounded-full border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center">
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <span className="text-slate-500">Active - included for new facilities</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-4 h-4 rounded-full border-2 border-slate-300"></div>
-                    <span className="text-slate-500">Inactive - hidden from new facilities</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Start</span>
-                    <span className="text-slate-500">First button in paired milestone</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">End</span>
-                    <span className="text-slate-500">Second button in paired milestone</span>
-                  </div>
-                </div>
+                      {/* Status Toggle */}
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => handleToggleActive(milestone)}
+                          disabled={saving}
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors disabled:opacity-50 ${
+                            milestone.is_active
+                              ? 'border-emerald-500 bg-emerald-500'
+                              : 'border-slate-300 hover:border-slate-400'
+                          }`}
+                          title={milestone.is_active ? 'Deactivate' : 'Activate'}
+                        >
+                          {milestone.is_active && (
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      </td>
+
+                      {/* Display Name */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-slate-900">{milestone.display_name}</span>
+                          {milestone.pair_position === 'start' && milestone.is_active && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+                              Start
+                            </span>
+                          )}
+                          {milestone.pair_position === 'end' && milestone.is_active && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                              End
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Internal Name */}
+                      <td className="px-4 py-3">
+                        <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                          {milestone.name}
+                        </code>
+                      </td>
+
+                      {/* Pairing */}
+                      <td className="px-4 py-3">
+                        {milestone.pair_with_id && milestone.is_active ? (
+                          <span className="text-sm text-blue-600">
+                            → {getPairedName(milestone.pair_with_id)}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-slate-300">—</span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {milestone.is_active && (
+                            <button
+                              onClick={() => openPairModal(milestone)}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                milestone.pair_with_id
+                                  ? 'text-blue-600 hover:bg-blue-50'
+                                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                              }`}
+                              title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                              </svg>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingMilestone(milestone)
+                              setEditDisplayName(milestone.display_name)
+                              setShowEditModal(true)
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            title="Edit"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Info Box */}
+          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+            <div className="flex gap-3">
+              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="text-sm text-slate-600">
+                <p className="font-medium text-slate-700 mb-1">About milestone pairing</p>
+                <p>
+                  Paired milestones create Start/End buttons in the mobile app for tracking durations 
+                  (e.g., Anesthesia Start → Anesthesia End). Click the link icon to manage pairings.
+                </p>
               </div>
-            </>
-          )}
-
+            </div>
+          </div>
+        </div>
       </Container>
 
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Global Milestone</h3>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Milestone</h3>
             
             <div className="space-y-4">
               <div>
@@ -736,7 +582,7 @@ const fetchMilestones = async () => {
                   type="text"
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
-                  placeholder="e.g., Array Placement"
+                  placeholder="e.g., Patient In Room"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   autoFocus
                 />
@@ -750,7 +596,7 @@ const fetchMilestones = async () => {
                   type="text"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder={newDisplayName ? generateName(newDisplayName) : 'e.g., array_placement'}
+                  placeholder={newDisplayName ? generateName(newDisplayName) : 'e.g., patient_in'}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                 />
                 <p className="text-xs text-slate-500 mt-1">Used for code references. Lowercase, underscores only.</p>
@@ -812,15 +658,11 @@ const fetchMilestones = async () => {
                 />
               </div>
 
-              {/* Pairing Info */}
               {editingMilestone.pair_with_id && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm font-medium text-blue-900">Paired Milestone</p>
                   <p className="text-sm text-blue-700 mt-1">
                     {editingMilestone.pair_position === 'start' ? 'Start' : 'End'} of pair with: <span className="font-medium">{getPairedName(editingMilestone.pair_with_id)}</span>
-                  </p>
-                  <p className="text-xs text-blue-600 mt-2">
-                    Use the link icon on the milestone row to manage pairing.
                   </p>
                 </div>
               )}
@@ -857,12 +699,11 @@ const fetchMilestones = async () => {
             </h3>
             <p className="text-sm text-slate-600 mb-4">
               {pairingMilestone.pair_with_id 
-                ? `"${pairingMilestone.display_name}" is currently paired with "${getPairedName(pairingMilestone.pair_with_id)}".`
+                ? `"${pairingMilestone.display_name}" is paired with "${getPairedName(pairingMilestone.pair_with_id)}".`
                 : `Pair "${pairingMilestone.display_name}" with another milestone to create a Start/End pair.`
               }
             </p>
             
-            {/* Current Pairing - with Unlink option */}
             {pairingMilestone.pair_with_id && (
               <div className="mb-4 p-4 bg-slate-50 rounded-xl">
                 <div className="flex items-center justify-between mb-3">
@@ -876,28 +717,21 @@ const fetchMilestones = async () => {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">Start</span>
+                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-100 text-emerald-700">Start</span>
                     <span className="text-sm text-slate-900">
-                      {pairingMilestone.pair_position === 'start' 
-                        ? pairingMilestone.display_name 
-                        : getPairedName(pairingMilestone.pair_with_id)
-                      }
+                      {pairingMilestone.pair_position === 'start' ? pairingMilestone.display_name : getPairedName(pairingMilestone.pair_with_id)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">End</span>
+                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-700">End</span>
                     <span className="text-sm text-slate-900">
-                      {pairingMilestone.pair_position === 'end' 
-                        ? pairingMilestone.display_name 
-                        : getPairedName(pairingMilestone.pair_with_id)
-                      }
+                      {pairingMilestone.pair_position === 'end' ? pairingMilestone.display_name : getPairedName(pairingMilestone.pair_with_id)}
                     </span>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* New Pairing Selection */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 {pairingMilestone.pair_with_id ? 'Change pairing to:' : 'Pair with:'}
