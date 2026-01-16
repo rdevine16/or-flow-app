@@ -321,8 +321,8 @@ if (!mounted) {   return (
         className="fixed top-0 left-0 h-full bg-slate-900 text-white z-50 flex flex-col transition-all duration-300 ease-out"
       >
         {/* Logo */}
-        <div className="h-16 flex items-center justify-center border-b border-slate-800 px-4">
-          <Link href="/dashboard" className="flex items-center gap-3">
+<div className={`h-16 flex items-center border-b border-slate-800 ${isExpanded ? 'px-4' : 'justify-center'}`}>
+  <Link href="/dashboard" className={`flex items-center ${isExpanded ? 'gap-3' : 'justify-center w-full'}`}>
             <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 flex-shrink-0">
               <span className="text-white font-bold text-lg">O</span>
             </div>
