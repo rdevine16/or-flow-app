@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { useUser } from '@/lib/UserContext'
 
 interface Surgeon {
   id: string
@@ -44,6 +45,10 @@ function getFirst<T>(arr: T[] | T | null | undefined): T | null {
 
 export default function SurgeonPreferencesPage() {
   const supabase = createClient()
+  
+  // Use the context - this automatically handles impersonation!
+  const { effectiveFacilityId, loading: userLoading } = useUser()
+  
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [preferences, setPreferences] = useState<SurgeonPreference[]>([])
@@ -51,7 +56,6 @@ export default function SurgeonPreferencesPage() {
   const [implantCompanies, setImplantCompanies] = useState<ImplantCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [prefsLoading, setPrefsLoading] = useState(false)
-  const [facilityId, setFacilityId] = useState<string | null>(null)
   
   // Modal state
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add' })
@@ -63,8 +67,12 @@ export default function SurgeonPreferencesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchInitialData()
-  }, [])
+    if (!userLoading && effectiveFacilityId) {
+      fetchInitialData()
+    } else if (!userLoading && !effectiveFacilityId) {
+      setLoading(false)
+    }
+  }, [userLoading, effectiveFacilityId])
 
   useEffect(() => {
     if (selectedSurgeon) {
@@ -73,17 +81,8 @@ export default function SurgeonPreferencesPage() {
   }, [selectedSurgeon])
 
   const fetchInitialData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!userData) return
-    setFacilityId(userData.facility_id)
+    if (!effectiveFacilityId) return
+    setLoading(true)
 
     // Fetch surgeons
     const { data: surgeonRole } = await supabase
@@ -96,7 +95,7 @@ export default function SurgeonPreferencesPage() {
       const { data: surgeonsData } = await supabase
         .from('users')
         .select('id, first_name, last_name')
-        .eq('facility_id', userData.facility_id)
+        .eq('facility_id', effectiveFacilityId)
         .eq('role_id', surgeonRole.id)
         .order('last_name')
 
@@ -107,7 +106,7 @@ export default function SurgeonPreferencesPage() {
     const { data: proceduresData } = await supabase
       .from('procedure_types')
       .select('id, name')
-      .or(`facility_id.is.null,facility_id.eq.${userData.facility_id}`)
+      .or(`facility_id.is.null,facility_id.eq.${effectiveFacilityId}`)
       .order('name')
 
     setProcedureTypes(proceduresData || [])
@@ -116,7 +115,7 @@ export default function SurgeonPreferencesPage() {
     const { data: companiesData } = await supabase
       .from('implant_companies')
       .select('id, name, facility_id')
-      .or(`facility_id.is.null,facility_id.eq.${userData.facility_id}`)
+      .or(`facility_id.is.null,facility_id.eq.${effectiveFacilityId}`)
       .order('name')
 
     setImplantCompanies(companiesData || [])
@@ -180,7 +179,7 @@ export default function SurgeonPreferencesPage() {
   }
 
   const handleSave = async () => {
-    if (!selectedSurgeon || !facilityId || !formData.procedure_type_id || formData.company_ids.length === 0) return
+    if (!selectedSurgeon || !effectiveFacilityId || !formData.procedure_type_id || formData.company_ids.length === 0) return
 
     setSaving(true)
 
@@ -190,7 +189,7 @@ export default function SurgeonPreferencesPage() {
         .from('surgeon_preferences')
         .insert({
           surgeon_id: selectedSurgeon,
-          facility_id: facilityId,
+          facility_id: effectiveFacilityId,
           procedure_type_id: formData.procedure_type_id,
         })
         .select('id')
@@ -266,7 +265,7 @@ export default function SurgeonPreferencesPage() {
           title="Surgeon Preferences"
           description="Create quick-fill templates for surgeon + procedure combinations"
         >
-          {loading ? (
+          {loading || userLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
