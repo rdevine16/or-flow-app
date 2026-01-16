@@ -310,14 +310,38 @@ interface GeneratedCaseStaff {
   role_id: string
 }
 
+// One implant record per case - matches your actual case_implants schema
 interface GeneratedImplant {
   id: string
   case_id: string
-  implant_company_id: string
-  component_type: string
-  component_name: string
-  templated_size: string | null
-  final_size: string
+  fixation_type: string | null
+  // THA (hip) components
+  cup_brand: string | null
+  cup_size_templated: string | null
+  cup_size_final: string | null
+  stem_brand: string | null
+  stem_size_templated: string | null
+  stem_size_final: string | null
+  head_size_templated: string | null
+  head_size_final: string | null
+  liner_size_templated: string | null
+  liner_size_final: string | null
+  // TKA (knee) components
+  femur_brand: string | null
+  femur_type: string | null
+  femur_size_templated: string | null
+  femur_size_final: string | null
+  tibia_brand: string | null
+  tibia_size_templated: string | null
+  tibia_size_final: string | null
+  poly_brand: string | null
+  poly_size_templated: string | null
+  poly_size_final: string | null
+  patella_brand: string | null
+  patella_type: string | null
+  patella_size_templated: string | null
+  patella_size_final: string | null
+  rep_notes: string | null
 }
 
 interface GeneratedDelay {
@@ -344,10 +368,10 @@ async function fetchFacilityData(supabase: SupabaseClient, facilityId: string) {
     supabase.from('or_rooms').select('*').eq('facility_id', facilityId),
     supabase.from('procedure_types').select('*').eq('facility_id', facilityId),
     supabase.from('users').select('*, user_roles(name)').eq('facility_id', facilityId),
-    supabase.from('milestone_types').select('*').eq('is_active', true).order('display_order'),
+    supabase.from('milestone_types').select('*').order('display_order'),
     supabase.from('case_statuses').select('*'),
     supabase.from('user_roles').select('*'),
-    supabase.from('payers').select('*').eq('facility_id', facilityId).eq('is_active', true),
+    supabase.from('payers').select('*').eq('facility_id', facilityId),
     supabase.from('delay_types').select('*'),
     supabase.from('implant_companies').select('*'),
   ])
@@ -465,51 +489,136 @@ function generateImplants(
   procedureType: 'THA' | 'TKA',
   vendor: 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes',
   implantCompanies: any[]
-): GeneratedImplant[] {
-  const implants: GeneratedImplant[] = []
-  const vendorSpecs = IMPLANT_SPECS[vendor]?.[procedureType]
-  if (!vendorSpecs) return implants
-
-  const implantCompany = implantCompanies.find((ic: any) => 
-    ic.name.toLowerCase().includes(vendor.toLowerCase().split(' ')[0])
-  )
-  if (!implantCompany) return implants
-
-  const componentTypes = Object.keys(vendorSpecs)
-  
-  for (const componentType of componentTypes) {
-    const spec = vendorSpecs[componentType]
-    const commonSizes: string[] = spec.common
-    const allSizes: string[] = spec.sizes
-    const componentName: string = spec.name
-    
-    // 70% chance of common size, 30% chance of any size
-    const sizePool = Math.random() < 0.7 ? commonSizes : allSizes
-    const randomIndex = Math.floor(Math.random() * sizePool.length)
-    const templatedSize: string = sizePool[randomIndex]
-    
-    // 30% chance final differs from templated by ±1 size
-    let finalSize: string = templatedSize
+): GeneratedImplant | null {
+  // Helper to pick a size with possible variance
+  const pickSize = (sizes: string[], commonSizes: string[]): { templated: string; final: string } => {
+    const sizePool = Math.random() < 0.7 ? commonSizes : sizes
+    const templated = sizePool[Math.floor(Math.random() * sizePool.length)]
+    let final = templated
     if (Math.random() < 0.3) {
-      const sizeIndex = allSizes.indexOf(templatedSize)
-      const newIndex = Math.max(0, Math.min(allSizes.length - 1, sizeIndex + (Math.random() < 0.5 ? -1 : 1)))
-      finalSize = allSizes[newIndex]
+      const idx = sizes.indexOf(templated)
+      const newIdx = Math.max(0, Math.min(sizes.length - 1, idx + (Math.random() < 0.5 ? -1 : 1)))
+      final = sizes[newIdx]
     }
-
-    const implant: GeneratedImplant = {
-      id: generateUUID(),
-      case_id: caseId,
-      implant_company_id: implantCompany.id,
-      component_type: componentType,
-      component_name: componentName,
-      templated_size: templatedSize,
-      final_size: finalSize,
-    }
-    
-    implants.push(implant)
+    return { templated, final }
   }
 
-  return implants
+  // Brand names by vendor
+  const brandNames: Record<string, Record<string, string>> = {
+    'Stryker': {
+      cup: 'Stryker Tritanium',
+      stem: 'Stryker Accolade II',
+      head: 'Stryker V40',
+      liner: 'Stryker X3',
+      femur: 'Stryker Triathlon',
+      tibia: 'Stryker Triathlon',
+      poly: 'Stryker Triathlon X3',
+      patella: 'Stryker Triathlon',
+    },
+    'Zimmer Biomet': {
+      cup: 'Zimmer G7',
+      stem: 'Zimmer Taperloc',
+      head: 'Zimmer',
+      liner: 'Zimmer Vivacit-E',
+      femur: 'Zimmer Persona',
+      tibia: 'Zimmer Persona',
+      poly: 'Zimmer Persona Vivacit-E',
+      patella: 'Zimmer Persona',
+    },
+    'DePuy Synthes': {
+      cup: 'DePuy Pinnacle',
+      stem: 'DePuy Corail',
+      head: 'DePuy',
+      liner: 'DePuy Marathon',
+      femur: 'DePuy ATTUNE',
+      tibia: 'DePuy ATTUNE',
+      poly: 'DePuy ATTUNE',
+      patella: 'DePuy ATTUNE',
+    },
+  }
+
+  const brands = brandNames[vendor] || brandNames['Stryker']
+  const specs = IMPLANT_SPECS[vendor]?.[procedureType]
+  if (!specs) return null
+
+  if (procedureType === 'THA') {
+    const cup = pickSize(specs.cup.sizes, specs.cup.common)
+    const stem = pickSize(specs.stem.sizes, specs.stem.common)
+    const head = pickSize(specs.head.sizes, specs.head.common)
+    const liner = pickSize(specs.liner.sizes, specs.liner.common)
+
+    return {
+      id: generateUUID(),
+      case_id: caseId,
+      fixation_type: Math.random() < 0.85 ? 'Cementless' : 'Cemented',
+      // THA components
+      cup_brand: brands.cup,
+      cup_size_templated: cup.templated,
+      cup_size_final: cup.final,
+      stem_brand: brands.stem,
+      stem_size_templated: stem.templated,
+      stem_size_final: stem.final,
+      head_size_templated: head.templated,
+      head_size_final: head.final,
+      liner_size_templated: liner.templated,
+      liner_size_final: liner.final,
+      // TKA components (null for THA)
+      femur_brand: null,
+      femur_type: null,
+      femur_size_templated: null,
+      femur_size_final: null,
+      tibia_brand: null,
+      tibia_size_templated: null,
+      tibia_size_final: null,
+      poly_brand: null,
+      poly_size_templated: null,
+      poly_size_final: null,
+      patella_brand: null,
+      patella_type: null,
+      patella_size_templated: null,
+      patella_size_final: null,
+      rep_notes: null,
+    }
+  } else {
+    // TKA
+    const femur = pickSize(specs.femur.sizes, specs.femur.common)
+    const tibia = pickSize(specs.tibia.sizes, specs.tibia.common)
+    const poly = pickSize(specs.poly.sizes, specs.poly.common)
+    const patella = pickSize(specs.patella.sizes, specs.patella.common)
+
+    return {
+      id: generateUUID(),
+      case_id: caseId,
+      fixation_type: Math.random() < 0.7 ? 'Cementless' : 'Cemented',
+      // THA components (null for TKA)
+      cup_brand: null,
+      cup_size_templated: null,
+      cup_size_final: null,
+      stem_brand: null,
+      stem_size_templated: null,
+      stem_size_final: null,
+      head_size_templated: null,
+      head_size_final: null,
+      liner_size_templated: null,
+      liner_size_final: null,
+      // TKA components
+      femur_brand: brands.femur,
+      femur_type: Math.random() < 0.5 ? 'Standard' : 'Narrow',
+      femur_size_templated: femur.templated,
+      femur_size_final: femur.final,
+      tibia_brand: brands.tibia,
+      tibia_size_templated: tibia.templated,
+      tibia_size_final: tibia.final,
+      poly_brand: brands.poly,
+      poly_size_templated: poly.templated,
+      poly_size_final: poly.final,
+      patella_brand: brands.patella,
+      patella_type: Math.random() < 0.8 ? 'Resurfaced' : 'Native',
+      patella_size_templated: patella.templated,
+      patella_size_final: patella.final,
+      rep_notes: null,
+    }
+  }
 }
 
 // =====================================================
@@ -752,10 +861,12 @@ export async function generateDemoData(
             })
           }
 
-          // Generate implants
+          // Generate implants (one record per case)
           const vendor = surgeon.useMako ? 'Stryker' : surgeon.preferredVendor
-          const implants = generateImplants(caseId, procedureType, vendor, facilityData.implantCompanies)
-          allImplants.push(...implants)
+          const implant = generateImplants(caseId, procedureType, vendor, facilityData.implantCompanies)
+          if (implant) {
+            allImplants.push(implant)
+          }
 
           // Generate delays for outlier cases
           if (isOutlier && isPastDate && facilityData.delayTypes.length > 0) {
@@ -878,16 +989,8 @@ export async function clearDemoData(
   onProgress?: ProgressCallback
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    onProgress?.({ phase: 'clearing', current: 10, total: 100, message: 'Clearing case data...' })
+    onProgress?.({ phase: 'clearing', current: 10, total: 100, message: 'Fetching case IDs...' })
 
-    // Delete in correct order due to foreign keys
-    // First delete case_implants, case_staff, case_milestones, case_delays
-    await supabase.from('case_implants').delete().eq('case_id', 
-      supabase.from('cases').select('id').eq('facility_id', facilityId)
-    )
-    
-    onProgress?.({ phase: 'clearing', current: 30, total: 100, message: 'Clearing milestones...' })
-    
     // Get all case IDs for this facility first
     const { data: cases } = await supabase
       .from('cases')
@@ -896,6 +999,8 @@ export async function clearDemoData(
 
     if (cases && cases.length > 0) {
       const caseIds = cases.map(c => c.id)
+      
+      onProgress?.({ phase: 'clearing', current: 20, total: 100, message: `Clearing ${caseIds.length} cases...` })
       
       // Delete related records in batches
       const BATCH_SIZE = 100
@@ -906,6 +1011,9 @@ export async function clearDemoData(
         await supabase.from('case_milestones').delete().in('case_id', batchIds)
         await supabase.from('case_staff').delete().in('case_id', batchIds)
         await supabase.from('case_delays').delete().in('case_id', batchIds)
+        
+        const progress = 20 + Math.floor((i / caseIds.length) * 50)
+        onProgress?.({ phase: 'clearing', current: progress, total: 100, message: `Cleared ${Math.min(i + BATCH_SIZE, caseIds.length)} of ${caseIds.length} cases...` })
       }
     }
 
@@ -961,26 +1069,21 @@ export async function getDemoDataStatus(
   milestoneCount: number
   implantCount: number
 }> {
-  const [
-    { count: caseCount },
-    { data: dateRange },
-    { count: milestoneCount },
-    { count: implantCount },
-  ] = await Promise.all([
-    supabase.from('cases').select('*', { count: 'exact', head: true }).eq('facility_id', facilityId),
-    supabase.from('cases')
-      .select('scheduled_date')
-      .eq('facility_id', facilityId)
-      .order('scheduled_date', { ascending: true })
-      .limit(1),
-    supabase.from('case_milestones')
-      .select('*', { count: 'exact', head: true })
-      .eq('case_id', supabase.from('cases').select('id').eq('facility_id', facilityId)),
-    supabase.from('case_implants')
-      .select('*', { count: 'exact', head: true })
-      .eq('case_id', supabase.from('cases').select('id').eq('facility_id', facilityId)),
-  ])
+  // Get case count
+  const { count: caseCount } = await supabase
+    .from('cases')
+    .select('*', { count: 'exact', head: true })
+    .eq('facility_id', facilityId)
 
+  // Get oldest case date
+  const { data: oldestData } = await supabase
+    .from('cases')
+    .select('scheduled_date')
+    .eq('facility_id', facilityId)
+    .order('scheduled_date', { ascending: true })
+    .limit(1)
+
+  // Get newest case date
   const { data: newestData } = await supabase
     .from('cases')
     .select('scheduled_date')
@@ -988,11 +1091,38 @@ export async function getDemoDataStatus(
     .order('scheduled_date', { ascending: false })
     .limit(1)
 
+  // Get case IDs for this facility to count related records
+  const { data: facilityCases } = await supabase
+    .from('cases')
+    .select('id')
+    .eq('facility_id', facilityId)
+
+  const caseIds = facilityCases?.map(c => c.id) || []
+
+  let milestoneCount = 0
+  let implantCount = 0
+
+  if (caseIds.length > 0) {
+    // Count milestones for these cases
+    const { count: mCount } = await supabase
+      .from('case_milestones')
+      .select('*', { count: 'exact', head: true })
+      .in('case_id', caseIds)
+    milestoneCount = mCount || 0
+
+    // Count implants for these cases
+    const { count: iCount } = await supabase
+      .from('case_implants')
+      .select('*', { count: 'exact', head: true })
+      .in('case_id', caseIds)
+    implantCount = iCount || 0
+  }
+
   return {
     caseCount: caseCount || 0,
-    oldestCase: dateRange?.[0]?.scheduled_date || null,
+    oldestCase: oldestData?.[0]?.scheduled_date || null,
     newestCase: newestData?.[0]?.scheduled_date || null,
-    milestoneCount: milestoneCount || 0,
-    implantCount: implantCount || 0,
+    milestoneCount,
+    implantCount,
   }
 }
