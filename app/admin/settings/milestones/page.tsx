@@ -510,7 +510,6 @@ const fetchMilestones = async () => {
     <Container className="py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-slate-900">Global Milestones</h1>
-        <p className="text-slate-500 mt-1">...</p>
       </div>
           {loading ? (
             <div className="flex items-center justify-center py-12">
