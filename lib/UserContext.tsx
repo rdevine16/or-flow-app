@@ -73,22 +73,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   // Extract fetchUser so we can call it from auth listener
-  const fetchUser = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
+const fetchUser = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    console.log('Auth user:', user)  // ← Add this
+    
+    if (user) {
+      const { data: userRecord, error } = await supabase
+        .from('users')
+        .select(`
+          first_name,
+          last_name,
+          access_level,
+          facility_id,
+          facilities (name, timezone)
+        `)
+        .eq('id', user.id)
+        .single()
       
-      if (user) {
-        const { data: userRecord } = await supabase
-          .from('users')
-          .select(`
-            first_name,
-            last_name,
-            access_level,
-            facility_id,
-            facilities (name, timezone)
-          `)
-          .eq('id', user.id)
-          .single()
+      console.log('User record:', userRecord, 'Error:', error) 
         
         if (userRecord) {
           const facilities = userRecord.facilities as { name: string; timezone: string }[] | null
