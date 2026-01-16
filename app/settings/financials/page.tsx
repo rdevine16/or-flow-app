@@ -1,1633 +1,1150 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import { getImpersonationState } from '../../../lib/impersonation'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
-import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  ScatterChart,
-  Scatter,
-  Cell,
-  Legend,
-} from 'recharts'
+import SettingsLayout from '../../../components/settings/SettingsLayout'
+import { facilityAudit, procedureAudit, genericAuditLog } from '../../../lib/audit-logger'
 
-// ============================================
+// =====================================================
 // TYPES
-// ============================================
+// =====================================================
 
-interface CaseDelay {
+interface ProcedureType {
   id: string
-  delay_type_id: string
-  duration_minutes: number | null
-  notes: string | null
-  delay_types: { name: string } | null
-}
-
-interface CaseWithFinancials {
-  id: string
-  case_number: string
-  scheduled_date: string
-  surgeon_id: string | null
-  surgeon: { first_name: string; last_name: string } | null
-  procedure_type_id: string | null
-  procedure_types: { 
-    id: string
-    name: string
-    soft_goods_cost: number | null
-    hard_goods_cost: number | null
-  } | null
-  payer_id: string | null
-  payers: { id: string; name: string } | null
-  case_milestones: Array<{
-    milestone_type_id: string
-    recorded_at: string
-    milestone_types: { name: string } | null
-  }>
-  case_delays: CaseDelay[]
-}
-
-interface FacilitySettings {
-  or_hourly_rate: number | null
+  name: string
+  soft_goods_cost: number | null
+  hard_goods_cost: number | null
 }
 
 interface ProcedureReimbursement {
+  id: string
   procedure_type_id: string
   payer_id: string | null
   reimbursement: number
+  effective_date: string
 }
 
-interface SurgeonStats {
-  surgeonId: string
-  surgeonName: string
-  totalProfit: number
-  avgProfit: number
-  caseCount: number
-  avgDurationMinutes: number
-  durationVsAvgMinutes: number
-  profitImpact: number
+interface Payer {
+  id: string
+  name: string
+  facility_id: string
+  deleted_at: string | null
 }
 
-interface ProcedureStats {
-  procedureId: string
-  procedureName: string
-  totalProfit: number
-  avgProfit: number
-  avgMarginPercent: number
-  caseCount: number
-  avgDurationMinutes: number
-  surgeonBreakdown: SurgeonStats[]
+interface Facility {
+  id: string
+  name: string
+  or_hourly_rate: number | null
 }
 
-// Issue detail types
-interface OverTimeIssue {
-  type: 'overTime'
-  actualMinutes: number
-  expectedMinutes: number
-  percentOver: number
-}
+type SubTab = 'pricing' | 'payers'
 
-interface DelayIssue {
-  type: 'delay'
-  delays: Array<{ name: string; minutes: number | null }>
-  totalMinutes: number
-}
+// =====================================================
+// COMPONENT
+// =====================================================
 
-interface LowPayerIssue {
-  type: 'lowPayer'
-  payerName: string
-  payerRate: number
-  defaultRate: number
-  percentBelow: number
-}
-
-interface UnknownIssue {
-  type: 'unknown'
-}
-
-type CaseIssue = OverTimeIssue | DelayIssue | LowPayerIssue | UnknownIssue
-
-interface OutlierCase {
-  caseId: string
-  caseNumber: string
-  date: string
-  surgeonName: string
-  procedureName: string
-  expectedProfit: number
-  actualProfit: number
-  gap: number
-  durationMinutes: number
-  expectedDurationMinutes: number
-  issues: CaseIssue[]
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-function formatCurrency(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-'
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function formatPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '-'
-  return `${value.toFixed(1)}%`
-}
-
-function formatDuration(minutes: number): string {
-  const hours = Math.floor(minutes / 60)
-  const mins = Math.round(minutes % 60)
-  if (hours === 0) return `${mins}m`
-  return `${hours}h ${mins}m`
-}
-
-function getCaseDurationMinutes(milestones: CaseWithFinancials['case_milestones']): number | null {
-  const patientIn = milestones.find(m => m.milestone_types?.name === 'patient_in')
-  const patientOut = milestones.find(m => m.milestone_types?.name === 'patient_out')
-  
-  if (!patientIn || !patientOut) return null
-  
-  const start = new Date(patientIn.recorded_at)
-  const end = new Date(patientOut.recorded_at)
-  return (end.getTime() - start.getTime()) / (1000 * 60)
-}
-
-function calculateCaseProfit(
-  caseData: CaseWithFinancials,
-  orHourlyRate: number,
-  reimbursements: ProcedureReimbursement[]
-): { profit: number; reimbursement: number; orCost: number; payerReimbursement: number | null; defaultReimbursement: number | null } | null {
-  const procedure = caseData.procedure_types
-  if (!procedure) return null
-  
-  const duration = getCaseDurationMinutes(caseData.case_milestones)
-  if (duration === null) return null
-  
-  // Get default reimbursement
-  const defaultReimbursement = reimbursements.find(
-    r => r.procedure_type_id === procedure.id && r.payer_id === null
-  )?.reimbursement || null
-
-  // Get payer-specific reimbursement if applicable
-  let payerReimbursement: number | null = null
-  if (caseData.payer_id) {
-    payerReimbursement = reimbursements.find(
-      r => r.procedure_type_id === procedure.id && r.payer_id === caseData.payer_id
-    )?.reimbursement || null
-  }
-  
-  // Use payer rate if available, otherwise default
-  const reimbursement = payerReimbursement ?? defaultReimbursement
-  if (!reimbursement) return null
-  
-  const softGoods = procedure.soft_goods_cost || 0
-  const hardGoods = procedure.hard_goods_cost || 0
-  const orCost = (duration / 60) * orHourlyRate
-  
-  const profit = reimbursement - softGoods - hardGoods - orCost
-  
-  return { profit, reimbursement, orCost, payerReimbursement, defaultReimbursement }
-}
-
-// ============================================
-// ISSUES BADGE COMPONENT
-// ============================================
-
-function IssuesBadge({ issues, caseId }: { issues: CaseIssue[]; caseId: string }) {
-  const [showTooltip, setShowTooltip] = useState(false)
-  
-  if (issues.length === 0) {
-    return (
-      <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-500 text-xs font-medium rounded-full">
-        Unknown
-      </span>
-    )
-  }
-  
-  const issueCount = issues.length
-  
-  // Single issue - show the tag directly
-  if (issueCount === 1) {
-    const issue = issues[0]
-    return (
-      <div className="relative inline-block">
-        <div
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-        >
-          <Link href={`/cases/${caseId}`}>
-            {issue.type === 'overTime' && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full cursor-pointer hover:bg-amber-200 transition-colors">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Over Time
-              </span>
-            )}
-            {issue.type === 'delay' && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full cursor-pointer hover:bg-purple-200 transition-colors">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                Delay
-              </span>
-            )}
-            {issue.type === 'lowPayer' && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full cursor-pointer hover:bg-blue-200 transition-colors">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Low Payer
-              </span>
-            )}
-            {issue.type === 'unknown' && (
-              <span className="inline-flex items-center px-2 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full cursor-pointer hover:bg-slate-200 transition-colors">
-                Unknown
-              </span>
-            )}
-          </Link>
-        </div>
-        
-        {/* Single issue tooltip */}
-        {showTooltip && (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50">
-            <div className="bg-slate-900 text-white text-xs rounded-lg px-3 py-2 whitespace-nowrap shadow-lg">
-              {issue.type === 'overTime' && (
-                <div>
-                  <p className="font-medium mb-1">Over Time</p>
-                  <p>{formatDuration(issue.actualMinutes)} vs {formatDuration(issue.expectedMinutes)} expected</p>
-                  <p className="text-amber-300">+{issue.percentOver.toFixed(0)}% over average</p>
-                </div>
-              )}
-              {issue.type === 'delay' && (
-                <div>
-                  <p className="font-medium mb-1">Recorded Delays</p>
-                  {issue.delays.map((d, i) => (
-                    <p key={i}>• {d.name}{d.minutes ? ` (${d.minutes} min)` : ''}</p>
-                  ))}
-                  {issue.totalMinutes > 0 && (
-                    <p className="text-purple-300 mt-1">Total: {issue.totalMinutes} min</p>
-                  )}
-                </div>
-              )}
-              {issue.type === 'lowPayer' && (
-                <div>
-                  <p className="font-medium mb-1">Low Payer Rate</p>
-                  <p>{issue.payerName}: {formatCurrency(issue.payerRate)}</p>
-                  <p>vs Default: {formatCurrency(issue.defaultRate)}</p>
-                  <p className="text-blue-300">-{issue.percentBelow.toFixed(0)}% below</p>
-                </div>
-              )}
-            </div>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-          </div>
-        )}
-      </div>
-    )
-  }
-  
-  // Multiple issues - show count badge
-  return (
-    <div className="relative inline-block">
-      <div
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-      >
-        <Link href={`/cases/${caseId}`}>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full cursor-pointer hover:bg-red-200 transition-colors">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            {issueCount} Issues
-          </span>
-        </Link>
-      </div>
-      
-      {/* Multi-issue tooltip */}
-      {showTooltip && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50">
-          <div className="bg-slate-900 text-white text-xs rounded-lg px-4 py-3 shadow-lg min-w-[200px]">
-            <div className="space-y-3">
-              {issues.map((issue, i) => (
-                <div key={i} className={i > 0 ? 'pt-2 border-t border-slate-700' : ''}>
-                  {issue.type === 'overTime' && (
-                    <div>
-                      <div className="flex items-center gap-1.5 font-medium text-amber-300 mb-1">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Over Time
-                      </div>
-                      <p className="text-slate-300">{formatDuration(issue.actualMinutes)} vs {formatDuration(issue.expectedMinutes)}</p>
-                      <p className="text-slate-400">+{issue.percentOver.toFixed(0)}% over average</p>
-                    </div>
-                  )}
-                  {issue.type === 'delay' && (
-                    <div>
-                      <div className="flex items-center gap-1.5 font-medium text-purple-300 mb-1">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        Delays
-                      </div>
-                      {issue.delays.slice(0, 3).map((d, j) => (
-                        <p key={j} className="text-slate-300">• {d.name}{d.minutes ? ` (${d.minutes}m)` : ''}</p>
-                      ))}
-                      {issue.delays.length > 3 && (
-                        <p className="text-slate-400">+{issue.delays.length - 3} more</p>
-                      )}
-                    </div>
-                  )}
-                  {issue.type === 'lowPayer' && (
-                    <div>
-                      <div className="flex items-center gap-1.5 font-medium text-blue-300 mb-1">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Low Payer
-                      </div>
-                      <p className="text-slate-300">{issue.payerName}</p>
-                      <p className="text-slate-400">{formatCurrency(issue.payerRate)} vs {formatCurrency(issue.defaultRate)}</p>
-                    </div>
-                  )}
-                  {issue.type === 'unknown' && (
-                    <div>
-                      <p className="text-slate-400">Unknown cause</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ============================================
-// SUB-TAB COMPONENTS
-// ============================================
-
-// Date Range Selector
-function DateRangeSelector({ 
-  value, 
-  onChange 
-}: { 
-  value: string
-  onChange: (value: string, startDate: string, endDate: string) => void 
-}) {
-  const today = new Date()
-  
-  const ranges = [
-    { 
-      id: 'mtd', 
-      label: 'MTD',
-      getRange: () => {
-        const start = new Date(today.getFullYear(), today.getMonth(), 1)
-        return { start, end: today }
-      }
-    },
-    { 
-      id: 'qtd', 
-      label: 'QTD',
-      getRange: () => {
-        const quarter = Math.floor(today.getMonth() / 3)
-        const start = new Date(today.getFullYear(), quarter * 3, 1)
-        return { start, end: today }
-      }
-    },
-    { 
-      id: 'ytd', 
-      label: 'YTD',
-      getRange: () => {
-        const start = new Date(today.getFullYear(), 0, 1)
-        return { start, end: today }
-      }
-    },
-    { 
-      id: 'last30', 
-      label: 'Last 30 Days',
-      getRange: () => {
-        const start = new Date(today)
-        start.setDate(start.getDate() - 30)
-        return { start, end: today }
-      }
-    },
-  ]
-
-  const handleChange = (rangeId: string) => {
-    const range = ranges.find(r => r.id === rangeId)
-    if (range) {
-      const { start, end } = range.getRange()
-      onChange(
-        rangeId, 
-        start.toISOString().split('T')[0], 
-        end.toISOString().split('T')[0]
-      )
-    }
-  }
-
-  return (
-    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-      {ranges.map(range => (
-        <button
-          key={range.id}
-          onClick={() => handleChange(range.id)}
-          className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-            value === range.id
-              ? 'bg-white text-slate-900 shadow-sm'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          {range.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// Metric Card
-function MetricCard({ 
-  title, 
-  value, 
-  subtitle, 
-  trend,
-  variant = 'default',
-  onClick 
-}: { 
-  title: string
-  value: string | number
-  subtitle?: string
-  trend?: { value: number; positive: boolean }
-  variant?: 'default' | 'success' | 'warning' | 'danger'
-  onClick?: () => void
-}) {
-  const variants = {
-    default: 'bg-white border-slate-200',
-    success: 'bg-emerald-50 border-emerald-200',
-    warning: 'bg-amber-50 border-amber-200',
-    danger: 'bg-red-50 border-red-200',
-  }
-  
-  const textVariants = {
-    default: 'text-slate-900',
-    success: 'text-emerald-700',
-    warning: 'text-amber-700',
-    danger: 'text-red-700',
-  }
-
-  return (
-    <div 
-      className={`rounded-xl border p-5 transition-all ${variants[variant]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
-      onClick={onClick}
-    >
-      <p className="text-sm font-medium text-slate-600 mb-1">{title}</p>
-      <div className="flex items-end gap-2">
-        <p className={`text-2xl font-bold ${textVariants[variant]}`}>{value}</p>
-        {trend && (
-          <span className={`text-sm font-medium ${trend.positive ? 'text-emerald-600' : 'text-red-500'}`}>
-            {trend.positive ? '↑' : '↓'} {Math.abs(trend.value)}%
-          </span>
-        )}
-      </div>
-      {subtitle && <p className="text-sm text-slate-500 mt-1">{subtitle}</p>}
-    </div>
-  )
-}
-
-// Slide-out Panel
-function SlideOutPanel({ 
-  isOpen, 
-  onClose, 
-  title, 
-  children 
-}: { 
-  isOpen: boolean
-  onClose: () => void
-  title: string
-  children: React.ReactNode
-}) {
-  if (!isOpen) return null
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl z-50 overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6">
-          {children}
-        </div>
-      </div>
-    </>
-  )
-}
-
-// ============================================
-// MAIN PAGE COMPONENT
-// ============================================
-
-export default function FinancialsAnalyticsPage() {
+export default function FinancialsSettingsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
   
-  // Facility handling
-  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
-  const [noFacilitySelected, setNoFacilitySelected] = useState(false)
-  const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
-  
-  // Data state
-  const [cases, setCases] = useState<CaseWithFinancials[]>([])
-  const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
-  const [reimbursements, setReimbursements] = useState<ProcedureReimbursement[]>([])
+  // Core state
+  const [activeTab, setActiveTab] = useState<SubTab>('pricing')
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   
-  // UI state
-  const [activeTab, setActiveTab] = useState<'overview' | 'procedure' | 'surgeon' | 'outliers'>('overview')
-  const [dateRange, setDateRange] = useState('mtd')
-  const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
-  const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
-  const [slideOutData, setSlideOutData] = useState<{ type: 'surgeon' | 'procedure' | 'case'; data: unknown } | null>(null)
+  // User/Facility state
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false)
+  const [facilities, setFacilities] = useState<Facility[]>([])
+  const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null)
+  const [currentFacility, setCurrentFacility] = useState<Facility | null>(null)
+  
+  // OR Rate state
+  const [orHourlyRate, setOrHourlyRate] = useState<string>('')
+  const [editingOrRate, setEditingOrRate] = useState(false)
+  
+  // Procedures state
+  const [procedures, setProcedures] = useState<ProcedureType[]>([])
+  const [reimbursements, setReimbursements] = useState<ProcedureReimbursement[]>([])
+  
+  // Payers state
+  const [payers, setPayers] = useState<Payer[]>([])
+  const [showInactivePayers, setShowInactivePayers] = useState(false)
+  
+  // Slide-out panel state
+  const [slideOutOpen, setSlideOutOpen] = useState(false)
+  const [selectedProcedure, setSelectedProcedure] = useState<ProcedureType | null>(null)
+  const [procedureForm, setProcedureForm] = useState({
+    soft_goods_cost: '',
+    hard_goods_cost: '',
+    default_reimbursement: '',
+  })
+  const [payerReimbursements, setPayerReimbursements] = useState<{ payer_id: string; reimbursement: string }[]>([])
+  
+  // Payer modal state
+  const [payerModalOpen, setPayerModalOpen] = useState(false)
+  const [payerModalMode, setPayerModalMode] = useState<'add' | 'edit'>('add')
+  const [selectedPayer, setSelectedPayer] = useState<Payer | null>(null)
+  const [payerName, setPayerName] = useState('')
+  const [deletePayerConfirm, setDeletePayerConfirm] = useState<string | null>(null)
 
-  // Determine effective facility ID
+  // =====================================================
+  // DATA FETCHING
+  // =====================================================
+
   useEffect(() => {
-    if (userLoading) return
-    
-    if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
-      const impersonation = getImpersonationState()
-      if (impersonation?.facilityId) {
-        setEffectiveFacilityId(impersonation.facilityId)
-      } else {
-        setNoFacilitySelected(true)
-      }
-    } else if (userData.facilityId) {
-      setEffectiveFacilityId(userData.facilityId)
-    }
-    
-    setFacilityCheckComplete(true)
-  }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
+    fetchCurrentUser()
+  }, [])
 
-  // Fetch data
-  const fetchData = async (startDate?: string, endDate?: string) => {
-    if (!effectiveFacilityId) return
-    
+  const fetchCurrentUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id, access_level')
+        .eq('id', user.id)
+        .single()
+
+      if (userData) {
+        const isGlobal = userData.access_level === 'global_admin'
+        setIsGlobalAdmin(isGlobal)
+
+        if (isGlobal) {
+          const { data: facilitiesData } = await supabase
+            .from('facilities')
+            .select('id, name, or_hourly_rate')
+            .order('name')
+
+          if (facilitiesData && facilitiesData.length > 0) {
+            setFacilities(facilitiesData)
+            setSelectedFacilityId(facilitiesData[0].id)
+            setCurrentFacility(facilitiesData[0])
+            setOrHourlyRate(facilitiesData[0].or_hourly_rate?.toString() || '')
+            fetchData(facilitiesData[0].id)
+          } else {
+            setLoading(false)
+          }
+        } else {
+          const { data: facilityData } = await supabase
+            .from('facilities')
+            .select('id, name, or_hourly_rate')
+            .eq('id', userData.facility_id)
+            .single()
+
+          if (facilityData) {
+            setSelectedFacilityId(facilityData.id)
+            setCurrentFacility(facilityData)
+            setOrHourlyRate(facilityData.or_hourly_rate?.toString() || '')
+            fetchData(facilityData.id)
+          } else {
+            setLoading(false)
+          }
+        }
+      }
+    }
+  }
+
+  const fetchData = async (facilityId: string) => {
     setLoading(true)
 
-    // Get date range
-    const today = new Date()
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    const start = startDate || monthStart.toISOString().split('T')[0]
-    const end = endDate || today.toISOString().split('T')[0]
-
-    const [casesRes, facilityRes, reimbursementsRes] = await Promise.all([
+    const [proceduresResult, reimbursementsResult, payersResult] = await Promise.all([
       supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          surgeon_id,
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-          procedure_type_id,
-          procedure_types (id, name, soft_goods_cost, hard_goods_cost),
-          payer_id,
-          payers (id, name),
-          case_milestones (
-            milestone_type_id,
-            recorded_at,
-            milestone_types (name)
-          ),
-          case_delays (
-            id,
-            delay_type_id,
-            duration_minutes,
-            notes,
-            delay_types (name)
-          )
-        `)
-        .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', start)
-        .lte('scheduled_date', end)
-        .order('scheduled_date', { ascending: false }),
-      
-      supabase
-        .from('facilities')
-        .select('or_hourly_rate')
-        .eq('id', effectiveFacilityId)
-        .single(),
-      
+        .from('procedure_types')
+        .select('id, name, soft_goods_cost, hard_goods_cost')
+        .eq('facility_id', facilityId)
+        .order('name'),
       supabase
         .from('procedure_reimbursements')
-        .select('procedure_type_id, payer_id, reimbursement')
-        .order('effective_date', { ascending: false }),
+        .select('id, procedure_type_id, payer_id, reimbursement, effective_date')
+        .in('procedure_type_id', 
+          (await supabase.from('procedure_types').select('id').eq('facility_id', facilityId)).data?.map(p => p.id) || []
+        ),
+      supabase
+        .from('payers')
+        .select('id, name, facility_id, deleted_at')
+        .eq('facility_id', facilityId)
+        .order('name'),
     ])
 
-    setCases((casesRes.data as unknown as CaseWithFinancials[]) || [])
-    setFacilitySettings(facilityRes.data as FacilitySettings)
-    setReimbursements((reimbursementsRes.data as ProcedureReimbursement[]) || [])
+    setProcedures(proceduresResult.data || [])
+    setReimbursements(reimbursementsResult.data || [])
+    setPayers(payersResult.data || [])
     setLoading(false)
   }
 
-  useEffect(() => {
-    if (effectiveFacilityId) {
-      fetchData()
-    }
-  }, [effectiveFacilityId])
-
-  const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
-    setDateRange(range)
-    fetchData(startDate, endDate)
+  const handleFacilityChange = (facilityId: string) => {
+    const facility = facilities.find(f => f.id === facilityId)
+    setSelectedFacilityId(facilityId)
+    setCurrentFacility(facility || null)
+    setOrHourlyRate(facility?.or_hourly_rate?.toString() || '')
+    fetchData(facilityId)
   }
 
-  // ============================================
-  // CALCULATE METRICS
-  // ============================================
-  
-  const metrics = useMemo(() => {
-    const orRate = facilitySettings?.or_hourly_rate || 0
+  // =====================================================
+  // OR HOURLY RATE
+  // =====================================================
+
+  const handleSaveOrRate = async () => {
+    if (!selectedFacilityId) return
+    setSaving(true)
+
+    const oldRate = currentFacility?.or_hourly_rate
+    const newRate = orHourlyRate ? parseFloat(orHourlyRate) : null
+
+    const { error } = await supabase
+      .from('facilities')
+      .update({ or_hourly_rate: newRate })
+      .eq('id', selectedFacilityId)
+
+    if (!error) {
+      setCurrentFacility(prev => prev ? { ...prev, or_hourly_rate: newRate } : null)
+      setEditingOrRate(false)
+
+      // Audit log
+      await genericAuditLog(supabase, 'facility.or_rate_updated', {
+        targetType: 'facility',
+        targetId: selectedFacilityId,
+        targetLabel: currentFacility?.name || '',
+        oldValues: { or_hourly_rate: oldRate },
+        newValues: { or_hourly_rate: newRate },
+        facilityId: selectedFacilityId,
+      })
+    }
+
+    setSaving(false)
+  }
+
+  // =====================================================
+  // PROCEDURE FINANCIALS
+  // =====================================================
+
+  const getDefaultReimbursement = (procedureId: string): number | null => {
+    const defaultRate = reimbursements.find(
+      r => r.procedure_type_id === procedureId && r.payer_id === null
+    )
+    return defaultRate?.reimbursement || null
+  }
+
+  const getPayerReimbursements = (procedureId: string): ProcedureReimbursement[] => {
+    return reimbursements.filter(
+      r => r.procedure_type_id === procedureId && r.payer_id !== null
+    )
+  }
+
+  const calculateBaseMargin = (procedure: ProcedureType): number | null => {
+    const reimbursement = getDefaultReimbursement(procedure.id)
+    if (reimbursement === null) return null
     
-    // Calculate profit for each case
-    const casesWithProfit = cases
-      .map(c => {
-        const result = calculateCaseProfit(c, orRate, reimbursements)
-        return result ? { ...c, ...result, duration: getCaseDurationMinutes(c.case_milestones) } : null
+    const softGoods = procedure.soft_goods_cost || 0
+    const hardGoods = procedure.hard_goods_cost || 0
+    
+    return reimbursement - softGoods - hardGoods
+  }
+
+  const isConfigured = (procedure: ProcedureType): boolean => {
+    const hasReimbursement = getDefaultReimbursement(procedure.id) !== null
+    const hasCosts = procedure.soft_goods_cost !== null || procedure.hard_goods_cost !== null
+    return hasReimbursement || hasCosts
+  }
+
+  const openProcedureSlideOut = (procedure: ProcedureType) => {
+    setSelectedProcedure(procedure)
+    setProcedureForm({
+      soft_goods_cost: procedure.soft_goods_cost?.toString() || '',
+      hard_goods_cost: procedure.hard_goods_cost?.toString() || '',
+      default_reimbursement: getDefaultReimbursement(procedure.id)?.toString() || '',
+    })
+    
+    // Load payer-specific reimbursements
+    const payerRates = getPayerReimbursements(procedure.id)
+    setPayerReimbursements(
+      payerRates.map(r => ({
+        payer_id: r.payer_id!,
+        reimbursement: r.reimbursement.toString(),
+      }))
+    )
+    
+    setSlideOutOpen(true)
+  }
+
+  const closeProcedureSlideOut = () => {
+    setSlideOutOpen(false)
+    setSelectedProcedure(null)
+    setProcedureForm({ soft_goods_cost: '', hard_goods_cost: '', default_reimbursement: '' })
+    setPayerReimbursements([])
+  }
+
+  const handleSaveProcedureFinancials = async () => {
+    if (!selectedProcedure || !selectedFacilityId) return
+    setSaving(true)
+
+    const softGoodsCost = procedureForm.soft_goods_cost ? parseFloat(procedureForm.soft_goods_cost) : null
+    const hardGoodsCost = procedureForm.hard_goods_cost ? parseFloat(procedureForm.hard_goods_cost) : null
+    const defaultReimbursement = procedureForm.default_reimbursement ? parseFloat(procedureForm.default_reimbursement) : null
+
+    // Update procedure costs
+    const { error: procedureError } = await supabase
+      .from('procedure_types')
+      .update({
+        soft_goods_cost: softGoodsCost,
+        hard_goods_cost: hardGoodsCost,
       })
-      .filter((c): c is CaseWithFinancials & { profit: number; reimbursement: number; orCost: number; payerReimbursement: number | null; defaultReimbursement: number | null; duration: number } => c !== null)
+      .eq('id', selectedProcedure.id)
 
-    // Summary metrics
-    const totalProfit = casesWithProfit.reduce((sum, c) => sum + c.profit, 0)
-    const totalReimbursement = casesWithProfit.reduce((sum, c) => sum + c.reimbursement, 0)
-    const avgProfit = casesWithProfit.length > 0 ? totalProfit / casesWithProfit.length : 0
-    const avgMargin = totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0
+    if (procedureError) {
+      console.error('Error updating procedure costs:', procedureError)
+      setSaving(false)
+      return
+    }
 
-    // Calculate standard deviation for outlier detection
-    const profitValues = casesWithProfit.map(c => c.profit)
-    const profitMean = avgProfit
-    const profitStdDev = profitValues.length > 1 
-      ? Math.sqrt(profitValues.reduce((sum, p) => sum + Math.pow(p - profitMean, 2), 0) / profitValues.length)
-      : 0
-
-    // Outliers (cases below 1 std dev)
-    const outlierThreshold = profitMean - profitStdDev
-    const outlierCases = casesWithProfit.filter(c => c.profit < outlierThreshold)
-
-    // Procedure breakdown
-    const procedureMap = new Map<string, typeof casesWithProfit>()
-    casesWithProfit.forEach(c => {
-      if (c.procedure_types) {
-        const key = c.procedure_types.id
-        if (!procedureMap.has(key)) procedureMap.set(key, [])
-        procedureMap.get(key)!.push(c)
-      }
+    // Audit log for costs
+    await genericAuditLog(supabase, 'procedure_type.costs_updated', {
+      targetType: 'procedure_type',
+      targetId: selectedProcedure.id,
+      targetLabel: selectedProcedure.name,
+      oldValues: {
+        soft_goods_cost: selectedProcedure.soft_goods_cost,
+        hard_goods_cost: selectedProcedure.hard_goods_cost,
+      },
+      newValues: {
+        soft_goods_cost: softGoodsCost,
+        hard_goods_cost: hardGoodsCost,
+      },
+      facilityId: selectedFacilityId,
     })
 
-    const procedureStats: ProcedureStats[] = Array.from(procedureMap.entries())
-      .map(([procId, procCases]) => {
-        const procTotal = procCases.reduce((sum, c) => sum + c.profit, 0)
-        const procReimbursement = procCases.reduce((sum, c) => sum + c.reimbursement, 0)
-        const procAvgDuration = procCases.reduce((sum, c) => sum + (c.duration || 0), 0) / procCases.length
+    // Handle default reimbursement
+    const existingDefault = reimbursements.find(
+      r => r.procedure_type_id === selectedProcedure.id && r.payer_id === null
+    )
+
+    if (defaultReimbursement !== null) {
+      if (existingDefault) {
+        // Update existing
+        await supabase
+          .from('procedure_reimbursements')
+          .update({ reimbursement: defaultReimbursement, effective_date: new Date().toISOString().split('T')[0] })
+          .eq('id', existingDefault.id)
+      } else {
+        // Insert new
+        await supabase
+          .from('procedure_reimbursements')
+          .insert({
+            procedure_type_id: selectedProcedure.id,
+            payer_id: null,
+            reimbursement: defaultReimbursement,
+            effective_date: new Date().toISOString().split('T')[0],
+          })
+      }
+    } else if (existingDefault) {
+      // Remove if cleared
+      await supabase
+        .from('procedure_reimbursements')
+        .delete()
+        .eq('id', existingDefault.id)
+    }
+
+    // Handle payer-specific reimbursements
+    for (const payerRate of payerReimbursements) {
+      const existingPayerRate = reimbursements.find(
+        r => r.procedure_type_id === selectedProcedure.id && r.payer_id === payerRate.payer_id
+      )
+      const reimbursementValue = payerRate.reimbursement ? parseFloat(payerRate.reimbursement) : null
+
+      if (reimbursementValue !== null) {
+        if (existingPayerRate) {
+          await supabase
+            .from('procedure_reimbursements')
+            .update({ reimbursement: reimbursementValue, effective_date: new Date().toISOString().split('T')[0] })
+            .eq('id', existingPayerRate.id)
+        } else {
+          await supabase
+            .from('procedure_reimbursements')
+            .insert({
+              procedure_type_id: selectedProcedure.id,
+              payer_id: payerRate.payer_id,
+              reimbursement: reimbursementValue,
+              effective_date: new Date().toISOString().split('T')[0],
+            })
+        }
+      } else if (existingPayerRate) {
+        await supabase
+          .from('procedure_reimbursements')
+          .delete()
+          .eq('id', existingPayerRate.id)
+      }
+    }
+
+    // Refresh data
+    await fetchData(selectedFacilityId)
+    closeProcedureSlideOut()
+    setSaving(false)
+  }
+
+  const addPayerReimbursement = () => {
+    const activePayers = payers.filter(p => !p.deleted_at)
+    const usedPayerIds = payerReimbursements.map(pr => pr.payer_id)
+    const availablePayers = activePayers.filter(p => !usedPayerIds.includes(p.id))
+    
+    if (availablePayers.length > 0) {
+      setPayerReimbursements([
+        ...payerReimbursements,
+        { payer_id: availablePayers[0].id, reimbursement: '' }
+      ])
+    }
+  }
+
+  const removePayerReimbursement = (index: number) => {
+    setPayerReimbursements(payerReimbursements.filter((_, i) => i !== index))
+  }
+
+  // =====================================================
+  // PAYER MANAGEMENT
+  // =====================================================
+
+  const openAddPayerModal = () => {
+    setPayerModalMode('add')
+    setPayerName('')
+    setSelectedPayer(null)
+    setPayerModalOpen(true)
+  }
+
+  const openEditPayerModal = (payer: Payer) => {
+    setPayerModalMode('edit')
+    setPayerName(payer.name)
+    setSelectedPayer(payer)
+    setPayerModalOpen(true)
+  }
+
+  const closePayerModal = () => {
+    setPayerModalOpen(false)
+    setPayerName('')
+    setSelectedPayer(null)
+  }
+
+  const handleSavePayer = async () => {
+    if (!payerName.trim() || !selectedFacilityId) return
+    setSaving(true)
+
+    if (payerModalMode === 'add') {
+      const { data, error } = await supabase
+        .from('payers')
+        .insert({
+          name: payerName.trim(),
+          facility_id: selectedFacilityId,
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        setPayers([...payers, data].sort((a, b) => a.name.localeCompare(b.name)))
         
-        // Surgeon breakdown for this procedure
-        const surgeonMap = new Map<string, typeof procCases>()
-        procCases.forEach(c => {
-          if (c.surgeon_id && c.surgeon) {
-            if (!surgeonMap.has(c.surgeon_id)) surgeonMap.set(c.surgeon_id, [])
-            surgeonMap.get(c.surgeon_id)!.push(c)
-          }
-        })
-
-        const surgeonBreakdown: SurgeonStats[] = Array.from(surgeonMap.entries())
-          .map(([surgeonId, surgeonCases]) => {
-            const surgeonName = surgeonCases[0].surgeon 
-              ? `Dr. ${surgeonCases[0].surgeon.first_name} ${surgeonCases[0].surgeon.last_name}`
-              : 'Unknown'
-            const surgeonTotal = surgeonCases.reduce((sum, c) => sum + c.profit, 0)
-            const surgeonAvgDuration = surgeonCases.reduce((sum, c) => sum + (c.duration || 0), 0) / surgeonCases.length
-            const durationDiff = surgeonAvgDuration - procAvgDuration
-            const profitImpact = -durationDiff * (orRate / 60) // Negative duration diff = positive profit impact
-
-            return {
-              surgeonId,
-              surgeonName,
-              totalProfit: surgeonTotal,
-              avgProfit: surgeonTotal / surgeonCases.length,
-              caseCount: surgeonCases.length,
-              avgDurationMinutes: surgeonAvgDuration,
-              durationVsAvgMinutes: durationDiff,
-              profitImpact,
-            }
-          })
-          .filter(s => s.caseCount >= 1) // Show all, but flag those below threshold
-          .sort((a, b) => b.avgProfit - a.avgProfit)
-
-        return {
-          procedureId: procId,
-          procedureName: procCases[0].procedure_types?.name || 'Unknown',
-          totalProfit: procTotal,
-          avgProfit: procTotal / procCases.length,
-          avgMarginPercent: procReimbursement > 0 ? (procTotal / procReimbursement) * 100 : 0,
-          caseCount: procCases.length,
-          avgDurationMinutes: procAvgDuration,
-          surgeonBreakdown,
-        }
-      })
-      .sort((a, b) => b.totalProfit - a.totalProfit)
-
-    // Overall surgeon stats
-    const surgeonMap = new Map<string, typeof casesWithProfit>()
-    casesWithProfit.forEach(c => {
-      if (c.surgeon_id && c.surgeon) {
-        if (!surgeonMap.has(c.surgeon_id)) surgeonMap.set(c.surgeon_id, [])
-        surgeonMap.get(c.surgeon_id)!.push(c)
-      }
-    })
-
-    const overallAvgDuration = casesWithProfit.length > 0
-      ? casesWithProfit.reduce((sum, c) => sum + (c.duration || 0), 0) / casesWithProfit.length
-      : 0
-
-    const surgeonStats: SurgeonStats[] = Array.from(surgeonMap.entries())
-      .map(([surgeonId, surgeonCases]) => {
-        const surgeonName = surgeonCases[0].surgeon 
-          ? `Dr. ${surgeonCases[0].surgeon.first_name} ${surgeonCases[0].surgeon.last_name}`
-          : 'Unknown'
-        const surgeonTotal = surgeonCases.reduce((sum, c) => sum + c.profit, 0)
-        const surgeonAvgDuration = surgeonCases.reduce((sum, c) => sum + (c.duration || 0), 0) / surgeonCases.length
-        const durationDiff = surgeonAvgDuration - overallAvgDuration
-        const profitImpact = -durationDiff * (orRate / 60)
-
-        return {
-          surgeonId,
-          surgeonName,
-          totalProfit: surgeonTotal,
-          avgProfit: surgeonTotal / surgeonCases.length,
-          caseCount: surgeonCases.length,
-          avgDurationMinutes: surgeonAvgDuration,
-          durationVsAvgMinutes: durationDiff,
-          profitImpact,
-        }
-      })
-      .sort((a, b) => b.totalProfit - a.totalProfit)
-
-    // Outlier case details with multi-issue detection
-    const outlierDetails: OutlierCase[] = outlierCases.map(c => {
-      const procedureCases = procedureMap.get(c.procedure_type_id || '')
-      const expectedDuration = procedureCases 
-        ? procedureCases.reduce((sum, pc) => sum + (pc.duration || 0), 0) / procedureCases.length
-        : c.duration || 0
-      const expectedProfit = avgProfit
-
-      // Detect all applicable issues
-      const issues: CaseIssue[] = []
-
-      // 1. Over Time check (30% over expected)
-      const actualDuration = c.duration || 0
-      if (actualDuration > expectedDuration * 1.3) {
-        const percentOver = ((actualDuration - expectedDuration) / expectedDuration) * 100
-        issues.push({
-          type: 'overTime',
-          actualMinutes: actualDuration,
-          expectedMinutes: expectedDuration,
-          percentOver,
+        await genericAuditLog(supabase, 'payer.created', {
+          targetType: 'payer',
+          targetId: data.id,
+          targetLabel: payerName.trim(),
+          newValues: { name: payerName.trim() },
+          facilityId: selectedFacilityId,
         })
       }
+    } else if (selectedPayer) {
+      const { error } = await supabase
+        .from('payers')
+        .update({ name: payerName.trim() })
+        .eq('id', selectedPayer.id)
 
-      // 2. Delay check (has recorded delays)
-      if (c.case_delays && c.case_delays.length > 0) {
-        const delays = c.case_delays.map(d => ({
-          name: d.delay_types?.name || 'Unknown Delay',
-          minutes: d.duration_minutes,
-        }))
-        const totalMinutes = c.case_delays.reduce((sum, d) => sum + (d.duration_minutes || 0), 0)
-        issues.push({
-          type: 'delay',
-          delays,
-          totalMinutes,
+      if (!error) {
+        setPayers(payers.map(p => 
+          p.id === selectedPayer.id ? { ...p, name: payerName.trim() } : p
+        ).sort((a, b) => a.name.localeCompare(b.name)))
+
+        await genericAuditLog(supabase, 'payer.updated', {
+          targetType: 'payer',
+          targetId: selectedPayer.id,
+          targetLabel: payerName.trim(),
+          oldValues: { name: selectedPayer.name },
+          newValues: { name: payerName.trim() },
+          facilityId: selectedFacilityId,
         })
       }
-
-      // 3. Low Payer check (payer rate < 80% of default)
-      if (c.payer_id && c.payerReimbursement && c.defaultReimbursement) {
-        const percentBelow = ((c.defaultReimbursement - c.payerReimbursement) / c.defaultReimbursement) * 100
-        if (percentBelow >= 20) {
-          issues.push({
-            type: 'lowPayer',
-            payerName: c.payers?.name || 'Unknown Payer',
-            payerRate: c.payerReimbursement,
-            defaultRate: c.defaultReimbursement,
-            percentBelow,
-          })
-        }
-      }
-
-      // If no issues detected, add unknown
-      if (issues.length === 0) {
-        issues.push({ type: 'unknown' })
-      }
-
-      return {
-        caseId: c.id,
-        caseNumber: c.case_number,
-        date: c.scheduled_date,
-        surgeonName: c.surgeon ? `Dr. ${c.surgeon.first_name} ${c.surgeon.last_name}` : 'Unknown',
-        procedureName: c.procedure_types?.name || 'Unknown',
-        expectedProfit,
-        actualProfit: c.profit,
-        gap: c.profit - expectedProfit,
-        durationMinutes: actualDuration,
-        expectedDurationMinutes: expectedDuration,
-        issues,
-      }
-    }).sort((a, b) => a.gap - b.gap)
-
-    // Count issues by type
-    const issueStats = {
-      overTime: outlierDetails.filter(o => o.issues.some(i => i.type === 'overTime')).length,
-      delay: outlierDetails.filter(o => o.issues.some(i => i.type === 'delay')).length,
-      lowPayer: outlierDetails.filter(o => o.issues.some(i => i.type === 'lowPayer')).length,
-      unknown: outlierDetails.filter(o => o.issues.some(i => i.type === 'unknown')).length,
     }
 
-    // Time = Money calculations
-    const costPerMinute = orRate / 60
-    const excessTimeMinutes = casesWithProfit.reduce((sum, c) => {
-      const procedureCases = procedureMap.get(c.procedure_type_id || '')
-      if (!procedureCases) return sum
-      const avgDuration = procedureCases.reduce((s, pc) => s + (pc.duration || 0), 0) / procedureCases.length
-      const excess = Math.max(0, (c.duration || 0) - avgDuration)
-      return sum + excess
-    }, 0)
-    const excessTimeCost = excessTimeMinutes * costPerMinute
+    closePayerModal()
+    setSaving(false)
+  }
 
-    // Profit trend by date
-    const profitByDate = new Map<string, number>()
-    casesWithProfit.forEach(c => {
-      const date = c.scheduled_date
-      profitByDate.set(date, (profitByDate.get(date) || 0) + c.profit)
-    })
-    const profitTrend = Array.from(profitByDate.entries())
-      .map(([date, profit]) => ({ date, profit }))
-      .sort((a, b) => a.date.localeCompare(b.date))
+  const handleDeletePayer = async (payerId: string) => {
+    const payer = payers.find(p => p.id === payerId)
+    if (!payer || !selectedFacilityId) return
 
-    return {
-      totalCases: casesWithProfit.length,
-      totalProfit,
-      avgProfit,
-      avgMargin,
-      outlierCount: outlierCases.length,
-      outlierThreshold,
-      costPerMinute,
-      excessTimeCost,
-      procedureStats,
-      surgeonStats,
-      outlierDetails,
-      issueStats,
-      profitTrend,
-      orRate,
+    // Soft delete
+    const { error } = await supabase
+      .from('payers')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', payerId)
+
+    if (!error) {
+      setPayers(payers.map(p => 
+        p.id === payerId ? { ...p, deleted_at: new Date().toISOString() } : p
+      ))
+
+      await genericAuditLog(supabase, 'payer.deleted', {
+        targetType: 'payer',
+        targetId: payerId,
+        targetLabel: payer.name,
+        facilityId: selectedFacilityId,
+      })
     }
-  }, [cases, facilitySettings, reimbursements])
 
-  // ============================================
+    setDeletePayerConfirm(null)
+  }
+
+  const handleRestorePayer = async (payerId: string) => {
+    const payer = payers.find(p => p.id === payerId)
+    if (!payer || !selectedFacilityId) return
+
+    const { error } = await supabase
+      .from('payers')
+      .update({ deleted_at: null })
+      .eq('id', payerId)
+
+    if (!error) {
+      setPayers(payers.map(p => 
+        p.id === payerId ? { ...p, deleted_at: null } : p
+      ))
+
+      await genericAuditLog(supabase, 'payer.restored', {
+        targetType: 'payer',
+        targetId: payerId,
+        targetLabel: payer.name,
+        facilityId: selectedFacilityId,
+      })
+    }
+  }
+
+  // =====================================================
+  // HELPERS
+  // =====================================================
+
+  const formatCurrency = (value: number | null): string => {
+    if (value === null) return 'u2014'
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value)
+  }
+
+  const activePayers = payers.filter(p => !p.deleted_at)
+  const inactivePayers = payers.filter(p => p.deleted_at)
+  const selectedFacility = facilities.find(f => f.id === selectedFacilityId)
+
+  // =====================================================
   // RENDER
-  // ============================================
-
-  // Loading state
-  if (userLoading || !facilityCheckComplete) {
-    return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center py-24">
-          <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-        </div>
-      </DashboardLayout>
-    )
-  }
-
-  // No facility selected (global admin)
-  if (noFacilitySelected) {
-    return (
-      <DashboardLayout>
-        <Container className="py-8">
-          <AnalyticsLayout
-            title="Financial Analytics"
-            description="Profitability metrics and insights"
-          >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
-                <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-                  Select a facility to view financial analytics.
-                </p>
-                <Link
-                  href="/admin/facilities"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  View Facilities
-                </Link>
-              </div>
-            </div>
-          </AnalyticsLayout>
-        </Container>
-      </DashboardLayout>
-    )
-  }
-
-  // Not configured state
-  if (!facilitySettings?.or_hourly_rate) {
-    return (
-      <DashboardLayout>
-        <Container className="py-8">
-          <AnalyticsLayout
-            title="Financial Analytics"
-            description="Profitability metrics and insights"
-          >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">Financials Not Configured</h3>
-                <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-                  Set up your OR hourly rate and procedure costs to enable financial analytics.
-                </p>
-                <Link
-                  href="/settings/financials"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Configure Financials
-                </Link>
-              </div>
-            </div>
-          </AnalyticsLayout>
-        </Container>
-      </DashboardLayout>
-    )
-  }
+  // =====================================================
 
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <AnalyticsLayout
-          title="Financial Analytics"
-          description={`${metrics.totalCases} cases analyzed`}
-          actions={
-            <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-          }
+        <SettingsLayout
+          title="Financials"
+          description="Manage procedure costs, reimbursement rates, and payers."
         >
+          {/* Facility Selector (Global Admin Only) */}
+          {isGlobalAdmin && facilities.length > 0 && (
+            <div className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Select Facility
+              </label>
+              <select
+                value={selectedFacilityId || ''}
+                onChange={(e) => handleFacilityChange(e.target.value)}
+                className="w-full md:w-80 px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+              >
+                {facilities.map((facility) => (
+                  <option key={facility.id} value={facility.id}>
+                    {facility.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-slate-500">
+                Managing financials for: <span className="font-medium text-slate-700">{selectedFacility?.name}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Sub-tabs */}
+          <div className="mb-6 border-b border-slate-200">
+            <div className="flex gap-6">
+              <button
+                onClick={() => setActiveTab('pricing')}
+                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'pricing'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Procedure Pricing
+              </button>
+              <button
+                onClick={() => setActiveTab('payers')}
+                className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === 'payers'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Payers
+              </button>
+            </div>
+          </div>
+
           {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+            <div className="flex items-center justify-center py-12">
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
-          ) : (
+          ) : !selectedFacilityId ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+              <p className="text-slate-500">No facility selected</p>
+            </div>
+          ) : activeTab === 'pricing' ? (
             <>
-              {/* Sub-tabs */}
-              <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-lg w-fit">
-                {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'procedure', label: 'By Procedure' },
-                  { id: 'surgeon', label: 'By Surgeon' },
-                  { id: 'outliers', label: 'Outliers' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+              {/* OR Hourly Rate Section */}
+              <div className="mb-6 p-5 bg-white rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-slate-900">OR Hourly Rate</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">Cost per hour to operate the OR</p>
+                  </div>
+                  {editingOrRate ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                        <input
+                          type="number"
+                          value={orHourlyRate}
+                          onChange={(e) => setOrHourlyRate(e.target.value)}
+                          className="w-32 pl-7 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          placeholder="0"
+                        />
+                      </div>
+                      <span className="text-sm text-slate-500">/hr</span>
+                      <button
+                        onClick={handleSaveOrRate}
+                        disabled={saving}
+                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOrHourlyRate(currentFacility?.or_hourly_rate?.toString() || '')
+                          setEditingOrRate(false)
+                        }}
+                        className="px-3 py-2 text-slate-600 text-sm hover:bg-slate-100 rounded-lg"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-semibold text-slate-900">
+                        {currentFacility?.or_hourly_rate 
+                          ? `${formatCurrency(currentFacility.or_hourly_rate)}/hr`
+                          : <span className="text-slate-400">Not set</span>
+                        }
+                      </span>
+                      <button
+                        onClick={() => setEditingOrRate(true)}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* OVERVIEW TAB */}
-              {activeTab === 'overview' && (
-                <div className="space-y-6">
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <MetricCard
-                      title="Total Profit"
-                      value={formatCurrency(metrics.totalProfit)}
-                      subtitle={`${metrics.totalCases} cases`}
-                      variant="success"
-                    />
-                    <MetricCard
-                      title="Avg Profit / Case"
-                      value={formatCurrency(metrics.avgProfit)}
-                    />
-                    <MetricCard
-                      title="Avg Margin"
-                      value={formatPercent(metrics.avgMargin)}
-                    />
-                    <MetricCard
-                      title="Outlier Cases"
-                      value={metrics.outlierCount}
-                      subtitle="Below expected"
-                      variant={metrics.outlierCount > 0 ? 'warning' : 'default'}
-                      onClick={() => setActiveTab('outliers')}
-                    />
-                  </div>
-
-                  {/* Two Column Layout */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Top Procedures */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Top Procedures by Profit</h3>
-                      <div className="space-y-3">
-                        {metrics.procedureStats.slice(0, 5).map(proc => (
-                          <div 
-                            key={proc.procedureId}
-                            className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors"
-                            onClick={() => {
-                              setSelectedProcedure(proc.procedureId)
-                              setActiveTab('procedure')
-                            }}
-                          >
-                            <div>
-                              <p className="font-medium text-slate-900">{proc.procedureName}</p>
-                              <p className="text-sm text-slate-500">{proc.caseCount} cases</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-emerald-600">{formatCurrency(proc.totalProfit)}</p>
-                              <p className="text-sm text-slate-500">{formatCurrency(proc.avgProfit)} avg</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Top Surgeons */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Top Surgeons by Profit</h3>
-                      <div className="space-y-3">
-                        {metrics.surgeonStats.slice(0, 5).map(surgeon => (
-                          <div 
-                            key={surgeon.surgeonId}
-                            className="flex items-center justify-between p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors"
-                            onClick={() => {
-                              setSelectedSurgeon(surgeon.surgeonId)
-                              setActiveTab('surgeon')
-                            }}
-                          >
-                            <div>
-                              <p className="font-medium text-slate-900">{surgeon.surgeonName}</p>
-                              <p className="text-sm text-slate-500">{surgeon.caseCount} cases</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-emerald-600">{formatCurrency(surgeon.totalProfit)}</p>
-                              <p className="text-sm text-slate-500">{formatCurrency(surgeon.avgProfit)} avg</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Time = Money Section */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 p-6">
-                      <p className="text-sm font-medium text-blue-600 mb-1">OR Cost per Minute</p>
-                      <p className="text-3xl font-bold text-blue-900">{formatCurrency(metrics.costPerMinute)}</p>
-                      <p className="text-sm text-blue-600 mt-2">Based on {formatCurrency(metrics.orRate)}/hr</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200 p-6">
-                      <p className="text-sm font-medium text-amber-600 mb-1">Excess Time Cost</p>
-                      <p className="text-3xl font-bold text-amber-900">{formatCurrency(metrics.excessTimeCost)}</p>
-                      <p className="text-sm text-amber-600 mt-2">Time above procedure averages</p>
-                    </div>
-                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl border border-emerald-200 p-6">
-                      <p className="text-sm font-medium text-emerald-600 mb-1">10-Min Savings Value</p>
-                      <p className="text-3xl font-bold text-emerald-900">{formatCurrency(metrics.costPerMinute * 10)}</p>
-                      <p className="text-sm text-emerald-600 mt-2">Potential savings per case</p>
-                    </div>
-                  </div>
-
-                  {/* Profit Trend Chart */}
-                  {metrics.profitTrend.length > 0 && (
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <h3 className="text-lg font-semibold text-slate-900 mb-4">Profit Trend</h3>
-                      <ResponsiveContainer width="100%" height={280}>
-                        <LineChart data={metrics.profitTrend}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis 
-                            dataKey="date" 
-                            stroke="#334155" 
-                            fontSize={12}
-                            tickFormatter={(date) => {
-                              const [y, m, d] = date.split('-').map(Number)
-                              return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                            }}
-                          />
-                          <YAxis 
-                            stroke="#334155" 
-                            fontSize={12}
-                            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                          />
-                          <Tooltip
-                            formatter={(value) => [formatCurrency(value as number), 'Daily Profit']}
-                            labelFormatter={(date) => {
-                              const [y, m, d] = (date as string).split('-').map(Number)
-                              return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-                            }}
-                          />
-                          <Line 
-                            type="monotone" 
-                            dataKey="profit" 
-                            stroke="#10b981" 
-                            strokeWidth={2}
-                            dot={{ fill: '#10b981', r: 4 }}
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
+              {/* Procedures Table */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="font-medium text-slate-900">Procedure Pricing</h3>
+                  <p className="text-sm text-slate-500">{procedures.length} procedures</p>
                 </div>
-              )}
 
-              {/* BY PROCEDURE TAB */}
-              {activeTab === 'procedure' && (
-                <div className="space-y-6">
-                  {/* Procedure Filter */}
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-slate-700">Procedure:</label>
-                    <select
-                      value={selectedProcedure || ''}
-                      onChange={(e) => setSelectedProcedure(e.target.value || null)}
-                      className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm"
-                    >
-                      <option value="">All Procedures</option>
-                      {metrics.procedureStats.map(proc => (
-                        <option key={proc.procedureId} value={proc.procedureId}>
-                          {proc.procedureName} ({proc.caseCount})
-                        </option>
-                      ))}
-                    </select>
+                {procedures.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <p className="text-slate-500">No procedures defined yet.</p>
+                    <p className="text-sm text-slate-400 mt-1">
+                      Add procedures in Settings u2192 Procedure Types first.
+                    </p>
                   </div>
-
-                  {selectedProcedure ? (
-                    // Single procedure detail
-                    (() => {
-                      const proc = metrics.procedureStats.find(p => p.procedureId === selectedProcedure)
-                      if (!proc) return null
-                      
-                      return (
-                        <>
-                          {/* Summary Cards */}
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            <MetricCard title="Avg Profit" value={formatCurrency(proc.avgProfit)} />
-                            <MetricCard title="Avg Duration" value={`${Math.round(proc.avgDurationMinutes)} min`} />
-                            <MetricCard title="Margin" value={formatPercent(proc.avgMarginPercent)} />
-                            <MetricCard title="Cases" value={proc.caseCount} />
-                          </div>
-
-                          {/* Surgeon Breakdown */}
-                          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-200">
-                              <h3 className="text-lg font-semibold text-slate-900">Surgeon Breakdown</h3>
-                            </div>
-                            <div className="overflow-x-auto">
-                              <table className="w-full">
-                                <thead className="bg-slate-50">
-                                  <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Surgeon</th>
-                                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Avg Profit</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Avg Time</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">vs Avg</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Impact</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {proc.surgeonBreakdown.map(surgeon => (
-                                    <tr key={surgeon.surgeonId} className="hover:bg-slate-50">
-                                      <td className="px-6 py-4">
-                                        <span className="font-medium text-slate-900">{surgeon.surgeonName}</span>
-                                        {surgeon.caseCount < 10 && (
-                                          <span className="ml-2 text-xs text-amber-600">*</span>
-                                        )}
-                                      </td>
-                                      <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
-                                      <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                                        {formatCurrency(surgeon.avgProfit)}
-                                      </td>
-                                      <td className="px-6 py-4 text-right text-slate-600">
-                                        {Math.round(surgeon.avgDurationMinutes)} min
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <span className={surgeon.durationVsAvgMinutes < 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                          {surgeon.durationVsAvgMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsAvgMinutes)} min
-                                        </span>
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <span className={surgeon.profitImpact > 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                          {surgeon.profitImpact > 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                            {proc.surgeonBreakdown.some(s => s.caseCount < 10) && (
-                              <div className="px-6 py-3 bg-slate-50 border-t border-slate-200">
-                                <p className="text-xs text-slate-500">* Below minimum threshold (10 cases) for statistical reliability</p>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      )
-                    })()
-                  ) : (
-                    // All procedures table
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
-                              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Total Profit</th>
-                              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Avg Profit</th>
-                              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Margin</th>
-                              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Avg Time</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {metrics.procedureStats.map(proc => (
-                              <tr 
-                                key={proc.procedureId} 
-                                className="hover:bg-slate-50 cursor-pointer"
-                                onClick={() => setSelectedProcedure(proc.procedureId)}
-                              >
-                                <td className="px-6 py-4 font-medium text-slate-900">{proc.procedureName}</td>
-                                <td className="px-6 py-4 text-center text-slate-600">{proc.caseCount}</td>
-                                <td className="px-6 py-4 text-right font-semibold text-emerald-600">
-                                  {formatCurrency(proc.totalProfit)}
-                                </td>
-                                <td className="px-6 py-4 text-right text-slate-600">{formatCurrency(proc.avgProfit)}</td>
-                                <td className="px-6 py-4 text-right text-slate-600">{formatPercent(proc.avgMarginPercent)}</td>
-                                <td className="px-6 py-4 text-right text-slate-600">{Math.round(proc.avgDurationMinutes)} min</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-3">Procedure</div>
+                      <div className="col-span-2 text-right">Reimbursement</div>
+                      <div className="col-span-2 text-right">Hard Goods</div>
+                      <div className="col-span-2 text-right">Soft Goods</div>
+                      <div className="col-span-2 text-right">Base Margin</div>
+                      <div className="col-span-1 text-right">Actions</div>
                     </div>
-                  )}
-                </div>
-              )}
 
-              {/* BY SURGEON TAB */}
-              {activeTab === 'surgeon' && (
-                <div className="space-y-6">
-                  {/* Surgeon Filter */}
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-slate-700">Surgeon:</label>
-                    <select
-                      value={selectedSurgeon || ''}
-                      onChange={(e) => setSelectedSurgeon(e.target.value || null)}
-                      className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm"
-                    >
-                      <option value="">All Surgeons</option>
-                      {metrics.surgeonStats.map(surgeon => (
-                        <option key={surgeon.surgeonId} value={surgeon.surgeonId}>
-                          {surgeon.surgeonName} ({surgeon.caseCount})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedSurgeon ? (
-                    // Single surgeon detail
-                    (() => {
-                      const surgeon = metrics.surgeonStats.find(s => s.surgeonId === selectedSurgeon)
-                      if (!surgeon) return null
-
-                      // Get procedure breakdown for this surgeon
-                      const surgeonProcedures = metrics.procedureStats
-                        .map(proc => {
-                          const surgeonData = proc.surgeonBreakdown.find(s => s.surgeonId === selectedSurgeon)
-                          if (!surgeonData) return null
-                          return {
-                            procedureName: proc.procedureName,
-                            ...surgeonData,
-                            facilityAvgDuration: proc.avgDurationMinutes,
-                          }
-                        })
-                        .filter(Boolean)
-                      
-                      return (
-                        <>
-                          {/* Summary Cards */}
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            <MetricCard 
-                              title="Total Profit" 
-                              value={formatCurrency(surgeon.totalProfit)}
-                              variant="success"
-                            />
-                            <MetricCard title="Avg Profit / Case" value={formatCurrency(surgeon.avgProfit)} />
-                            <MetricCard 
-                              title="Time vs Avg" 
-                              value={`${surgeon.durationVsAvgMinutes > 0 ? '+' : ''}${Math.round(surgeon.durationVsAvgMinutes)} min`}
-                              variant={surgeon.durationVsAvgMinutes < 0 ? 'success' : surgeon.durationVsAvgMinutes > 10 ? 'warning' : 'default'}
-                            />
-                            <MetricCard title="Cases" value={surgeon.caseCount} />
-                          </div>
-
-                          {/* Procedure Breakdown */}
-                          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-200">
-                              <h3 className="text-lg font-semibold text-slate-900">By Procedure</h3>
+                    {/* Table Body */}
+                    <div className="divide-y divide-slate-100">
+                      {procedures.map((procedure) => {
+                        const configured = isConfigured(procedure)
+                        const baseMargin = calculateBaseMargin(procedure)
+                        
+                        return (
+                          <div
+                            key={procedure.id}
+                            onClick={() => openProcedureSlideOut(procedure)}
+                            className={`grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors cursor-pointer ${
+                              !configured ? 'bg-amber-50/30' : ''
+                            }`}
+                          >
+                            {/* Procedure Name */}
+                            <div className="col-span-3 flex items-center gap-2">
+                              <p className="font-medium text-slate-900">{procedure.name}</p>
+                              {!configured && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700">
+                                  Not configured
+                                </span>
+                              )}
                             </div>
-                            <div className="overflow-x-auto">
-                              <table className="w-full">
-                                <thead className="bg-slate-50">
-                                  <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
-                                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Avg Profit</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Avg Time</th>
-                                    <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">vs Facility</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {surgeonProcedures.map((proc: any) => (
-                                    <tr key={proc.procedureName} className="hover:bg-slate-50">
-                                      <td className="px-6 py-4 font-medium text-slate-900">{proc.procedureName}</td>
-                                      <td className="px-6 py-4 text-center text-slate-600">{proc.caseCount}</td>
-                                      <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                                        {formatCurrency(proc.avgProfit)}
-                                      </td>
-                                      <td className="px-6 py-4 text-right text-slate-600">
-                                        {Math.round(proc.avgDurationMinutes)} min
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <span className={proc.durationVsAvgMinutes < 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                          {proc.durationVsAvgMinutes > 0 ? '+' : ''}{Math.round(proc.durationVsAvgMinutes)} min
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </>
-                      )
-                    })()
-                  ) : (
-                    // All surgeons comparison
-                    <>
-                      {/* Comparison Table */}
-                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead className="bg-slate-50">
-                              <tr>
-                                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Surgeon</th>
-                                <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
-                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Total Profit</th>
-                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Per Case</th>
-                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Time vs Avg</th>
-                                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Impact</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {metrics.surgeonStats.map((surgeon, idx) => (
-                                <tr 
-                                  key={surgeon.surgeonId} 
-                                  className="hover:bg-slate-50 cursor-pointer"
-                                  onClick={() => setSelectedSurgeon(surgeon.surgeonId)}
-                                >
-                                  <td className="px-6 py-4">
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-                                        idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-amber-700' : 'bg-slate-300'
-                                      }`}>
-                                        {idx + 1}
-                                      </div>
-                                      <span className="font-medium text-slate-900">{surgeon.surgeonName}</span>
-                                      {surgeon.caseCount < 10 && (
-                                        <span className="text-xs text-amber-600">*</span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
-                                  <td className="px-6 py-4 text-right font-semibold text-emerald-600">
-                                    {formatCurrency(surgeon.totalProfit)}
-                                  </td>
-                                  <td className="px-6 py-4 text-right text-slate-600">{formatCurrency(surgeon.avgProfit)}</td>
-                                  <td className="px-6 py-4 text-right">
-                                    <span className={surgeon.durationVsAvgMinutes < 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                      {surgeon.durationVsAvgMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsAvgMinutes)} min
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 text-right">
-                                    <span className={surgeon.profitImpact > 0 ? 'text-emerald-600' : 'text-red-500'}>
-                                      {surgeon.profitImpact > 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {metrics.surgeonStats.some(s => s.caseCount < 10) && (
-                          <div className="px-6 py-3 bg-slate-50 border-t border-slate-200">
-                            <p className="text-xs text-slate-500">* Below minimum threshold (10 cases) for statistical reliability</p>
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Scatter Plot */}
-                      {metrics.surgeonStats.length > 1 && (
-                        <div className="bg-white rounded-xl border border-slate-200 p-6">
-                          <h3 className="text-lg font-semibold text-slate-900 mb-4">Time vs Profit Analysis</h3>
-                          <p className="text-sm text-slate-500 mb-4">Top-left quadrant = fast and profitable</p>
-                          <ResponsiveContainer width="100%" height={300}>
-                            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis 
-                                type="number" 
-                                dataKey="avgDurationMinutes" 
-                                name="Avg Duration" 
-                                unit=" min"
-                                label={{ value: 'Avg Duration (min)', position: 'bottom' }}
-                              />
-                              <YAxis 
-                                type="number" 
-                                dataKey="avgProfit" 
-                                name="Avg Profit"
-                                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                                label={{ value: 'Avg Profit', angle: -90, position: 'left' }}
-                              />
-                              <Tooltip 
-                                formatter={(value: any, name: any) => {
-                                  if (value === undefined) return '-'
-                                  if (name === 'Avg Profit') return formatCurrency(value)
-                                  return `${Math.round(value)} min`
+                            {/* Reimbursement */}
+                            <div className="col-span-2 text-right">
+                              <span className={`text-sm ${getDefaultReimbursement(procedure.id) ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {formatCurrency(getDefaultReimbursement(procedure.id))}
+                              </span>
+                            </div>
+
+                            {/* Hard Goods */}
+                            <div className="col-span-2 text-right">
+                              <span className={`text-sm ${procedure.hard_goods_cost ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {formatCurrency(procedure.hard_goods_cost)}
+                              </span>
+                            </div>
+
+                            {/* Soft Goods */}
+                            <div className="col-span-2 text-right">
+                              <span className={`text-sm ${procedure.soft_goods_cost ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {formatCurrency(procedure.soft_goods_cost)}
+                              </span>
+                            </div>
+
+                            {/* Base Margin */}
+                            <div className="col-span-2 text-right">
+                              <span className={`text-sm font-medium ${
+                                baseMargin !== null
+                                  ? baseMargin >= 0 ? 'text-emerald-600' : 'text-red-600'
+                                  : 'text-slate-400'
+                              }`}>
+                                {formatCurrency(baseMargin)}
+                              </span>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="col-span-1 flex justify-end">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openProcedureSlideOut(procedure)
                                 }}
-                                labelFormatter={(_, payload: any) => payload?.[0]?.payload?.surgeonName || ''}
-                              />
-                              <Scatter 
-                                data={metrics.surgeonStats.filter(s => s.caseCount >= 5)} 
-                                fill="#2563eb"
+                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               >
-                                {metrics.surgeonStats.filter(s => s.caseCount >= 5).map((entry, index) => (
-                                  <Cell 
-                                    key={`cell-${index}`} 
-                                    fill={entry.profitImpact > 0 ? '#10b981' : '#ef4444'} 
-                                  />
-                                ))}
-                              </Scatter>
-                            </ScatterChart>
-                          </ResponsiveContainer>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Payers Tab */
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-slate-900">Payers</h3>
+                  <p className="text-sm text-slate-500">{activePayers.length} active payers</p>
+                </div>
+                <button
+                  onClick={openAddPayerModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Payer
+                </button>
+              </div>
+
+              {activePayers.length === 0 && inactivePayers.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <p className="text-slate-500">No payers defined yet.</p>
+                  <button
+                    onClick={openAddPayerModal}
+                    className="mt-2 text-blue-600 hover:underline text-sm"
+                  >
+                    Add your first payer
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Active Payers */}
+                  <div className="divide-y divide-slate-100">
+                    {activePayers.map((payer) => (
+                      <div
+                        key={payer.id}
+                        className="px-6 py-4 flex items-center justify-between hover:bg-slate-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-sm font-medium text-blue-600">
+                              {payer.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="font-medium text-slate-900">{payer.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEditPayerModal(payer)}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          {deletePayerConfirm === payer.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleDeletePayer(payer.id)}
+                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setDeletePayerConfirm(null)}
+                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeletePayerConfirm(payer.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Inactive Payers */}
+                  {inactivePayers.length > 0 && (
+                    <div className="border-t border-slate-200">
+                      <button
+                        onClick={() => setShowInactivePayers(!showInactivePayers)}
+                        className="w-full px-6 py-3 flex items-center justify-between text-sm text-slate-500 hover:bg-slate-50"
+                      >
+                        <span>{inactivePayers.length} inactive payer{inactivePayers.length > 1 ? 's' : ''}</span>
+                        <svg
+                          className={`w-4 h-4 transition-transform ${showInactivePayers ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showInactivePayers && (
+                        <div className="divide-y divide-slate-100 bg-slate-50/50">
+                          {inactivePayers.map((payer) => (
+                            <div
+                              key={payer.id}
+                              className="px-6 py-4 flex items-center justify-between opacity-60"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+                                  <span className="text-sm font-medium text-slate-500">
+                                    {payer.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="font-medium text-slate-600">{payer.name}</span>
+                                <span className="text-xs text-slate-400">Inactive</span>
+                              </div>
+                              <button
+                                onClick={() => handleRestorePayer(payer.id)}
+                                className="px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              >
+                                Restore
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
-                </div>
+                </>
               )}
+            </div>
+          )}
 
-              {/* OUTLIERS TAB */}
-              {activeTab === 'outliers' && (
-                <div className="space-y-6">
-                  {/* Summary */}
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                    <MetricCard 
-                      title="Outlier Cases" 
-                      value={metrics.outlierCount}
-                      subtitle="Below 1 std dev"
-                      variant={metrics.outlierCount > 0 ? 'warning' : 'success'}
-                    />
-                    <MetricCard 
-                      title="Total Gap" 
-                      value={formatCurrency(metrics.outlierDetails.reduce((sum, c) => sum + c.gap, 0))}
-                      subtitle="vs expected profit"
-                      variant="danger"
-                    />
-                    <MetricCard 
-                      title="Over Time" 
-                      value={metrics.issueStats.overTime}
-                      subtitle="Cases with excess time"
-                    />
-                    <MetricCard 
-                      title="With Delays" 
-                      value={metrics.issueStats.delay}
-                      subtitle="Cases with delays"
-                    />
-                    <MetricCard 
-                      title="Low Payer" 
-                      value={metrics.issueStats.lowPayer}
-                      subtitle="Below-average payer"
-                    />
+          {/* Procedure Slide-out Panel */}
+          {slideOutOpen && selectedProcedure && (
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 bg-black/30 z-40"
+                onClick={closeProcedureSlideOut}
+              />
+              
+              {/* Panel */}
+              <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 overflow-y-auto">
+                {/* Header */}
+                <div className="sticky top-0 bg-white px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">{selectedProcedure.name}</h3>
+                    <p className="text-sm text-slate-500">Edit pricing details</p>
+                  </div>
+                  <button
+                    onClick={closeProcedureSlideOut}
+                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-6">
+                  {/* Costs Section */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900 mb-4">Costs</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                          Hard Goods Cost
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                          <input
+                            type="number"
+                            value={procedureForm.hard_goods_cost}
+                            onChange={(e) => setProcedureForm({ ...procedureForm, hard_goods_cost: e.target.value })}
+                            className="w-full pl-7 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            placeholder="0"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">Implants, devices, hardware</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                          Soft Goods Cost
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                          <input
+                            type="number"
+                            value={procedureForm.soft_goods_cost}
+                            onChange={(e) => setProcedureForm({ ...procedureForm, soft_goods_cost: e.target.value })}
+                            className="w-full pl-7 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            placeholder="0"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">Consumables, sutures, drapes</p>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Outlier Cases Table */}
-                  {metrics.outlierDetails.length > 0 ? (
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                      <div className="px-6 py-4 border-b border-slate-200">
-                        <h3 className="text-lg font-semibold text-slate-900">Cases Below Expected Profit</h3>
-                        <p className="text-sm text-slate-500">Sorted by largest gap from expected • Hover issues for details</p>
+                  {/* Reimbursement Section */}
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900 mb-4">Reimbursement</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                          Default Reimbursement
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                          <input
+                            type="number"
+                            value={procedureForm.default_reimbursement}
+                            onChange={(e) => setProcedureForm({ ...procedureForm, default_reimbursement: e.target.value })}
+                            className="w-full pl-7 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            placeholder="0"
+                          />
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">Used when no payer is specified</p>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Case #</th>
-                              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Surgeon</th>
-                              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
-                              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Actual</th>
-                              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Gap</th>
-                              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Issues</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100">
-                            {metrics.outlierDetails.map(outlier => (
-                              <tr key={outlier.caseId} className="hover:bg-slate-50">
-                                <td className="px-6 py-4 text-sm text-slate-600">{outlier.date}</td>
-                                <td className="px-6 py-4">
-                                  <Link href={`/cases/${outlier.caseId}`} className="text-blue-600 hover:underline font-medium">
-                                    {outlier.caseNumber}
-                                  </Link>
-                                </td>
-                                <td className="px-6 py-4 text-sm text-slate-900">{outlier.surgeonName}</td>
-                                <td className="px-6 py-4 text-sm text-slate-600">{outlier.procedureName}</td>
-                                <td className="px-6 py-4 text-right text-sm font-medium text-red-600">
-                                  {formatCurrency(outlier.actualProfit)}
-                                </td>
-                                <td className="px-6 py-4 text-right text-sm font-semibold text-red-600">
-                                  {formatCurrency(outlier.gap)}
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                  <IssuesBadge issues={outlier.issues} caseId={outlier.caseId} />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+
+                      {/* Payer-specific rates */}
+                      {activePayers.length > 0 && (
+                        <div className="pt-4 border-t border-slate-200">
+                          <div className="flex items-center justify-between mb-3">
+                            <label className="text-sm font-medium text-slate-700">
+                              Payer-Specific Rates
+                            </label>
+                            <button
+                              onClick={addPayerReimbursement}
+                              disabled={payerReimbursements.length >= activePayers.length}
+                              className="text-sm text-blue-600 hover:text-blue-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+                            >
+                              + Add payer rate
+                            </button>
+                          </div>
+                          
+                          {payerReimbursements.length === 0 ? (
+                            <p className="text-sm text-slate-500 italic">No payer-specific rates configured</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {payerReimbursements.map((pr, index) => (
+                                <div key={index} className="flex items-center gap-2">
+                                  <select
+                                    value={pr.payer_id}
+                                    onChange={(e) => {
+                                      const updated = [...payerReimbursements]
+                                      updated[index].payer_id = e.target.value
+                                      setPayerReimbursements(updated)
+                                    }}
+                                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                  >
+                                    {activePayers.map(p => (
+                                      <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                  </select>
+                                  <div className="relative w-28">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                                    <input
+                                      type="number"
+                                      value={pr.reimbursement}
+                                      onChange={(e) => {
+                                        const updated = [...payerReimbursements]
+                                        updated[index].reimbursement = e.target.value
+                                        setPayerReimbursements(updated)
+                                      }}
+                                      className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                      placeholder="0"
+                                    />
+                                  </div>
+                                  <button
+                                    onClick={() => removePayerReimbursement(index)}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-                      <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-semibold text-slate-900 mb-2">No Outliers Detected</h3>
-                      <p className="text-slate-500">All cases are within expected profit ranges.</p>
+                  </div>
+
+                  {/* Calculated Margin */}
+                  <div className="pt-4 border-t border-slate-200">
+                    <div className="p-4 bg-slate-50 rounded-lg">
+                      <p className="text-sm text-slate-600 mb-1">Base Margin (before OR time)</p>
+                      <p className="text-2xl font-semibold text-slate-900">
+                        {(() => {
+                          const reimbursement = procedureForm.default_reimbursement ? parseFloat(procedureForm.default_reimbursement) : null
+                          const hardGoods = procedureForm.hard_goods_cost ? parseFloat(procedureForm.hard_goods_cost) : 0
+                          const softGoods = procedureForm.soft_goods_cost ? parseFloat(procedureForm.soft_goods_cost) : 0
+                          if (reimbursement === null) return 'u2014'
+                          return formatCurrency(reimbursement - hardGoods - softGoods)
+                        })()}
+                      </p>
                     </div>
-                  )}
+                  </div>
                 </div>
-              )}
+
+                {/* Footer */}
+                <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button
+                    onClick={closeProcedureSlideOut}
+                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveProcedureFinancials}
+                    disabled={saving}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
             </>
           )}
-        </AnalyticsLayout>
+
+          {/* Payer Modal */}
+          {payerModalOpen && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {payerModalMode === 'add' ? 'Add Payer' : 'Edit Payer'}
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Payer Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={payerName}
+                      onChange={(e) => setPayerName(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      placeholder="e.g., Medicare, BCBS, Aetna"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button
+                    onClick={closePayerModal}
+                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSavePayer}
+                    disabled={saving || !payerName.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : payerModalMode === 'add' ? 'Add Payer' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </SettingsLayout>
       </Container>
     </DashboardLayout>
   )
