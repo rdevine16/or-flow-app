@@ -1,17 +1,21 @@
+// components/analytics/AnalyticsLayout.tsx
+// Updated to use SubNavContext for seamless panel 2 integration
+
 'use client'
 
+import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import Link from 'next/link'
-import { useState } from 'react'
+import { useSubNav } from '../../lib/SubNavContext'
 
-interface AnalyticsSection {
-  id: string
-  label: string
-  href: string
-  icon: React.ReactNode
+interface AnalyticsLayoutProps {
+  children: React.ReactNode
+  title: string
+  description: string
+  actions?: React.ReactNode
 }
 
-const analyticsSections: AnalyticsSection[] = [
+// Analytics sub-navigation items
+const analyticsSections = [
   {
     id: 'overview',
     label: 'Overview',
@@ -74,19 +78,25 @@ const analyticsSections: AnalyticsSection[] = [
   },
 ]
 
-interface AnalyticsLayoutProps {
-  children: React.ReactNode
-  title: string
-  description: string
-  actions?: React.ReactNode
-}
-
 export default function AnalyticsLayout({ children, title, description, actions }: AnalyticsLayoutProps) {
   const pathname = usePathname()
+  const { setSubNav, clearSubNav } = useSubNav()
   const [showExportMenu, setShowExportMenu] = useState(false)
 
+  // Register sub-nav on mount, clear on unmount
+  useEffect(() => {
+    setSubNav({
+      title: 'Analytics',
+      items: analyticsSections,
+    })
+
+    return () => {
+      clearSubNav()
+    }
+  }, [setSubNav, clearSubNav])
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       {/* Header Section */}
       <div className="flex items-start justify-between">
         <div>
@@ -124,10 +134,7 @@ export default function AnalyticsLayout({ children, title, description, actions 
             
             {showExportMenu && (
               <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={() => setShowExportMenu(false)}
-                />
+                <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl border border-slate-200 shadow-xl z-20 py-1 overflow-hidden">
                   <button className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
                     <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24">
@@ -153,31 +160,6 @@ export default function AnalyticsLayout({ children, title, description, actions 
             )}
           </div>
         </div>
-      </div>
-
-      {/* Horizontal Tab Navigation */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-1.5 shadow-sm">
-        <nav className="flex gap-1 overflow-x-auto">
-          {analyticsSections.map((section) => {
-            const isActive = pathname === section.href
-            return (
-              <Link
-                key={section.id}
-                href={section.href}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                  isActive
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <span className={isActive ? 'text-white' : 'text-slate-400'}>
-                  {section.icon}
-                </span>
-                {section.label}
-              </Link>
-            )
-          })}
-        </nav>
       </div>
 
       {/* Main Content - Full Width */}
