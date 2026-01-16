@@ -339,7 +339,7 @@ export default function CompletedCaseView({
   const anesStart = milestones.find(m => m.name === 'anes_start')?.recordedAt ?? null
   const anesEnd = milestones.find(m => m.name === 'anes_end')?.recordedAt ?? null
 
-  // Calculate times
+  // Calculate actual times
   const totalMinutes = minutesBetween(patientIn, patientOut)
   const surgicalMinutes = minutesBetween(incision, closing)
   const anesthesiaMinutes = minutesBetween(anesStart, anesEnd)
@@ -348,7 +348,36 @@ export default function CompletedCaseView({
   // Total delays
   const totalDelayMinutes = delays.reduce((sum, d) => sum + (d.durationMinutes || 0), 0)
 
-  // Calculate comparisons
+  // ========================================
+  // MILESTONE AVERAGES COMPARISON
+  // ========================================
+  
+  // Helper to get average for a milestone
+  const getAvgForMilestone = (milestoneName: string): number | null => {
+    const avg = milestoneAverages.find(ma => ma.milestoneName === milestoneName)
+    return avg ? avg.avgMinutesFromStart : null
+  }
+
+  // Calculate surgical time average from milestone averages
+  // Surgical avg = avg time to closing - avg time to incision
+  const avgIncisionFromStart = getAvgForMilestone('incision')
+  const avgClosingFromStart = getAvgForMilestone('closing') ?? getAvgForMilestone('closing_complete')
+  const avgSurgicalMinutes = (avgIncisionFromStart !== null && avgClosingFromStart !== null)
+    ? avgClosingFromStart - avgIncisionFromStart
+    : null
+
+  // Calculate anesthesia time average
+  const avgAnesStart = getAvgForMilestone('anes_start')
+  const avgAnesEnd = getAvgForMilestone('anes_end')
+  const avgAnesthesiaMinutes = (avgAnesStart !== null && avgAnesEnd !== null)
+    ? avgAnesEnd - avgAnesStart
+    : null
+
+  // ========================================
+  // COMPARISONS
+  // ========================================
+
+  // Total time comparison (from surgeon_procedure_averages)
   const totalComparison = surgeonAverage?.avgTotalMinutes && totalMinutes
     ? {
         diff: totalMinutes - surgeonAverage.avgTotalMinutes,
@@ -357,9 +386,30 @@ export default function CompletedCaseView({
       }
     : null
 
-  // Generate insights
+  // Surgical time comparison (from milestone averages)
+  const surgicalComparison = avgSurgicalMinutes && surgicalMinutes
+    ? {
+        diff: surgicalMinutes - avgSurgicalMinutes,
+        value: `${surgicalMinutes > avgSurgicalMinutes ? '+' : ''}${Math.round(surgicalMinutes - avgSurgicalMinutes)}m`,
+        isPositive: surgicalMinutes <= avgSurgicalMinutes
+      }
+    : null
+
+  // Anesthesia time comparison (from milestone averages)
+  const anesthesiaComparison = avgAnesthesiaMinutes && anesthesiaMinutes
+    ? {
+        diff: anesthesiaMinutes - avgAnesthesiaMinutes,
+        value: `${anesthesiaMinutes > avgAnesthesiaMinutes ? '+' : ''}${Math.round(anesthesiaMinutes - avgAnesthesiaMinutes)}m`,
+        isPositive: anesthesiaMinutes <= avgAnesthesiaMinutes
+      }
+    : null
+
+  // ========================================
+  // GENERATE INSIGHTS
+  // ========================================
   const insights: { icon: string; text: string; type: 'success' | 'warning' | 'danger' | 'info' }[] = []
   
+  // Start time insight
   if (startVariance) {
     if (startVariance.minutes <= 5) {
       insights.push({ icon: '✓', text: 'Started on time', type: 'success' })
@@ -370,16 +420,38 @@ export default function CompletedCaseView({
     }
   }
 
+  // Total time insight
   if (totalComparison) {
     if (Math.abs(totalComparison.diff) <= 5) {
       insights.push({ icon: '✓', text: `Total time on par with ${surgeon?.lastName ? `Dr. ${surgeon.lastName}'s` : "surgeon's"} average`, type: 'success' })
     } else if (totalComparison.diff < 0) {
-      insights.push({ icon: '✓', text: `${Math.abs(Math.round(totalComparison.diff))} min faster than ${surgeon?.lastName ? `Dr. ${surgeon.lastName}'s` : "surgeon's"} average`, type: 'success' })
+      insights.push({ icon: '✓', text: `Total time ${Math.abs(Math.round(totalComparison.diff))} min faster than average`, type: 'success' })
     } else {
-      insights.push({ icon: '~', text: `${Math.round(totalComparison.diff)} min longer than ${surgeon?.lastName ? `Dr. ${surgeon.lastName}'s` : "surgeon's"} average`, type: 'warning' })
+      insights.push({ icon: '~', text: `Total time ${Math.round(totalComparison.diff)} min longer than average`, type: totalComparison.diff > 15 ? 'danger' : 'warning' })
     }
   }
 
+  // Surgical time insight (from milestone averages)
+  if (surgicalComparison) {
+    if (Math.abs(surgicalComparison.diff) <= 5) {
+      insights.push({ icon: '✓', text: `Surgical time on par with ${surgeon?.lastName ? `Dr. ${surgeon.lastName}'s` : "surgeon's"} average`, type: 'success' })
+    } else if (surgicalComparison.diff < 0) {
+      insights.push({ icon: '✓', text: `Surgical time ${Math.abs(Math.round(surgicalComparison.diff))} min faster than average`, type: 'success' })
+    } else {
+      insights.push({ icon: '!', text: `Surgical time ${Math.round(surgicalComparison.diff)} min longer than average`, type: surgicalComparison.diff > 15 ? 'danger' : 'warning' })
+    }
+  }
+
+  // Anesthesia time insight (from milestone averages)
+  if (anesthesiaComparison && Math.abs(anesthesiaComparison.diff) > 5) {
+    if (anesthesiaComparison.diff < 0) {
+      insights.push({ icon: '✓', text: `Anesthesia ${Math.abs(Math.round(anesthesiaComparison.diff))} min faster than average`, type: 'success' })
+    } else {
+      insights.push({ icon: '~', text: `Anesthesia ${Math.round(anesthesiaComparison.diff)} min longer than average`, type: 'warning' })
+    }
+  }
+
+  // Delays insight
   if (delays.length > 0) {
     insights.push({ 
       icon: '⚠', 
@@ -388,6 +460,7 @@ export default function CompletedCaseView({
     })
   }
 
+  // Milestones recorded insight
   if (recordedMilestones.length === milestones.length && milestones.length > 0) {
     insights.push({ icon: '✓', text: `All ${milestones.length} milestones recorded`, type: 'success' })
   } else if (milestones.length > 0) {
@@ -451,7 +524,12 @@ export default function CompletedCaseView({
           label="Total Time"
           value={totalMinutes ? formatDuration(totalMinutes) : '—'}
           subtitle="Patient In → Out"
-          variant="success"
+          variant={
+            !totalComparison ? 'success' :
+            Math.abs(totalComparison.diff) <= 5 ? 'success' :
+            totalComparison.diff > 15 ? 'danger' :
+            totalComparison.diff > 0 ? 'warning' : 'success'
+          }
           comparison={totalComparison ? {
             value: totalComparison.value,
             isPositive: totalComparison.isPositive,
@@ -464,7 +542,17 @@ export default function CompletedCaseView({
           label="Surgical Time"
           value={surgicalMinutes ? formatDuration(surgicalMinutes) : '—'}
           subtitle="Incision → Closing"
-          variant="primary"
+          variant={
+            !surgicalComparison ? 'primary' :
+            Math.abs(surgicalComparison.diff) <= 5 ? 'primary' :
+            surgicalComparison.diff > 15 ? 'danger' :
+            surgicalComparison.diff > 0 ? 'warning' : 'primary'
+          }
+          comparison={surgicalComparison ? {
+            value: surgicalComparison.value,
+            isPositive: surgicalComparison.isPositive,
+            neutral: Math.abs(surgicalComparison.diff) <= 5
+          } : undefined}
         />
 
         {/* Delays Card */}
@@ -631,9 +719,14 @@ export default function CompletedCaseView({
                 <li><span className="text-amber-600">Yellow</span> = Slight variance (5-15 min)</li>
                 <li><span className="text-red-600">Red</span> = Significant variance (&gt;15 min)</li>
               </ul>
-              <p className="mt-2"><strong>Averages</strong> are calculated from the surgeon&apos;s last 30 days of completed cases for this procedure type.</p>
+              <p className="mt-2"><strong>How we calculate averages:</strong></p>
+              <ul className="list-disc list-inside mt-1 space-y-1">
+                <li><strong>Total Time</strong> — Surgeon&apos;s average case duration for this procedure</li>
+                <li><strong>Surgical Time</strong> — Calculated from surgeon&apos;s average milestone timing (Incision to Closing)</li>
+                <li><strong>Anesthesia</strong> — Calculated from surgeon&apos;s average milestone timing</li>
+              </ul>
               {surgeonAverage?.sampleSize && (
-                <p className="mt-1">Sample size: {surgeonAverage.sampleSize} cases</p>
+                <p className="mt-2 text-slate-500">Based on {surgeonAverage.sampleSize} completed cases</p>
               )}
             </HelpTooltip>
           </div>
