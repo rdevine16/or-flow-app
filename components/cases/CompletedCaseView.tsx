@@ -428,16 +428,17 @@ export default function CompletedCaseView({
             : '—'
           }
           subtitle={startVariance 
-            ? (startVariance.isLate ? 'Late start' : 'Early start')
+            ? (startVariance.minutes <= 5 ? 'On time' : startVariance.isLate ? 'Late start' : 'Early start')
             : 'No data'
           }
           variant={
             !startVariance ? 'default' :
-            startVariance.minutes <= 5 ? 'success' :
-            startVariance.minutes <= 15 ? 'warning' : 'danger'
+            startVariance.minutes <= 5 ? 'success' :           // Green: on time (within 5 min either way)
+            !startVariance.isLate ? 'success' :                // Green: early (any amount)
+            startVariance.minutes <= 15 ? 'warning' : 'danger' // Yellow: 5-15 min late, Red: >15 min late
           }
           icon={
-            startVariance && startVariance.minutes <= 5 ? (
+            startVariance && (startVariance.minutes <= 5 || !startVariance.isLate) ? (
               <svg className="w-4 h-4 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -508,7 +509,11 @@ export default function CompletedCaseView({
               </div>
               <div>
                 <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Started</p>
-                <p className="text-sm font-semibold text-emerald-600 mt-0.5 font-mono">{formatTimeShort(patientIn)}</p>
+                <p className={`text-sm font-semibold mt-0.5 font-mono ${
+                  startVariance 
+                    ? (startVariance.isLate && startVariance.minutes > 5 ? 'text-red-600' : 'text-emerald-600')
+                    : 'text-slate-900'
+                }`}>{formatTimeShort(patientIn)}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
