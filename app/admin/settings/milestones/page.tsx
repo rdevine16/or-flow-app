@@ -369,7 +369,7 @@ export default function AdminMilestonesSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <div className="max-w-4xl">
+<div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-start justify-between mb-6">
             <div>
