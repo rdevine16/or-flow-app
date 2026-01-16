@@ -74,7 +74,8 @@ const MILESTONE_OFFSETS = {
     patient_in: [0, 0, 0],
     anes_start: [2, 3, 4],
     anes_end: [12, 15, 18],
-    prepped: [18, 22, 28],
+    prepped: [14, 17, 20],
+    draping_complete: [18, 22, 28],
     incision: [20, 25, 30],
     closing: [55, 75, 95],
     closing_complete: [60, 82, 103],
@@ -85,7 +86,8 @@ const MILESTONE_OFFSETS = {
     patient_in: [0, 0, 0],
     anes_start: [2, 3, 4],
     anes_end: [14, 17, 20],
-    prepped: [20, 25, 32],
+    prepped: [16, 20, 25],
+    draping_complete: [20, 25, 32],
     incision: [22, 28, 35],
     closing: [60, 82, 105],
     closing_complete: [66, 90, 115],
@@ -235,7 +237,7 @@ function formatDateEST(date: Date): string {
 }
 
 function formatTimeEST(date: Date): string {
-  // Format as HH:MM:SS - extract the time components we set, not timezone-converted
+  // Format as HH:MM:SS - extract the time components we set
   const hours = date.getUTCHours()
   const minutes = date.getUTCMinutes()
   const seconds = date.getUTCSeconds()
@@ -243,8 +245,15 @@ function formatTimeEST(date: Date): string {
 }
 
 function formatTimestampEST(date: Date): string {
-  // Format as ISO timestamp - the date already represents the correct EST time stored as UTC
-  return date.toISOString()
+  // The date was set with setUTCHours to represent local EST time.
+  // But the frontend displays timestamps in local time (EST = UTC-5).
+  // So we need to add 5 hours to store the correct UTC time that will display as EST.
+  // Example: We want 7:00 AM EST to display
+  //   - 7:00 AM EST = 12:00 PM UTC
+  //   - Store 12:00 PM UTC, frontend shows 7:00 AM EST ✓
+  const EST_OFFSET_HOURS = 5
+  const utcDate = new Date(date.getTime() + EST_OFFSET_HOURS * 60 * 60 * 1000)
+  return utcDate.toISOString()
 }
 
 function parseTimeToMinutes(time: string): number {
@@ -461,7 +470,7 @@ function generateMilestones(
   const variance = isOutlier ? randomInt(15, 30) : randomInt(-3, 5)
 
   // Standard milestones to generate (must match names in facility_milestones)
-  const milestoneNames = ['patient_in', 'anes_start', 'anes_end', 'prepped', 'incision', 'closing', 'closing_complete', 'patient_out']
+  const milestoneNames = ['patient_in', 'anes_start', 'anes_end', 'prepped', 'draping_complete', 'incision', 'closing', 'closing_complete', 'patient_out']
 
   for (const name of milestoneNames) {
     // Find the facility milestone by name
@@ -471,6 +480,9 @@ function generateMilestones(
     const baseOffset = (offsets as any)[name]?.[profileIndex] || 0
     const actualOffset = baseOffset + (name !== 'patient_in' ? variance : 0)
     const timestamp = addMinutes(patientInTime, Math.max(0, actualOffset))
+    
+    // Add random seconds (0-59) for realistic timestamps
+    timestamp.setUTCSeconds(randomInt(0, 59))
 
     milestones.push({
       id: generateUUID(),
