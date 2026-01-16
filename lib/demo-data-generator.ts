@@ -1119,10 +1119,14 @@ export async function generateDemoData(
 
     onProgress?.({ phase: 'finalizing', current: 98, total: 100, message: 'Recalculating surgeon averages...' })
 
-    // Recalculate surgeon averages
-    const { error: avgError } = await supabase.rpc('recalculate_surgeon_averages')
+    // Recalculate surgeon averages for this facility
+    const { data: avgResult, error: avgError } = await supabase.rpc('recalculate_surgeon_averages', {
+      p_facility_id: facilityId
+    })
     if (avgError) {
       console.error('Error recalculating averages:', avgError)
+    } else {
+      console.log('Surgeon averages recalculated:', avgResult)
     }
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Demo data generation complete!' })
