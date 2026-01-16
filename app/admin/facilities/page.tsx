@@ -29,7 +29,7 @@ type StatusFilter = 'all' | 'active' | 'trial' | 'past_due' | 'disabled' | 'demo
 export default function FacilitiesListPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, isGlobalAdmin, loading: userLoading } = useUser()
+const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
 
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
@@ -108,17 +108,17 @@ export default function FacilitiesListPage() {
       facility.name
     )
 
-    if (result.success) {
-      // Log the action
-      await adminAudit.impersonationStarted(supabase, facility.name, facility.id)
+if (result.success) {
+  // Log the action
+  await adminAudit.impersonationStarted(supabase, facility.name, facility.id)
 
-      // Redirect to dashboard with the impersonated facility
-      router.push('/dashboard')
-      router.refresh()
-    } else {
-      alert('Failed to start impersonation: ' + result.error)
-    }
-  }
+  // Update the context immediately so all pages pick up the new facility
+  refreshImpersonation()
+
+  // Redirect to dashboard with the impersonated facility
+  router.push('/dashboard')
+  router.refresh()
+}
 
   // Filter facilities
   const filteredFacilities = facilities.filter(facility => {
@@ -390,4 +390,5 @@ export default function FacilitiesListPage() {
       </div>
     </DashboardLayout>
   )
+}
 }
