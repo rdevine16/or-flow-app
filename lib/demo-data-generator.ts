@@ -629,7 +629,7 @@ export async function generateDemoData(
   supabase: SupabaseClient,
   facilityId: string,
   onProgress?: ProgressCallback
-): Promise<{ success: boolean; casesGenerated: number; error?: string }> {
+): Promise<{ success: boolean; casesGenerated: number; error?: string; details?: { milestones: number; staff: number; implants: number; delays: number } }> {
   try {
     onProgress?.({ phase: 'setup', current: 0, total: 100, message: 'Loading facility data...' })
 
@@ -968,7 +968,16 @@ export async function generateDemoData(
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Demo data generation complete!' })
 
-    return { success: true, casesGenerated: allCases.length }
+    return { 
+      success: true, 
+      casesGenerated: allCases.length,
+      details: {
+        milestones: allMilestones.length,
+        staff: allCaseStaff.length,
+        implants: allImplants.length,
+        delays: allDelays.length,
+      }
+    }
   } catch (error) {
     console.error('Demo data generation error:', error)
     return { 
