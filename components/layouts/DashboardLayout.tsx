@@ -283,8 +283,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const showTrialWarning = trialDaysRemaining !== null && trialDaysRemaining > 0 && trialDaysRemaining <= 7
 
   // Loading states
-  if (loading || !mounted || checkingAccess) {
-    return (
+console.log('DEBUG:', { loading, mounted, checkingAccess })
+if (loading || !mounted || checkingAccess) {    return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
