@@ -899,6 +899,13 @@ export async function generateDemoData(
 
     onProgress?.({ phase: 'inserting', current: 90, total: 100, message: `Inserting ${allCases.length} cases...` })
 
+    // Disable audit triggers (they require user session which service role doesn't have)
+    const { error: disableError } = await supabase.rpc('disable_demo_audit_triggers')
+    if (disableError) {
+      console.warn('Could not disable audit triggers:', disableError.message)
+      // Continue anyway - inserts may still work if triggers don't exist
+    }
+
     // Batch insert all data
     const BATCH_SIZE = 100
 
@@ -908,6 +915,8 @@ export async function generateDemoData(
       const { error } = await supabase.from('cases').insert(batch)
       if (error) {
         console.error('Error inserting cases:', error)
+        // Re-enable triggers before returning
+        try { await supabase.rpc('enable_demo_audit_triggers') } catch (_) {}
         return { success: false, casesGenerated: i, error: `Failed to insert cases: ${error.message}` }
       }
     }
@@ -960,6 +969,12 @@ export async function generateDemoData(
       }
     }
 
+    // Re-enable audit triggers
+    const { error: enableError } = await supabase.rpc('enable_demo_audit_triggers')
+    if (enableError) {
+      console.warn('Could not re-enable audit triggers:', enableError.message)
+    }
+
     onProgress?.({ phase: 'finalizing', current: 98, total: 100, message: 'Recalculating surgeon averages...' })
 
     // Recalculate surgeon averages
@@ -1004,6 +1019,8 @@ export async function generateDemoData(
     }
   } catch (error) {
     console.error('Demo data generation error:', error)
+    // Try to re-enable triggers in case of error
+    try { await supabase.rpc('enable_demo_audit_triggers') } catch (_) {}
     return { 
       success: false, 
       casesGenerated: 0, 
