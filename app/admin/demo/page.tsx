@@ -71,10 +71,20 @@ export default function DemoDataPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'status', facilityId }),
       })
-      const status = await res.json()
+      const data = await res.json()
+      // Ensure all fields have default values
+      const status: DemoStatus = {
+        cases: data.cases ?? 0,
+        milestones: data.milestones ?? 0,
+        staff: data.staff ?? 0,
+        implants: data.implants ?? 0,
+        delays: data.delays ?? 0,
+      }
       setStatuses(prev => ({ ...prev, [facilityId]: status }))
     } catch (error) {
       console.error('Error loading status:', error)
+      // Set zero values on error
+      setStatuses(prev => ({ ...prev, [facilityId]: { cases: 0, milestones: 0, staff: 0, implants: 0, delays: 0 } }))
     }
   }
 
@@ -170,10 +180,10 @@ export default function DemoDataPage() {
                 </p>
                 {result.success && result.details && (
                   <div className="flex gap-4 mt-2 text-sm text-green-700">
-                    <span>📋 {result.details.milestones.toLocaleString()} milestones</span>
-                    <span>👥 {result.details.staff.toLocaleString()} staff</span>
-                    <span>🦴 {result.details.implants.toLocaleString()} implants</span>
-                    <span>⚠️ {result.details.delays.toLocaleString()} delays</span>
+                    <span>📋 {(result.details.milestones ?? 0).toLocaleString()} milestones</span>
+                    <span>👥 {(result.details.staff ?? 0).toLocaleString()} staff</span>
+                    <span>🦴 {(result.details.implants ?? 0).toLocaleString()} implants</span>
+                    <span>⚠️ {(result.details.delays ?? 0).toLocaleString()} delays</span>
                   </div>
                 )}
                 {result.error && !result.success && (
@@ -333,11 +343,11 @@ export default function DemoDataPage() {
   )
 }
 
-function StatusCard({ label, value, icon }: { label: string; value: number; icon: string }) {
+function StatusCard({ label, value, icon }: { label: string; value: number | undefined; icon: string }) {
   return (
     <div className="bg-gray-50 rounded-lg p-3 text-center">
       <div className="text-lg mb-1">{icon}</div>
-      <div className="text-xl font-bold text-gray-900">{value.toLocaleString()}</div>
+      <div className="text-xl font-bold text-gray-900">{(value ?? 0).toLocaleString()}</div>
       <div className="text-xs text-gray-500">{label}</div>
     </div>
   )

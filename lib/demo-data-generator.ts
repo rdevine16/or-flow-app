@@ -1072,33 +1072,17 @@ export async function getDemoDataStatus(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<{
-  caseCount: number
-  oldestCase: string | null
-  newestCase: string | null
-  milestoneCount: number
-  implantCount: number
+  cases: number
+  milestones: number
+  staff: number
+  implants: number
+  delays: number
 }> {
   // Get case count
   const { count: caseCount } = await supabase
     .from('cases')
     .select('*', { count: 'exact', head: true })
     .eq('facility_id', facilityId)
-
-  // Get oldest case date
-  const { data: oldestData } = await supabase
-    .from('cases')
-    .select('scheduled_date')
-    .eq('facility_id', facilityId)
-    .order('scheduled_date', { ascending: true })
-    .limit(1)
-
-  // Get newest case date
-  const { data: newestData } = await supabase
-    .from('cases')
-    .select('scheduled_date')
-    .eq('facility_id', facilityId)
-    .order('scheduled_date', { ascending: false })
-    .limit(1)
 
   // Get case IDs for this facility to count related records
   const { data: facilityCases } = await supabase
@@ -1109,7 +1093,9 @@ export async function getDemoDataStatus(
   const caseIds = facilityCases?.map(c => c.id) || []
 
   let milestoneCount = 0
+  let staffCount = 0
   let implantCount = 0
+  let delayCount = 0
 
   if (caseIds.length > 0) {
     // Count milestones for these cases
@@ -1119,19 +1105,33 @@ export async function getDemoDataStatus(
       .in('case_id', caseIds)
     milestoneCount = mCount || 0
 
+    // Count staff assignments for these cases
+    const { count: sCount } = await supabase
+      .from('case_staff')
+      .select('*', { count: 'exact', head: true })
+      .in('case_id', caseIds)
+    staffCount = sCount || 0
+
     // Count implants for these cases
     const { count: iCount } = await supabase
       .from('case_implants')
       .select('*', { count: 'exact', head: true })
       .in('case_id', caseIds)
     implantCount = iCount || 0
+
+    // Count delays for these cases
+    const { count: dCount } = await supabase
+      .from('case_delays')
+      .select('*', { count: 'exact', head: true })
+      .in('case_id', caseIds)
+    delayCount = dCount || 0
   }
 
   return {
-    caseCount: caseCount || 0,
-    oldestCase: oldestData?.[0]?.scheduled_date || null,
-    newestCase: newestData?.[0]?.scheduled_date || null,
-    milestoneCount,
-    implantCount,
+    cases: caseCount || 0,
+    milestones: milestoneCount,
+    staff: staffCount,
+    implants: implantCount,
+    delays: delayCount,
   }
 }
