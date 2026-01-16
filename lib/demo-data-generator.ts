@@ -294,7 +294,8 @@ interface GeneratedCase {
 interface GeneratedMilestone {
   id: string
   case_id: string
-  milestone_type_id: string
+  milestone_type_id: string | null  // source_milestone_type_id from facility_milestones
+  facility_milestone_id: string     // The facility_milestones.id - this is what the UI uses
   recorded_at: string
   recorded_by: string
 }
@@ -354,7 +355,7 @@ async function fetchFacilityData(supabase: SupabaseClient, facilityId: string) {
     { data: rooms },
     { data: procedures },
     { data: users },
-    { data: milestoneTypes },
+    { data: facilityMilestones },
     { data: statuses },
     { data: roles },
     { data: payers },
@@ -364,7 +365,8 @@ async function fetchFacilityData(supabase: SupabaseClient, facilityId: string) {
     supabase.from('or_rooms').select('*').eq('facility_id', facilityId),
     supabase.from('procedure_types').select('*').eq('facility_id', facilityId),
     supabase.from('users').select('*, user_roles(name)').eq('facility_id', facilityId),
-    supabase.from('milestone_types').select('*').order('display_order'),
+    // Use facility_milestones instead of global milestone_types
+    supabase.from('facility_milestones').select('id, name, display_name, display_order, source_milestone_type_id').eq('facility_id', facilityId).eq('is_active', true).order('display_order'),
     supabase.from('case_statuses').select('*'),
     supabase.from('user_roles').select('*'),
     supabase.from('payers').select('*').eq('facility_id', facilityId),
@@ -376,7 +378,7 @@ async function fetchFacilityData(supabase: SupabaseClient, facilityId: string) {
     rooms: rooms || [],
     procedures: procedures || [],
     users: users || [],
-    milestoneTypes: milestoneTypes || [],
+    facilityMilestones: facilityMilestones || [],
     statuses: statuses || [],
     roles: roles || [],
     payers: payers || [],
@@ -448,7 +450,7 @@ function generateMilestones(
   procedureType: 'THA' | 'TKA',
   surgeonProfile: 'high_volume' | 'medium_volume' | 'low_volume',
   isOutlier: boolean,
-  milestoneTypes: any[],
+  facilityMilestones: any[],
   recordedBy: string
 ): GeneratedMilestone[] {
   const milestones: GeneratedMilestone[] = []
@@ -458,11 +460,13 @@ function generateMilestones(
   // Add variance to times
   const variance = isOutlier ? randomInt(15, 30) : randomInt(-3, 5)
 
-  const milestoneNames = ['patient_in', 'anes_start', 'anes_end', 'prepped', 'incision', 'closing', 'closing_complete', 'patient_out', 'room_cleaned']
+  // Standard milestones to generate (must match names in facility_milestones)
+  const milestoneNames = ['patient_in', 'anes_start', 'anes_end', 'prepped', 'incision', 'closing', 'closing_complete', 'patient_out']
 
   for (const name of milestoneNames) {
-    const milestoneType = milestoneTypes.find((mt: any) => mt.name === name)
-    if (!milestoneType) continue
+    // Find the facility milestone by name
+    const facilityMilestone = facilityMilestones.find((fm: any) => fm.name === name)
+    if (!facilityMilestone) continue
 
     const baseOffset = (offsets as any)[name]?.[profileIndex] || 0
     const actualOffset = baseOffset + (name !== 'patient_in' ? variance : 0)
@@ -471,7 +475,8 @@ function generateMilestones(
     milestones.push({
       id: generateUUID(),
       case_id: caseId,
-      milestone_type_id: milestoneType.id,
+      milestone_type_id: facilityMilestone.source_milestone_type_id || null,
+      facility_milestone_id: facilityMilestone.id,
       recorded_at: formatTimestampEST(timestamp),
       recorded_by: recordedBy,
     })
@@ -807,31 +812,14 @@ export async function generateDemoData(
               procedureType,
               surgeon.profile,
               isOutlier,
-              facilityData.milestoneTypes,
+              facilityData.facilityMilestones,
               surgeon.id
             )
             allMilestones.push(...milestones)
           }
 
-          // Generate case staff - only add if role exists
-          if (surgeonRole) {
-            allCaseStaff.push({
-              id: generateUUID(),
-              case_id: caseId,
-              user_id: surgeon.id,
-              role_id: surgeonRole.id,
-            })
-          }
-
-          // Add anesthesiologist
-          if (anesthesiologists.length > 0 && anesRole) {
-            allCaseStaff.push({
-              id: generateUUID(),
-              case_id: caseId,
-              user_id: randomChoice(anesthesiologists).id,
-              role_id: anesRole.id,
-            })
-          }
+          // Note: Surgeon and Anesthesiologist are already on the case record 
+          // (surgeon_id, anesthesiologist_id) - don't add to case_staff to avoid duplicates
 
           // Add nurses (1-2)
           if (nurses.length > 0 && nurseRole) {
@@ -902,8 +890,12 @@ export async function generateDemoData(
     // Disable audit triggers (they require user session which service role doesn't have)
     const { error: disableError } = await supabase.rpc('disable_demo_audit_triggers')
     if (disableError) {
-      console.warn('Could not disable audit triggers:', disableError.message)
-      // Continue anyway - inserts may still work if triggers don't exist
+      console.error('Could not disable audit triggers:', disableError)
+      return { 
+        success: false, 
+        casesGenerated: 0, 
+        error: `Failed to disable audit triggers: ${disableError.message}. Run this SQL manually: ALTER TABLE case_implants DISABLE TRIGGER audit_case_implants_trigger;` 
+      }
     }
 
     // Batch insert all data
@@ -987,7 +979,7 @@ export async function generateDemoData(
 
     // Build debug info
     const debugInfo = {
-      milestoneTypesFound: facilityData.milestoneTypes.length,
+      milestoneTypesFound: facilityData.facilityMilestones.length,
       surgeonsFound: surgeonProfiles.length,
       proceduresFound: facilityData.procedures.length,
       roomsFound: facilityData.rooms.length,
@@ -1125,54 +1117,28 @@ export async function getDemoDataStatus(
     .select('*', { count: 'exact', head: true })
     .eq('facility_id', facilityId)
 
-  // Get case IDs for this facility to count related records
-  const { data: facilityCases } = await supabase
-    .from('cases')
-    .select('id')
-    .eq('facility_id', facilityId)
+  // Use RPC function to count related records efficiently
+  const { data: counts, error } = await supabase.rpc('get_facility_demo_counts', {
+    p_facility_id: facilityId
+  })
 
-  const caseIds = facilityCases?.map(c => c.id) || []
-
-  let milestoneCount = 0
-  let staffCount = 0
-  let implantCount = 0
-  let delayCount = 0
-
-  if (caseIds.length > 0) {
-    // Count milestones for these cases
-    const { count: mCount } = await supabase
-      .from('case_milestones')
-      .select('*', { count: 'exact', head: true })
-      .in('case_id', caseIds)
-    milestoneCount = mCount || 0
-
-    // Count staff assignments for these cases
-    const { count: sCount } = await supabase
-      .from('case_staff')
-      .select('*', { count: 'exact', head: true })
-      .in('case_id', caseIds)
-    staffCount = sCount || 0
-
-    // Count implants for these cases
-    const { count: iCount } = await supabase
-      .from('case_implants')
-      .select('*', { count: 'exact', head: true })
-      .in('case_id', caseIds)
-    implantCount = iCount || 0
-
-    // Count delays for these cases
-    const { count: dCount } = await supabase
-      .from('case_delays')
-      .select('*', { count: 'exact', head: true })
-      .in('case_id', caseIds)
-    delayCount = dCount || 0
+  if (error || !counts) {
+    console.error('Error getting demo counts:', error)
+    // Fallback to basic count
+    return {
+      cases: caseCount || 0,
+      milestones: 0,
+      staff: 0,
+      implants: 0,
+      delays: 0,
+    }
   }
 
   return {
     cases: caseCount || 0,
-    milestones: milestoneCount,
-    staff: staffCount,
-    implants: implantCount,
-    delays: delayCount,
+    milestones: counts.milestone_count || 0,
+    staff: counts.staff_count || 0,
+    implants: counts.implant_count || 0,
+    delays: counts.delay_count || 0,
   }
 }
