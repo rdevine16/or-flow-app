@@ -721,7 +721,7 @@ export async function generateDemoData(
         // Parse start time
         const [startHour, startMin] = profile.startTime.split(':').map(Number)
         let currentTime = new Date(currentDate)
-        currentTime.setHours(startHour, startMin, 0, 0)
+        currentTime.setUTCHours(startHour, startMin, 0, 0)
 
         // Get procedure type (THA or TKA)
         const thaProcedure = facilityData.procedures.find((p: any) => 
