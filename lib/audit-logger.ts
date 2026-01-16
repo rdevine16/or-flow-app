@@ -38,6 +38,11 @@ export type AuditAction =
   | 'case.status_changed'
   | 'case.implant_company_added'
   | 'case.implant_company_removed'
+    // Procedure Categories
+  | 'admin.procedure_category_created'
+  | 'admin.procedure_category_updated'
+  | 'admin.procedure_category_deleted'
+  | 'admin.procedure_category_reordered'
   // Milestones
   | 'milestone.recorded'
   | 'milestone.updated'
@@ -120,6 +125,11 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'auth.logout': 'logged out',
   'auth.password_changed': 'changed password',
   'auth.password_reset': 'requested password reset',
+  // Procedure Categories
+  'admin.procedure_category_created': 'created a procedure category',
+  'admin.procedure_category_updated': 'updated a procedure category',
+  'admin.procedure_category_deleted': 'deleted a procedure category',
+  'admin.procedure_category_reordered': 'reordered procedure categories',
   // Cases
   'case.created': 'created a case',
   'case.updated': 'updated a case',
@@ -276,7 +286,73 @@ async function log(
     console.error('[AUDIT] Failed to log:', error)
   }
 }
+// =====================================================
+// PROCEDURE CATEGORIES (Global Admin)
+// =====================================================
 
+export const procedureCategoryAudit = {
+  async created(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    bodyRegion?: string
+  ) {
+    await log(supabase, 'admin.procedure_category_created', {
+      targetType: 'procedure_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      newValues: { 
+        name: categoryName,
+        body_region: bodyRegion || null,
+        scope: 'global' 
+      },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    categoryId: string,
+    categoryName: string,
+    oldValues: Record<string, unknown>,
+    newValues: Record<string, unknown>
+  ) {
+    await log(supabase, 'admin.procedure_category_updated', {
+      targetType: 'procedure_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      oldValues,
+      newValues: { ...newValues, scope: 'global' },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string
+  ) {
+    await log(supabase, 'admin.procedure_category_deleted', {
+      targetType: 'procedure_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+    })
+  },
+
+  async reordered(
+    supabase: SupabaseClient,
+    changes: { id: string; name: string; oldOrder: number; newOrder: number }[]
+  ) {
+    await log(supabase, 'admin.procedure_category_reordered', {
+      targetType: 'procedure_category',
+      metadata: { 
+        changes: changes.map(c => ({
+          name: c.name,
+          from: c.oldOrder,
+          to: c.newOrder
+        }))
+      },
+    })
+  },
+}
 // =====================================================
 // AUTHENTICATION
 // =====================================================
