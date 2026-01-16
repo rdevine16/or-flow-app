@@ -38,7 +38,12 @@ export type AuditAction =
   | 'case.status_changed'
   | 'case.implant_company_added'
   | 'case.implant_company_removed'
-    // Procedure Categories
+  // Body Regions
+  | 'admin.body_region_created'
+  | 'admin.body_region_updated'
+  | 'admin.body_region_deleted'
+  
+  // Procedure Categories
   | 'admin.procedure_category_created'
   | 'admin.procedure_category_updated'
   | 'admin.procedure_category_deleted'
@@ -137,6 +142,10 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'case.status_changed': 'changed case status',
   'case.implant_company_added': 'added implant company to case',
   'case.implant_company_removed': 'removed implant company from case',
+    // Body Regions
+  'admin.body_region_created': 'created a body region',
+'admin.body_region_updated': 'updated a body region',
+'admin.body_region_deleted': 'deleted a body region',
   // Milestones
   'milestone.recorded': 'recorded a milestone',
   'milestone.updated': 'updated a milestone',
@@ -286,6 +295,39 @@ async function log(
     console.error('[AUDIT] Failed to log:', error)
   }
 }
+// =====================================================
+// BODY REGIONS
+// =====================================================
+
+export const bodyRegionAudit = {
+  async created(supabase: SupabaseClient, regionName: string, regionId: string) {
+    await log(supabase, 'admin.body_region_created', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: regionName,
+      newValues: { name: regionName },
+    })
+  },
+
+  async updated(supabase: SupabaseClient, regionId: string, oldName: string, newName: string) {
+    await log(supabase, 'admin.body_region_updated', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: newName,
+      oldValues: { name: oldName },
+      newValues: { name: newName },
+    })
+  },
+
+  async deleted(supabase: SupabaseClient, regionName: string, regionId: string) {
+    await log(supabase, 'admin.body_region_deleted', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: regionName,
+    })
+  },
+}
+
 // =====================================================
 // PROCEDURE CATEGORIES (Global Admin)
 // =====================================================
