@@ -194,7 +194,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       setCheckingAccess(false)
     } catch (error) {
       console.error('Error checking facility access:', error)
-      setCheckingAccess(false)  // ← IMPORTANT: Always stop loading even on error
+      setCheckingAccess(false)  // ← THIS IS THE KEY - always stop loading
     }
   }
 
