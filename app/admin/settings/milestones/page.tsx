@@ -5,6 +5,8 @@ import { createClient } from '../../../../lib/supabase'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import Container from '../../../../components/ui/Container'
 import { milestoneTypeAudit } from '../../../../lib/audit-logger'
+import AdminSettingsLayout from '../../../../components/settings/AdminSettingsLayout'
+
 
 interface MilestoneType {
   id: string
@@ -507,10 +509,10 @@ const fetchMilestones = async () => {
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <SettingsLayout
-          title="Global Milestones"
-          description="Manage milestone templates for new facilities. Deactivated milestones won't appear for new facilities."
-        >
+<AdminSettingsLayout
+  title="Global Milestones"
+  description="Manage milestone templates for new facilities. Deactivated milestones won't appear for new facilities."
+>
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -718,7 +720,8 @@ const fetchMilestones = async () => {
               </div>
             </>
           )}
-        </SettingsLayout>
+</AdminSettingsLayout>
+
       </Container>
 
       {/* Add Modal */}
