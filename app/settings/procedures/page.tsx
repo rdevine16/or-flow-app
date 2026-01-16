@@ -8,6 +8,7 @@ import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import { procedureAudit } from '../../../lib/audit-logger'
 
+
 interface BodyRegion {
   id: string
   name: string
@@ -60,13 +61,14 @@ export default function ProceduresSettingsPage() {
   // Fetch data when facility changes (including impersonation changes)
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
-      fetchData(effectiveFacilityId)
+      fetchData()
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
   }, [userLoading, effectiveFacilityId])
 
-  const fetchData = async (facilityId: string) => {
+  const fetchData = async () => {
+    if (!effectiveFacilityId) return
     setLoading(true)
 
     const [proceduresResult, regionsResult, techniquesResult] = await Promise.all([
@@ -81,7 +83,7 @@ export default function ProceduresSettingsPage() {
           body_regions (id, name, display_name),
           procedure_techniques (id, name, display_name)
         `)
-        .eq('facility_id', facilityId)
+        .eq('facility_id', effectiveFacilityId)
         .order('name'),
       supabase.from('body_regions').select('id, name, display_name').order('display_name'),
       supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
