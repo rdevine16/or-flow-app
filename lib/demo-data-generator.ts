@@ -735,26 +735,88 @@ export async function generateDemoData(
         const availableRooms = facilityData.rooms.slice(0, profile.roomsUsed)
         if (availableRooms.length === 0) continue
 
-        // Parse start time
+        // Parse scheduled start time
         const [startHour, startMin] = profile.startTime.split(':').map(Number)
-        let currentTime = new Date(currentDate)
-        currentTime.setUTCHours(startHour, startMin, 0, 0)
+        let scheduledStartTime = new Date(currentDate)
+        scheduledStartTime.setUTCHours(startHour, startMin, 0, 0)
 
-        // Get procedure type (THA or TKA)
-        const thaProcedure = facilityData.procedures.find((p: any) => 
-          p.name.toLowerCase().includes('tha') || p.name.toLowerCase().includes('hip')
+        // Find all 4 procedure types
+        const makoTHA = facilityData.procedures.find((p: any) => 
+          p.name.toLowerCase().includes('mako') && (p.name.toLowerCase().includes('tha') || p.name.toLowerCase().includes('hip'))
         )
-        const tkaProcedure = facilityData.procedures.find((p: any) => 
-          p.name.toLowerCase().includes('tka') || p.name.toLowerCase().includes('knee')
+        const makoTKA = facilityData.procedures.find((p: any) => 
+          p.name.toLowerCase().includes('mako') && (p.name.toLowerCase().includes('tka') || p.name.toLowerCase().includes('knee'))
         )
+        const standardTHA = facilityData.procedures.find((p: any) => 
+          !p.name.toLowerCase().includes('mako') && (p.name.toLowerCase().includes('tha') || p.name.toLowerCase().includes('hip'))
+        )
+        const standardTKA = facilityData.procedures.find((p: any) => 
+          !p.name.toLowerCase().includes('mako') && (p.name.toLowerCase().includes('tka') || p.name.toLowerCase().includes('knee'))
+        )
+
+        // Build available procedures for this surgeon based on their preference
+        let availableProcedures: any[] = []
+        if (surgeon.useMako) {
+          // Mako surgeons: 70% Mako, 30% standard
+          if (makoTHA) availableProcedures.push({ proc: makoTHA, weight: 35 })
+          if (makoTKA) availableProcedures.push({ proc: makoTKA, weight: 35 })
+          if (standardTHA) availableProcedures.push({ proc: standardTHA, weight: 15 })
+          if (standardTKA) availableProcedures.push({ proc: standardTKA, weight: 15 })
+        } else {
+          // Non-Mako surgeons: mostly standard, occasional Mako
+          if (standardTHA) availableProcedures.push({ proc: standardTHA, weight: 40 })
+          if (standardTKA) availableProcedures.push({ proc: standardTKA, weight: 40 })
+          if (makoTHA) availableProcedures.push({ proc: makoTHA, weight: 10 })
+          if (makoTKA) availableProcedures.push({ proc: makoTKA, weight: 10 })
+        }
+
+        // Fallback if no procedures found
+        if (availableProcedures.length === 0) {
+          const anyProc = facilityData.procedures[0]
+          if (anyProc) availableProcedures.push({ proc: anyProc, weight: 100 })
+        }
+
+        // Track current time for case scheduling
+        let currentTime = new Date(scheduledStartTime)
 
         for (let i = 0; i < casesForDay; i++) {
           const room = availableRooms[i % availableRooms.length]
-          const procedure = Math.random() < 0.5 ? thaProcedure : tkaProcedure
+          
+          // Select procedure with weights
+          const totalWeight = availableProcedures.reduce((sum, p) => sum + p.weight, 0)
+          let rand = Math.random() * totalWeight
+          let procedure = availableProcedures[0].proc
+          for (const p of availableProcedures) {
+            rand -= p.weight
+            if (rand <= 0) {
+              procedure = p.proc
+              break
+            }
+          }
           if (!procedure) continue
 
           const procedureType: 'THA' | 'TKA' = procedure.name.toLowerCase().includes('tha') || 
             procedure.name.toLowerCase().includes('hip') ? 'THA' : 'TKA'
+
+          // FIRST CASE TIMING LOGIC
+          let patientInTime = new Date(currentTime)
+          if (i === 0) {
+            // First case of the day
+            const firstCaseRand = Math.random()
+            if (firstCaseRand < 0.70) {
+              // 70% - On time or early (patient in 5-12 minutes BEFORE scheduled start)
+              patientInTime = addMinutes(scheduledStartTime, -randomInt(5, 12))
+            } else if (firstCaseRand < 0.85) {
+              // 15% - Slightly early (1-4 minutes before)
+              patientInTime = addMinutes(scheduledStartTime, -randomInt(1, 4))
+            } else {
+              // 15% - Late start (15-30 minutes AFTER scheduled start)
+              patientInTime = addMinutes(scheduledStartTime, randomInt(15, 30))
+            }
+          } else {
+            // Subsequent cases - use current time (after previous case turnover)
+            patientInTime = new Date(currentTime)
+          }
 
           // Is this an outlier case? (5-10% chance)
           const isOutlier = Math.random() < 0.08
@@ -781,7 +843,7 @@ export async function generateDemoData(
           }
 
           // Calculate call time (15-30 min before patient_in, except first case)
-          const callTime = i === 0 ? null : addMinutes(currentTime, -randomInt(15, 30))
+          const callTime = i === 0 ? null : addMinutes(patientInTime, -randomInt(15, 30))
 
           const caseId = generateUUID()
           const caseNumber = generateCaseNumber(facilityPrefix, currentDate, caseSequence++)
@@ -795,6 +857,9 @@ export async function generateDemoData(
             continue
           }
 
+          // For first case, use scheduled start time; for others use expected start
+          const displayStartTime = i === 0 ? scheduledStartTime : currentTime
+
           const newCase: GeneratedCase = {
             id: caseId,
             facility_id: facilityId,
@@ -807,7 +872,7 @@ export async function generateDemoData(
               ? randomChoice(anesthesiologists).id 
               : surgeon.id,
             scheduled_date: dateStr,
-            start_time: formatTimeEST(currentTime),
+            start_time: formatTimeEST(displayStartTime),
             call_time: callTime ? formatTimestampEST(callTime) : null,
             operative_side: operativeSide,
             notes: isOutlier ? 'Complex case - extended surgical time' : null,
@@ -816,11 +881,11 @@ export async function generateDemoData(
 
           allCases.push(newCase)
 
-          // Generate milestones for past cases
+          // Generate milestones for past cases - use patientInTime as the actual start
           if (isPastDate) {
             const milestones = generateMilestones(
               caseId,
-              currentTime,
+              patientInTime,
               procedureType,
               surgeon.profile,
               isOutlier,
@@ -876,12 +941,12 @@ export async function generateDemoData(
             })
           }
 
-          // Move to next case time (turnover)
+          // Move to next case time (from actual patient_in time + case duration + turnover)
           const caseEndOffset = MILESTONE_OFFSETS[procedureType].room_cleaned[
             surgeon.profile === 'high_volume' ? 0 : surgeon.profile === 'medium_volume' ? 1 : 2
           ]
           const turnover = randomInt(profile.turnoverTime.min, profile.turnoverTime.max)
-          currentTime = addMinutes(currentTime, caseEndOffset + turnover + (isOutlier ? randomInt(15, 30) : 0))
+          currentTime = addMinutes(patientInTime, caseEndOffset + turnover + (isOutlier ? randomInt(15, 30) : 0))
         }
       }
 
