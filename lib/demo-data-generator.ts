@@ -900,7 +900,7 @@ export async function generateDemoData(
 
           // Skip case if no payer found (shouldn't happen if SQL migration ran)
           if (!selectedPayer) {
-            console.warn(`No payer found for ${selectedPayerName}, skipping case`)
+            console.warn(`No payer found for ${selectedPayer}, skipping case`)
             continue
           }
 
