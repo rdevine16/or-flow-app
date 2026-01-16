@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { createClient } from '../../../../lib/supabase'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import Container from '../../../../components/ui/Container'
-import AdminSettingsLayout from '../../../../components/settings/AdminSettingsLayout'
 import { procedureCategoryAudit } from '../../../../lib/audit-logger'
 
 interface BodyRegion {
@@ -313,10 +312,8 @@ export default function AdminProcedureCategoriesPage() {
 
   return (
     <DashboardLayout>
-      <AdminSettingsLayout
         title="Procedure Categories"
         description="Define clinical groupings for analytics comparisons"
-      >
         <Container>
           <div className="max-w-4xl">
             {/* Add Button */}
@@ -447,7 +444,6 @@ export default function AdminProcedureCategoriesPage() {
             </div>
           </div>
         </Container>
-      </AdminSettingsLayout>
 
       {/* Add Modal */}
       {showAddModal && (
