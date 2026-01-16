@@ -27,6 +27,143 @@ interface NavItem {
   allowedRoles: string[]
 }
 
+interface NavGroup {
+  id: string
+  label: string
+  items: NavItem[]
+}
+
+// Icons for admin nav
+const adminIcons = {
+  dashboard: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+    </svg>
+  ),
+  facilities: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ),
+  procedures: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+    </svg>
+  ),
+  categories: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    </svg>
+  ),
+  milestones: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  delays: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  ),
+  implants: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+    </svg>
+  ),
+  bodyRegions: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
+  auditLog: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+}
+
+// Admin navigation groups (for global_admin when not impersonating)
+const adminNavGroups: NavGroup[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    items: [
+      {
+        name: 'Dashboard',
+        href: '/admin',
+        icon: adminIcons.dashboard,
+        allowedRoles: ['global_admin'],
+      },
+    ],
+  },
+  {
+    id: 'management',
+    label: 'Management',
+    items: [
+      {
+        name: 'Facilities',
+        href: '/admin/facilities',
+        icon: adminIcons.facilities,
+        allowedRoles: ['global_admin'],
+      },
+    ],
+  },
+  {
+    id: 'configuration',
+    label: 'Configuration',
+    items: [
+      {
+        name: 'Procedures',
+        href: '/admin/settings/procedures',
+        icon: adminIcons.procedures,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Categories',
+        href: '/admin/settings/procedure-categories',
+        icon: adminIcons.categories,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Milestones',
+        href: '/admin/settings/milestones',
+        icon: adminIcons.milestones,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Delay Types',
+        href: '/admin/settings/delay-types',
+        icon: adminIcons.delays,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Body Regions',
+        href: '/admin/settings/body-regions',
+        icon: adminIcons.bodyRegions,
+        allowedRoles: ['global_admin'],
+      },
+      {
+        name: 'Implant Companies',
+        href: '/admin/settings/implant-companies',
+        icon: adminIcons.implants,
+        allowedRoles: ['global_admin'],
+      },
+    ],
+  },
+  {
+    id: 'compliance',
+    label: 'Compliance',
+    items: [
+      {
+        name: 'Audit Log',
+        href: '/admin/audit-log',
+        icon: adminIcons.auditLog,
+        allowedRoles: ['global_admin'],
+      },
+    ],
+  },
+]
+
 const baseNavigation: NavItem[] = [
   {
     name: 'Dashboard',
@@ -70,17 +207,6 @@ const baseNavigation: NavItem[] = [
     allowedRoles: ['global_admin', 'facility_admin'],
   },
 ]
-
-const adminNavItem: NavItem = {
-  name: 'Admin',
-  href: '/admin',
-  icon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  ),
-  allowedRoles: ['global_admin'],
-}
 
 // Sidebar widths
 const SIDEBAR_COLLAPSED = 64
@@ -251,14 +377,18 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
+    if (href === '/admin') return pathname === '/admin'
     return pathname.startsWith(href)
   }
 
+  // Determine if showing admin nav (grouped) or facility nav (flat)
+  const isAdminMode = effectiveIsGlobalAdmin && !impersonation
+
   const getNavigation = (): NavItem[] => {
-    if (effectiveIsGlobalAdmin && !impersonation) return [adminNavItem]
-    const nav = baseNavigation.filter(item => item.allowedRoles.includes(userData.accessLevel))
-    if (effectiveIsGlobalAdmin && impersonation) nav.push(adminNavItem)
-    return nav
+    // Global admin not impersonating -> no flat nav (uses grouped admin nav instead)
+    if (isAdminMode) return []
+    // Impersonating or regular user -> facility nav only (no admin link)
+    return baseNavigation.filter(item => item.allowedRoles.includes(userData.accessLevel))
   }
 
   const navigation = getNavigation()
@@ -333,25 +463,65 @@ if (!mounted) {   return (
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto overflow-x-hidden">
-          {navigation.map((item) => {
-            const active = isActive(item.href)
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                  ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                title={!isExpanded ? item.name : undefined}
-              >
-                <span className="flex-shrink-0">{item.icon}</span>
-                <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
-                  {item.name}
-                </span>
-                {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-400 rounded-r-full" />}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 py-4 px-3 overflow-y-auto overflow-x-hidden">
+          {isAdminMode ? (
+            /* Grouped Admin Navigation */
+            <div className="space-y-6">
+              {adminNavGroups.map((group) => (
+                <div key={group.id}>
+                  {/* Group Header */}
+                  {isExpanded && (
+                    <h3 className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      {group.label}
+                    </h3>
+                  )}
+                  {/* Group Items */}
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const active = isActive(item.href)
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
+                            ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                          title={!isExpanded ? item.name : undefined}
+                        >
+                          <span className="flex-shrink-0">{item.icon}</span>
+                          <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
+                            {item.name}
+                          </span>
+                          {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-400 rounded-r-full" />}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Flat Facility Navigation */
+            <div className="space-y-1">
+              {navigation.map((item) => {
+                const active = isActive(item.href)
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
+                      ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                    title={!isExpanded ? item.name : undefined}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
+                      {item.name}
+                    </span>
+                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-400 rounded-r-full" />}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </nav>
 
         {/* Pin & Version */}
@@ -536,14 +706,6 @@ if (!mounted) {   return (
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                         Settings
-                      </Link>
-                    )}
-                    {effectiveIsGlobalAdmin && (
-                      <Link href="/admin" className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors" onClick={() => setUserMenuOpen(false)}>
-                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
-                        Admin Dashboard
                       </Link>
                     )}
                   </div>
