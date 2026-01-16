@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 
 interface Facility {
   id: string
@@ -44,18 +43,23 @@ export default function DemoDataPage() {
 
   async function loadFacilities() {
     setLoading(true)
-    const { data } = await supabase
-      .from('facilities')
-      .select('id, name, is_demo, case_number_prefix')
-      .eq('is_demo', true)
-      .order('name')
-
-    if (data) {
-      setFacilities(data)
-      // Load status for each facility
-      for (const facility of data) {
-        await loadStatus(facility.id)
+    try {
+      const res = await fetch('/api/demo-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list-facilities' }),
+      })
+      const data = await res.json()
+      
+      if (data.facilities) {
+        setFacilities(data.facilities)
+        // Load status for each facility
+        for (const facility of data.facilities) {
+          await loadStatus(facility.id)
+        }
       }
+    } catch (error) {
+      console.error('Error loading facilities:', error)
     }
     setLoading(false)
   }

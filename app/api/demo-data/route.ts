@@ -13,6 +13,17 @@ export async function POST(request: NextRequest) {
   try {
     const { action, facilityId } = await request.json()
 
+    // List all demo facilities
+    if (action === 'list-facilities') {
+      const { data: facilities } = await supabaseAdmin
+        .from('facilities')
+        .select('id, name, is_demo, case_number_prefix')
+        .eq('is_demo', true)
+        .order('name')
+      
+      return NextResponse.json({ facilities: facilities || [] })
+    }
+
     if (!facilityId) {
       return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
     }
