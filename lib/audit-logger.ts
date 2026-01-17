@@ -460,14 +460,12 @@ export const caseDeviceAudit = {
         implant_company: companyName,
         tray_status: oldStatus
       },
-      newValues: {
+newValues: {
         tray_status: 'pending'
       },
     })
   },
-}git add .
-git commit -m "Move analytics nav to horizontal tabs"
-git push
+}
 
 // =====================================================
 // BODY REGIONS
