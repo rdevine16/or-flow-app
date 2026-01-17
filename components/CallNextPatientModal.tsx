@@ -6,6 +6,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../lib/supabase'
+import { getLocalDateString } from '../lib/date-utils'
+
 
 interface Room {
   id: string
@@ -162,8 +164,7 @@ export default function CallNextPatientModal({
 
   // Fetch next case for selected room
   const fetchCasesForRoom = async (room: Room) => {
-    const today = getTodayDate()
-
+ const today = getLocalDateString() 
     // Fetch in_progress case (current)
     const { data: currentCaseData } = await supabase
       .from('cases')
