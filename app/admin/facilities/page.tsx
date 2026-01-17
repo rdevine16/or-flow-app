@@ -13,6 +13,7 @@ import { startImpersonation } from '../../../lib/impersonation'
 import { adminAudit } from '../../../lib/audit-logger'
 import DeleteFacilityModal from '../../../components/modals/DeleteFacilityModal'
 
+
 interface Facility {
   id: string
   name: string

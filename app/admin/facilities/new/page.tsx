@@ -8,9 +8,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '../../../../lib/supabase'
 import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import { generateTemporaryPassword } from '../../../../lib/passwords'
-import { sendWelcomeEmail } from '../../../../lib/email'
-import { facilityAudit, userAudit } from '../../../../lib/audit-logger'
+import { facilityAudit } from '../../../../lib/audit-logger'
+
 
 interface FacilityData {
   name: string
@@ -138,53 +137,8 @@ export default function CreateFacilityPage() {
 
       if (facilityError) throw new Error('Failed to create facility: ' + facilityError.message)
 
-      // 2. Generate password
-      const tempPassword = generateTemporaryPassword()
+      // 2. Create default OR rooms if selected
 
-      // 3. Create auth user via Supabase Admin API
-      // Note: This requires service role key - using signUp as alternative
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: adminData.email.trim(),
-        password: tempPassword,
-        options: {
-          data: {
-            first_name: adminData.firstName.trim(),
-            last_name: adminData.lastName.trim(),
-          },
-        },
-      })
-
-      if (authError) {
-        // Rollback facility
-        await supabase.from('facilities').delete().eq('id', facility.id)
-        throw new Error('Failed to create user account: ' + authError.message)
-      }
-
-      if (!authData.user) {
-        await supabase.from('facilities').delete().eq('id', facility.id)
-        throw new Error('Failed to create user account: No user returned')
-      }
-
-      // 4. Create user profile
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: adminData.email.trim(),
-          first_name: adminData.firstName.trim(),
-          last_name: adminData.lastName.trim(),
-          facility_id: facility.id,
-          role_id: adminData.roleId,
-          access_level: 'facility_admin',
-          must_change_password: true,
-        })
-
-      if (userError) {
-        console.error('Failed to create user profile:', userError)
-        // Continue anyway - the user exists in auth
-      }
-
-      // 5. Create default OR rooms if selected
       if (setupOptions.createDefaultRooms) {
         const defaultRooms = ['OR 1', 'OR 2', 'OR 3']
         await supabase
@@ -213,24 +167,36 @@ export default function CreateFacilityPage() {
         }
       }
 
-      // 7. Send welcome email if selected
+ // 4. Send invite email if selected (uses token-based invite API)
       if (setupOptions.sendWelcomeEmail) {
-        await sendWelcomeEmail(
-          adminData.email.trim(),
-          adminData.firstName.trim(),
-          facilityData.name.trim(),
-          tempPassword
-        )
+        const { data: session } = await supabase.auth.getSession()
+        
+        const inviteResponse = await fetch('/api/admin/invite', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            email: adminData.email.trim(),
+            firstName: adminData.firstName.trim(),
+            lastName: adminData.lastName.trim(),
+            accessLevel: 'facility_admin',
+            facilityId: facility.id,
+            roleId: adminData.roleId,
+          }),
+        })
+
+        const inviteResult = await inviteResponse.json()
+
+        if (!inviteResponse.ok) {
+          console.error('Invite failed:', inviteResult.error)
+          // Facility created but invite failed - still redirect, they can resend
+        }
       }
 
-      // 8. Log audit events
+      // 5. Log audit events
       await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
-      await userAudit.created(
-        supabase,
-        `${adminData.firstName} ${adminData.lastName}`,
-        adminData.email,
-        authData.user.id
-      )
 
       // Success! Redirect to facility detail page
       router.push(`/admin/facilities/${facility.id}`)
@@ -445,7 +411,7 @@ export default function CreateFacilityPage() {
                     <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p>A temporary password will be auto-generated and sent to this email address.</p>
+<p>They'll receive an email with a link to create their password.</p>
                   </div>
                 </div>
               </div>
