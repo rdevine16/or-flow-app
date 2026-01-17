@@ -609,12 +609,12 @@ export default function SurgeonOverviewPage() {
 
     if (!statusData) return
 
-    // Fetch cases with call_time and milestones
+// Fetch cases with called_back_at and milestones
     const { data: casesData } = await supabase
       .from('cases')
       .select(`
         id,
-        call_time,
+        called_back_at,
         case_milestones (
           recorded_at,
           milestone_types (name)
@@ -623,7 +623,7 @@ export default function SurgeonOverviewPage() {
       .eq('facility_id', effectiveFacilityId)
       .eq('surgeon_id', selectedSurgeonId)
       .eq('status_id', statusData.id)
-      .not('call_time', 'is', null)
+      .not('called_back_at', 'is', null)
       .gte('scheduled_date', startDate)
       .lte('scheduled_date', endDate)
 
@@ -651,7 +651,7 @@ export default function SurgeonOverviewPage() {
         }
       })
 
-      const callTime = new Date(c.call_time)
+      const callTime = new Date(c.called_back_at)
 
       // Minutes before incision (negative = before)
       if (milestones.incision) {
