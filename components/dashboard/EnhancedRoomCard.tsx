@@ -1,6 +1,6 @@
 // components/dashboard/EnhancedRoomCard.tsx
 // Enhanced room card showing all scheduled cases for the room
-// UPDATED: Added operative side badge display
+// UPDATED: Added pulsing amber border for called-back patients
 
 'use client'
 
@@ -73,6 +73,18 @@ function OperativeSideBadge({ side }: { side: string | null | undefined }) {
   return (
     <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded border ${cfg.color}`}>
       {cfg.label}
+    </span>
+  )
+}
+
+// NEW: Called Back Badge - shows when patient has been called to go back
+function CalledBackBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+      </svg>
+      Go Back
     </span>
   )
 }
@@ -183,6 +195,10 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
   const primaryCase = currentCase || nextCase
   const isActive = status === 'active'
   
+  // Check if the next case has been called back
+  // Only show pulsing when there's a nextCase (not currentCase) that's been called
+  const nextCaseCalledBack = !currentCase && nextCase && (nextCase as any).called_back_at
+  
   // Get other cases (exclude the primary case from the upcoming list)
   const otherCases = upcomingCases.filter(c => c.id !== primaryCase?.id)
   
@@ -192,13 +208,26 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
     (currentCase && getStatusName(currentCase.case_statuses) === 'completed' ? 1 : 0)
   
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+    <div 
+      className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${
+        nextCaseCalledBack 
+          ? 'border-2 border-amber-400 animate-pulse-border' 
+          : 'border border-slate-200/80'
+      }`}
+    >
       {/* Header */}
-      <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+      <div className={`px-4 py-3 border-b flex items-center justify-between ${
+        nextCaseCalledBack 
+          ? 'bg-amber-50/80 border-amber-200' 
+          : 'bg-slate-50/80 border-slate-100'
+      }`}>
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-bold text-slate-900">{room.name}</h3>
           {isActive && currentPhase && (
             <PhaseBadge phase={currentPhase} />
+          )}
+          {nextCaseCalledBack && (
+            <CalledBackBadge />
           )}
         </div>
         <div className="flex items-center gap-2">
