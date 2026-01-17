@@ -39,7 +39,15 @@ export type AuditAction =
   | 'case_device.trays_delivered'
   | 'case_device.reminder_sent'
   | 'case_device.status_reset'  
-// Cases
+// Device Rep Tray Actions
+| 'device_rep.tray_consignment_confirmed'
+| 'device_rep.tray_loaners_confirmed'
+| 'device_rep.trays_delivered'
+| 'device_rep.tray_status_reset'
+| 'device_rep.tray_status_changed'
+| 'device_rep.notes_updated'
+| 'device_rep.tray_updated'
+  // Cases
   | 'case.created'
   | 'case.updated'
   | 'case.deleted'
@@ -150,7 +158,15 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'case.status_changed': 'changed case status',
   'case.implant_company_added': 'added implant company to case',
   'case.implant_company_removed': 'removed implant company from case',
-    // Body Regions
+  // Device Rep Tray Actions
+'device_rep.tray_consignment_confirmed': 'confirmed consignment trays',
+'device_rep.tray_loaners_confirmed': 'confirmed loaner trays',
+'device_rep.trays_delivered': 'delivered trays',
+'device_rep.tray_status_reset': 'reset tray status',
+'device_rep.tray_status_changed': 'changed tray status',
+'device_rep.notes_updated': 'updated rep notes',
+'device_rep.tray_updated': 'updated tray info',  
+  // Body Regions
   'admin.body_region_created': 'created a body region',
 'admin.body_region_updated': 'updated a body region',
 'admin.body_region_deleted': 'deleted a body region',
