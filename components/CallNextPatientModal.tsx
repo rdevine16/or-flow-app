@@ -6,6 +6,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../lib/supabase'
+import { call } from 'assert/strict'
 
 interface Room {
   id: string
@@ -277,17 +278,15 @@ export default function CallNextPatientModal({
       if (notifError) throw notifError
 
       // 2. Record call_time on current case (if exists)
-      if (currentCase) {
-        const now = new Date().toISOString()
-        await supabase
-          .from('cases')
-          .update({
-            call_time: now,
-            call_time_recorded_by: userId,
-            called_next_case_id: nextCase.id
-          })
-          .eq('id', currentCase.id)
-      }
+const now = new Date().toISOString()
+await supabase
+  .from('cases')
+  .update({
+    called_back_at: now,
+    called_back_by: userId
+  })
+  .eq('id', call.case_id)
+
 
       // 3. Trigger push notifications via edge function
       try {
@@ -472,14 +471,13 @@ export default function CallNextPatientModal({
       }
 
       // Clear call_time from the case that has called_next_case_id pointing to this case
-      await supabase
-        .from('cases')
-        .update({
-          call_time: null,
-          call_time_recorded_by: null,
-          called_next_case_id: null
-        })
-        .eq('called_next_case_id', call.case_id)
+await supabase
+  .from('cases')
+  .update({
+    called_back_at: null,
+    called_back_by: null
+  })
+  .eq('id', call.case_id)
 
       // Send cancellation push notification
       const { error: pushError } = await supabase.functions.invoke('send-push-notification', {

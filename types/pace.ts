@@ -80,6 +80,8 @@ export interface EnhancedCase {
   or_room_id: string | null
   procedure_type_id: string | null
   surgeon_id: string | null
+  called_back_at?: string | null
+  called_back_by?: string | null
   // Supabase can return these as arrays or single objects depending on the relationship
   or_rooms: JoinedData<{ name: string }>
   procedure_types: JoinedData<{ name: string }>

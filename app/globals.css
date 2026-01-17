@@ -255,3 +255,19 @@ textarea::placeholder {
   color: #64748b !important;
   font-size: 13px !important;
 }
+
+/* Pulsing border animation for called-back patients */
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: rgb(251 191 36); /* amber-400 */
+    box-shadow: 0 0 0 0 rgb(251 191 36 / 0.4);
+  }
+  50% {
+    border-color: rgb(245 158 11); /* amber-500 */
+    box-shadow: 0 0 0 4px rgb(251 191 36 / 0);
+  }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s ease-in-out infinite;
+}

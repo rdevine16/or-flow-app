@@ -164,27 +164,28 @@ export default function DashboardPage() {
       setLoading(true)
 
       try {
-        // Fetch cases
-        const { data: casesData } = await supabase
-          .from('cases')
-          .select(`
-            id,
-            case_number,
-            scheduled_date,
-            start_time,
-            operative_side,
-            facility_id,
-            or_room_id,
-            procedure_type_id,
-            surgeon_id,
-            or_rooms (name),
-            procedure_types (name),
-            case_statuses (name),
-            surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-          `)
-          .eq('facility_id', userFacilityId)
-          .eq('scheduled_date', selectedDate)
-          .order('start_time', { ascending: true, nullsFirst: false })
+ // Fetch cases
+const { data: casesData } = await supabase
+  .from('cases')
+  .select(`
+    id,
+    case_number,
+    scheduled_date,
+    start_time,
+    operative_side,
+    facility_id,
+    or_room_id,
+    procedure_type_id,
+    surgeon_id,
+    called_back_at,
+    or_rooms (name),
+    procedure_types (name),
+    case_statuses (name),
+    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+  `)
+  .eq('facility_id', userFacilityId)
+  .eq('scheduled_date', selectedDate)
+  .order('start_time', { ascending: true, nullsFirst: false })
 
         // Fetch rooms
         const { data: roomsData } = await supabase
