@@ -842,14 +842,24 @@ export default function SPDDashboardPage() {
                         {deviceCompanies.map((dc) => (
                           <div key={dc.id} className="flex items-center gap-2">
                             <span className="text-sm font-medium text-slate-700">{dc.implant_companies?.name}</span>
+                            {dc.tray_status === 'pending' && (
+                              <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                ⏳ Pending
+                              </span>
+                            )}
+                            {dc.tray_status === 'consignment' && (
+                              <span className="text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                ✓ Consignment
+                              </span>
+                            )}
                             {dc.tray_status === 'loaners_confirmed' && dc.loaner_tray_count && (
                               <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-                                {dc.loaner_tray_count} trays
+                                📦 {dc.loaner_tray_count} trays
                               </span>
                             )}
                             {dc.tray_status === 'delivered' && (
                               <span className="text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                ✓ Delivered
+                                ✓ {dc.delivered_tray_count || dc.loaner_tray_count || ''} Delivered
                               </span>
                             )}
                             {dc.rep_notes && (
