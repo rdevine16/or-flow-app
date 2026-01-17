@@ -284,8 +284,7 @@ await supabase
     called_back_at: now,
     called_back_by: userId
   })
-  .eq('id', call.case_id)
-
+  .eq('id', nextCase.id) 
 
       // 3. Trigger push notifications via edge function
       try {
