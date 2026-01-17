@@ -1,618 +1,437 @@
-// app/admin/facilities/new/page.tsx
-// Create Facility Wizard - Multi-step form for onboarding new facilities
+// app/invite/user/[token]/page.tsx
+// 
+// Accept invitation page for facility admins and staff
+// Mirrors the device rep flow: validate token → show info → create account
+//
+// Flow:
+// 1. User clicks link in email → lands here
+// 2. Page validates token and shows invite details
+// 3. User creates password
+// 4. Account created in auth.users and public.users
+// 5. Invite marked as accepted
+// 6. Redirect to success page
 
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '../../../../lib/supabase'
-import { useUser } from '../../../../lib/UserContext'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import { generateTemporaryPassword } from '../../../../lib/passwords'
-import { sendWelcomeEmail } from '../../../../lib/email'
-import { facilityAudit, userAudit } from '../../../../lib/audit-logger'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase'
 
-interface FacilityData {
-  name: string
-  address: string
-  subscriptionStatus: 'trial' | 'active'
-  trialDays: number
-}
-
-interface AdminData {
+interface InviteData {
+  id: string
+  email: string
   firstName: string
   lastName: string
-  email: string
+  facilityId: string
+  facilityName: string
+  facilityAddress: string | null
+  accessLevel: string
   roleId: string
+  roleName: string
+  expiresAt: string
 }
 
-interface SetupOptions {
-  createDefaultRooms: boolean
-  createDefaultProcedures: boolean
-  sendWelcomeEmail: boolean
-}
-
-interface UserRole {
-  id: string
-  name: string
-}
-
-export default function CreateFacilityPage() {
+function AcceptInviteContent() {
   const router = useRouter()
+  const params = useParams()
+  const token = params.token as string
   const supabase = createClient()
-  const { userData, isGlobalAdmin, loading: userLoading } = useUser()
 
-  // Form state
-  const [step, setStep] = useState(1)
-  const [submitting, setSubmitting] = useState(false)
+  const [invite, setInvite] = useState<InviteData | null>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  // Step 1: Facility details
-  const [facilityData, setFacilityData] = useState<FacilityData>({
-    name: '',
-    address: '',
-    subscriptionStatus: 'trial',
-    trialDays: 30,
-  })
+  // Password form
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
-  // Step 2: Admin user
-  const [adminData, setAdminData] = useState<AdminData>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    roleId: '',
-  })
-
-  // Step 3: Setup options
-  const [setupOptions, setSetupOptions] = useState<SetupOptions>({
-    createDefaultRooms: true,
-    createDefaultProcedures: true,
-    sendWelcomeEmail: true,
-  })
-
-  // Available roles
-  const [roles, setRoles] = useState<UserRole[]>([])
-
-  // Redirect non-admins
   useEffect(() => {
-    if (!userLoading && !isGlobalAdmin) {
-      router.push('/dashboard')
+    if (token) {
+      fetchInvite()
     }
-  }, [userLoading, isGlobalAdmin, router])
+  }, [token])
 
-  // Fetch roles
-  useEffect(() => {
-    async function fetchRoles() {
-      const { data } = await supabase
-        .from('user_roles')
-        .select('id, name')
-        .order('name')
+  const fetchInvite = async () => {
+    // Fetch invite details from user_invites table
+    const { data, error } = await supabase
+      .from('user_invites')
+      .select(`
+        id,
+        email,
+        first_name,
+        last_name,
+        facility_id,
+        access_level,
+        role_id,
+        expires_at,
+        facilities (name, address),
+        user_roles (name)
+      `)
+      .eq('invite_token', token)
+      .is('accepted_at', null)
+      .single()
 
-      if (data) {
-        setRoles(data)
-        // Default to 'admin' role if available
-        const adminRole = data.find(r => r.name === 'admin')
-        if (adminRole) {
-          setAdminData(prev => ({ ...prev, roleId: adminRole.id }))
-        }
-      }
+    if (error || !data) {
+      setError('This invite link is invalid or has already been used.')
+      setLoading(false)
+      return
     }
 
-    fetchRoles()
-  }, [supabase])
+    // Check if expired
+    if (new Date(data.expires_at) < new Date()) {
+      setError('This invite has expired. Please contact your administrator for a new invite.')
+      setLoading(false)
+      return
+    }
 
-  // Validation
-  const isStep1Valid = facilityData.name.trim().length > 0
-  const isStep2Valid = 
-    adminData.firstName.trim().length > 0 &&
-    adminData.lastName.trim().length > 0 &&
-    adminData.email.trim().length > 0 &&
-    adminData.email.includes('@') &&
-    adminData.roleId.length > 0
+    // Transform data - Supabase returns joined tables as arrays sometimes
+    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
+    const role = Array.isArray(data.user_roles) ? data.user_roles[0] : data.user_roles
 
-  // Handle form submission
-  const handleSubmit = async () => {
-    if (!isStep1Valid || !isStep2Valid) return
+    setInvite({
+      id: data.id,
+      email: data.email,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      facilityId: data.facility_id,
+      facilityName: facility?.name || 'Unknown Facility',
+      facilityAddress: facility?.address || null,
+      accessLevel: data.access_level,
+      roleId: data.role_id,
+      roleName: role?.name || 'Staff',
+      expiresAt: data.expires_at,
+    })
+
+    setLoading(false)
+  }
+
+  // Password validation
+  const passwordRequirements = {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+  }
+  const isPasswordValid = Object.values(passwordRequirements).every(Boolean)
+  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!invite) return
+
+    if (!isPasswordValid) {
+      setError('Please meet all password requirements')
+      return
+    }
+
+    if (!passwordsMatch) {
+      setError('Passwords do not match')
+      return
+    }
 
     setSubmitting(true)
     setError(null)
 
     try {
-      // Calculate trial end date
-      const trialEndsAt = facilityData.subscriptionStatus === 'trial'
-        ? new Date(Date.now() + facilityData.trialDays * 86400000).toISOString()
-        : null
-
-      // 1. Create facility
-      const { data: facility, error: facilityError } = await supabase
-        .from('facilities')
-        .insert({
-          name: facilityData.name.trim(),
-          address: facilityData.address.trim() || null,
-          subscription_status: facilityData.subscriptionStatus,
-          trial_ends_at: trialEndsAt,
-          subscription_started_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
-
-      if (facilityError) throw new Error('Failed to create facility: ' + facilityError.message)
-
-      // 2. Generate password
-      const tempPassword = generateTemporaryPassword()
-
-      // 3. Create auth user via Supabase Admin API
-      // Note: This requires service role key - using signUp as alternative
+      // 1. Create auth user with Supabase
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: adminData.email.trim(),
-        password: tempPassword,
+        email: invite.email,
+        password: password,
         options: {
           data: {
-            first_name: adminData.firstName.trim(),
-            last_name: adminData.lastName.trim(),
+            first_name: invite.firstName,
+            last_name: invite.lastName,
           },
         },
       })
 
       if (authError) {
-        // Rollback facility
-        await supabase.from('facilities').delete().eq('id', facility.id)
-        throw new Error('Failed to create user account: ' + authError.message)
+        // Check if user already exists
+        if (authError.message.includes('already registered')) {
+          setError('An account with this email already exists. Please sign in instead.')
+          return
+        }
+        throw authError
       }
 
       if (!authData.user) {
-        await supabase.from('facilities').delete().eq('id', facility.id)
-        throw new Error('Failed to create user account: No user returned')
+        throw new Error('Failed to create account')
       }
 
-      // 4. Create user profile
-      const { error: userError } = await supabase
+      // 2. Create user profile in public.users
+      const { error: profileError } = await supabase
         .from('users')
         .insert({
           id: authData.user.id,
-          email: adminData.email.trim(),
-          first_name: adminData.firstName.trim(),
-          last_name: adminData.lastName.trim(),
-          facility_id: facility.id,
-          role_id: adminData.roleId,
-          access_level: 'facility_admin',
-          must_change_password: true,
+          email: invite.email,
+          first_name: invite.firstName,
+          last_name: invite.lastName,
+          facility_id: invite.facilityId,
+          role_id: invite.roleId,
+          access_level: invite.accessLevel,
         })
 
-      if (userError) {
-        console.error('Failed to create user profile:', userError)
-        // Continue anyway - the user exists in auth
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+        // Note: Don't fail completely - auth user exists, they might need admin help
+        // but they can still try to sign in
       }
 
-      // 5. Create default OR rooms if selected
-      if (setupOptions.createDefaultRooms) {
-        const defaultRooms = ['OR 1', 'OR 2', 'OR 3']
-        await supabase
-          .from('or_rooms')
-          .insert(defaultRooms.map(name => ({
-            facility_id: facility.id,
-            name,
-          })))
-      }
+      // 3. Mark invite as accepted
+      await supabase
+        .from('user_invites')
+        .update({ accepted_at: new Date().toISOString() })
+        .eq('id', invite.id)
 
-      // 6. Copy default procedure types if selected
-      if (setupOptions.createDefaultProcedures) {
-        const { data: defaultProcs } = await supabase
-          .from('default_procedure_types')
-          .select('name, body_region_id')
-          .eq('is_active', true)
+      // 4. Redirect to success page
+      router.push('/invite/success')
 
-        if (defaultProcs && defaultProcs.length > 0) {
-          await supabase
-            .from('procedure_types')
-            .insert(defaultProcs.map(p => ({
-              facility_id: facility.id,
-              name: p.name,
-              body_region_id: p.body_region_id,
-            })))
-        }
-      }
-
-      // 7. Send welcome email if selected
-      if (setupOptions.sendWelcomeEmail) {
-        await sendWelcomeEmail(
-          adminData.email.trim(),
-          adminData.firstName.trim(),
-          facilityData.name.trim(),
-          tempPassword
-        )
-      }
-
-      // 8. Log audit events
-      await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
-      await userAudit.created(
-        supabase,
-        `${adminData.firstName} ${adminData.lastName}`,
-        adminData.email,
-        authData.user.id
-      )
-
-      // Success! Redirect to facility detail page
-      router.push(`/admin/facilities/${facility.id}`)
-    } catch (err) {
-      console.error('Error creating facility:', err)
-      setError(err instanceof Error ? err.message : 'An error occurred')
+    } catch (err: any) {
+      console.error('Error creating account:', err)
+      setError(err.message || 'Failed to create account. Please try again.')
     } finally {
       setSubmitting(false)
     }
   }
 
-  // Loading state
-  if (userLoading) {
+  if (loading) {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      </DashboardLayout>
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
     )
   }
 
-  if (!isGlobalAdmin) {
-    return null
+  if (error && !invite) {
+    return (
+      <div className="text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">Invite Error</h2>
+        <p className="text-slate-600 mb-6">{error}</p>
+        <Link
+          href="/login"
+          className="inline-flex items-center justify-center px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
+        >
+          Go to Login
+        </Link>
+      </div>
+    )
   }
 
+  const isAdmin = invite?.accessLevel === 'facility_admin'
+
   return (
-    <DashboardLayout>
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Create New Facility</h1>
-          <p className="text-slate-500 mt-1">Set up a new customer in ORbit</p>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="flex items-center gap-4 mb-8">
-          {[1, 2, 3, 4].map((s) => (
-            <div key={s} className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  s < step
-                    ? 'bg-emerald-500 text-white'
-                    : s === step
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-200 text-slate-500'
-                }`}
-              >
-                {s < step ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  s
-                )}
-              </div>
-              {s < 4 && (
-                <div className={`w-12 h-1 ml-2 rounded ${s < step ? 'bg-emerald-500' : 'bg-slate-200'}`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Form Card */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          {/* Step 1: Facility Details */}
-          {step === 1 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Details</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Facility Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={facilityData.name}
-                    onChange={(e) => setFacilityData({ ...facilityData, name: e.target.value })}
-                    placeholder="e.g., Memorial General Hospital"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    value={facilityData.address}
-                    onChange={(e) => setFacilityData({ ...facilityData, address: e.target.value })}
-                    placeholder="e.g., 123 Medical Center Drive, Chicago, IL"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Subscription Status
-                  </label>
-                  <div className="flex gap-4 mt-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="status"
-                        checked={facilityData.subscriptionStatus === 'trial'}
-                        onChange={() => setFacilityData({ ...facilityData, subscriptionStatus: 'trial' })}
-                        className="w-4 h-4 text-blue-600"
-                      />
-                      <span className="text-sm text-slate-700">Trial</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="status"
-                        checked={facilityData.subscriptionStatus === 'active'}
-                        onChange={() => setFacilityData({ ...facilityData, subscriptionStatus: 'active' })}
-                        className="w-4 h-4 text-blue-600"
-                      />
-                      <span className="text-sm text-slate-700">Active (Paid)</span>
-                    </label>
-                  </div>
-                </div>
-
-                {facilityData.subscriptionStatus === 'trial' && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Trial Length
-                    </label>
-                    <select
-                      value={facilityData.trialDays}
-                      onChange={(e) => setFacilityData({ ...facilityData, trialDays: parseInt(e.target.value) })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value={14}>14 days</option>
-                      <option value={30}>30 days</option>
-                      <option value={60}>60 days</option>
-                      <option value={90}>90 days</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Admin User */}
-          {step === 2 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">First Administrator</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                This person will be the facility admin and can invite other staff.
-              </p>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={adminData.firstName}
-                      onChange={(e) => setAdminData({ ...adminData, firstName: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Last Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={adminData.lastName}
-                      onChange={(e) => setAdminData({ ...adminData, lastName: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={adminData.email}
-                    onChange={(e) => setAdminData({ ...adminData, email: e.target.value })}
-                    placeholder="admin@hospital.com"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Role <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={adminData.roleId}
-                    onChange={(e) => setAdminData({ ...adminData, roleId: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                  >
-                    <option value="">Select role...</option>
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
-                  <div className="flex gap-2">
-                    <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <p>A temporary password will be auto-generated and sent to this email address.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Setup Options */}
-          {step === 3 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Default Setup</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Choose what to set up automatically for this facility.
-              </p>
-              <div className="space-y-4">
-                <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={setupOptions.createDefaultRooms}
-                    onChange={(e) => setSetupOptions({ ...setupOptions, createDefaultRooms: e.target.checked })}
-                    className="w-5 h-5 mt-0.5 rounded text-blue-600"
-                  />
-                  <div>
-                    <p className="font-medium text-slate-900">Create default OR rooms</p>
-                    <p className="text-sm text-slate-500 mt-0.5">Adds OR 1, OR 2, and OR 3</p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={setupOptions.createDefaultProcedures}
-                    onChange={(e) => setSetupOptions({ ...setupOptions, createDefaultProcedures: e.target.checked })}
-                    className="w-5 h-5 mt-0.5 rounded text-blue-600"
-                  />
-                  <div>
-                    <p className="font-medium text-slate-900">Create default procedure types</p>
-                    <p className="text-sm text-slate-500 mt-0.5">Copies standard procedures from template</p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={setupOptions.sendWelcomeEmail}
-                    onChange={(e) => setSetupOptions({ ...setupOptions, sendWelcomeEmail: e.target.checked })}
-                    className="w-5 h-5 mt-0.5 rounded text-blue-600"
-                  />
-                  <div>
-                    <p className="font-medium text-slate-900">Send welcome email</p>
-                    <p className="text-sm text-slate-500 mt-0.5">Emails login credentials to the administrator</p>
-                  </div>
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Review */}
-          {step === 4 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Review & Create</h2>
-              
-              {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Facility</h3>
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="font-semibold text-slate-900">{facilityData.name}</p>
-                    {facilityData.address && (
-                      <p className="text-sm text-slate-600 mt-1">{facilityData.address}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                        facilityData.subscriptionStatus === 'active'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {facilityData.subscriptionStatus === 'active' ? 'Active' : `${facilityData.trialDays}-day Trial`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Administrator</h3>
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="font-semibold text-slate-900">{adminData.firstName} {adminData.lastName}</p>
-                    <p className="text-sm text-slate-600 mt-1">{adminData.email}</p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Role: {roles.find(r => r.id === adminData.roleId)?.name || 'Unknown'}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Setup</h3>
-                  <div className="bg-slate-50 rounded-xl p-4 space-y-1">
-                    <p className="text-sm text-slate-700 flex items-center gap-2">
-                      {setupOptions.createDefaultRooms ? '✓' : '✗'} Default OR rooms
-                    </p>
-                    <p className="text-sm text-slate-700 flex items-center gap-2">
-                      {setupOptions.createDefaultProcedures ? '✓' : '✗'} Default procedures
-                    </p>
-                    <p className="text-sm text-slate-700 flex items-center gap-2">
-                      {setupOptions.sendWelcomeEmail ? '✓' : '✗'} Welcome email
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-between">
-            {step > 1 ? (
-              <button
-                onClick={() => setStep(step - 1)}
-                disabled={submitting}
-                className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium transition-colors disabled:opacity-50"
-              >
-                Back
-              </button>
-            ) : (
-              <button
-                onClick={() => router.push('/admin/facilities')}
-                className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium transition-colors"
-              >
-                Cancel
-              </button>
-            )}
-
-            {step < 4 ? (
-              <button
-                onClick={() => setStep(step + 1)}
-                disabled={(step === 1 && !isStep1Valid) || (step === 2 && !isStep2Valid)}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-medium transition-colors"
-              >
-                Continue
-              </button>
-            ) : (
-              <button
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Create Facility
-                  </>
-                )}
-              </button>
+    <>
+      {/* Invite Details Card */}
+      <div className="bg-slate-50 rounded-xl p-4 mb-6">
+        <p className="text-sm text-slate-600 mb-3">You've been invited to join:</p>
+        
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900">{invite?.facilityName}</p>
+            {invite?.facilityAddress && (
+              <p className="text-sm text-slate-500">{invite.facilityAddress}</p>
             )}
           </div>
         </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+            isAdmin 
+              ? 'bg-purple-100 text-purple-700' 
+              : 'bg-blue-100 text-blue-700'
+          }`}>
+            {isAdmin ? '👑 Administrator' : '👤 Staff'}
+          </span>
+          <span className="text-xs text-slate-500">•</span>
+          <span className="text-xs text-slate-500 capitalize">{invite?.roleName}</span>
+        </div>
       </div>
-    </DashboardLayout>
+
+      {/* Password Form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Email
+          </label>
+          <input
+            type="email"
+            value={invite?.email || ''}
+            disabled
+            className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              First Name
+            </label>
+            <input
+              type="text"
+              value={invite?.firstName || ''}
+              disabled
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Last Name
+            </label>
+            <input
+              type="text"
+              value={invite?.lastName || ''}
+              disabled
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Create Password
+          </label>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-12"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              {showPassword ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Password Requirements */}
+        <div className="bg-slate-50 rounded-lg p-3">
+          <p className="text-xs font-medium text-slate-600 mb-2">Password must have:</p>
+          <div className="grid grid-cols-2 gap-1">
+            {[
+              { met: passwordRequirements.minLength, text: '8+ characters' },
+              { met: passwordRequirements.hasUppercase, text: 'Uppercase letter' },
+              { met: passwordRequirements.hasLowercase, text: 'Lowercase letter' },
+              { met: passwordRequirements.hasNumber, text: 'Number' },
+            ].map((req, i) => (
+              <div key={i} className={`flex items-center gap-1 text-xs ${req.met ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {req.met ? (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                  </svg>
+                )}
+                {req.text}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Confirm Password
+          </label>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              confirmPassword.length > 0
+                ? passwordsMatch
+                  ? 'border-emerald-300 bg-emerald-50/50'
+                  : 'border-red-300 bg-red-50/50'
+                : 'border-slate-200'
+            }`}
+          />
+          {confirmPassword.length > 0 && !passwordsMatch && (
+            <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+          )}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={submitting || !isPasswordValid || !passwordsMatch}
+          className="w-full py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Creating Account...
+            </>
+          ) : (
+            'Create Account'
+          )}
+        </button>
+      </form>
+
+      <p className="text-xs text-center text-slate-500 mt-6">
+        By creating an account, you agree to ORbit's Terms of Service and Privacy Policy.
+      </p>
+    </>
+  )
+}
+
+export default function AcceptUserInvitePage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
+            <span className="text-2xl font-bold text-white">O</span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Welcome to ORbit</h1>
+          <p className="text-slate-500 mt-1">Create your account to get started</p>
+        </div>
+
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <AcceptInviteContent />
+        </Suspense>
+      </div>
+    </div>
   )
 }
