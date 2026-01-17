@@ -80,6 +80,9 @@ export default function DashboardPage() {
   // Call Next Patient modal state
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
   
+  // NEW: Hide completed cases toggle (default: checked = hide completed)
+  const [hideCompleted, setHideCompleted] = useState(true)
+  
   const supabase = createClient()
 
   // Staff Assignment State
@@ -445,7 +448,7 @@ export default function DashboardPage() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {/* Page Header - Date navigation and Staff toggle */}
+        {/* Page Header - Date navigation and toggles */}
         <div className="flex items-center justify-between mb-6">
           {/* Left side - Date Navigation */}
           <div className="flex items-center gap-2">
@@ -504,35 +507,66 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Right side - Staff Toggle (only for admins) */}
-          {canManageStaff && (
+          {/* Right side - Toggles */}
+          <div className="flex items-center gap-4">
+            {/* Hide Completed Toggle */}
             <label className="flex items-center gap-2 cursor-pointer">
               <div className="relative">
                 <input
                   type="checkbox"
-                  checked={showStaffPanel}
-                  onChange={() => setShowStaffPanel(!showStaffPanel)}
+                  checked={hideCompleted}
+                  onChange={() => setHideCompleted(!hideCompleted)}
                   className="sr-only peer"
                 />
                 <div className={`
                   w-5 h-5 rounded border-2 
                   flex items-center justify-center
                   transition-all duration-200
-                  ${showStaffPanel 
-                    ? 'bg-blue-600 border-blue-600' 
+                  ${hideCompleted 
+                    ? 'bg-slate-600 border-slate-600' 
                     : 'bg-white border-slate-300 hover:border-slate-400'
                   }
                 `}>
-                  {showStaffPanel && (
+                  {hideCompleted && (
                     <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </div>
               </div>
-              <span className="text-sm font-semibold text-blue-600">Staff</span>
+              <span className="text-sm font-medium text-slate-600">Hide Completed</span>
             </label>
-          )}
+
+            {/* Staff Toggle (only for admins) */}
+            {canManageStaff && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={showStaffPanel}
+                    onChange={() => setShowStaffPanel(!showStaffPanel)}
+                    className="sr-only peer"
+                  />
+                  <div className={`
+                    w-5 h-5 rounded border-2 
+                    flex items-center justify-center
+                    transition-all duration-200
+                    ${showStaffPanel 
+                      ? 'bg-blue-600 border-blue-600' 
+                      : 'bg-white border-slate-300 hover:border-slate-400'
+                    }
+                  `}>
+                    {showStaffPanel && (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span className="text-sm font-semibold text-blue-600">Staff</span>
+              </label>
+            )}
+          </div>
         </div>
 
         {/* Staff Assignment Panel - Shows when enabled */}
@@ -585,6 +619,7 @@ export default function DashboardPage() {
                 onRemoveStaff={handleRemoveStaff}
                 canManageStaff={canManageStaff}
                 dropZonesEnabled={showStaffPanel}
+                hideCompleted={hideCompleted}
               />
             )}
           </div>

@@ -14,7 +14,7 @@ import PhaseBadge from '../ui/PhaseBadge'
 import StatusIndicator from '../ui/StatusIndicator'
 import PaceProgressBar from './PaceProgressBar'
 import DroppableCaseRow from './DroppableCaseRow'
-import { AssignedStaffAvatar } from '../ui/StaffAvatar'
+import { AssignedStaffAvatar, GroupedStaffTooltip } from '../ui/StaffAvatar'
 
 interface EnhancedRoomCardProps {
   roomWithCase: RoomWithCase
@@ -23,6 +23,8 @@ interface EnhancedRoomCardProps {
   onRemoveStaff?: (assignmentId: string, caseId: string, isFaded: boolean, isInProgress: boolean) => void
   canManageStaff?: boolean
   dropZonesEnabled?: boolean
+  // NEW: Hide completed cases
+  hideCompleted?: boolean
 }
 
 // Helper to format time for display
@@ -136,7 +138,7 @@ function ScheduledTimeDisplay({ time }: { time: string | null }) {
   )
 }
 
-// Inline assigned staff avatars - single component for displaying staff on cases
+// Inline assigned staff avatars - for "Up Next" / active cases (individual tooltips)
 function InlineAssignedStaff({
   assignments,
   maxVisible = 4,
@@ -171,6 +173,7 @@ function InlineAssignedStaff({
           isFaded={assignment.removed_at !== null}
           onRemove={dropZonesEnabled && canManageStaff && onRemove ? () => onRemove(assignment.id, assignment.removed_at !== null) : undefined}
           canRemove={dropZonesEnabled && canManageStaff}
+          showTooltip={true} // Individual tooltips for "Up Next" case
         />
       ))}
       
@@ -189,7 +192,71 @@ function InlineAssignedStaff({
   )
 }
 
-// Case row for the schedule list
+// NEW: Inline assigned staff with GROUPED tooltip - for scheduled cases
+function InlineAssignedStaffGrouped({
+  assignments,
+  maxVisible = 4,
+  onRemove,
+  canManageStaff = false,
+  dropZonesEnabled = false
+}: {
+  assignments: CaseStaffAssignment[]
+  maxVisible?: number
+  onRemove?: (assignmentId: string, isFaded: boolean) => void
+  canManageStaff?: boolean
+  dropZonesEnabled?: boolean
+}) {
+  // Show active assignments first, then faded ones
+  const activeAssignments = assignments.filter(a => a.removed_at === null)
+  const fadedAssignments = assignments.filter(a => a.removed_at !== null)
+  const allAssignments = [...activeAssignments, ...fadedAssignments]
+  const visibleAssignments = allAssignments.slice(0, maxVisible)
+  const overflowCount = allAssignments.length - maxVisible
+  
+  if (allAssignments.length === 0) return null
+  
+  // Build staff list for grouped tooltip
+  const staffList = allAssignments.map(a => ({
+    firstName: a.user?.first_name || '?',
+    lastName: a.user?.last_name || '?',
+    roleName: a.user_roles?.name,
+    isFaded: a.removed_at !== null
+  }))
+  
+  return (
+    <GroupedStaffTooltip staffList={staffList}>
+      <div className="flex items-center -space-x-1.5">
+        {visibleAssignments.map((assignment) => (
+          <AssignedStaffAvatar
+            key={assignment.id}
+            firstName={assignment.user?.first_name || '?'}
+            lastName={assignment.user?.last_name || '?'}
+            profileImageUrl={assignment.user?.profile_image_url}
+            roleName={assignment.user_roles?.name}
+            isFaded={assignment.removed_at !== null}
+            onRemove={dropZonesEnabled && canManageStaff && onRemove ? () => onRemove(assignment.id, assignment.removed_at !== null) : undefined}
+            canRemove={dropZonesEnabled && canManageStaff}
+            showTooltip={false} // NO individual tooltips - use grouped
+          />
+        ))}
+        
+        {overflowCount > 0 && (
+          <div className="
+            w-9 h-9 rounded-full 
+            bg-slate-200 border-2 border-white
+            flex items-center justify-center
+            text-xs font-semibold text-slate-600
+            z-10
+          ">
+            +{overflowCount}
+          </div>
+        )}
+      </div>
+    </GroupedStaffTooltip>
+  )
+}
+
+// Case row for the schedule list - uses GROUPED tooltip
 function CompactCaseRow({ 
   caseItem,
   assignments,
@@ -219,22 +286,22 @@ function CompactCaseRow({
       
       {/* Case Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h4 className={`text-sm font-semibold truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold text-slate-900 truncate">
             {getProcedureName(caseItem.procedure_types)}
-          </h4>
+          </span>
           <OperativeSideBadge side={(caseItem as any).operative_side} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span className="font-medium">{getSurgeonName(caseItem.surgeon)}</span>
+        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+          <span className="font-medium truncate">{getSurgeonName(caseItem.surgeon)}</span>
           <span className="text-slate-300">•</span>
-          <span className="text-slate-400">{caseItem.case_number}</span>
+          <span className="text-slate-400 truncate">{caseItem.case_number}</span>
         </div>
       </div>
       
-      {/* Assigned Staff Avatars */}
+      {/* Assigned Staff with GROUPED tooltip */}
       {assignments.length > 0 && (
-        <InlineAssignedStaff 
+        <InlineAssignedStaffGrouped 
           assignments={assignments}
           maxVisible={3}
           onRemove={(assignmentId, isFaded) => {
@@ -296,7 +363,8 @@ export default function EnhancedRoomCard({
   assignmentsByCaseId = {},
   onRemoveStaff,
   canManageStaff = false,
-  dropZonesEnabled = false
+  dropZonesEnabled = false,
+  hideCompleted = false // NEW prop
 }: EnhancedRoomCardProps) {
   const { room, currentCase, nextCase, upcomingCases, caseStartTime, currentPhase, paceData } = roomWithCase
   const status = getRoomStatus(currentCase, nextCase)
@@ -307,10 +375,20 @@ export default function EnhancedRoomCard({
   const nextCaseCalledBack = !currentCase && nextCase && (nextCase as any).called_back_at
   
   // Get other cases (exclude the primary case from the upcoming list)
-  const otherCases = upcomingCases.filter(c => c.id !== primaryCase?.id)
+  // NEW: Filter out completed cases if hideCompleted is true
+  const otherCases = upcomingCases
+    .filter(c => c.id !== primaryCase?.id)
+    .filter(c => {
+      if (!hideCompleted) return true
+      const statusName = getStatusName(c.case_statuses)
+      return statusName !== 'completed'
+    })
   
-  // Calculate total cases for the day
-  const totalCases = upcomingCases.length + (currentCase ? 1 : 0)
+  // Calculate total cases for the day (respect hideCompleted for display)
+  const allCasesForCount = hideCompleted 
+    ? upcomingCases.filter(c => getStatusName(c.case_statuses) !== 'completed')
+    : upcomingCases
+  const totalCases = allCasesForCount.length + (currentCase ? 1 : 0)
   const completedCases = upcomingCases.filter(c => getStatusName(c.case_statuses) === 'completed').length + 
     (currentCase && getStatusName(currentCase.case_statuses) === 'completed' ? 1 : 0)
   
@@ -320,8 +398,12 @@ export default function EnhancedRoomCard({
   const isPrimaryInProgress = primaryStatusName === 'in_progress'
   const isPrimaryCompleted = primaryStatusName === 'completed'
   
-  // Primary case content (the main case displayed prominently)
-  const primaryCaseContent = primaryCase ? (
+  // If primary case is completed and hideCompleted, don't show it prominently
+  // Instead, show the next non-completed case
+  const shouldShowPrimary = !hideCompleted || !isPrimaryCompleted
+  
+  // Primary case content (the main case displayed prominently) - uses INDIVIDUAL tooltips
+  const primaryCaseContent = primaryCase && shouldShowPrimary ? (
     <Link href={`/cases/${primaryCase.id}`} className="block">
       {/* Primary case info row */}
       <div className="flex items-center gap-3">
@@ -341,7 +423,7 @@ export default function EnhancedRoomCard({
           </div>
         </div>
         
-        {/* Assigned Staff Avatars */}
+        {/* Assigned Staff Avatars - Individual tooltips for primary/up-next case */}
         {primaryCaseAssignments.length > 0 && (
           <InlineAssignedStaff 
             assignments={primaryCaseAssignments}
@@ -382,14 +464,16 @@ export default function EnhancedRoomCard({
       )}
     </Link>
   ) : (
-    /* Empty state */
+    /* Empty state or completed state */
     <div className="flex items-center gap-3 py-2">
       <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
         <svg className="w-5 h-5 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
           <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
         </svg>
       </div>
-      <span className="text-sm text-slate-400 font-medium">No cases scheduled</span>
+      <span className="text-sm text-slate-400 font-medium">
+        {hideCompleted && isPrimaryCompleted ? 'All cases completed' : 'No cases scheduled'}
+      </span>
     </div>
   )
   
@@ -419,7 +503,7 @@ export default function EnhancedRoomCard({
         <div className="flex items-center gap-2">
           {totalCases > 0 && (
             <span className="text-xs font-medium text-slate-400">
-              {completedCases}/{totalCases} done
+              {completedCases}/{totalCases + (hideCompleted ? completedCases : 0)} done
             </span>
           )}
           <StatusIndicator status={status} />
@@ -428,7 +512,7 @@ export default function EnhancedRoomCard({
       
       {/* Primary Case Content - with drop zone support */}
       <div className="p-4">
-        {dropZonesEnabled && canManageStaff && primaryCase ? (
+        {dropZonesEnabled && canManageStaff && primaryCase && shouldShowPrimary ? (
           <DroppableCaseRow
             caseId={primaryCase.id}
             caseNumber={primaryCase.case_number}

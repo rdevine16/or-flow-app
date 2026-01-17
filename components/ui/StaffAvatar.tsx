@@ -143,6 +143,7 @@ export function DraggableStaffAvatarDisplay({
 }
 
 // Small avatar for case rows with remove button on hover
+// NOTE: This version does NOT show individual tooltip - use with GroupedStaffTooltip wrapper
 export function AssignedStaffAvatar({
   firstName,
   lastName,
@@ -150,7 +151,8 @@ export function AssignedStaffAvatar({
   roleName,
   isFaded = false,
   onRemove,
-  canRemove = true
+  canRemove = true,
+  showTooltip = true // Can be disabled when using grouped tooltip
 }: StaffAvatarProps & { 
   onRemove?: () => void
   canRemove?: boolean 
@@ -163,7 +165,7 @@ export function AssignedStaffAvatar({
   const showImage = profileImageUrl && !imageError
   
   return (
-    <div className="relative group">
+    <div className="relative group/avatar">
       <div
         className={`
           w-9 h-9
@@ -203,7 +205,7 @@ export function AssignedStaffAvatar({
             text-white
             rounded-full
             flex items-center justify-center
-            opacity-0 group-hover:opacity-100
+            opacity-0 group-hover/avatar:opacity-100
             transition-opacity duration-150
             shadow-sm
             z-10
@@ -216,21 +218,86 @@ export function AssignedStaffAvatar({
         </button>
       )}
       
-      {/* Tooltip - positioned to the left to avoid overflow clipping */}
+      {/* Individual Tooltip - only shown when showTooltip is true (for "Up Next" case) */}
+      {showTooltip && (
+        <div className="
+          absolute right-full top-1/2 -translate-y-1/2 mr-2
+          px-2 py-1
+          bg-slate-900 text-white text-xs font-medium
+          rounded-md
+          opacity-0 group-hover/avatar:opacity-100
+          transition-opacity duration-150
+          pointer-events-none
+          whitespace-nowrap
+          z-[100]
+        ">
+          {fullName}
+          {roleName && <span className="text-slate-400 ml-1">· {roleName}</span>}
+          {isFaded && <span className="text-amber-400 ml-1">· Was assigned</span>}
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-slate-900" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Staff info type for grouped tooltip
+interface StaffInfo {
+  firstName: string
+  lastName: string
+  roleName?: string
+  isFaded?: boolean
+}
+
+// Grouped tooltip that shows all staff names at once
+// Use this wrapper around avatar groups for scheduled cases
+export function GroupedStaffTooltip({ 
+  staffList,
+  children 
+}: { 
+  staffList: StaffInfo[]
+  children: React.ReactNode 
+}) {
+  if (staffList.length === 0) return <>{children}</>
+  
+  return (
+    <div className="relative group/grouped">
+      {children}
+      
+      {/* Grouped tooltip showing all names */}
       <div className="
         absolute right-full top-1/2 -translate-y-1/2 mr-2
-        px-2 py-1
+        px-3 py-2
         bg-slate-900 text-white text-xs font-medium
-        rounded-md
-        opacity-0 group-hover:opacity-100
+        rounded-lg
+        opacity-0 group-hover/grouped:opacity-100
         transition-opacity duration-150
         pointer-events-none
         whitespace-nowrap
         z-[100]
+        shadow-lg
       ">
-        {fullName}
-        {roleName && <span className="text-slate-400 ml-1">· {roleName}</span>}
-        {isFaded && <span className="text-amber-400 ml-1">· Was assigned</span>}
+        <div className="space-y-1">
+          {staffList.map((staff, index) => {
+            const fullName = getFullName(staff.firstName, staff.lastName)
+            return (
+              <div key={index} className="flex items-center gap-2">
+                <span className={staff.isFaded ? 'text-slate-400 line-through' : ''}>
+                  {fullName}
+                </span>
+                {staff.roleName && (
+                  <span className="text-slate-400 text-[10px]">
+                    {staff.roleName}
+                  </span>
+                )}
+                {staff.isFaded && (
+                  <span className="text-amber-400 text-[10px]">removed</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {/* Tooltip arrow */}
         <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-slate-900" />
       </div>
     </div>

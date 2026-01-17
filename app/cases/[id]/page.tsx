@@ -342,7 +342,7 @@ const { data: caseResult } = await supabase
         .select('id, milestone_type_id, facility_milestone_id, recorded_at')
         .eq('case_id', id)
 
-      // Fetch case staff
+      // Fetch case staff (only active - exclude soft-deleted)
       const { data: staffResult } = await supabase
         .from('case_staff')
         .select(`
@@ -352,6 +352,7 @@ const { data: caseResult } = await supabase
           user_roles (name)
         `)
         .eq('case_id', id)
+        .is('removed_at', null)  // Only get active staff, not soft-deleted
 
       // Fetch ALL users at this facility
       const { data: allFacilityUsers } = await supabase
