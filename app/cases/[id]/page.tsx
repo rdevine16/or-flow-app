@@ -173,7 +173,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [caseMilestones, setCaseMilestones] = useState<CaseMilestone[]>([])
   const [caseStaff, setCaseStaff] = useState<CaseStaff[]>([])
   const [availableStaff, setAvailableStaff] = useState<User[]>([])
-  const [anesthesiologists, setAnesthesiologists] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [surgeonAverages, setSurgeonAverages] = useState<{ avgTotalTime: number | null; avgSurgicalTime: number | null }>({
     avgTotalTime: null,
@@ -377,20 +376,12 @@ console.log('Staff Query Debug:', {
         .select('id, first_name, last_name, role_id, user_roles(name)')
         .eq('facility_id', userFacilityId)
 
-      // Filter to just nurses and techs client-side
+      // Filter to nurses, techs, and anesthesiologists (unified staff management)
       const staffUsers = (allFacilityUsers || []).filter(u => {
         const roleName = Array.isArray(u.user_roles) 
           ? u.user_roles[0]?.name 
           : (u.user_roles as any)?.name
-        return roleName === 'nurse' || roleName === 'tech'
-      })
-
-      // Filter to just anesthesiologists client-side
-      const anesthUsers = (allFacilityUsers || []).filter(u => {
-        const roleName = Array.isArray(u.user_roles) 
-          ? u.user_roles[0]?.name 
-          : (u.user_roles as any)?.name
-        return roleName === 'anesthesiologist'
+        return roleName === 'nurse' || roleName === 'tech' || roleName === 'anesthesiologist'
       })
 // ========================================
 // Fetch implant data for this case
@@ -555,7 +546,6 @@ setPatientCallTime(caseResult?.call_time || null)
       setCaseMilestones(milestonesResult || [])
       setCaseStaff(staffResult as CaseStaff[] || [])
       setAvailableStaff(staffUsers as User[] || [])
-      setAnesthesiologists(anesthUsers as User[] || [])
 
       setLoading(false)
     }
@@ -1007,23 +997,7 @@ setPatientCallTime(caseResult?.call_time || null)
               </div>
             </div>
 
-            {/* Anesthesiologist Card */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Anesthesiologist</p>
-                <AnesthesiaPopover
-                  currentAnesthesiologist={anesthesiologist}
-                  availableAnesthesiologists={anesthesiologists.map(a => ({
-                    id: a.id,
-                    label: `${a.first_name} ${a.last_name}`
-                  }))}
-                  onChange={updateAnesthesiologist}
-                  onRemove={removeAnesthesiologist}
-                />
-              </div>
-            </div>
-
-            {/* Staff Section */}
+            {/* Team Section - All staff including anesthesiologists */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
               <StaffPopover
                 staff={caseStaff.map(cs => {
