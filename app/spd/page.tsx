@@ -18,6 +18,7 @@ interface SPDCase {
   case_number: string
   scheduled_date: string
   start_time: string | null
+  operative_side: string | null
   or_rooms: { name: string } | null
   procedure_types: { name: string; requires_rep: boolean } | null
   case_statuses: { name: string } | null
@@ -34,7 +35,15 @@ interface CaseDeviceCompany {
   delivered_tray_count: number | null
   confirmed_at: string | null
   delivered_at: string | null
+  rep_notes: string | null
   implant_companies: { name: string }
+}
+
+interface TrayActivity {
+  id: string
+  activity_type: string
+  message: string
+  created_at: string
 }
 
 type DateFilter = 'today' | 'tomorrow' | '3days'
@@ -68,6 +77,34 @@ const formatDateLabel = (dateString: string): string => {
   if (caseDate.getTime() === tomorrow.getTime()) return 'Tomorrow'
   
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+const formatDateFull = (dateString: string): string => {
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+}
+
+const formatDateTime = (isoString: string | null): string => {
+  if (!isoString) return '—'
+  const date = new Date(isoString)
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
+}
+
+const formatOperativeSide = (side: string | null): string => {
+  if (!side) return ''
+  switch (side.toLowerCase()) {
+    case 'left': return 'Left'
+    case 'right': return 'Right'
+    case 'bilateral': return 'Bilateral'
+    default: return side
+  }
 }
 
 // Determine if case requires rep based on override and procedure default
@@ -140,6 +177,22 @@ const getTrayStatusConfig = (status: TrayStatusFilter) => {
   }
 }
 
+// Get individual device company status config
+const getDeviceStatusConfig = (status: string) => {
+  switch (status) {
+    case 'pending':
+      return { label: 'Pending', color: 'text-amber-600', bg: 'bg-amber-50', icon: '⏳' }
+    case 'consignment':
+      return { label: 'Consignment', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: '✓' }
+    case 'loaners_confirmed':
+      return { label: 'Loaners Confirmed', color: 'text-blue-600', bg: 'bg-blue-50', icon: '📦' }
+    case 'delivered':
+      return { label: 'Delivered', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: '✓' }
+    default:
+      return { label: status, color: 'text-slate-600', bg: 'bg-slate-50', icon: '—' }
+  }
+}
+
 // Get date range based on filter
 function getDateRange(filter: DateFilter): { start: string; end: string } {
   const today = getLocalDateString()
@@ -164,6 +217,255 @@ function getDateRange(filter: DateFilter): { start: string; end: string } {
 }
 
 // =====================================================
+// SLIDEOUT PANEL COMPONENT
+// =====================================================
+
+interface SlideoutPanelProps {
+  caseData: SPDCase | null
+  isOpen: boolean
+  onClose: () => void
+  activities: TrayActivity[]
+  loadingActivities: boolean
+}
+
+function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivities }: SlideoutPanelProps) {
+  if (!caseData) return null
+
+  const requiresRep = caseRequiresRep(caseData)
+  const trayStatus = getCaseTrayStatus(caseData)
+  const statusConfig = getTrayStatusConfig(trayStatus)
+  const surgeon = caseData.surgeon 
+    ? `Dr. ${caseData.surgeon.first_name} ${caseData.surgeon.last_name}`
+    : 'Unassigned'
+  const procedureName = caseData.procedure_types?.name || 'Not specified'
+  const roomName = caseData.or_rooms?.name || '—'
+  const deviceCompanies = caseData.case_device_companies || []
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-40 transition-opacity duration-300 ${
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={onClose}
+      />
+      
+      {/* Slideout Panel */}
+      <div 
+        className={`fixed right-0 top-0 bottom-0 w-full max-w-lg bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Case Details</h2>
+            <p className="text-sm text-slate-500">{caseData.case_number}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto h-[calc(100vh-140px)] p-6 space-y-6">
+          {/* Case Info Section */}
+          <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-semibold text-slate-900">{procedureName}</h3>
+                {caseData.operative_side && (
+                  <span className="text-sm text-slate-500">({formatOperativeSide(caseData.operative_side)})</span>
+                )}
+              </div>
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${statusConfig.bgColor} ${statusConfig.borderColor}`}>
+                <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotColor}`}></div>
+                <span className={`text-xs font-semibold ${statusConfig.textColor}`}>
+                  {statusConfig.label}
+                </span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-slate-500">Date</span>
+                <p className="font-medium text-slate-900">{formatDateFull(caseData.scheduled_date)}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">Time</span>
+                <p className="font-medium text-slate-900">{formatTime(caseData.start_time)}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">Room</span>
+                <p className="font-medium text-slate-900">{roomName}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">Surgeon</span>
+                <p className="font-medium text-slate-900">{surgeon}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tray Status Section */}
+          <div>
+            <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-3">
+              Tray Status
+            </h4>
+            
+            {!requiresRep ? (
+              <div className="bg-slate-50 rounded-xl p-6 text-center">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                  </svg>
+                </div>
+                <p className="text-slate-600 font-medium">No Rep Required</p>
+                <p className="text-sm text-slate-400 mt-1">This case does not require device rep involvement</p>
+              </div>
+            ) : deviceCompanies.length === 0 ? (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-medium text-amber-800">No Device Company Assigned</p>
+                    <p className="text-sm text-amber-600 mt-1">This case requires rep but no company has been assigned.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {deviceCompanies.map((dc) => {
+                  const dcStatus = getDeviceStatusConfig(dc.tray_status)
+                  return (
+                    <div key={dc.id} className="bg-white border border-slate-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-semibold text-slate-900">{dc.implant_companies?.name}</span>
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${dcStatus.color} ${dcStatus.bg}`}>
+                          {dcStatus.icon} {dcStatus.label}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-2 text-sm">
+                        {dc.tray_status === 'loaners_confirmed' && dc.loaner_tray_count && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Trays Confirmed</span>
+                            <span className="font-medium text-slate-900">{dc.loaner_tray_count} tray{dc.loaner_tray_count > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+                        {dc.tray_status === 'delivered' && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Trays Delivered</span>
+                            <span className="font-medium text-slate-900">{dc.delivered_tray_count || dc.loaner_tray_count || 0} tray{(dc.delivered_tray_count || dc.loaner_tray_count || 0) > 1 ? 's' : ''}</span>
+                          </div>
+                        )}
+                        {dc.confirmed_at && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Confirmed</span>
+                            <span className="font-medium text-slate-900">{formatDateTime(dc.confirmed_at)}</span>
+                          </div>
+                        )}
+                        {dc.delivered_at && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Delivered</span>
+                            <span className="font-medium text-slate-900">{formatDateTime(dc.delivered_at)}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Rep Notes */}
+                      {dc.rep_notes && (
+                        <div className="mt-3 pt-3 border-t border-slate-100">
+                          <div className="flex items-start gap-2">
+                            <svg className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                            </svg>
+                            <div>
+                              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Rep Notes</p>
+                              <p className="text-sm text-slate-700 mt-1">{dc.rep_notes}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Activity History */}
+          {requiresRep && deviceCompanies.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-3">
+                Activity History
+              </h4>
+              
+              {loadingActivities ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : activities.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">No activity recorded yet</p>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-xl p-4">
+                  <div className="space-y-3">
+                    {activities.map((activity, idx) => (
+                      <div key={activity.id} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-2.5 h-2.5 rounded-full ${
+                            activity.activity_type === 'trays_delivered' || activity.activity_type === 'consignment_confirmed'
+                              ? 'bg-emerald-500'
+                              : activity.activity_type === 'loaners_confirmed'
+                              ? 'bg-blue-500'
+                              : activity.activity_type === 'status_reset'
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
+                          }`} />
+                          {idx < activities.length - 1 && (
+                            <div className="w-0.5 h-full bg-slate-200 mt-1" />
+                          )}
+                        </div>
+                        <div className="pb-3">
+                          <p className="text-sm text-slate-700">{activity.message}</p>
+                          <p className="text-xs text-slate-400">{formatDateTime(activity.created_at)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="absolute bottom-0 left-0 right-0 px-6 py-4 bg-white border-t border-slate-200">
+          <Link
+            href={`/cases/${caseData.id}`}
+            className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            View Full Case Details
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </Link>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// =====================================================
 // MAIN COMPONENT
 // =====================================================
 
@@ -178,6 +480,12 @@ export default function SPDDashboardPage() {
   const [statusFilter, setStatusFilter] = useState<TrayStatusFilter>('all')
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
+  
+  // Slideout state
+  const [selectedCase, setSelectedCase] = useState<SPDCase | null>(null)
+  const [slideoutOpen, setSlideoutOpen] = useState(false)
+  const [activities, setActivities] = useState<TrayActivity[]>([])
+  const [loadingActivities, setLoadingActivities] = useState(false)
 
   // Get effective facility ID (handles impersonation)
   useEffect(() => {
@@ -220,6 +528,7 @@ export default function SPDDashboardPage() {
         case_number,
         scheduled_date,
         start_time,
+        operative_side,
         rep_required_override,
         or_rooms(name),
         procedure_types(name, requires_rep),
@@ -233,6 +542,7 @@ export default function SPDDashboardPage() {
           delivered_tray_count,
           confirmed_at,
           delivered_at,
+          rep_notes,
           implant_companies(name)
         )
       `)
@@ -255,6 +565,49 @@ export default function SPDDashboardPage() {
     fetchCases()
   }, [fetchCases])
 
+  // Fetch activities when a case is selected
+  const fetchActivities = useCallback(async (caseId: string, companyIds: string[]) => {
+    if (companyIds.length === 0) {
+      setActivities([])
+      return
+    }
+
+    setLoadingActivities(true)
+    
+    const { data, error } = await supabase
+      .from('case_device_activity')
+      .select('id, activity_type, message, created_at')
+      .eq('case_id', caseId)
+      .in('implant_company_id', companyIds)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (error) {
+      console.error('Error fetching activities:', error)
+      setActivities([])
+    } else {
+      setActivities(data || [])
+    }
+    setLoadingActivities(false)
+  }, [supabase])
+
+  // Handle row click
+  const handleRowClick = (caseData: SPDCase) => {
+    setSelectedCase(caseData)
+    setSlideoutOpen(true)
+    
+    // Fetch activities for this case
+    const companyIds = caseData.case_device_companies?.map(dc => dc.implant_company_id) || []
+    fetchActivities(caseData.id, companyIds)
+  }
+
+  // Handle slideout close
+  const handleSlideoutClose = () => {
+    setSlideoutOpen(false)
+    // Clear selection after animation
+    setTimeout(() => setSelectedCase(null), 300)
+  }
+
   // Filter cases by tray status
   const filteredCases = cases.filter(c => {
     if (statusFilter === 'all') return true
@@ -275,7 +628,8 @@ export default function SPDDashboardPage() {
   }
 
   // Handle remind rep (placeholder for now)
-  const handleRemindRep = async (caseId: string, companyId: string) => {
+  const handleRemindRep = async (caseId: string, companyId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent row click
     // TODO: Implement push notification to rep
     console.log('Remind rep for case:', caseId, 'company:', companyId)
     alert('Reminder sent to device rep')
@@ -299,12 +653,6 @@ export default function SPDDashboardPage() {
           <p className="text-slate-500 mb-6 max-w-md">
             As a global admin, you need to impersonate a facility to view the SPD dashboard.
           </p>
-          <Link
-            href="/admin/facilities"
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
-          >
-            Go to Facilities
-          </Link>
         </div>
       </DashboardLayout>
     )
@@ -312,135 +660,87 @@ export default function SPDDashboardPage() {
 
   return (
     <DashboardLayout>
-      {/* Page Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">SPD Dashboard</h1>
-            <p className="text-slate-500 mt-1">Monitor instrument tray requirements and delivery status</p>
-          </div>
-          <button
-            onClick={() => fetchCases()}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">SPD Dashboard</h1>
+          <p className="text-slate-500 mt-1">Track instrument tray status for upcoming cases</p>
         </div>
-      </div>
-
-      {/* Date Filter Pills */}
-      <div className="flex items-center gap-2 mb-6">
-        {(['today', 'tomorrow', '3days'] as DateFilter[]).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setDateFilter(filter)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              dateFilter === filter
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {filter === 'today' && 'Today'}
-            {filter === 'tomorrow' && 'Tomorrow'}
-            {filter === '3days' && 'Next 3 Days'}
-            {dateFilter === filter && (
-              <span className="ml-2 px-1.5 py-0.5 text-xs bg-white/20 rounded-md">
-                {filteredCases.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Rep Cases</p>
-              <p className="text-3xl font-bold text-slate-900 mt-1">{stats.totalRepCases}</p>
-            </div>
-            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </div>
+        
+        {/* Quick Stats */}
+        <div className="flex items-center gap-6">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-emerald-600">{stats.confirmed}</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Ready</p>
           </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Confirmed</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-1">{stats.confirmed}</p>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Pending</p>
           </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Pending</p>
-              <p className="text-3xl font-bold text-amber-600 mt-1">{stats.pending}</p>
-            </div>
-            <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-blue-600">{stats.awaitingDelivery}</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Awaiting</p>
           </div>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Trays Expected</p>
-              <p className="text-3xl font-bold text-blue-600 mt-1">{stats.totalTraysExpected}</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
-            </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-slate-700">{stats.totalTraysExpected}</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wider">Trays Expected</p>
           </div>
         </div>
       </div>
 
-      {/* Status Filter Pills */}
-      <div className="flex items-center gap-2 mb-4">
-        {([
-          { value: 'all', label: 'All Cases' },
-          { value: 'awaiting_response', label: '⚠️ Awaiting Response' },
-          { value: 'awaiting_delivery', label: '📦 Awaiting Delivery' },
-          { value: 'ready', label: '✓ Ready' },
-          { value: 'no_rep_needed', label: 'No Rep Needed' },
-        ] as { value: TrayStatusFilter; label: string }[]).map((filter) => (
-          <button
-            key={filter.value}
-            onClick={() => setStatusFilter(filter.value)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-              statusFilter === filter.value
-                ? 'bg-slate-900 text-white'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
+      {/* Filters */}
+      <div className="flex items-center justify-between mb-4">
+        {/* Date Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">Date:</span>
+          <div className="flex items-center bg-slate-100 rounded-lg p-1">
+            {(['today', 'tomorrow', '3days'] as DateFilter[]).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setDateFilter(filter)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  dateFilter === filter
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {filter === 'today' ? 'Today' : filter === 'tomorrow' ? 'Tomorrow' : 'Next 3 Days'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">Status:</span>
+          <div className="flex items-center gap-1">
+            {([
+              { value: 'all', label: 'All' },
+              { value: 'awaiting_response', label: 'Awaiting Response' },
+              { value: 'awaiting_delivery', label: 'Awaiting Delivery' },
+              { value: 'ready', label: 'Ready' },
+              { value: 'no_rep_needed', label: 'No Rep' },
+            ] as { value: TrayStatusFilter; label: string }[]).map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setStatusFilter(value)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  statusFilter === value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Cases Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-50 border-b border-slate-200">
+        <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200">
           <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</div>
           <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</div>
           <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</div>
@@ -482,11 +782,13 @@ export default function SPDDashboardPage() {
               const procedureName = c.procedure_types?.name || 'Not specified'
               const deviceCompanies = c.case_device_companies || []
               const requiresRep = caseRequiresRep(c)
+              const hasNotes = deviceCompanies.some(dc => dc.rep_notes)
 
               return (
                 <div
                   key={c.id}
-                  className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50/50 transition-colors group relative"
+                  onClick={() => handleRowClick(c)}
+                  className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50/50 transition-colors group relative cursor-pointer"
                 >
                   {/* Hover indicator */}
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${
@@ -550,6 +852,11 @@ export default function SPDDashboardPage() {
                                 ✓ Delivered
                               </span>
                             )}
+                            {dc.rep_notes && (
+                              <span className="text-xs text-slate-400" title="Has notes">
+                                💬
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -569,22 +876,25 @@ export default function SPDDashboardPage() {
                   {/* Actions */}
                   <div className="col-span-1">
                     <div className="flex items-center justify-end gap-1">
-                      {/* View Case */}
-                      <Link
-                        href={`/cases/${c.id}`}
+                      {/* View Details (slideout) */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRowClick(c)
+                        }}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                        title="View Case"
+                        title="View Details"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
-                      </Link>
+                      </button>
 
                       {/* Remind Rep (only for pending) */}
                       {trayStatus === 'awaiting_response' && deviceCompanies.length > 0 && (
                         <button
-                          onClick={() => handleRemindRep(c.id, deviceCompanies[0].implant_company_id)}
+                          onClick={(e) => handleRemindRep(c.id, deviceCompanies[0].implant_company_id, e)}
                           className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
                           title="Send Reminder"
                         >
@@ -626,6 +936,15 @@ export default function SPDDashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Slideout Panel */}
+      <SlideoutPanel
+        caseData={selectedCase}
+        isOpen={slideoutOpen}
+        onClose={handleSlideoutClose}
+        activities={activities}
+        loadingActivities={loadingActivities}
+      />
     </DashboardLayout>
   )
 }
