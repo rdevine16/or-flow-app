@@ -39,6 +39,7 @@ export default function FacilitiesListPage() {
   
   // Delete modal state
   const [facilityToDelete, setFacilityToDelete] = useState<Facility | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Redirect non-admins
   useEffect(() => {
@@ -131,7 +132,12 @@ export default function FacilitiesListPage() {
 
   // Handle successful deletion
   const handleDeleteSuccess = () => {
+    const deletedName = facilityToDelete?.name
     setFacilityToDelete(null)
+    // Show success message
+    setSuccessMessage(`"${deletedName}" has been permanently deleted`)
+    // Auto-hide after 5 seconds
+    setTimeout(() => setSuccessMessage(null), 5000)
     // Refresh the list
     fetchFacilities()
   }
@@ -413,6 +419,28 @@ export default function FacilitiesListPage() {
       <div className="mt-4 text-sm text-slate-500 text-center">
         Showing {filteredFacilities.length} of {facilities.length} facilities
       </div>
+
+      {/* Success Toast */}
+      {successMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-800 px-5 py-4 rounded-xl shadow-lg">
+            <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="font-medium">{successMessage}</p>
+            <button
+              onClick={() => setSuccessMessage(null)}
+              className="ml-2 text-emerald-600 hover:text-emerald-800"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {facilityToDelete && (
