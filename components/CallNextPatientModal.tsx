@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '../lib/supabase'
-import { call } from 'assert/strict'
 
 interface Room {
   id: string
