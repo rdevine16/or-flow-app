@@ -1,17 +1,30 @@
 // components/dashboard/EnhancedRoomGridView.tsx
-// Room grid using enhanced cards with pace data
+// UPDATED VERSION - passes staff assignment props to room cards
 
 'use client'
 
 import { RoomWithCase } from '../../types/pace'
+import { CaseStaffAssignment } from '../../types/staff-assignment'
 import EnhancedRoomCard from './EnhancedRoomCard'
 
 interface EnhancedRoomGridViewProps {
   roomsWithCases: RoomWithCase[]
   loading?: boolean
+  // NEW props for staff assignment
+  assignmentsByCaseId?: Record<string, CaseStaffAssignment[]>
+  onRemoveStaff?: (assignmentId: string, caseId: string, isFaded: boolean, isInProgress: boolean) => void
+  canManageStaff?: boolean
+  dropZonesEnabled?: boolean
 }
 
-export default function EnhancedRoomGridView({ roomsWithCases, loading }: EnhancedRoomGridViewProps) {
+export default function EnhancedRoomGridView({ 
+  roomsWithCases, 
+  loading,
+  assignmentsByCaseId = {},
+  onRemoveStaff,
+  canManageStaff = false,
+  dropZonesEnabled = false
+}: EnhancedRoomGridViewProps) {
   if (loading) {
     return <RoomGridSkeleton />
   }
@@ -25,7 +38,12 @@ export default function EnhancedRoomGridView({ roomsWithCases, loading }: Enhanc
       {roomsWithCases.map((roomWithCase) => (
         <EnhancedRoomCard 
           key={roomWithCase.room.id} 
-          roomWithCase={roomWithCase} 
+          roomWithCase={roomWithCase}
+          // Pass through staff assignment props
+          assignmentsByCaseId={assignmentsByCaseId}
+          onRemoveStaff={onRemoveStaff}
+          canManageStaff={canManageStaff}
+          dropZonesEnabled={dropZonesEnabled}
         />
       ))}
     </div>

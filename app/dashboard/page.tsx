@@ -1,9 +1,10 @@
 // app/dashboard/page.tsx
-// Enhanced dashboard with pace tracking, polished room cards, and Call Next Patient FAB
+// Enhanced dashboard with pace tracking, polished room cards, Call Next Patient FAB,
+// and drag-and-drop staff assignment
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
 import { useUser } from '../../lib/UserContext'
@@ -26,6 +27,24 @@ import {
 } from '../../types/pace'
 import { determinePhase, parseISODate, parseScheduledStartTime } from '../../lib/pace-utils'
 
+// NEW: DnD Kit imports for drag-and-drop staff assignment
+import { 
+  DndContext, 
+  DragStartEvent, 
+  DragEndEvent,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  pointerWithin
+} from '@dnd-kit/core'
+
+// NEW: Staff assignment imports
+import StaffAssignmentPanel from '../../components/dashboard/StaffAssignmentPanel'
+import StaffDragOverlay from '../../components/dashboard/StaffDragOverlay'
+import { useStaffAssignment } from '../../hooks/useStaffAssignment'
+import { DragData, DropData } from '../../types/staff-assignment'
+
 interface Room {
   id: string
   name: string
@@ -39,7 +58,7 @@ const getValue = (data: { name: string }[] | { name: string } | null): string | 
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { isGlobalAdmin, isImpersonating, loading: userLoading } = useUser()
+const { isGlobalAdmin, isImpersonating, loading: userLoading, isAdmin } = useUser()
   
   // Redirect global admins (not impersonating) to admin page
   useEffect(() => {
@@ -64,6 +83,116 @@ export default function DashboardPage() {
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
   
   const supabase = createClient()
+
+  // ========================================
+  // NEW: Staff Assignment State
+  // ========================================
+  const [showStaffPanel, setShowStaffPanel] = useState(false)
+  const [activeDragData, setActiveDragData] = useState<DragData | null>(null)
+  
+  // Check if user can manage staff (facility_admin or global_admin)
+const canManageStaff = isAdmin
+  
+  // Get all case IDs for the staff assignment hook
+  const allCaseIds = useMemo(() => {
+    return cases.map(c => c.id)
+  }, [cases])
+  
+  // Staff assignment hook - manages all staff data and operations
+  const {
+    facilityStaff,
+    staffLoading,
+    assignmentsByCaseId,
+    assignStaffToCase,
+    removeStaffFromCase,
+    permanentlyRemoveStaff,
+    moveStaffBetweenCases
+  } = useStaffAssignment({
+    facilityId: userFacilityId,
+    caseIds: allCaseIds
+  })
+  
+  // ========================================
+  // NEW: DnD Kit Sensors Configuration
+  // ========================================
+  const mouseSensor = useSensor(MouseSensor, {
+    // Require the mouse to move by 8px before starting drag
+    activationConstraint: {
+      distance: 8,
+    },
+  })
+  
+  const touchSensor = useSensor(TouchSensor, {
+    // Require a 200ms delay before starting drag on touch
+    activationConstraint: {
+      delay: 200,
+      tolerance: 8,
+    },
+  })
+  
+  const sensors = useSensors(mouseSensor, touchSensor)
+  
+  // ========================================
+  // NEW: Drag Event Handlers
+  // ========================================
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const data = event.active.data.current as DragData
+    if (data?.type === 'staff-avatar') {
+      setActiveDragData(data)
+    }
+  }, [])
+  
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveDragData(null)
+    
+    if (!over) return
+    
+    const dragData = active.data.current as DragData
+    const dropData = over.data.current as DropData
+    
+    if (dragData?.type !== 'staff-avatar' || dropData?.type !== 'case-row') {
+      return
+    }
+    
+    const { staffId, staff, sourceType, sourceCaseId } = dragData
+    const { caseId: targetCaseId } = dropData
+    
+    // Don't do anything if dropping on same case
+    if (sourceType === 'case' && sourceCaseId === targetCaseId) {
+      return
+    }
+    
+    try {
+      if (sourceType === 'case' && sourceCaseId) {
+        // Moving between cases
+        await moveStaffBetweenCases(staffId, sourceCaseId, targetCaseId, staff.role_id)
+      } else {
+        // Assigning from panel
+        await assignStaffToCase(staffId, targetCaseId, staff.role_id)
+      }
+    } catch (error) {
+      console.error('Error handling drop:', error)
+    }
+  }, [assignStaffToCase, moveStaffBetweenCases])
+  
+  // ========================================
+  // NEW: Staff Removal Handler
+  // ========================================
+  const handleRemoveStaff = useCallback(async (
+    assignmentId: string, 
+    caseId: string,
+    isFaded: boolean,
+    isInProgress: boolean
+  ) => {
+    if (isFaded) {
+      // Already soft-deleted, now permanently remove
+      await permanentlyRemoveStaff(assignmentId, caseId)
+    } else {
+      // Either soft-delete (if in progress) or hard-delete
+      await removeStaffFromCase(assignmentId, caseId, isInProgress)
+    }
+  }, [permanentlyRemoveStaff, removeStaffFromCase])
 
   // Initialize with today's date and fetch user's facility
   useEffect(() => {
@@ -164,28 +293,28 @@ export default function DashboardPage() {
       setLoading(true)
 
       try {
- // Fetch cases
-const { data: casesData } = await supabase
-  .from('cases')
-  .select(`
-    id,
-    case_number,
-    scheduled_date,
-    start_time,
-    operative_side,
-    facility_id,
-    or_room_id,
-    procedure_type_id,
-    surgeon_id,
-    called_back_at,
-    or_rooms (name),
-    procedure_types (name),
-    case_statuses (name),
-    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-  `)
-  .eq('facility_id', userFacilityId)
-  .eq('scheduled_date', selectedDate)
-  .order('start_time', { ascending: true, nullsFirst: false })
+        // Fetch cases
+        const { data: casesData } = await supabase
+          .from('cases')
+          .select(`
+            id,
+            case_number,
+            scheduled_date,
+            start_time,
+            operative_side,
+            facility_id,
+            or_room_id,
+            procedure_type_id,
+            surgeon_id,
+            called_back_at,
+            or_rooms (name),
+            procedure_types (name),
+            case_statuses (name),
+            surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+          `)
+          .eq('facility_id', userFacilityId)
+          .eq('scheduled_date', selectedDate)
+          .order('start_time', { ascending: true, nullsFirst: false })
 
         // Fetch rooms
         const { data: roomsData } = await supabase
@@ -351,178 +480,205 @@ const { data: casesData } = await supabase
 
   return (
     <DashboardLayout>
-      {/* Page Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          {/* Date Navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={goToPreviousDay}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Previous day"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
+      {/* Wrap everything in DndContext for drag-and-drop */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        {/* Page Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            {/* Date Navigation */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goToPreviousDay}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Previous day"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
 
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                />
-                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-colors">
-                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="text-sm font-medium text-slate-900">
-                    {selectedDate ? formatDateWithWeekday(selectedDate) : 'Select date'}
-                  </span>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                  />
+                  <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-colors">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm font-medium text-slate-900">
+                      {selectedDate ? formatDateWithWeekday(selectedDate) : 'Select date'}
+                    </span>
+                  </div>
                 </div>
+
+                {!isToday && (
+                  <button
+                    onClick={goToToday}
+                    className="px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    Today
+                  </button>
+                )}
+
+                {isToday && (
+                  <span className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
+                    Today
+                  </span>
+                )}
               </div>
 
-              {!isToday && (
-                <button
-                  onClick={goToToday}
-                  className="px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  Today
-                </button>
-              )}
-
-              {isToday && (
-                <span className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
-                  Today
-                </span>
-              )}
-            </div>
-
-            <button
-              onClick={goToNextDay}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Next day"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{cases.length}</p>
-            </div>
-            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">In Progress</p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">{getStatusCount('in_progress')}</p>
-            </div>
-            <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</p>
-              <p className="text-2xl font-bold text-slate-600 mt-1">{getStatusCount('completed')}</p>
-            </div>
-            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Scheduled</p>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{getStatusCount('scheduled')}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="space-y-6">
-        {/* Room Grid Section */}
-        <div>
-          <div 
-            className="flex items-center justify-between mb-4 cursor-pointer group"
-            onClick={() => setRoomsCollapsed(!roomsCollapsed)}
-          >
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">OR Rooms</h2>
-              {activeCount > 0 && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  {activeCount} Active
-                </span>
-              )}
-            </div>
-            <button 
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              title={roomsCollapsed ? 'Expand rooms' : 'Collapse rooms'}
-            >
-              <svg 
-                className={`w-5 h-5 transition-transform ${roomsCollapsed ? '' : 'rotate-180'}`} 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
+              <button
+                onClick={goToNextDay}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Next day"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          </div>
-          
-          {!roomsCollapsed && (
-            <EnhancedRoomGridView 
-              roomsWithCases={roomsWithCases} 
-              loading={loading}
-            />
-          )}
-        </div>
-
-        {/* Case List Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">All Cases</h2>
-              <span className="text-sm text-slate-500">
-                {cases.length} case{cases.length !== 1 ? 's' : ''}
-              </span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
           </div>
-          
-          <CaseListView cases={cases as any} />
         </div>
-      </div>
+
+        {/* NEW: Staff Assignment Panel - Only show for admins */}
+        {canManageStaff && (
+          <StaffAssignmentPanel
+            staff={facilityStaff}
+            isVisible={showStaffPanel}
+            onToggle={() => setShowStaffPanel(!showStaffPanel)}
+            loading={staffLoading}
+          />
+        )}
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">{cases.length}</p>
+              </div>
+              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">In Progress</p>
+                <p className="text-2xl font-bold text-emerald-600 mt-1">{getStatusCount('in_progress')}</p>
+              </div>
+              <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</p>
+                <p className="text-2xl font-bold text-slate-600 mt-1">{getStatusCount('completed')}</p>
+              </div>
+              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Scheduled</p>
+                <p className="text-2xl font-bold text-blue-600 mt-1">{getStatusCount('scheduled')}</p>
+              </div>
+              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="space-y-6">
+          {/* Room Grid Section */}
+          <div>
+            <div 
+              className="flex items-center justify-between mb-4 cursor-pointer group"
+              onClick={() => setRoomsCollapsed(!roomsCollapsed)}
+            >
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-slate-900">OR Rooms</h2>
+                {activeCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                    {activeCount} Active
+                  </span>
+                )}
+              </div>
+              <button 
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                title={roomsCollapsed ? 'Expand rooms' : 'Collapse rooms'}
+              >
+                <svg 
+                  className={`w-5 h-5 transition-transform ${roomsCollapsed ? '' : 'rotate-180'}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+            
+            {!roomsCollapsed && (
+              <EnhancedRoomGridView 
+                roomsWithCases={roomsWithCases} 
+                loading={loading}
+                // NEW: Staff assignment props
+                assignmentsByCaseId={assignmentsByCaseId}
+                onRemoveStaff={handleRemoveStaff}
+                canManageStaff={canManageStaff}
+                dropZonesEnabled={showStaffPanel}
+              />
+            )}
+          </div>
+
+          {/* Case List Section */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-slate-900">All Cases</h2>
+                <span className="text-sm text-slate-500">
+                  {cases.length} case{cases.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+            
+            <CaseListView cases={cases as any} />
+          </div>
+        </div>
+
+        {/* NEW: Drag Overlay - Ghost avatar that follows cursor */}
+        <StaffDragOverlay activeData={activeDragData} />
+
+      </DndContext>
 
       {/* Floating Action Button - Quick Actions */}
       {userFacilityId && (
@@ -534,8 +690,6 @@ const { data: casesData } = await supabase
               icon: 'megaphone',
               onClick: () => setShowCallNextPatient(true)
             }
-            // Future actions can be added here:
-            // { id: 'add-case', label: 'Add Case', icon: 'clipboard', onClick: () => {}, disabled: true }
           ]}
         />
       )}

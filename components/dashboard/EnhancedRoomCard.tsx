@@ -1,20 +1,27 @@
 // components/dashboard/EnhancedRoomCard.tsx
 // Enhanced room card showing all scheduled cases for the room
-// UPDATED: Added pulsing amber border for called-back patients
+// WITH drag-and-drop staff assignment support
 
 'use client'
 
 import Link from 'next/link'
 import { RoomWithCase, CasePhase, EnhancedCase, getJoinedValue } from '../../types/pace'
+import { CaseStaffAssignment } from '../../types/staff-assignment'
 import { useElapsedTime } from '../../hooks/useElapsedTime'
 import { getRoomStatus } from '../../lib/pace-utils'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
 import PhaseBadge from '../ui/PhaseBadge'
 import StatusIndicator from '../ui/StatusIndicator'
 import PaceProgressBar from './PaceProgressBar'
+import DroppableCaseRow, { InlineAssignedStaff } from './DroppableCaseRow'
 
 interface EnhancedRoomCardProps {
   roomWithCase: RoomWithCase
+  // Staff assignment props
+  assignmentsByCaseId?: Record<string, CaseStaffAssignment[]>
+  onRemoveStaff?: (assignmentId: string, caseId: string, isFaded: boolean, isInProgress: boolean) => void
+  canManageStaff?: boolean
+  dropZonesEnabled?: boolean
 }
 
 // Helper to format time for display
@@ -57,7 +64,7 @@ function getStatusName(caseStatuses: { name: string } | { name: string }[] | nul
   return s?.name || null
 }
 
-// NEW: Operative Side Badge Component
+// Operative Side Badge Component
 function OperativeSideBadge({ side }: { side: string | null | undefined }) {
   if (!side || side === 'n/a') return null
   
@@ -77,7 +84,7 @@ function OperativeSideBadge({ side }: { side: string | null | undefined }) {
   )
 }
 
-// NEW: Called Back Badge - shows when patient has been called to go back
+// Called Back Badge - shows when patient has been called to go back
 function CalledBackBadge() {
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
@@ -128,12 +135,25 @@ function ScheduledTimeDisplay({ time }: { time: string | null }) {
   )
 }
 
-// Case row for the schedule list - matches primary case format
-function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
+// Case row for the schedule list
+function CompactCaseRow({ 
+  caseItem,
+  assignments,
+  onRemoveStaff,
+  canManageStaff,
+  dropZonesEnabled
+}: { 
+  caseItem: EnhancedCase
+  assignments: CaseStaffAssignment[]
+  onRemoveStaff?: (assignmentId: string, caseId: string, isFaded: boolean, isInProgress: boolean) => void
+  canManageStaff?: boolean
+  dropZonesEnabled?: boolean
+}) {
   const statusName = getStatusName(caseItem.case_statuses)
   const isCompleted = statusName === 'completed'
+  const isInProgress = statusName === 'in_progress'
   
-  return (
+  const content = (
     <Link 
       href={`/cases/${caseItem.id}`}
       className={`flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors group ${
@@ -145,7 +165,6 @@ function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
       
       {/* Case Info */}
       <div className="flex-1 min-w-0">
-        {/* UPDATED: Added operative side badge */}
         <div className="flex items-center gap-2">
           <h4 className={`text-sm font-semibold truncate ${isCompleted ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
             {getProcedureName(caseItem.procedure_types)}
@@ -158,6 +177,14 @@ function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
           <span className="text-slate-400">{caseItem.case_number}</span>
         </div>
       </div>
+      
+      {/* Assigned Staff Avatars (inline preview) */}
+      {assignments.filter(a => !a.removed_at).length > 0 && (
+        <InlineAssignedStaff 
+          assignments={assignments}
+          maxVisible={3}
+        />
+      )}
       
       {/* Time */}
       <div className="flex-shrink-0 text-right">
@@ -187,16 +214,43 @@ function CompactCaseRow({ caseItem }: { caseItem: EnhancedCase }) {
       </svg>
     </Link>
   )
+  
+  // Wrap in droppable if enabled
+  if (dropZonesEnabled && canManageStaff) {
+    return (
+      <DroppableCaseRow
+        caseId={caseItem.id}
+        caseNumber={caseItem.case_number}
+        isActive={isInProgress}
+        isCompleted={isCompleted}
+        assignments={assignments}
+        onRemoveStaff={(assignmentId, isFaded) => {
+          onRemoveStaff?.(assignmentId, caseItem.id, isFaded, isInProgress)
+        }}
+        canManageStaff={canManageStaff || false}
+        dropZonesEnabled={dropZonesEnabled || false}
+      >
+        {content}
+      </DroppableCaseRow>
+    )
+  }
+  
+  return content
 }
 
-export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps) {
+export default function EnhancedRoomCard({ 
+  roomWithCase,
+  assignmentsByCaseId = {},
+  onRemoveStaff,
+  canManageStaff = false,
+  dropZonesEnabled = false
+}: EnhancedRoomCardProps) {
   const { room, currentCase, nextCase, upcomingCases, caseStartTime, currentPhase, paceData } = roomWithCase
   const status = getRoomStatus(currentCase, nextCase)
   const primaryCase = currentCase || nextCase
   const isActive = status === 'active'
   
   // Check if the next case has been called back
-  // Only show pulsing when there's a nextCase (not currentCase) that's been called
   const nextCaseCalledBack = !currentCase && nextCase && (nextCase as any).called_back_at
   
   // Get other cases (exclude the primary case from the upcoming list)
@@ -206,6 +260,80 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
   const totalCases = upcomingCases.length + (currentCase ? 1 : 0)
   const completedCases = upcomingCases.filter(c => getStatusName(c.case_statuses) === 'completed').length + 
     (currentCase && getStatusName(currentCase.case_statuses) === 'completed' ? 1 : 0)
+  
+  // Get assignments for primary case
+  const primaryCaseAssignments = primaryCase ? (assignmentsByCaseId[primaryCase.id] || []) : []
+  const primaryStatusName = primaryCase ? getStatusName(primaryCase.case_statuses) : null
+  const isPrimaryInProgress = primaryStatusName === 'in_progress'
+  const isPrimaryCompleted = primaryStatusName === 'completed'
+  
+  // Primary case content (the main case displayed prominently)
+  const primaryCaseContent = primaryCase ? (
+    <Link href={`/cases/${primaryCase.id}`} className="block">
+      {/* Primary case info row */}
+      <div className="flex items-center gap-3">
+        <SurgeonAvatar name={getSurgeonFullName(primaryCase.surgeon)} size="md" />
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h4 className="text-base font-semibold text-slate-900 truncate">
+              {getProcedureName(primaryCase.procedure_types)}
+            </h4>
+            <OperativeSideBadge side={(primaryCase as any).operative_side} />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span className="font-medium">{getSurgeonName(primaryCase.surgeon)}</span>
+            <span className="text-slate-300">•</span>
+            <span className="text-slate-400">{primaryCase.case_number}</span>
+          </div>
+        </div>
+        
+        {/* Assigned Staff Avatars */}
+        {primaryCaseAssignments.filter(a => !a.removed_at).length > 0 && (
+          <InlineAssignedStaff 
+            assignments={primaryCaseAssignments}
+            maxVisible={4}
+          />
+        )}
+        
+        {/* Time display */}
+        <div className="flex-shrink-0">
+          {isActive ? (
+            <ElapsedTimeDisplay startTime={caseStartTime} isActive={true} />
+          ) : (
+            <ScheduledTimeDisplay time={primaryCase.start_time} />
+          )}
+        </div>
+        
+        {/* Chevron */}
+        <svg 
+          className="w-5 h-5 text-slate-300 flex-shrink-0" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+      
+      {/* Progress bar for active cases */}
+      {isActive && paceData && (
+        <div className="mt-4">
+          <PaceProgressBar paceData={paceData} />
+        </div>
+      )}
+    </Link>
+  ) : (
+    /* Empty state */
+    <div className="flex items-center gap-3 py-2">
+      <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
+        <svg className="w-5 h-5 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+      </div>
+      <span className="text-sm text-slate-400 font-medium">No cases scheduled</span>
+    </div>
+  )
   
   return (
     <div 
@@ -240,66 +368,25 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
         </div>
       </div>
       
-      {/* Primary Case Content */}
+      {/* Primary Case Content - with drop zone support */}
       <div className="p-4">
-        {primaryCase ? (
-          <Link href={`/cases/${primaryCase.id}`} className="block">
-            {/* Primary case info row */}
-            <div className="flex items-center gap-3">
-              <SurgeonAvatar name={getSurgeonFullName(primaryCase.surgeon)} size="md" />
-              
-              <div className="flex-1 min-w-0">
-                {/* UPDATED: Added operative side badge */}
-                <div className="flex items-center gap-2">
-                  <h4 className="text-base font-semibold text-slate-900 truncate">
-                    {getProcedureName(primaryCase.procedure_types)}
-                  </h4>
-                  <OperativeSideBadge side={(primaryCase as any).operative_side} />
-                </div>
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <span className="font-medium">{getSurgeonName(primaryCase.surgeon)}</span>
-                  <span className="text-slate-300">•</span>
-                  <span className="text-slate-400">{primaryCase.case_number}</span>
-                </div>
-              </div>
-              
-              {/* Time display */}
-              <div className="flex-shrink-0">
-                {isActive ? (
-                  <ElapsedTimeDisplay startTime={caseStartTime} isActive={true} />
-                ) : (
-                  <ScheduledTimeDisplay time={primaryCase.start_time} />
-                )}
-              </div>
-              
-              {/* Chevron */}
-              <svg 
-                className="w-5 h-5 text-slate-300 flex-shrink-0" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-            
-            {/* Progress bar for active cases */}
-            {isActive && paceData && (
-              <div className="mt-4">
-                <PaceProgressBar paceData={paceData} />
-              </div>
-            )}
-          </Link>
+        {dropZonesEnabled && canManageStaff && primaryCase ? (
+          <DroppableCaseRow
+            caseId={primaryCase.id}
+            caseNumber={primaryCase.case_number}
+            isActive={isPrimaryInProgress}
+            isCompleted={isPrimaryCompleted}
+            assignments={primaryCaseAssignments}
+            onRemoveStaff={(assignmentId, isFaded) => {
+              onRemoveStaff?.(assignmentId, primaryCase.id, isFaded, isPrimaryInProgress)
+            }}
+            canManageStaff={canManageStaff}
+            dropZonesEnabled={dropZonesEnabled}
+          >
+            {primaryCaseContent}
+          </DroppableCaseRow>
         ) : (
-          /* Empty state */
-          <div className="flex items-center gap-3 py-2">
-            <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
-              <svg className="w-5 h-5 text-slate-300" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
-              </svg>
-            </div>
-            <span className="text-sm text-slate-400 font-medium">No cases scheduled</span>
-          </div>
+          primaryCaseContent
         )}
       </div>
       
@@ -313,7 +400,14 @@ export default function EnhancedRoomCard({ roomWithCase }: EnhancedRoomCardProps
           </div>
           <div className="px-2 pb-2 max-h-72 overflow-y-auto">
             {otherCases.map((caseItem) => (
-              <CompactCaseRow key={caseItem.id} caseItem={caseItem} />
+              <CompactCaseRow 
+                key={caseItem.id} 
+                caseItem={caseItem}
+                assignments={assignmentsByCaseId[caseItem.id] || []}
+                onRemoveStaff={onRemoveStaff}
+                canManageStaff={canManageStaff}
+                dropZonesEnabled={dropZonesEnabled}
+              />
             ))}
           </div>
         </div>
