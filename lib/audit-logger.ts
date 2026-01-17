@@ -1413,6 +1413,14 @@ export const adminAudit = {
       targetLabel: procedureName,
     })
   },
+
+  async facilityDeleted(supabase: SupabaseClient, facilityName: string, facilityId: string) {
+    await log(supabase, 'facility.deleted', {
+      targetType: 'facility',
+      targetId: facilityId,
+      targetLabel: facilityName,
+    })
+  },
 }
 
 // =====================================================
