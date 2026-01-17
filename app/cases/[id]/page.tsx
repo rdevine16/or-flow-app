@@ -13,7 +13,6 @@ import { milestoneAudit, staffAudit, caseAudit } from '../../../lib/audit-logger
 import ImplantSection from '../../../components/cases/ImplantSection'
 import FloatingActionButton from '../../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../../components/CallNextPatientModal'
-import AnesthesiaPopover from '../../../components/ui/AnesthesiaPopover'
 import CompletedCaseView from '../../../components/cases/CompletedCaseView'
 
 
@@ -715,72 +714,6 @@ setPatientCallTime(caseResult?.call_time || null)
           `${staffUser.first_name} ${staffUser.last_name}`,
           staffRole?.name || 'staff',
           staffId
-        )
-      }
-    }
-  }
-
-  const updateAnesthesiologist = async (anesthId: string) => {
-    const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
-    
-    const { error } = await supabase
-      .from('cases')
-      .update({ anesthesiologist_id: anesthId || null })
-      .eq('id', id)
-
-    if (!error) {
-      const newAnesth = anesthesiologists.find(a => a.id === anesthId)
-      if (caseData) {
-        setCaseData({
-          ...caseData,
-          anesthesiologist: newAnesth ? { id: newAnesth.id, first_name: newAnesth.first_name, last_name: newAnesth.last_name } : null
-        })
-
-        if (newAnesth) {
-          const newName = `${newAnesth.first_name} ${newAnesth.last_name}`
-          if (oldAnesthesiologist) {
-            const oldName = `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`
-            await staffAudit.removed(
-              supabase,
-              caseData.case_number,
-              oldName,
-              'anesthesiologist',
-              oldAnesthesiologist.id
-            )
-          }
-          await staffAudit.added(
-            supabase,
-            caseData.case_number,
-            newName,
-            'anesthesiologist',
-            newAnesth.id
-          )
-        }
-      }
-    }
-  }
-
-  const removeAnesthesiologist = async () => {
-    const oldAnesthesiologist = getFirst(caseData?.anesthesiologist)
-    
-    const { error } = await supabase
-      .from('cases')
-      .update({ anesthesiologist_id: null })
-      .eq('id', id)
-
-    if (!error && caseData) {
-      setCaseData({
-        ...caseData,
-        anesthesiologist: null
-      })
-
-      if (oldAnesthesiologist) {
-        await staffAudit.removed(
-          supabase,
-          caseData.case_number,
-          `${oldAnesthesiologist.first_name} ${oldAnesthesiologist.last_name}`,
-          'anesthesiologist',
-          oldAnesthesiologist.id
         )
       }
     }
