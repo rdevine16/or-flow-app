@@ -718,7 +718,6 @@ setPatientCallTime(caseResult?.call_time || null)
       }
     }
   }
-
   // Helper functions for milestones
   const getMilestoneByTypeId = (typeId: string) => caseMilestones.find(m => 
     m.facility_milestone_id === typeId || m.milestone_type_id === typeId
