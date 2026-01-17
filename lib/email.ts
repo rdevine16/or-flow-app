@@ -138,6 +138,10 @@ Questions? Reply to this email and we'll help you get started.
   }
 }
 
+// REPLACE the sendUserInviteEmail function in lib/email.ts with this version
+// Find the function starting at "export async function sendUserInviteEmail"
+// and replace it entirely with this code:
+
 /**
  * Send invitation email to new facility user (admin or staff)
  * Uses token-based flow - user clicks link to set their password
@@ -161,15 +165,12 @@ export async function sendUserInviteEmail(
   const inviteUrl = `${APP_URL}/invite/user/${invitationToken}`
 
   const isAdmin = accessLevel === 'facility_admin'
-  const roleDescription = isAdmin 
-    ? 'As an administrator, you\'ll have full access to manage your facility.'
-    : 'You\'ll be able to view cases and record milestones during procedures.'
 
   try {
     const { data, error } = await getResendClient().emails.send({
       from: DEFAULT_FROM,
       to: [to],
-      subject: `You're invited to join ${facilityName} on ORbit`,
+      subject: `You've been invited to join ${facilityName} on ORbit`,
       html: `
         <!DOCTYPE html>
         <html>
@@ -177,111 +178,114 @@ export async function sendUserInviteEmail(
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
         </head>
-        <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc;">
+        <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f1f5f9;">
             <tr>
-              <td align="center" style="padding: 40px 20px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <td align="center" style="padding: 48px 20px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px;">
                   
-                  <!-- Header -->
+                  <!-- Logo Header -->
                   <tr>
-                    <td style="padding: 40px 40px 24px 40px; text-align: center;">
-                      <div style="display: inline-block; width: 56px; height: 56px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 14px; line-height: 56px;">
-                        <span style="color: white; font-size: 28px; font-weight: bold;">O</span>
+                    <td style="padding-bottom: 32px; text-align: center;">
+                      <div style="display: inline-block; width: 48px; height: 48px; background: #2563eb; border-radius: 12px; line-height: 48px;">
+                        <span style="color: white; font-size: 24px; font-weight: 700;">O</span>
                       </div>
                     </td>
                   </tr>
                   
-                  <!-- Title -->
+                  <!-- Main Card -->
                   <tr>
-                    <td style="padding: 0 40px 16px 40px; text-align: center;">
-                      <h1 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a;">You're Invited!</h1>
-                    </td>
-                  </tr>
-                  
-                  <!-- Message -->
-                  <tr>
-                    <td style="padding: 0 40px 24px 40px;">
-                      <p style="margin: 0 0 16px; font-size: 16px; color: #475569; line-height: 1.6;">
-                        Hi ${firstName},
-                      </p>
-                      <p style="margin: 0; font-size: 16px; color: #475569; line-height: 1.6;">
-                        ${invitedByName} has invited you to join <strong style="color: #0f172a;">${facilityName}</strong> on ORbit — the surgical case management platform.
-                      </p>
-                    </td>
-                  </tr>
-                  
-                  <!-- Role Badge -->
-                  <tr>
-                    <td style="padding: 0 40px 24px 40px; text-align: center;">
-                      <span style="display: inline-block; padding: 6px 12px; background: ${isAdmin ? '#f3e8ff' : '#dbeafe'}; color: ${isAdmin ? '#7c3aed' : '#2563eb'}; font-size: 13px; font-weight: 600; border-radius: 20px;">
-                        ${isAdmin ? '👑 Administrator' : '👤 Staff Member'}
-                      </span>
-                    </td>
-                  </tr>
-                  
-                  <!-- CTA Button -->
-                  <tr>
-                    <td style="padding: 0 40px 32px 40px; text-align: center;">
-                      <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
-                        Accept Invitation
-                      </a>
-                    </td>
-                  </tr>
-                  
-                  <!-- What you'll be able to do -->
-                  <tr>
-                    <td style="padding: 0 40px 32px 40px;">
-                      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
-                        <p style="margin: 0 0 12px; font-weight: 600; color: #0f172a; font-size: 14px;">
-                          What you'll be able to do:
-                        </p>
-                        <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.8;">
-                          ${isAdmin ? `
-                            <li>Manage your facility's settings and users</li>
-                            <li>Create and manage surgical cases</li>
-                            <li>View analytics and reports</li>
-                            <li>Invite staff members</li>
-                          ` : `
-                            <li>View your surgical case schedule</li>
-                            <li>Track cases in real-time</li>
-                            <li>Record milestones during procedures</li>
-                            <li>Receive push notifications for updates</li>
-                          `}
-                        </ul>
-                      </div>
-                    </td>
-                  </tr>
-                  
-                  <!-- Expiry notice -->
-                  <tr>
-                    <td style="padding: 0 40px 24px 40px;">
-                      <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 12px; padding: 16px;">
-                        <p style="margin: 0; color: #92400e; font-size: 14px;">
-                          <strong>⏰ Note:</strong> This invitation expires in 7 days.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                  
-                  <!-- Fallback link -->
-                  <tr>
-                    <td style="padding: 0 40px 32px 40px; text-align: center;">
-                      <p style="margin: 0; color: #64748b; font-size: 13px;">
-                        Or copy and paste this link into your browser:<br>
-                        <a href="${inviteUrl}" style="color: #2563eb; word-break: break-all; font-size: 12px;">${inviteUrl}</a>
-                      </p>
+                    <td style="background-color: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                        
+                        <!-- Card Content -->
+                        <tr>
+                          <td style="padding: 40px;">
+                            
+                            <!-- Greeting -->
+                            <p style="margin: 0 0 24px; font-size: 15px; color: #334155; line-height: 1.6;">
+                              Hi ${firstName},
+                            </p>
+                            
+                            <!-- Main Message -->
+                            <p style="margin: 0 0 24px; font-size: 15px; color: #334155; line-height: 1.6;">
+                              <strong style="color: #0f172a;">${invitedByName}</strong> has invited you to join <strong style="color: #0f172a;">${facilityName}</strong> on ORbit, the surgical case management platform.
+                            </p>
+                            
+                            <!-- Role Info -->
+                            <div style="background: #f8fafc; border-left: 3px solid ${isAdmin ? '#2563eb' : '#64748b'}; padding: 16px 20px; margin: 0 0 28px; border-radius: 0 8px 8px 0;">
+                              <p style="margin: 0 0 4px; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Your Role
+                              </p>
+                              <p style="margin: 0; font-size: 15px; font-weight: 600; color: #0f172a;">
+                                ${isAdmin ? 'Facility Administrator' : 'Staff Member'}
+                              </p>
+                            </div>
+                            
+                            <!-- CTA Button -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                              <tr>
+                                <td align="center" style="padding: 4px 0 28px;">
+                                  <a href="${inviteUrl}" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 36px; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                                    Accept Invitation
+                                  </a>
+                                </td>
+                              </tr>
+                            </table>
+                            
+                            <!-- What you can do -->
+                            <p style="margin: 0 0 12px; font-size: 13px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">
+                              What you'll be able to do
+                            </p>
+                            <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+                              ${isAdmin ? `
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• Manage facility settings and users</td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• Create and manage surgical cases</td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• View analytics and reports</td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• Invite additional staff members</td>
+                              </tr>
+                              ` : `
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• View your surgical case schedule</td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• Track cases in real-time</td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• Record milestones during procedures</td>
+                              </tr>
+                              <tr>
+                                <td style="padding: 6px 0; font-size: 14px; color: #475569;">• Receive notifications for updates</td>
+                              </tr>
+                              `}
+                            </table>
+                            
+                            <!-- Expiry Notice -->
+                            <p style="margin: 0; padding: 12px 16px; background: #fefce8; border-radius: 6px; font-size: 13px; color: #854d0e;">
+                              This invitation expires in 7 days.
+                            </p>
+                            
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
                   
                   <!-- Footer -->
                   <tr>
-                    <td style="padding: 24px 40px; border-top: 1px solid #e2e8f0; text-align: center;">
-                      <p style="margin: 0; color: #94a3b8; font-size: 12px;">
-                        © ${new Date().getFullYear()} ORbit Surgical. All rights reserved.
-                      </p>
-                      <p style="margin: 8px 0 0; color: #94a3b8; font-size: 12px;">
+                    <td style="padding: 32px 20px; text-align: center;">
+                      <p style="margin: 0 0 8px; font-size: 12px; color: #94a3b8;">
                         If you didn't expect this invitation, you can safely ignore this email.
+                      </p>
+                      <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                        © ${new Date().getFullYear()} ORbit Surgical
                       </p>
                     </td>
                   </tr>
@@ -294,32 +298,30 @@ export async function sendUserInviteEmail(
         </html>
       `,
       text: `
-You're Invited to ORbit!
-
 Hi ${firstName},
 
-${invitedByName} has invited you to join ${facilityName} on ORbit — the surgical case management platform.
+${invitedByName} has invited you to join ${facilityName} on ORbit, the surgical case management platform.
 
-You've been invited as: ${isAdmin ? 'Administrator' : 'Staff Member'}
+Your Role: ${isAdmin ? 'Facility Administrator' : 'Staff Member'}
 
 Click the link below to accept your invitation and create your account:
 ${inviteUrl}
 
 ${isAdmin ? `
 What you'll be able to do:
-- Manage your facility's settings and users
+- Manage facility settings and users
 - Create and manage surgical cases
 - View analytics and reports
-- Invite staff members
+- Invite additional staff members
 ` : `
 What you'll be able to do:
 - View your surgical case schedule
 - Track cases in real-time
 - Record milestones during procedures
-- Receive push notifications for updates
+- Receive notifications for updates
 `}
 
-Note: This invitation expires in 7 days.
+This invitation expires in 7 days.
 
 If you didn't expect this invitation, you can safely ignore this email.
 
