@@ -1,0 +1,437 @@
+// app/invite/user/[token]/page.tsx
+// 
+// Accept invitation page for facility admins and staff
+// Mirrors the device rep flow: validate token → show info → create account
+//
+// Flow:
+// 1. User clicks link in email → lands here
+// 2. Page validates token and shows invite details
+// 3. User creates password
+// 4. Account created in auth.users and public.users
+// 5. Invite marked as accepted
+// 6. Redirect to success page
+
+'use client'
+
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase'
+
+interface InviteData {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  facilityId: string
+  facilityName: string
+  facilityAddress: string | null
+  accessLevel: string
+  roleId: string
+  roleName: string
+  expiresAt: string
+}
+
+function AcceptInviteContent() {
+  const router = useRouter()
+  const params = useParams()
+  const token = params.token as string
+  const supabase = createClient()
+
+  const [invite, setInvite] = useState<InviteData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Password form
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    if (token) {
+      fetchInvite()
+    }
+  }, [token])
+
+  const fetchInvite = async () => {
+    // Fetch invite details from user_invites table
+    const { data, error } = await supabase
+      .from('user_invites')
+      .select(`
+        id,
+        email,
+        first_name,
+        last_name,
+        facility_id,
+        access_level,
+        role_id,
+        expires_at,
+        facilities (name, address),
+        user_roles (name)
+      `)
+      .eq('invite_token', token)
+      .is('accepted_at', null)
+      .single()
+
+    if (error || !data) {
+      setError('This invite link is invalid or has already been used.')
+      setLoading(false)
+      return
+    }
+
+    // Check if expired
+    if (new Date(data.expires_at) < new Date()) {
+      setError('This invite has expired. Please contact your administrator for a new invite.')
+      setLoading(false)
+      return
+    }
+
+    // Transform data - Supabase returns joined tables as arrays sometimes
+    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
+    const role = Array.isArray(data.user_roles) ? data.user_roles[0] : data.user_roles
+
+    setInvite({
+      id: data.id,
+      email: data.email,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      facilityId: data.facility_id,
+      facilityName: facility?.name || 'Unknown Facility',
+      facilityAddress: facility?.address || null,
+      accessLevel: data.access_level,
+      roleId: data.role_id,
+      roleName: role?.name || 'Staff',
+      expiresAt: data.expires_at,
+    })
+
+    setLoading(false)
+  }
+
+  // Password validation
+  const passwordRequirements = {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+  }
+  const isPasswordValid = Object.values(passwordRequirements).every(Boolean)
+  const passwordsMatch = password === confirmPassword && confirmPassword.length > 0
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!invite) return
+
+    if (!isPasswordValid) {
+      setError('Please meet all password requirements')
+      return
+    }
+
+    if (!passwordsMatch) {
+      setError('Passwords do not match')
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      // 1. Create auth user with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: invite.email,
+        password: password,
+        options: {
+          data: {
+            first_name: invite.firstName,
+            last_name: invite.lastName,
+          },
+        },
+      })
+
+      if (authError) {
+        // Check if user already exists
+        if (authError.message.includes('already registered')) {
+          setError('An account with this email already exists. Please sign in instead.')
+          return
+        }
+        throw authError
+      }
+
+      if (!authData.user) {
+        throw new Error('Failed to create account')
+      }
+
+      // 2. Create user profile in public.users
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: invite.email,
+          first_name: invite.firstName,
+          last_name: invite.lastName,
+          facility_id: invite.facilityId,
+          role_id: invite.roleId,
+          access_level: invite.accessLevel,
+        })
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError)
+        // Note: Don't fail completely - auth user exists, they might need admin help
+        // but they can still try to sign in
+      }
+
+      // 3. Mark invite as accepted
+      await supabase
+        .from('user_invites')
+        .update({ accepted_at: new Date().toISOString() })
+        .eq('id', invite.id)
+
+      // 4. Redirect to success page
+      router.push('/invite/success')
+
+    } catch (err: any) {
+      console.error('Error creating account:', err)
+      setError(err.message || 'Failed to create account. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (error && !invite) {
+    return (
+      <div className="text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">Invite Error</h2>
+        <p className="text-slate-600 mb-6">{error}</p>
+        <Link
+          href="/login"
+          className="inline-flex items-center justify-center px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
+        >
+          Go to Login
+        </Link>
+      </div>
+    )
+  }
+
+  const isAdmin = invite?.accessLevel === 'facility_admin'
+
+  return (
+    <>
+      {/* Invite Details Card */}
+      <div className="bg-slate-50 rounded-xl p-4 mb-6">
+        <p className="text-sm text-slate-600 mb-3">You've been invited to join:</p>
+        
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900">{invite?.facilityName}</p>
+            {invite?.facilityAddress && (
+              <p className="text-sm text-slate-500">{invite.facilityAddress}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+            isAdmin 
+              ? 'bg-purple-100 text-purple-700' 
+              : 'bg-blue-100 text-blue-700'
+          }`}>
+            {isAdmin ? '👑 Administrator' : '👤 Staff'}
+          </span>
+          <span className="text-xs text-slate-500">•</span>
+          <span className="text-xs text-slate-500 capitalize">{invite?.roleName}</span>
+        </div>
+      </div>
+
+      {/* Password Form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Email
+          </label>
+          <input
+            type="email"
+            value={invite?.email || ''}
+            disabled
+            className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              First Name
+            </label>
+            <input
+              type="text"
+              value={invite?.firstName || ''}
+              disabled
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Last Name
+            </label>
+            <input
+              type="text"
+              value={invite?.lastName || ''}
+              disabled
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Create Password
+          </label>
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-12"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              {showPassword ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Password Requirements */}
+        <div className="bg-slate-50 rounded-lg p-3">
+          <p className="text-xs font-medium text-slate-600 mb-2">Password must have:</p>
+          <div className="grid grid-cols-2 gap-1">
+            {[
+              { met: passwordRequirements.minLength, text: '8+ characters' },
+              { met: passwordRequirements.hasUppercase, text: 'Uppercase letter' },
+              { met: passwordRequirements.hasLowercase, text: 'Lowercase letter' },
+              { met: passwordRequirements.hasNumber, text: 'Number' },
+            ].map((req, i) => (
+              <div key={i} className={`flex items-center gap-1 text-xs ${req.met ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {req.met ? (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                  </svg>
+                )}
+                {req.text}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Confirm Password
+          </label>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              confirmPassword.length > 0
+                ? passwordsMatch
+                  ? 'border-emerald-300 bg-emerald-50/50'
+                  : 'border-red-300 bg-red-50/50'
+                : 'border-slate-200'
+            }`}
+          />
+          {confirmPassword.length > 0 && !passwordsMatch && (
+            <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+          )}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-100 rounded-lg">
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={submitting || !isPasswordValid || !passwordsMatch}
+          className="w-full py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {submitting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Creating Account...
+            </>
+          ) : (
+            'Create Account'
+          )}
+        </button>
+      </form>
+
+      <p className="text-xs text-center text-slate-500 mt-6">
+        By creating an account, you agree to ORbit's Terms of Service and Privacy Policy.
+      </p>
+    </>
+  )
+}
+
+export default function AcceptUserInvitePage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
+            <span className="text-2xl font-bold text-white">O</span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Welcome to ORbit</h1>
+          <p className="text-slate-500 mt-1">Create your account to get started</p>
+        </div>
+
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-12">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        }>
+          <AcceptInviteContent />
+        </Suspense>
+      </div>
+    </div>
+  )
+}

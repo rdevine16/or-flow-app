@@ -1,7 +1,17 @@
+// app/api/admin/invite/route.ts
+// 
+// REPLACEMENT: Uses custom tokens + Resend emails via lib/email.ts
+// NO MORE Supabase inviteUserByEmail() - that sends generic emails
+//
+// This creates an invite record in user_invites table and sends
+// a professional email via Resend with a link to /invite/user/[token]
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendUserInviteEmail } from '@/lib/email'
+import crypto from 'crypto'
 
-// Create admin client inline to avoid import issues
+// Create admin client for server-side operations
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -35,11 +45,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user already exists
+    const normalizedEmail = email.trim().toLowerCase()
+
+    // Check if user already exists in public.users
     const { data: existingUser } = await supabaseAdmin
       .from('users')
       .select('id')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .single()
 
     if (existingUser) {
@@ -49,53 +61,108 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create auth user and send invite email
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      email,
-      {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?type=invite`,
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-        },
-      }
-    )
+    // Check if there's already a pending invite for this email at this facility
+    const { data: existingInvite } = await supabaseAdmin
+      .from('user_invites')
+      .select('id, expires_at')
+      .eq('email', normalizedEmail)
+      .eq('facility_id', facilityId)
+      .is('accepted_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .single()
 
-    if (authError || !authData.user) {
-      console.error('Auth error:', authError)
+    if (existingInvite) {
       return NextResponse.json(
-        { success: false, error: authError?.message || 'Failed to create auth user' },
+        { success: false, error: 'An invite is already pending for this email' },
         { status: 400 }
       )
     }
 
-    // Create public.users record
-    const { error: dbError } = await supabaseAdmin
-      .from('users')
+    // Get facility name for the email
+    const { data: facility } = await supabaseAdmin
+      .from('facilities')
+      .select('name')
+      .eq('id', facilityId)
+      .single()
+
+    const facilityName = facility?.name || 'your facility'
+
+    // Get the inviting user's name (from auth header)
+    let invitedByName = 'Your administrator'
+    let invitedById: string | null = null
+    
+    const authHeader = request.headers.get('Authorization')
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '')
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+      if (user) {
+        invitedById = user.id
+        const { data: inviter } = await supabaseAdmin
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single()
+        if (inviter) {
+          invitedByName = `${inviter.first_name} ${inviter.last_name}`
+        }
+      }
+    }
+
+    // Generate invite token (like device rep flow)
+    const inviteToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+
+    // Create invite record in user_invites table
+    const { data: invite, error: inviteError } = await supabaseAdmin
+      .from('user_invites')
       .insert({
-        id: authData.user.id,
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        access_level: accessLevel,
+        email: normalizedEmail,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
         facility_id: facilityId,
         role_id: roleId,
+        access_level: accessLevel,
+        invite_token: inviteToken,
+        expires_at: expiresAt,
+        invited_by: invitedById,
       })
+      .select()
+      .single()
 
-    if (dbError) {
-      // Rollback: delete auth user if db insert fails
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-      console.error('Database error:', dbError)
+    if (inviteError) {
+      console.error('Failed to create invite:', inviteError)
       return NextResponse.json(
-        { success: false, error: dbError.message },
-        { status: 400 }
+        { success: false, error: 'Failed to create invite record' },
+        { status: 500 }
       )
+    }
+
+    // Send invite email via Resend (using lib/email.ts)
+    const emailResult = await sendUserInviteEmail(
+      normalizedEmail,
+      firstName.trim(),
+      facilityName,
+      invitedByName,
+      inviteToken,
+      accessLevel
+    )
+
+    if (!emailResult.success) {
+      console.error('Failed to send invite email:', emailResult.error)
+      // Don't fail the whole request - invite is created, they can resend
+      // But do let the caller know
+      return NextResponse.json({
+        success: true,
+        message: `Invite created but email failed to send. You can resend the invite.`,
+        inviteId: invite.id,
+        emailError: emailResult.error,
+      })
     }
 
     return NextResponse.json({
       success: true,
-      message: `Invitation sent to ${email}`,
-      userId: authData.user.id,
+      message: `Invitation sent to ${normalizedEmail}`,
+      inviteId: invite.id,
     })
 
   } catch (error) {
