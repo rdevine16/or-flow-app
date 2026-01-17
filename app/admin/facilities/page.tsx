@@ -11,6 +11,7 @@ import { useUser } from '../../../lib/UserContext'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import { startImpersonation } from '../../../lib/impersonation'
 import { adminAudit } from '../../../lib/audit-logger'
+import DeleteFacilityModal from '../../../components/modals/DeleteFacilityModal'
 
 interface Facility {
   id: string
@@ -29,12 +30,15 @@ type StatusFilter = 'all' | 'active' | 'trial' | 'past_due' | 'disabled' | 'demo
 export default function FacilitiesListPage() {
   const router = useRouter()
   const supabase = createClient()
-const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
+  const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
 
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  
+  // Delete modal state
+  const [facilityToDelete, setFacilityToDelete] = useState<Facility | null>(null)
 
   // Redirect non-admins
   useEffect(() => {
@@ -44,55 +48,54 @@ const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = 
   }, [userLoading, isGlobalAdmin, router])
 
   // Fetch facilities
+  const fetchFacilities = async () => {
+    setLoading(true)
+
+    try {
+      // Fetch all facilities
+      const { data: facilitiesData, error } = await supabase
+        .from('facilities')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Fetch user counts per facility
+      const { data: userCounts } = await supabase
+        .from('users')
+        .select('facility_id')
+
+      // Fetch case counts (last 30 days)
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+      const { data: caseCounts } = await supabase
+        .from('cases')
+        .select('facility_id, created_at')
+        .gte('created_at', thirtyDaysAgo.toISOString())
+
+      // Combine data
+      const facilitiesWithCounts = (facilitiesData || []).map(facility => {
+        const userCount = (userCounts || []).filter(u => u.facility_id === facility.id).length
+        const caseCount = (caseCounts || []).filter(c => c.facility_id === facility.id).length
+
+        return {
+          ...facility,
+          user_count: userCount,
+          case_count: caseCount,
+        }
+      })
+
+      setFacilities(facilitiesWithCounts)
+    } catch (error) {
+      console.error('Error fetching facilities:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!isGlobalAdmin) return
-
-    async function fetchFacilities() {
-      setLoading(true)
-
-      try {
-        // Fetch all facilities
-        const { data: facilitiesData, error } = await supabase
-          .from('facilities')
-          .select('*')
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-
-        // Fetch user counts per facility
-        const { data: userCounts } = await supabase
-          .from('users')
-          .select('facility_id')
-
-        // Fetch case counts (last 30 days)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-        const { data: caseCounts } = await supabase
-          .from('cases')
-          .select('facility_id, created_at')
-          .gte('created_at', thirtyDaysAgo.toISOString())
-
-        // Combine data
-        const facilitiesWithCounts = (facilitiesData || []).map(facility => {
-          const userCount = (userCounts || []).filter(u => u.facility_id === facility.id).length
-          const caseCount = (caseCounts || []).filter(c => c.facility_id === facility.id).length
-
-          return {
-            ...facility,
-            user_count: userCount,
-            case_count: caseCount,
-          }
-        })
-
-        setFacilities(facilitiesWithCounts)
-      } catch (error) {
-        console.error('Error fetching facilities:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchFacilities()
   }, [isGlobalAdmin, supabase])
 
@@ -108,17 +111,29 @@ const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = 
       facility.name
     )
 
-if (result.success) {
-  // Log the action
-  await adminAudit.impersonationStarted(supabase, facility.name, facility.id)
+    if (result.success) {
+      // Log the action
+      await adminAudit.impersonationStarted(supabase, facility.name, facility.id)
 
-  // Update the context immediately so all pages pick up the new facility
-  refreshImpersonation()
+      // Update the context immediately so all pages pick up the new facility
+      refreshImpersonation()
 
-  // Redirect to dashboard with the impersonated facility
-  router.push('/dashboard')
-  router.refresh()
+      // Redirect to dashboard with the impersonated facility
+      router.push('/dashboard')
+      router.refresh()
     }
+  }
+
+  // Handle delete button click
+  const handleDeleteClick = (facility: Facility) => {
+    setFacilityToDelete(facility)
+  }
+
+  // Handle successful deletion
+  const handleDeleteSuccess = () => {
+    setFacilityToDelete(null)
+    // Refresh the list
+    fetchFacilities()
   }
 
   // Filter facilities
@@ -374,6 +389,15 @@ if (result.success) {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                             </svg>
                           </button>
+                          <button
+                            onClick={() => handleDeleteClick(facility)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete facility"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -389,6 +413,15 @@ if (result.success) {
       <div className="mt-4 text-sm text-slate-500 text-center">
         Showing {filteredFacilities.length} of {facilities.length} facilities
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {facilityToDelete && (
+        <DeleteFacilityModal
+          facility={facilityToDelete}
+          onClose={() => setFacilityToDelete(null)}
+          onDeleted={handleDeleteSuccess}
+        />
+      )}
     </DashboardLayout>
   )
 }
