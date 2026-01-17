@@ -342,16 +342,26 @@ const { data: caseResult } = await supabase
         .select('id, milestone_type_id, facility_milestone_id, recorded_at')
         .eq('case_id', id)
 
+// Fetch case staff (only active - exclude soft-deleted)
 const { data: staffResult, error: staffError } = await supabase
   .from('case_staff')
   .select(`
     id,
     user_id,
-    users (first_name, last_name),
-    user_roles (name)
+    role_id,
+    users!case_staff_user_id_fkey (
+      first_name, 
+      last_name
+    ),
+    user_roles!case_staff_role_id_fkey (
+      name
+    )
   `)
   .eq('case_id', id)
   .is('removed_at', null)
+
+// Debug - remove after testing
+console.log('Staff Debug:', { staffResult, staffError, caseId: id })
 
 // ADD THIS DEBUG LOG
 console.log('Staff Query Debug:', { 
