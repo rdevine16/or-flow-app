@@ -31,7 +31,15 @@ export type AuditAction =
 | 'procedure_reimbursement.deleted'
 | 'facility.or_rate_updated'
 | 'procedure_type.costs_updated'
-  // Cases
+  // Case Device/Tray Management
+  | 'case_device.company_assigned'
+  | 'case_device.company_removed'
+  | 'case_device.consignment_confirmed'
+  | 'case_device.loaners_confirmed'
+  | 'case_device.trays_delivered'
+  | 'case_device.reminder_sent'
+  | 'case_device.status_reset'  
+// Cases
   | 'case.created'
   | 'case.updated'
   | 'case.deleted'
@@ -146,7 +154,15 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'admin.body_region_created': 'created a body region',
 'admin.body_region_updated': 'updated a body region',
 'admin.body_region_deleted': 'deleted a body region',
-  // Milestones
+  // Case Device/Tray Management
+  'case_device.company_assigned': 'assigned device company to case',
+  'case_device.company_removed': 'removed device company from case',
+  'case_device.consignment_confirmed': 'confirmed consignment available',
+  'case_device.loaners_confirmed': 'confirmed loaner trays coming',
+  'case_device.trays_delivered': 'confirmed tray delivery',
+  'case_device.reminder_sent': 'sent tray reminder',
+  'case_device.status_reset': 'reset tray status',  
+// Milestones
   'milestone.recorded': 'recorded a milestone',
   'milestone.updated': 'updated a milestone',
   'milestone.deleted': 'deleted a milestone',
@@ -295,6 +311,164 @@ async function log(
     console.error('[AUDIT] Failed to log:', error)
   }
 }
+// =====================================================
+// CASE DEVICE / TRAY MANAGEMENT
+// =====================================================
+
+export const caseDeviceAudit = {
+  async companyAssigned(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    companyId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'case_device.company_assigned', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      newValues: { 
+        implant_company: companyName,
+        implant_company_id: companyId
+      },
+    })
+  },
+
+  async companyRemoved(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    companyId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'case_device.company_removed', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      oldValues: { 
+        implant_company: companyName,
+        implant_company_id: companyId
+      },
+    })
+  },
+
+  async consignmentConfirmed(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    facilityId: string,
+    repNotes?: string
+  ) {
+    await log(supabase, 'case_device.consignment_confirmed', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      newValues: { 
+        implant_company: companyName,
+        tray_status: 'consignment',
+        rep_notes: repNotes
+      },
+    })
+  },
+
+  async loanersConfirmed(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    trayCount: number,
+    facilityId: string,
+    repNotes?: string
+  ) {
+    await log(supabase, 'case_device.loaners_confirmed', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      newValues: { 
+        implant_company: companyName,
+        tray_status: 'loaners_confirmed',
+        loaner_tray_count: trayCount,
+        rep_notes: repNotes
+      },
+    })
+  },
+
+  async traysDelivered(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    deliveredCount: number,
+    expectedCount: number,
+    facilityId: string
+  ) {
+    await log(supabase, 'case_device.trays_delivered', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      newValues: { 
+        implant_company: companyName,
+        tray_status: 'delivered',
+        delivered_tray_count: deliveredCount,
+        expected_tray_count: expectedCount
+      },
+    })
+  },
+
+  async reminderSent(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    reminderType: 'tray_confirmation' | 'delivery_confirmation',
+    facilityId: string
+  ) {
+    await log(supabase, 'case_device.reminder_sent', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      metadata: { 
+        implant_company: companyName,
+        reminder_type: reminderType
+      },
+    })
+  },
+
+  async statusReset(
+    supabase: SupabaseClient,
+    caseId: string,
+    caseNumber: string,
+    companyName: string,
+    oldStatus: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'case_device.status_reset', {
+      targetType: 'case',
+      targetId: caseId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      oldValues: { 
+        implant_company: companyName,
+        tray_status: oldStatus
+      },
+      newValues: {
+        tray_status: 'pending'
+      },
+    })
+  },
+}git add .
+git commit -m "Move analytics nav to horizontal tabs"
+git push
+
 // =====================================================
 // BODY REGIONS
 // =====================================================
