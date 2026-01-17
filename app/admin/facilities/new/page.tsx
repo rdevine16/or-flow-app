@@ -171,7 +171,7 @@ export default function CreateFacilityPage() {
       if (setupOptions.sendWelcomeEmail) {
         const { data: session } = await supabase.auth.getSession()
         
-const inviteResponse = await fetch('/api/invite', {
+const inviteResponse = await fetch('/api/admin/invite', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
