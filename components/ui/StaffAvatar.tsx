@@ -69,10 +69,10 @@ export default function StaffAvatar({
         )}
       </div>
       
-      {/* Tooltip on hover */}
+      {/* Tooltip on hover - positioned to the left to avoid overflow clipping */}
       {showTooltip && (
         <div className="
-          absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+          absolute right-full top-1/2 -translate-y-1/2 mr-2
           px-2 py-1
           bg-slate-900 text-white text-xs font-medium
           rounded-md
@@ -80,7 +80,7 @@ export default function StaffAvatar({
           transition-opacity duration-150
           pointer-events-none
           whitespace-nowrap
-          z-50
+          z-[100]
         ">
           {fullName}
           {roleName && (
@@ -90,7 +90,7 @@ export default function StaffAvatar({
             <span className="text-amber-400 ml-1">· Removed</span>
           )}
           {/* Tooltip arrow */}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+          <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-slate-900" />
         </div>
       )}
     </div>
@@ -216,9 +216,9 @@ export function AssignedStaffAvatar({
         </button>
       )}
       
-      {/* Tooltip */}
+      {/* Tooltip - positioned to the left to avoid overflow clipping */}
       <div className="
-        absolute bottom-full left-1/2 -translate-x-1/2 mb-2
+        absolute right-full top-1/2 -translate-y-1/2 mr-2
         px-2 py-1
         bg-slate-900 text-white text-xs font-medium
         rounded-md
@@ -226,12 +226,12 @@ export function AssignedStaffAvatar({
         transition-opacity duration-150
         pointer-events-none
         whitespace-nowrap
-        z-50
+        z-[100]
       ">
         {fullName}
         {roleName && <span className="text-slate-400 ml-1">· {roleName}</span>}
         {isFaded && <span className="text-amber-400 ml-1">· Was assigned</span>}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+        <div className="absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent border-l-slate-900" />
       </div>
     </div>
   )

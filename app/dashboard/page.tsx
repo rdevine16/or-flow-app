@@ -21,13 +21,11 @@ import {
   CasePaceData, 
   CasePhase,
   MilestoneWithType,
-  SurgeonProcedureAverage,
-  SurgeonMilestoneAverage,
   getJoinedValue
 } from '../../types/pace'
 import { determinePhase, parseISODate, parseScheduledStartTime } from '../../lib/pace-utils'
 
-// NEW: DnD Kit imports for drag-and-drop staff assignment
+// DnD Kit imports for drag-and-drop staff assignment
 import { 
   DndContext, 
   DragStartEvent, 
@@ -39,7 +37,7 @@ import {
   pointerWithin
 } from '@dnd-kit/core'
 
-// NEW: Staff assignment imports
+// Staff assignment imports
 import StaffAssignmentPanel from '../../components/dashboard/StaffAssignmentPanel'
 import StaffDragOverlay from '../../components/dashboard/StaffDragOverlay'
 import { useStaffAssignment } from '../../hooks/useStaffAssignment'
@@ -50,7 +48,7 @@ interface Room {
   name: string
 }
 
-// Helper to get name from joined data (uses getJoinedValue internally)
+// Helper to get name from joined data
 const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
   const joined = getJoinedValue(data)
   return joined?.name || null
@@ -58,7 +56,7 @@ const getValue = (data: { name: string }[] | { name: string } | null): string | 
 
 export default function DashboardPage() {
   const router = useRouter()
-const { isGlobalAdmin, isImpersonating, loading: userLoading, isAdmin } = useUser()
+  const { isGlobalAdmin, isImpersonating, loading: userLoading, isAdmin } = useUser()
   
   // Redirect global admins (not impersonating) to admin page
   useEffect(() => {
@@ -84,21 +82,19 @@ const { isGlobalAdmin, isImpersonating, loading: userLoading, isAdmin } = useUse
   
   const supabase = createClient()
 
-  // ========================================
-  // NEW: Staff Assignment State
-  // ========================================
+  // Staff Assignment State
   const [showStaffPanel, setShowStaffPanel] = useState(false)
   const [activeDragData, setActiveDragData] = useState<DragData | null>(null)
   
-  // Check if user can manage staff (facility_admin or global_admin)
-const canManageStaff = isAdmin
+  // Check if user can manage staff
+  const canManageStaff = isAdmin
   
   // Get all case IDs for the staff assignment hook
   const allCaseIds = useMemo(() => {
     return cases.map(c => c.id)
   }, [cases])
   
-  // Staff assignment hook - manages all staff data and operations
+  // Staff assignment hook
   const {
     facilityStaff,
     staffLoading,
@@ -112,18 +108,14 @@ const canManageStaff = isAdmin
     caseIds: allCaseIds
   })
   
-  // ========================================
-  // NEW: DnD Kit Sensors Configuration
-  // ========================================
+  // DnD Kit Sensors Configuration
   const mouseSensor = useSensor(MouseSensor, {
-    // Require the mouse to move by 8px before starting drag
     activationConstraint: {
       distance: 8,
     },
   })
   
   const touchSensor = useSensor(TouchSensor, {
-    // Require a 200ms delay before starting drag on touch
     activationConstraint: {
       delay: 200,
       tolerance: 8,
@@ -132,9 +124,7 @@ const canManageStaff = isAdmin
   
   const sensors = useSensors(mouseSensor, touchSensor)
   
-  // ========================================
-  // NEW: Drag Event Handlers
-  // ========================================
+  // Drag Event Handlers
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as DragData
     if (data?.type === 'staff-avatar') {
@@ -158,17 +148,14 @@ const canManageStaff = isAdmin
     const { staffId, staff, sourceType, sourceCaseId } = dragData
     const { caseId: targetCaseId } = dropData
     
-    // Don't do anything if dropping on same case
     if (sourceType === 'case' && sourceCaseId === targetCaseId) {
       return
     }
     
     try {
       if (sourceType === 'case' && sourceCaseId) {
-        // Moving between cases
         await moveStaffBetweenCases(staffId, sourceCaseId, targetCaseId, staff.role_id)
       } else {
-        // Assigning from panel
         await assignStaffToCase(staffId, targetCaseId, staff.role_id)
       }
     } catch (error) {
@@ -176,9 +163,7 @@ const canManageStaff = isAdmin
     }
   }, [assignStaffToCase, moveStaffBetweenCases])
   
-  // ========================================
-  // NEW: Staff Removal Handler
-  // ========================================
+  // Staff Removal Handler
   const handleRemoveStaff = useCallback(async (
     assignmentId: string, 
     caseId: string,
@@ -186,10 +171,8 @@ const canManageStaff = isAdmin
     isInProgress: boolean
   ) => {
     if (isFaded) {
-      // Already soft-deleted, now permanently remove
       await permanentlyRemoveStaff(assignmentId, caseId)
     } else {
-      // Either soft-delete (if in progress) or hard-delete
       await removeStaffFromCase(assignmentId, caseId, isInProgress)
     }
   }, [permanentlyRemoveStaff, removeStaffFromCase])
@@ -203,11 +186,9 @@ const canManageStaff = isAdmin
   }, [])
 
   const fetchCurrentUser = async () => {
-    // Check for impersonation first
     const impersonation = getImpersonationState()
     if (impersonation) {
       setUserFacilityId(impersonation.facilityId)
-      // Still need user info for audit logs
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setUserId(user.id)
@@ -216,7 +197,6 @@ const canManageStaff = isAdmin
       return
     }
 
-    // Otherwise use user's actual facility
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       setUserId(user.id)
@@ -242,7 +222,6 @@ const canManageStaff = isAdmin
     scheduledStart: Date
   ): Promise<CasePaceData | null> => {
     try {
-      // Fetch procedure average
       const { data: procAverages } = await supabase
         .from('surgeon_procedure_averages')
         .select('*')
@@ -252,7 +231,6 @@ const canManageStaff = isAdmin
       
       if (!procAverages) return null
       
-      // Get milestone type ID
       const { data: milestoneType } = await supabase
         .from('milestone_types')
         .select('id, name')
@@ -261,7 +239,6 @@ const canManageStaff = isAdmin
       
       if (!milestoneType) return null
       
-      // Fetch milestone average
       const { data: msAverage } = await supabase
         .from('surgeon_milestone_averages')
         .select('*')
@@ -293,7 +270,6 @@ const canManageStaff = isAdmin
       setLoading(true)
 
       try {
-        // Fetch cases
         const { data: casesData } = await supabase
           .from('cases')
           .select(`
@@ -316,7 +292,6 @@ const canManageStaff = isAdmin
           .eq('scheduled_date', selectedDate)
           .order('start_time', { ascending: true, nullsFirst: false })
 
-        // Fetch rooms
         const { data: roomsData } = await supabase
           .from('or_rooms')
           .select('id, name')
@@ -328,7 +303,6 @@ const canManageStaff = isAdmin
 
         setCases(fetchedCases)
 
-        // Fetch milestones for all cases
         const allCaseIds = fetchedCases.map(c => c.id)
         
         const caseStartTimes: Record<string, Date> = {}
@@ -347,7 +321,6 @@ const canManageStaff = isAdmin
             for (const milestone of milestones as unknown as MilestoneWithType[]) {
               const caseId = milestone.case_id
               
-              // First milestone = patient in time (actual case start)
               if (!caseStartTimes[caseId]) {
                 const date = parseISODate(milestone.recorded_at)
                 if (date) {
@@ -366,14 +339,12 @@ const canManageStaff = isAdmin
               }
             }
             
-            // Determine phase for each case
             for (const [caseId, names] of Object.entries(caseMilestoneNames)) {
               casePhases[caseId] = determinePhase(names)
             }
           }
         }
 
-        // Build rooms with cases and fetch pace data for active cases
         const roomsWithCasesPromises = rooms.map(async (room) => {
           const roomCases = fetchedCases.filter(c => {
             const orRoom = getJoinedValue(c.or_rooms)
@@ -386,18 +357,11 @@ const canManageStaff = isAdmin
 
           const currentCase = roomCases.find(c => getValue(c.case_statuses) === 'in_progress') || null
           const nextCase = roomCases.find(c => getValue(c.case_statuses) === 'scheduled') || null
-          
-          // Get all cases that aren't the current in-progress case (for the schedule list)
           const upcomingCases = roomCases.filter(c => c.id !== currentCase?.id)
 
-          const displayCase = currentCase || nextCase
-          const isActive = !!currentCase
-
-          // Get start time and phase for active case
           const startTime = currentCase ? caseStartTimes[currentCase.id] || null : null
           const phase = currentCase ? casePhases[currentCase.id] || null : null
 
-          // Fetch pace data for active cases
           let paceData: CasePaceData | null = null
           if (currentCase && currentCase.surgeon_id && currentCase.procedure_type_id) {
             const currentMilestone = caseCurrentMilestone[currentCase.id]
@@ -440,10 +404,6 @@ const canManageStaff = isAdmin
     fetchData()
   }, [selectedDate, userFacilityId, supabase, fetchPaceData])
 
-  const getStatusCount = (statusName: string) => {
-    return cases.filter(c => getValue(c.case_statuses) === statusName).length
-  }
-
   const activeCount = roomsWithCases.filter(r => r.currentCase !== null).length
 
   const goToPreviousDay = () => {
@@ -466,7 +426,6 @@ const canManageStaff = isAdmin
 
   const isToday = selectedDate === todayDate
 
-  // Show loading while checking user or redirecting global admin
   if (userLoading || (isGlobalAdmin && !isImpersonating)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -480,77 +439,104 @@ const canManageStaff = isAdmin
 
   return (
     <DashboardLayout>
-      {/* Wrap everything in DndContext for drag-and-drop */}
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        {/* Page Header */}
+        {/* Page Header - Date navigation and Staff toggle */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {/* Date Navigation */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goToPreviousDay}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Previous day"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
+          {/* Left side - Date Navigation */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={goToPreviousDay}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Previous day"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
 
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                  />
-                  <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-colors">
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-sm font-medium text-slate-900">
-                      {selectedDate ? formatDateWithWeekday(selectedDate) : 'Select date'}
-                    </span>
-                  </div>
-                </div>
-
-                {!isToday && (
-                  <button
-                    onClick={goToToday}
-                    className="px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    Today
-                  </button>
-                )}
-
-                {isToday && (
-                  <span className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
-                    Today
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                />
+                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-colors">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm font-medium text-slate-900">
+                    {selectedDate ? formatDateWithWeekday(selectedDate) : 'Select date'}
                   </span>
-                )}
+                </div>
               </div>
 
-              <button
-                onClick={goToNextDay}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                title="Next day"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+              {!isToday && (
+                <button
+                  onClick={goToToday}
+                  className="px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  Today
+                </button>
+              )}
+
+              {isToday && (
+                <span className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
+                  Today
+                </span>
+              )}
             </div>
+
+            <button
+              onClick={goToNextDay}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              title="Next day"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
+
+          {/* Right side - Staff Toggle (only for admins) */}
+          {canManageStaff && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={showStaffPanel}
+                  onChange={() => setShowStaffPanel(!showStaffPanel)}
+                  className="sr-only peer"
+                />
+                <div className={`
+                  w-5 h-5 rounded border-2 
+                  flex items-center justify-center
+                  transition-all duration-200
+                  ${showStaffPanel 
+                    ? 'bg-blue-600 border-blue-600' 
+                    : 'bg-white border-slate-300 hover:border-slate-400'
+                  }
+                `}>
+                  {showStaffPanel && (
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <span className="text-sm font-semibold text-blue-600">Staff</span>
+            </label>
+          )}
         </div>
 
-        {/* NEW: Staff Assignment Panel - Only show for admins */}
-        {canManageStaff && (
+        {/* Staff Assignment Panel - Shows when enabled */}
+        {canManageStaff && showStaffPanel && (
           <StaffAssignmentPanel
             staff={facilityStaff}
             isVisible={showStaffPanel}
@@ -558,62 +544,6 @@ const canManageStaff = isAdmin
             loading={staffLoading}
           />
         )}
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</p>
-                <p className="text-2xl font-bold text-slate-900 mt-1">{cases.length}</p>
-              </div>
-              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">In Progress</p>
-                <p className="text-2xl font-bold text-emerald-600 mt-1">{getStatusCount('in_progress')}</p>
-              </div>
-              <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</p>
-                <p className="text-2xl font-bold text-slate-600 mt-1">{getStatusCount('completed')}</p>
-              </div>
-              <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Scheduled</p>
-                <p className="text-2xl font-bold text-blue-600 mt-1">{getStatusCount('scheduled')}</p>
-              </div>
-              <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Content */}
         <div className="space-y-6">
@@ -651,7 +581,6 @@ const canManageStaff = isAdmin
               <EnhancedRoomGridView 
                 roomsWithCases={roomsWithCases} 
                 loading={loading}
-                // NEW: Staff assignment props
                 assignmentsByCaseId={assignmentsByCaseId}
                 onRemoveStaff={handleRemoveStaff}
                 canManageStaff={canManageStaff}
@@ -675,12 +604,12 @@ const canManageStaff = isAdmin
           </div>
         </div>
 
-        {/* NEW: Drag Overlay - Ghost avatar that follows cursor */}
+        {/* Drag Overlay */}
         <StaffDragOverlay activeData={activeDragData} />
 
       </DndContext>
 
-      {/* Floating Action Button - Quick Actions */}
+      {/* Floating Action Button */}
       {userFacilityId && (
         <FloatingActionButton 
           actions={[

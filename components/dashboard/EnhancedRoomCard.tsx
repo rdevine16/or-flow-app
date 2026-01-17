@@ -13,7 +13,8 @@ import SurgeonAvatar from '../ui/SurgeonAvatar'
 import PhaseBadge from '../ui/PhaseBadge'
 import StatusIndicator from '../ui/StatusIndicator'
 import PaceProgressBar from './PaceProgressBar'
-import DroppableCaseRow, { InlineAssignedStaff } from './DroppableCaseRow'
+import DroppableCaseRow from './DroppableCaseRow'
+import { AssignedStaffAvatar } from '../ui/StaffAvatar'
 
 interface EnhancedRoomCardProps {
   roomWithCase: RoomWithCase
@@ -84,7 +85,7 @@ function OperativeSideBadge({ side }: { side: string | null | undefined }) {
   )
 }
 
-// Called Back Badge - shows when patient has been called to go back
+// Called Back Badge
 function CalledBackBadge() {
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-full">
@@ -135,6 +136,59 @@ function ScheduledTimeDisplay({ time }: { time: string | null }) {
   )
 }
 
+// Inline assigned staff avatars - single component for displaying staff on cases
+function InlineAssignedStaff({
+  assignments,
+  maxVisible = 4,
+  onRemove,
+  canManageStaff = false,
+  dropZonesEnabled = false
+}: {
+  assignments: CaseStaffAssignment[]
+  maxVisible?: number
+  onRemove?: (assignmentId: string, isFaded: boolean) => void
+  canManageStaff?: boolean
+  dropZonesEnabled?: boolean
+}) {
+  // Show active assignments first, then faded ones
+  const activeAssignments = assignments.filter(a => a.removed_at === null)
+  const fadedAssignments = assignments.filter(a => a.removed_at !== null)
+  const allAssignments = [...activeAssignments, ...fadedAssignments]
+  const visibleAssignments = allAssignments.slice(0, maxVisible)
+  const overflowCount = allAssignments.length - maxVisible
+  
+  if (allAssignments.length === 0) return null
+  
+  return (
+    <div className="flex items-center -space-x-1.5">
+      {visibleAssignments.map((assignment) => (
+        <AssignedStaffAvatar
+          key={assignment.id}
+          firstName={assignment.user?.first_name || '?'}
+          lastName={assignment.user?.last_name || '?'}
+          profileImageUrl={assignment.user?.profile_image_url}
+          roleName={assignment.user_roles?.name}
+          isFaded={assignment.removed_at !== null}
+          onRemove={dropZonesEnabled && canManageStaff && onRemove ? () => onRemove(assignment.id, assignment.removed_at !== null) : undefined}
+          canRemove={dropZonesEnabled && canManageStaff}
+        />
+      ))}
+      
+      {overflowCount > 0 && (
+        <div className="
+          w-9 h-9 rounded-full 
+          bg-slate-200 border-2 border-white
+          flex items-center justify-center
+          text-xs font-semibold text-slate-600
+          z-10
+        ">
+          +{overflowCount}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Case row for the schedule list
 function CompactCaseRow({ 
   caseItem,
@@ -178,11 +232,16 @@ function CompactCaseRow({
         </div>
       </div>
       
-      {/* Assigned Staff Avatars (inline preview) */}
-      {assignments.filter(a => !a.removed_at).length > 0 && (
+      {/* Assigned Staff Avatars */}
+      {assignments.length > 0 && (
         <InlineAssignedStaff 
           assignments={assignments}
           maxVisible={3}
+          onRemove={(assignmentId, isFaded) => {
+            onRemoveStaff?.(assignmentId, caseItem.id, isFaded, isInProgress)
+          }}
+          canManageStaff={canManageStaff}
+          dropZonesEnabled={dropZonesEnabled}
         />
       )}
       
@@ -223,12 +282,6 @@ function CompactCaseRow({
         caseNumber={caseItem.case_number}
         isActive={isInProgress}
         isCompleted={isCompleted}
-        assignments={assignments}
-        onRemoveStaff={(assignmentId, isFaded) => {
-          onRemoveStaff?.(assignmentId, caseItem.id, isFaded, isInProgress)
-        }}
-        canManageStaff={canManageStaff || false}
-        dropZonesEnabled={dropZonesEnabled || false}
       >
         {content}
       </DroppableCaseRow>
@@ -289,10 +342,15 @@ export default function EnhancedRoomCard({
         </div>
         
         {/* Assigned Staff Avatars */}
-        {primaryCaseAssignments.filter(a => !a.removed_at).length > 0 && (
+        {primaryCaseAssignments.length > 0 && (
           <InlineAssignedStaff 
             assignments={primaryCaseAssignments}
             maxVisible={4}
+            onRemove={(assignmentId, isFaded) => {
+              onRemoveStaff?.(assignmentId, primaryCase.id, isFaded, isPrimaryInProgress)
+            }}
+            canManageStaff={canManageStaff}
+            dropZonesEnabled={dropZonesEnabled}
           />
         )}
         
@@ -376,12 +434,6 @@ export default function EnhancedRoomCard({
             caseNumber={primaryCase.case_number}
             isActive={isPrimaryInProgress}
             isCompleted={isPrimaryCompleted}
-            assignments={primaryCaseAssignments}
-            onRemoveStaff={(assignmentId, isFaded) => {
-              onRemoveStaff?.(assignmentId, primaryCase.id, isFaded, isPrimaryInProgress)
-            }}
-            canManageStaff={canManageStaff}
-            dropZonesEnabled={dropZonesEnabled}
           >
             {primaryCaseContent}
           </DroppableCaseRow>
@@ -398,7 +450,8 @@ export default function EnhancedRoomCard({
               {isActive ? 'Up Next' : 'Schedule'} ({otherCases.length})
             </p>
           </div>
-          <div className="px-2 pb-2 max-h-72 overflow-y-auto">
+          {/* Added pt-2 for tooltip space, changed overflow to clip only horizontally */}
+          <div className="px-2 pb-2 pt-2 max-h-80 overflow-y-auto overflow-x-visible">
             {otherCases.map((caseItem) => (
               <CompactCaseRow 
                 key={caseItem.id} 

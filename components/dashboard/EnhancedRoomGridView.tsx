@@ -1,5 +1,5 @@
 // components/dashboard/EnhancedRoomGridView.tsx
-// UPDATED VERSION - passes staff assignment props to room cards
+// Room grid using enhanced cards with pace data and staff assignment support
 
 'use client'
 
@@ -10,7 +10,7 @@ import EnhancedRoomCard from './EnhancedRoomCard'
 interface EnhancedRoomGridViewProps {
   roomsWithCases: RoomWithCase[]
   loading?: boolean
-  // NEW props for staff assignment
+  // Staff assignment props
   assignmentsByCaseId?: Record<string, CaseStaffAssignment[]>
   onRemoveStaff?: (assignmentId: string, caseId: string, isFaded: boolean, isInProgress: boolean) => void
   canManageStaff?: boolean
@@ -39,7 +39,6 @@ export default function EnhancedRoomGridView({
         <EnhancedRoomCard 
           key={roomWithCase.room.id} 
           roomWithCase={roomWithCase}
-          // Pass through staff assignment props
           assignmentsByCaseId={assignmentsByCaseId}
           onRemoveStaff={onRemoveStaff}
           canManageStaff={canManageStaff}
@@ -59,13 +58,10 @@ function RoomGridSkeleton() {
           key={i}
           className="bg-white rounded-2xl border border-slate-200 overflow-hidden animate-pulse"
         >
-          {/* Header skeleton */}
           <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
             <div className="h-6 w-24 bg-slate-200 rounded" />
             <div className="h-6 w-20 bg-slate-200 rounded-full" />
           </div>
-          
-          {/* Content skeleton */}
           <div className="p-4">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-slate-200" />
@@ -78,8 +74,6 @@ function RoomGridSkeleton() {
                 <div className="h-3 w-12 bg-slate-100 rounded ml-auto" />
               </div>
             </div>
-            
-            {/* Progress bar skeleton */}
             <div className="mt-4 space-y-2">
               <div className="h-1.5 bg-slate-100 rounded-full" />
               <div className="flex justify-between">
