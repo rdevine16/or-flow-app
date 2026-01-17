@@ -1,6 +1,6 @@
 // ============================================
 // FILE: components/cases/CaseForm.tsx
-// UPDATED: Added payer_id field for financials
+// UPDATED: Added rep_required_override and case_device_companies for SPD tray tracking
 // ============================================
 
 'use client'
@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
 import { getLocalDateString } from '../../lib/date-utils'
-import { caseAudit } from '../../lib/audit-logger'
+import { caseAudit, caseDeviceAudit } from '../../lib/audit-logger'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 
@@ -29,8 +29,14 @@ interface FormData {
   surgeon_id: string
   anesthesiologist_id: string
   operative_side: string
-  payer_id: string  // NEW
+  payer_id: string
   notes: string
+}
+
+interface ProcedureType {
+  id: string
+  name: string
+  requires_rep: boolean
 }
 
 // Operative side options
@@ -60,28 +66,38 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     surgeon_id: '',
     anesthesiologist_id: '',
     operative_side: '',
-    payer_id: '',  // NEW
+    payer_id: '',
     notes: '',
   })
 
-  // NEW: State for implant companies
+  // State for implant companies
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([])
   const [originalCompanyIds, setOriginalCompanyIds] = useState<string[]>([])
+
+  // NEW: Rep required override state
+  // null = use procedure default, true = force require, false = force no require
+  const [repRequiredOverride, setRepRequiredOverride] = useState<boolean | null>(null)
+  const [originalRepRequiredOverride, setOriginalRepRequiredOverride] = useState<boolean | null>(null)
 
   // Store original data for edit mode to track changes
   const [originalData, setOriginalData] = useState<FormData | null>(null)
 
   const [orRooms, setOrRooms] = useState<{ id: string; name: string }[]>([])
-  const [procedureTypes, setProcedureTypes] = useState<{ id: string; name: string }[]>([])
+  const [procedureTypes, setProcedureTypes] = useState<ProcedureType[]>([])
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([])
   const [surgeons, setSurgeons] = useState<{ id: string; first_name: string; last_name: string }[]>([])
   const [anesthesiologists, setAnesthesiologists] = useState<{ id: string; first_name: string; last_name: string }[]>([])
   
-  // NEW: Payers state
+  // Payers state
   const [payers, setPayers] = useState<{ id: string; name: string }[]>([])
   
-  // NEW: Store implant companies for audit logging
+  // Store implant companies for audit logging
   const [implantCompanies, setImplantCompanies] = useState<{ id: string; name: string }[]>([])
+
+  // NEW: Compute effective rep required status
+  const selectedProcedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
+  const procedureRequiresRep = selectedProcedure?.requires_rep ?? false
+  const effectiveRepRequired = repRequiredOverride !== null ? repRequiredOverride : procedureRequiresRep
 
   // First, get the current user's facility
   useEffect(() => {
@@ -119,17 +135,15 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
       const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
-        // UPDATED: Fetch both global (NULL) and facility-specific procedures
-        supabase.from('procedure_types').select('id, name')
+        // UPDATED: Fetch requires_rep along with procedure types
+        supabase.from('procedure_types').select('id, name, requires_rep')
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
         supabase.from('users').select('id, first_name, last_name, role_id').eq('facility_id', userFacilityId),
-        // NEW: Fetch implant companies for audit logging
         supabase.from('implant_companies').select('id, name')
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
-        // NEW: Fetch payers for the facility (only active ones)
         supabase.from('payers').select('id, name')
           .eq('facility_id', userFacilityId)
           .is('deleted_at', null)
@@ -137,7 +151,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       ])
 
       setOrRooms(roomsRes.data || [])
-      setProcedureTypes(proceduresRes.data || [])
+      setProcedureTypes((proceduresRes.data as ProcedureType[]) || [])
       setStatuses(statusesRes.data || [])
       setImplantCompanies(companiesRes.data || [])
       setPayers(payersRes.data || [])
@@ -188,10 +202,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     async function fetchCase() {
       if (mode !== 'edit' || !caseId) return
 
-      // Fetch case data
+      // Fetch case data including rep_required_override
       const { data, error } = await supabase
         .from('cases')
-        .select('*')
+        .select('*, rep_required_override')
         .eq('id', caseId)
         .single()
 
@@ -210,14 +224,18 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         surgeon_id: data.surgeon_id || '',
         anesthesiologist_id: data.anesthesiologist_id || '',
         operative_side: data.operative_side || '',
-        payer_id: data.payer_id || '',  // NEW
+        payer_id: data.payer_id || '',
         notes: data.notes || '',
       }
 
       setFormData(caseFormData)
       setOriginalData(caseFormData)
 
-      // NEW: Fetch existing implant companies for this case
+      // Set rep required override
+      setRepRequiredOverride(data.rep_required_override)
+      setOriginalRepRequiredOverride(data.rep_required_override)
+
+      // Fetch existing implant companies for this case
       const { data: caseCompanies } = await supabase
         .from('case_implant_companies')
         .select('implant_company_id')
@@ -237,10 +255,25 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }
   }, [caseId, mode, userFacilityId])
 
-  // NEW: Handle surgeon preference selection (quick-fill)
+  // Handle surgeon preference selection (quick-fill)
   const handlePreferenceSelect = (preference: { procedureTypeId: string; implantCompanyIds: string[] }) => {
     setFormData(prev => ({ ...prev, procedure_type_id: preference.procedureTypeId }))
     setSelectedCompanyIds(preference.implantCompanyIds)
+  }
+
+  // NEW: Handle rep required toggle
+  const handleRepRequiredToggle = () => {
+    // Cycle through: use default -> force yes -> force no -> use default
+    if (repRequiredOverride === null) {
+      // Currently using default, switch to opposite of default
+      setRepRequiredOverride(!procedureRequiresRep)
+    } else if (repRequiredOverride === true) {
+      // Currently forced yes, switch to forced no
+      setRepRequiredOverride(false)
+    } else {
+      // Currently forced no, switch back to using default
+      setRepRequiredOverride(null)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -254,6 +287,19 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       return
     }
 
+    // NEW: Warning if rep required but no company assigned
+    if (effectiveRepRequired && selectedCompanyIds.length === 0) {
+      const proceed = window.confirm(
+        'This case requires a device rep but no implant company is assigned. ' +
+        'The case will appear as "No Company Assigned" on the SPD dashboard.\n\n' +
+        'Do you want to continue anyway?'
+      )
+      if (!proceed) {
+        setLoading(false)
+        return
+      }
+    }
+
     const caseData = {
       case_number: formData.case_number,
       scheduled_date: formData.scheduled_date,
@@ -264,9 +310,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       surgeon_id: formData.surgeon_id || null,
       anesthesiologist_id: formData.anesthesiologist_id || null,
       operative_side: formData.operative_side || null,
-      payer_id: formData.payer_id || null,  // NEW
+      payer_id: formData.payer_id || null,
       notes: formData.notes || null,
       facility_id: userFacilityId,
+      rep_required_override: repRequiredOverride, // NEW
     }
 
     let result
@@ -285,7 +332,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           procedure_name: procedure?.name,
         })
 
-        // NEW: Save implant companies
+        // Save implant companies
         if (selectedCompanyIds.length > 0) {
           await supabase.from('case_implant_companies').insert(
             selectedCompanyIds.map(companyId => ({
@@ -306,6 +353,43 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                 companyId,
                 userFacilityId
               )
+            }
+          }
+
+          // NEW: If rep is required, also create case_device_companies entries for SPD tracking
+          if (effectiveRepRequired) {
+            await supabase.from('case_device_companies').insert(
+              selectedCompanyIds.map(companyId => ({
+                case_id: savedCaseId,
+                implant_company_id: companyId,
+                tray_status: 'pending',
+              }))
+            )
+
+            // Create activity log entries
+            for (const companyId of selectedCompanyIds) {
+              const company = implantCompanies.find(c => c.id === companyId)
+              if (company) {
+                await supabase.from('case_device_activity').insert({
+                  case_id: savedCaseId,
+                  implant_company_id: companyId,
+                  activity_type: 'company_assigned',
+                  actor_id: (await supabase.auth.getUser()).data.user?.id,
+                  actor_type: 'facility_staff',
+                  message: `${company.name} assigned to case`,
+                  metadata: { company_name: company.name },
+                })
+
+                // Audit log for SPD
+                await caseDeviceAudit.companyAssigned(
+                  supabase,
+                  savedCaseId,
+                  formData.case_number,
+                  company.name,
+                  companyId,
+                  userFacilityId
+                )
+              }
             }
           }
         }
@@ -356,17 +440,20 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           changes.status = newStatus?.name || 'None'
           oldValues.status = oldStatus?.name || 'None'
         }
-        // Track operative side changes
         if (formData.operative_side !== originalData.operative_side) {
           changes.operative_side = formData.operative_side || 'None'
           oldValues.operative_side = originalData.operative_side || 'None'
         }
-        // NEW: Track payer changes
         if (formData.payer_id !== originalData.payer_id) {
           const newPayer = payers.find(p => p.id === formData.payer_id)
           const oldPayer = payers.find(p => p.id === originalData.payer_id)
           changes.payer = newPayer?.name || 'None (Default)'
           oldValues.payer = oldPayer?.name || 'None (Default)'
+        }
+        // NEW: Track rep_required_override changes
+        if (repRequiredOverride !== originalRepRequiredOverride) {
+          changes.rep_required = repRequiredOverride === null ? 'Use Procedure Default' : repRequiredOverride ? 'Required' : 'Not Required'
+          oldValues.rep_required = originalRepRequiredOverride === null ? 'Use Procedure Default' : originalRepRequiredOverride ? 'Required' : 'Not Required'
         }
 
         // Only log if there were changes
@@ -391,10 +478,37 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             .eq('case_id', savedCaseId)
             .in('implant_company_id', removedCompanies)
 
+          // NEW: Also remove from case_device_companies
+          await supabase
+            .from('case_device_companies')
+            .delete()
+            .eq('case_id', savedCaseId)
+            .in('implant_company_id', removedCompanies)
+
           for (const companyId of removedCompanies) {
             const company = implantCompanies.find(c => c.id === companyId)
             if (company) {
               await caseAudit.implantCompanyRemoved(
+                supabase,
+                savedCaseId,
+                formData.case_number,
+                company.name,
+                companyId,
+                userFacilityId
+              )
+
+              // Activity log
+              await supabase.from('case_device_activity').insert({
+                case_id: savedCaseId,
+                implant_company_id: companyId,
+                activity_type: 'company_removed',
+                actor_id: (await supabase.auth.getUser()).data.user?.id,
+                actor_type: 'facility_staff',
+                message: `${company.name} removed from case`,
+                metadata: { company_name: company.name },
+              })
+
+              await caseDeviceAudit.companyRemoved(
                 supabase,
                 savedCaseId,
                 formData.case_number,
@@ -415,6 +529,17 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             }))
           )
 
+          // NEW: If rep is required, also add to case_device_companies
+          if (effectiveRepRequired) {
+            await supabase.from('case_device_companies').insert(
+              addedCompanies.map(companyId => ({
+                case_id: savedCaseId,
+                implant_company_id: companyId,
+                tray_status: 'pending',
+              }))
+            )
+          }
+
           for (const companyId of addedCompanies) {
             const company = implantCompanies.find(c => c.id === companyId)
             if (company) {
@@ -426,7 +551,49 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                 companyId,
                 userFacilityId
               )
+
+              if (effectiveRepRequired) {
+                // Activity log
+                await supabase.from('case_device_activity').insert({
+                  case_id: savedCaseId,
+                  implant_company_id: companyId,
+                  activity_type: 'company_assigned',
+                  actor_id: (await supabase.auth.getUser()).data.user?.id,
+                  actor_type: 'facility_staff',
+                  message: `${company.name} assigned to case`,
+                  metadata: { company_name: company.name },
+                })
+
+                await caseDeviceAudit.companyAssigned(
+                  supabase,
+                  savedCaseId,
+                  formData.case_number,
+                  company.name,
+                  companyId,
+                  userFacilityId
+                )
+              }
             }
+          }
+        }
+
+        // NEW: Handle case where rep required status changed but companies stayed the same
+        // If rep is now required but wasn't before, create case_device_companies entries
+        const wasRepRequired = originalRepRequiredOverride !== null 
+          ? originalRepRequiredOverride 
+          : (procedureTypes.find(p => p.id === originalData.procedure_type_id)?.requires_rep ?? false)
+        
+        if (effectiveRepRequired && !wasRepRequired && selectedCompanyIds.length > 0) {
+          // Rep is now required, create case_device_companies entries for existing companies
+          const existingCompanies = selectedCompanyIds.filter(id => originalCompanyIds.includes(id))
+          if (existingCompanies.length > 0) {
+            await supabase.from('case_device_companies').insert(
+              existingCompanies.map(companyId => ({
+                case_id: savedCaseId,
+                implant_company_id: companyId,
+                tray_status: 'pending',
+              }))
+            )
           }
         }
       }
@@ -519,7 +686,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         />
       </div>
 
-      {/* NEW: Surgeon Preference Quick-Fill */}
+      {/* Surgeon Preference Quick-Fill */}
       {userFacilityId && (
         <SurgeonPreferenceSelect
           surgeonId={formData.surgeon_id || null}
@@ -535,7 +702,11 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             label="Procedure Type"
             placeholder="Select Procedure"
             value={formData.procedure_type_id}
-            onChange={(id) => setFormData({ ...formData, procedure_type_id: id })}
+            onChange={(id) => {
+              setFormData({ ...formData, procedure_type_id: id })
+              // Reset rep override when procedure changes
+              setRepRequiredOverride(null)
+            }}
             options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
           />
         </div>
@@ -559,20 +730,95 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       </div>
 
-      {/* NEW: Implant Companies */}
+      {/* NEW: Device Rep & Implant Companies Section */}
       {userFacilityId && (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Implant Companies
-          </label>
-          <ImplantCompanySelect
-            facilityId={userFacilityId}
-            selectedIds={selectedCompanyIds}
-            onChange={setSelectedCompanyIds}
-          />
-          <p className="text-xs text-slate-500 mt-1.5">
-            Select all vendors providing implants for this case
-          </p>
+        <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">Device Rep & Trays</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Configure device company requirements for this case
+              </p>
+            </div>
+          </div>
+
+          {/* Rep Required Toggle & Implant Companies side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Rep Required Toggle */}
+            <div className="md:col-span-1">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Requires Device Rep
+              </label>
+              <button
+                type="button"
+                onClick={handleRepRequiredToggle}
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all flex items-center justify-between ${
+                  effectiveRepRequired
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-slate-200 bg-white text-slate-600'
+                }`}
+              >
+                <span className="font-medium">
+                  {effectiveRepRequired ? 'Yes' : 'No'}
+                </span>
+                <div className="flex items-center gap-2">
+                  {repRequiredOverride !== null && (
+                    <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                      Override
+                    </span>
+                  )}
+                  {/* Toggle indicator */}
+                  <div className={`w-10 h-6 rounded-full transition-colors ${effectiveRepRequired ? 'bg-blue-500' : 'bg-slate-300'}`}>
+                    <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform mt-1 ${effectiveRepRequired ? 'translate-x-5 ml-0' : 'translate-x-1'}`} />
+                  </div>
+                </div>
+              </button>
+              {selectedProcedure && (
+                <p className="text-xs text-slate-500 mt-1.5">
+                  Procedure default: {procedureRequiresRep ? 'Required' : 'Not required'}
+                  {repRequiredOverride !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setRepRequiredOverride(null)}
+                      className="ml-2 text-blue-600 hover:underline"
+                    >
+                      Reset to default
+                    </button>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Implant Companies */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Implant Companies
+                {effectiveRepRequired && <span className="text-amber-600 ml-1">*</span>}
+              </label>
+              <ImplantCompanySelect
+                facilityId={userFacilityId}
+                selectedIds={selectedCompanyIds}
+                onChange={setSelectedCompanyIds}
+              />
+              <p className="text-xs text-slate-500 mt-1.5">
+                {effectiveRepRequired 
+                  ? 'Select vendors providing implants. They will be notified to confirm tray requirements.'
+                  : 'Select all vendors providing implants for this case (optional)'}
+              </p>
+            </div>
+          </div>
+
+          {/* Warning if rep required but no company selected */}
+          {effectiveRepRequired && selectedCompanyIds.length === 0 && (
+            <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <svg className="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm text-amber-800">
+                This case requires a device rep but no implant company is selected. Please assign at least one company.
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -586,7 +832,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
         />
         
-        {/* NEW: Payer Selection */}
+        {/* Payer Selection */}
         {payers.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
