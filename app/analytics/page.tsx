@@ -7,12 +7,12 @@ import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
-import DateFilter from '@/components/ui/DateFilter'
 
 // Tremor components
 import {
   BarChart,
   DonutChart,
+  AreaChart,
   Legend,
   type Color,
 } from '@tremor/react'
@@ -61,6 +61,129 @@ interface KPIData {
   delta?: number
   deltaType?: 'increase' | 'decrease' | 'unchanged'
   dailyData?: Array<{ color: Color; tooltip: string }>
+}
+
+interface ProcedureCategory {
+  id: string
+  name: string
+  display_name: string
+}
+
+interface ProcedureTechnique {
+  id: string
+  name: string
+  display_name: string
+}
+
+// ============================================
+// DATE FILTER WITH CUSTOM OPTION
+// ============================================
+
+interface DateFilterProps {
+  selectedFilter: string
+  onFilterChange: (filter: string, startDate?: string, endDate?: string) => void
+}
+
+function DateFilterWithCustom({ selectedFilter, onFilterChange }: DateFilterProps) {
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [showCustom, setShowCustom] = useState(selectedFilter === 'custom')
+
+  const presets = [
+    { value: 'week', label: 'Last 7 Days' },
+    { value: 'month', label: 'This Month' },
+    { value: 'quarter', label: 'This Quarter' },
+    { value: 'year', label: 'This Year' },
+    { value: 'custom', label: 'Custom Range' },
+  ]
+
+  const handlePresetChange = (value: string) => {
+    if (value === 'custom') {
+      setShowCustom(true)
+      // Don't trigger filter change yet - wait for dates
+    } else {
+      setShowCustom(false)
+      const { startDate, endDate } = getDateRangeFromPreset(value)
+      onFilterChange(value, startDate, endDate)
+    }
+  }
+
+  const handleCustomApply = () => {
+    if (customStart && customEnd) {
+      onFilterChange('custom', customStart, customEnd)
+    }
+  }
+
+  const getDateRangeFromPreset = (preset: string) => {
+    const today = new Date()
+    let startDate: Date
+    let endDate = today
+
+    switch (preset) {
+      case 'week':
+        startDate = new Date(today)
+        startDate.setDate(today.getDate() - 7)
+        break
+      case 'month':
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1)
+        break
+      case 'quarter':
+        const currentQuarter = Math.floor(today.getMonth() / 3)
+        startDate = new Date(today.getFullYear(), currentQuarter * 3, 1)
+        break
+      case 'year':
+        startDate = new Date(today.getFullYear(), 0, 1)
+        break
+      default:
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1)
+    }
+
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <select
+        value={showCustom ? 'custom' : selectedFilter}
+        onChange={(e) => handlePresetChange(e.target.value)}
+        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+      >
+        {presets.map((preset) => (
+          <option key={preset.value} value={preset.value}>
+            {preset.label}
+          </option>
+        ))}
+      </select>
+
+      {showCustom && (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+          />
+          <span className="text-slate-400 text-sm">to</span>
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+          />
+          <button
+            onClick={handleCustomApply}
+            disabled={!customStart || !customEnd}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Apply
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ============================================
@@ -387,6 +510,8 @@ export default function AnalyticsHubPage() {
   
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
+  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
+  const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
   
@@ -410,6 +535,20 @@ export default function AnalyticsHubPage() {
     setFacilityCheckComplete(true)
   }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
 
+  // Fetch procedure categories and techniques
+  useEffect(() => {
+    async function fetchLookups() {
+      const [categoriesRes, techniquesRes] = await Promise.all([
+        supabase.from('procedure_categories').select('id, name, display_name').order('display_order'),
+        supabase.from('procedure_techniques').select('id, name, display_name').order('display_order'),
+      ])
+      
+      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
+      if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
+    }
+    fetchLookups()
+  }, [])
+
   // Fetch data
   const fetchData = async (startDate?: string, endDate?: string) => {
     if (!effectiveFacilityId) return
@@ -428,7 +567,14 @@ export default function AnalyticsHubPage() {
         or_room_id,
         status_id,
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-        procedure_types (id, name),
+        procedure_types (
+          id, 
+          name,
+          procedure_category_id,
+          technique_id,
+          procedure_categories (id, name, display_name),
+          procedure_techniques (id, name, display_name)
+        ),
         or_rooms (id, name),
         case_statuses (name),
         case_milestones (
@@ -470,7 +616,14 @@ export default function AnalyticsHubPage() {
           or_room_id,
           status_id,
           surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-          procedure_types (id, name),
+          procedure_types (
+            id, 
+            name,
+            procedure_category_id,
+            technique_id,
+            procedure_categories (id, name, display_name),
+            procedure_techniques (id, name, display_name)
+          ),
           or_rooms (id, name),
           case_statuses (name),
           case_milestones (
@@ -506,16 +659,184 @@ export default function AnalyticsHubPage() {
     return calculateAnalyticsOverview(cases, previousPeriodCases)
   }, [cases, previousPeriodCases])
 
-  // Chart data
-  const phaseChartData = [
-    { name: 'Pre-Op', minutes: Math.round(analytics.avgPreOpTime) },
-    { name: 'Surgical', minutes: Math.round(analytics.avgSurgicalTime) },
-    { name: 'Closing', minutes: Math.round(analytics.avgClosingTime) },
-    { name: 'Emergence', minutes: Math.round(analytics.avgEmergenceTime) },
-  ].filter(d => d.minutes > 0)
+  // ============================================
+  // NEW CHART DATA CALCULATIONS
+  // ============================================
 
-  const totalPhaseTime = phaseChartData.reduce((sum, d) => sum + d.minutes, 0)
-  const chartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet']
+  // Daily Case Volume Trend Data
+  const dailyCaseTrendData = useMemo(() => {
+    const byDate: { [key: string]: number } = {}
+    
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name === 'completed') {
+        const date = c.scheduled_date
+        byDate[date] = (byDate[date] || 0) + 1
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, count]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Completed Cases': count,
+      }))
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [cases])
+
+  // Procedure Category Volume Data
+  const procedureCategoryData = useMemo(() => {
+    const byCategoryId: { [key: string]: { count: number; name: string } } = {}
+    
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name !== 'completed') return
+      
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+      
+      const category = procType.procedure_categories
+      if (category) {
+        const catData = Array.isArray(category) ? category[0] : category
+        if (catData) {
+          if (!byCategoryId[catData.id]) {
+            byCategoryId[catData.id] = { count: 0, name: catData.display_name || catData.name }
+          }
+          byCategoryId[catData.id].count++
+        }
+      }
+    })
+
+    return Object.values(byCategoryId)
+      .map(cat => ({ name: cat.name, cases: cat.count }))
+      .sort((a, b) => b.cases - a.cases)
+      .slice(0, 8) // Top 8 categories
+  }, [cases])
+
+  const categoryChartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet', 'fuchsia', 'pink', 'emerald', 'amber']
+
+// Helper to get surgical time from milestones
+const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
+  const milestones = caseData.case_milestones || []
+  let incisionTimestamp: number | null = null
+  let closingTimestamp: number | null = null
+
+  milestones.forEach(m => {
+    const mType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
+    if (mType?.name === 'incision') {
+      incisionTimestamp = new Date(m.recorded_at).getTime()
+    } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
+      closingTimestamp = new Date(m.recorded_at).getTime()
+    }
+  })
+
+  if (incisionTimestamp !== null && closingTimestamp !== null) {
+    return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
+  }
+  return null
+}
+
+  // Robotic vs Traditional Comparison Data for Total Knee
+  const kneeComparisonData = useMemo(() => {
+    const totalKneeCategoryId = procedureCategories.find(c => c.name === 'total_knee')?.id
+    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
+    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
+
+    if (!totalKneeCategoryId) return []
+
+    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
+
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name !== 'completed') return
+
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      const category = procType.procedure_categories
+      const catData = Array.isArray(category) ? category[0] : category
+      if (catData?.id !== totalKneeCategoryId) return
+
+      const surgicalTime = getSurgicalTimeMinutes(c)
+      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return // Filter outliers
+
+      const date = c.scheduled_date
+      if (!byDate[date]) {
+        byDate[date] = { robotic: [], traditional: [] }
+      }
+
+      if (procType.technique_id === roboticTechniqueId) {
+        byDate[date].robotic.push(surgicalTime)
+      } else if (procType.technique_id === manualTechniqueId) {
+        byDate[date].traditional.push(surgicalTime)
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, times]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Robotic (Mako)': times.robotic.length > 0 
+          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
+          : null,
+        'Traditional': times.traditional.length > 0 
+          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
+          : null,
+      }))
+      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [cases, procedureCategories, procedureTechniques])
+
+  // Robotic vs Traditional Comparison Data for Total Hip
+  const hipComparisonData = useMemo(() => {
+    const totalHipCategoryId = procedureCategories.find(c => c.name === 'total_hip')?.id
+    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
+    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
+
+    if (!totalHipCategoryId) return []
+
+    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
+
+    cases.forEach(c => {
+      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
+      if (status?.name !== 'completed') return
+
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      const category = procType.procedure_categories
+      const catData = Array.isArray(category) ? category[0] : category
+      if (catData?.id !== totalHipCategoryId) return
+
+      const surgicalTime = getSurgicalTimeMinutes(c)
+      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return
+
+      const date = c.scheduled_date
+      if (!byDate[date]) {
+        byDate[date] = { robotic: [], traditional: [] }
+      }
+
+      if (procType.technique_id === roboticTechniqueId) {
+        byDate[date].robotic.push(surgicalTime)
+      } else if (procType.technique_id === manualTechniqueId) {
+        byDate[date].traditional.push(surgicalTime)
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, times]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Robotic (Mako)': times.robotic.length > 0 
+          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
+          : null,
+        'Traditional': times.traditional.length > 0 
+          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
+          : null,
+      }))
+      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [cases, procedureCategories, procedureTechniques])
 
   // Report cards configuration
   const reportCards: ReportCardProps[] = [
@@ -621,7 +942,7 @@ export default function AnalyticsHubPage() {
                 Performance insights and operational metrics
               </p>
             </div>
-            <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
+            <DateFilterWithCustom selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
           </div>
 
           {loading ? (
@@ -673,25 +994,25 @@ export default function AnalyticsHubPage() {
                 </div>
               </section>
 
-              {/* CHARTS ROW */}
+              {/* CHARTS ROW - Case Trends & Category Breakdown */}
               <section>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Bar Chart */}
+                  {/* Daily Case Volume Trend */}
                   <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Time by Phase</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Average minutes per surgical phase</p>
+                      <h3 className="text-base font-semibold text-slate-900">Case Volume Trend</h3>
+                      <p className="text-sm text-slate-500 mt-0.5">Completed cases over time</p>
                     </div>
                     <div className="p-6">
-                      {phaseChartData.length > 0 ? (
+                      {dailyCaseTrendData.length > 0 ? (
                         <BarChart
                           className="h-64"
-                          data={phaseChartData}
-                          index="name"
-                          categories={['minutes']}
+                          data={dailyCaseTrendData}
+                          index="date"
+                          categories={['Completed Cases']}
                           colors={['blue']}
-                          valueFormatter={(v) => `${v} min`}
-                          yAxisWidth={48}
+                          valueFormatter={(v) => v.toString()}
+                          yAxisWidth={40}
                           showAnimation={true}
                           showLegend={false}
                         />
@@ -706,29 +1027,29 @@ export default function AnalyticsHubPage() {
                     </div>
                   </div>
 
-                  {/* Donut Chart */}
+                  {/* Procedure Category Breakdown */}
                   <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Time Distribution</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Proportion of case time by phase</p>
+                      <h3 className="text-base font-semibold text-slate-900">Procedure Categories</h3>
+                      <p className="text-sm text-slate-500 mt-0.5">Case distribution by procedure type</p>
                     </div>
                     <div className="p-6">
-                      {phaseChartData.length > 0 ? (
+                      {procedureCategoryData.length > 0 ? (
                         <div className="flex flex-col items-center">
                           <DonutChart
                             className="h-52"
-                            data={phaseChartData}
+                            data={procedureCategoryData}
                             index="name"
-                            category="minutes"
-                            colors={chartColors}
-                            valueFormatter={(v) => `${v} min`}
+                            category="cases"
+                            colors={categoryChartColors}
+                            valueFormatter={(v) => `${v} cases`}
                             showAnimation={true}
-                            label={`${totalPhaseTime} min`}
+                            label={`${procedureCategoryData.reduce((sum, d) => sum + d.cases, 0)} total`}
                           />
                           <Legend
                             className="mt-4"
-                            categories={phaseChartData.map(d => d.name)}
-                            colors={chartColors}
+                            categories={procedureCategoryData.map(d => d.name)}
+                            colors={categoryChartColors.slice(0, procedureCategoryData.length)}
                           />
                         </div>
                       ) : (
@@ -743,6 +1064,77 @@ export default function AnalyticsHubPage() {
                   </div>
                 </div>
               </section>
+
+              {/* ROBOTIC VS TRADITIONAL COMPARISON */}
+              {(kneeComparisonData.length > 0 || hipComparisonData.length > 0) && (
+                <section>
+                  <SectionHeader
+                    title="Robotic vs Traditional Surgical Time"
+                    subtitle="Average surgical time comparison by technique"
+                  />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Total Knee Comparison */}
+                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="text-base font-semibold text-slate-900">Total Knee Arthroplasty</h3>
+                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
+                      </div>
+                      <div className="p-6">
+                        {kneeComparisonData.length > 0 ? (
+                          <AreaChart
+                            className="h-56"
+                            data={kneeComparisonData}
+                            index="date"
+                            categories={['Robotic (Mako)', 'Traditional']}
+                            colors={['cyan', 'slate']}
+                            valueFormatter={(v) => `${v} min`}
+                            yAxisWidth={48}
+                            showAnimation={true}
+                            connectNulls={true}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-56 text-slate-400">
+                            <div className="text-center">
+                              <ChartBarIcon className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <p className="text-sm">No TKA data available</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Total Hip Comparison */}
+                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-slate-100">
+                        <h3 className="text-base font-semibold text-slate-900">Total Hip Arthroplasty</h3>
+                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
+                      </div>
+                      <div className="p-6">
+                        {hipComparisonData.length > 0 ? (
+                          <AreaChart
+                            className="h-56"
+                            data={hipComparisonData}
+                            index="date"
+                            categories={['Robotic (Mako)', 'Traditional']}
+                            colors={['cyan', 'slate']}
+                            valueFormatter={(v) => `${v} min`}
+                            yAxisWidth={48}
+                            showAnimation={true}
+                            connectNulls={true}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-56 text-slate-400">
+                            <div className="text-center">
+                              <ChartBarIcon className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <p className="text-sm">No THA data available</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* AI INSIGHT CARD */}
               {analytics.surgeonIdleTime.value > 0 && (

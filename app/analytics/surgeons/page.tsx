@@ -164,6 +164,86 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 // ============================================
+// DATE FILTER WITH CUSTOM OPTION
+// ============================================
+
+interface DateFilterProps {
+  selectedPeriod: string
+  onPeriodChange: (period: string) => void
+  customStartDate?: string
+  customEndDate?: string
+  onCustomDateChange?: (start: string, end: string) => void
+}
+
+function PeriodSelectorWithCustom({ 
+  selectedPeriod, 
+  onPeriodChange,
+  customStartDate,
+  customEndDate,
+  onCustomDateChange 
+}: DateFilterProps) {
+  const [showCustom, setShowCustom] = useState(selectedPeriod === 'custom')
+  const [localStart, setLocalStart] = useState(customStartDate || '')
+  const [localEnd, setLocalEnd] = useState(customEndDate || '')
+
+  const handlePresetChange = (value: string) => {
+    if (value === 'custom') {
+      setShowCustom(true)
+    } else {
+      setShowCustom(false)
+      onPeriodChange(value)
+    }
+  }
+
+  const handleApplyCustom = () => {
+    if (localStart && localEnd && onCustomDateChange) {
+      onCustomDateChange(localStart, localEnd)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <select
+        value={showCustom ? 'custom' : selectedPeriod}
+        onChange={(e) => handlePresetChange(e.target.value)}
+        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+      >
+        <option value="week">Last 7 Days</option>
+        <option value="month">This Month</option>
+        <option value="quarter">This Quarter</option>
+        <option value="year">This Year</option>
+        <option value="custom">Custom Range</option>
+      </select>
+
+      {showCustom && (
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={localStart}
+            onChange={(e) => setLocalStart(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+          <span className="text-slate-400 text-sm">to</span>
+          <input
+            type="date"
+            value={localEnd}
+            onChange={(e) => setLocalEnd(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+          <button
+            onClick={handleApplyCustom}
+            disabled={!localStart || !localEnd}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Apply
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
@@ -181,6 +261,8 @@ export default function SurgeonPerformancePage() {
   
   // Overview tab state
   const [timePeriod, setTimePeriod] = useState('month')
+  const [customStartDate, setCustomStartDate] = useState<string>('')
+  const [customEndDate, setCustomEndDate] = useState<string>('')
   const [periodCases, setPeriodCases] = useState<CaseWithMilestones[]>([])
   const [prevPeriodCases, setPrevPeriodCases] = useState<CaseWithMilestones[]>([])
   const [procedureBreakdown, setProcedureBreakdown] = useState<ProcedureBreakdown[]>([])
@@ -252,13 +334,37 @@ export default function SurgeonPerformancePage() {
     fetchData()
   }, [effectiveFacilityId])
 
+  // Helper to get date range (handles custom dates)
+  const getEffectiveDateRange = () => {
+    if (timePeriod === 'custom' && customStartDate && customEndDate) {
+      // Calculate previous period for custom range
+      const start = new Date(customStartDate)
+      const end = new Date(customEndDate)
+      const periodLength = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+      
+      const prevEnd = new Date(start)
+      prevEnd.setDate(prevEnd.getDate() - 1)
+      const prevStart = new Date(prevEnd)
+      prevStart.setDate(prevStart.getDate() - periodLength)
+
+      return {
+        startDate: customStartDate,
+        endDate: customEndDate,
+        prevStartDate: prevStart.toISOString().split('T')[0],
+        prevEndDate: prevEnd.toISOString().split('T')[0],
+        label: `${formatDateDisplay(customStartDate)} - ${formatDateDisplay(customEndDate)}`,
+      }
+    }
+    return getDateRange(timePeriod)
+  }
+
   // Fetch Overview data
   useEffect(() => {
     if (!selectedSurgeon || !effectiveFacilityId || activeTab !== 'overview') return
 
     async function fetchOverviewData() {
       setLoading(true)
-      const { startDate, endDate, prevStartDate, prevEndDate } = getDateRange(timePeriod)
+      const { startDate, endDate, prevStartDate, prevEndDate } = getEffectiveDateRange()
 
       // Current period cases
       const { data: currentData } = await supabase
@@ -298,7 +404,14 @@ export default function SurgeonPerformancePage() {
     }
 
     fetchOverviewData()
-  }, [selectedSurgeon, timePeriod, effectiveFacilityId, activeTab])
+  }, [selectedSurgeon, timePeriod, customStartDate, customEndDate, effectiveFacilityId, activeTab])
+
+  // Handle custom date change
+  const handleCustomDateChange = (start: string, end: string) => {
+    setCustomStartDate(start)
+    setCustomEndDate(end)
+    setTimePeriod('custom')
+  }
 
   // Fetch Day Analysis data
   useEffect(() => {
@@ -539,7 +652,7 @@ export default function SurgeonPerformancePage() {
 
   const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases, selectedProcedureFilter])
 
-  // Daily trend data for overview chart
+  // Daily trend data for overview chart - FIXED Y-axis formatting
   const dailyTrendData = useMemo(() => {
     const byDate: { [key: string]: CaseWithMilestones[] } = {}
     periodCases.forEach(c => {
@@ -553,15 +666,16 @@ export default function SurgeonPerformancePage() {
         const orTimes = completed.map(c => getTotalORTime(getMilestoneMap(c)))
         return {
           date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          cases: completed.length,
-          avgORTime: Math.round((calculateAverage(orTimes) || 0) / 60), // Convert to minutes for chart
+          rawDate: date,
+          'Cases': completed.length,  // Changed from 'cases' to 'Cases' for cleaner legend
+          avgORTime: Math.round((calculateAverage(orTimes) || 0) / 60),
         }
       })
-      .sort((a, b) => a.date.localeCompare(b.date))
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
   }, [periodCases])
 
   const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
-  const { label: periodLabel } = getDateRange(timePeriod)
+  const { label: periodLabel } = getEffectiveDateRange()
 
   // Loading states
   if (userLoading || initialLoading) {
@@ -665,18 +779,15 @@ export default function SurgeonPerformancePage() {
                 /* OVERVIEW TAB */
                 /* ============================================ */
                 <div className="space-y-6">
-                  {/* Period Selector */}
+                  {/* Period Selector with Custom Date Option */}
                   <div className="flex justify-end">
-                    <select
-                      value={timePeriod}
-                      onChange={(e) => setTimePeriod(e.target.value)}
-                      className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="week">Last 7 Days</option>
-                      <option value="month">This Month</option>
-                      <option value="quarter">This Quarter</option>
-                      <option value="year">This Year</option>
-                    </select>
+                    <PeriodSelectorWithCustom
+                      selectedPeriod={timePeriod}
+                      onPeriodChange={setTimePeriod}
+                      customStartDate={customStartDate}
+                      customEndDate={customEndDate}
+                      onCustomDateChange={handleCustomDateChange}
+                    />
                   </div>
 
                   {/* KPI Cards */}
@@ -713,7 +824,7 @@ export default function SurgeonPerformancePage() {
                     </div>
                   </div>
 
-                  {/* Trend Chart */}
+                  {/* Trend Chart - FIXED Y-axis */}
                   {dailyTrendData.length > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                       <h3 className="text-base font-semibold text-slate-900 mb-1">Daily Case Volume</h3>
@@ -722,10 +833,12 @@ export default function SurgeonPerformancePage() {
                         className="h-48"
                         data={dailyTrendData}
                         index="date"
-                        categories={['cases']}
+                        categories={['Cases']}
                         colors={['blue']}
-                        valueFormatter={(v: number) => `${v} cases`}
+                        valueFormatter={(v: number) => v.toString()}
+                        yAxisWidth={32}
                         showLegend={false}
+                        showAnimation={true}
                       />
                     </div>
                   )}
