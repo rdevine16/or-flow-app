@@ -88,7 +88,7 @@ export default function InviteUserModal({
     setLoading(true)
 
     try {
-      const response = await fetch('/api/invite', {
+      const response = await fetch('/api/admin/invite', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
