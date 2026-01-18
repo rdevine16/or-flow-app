@@ -9,23 +9,22 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import DateFilter from '@/components/ui/DateFilter'
 
-// Custom components
-import { Tracker } from '@/components/analytics/Tracker'
-import { KPICard, SimpleMetricCard, SurgeonIdleTimeCard } from '@/components/analytics/KPICard'
-
-// Charts (you already have Recharts)
+// Tremor components
 import {
+  Card,
+  Metric,
+  Text,
+  Title,
+  Subtitle,
+  Flex,
+  Grid,
+  BadgeDelta,
+  ProgressBar,
+  Tracker,
   BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts'
+  DonutChart,
+  type Color,
+} from '@tremor/react'
 
 // Analytics functions
 import {
@@ -36,15 +35,151 @@ import {
 } from '@/lib/analyticsV2'
 
 // ============================================
-// SECTION HEADER
+// TYPES
 // ============================================
 
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+interface KPIData {
+  value: number
+  displayValue: string
+  subtitle: string
+  target?: number
+  targetMet?: boolean
+  delta?: number
+  deltaType?: 'increase' | 'decrease' | 'unchanged'
+  dailyData?: Array<{ color: Color; tooltip: string }>
+}
+
+// ============================================
+// KPI CARD WITH TREMOR TRACKER
+// ============================================
+
+function KPICard({ 
+  title, 
+  kpi, 
+  highlighted = false,
+  showTracker = true,
+  onClick,
+  invertDelta = false
+}: { 
+  title: string
+  kpi: KPIData
+  highlighted?: boolean
+  showTracker?: boolean
+  onClick?: () => void
+  invertDelta?: boolean
+}) {
+  // Determine delta type display
+  const getDeltaType = () => {
+    if (!kpi.deltaType || kpi.deltaType === 'unchanged') return 'unchanged'
+    if (invertDelta) {
+      return kpi.deltaType === 'decrease' ? 'increase' : 'decrease'
+    }
+    return kpi.deltaType
+  }
+
   return (
-    <div className="mb-4">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
-    </div>
+    <Card
+      className={`${highlighted ? 'ring-2 ring-blue-500' : ''} ${onClick ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}`}
+      onClick={onClick}
+    >
+      <Flex alignItems="start">
+        <div>
+          <Text>{title}</Text>
+          <Metric className={highlighted ? 'text-blue-600' : ''}>{kpi.displayValue}</Metric>
+        </div>
+        {kpi.delta !== undefined && kpi.deltaType && (
+          <BadgeDelta deltaType={getDeltaType() as 'increase' | 'decrease' | 'unchanged'}>
+            {kpi.delta}%
+          </BadgeDelta>
+        )}
+      </Flex>
+
+      {kpi.target !== undefined && (
+        <Flex className="mt-4" justifyContent="start" alignItems="center">
+          <div className={`w-2 h-2 rounded-full mr-2 ${kpi.targetMet ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          <Text className="text-slate-500">
+            Target: {title.includes('Cancellation') ? `<${kpi.target}%` : `${kpi.target}%`}
+          </Text>
+        </Flex>
+      )}
+
+      {kpi.subtitle && (
+        <Text className="mt-2">{kpi.subtitle}</Text>
+      )}
+
+      {showTracker && kpi.dailyData && kpi.dailyData.length > 0 && (
+        <div className="mt-4">
+          <Flex justifyContent="between" className="mb-2">
+            <Text className="text-xs text-slate-400">Daily performance</Text>
+            <Text className="text-xs text-slate-400">Last {kpi.dailyData.length} days</Text>
+          </Flex>
+          <Tracker data={kpi.dailyData} className="h-10" />
+        </div>
+      )}
+
+      {onClick && (
+        <div className="mt-4 flex items-center text-xs font-medium text-blue-600">
+          View details
+          <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ============================================
+// SURGEON IDLE TIME CARD (Special)
+// ============================================
+
+function SurgeonIdleTimeCard({ 
+  kpi, 
+  onClick 
+}: { 
+  kpi: KPIData
+  onClick?: () => void 
+}) {
+  return (
+    <Card 
+      className="ring-2 ring-blue-500 cursor-pointer hover:shadow-lg transition-shadow"
+      decoration="top"
+      decorationColor="blue"
+      onClick={onClick}
+    >
+      <Flex alignItems="start">
+        <div>
+          <Flex justifyContent="start" className="gap-2">
+            <Text>Surgeon Idle Time</Text>
+            <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
+              Insight
+            </span>
+          </Flex>
+          <Metric className="text-blue-600">{kpi.displayValue}</Metric>
+        </div>
+      </Flex>
+
+      <Text className="mt-2">Avg wait between rooms</Text>
+
+      {kpi.subtitle && kpi.subtitle !== 'No optimization needed' && kpi.value > 0 && (
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <Text className="text-blue-800">💡 {kpi.subtitle}</Text>
+        </div>
+      )}
+
+      {(kpi.targetMet || kpi.value <= 5) && (
+        <div className="mt-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+          <Text className="text-emerald-700">✓ Excellent! Minimal surgeon wait time</Text>
+        </div>
+      )}
+
+      <div className="mt-4 flex items-center text-xs font-medium text-blue-600">
+        View flip room details
+        <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </Card>
   )
 }
 
@@ -66,16 +201,13 @@ function FlipRoomModal({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-        {/* Backdrop */}
         <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={onClose} />
         
-        {/* Modal */}
         <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden">
-          {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Flip Room Analysis</h3>
-              <p className="text-sm text-slate-500">Surgeon idle time between room transitions</p>
+              <Title>Flip Room Analysis</Title>
+              <Text>Surgeon idle time between room transitions</Text>
             </div>
             <button
               onClick={onClose}
@@ -87,7 +219,6 @@ function FlipRoomModal({
             </button>
           </div>
           
-          {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
             {data.length === 0 ? (
               <div className="text-center py-12">
@@ -96,37 +227,33 @@ function FlipRoomModal({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
-                <p className="text-slate-600 font-medium">No flip room patterns detected</p>
-                <p className="text-sm text-slate-500 mt-2">
+                <Text className="font-medium">No flip room patterns detected</Text>
+                <Text className="mt-2">
                   Flip rooms occur when a surgeon operates in multiple rooms on the same day.
-                </p>
+                </Text>
               </div>
             ) : (
               <div className="space-y-6">
                 {data.map((analysis, idx) => (
-                  <div key={idx} className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                    {/* Surgeon Header */}
-                    <div className="flex items-center justify-between mb-4">
+                  <Card key={idx} className="bg-slate-50">
+                    <Flex>
                       <div>
-                        <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
-                        <p className="text-sm text-slate-500">{analysis.date}</p>
+                        <Text className="font-semibold">{analysis.surgeonName}</Text>
+                        <Text className="text-slate-500">{analysis.date}</Text>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-slate-500">Total idle time</p>
-                        <p className="text-xl font-bold text-amber-600">
-                          {Math.round(analysis.totalIdleTime)} min
-                        </p>
+                        <Text className="text-slate-500">Total idle time</Text>
+                        <Metric className="text-amber-600">{Math.round(analysis.totalIdleTime)} min</Metric>
                       </div>
-                    </div>
+                    </Flex>
                     
-                    {/* Room Sequence */}
-                    <div className="mb-4">
-                      <p className="text-sm font-medium text-slate-600 mb-2">Room Sequence</p>
+                    <div className="mt-4">
+                      <Text className="font-medium mb-2">Room Sequence</Text>
                       <div className="flex items-center gap-2 flex-wrap">
                         {analysis.cases.map((c, i) => (
                           <div key={c.caseId} className="flex items-center">
                             <div className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-sm">
-                              <span className="font-medium text-slate-900">{c.roomName}</span>
+                              <span className="font-medium">{c.roomName}</span>
                               <span className="text-slate-500 ml-2">{c.scheduledStart}</span>
                             </div>
                             {i < analysis.cases.length - 1 && (
@@ -139,33 +266,32 @@ function FlipRoomModal({
                       </div>
                     </div>
                     
-                    {/* Transition Gaps */}
                     {analysis.idleGaps.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium text-slate-600 mb-2">Transition Gaps</p>
+                      <div className="mt-4">
+                        <Text className="font-medium mb-2">Transition Gaps</Text>
                         <div className="space-y-2">
                           {analysis.idleGaps.map((gap, i) => (
                             <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-slate-700">{gap.fromCase}</span>
+                                <Text className="font-medium">{gap.fromCase}</Text>
                                 <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                                 </svg>
-                                <span className="text-sm font-medium text-slate-700">{gap.toCase}</span>
+                                <Text className="font-medium">{gap.toCase}</Text>
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
-                                  <p className="text-xs text-slate-500">Idle time</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-red-600' : 'text-amber-600'}`}>
+                                  <Text className="text-xs text-slate-500">Idle time</Text>
+                                  <Text className={`font-semibold ${gap.idleMinutes > 10 ? 'text-red-600' : 'text-amber-600'}`}>
                                     {Math.round(gap.idleMinutes)} min
-                                  </p>
+                                  </Text>
                                 </div>
                                 {gap.optimalCallDelta > 0 && (
                                   <div className="text-right pl-4 border-l border-slate-200">
-                                    <p className="text-xs text-blue-600">Call earlier by</p>
-                                    <p className="font-semibold text-blue-600">
+                                    <Text className="text-xs text-blue-600">Call earlier by</Text>
+                                    <Text className="font-semibold text-blue-600">
                                       {Math.round(gap.optimalCallDelta)} min
-                                    </p>
+                                    </Text>
                                   </div>
                                 )}
                               </div>
@@ -174,7 +300,7 @@ function FlipRoomModal({
                         </div>
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -184,12 +310,6 @@ function FlipRoomModal({
     </div>
   )
 }
-
-// ============================================
-// CHART COLORS
-// ============================================
-
-const CHART_COLORS = ['#3b82f6', '#64748b', '#94a3b8', '#cbd5e1']
 
 // ============================================
 // MAIN PAGE COMPONENT
@@ -208,7 +328,6 @@ export default function AnalyticsOverviewPage() {
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
   
-  // Modal state
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
 
   // Determine effective facility ID
@@ -325,13 +444,13 @@ export default function AnalyticsOverviewPage() {
     return calculateAnalyticsOverview(cases, previousPeriodCases)
   }, [cases, previousPeriodCases])
 
-  // Chart data
-  const phaseData = [
-    { name: 'Pre-Op', value: Math.round(analytics.avgPreOpTime) },
-    { name: 'Surgical', value: Math.round(analytics.avgSurgicalTime) },
-    { name: 'Closing', value: Math.round(analytics.avgClosingTime) },
-    { name: 'Emergence', value: Math.round(analytics.avgEmergenceTime) },
-  ].filter(d => d.value > 0)
+  // Chart data for Tremor
+  const phaseChartData = [
+    { name: 'Pre-Op', minutes: Math.round(analytics.avgPreOpTime) },
+    { name: 'Surgical', minutes: Math.round(analytics.avgSurgicalTime) },
+    { name: 'Closing', minutes: Math.round(analytics.avgClosingTime) },
+    { name: 'Emergence', minutes: Math.round(analytics.avgEmergenceTime) },
+  ].filter(d => d.minutes > 0)
 
   // Loading state
   if (userLoading || !facilityCheckComplete) {
@@ -352,25 +471,21 @@ export default function AnalyticsOverviewPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
-              <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-                As a global admin, select a facility to view their analytics.
-              </p>
-              <Link
-                href="/admin/facilities"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                View Facilities
-              </Link>
+          <Card className="max-w-lg mx-auto text-center">
+            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </div>
-          </div>
+            <Title>No Facility Selected</Title>
+            <Text className="mt-2">Select a facility to view analytics.</Text>
+            <Link
+              href="/admin/facilities"
+              className="inline-flex items-center gap-2 px-4 py-2 mt-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              View Facilities
+            </Link>
+          </Card>
         </Container>
       </DashboardLayout>
     )
@@ -380,13 +495,13 @@ export default function AnalyticsOverviewPage() {
     <DashboardLayout>
       <Container className="py-8">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <Flex className="mb-8" justifyContent="between" alignItems="start">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Analytics Overview</h1>
-            <p className="text-slate-500 mt-1">{analytics.completedCases} completed cases analyzed</p>
+            <Title className="text-2xl">Analytics Overview</Title>
+            <Text className="mt-1">{analytics.completedCases} completed cases analyzed</Text>
           </div>
           <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
-        </div>
+        </Flex>
 
         {loading ? (
           <div className="flex items-center justify-center py-24">
@@ -397,15 +512,11 @@ export default function AnalyticsOverviewPage() {
           </div>
         ) : (
           <>
-            {/* ================================================
-                ROW 1: KEY PERFORMANCE INDICATORS (The Big 4)
-                ================================================ */}
+            {/* ROW 1: KEY PERFORMANCE INDICATORS */}
             <div className="mb-8">
-              <SectionHeader 
-                title="Key Performance Indicators" 
-                subtitle="Click any metric to drill down into details"
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Title className="text-lg mb-1">Key Performance Indicators</Title>
+              <Text className="mb-4">Click any metric to drill down into details</Text>
+              <Grid numItemsMd={2} numItemsLg={4} className="gap-4">
                 <KPICard 
                   title="First Case On-Time" 
                   kpi={analytics.fcots}
@@ -426,18 +537,14 @@ export default function AnalyticsOverviewPage() {
                   kpi={analytics.caseVolume}
                   showTracker={false}
                 />
-              </div>
+              </Grid>
             </div>
 
-            {/* ================================================
-                ROW 2: EFFICIENCY INDICATORS
-                ================================================ */}
+            {/* ROW 2: EFFICIENCY INDICATORS */}
             <div className="mb-8">
-              <SectionHeader 
-                title="Efficiency Indicators" 
-                subtitle="Secondary metrics that drive performance"
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Title className="text-lg mb-1">Efficiency Indicators</Title>
+              <Text className="mb-4">Secondary metrics that drive performance</Text>
+              <Grid numItemsMd={2} numItemsLg={4} className="gap-4">
                 <KPICard 
                   title="Same-Day Cancellation" 
                   kpi={analytics.cancellationRate}
@@ -457,126 +564,92 @@ export default function AnalyticsOverviewPage() {
                   kpi={analytics.surgeonIdleTime}
                   onClick={() => setShowFlipRoomModal(true)}
                 />
-              </div>
+              </Grid>
             </div>
 
-            {/* ================================================
-                ROW 3: TIME BREAKDOWN
-                ================================================ */}
+            {/* ROW 3: TIME BREAKDOWN */}
             <div className="mb-8">
-              <SectionHeader 
-                title="Time Breakdown" 
-                subtitle="Average durations across all completed cases"
-              />
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <SimpleMetricCard
-                  title="Total Case Time"
-                  value={formatMinutes(analytics.avgTotalCaseTime)}
-                  subtitle="Patient In → Out"
-                />
-                <SimpleMetricCard
-                  title="Surgical Time"
-                  value={formatMinutes(analytics.avgSurgicalTime)}
-                  subtitle="Incision → Closing"
-                />
-                <SimpleMetricCard
-                  title="Pre-Op Time"
-                  value={formatMinutes(analytics.avgPreOpTime)}
-                  subtitle="Patient In → Incision"
-                />
-                <SimpleMetricCard
-                  title="Anesthesia Time"
-                  value={formatMinutes(analytics.avgAnesthesiaTime)}
-                  subtitle="Anes Start → End"
-                />
-                <SimpleMetricCard
-                  title="Closing Time"
-                  value={formatMinutes(analytics.avgClosingTime)}
-                  subtitle="Closing → Complete"
-                />
-                <SimpleMetricCard
-                  title="Emergence"
-                  value={formatMinutes(analytics.avgEmergenceTime)}
-                  subtitle="Close → Patient Out"
-                />
-              </div>
+              <Title className="text-lg mb-1">Time Breakdown</Title>
+              <Text className="mb-4">Average durations across all completed cases</Text>
+              <Grid numItemsMd={3} numItemsLg={6} className="gap-4">
+                <Card>
+                  <Text>Total Case Time</Text>
+                  <Metric className="text-xl">{formatMinutes(analytics.avgTotalCaseTime)}</Metric>
+                  <Text className="text-slate-500 text-sm">Patient In → Out</Text>
+                </Card>
+                <Card>
+                  <Text>Surgical Time</Text>
+                  <Metric className="text-xl">{formatMinutes(analytics.avgSurgicalTime)}</Metric>
+                  <Text className="text-slate-500 text-sm">Incision → Closing</Text>
+                </Card>
+                <Card>
+                  <Text>Pre-Op Time</Text>
+                  <Metric className="text-xl">{formatMinutes(analytics.avgPreOpTime)}</Metric>
+                  <Text className="text-slate-500 text-sm">Patient In → Incision</Text>
+                </Card>
+                <Card>
+                  <Text>Anesthesia Time</Text>
+                  <Metric className="text-xl">{formatMinutes(analytics.avgAnesthesiaTime)}</Metric>
+                  <Text className="text-slate-500 text-sm">Anes Start → End</Text>
+                </Card>
+                <Card>
+                  <Text>Closing Time</Text>
+                  <Metric className="text-xl">{formatMinutes(analytics.avgClosingTime)}</Metric>
+                  <Text className="text-slate-500 text-sm">Closing → Complete</Text>
+                </Card>
+                <Card>
+                  <Text>Emergence</Text>
+                  <Metric className="text-xl">{formatMinutes(analytics.avgEmergenceTime)}</Metric>
+                  <Text className="text-slate-500 text-sm">Close → Patient Out</Text>
+                </Card>
+              </Grid>
             </div>
 
-            {/* ================================================
-                ROW 4: CHARTS
-                ================================================ */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Phase Duration Bar Chart */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-1">Average Time by Phase</h3>
-                <p className="text-sm text-slate-500 mb-4">Minutes spent in each surgical phase</p>
-                {phaseData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <BarChart data={phaseData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={true} vertical={false} />
-                      <XAxis type="number" stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v}m`} />
-                      <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} width={80} />
-                      <Tooltip
-                        formatter={(value) => [`${value} min`, 'Duration']}
-                        contentStyle={{ 
-                          borderRadius: '8px', 
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                        }}
-                      />
-                      <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+            {/* ROW 4: CHARTS */}
+            <Grid numItemsMd={2} className="gap-6 mb-8">
+              {/* Tremor Bar Chart */}
+              <Card>
+                <Title>Average Time by Phase</Title>
+                <Text>Minutes spent in each surgical phase</Text>
+                {phaseChartData.length > 0 ? (
+                  <BarChart
+                    className="mt-4 h-72"
+                    data={phaseChartData}
+                    index="name"
+                    categories={['minutes']}
+                    colors={['blue']}
+                    valueFormatter={(v) => `${v} min`}
+                    yAxisWidth={48}
+                  />
                 ) : (
-                  <div className="flex items-center justify-center h-[280px] text-slate-400">
+                  <div className="flex items-center justify-center h-72 text-slate-400">
                     No data available
                   </div>
                 )}
-              </div>
+              </Card>
 
-              {/* Time Distribution Pie Chart */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6">
-                <h3 className="text-lg font-semibold text-slate-900 mb-1">Time Distribution</h3>
-                <p className="text-sm text-slate-500 mb-4">Proportion of case time by phase</p>
-                {phaseData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                    <PieChart>
-                      <Pie
-                        data={phaseData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={2}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                        labelLine={false}
-                      >
-                        {phaseData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value) => [`${value} min`, 'Duration']}
-                        contentStyle={{ 
-                          borderRadius: '8px', 
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
+              {/* Tremor Donut Chart */}
+              <Card>
+                <Title>Time Distribution</Title>
+                <Text>Proportion of case time by phase</Text>
+                {phaseChartData.length > 0 ? (
+                  <DonutChart
+                    className="mt-4 h-72"
+                    data={phaseChartData}
+                    index="name"
+                    category="minutes"
+                    colors={['blue', 'slate', 'zinc', 'gray']}
+                    valueFormatter={(v) => `${v} min`}
+                  />
                 ) : (
-                  <div className="flex items-center justify-center h-[280px] text-slate-400">
+                  <div className="flex items-center justify-center h-72 text-slate-400">
                     No data available
                   </div>
                 )}
-              </div>
-            </div>
+              </Card>
+            </Grid>
 
-            {/* ================================================
-                FLIP ROOM MODAL
-                ================================================ */}
+            {/* FLIP ROOM MODAL */}
             <FlipRoomModal
               isOpen={showFlipRoomModal}
               onClose={() => setShowFlipRoomModal(false)}
