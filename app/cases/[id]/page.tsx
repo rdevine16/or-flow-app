@@ -14,6 +14,7 @@ import ImplantSection from '../../../components/cases/ImplantSection'
 import FloatingActionButton from '../../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import CompletedCaseView from '../../../components/cases/CompletedCaseView'
+import DeviceRepSection from '../../../components/cases/DeviceRepSection'
 
 
 
@@ -233,6 +234,22 @@ const [milestoneAverages, setMilestoneAverages] = useState<{
 } | null>(null)
 
 const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | null>(null)
+
+// Device Rep / Trays
+interface DeviceCompanyData {
+  id: string
+  companyName: string
+  trayStatus: 'pending' | 'consignment' | 'loaners_confirmed' | 'delivered'
+  loanerTrayCount: number | null
+  deliveredTrayCount: number | null
+  repNotes: string | null
+  confirmedAt: string | null
+  confirmedByName: string | null
+  deliveredAt: string | null
+  deliveredByName: string | null
+}
+const [deviceCompanies, setDeviceCompanies] = useState<DeviceCompanyData[]>([])
+
   // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
@@ -407,6 +424,43 @@ if (caseResult?.procedure_type_id) {
     setImplantCategory(procData.implant_category as 'hip' | 'knee')
   }
 }
+
+// ========================================
+// Fetch device companies for this case
+// ========================================
+const { data: deviceCompanyData } = await supabase
+  .from('case_device_companies')
+  .select(`
+    id,
+    tray_status,
+    loaner_tray_count,
+    delivered_tray_count,
+    rep_notes,
+    confirmed_at,
+    confirmed_by,
+    delivered_at,
+    delivered_by,
+    implant_companies (name),
+    confirmed_by_user:users!case_device_companies_confirmed_by_fkey (first_name, last_name),
+    delivered_by_user:users!case_device_companies_delivered_by_fkey (first_name, last_name)
+  `)
+  .eq('case_id', id)
+
+if (deviceCompanyData) {
+  setDeviceCompanies(deviceCompanyData.map((dc: any) => ({
+    id: dc.id,
+    companyName: dc.implant_companies?.name || 'Unknown',
+    trayStatus: dc.tray_status,
+    loanerTrayCount: dc.loaner_tray_count,
+    deliveredTrayCount: dc.delivered_tray_count,
+    repNotes: dc.rep_notes,
+    confirmedAt: dc.confirmed_at,
+    confirmedByName: dc.confirmed_by_user ? `${dc.confirmed_by_user.first_name} ${dc.confirmed_by_user.last_name}` : null,
+    deliveredAt: dc.delivered_at,
+    deliveredByName: dc.delivered_by_user ? `${dc.delivered_by_user.first_name} ${dc.delivered_by_user.last_name}` : null,
+  })))
+}
+
       // ========================================
       // NEW: Fetch delays for this case
       // ========================================
@@ -874,8 +928,9 @@ setPatientCallTime(caseResult?.call_time || null)
     patientCallTime={patientCallTime}
     surgeonAverage={surgeonProcedureAverage}
     milestoneAverages={milestoneAverages}
-      implants={implants}
-  implantCategory={implantCategory} 
+    implants={implants}
+    implantCategory={implantCategory}
+    deviceCompanies={deviceCompanies}
   />
 ) : (
           /* Main Content Grid */
@@ -960,6 +1015,12 @@ setPatientCallTime(caseResult?.call_time || null)
             <ImplantSection 
               caseId={id} 
               procedureTypeId={caseData.procedure_type_id}
+              supabase={supabase}
+            />
+
+            {/* Device Rep / Trays Section */}
+            <DeviceRepSection 
+              caseId={id} 
               supabase={supabase}
             />
 

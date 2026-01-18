@@ -69,6 +69,19 @@ interface ImplantData {
   patella_size_final: string | null
 }
 
+interface DeviceCompanyData {
+  id: string
+  companyName: string
+  trayStatus: 'pending' | 'consignment' | 'loaners_confirmed' | 'delivered'
+  loanerTrayCount: number | null
+  deliveredTrayCount: number | null
+  repNotes: string | null
+  confirmedAt: string | null
+  confirmedByName: string | null
+  deliveredAt: string | null
+  deliveredByName: string | null
+}
+
 interface CompletedCaseViewProps {
   caseData: {
     id: string
@@ -96,6 +109,8 @@ interface CompletedCaseViewProps {
   // Implant data
   implants: ImplantData | null
   implantCategory: 'hip' | 'knee' | 'total_hip' | 'total_knee' | null
+  // Device Rep / Trays data
+  deviceCompanies: DeviceCompanyData[]
 }
 
 // ============================================================================
@@ -209,6 +224,65 @@ function getRoleBadgeClass(role: string): string {
     tech: 'bg-purple-100 text-purple-700',
   }
   return colors[role] || 'bg-slate-100 text-slate-600'
+}
+
+// Tray status configuration
+function getTrayStatusConfig(status: string) {
+  switch (status) {
+    case 'pending':
+      return {
+        label: 'Pending',
+        icon: '⏳',
+        bgColor: 'bg-amber-50',
+        textColor: 'text-amber-700',
+        borderColor: 'border-amber-200',
+      }
+    case 'consignment':
+      return {
+        label: 'Consignment',
+        icon: '✓',
+        bgColor: 'bg-emerald-50',
+        textColor: 'text-emerald-700',
+        borderColor: 'border-emerald-200',
+      }
+    case 'loaners_confirmed':
+      return {
+        label: 'Loaners Confirmed',
+        icon: '📦',
+        bgColor: 'bg-blue-50',
+        textColor: 'text-blue-700',
+        borderColor: 'border-blue-200',
+      }
+    case 'delivered':
+      return {
+        label: 'Delivered',
+        icon: '✓',
+        bgColor: 'bg-emerald-50',
+        textColor: 'text-emerald-700',
+        borderColor: 'border-emerald-200',
+      }
+    default:
+      return {
+        label: status,
+        icon: '•',
+        bgColor: 'bg-slate-50',
+        textColor: 'text-slate-700',
+        borderColor: 'border-slate-200',
+      }
+  }
+}
+
+// Format datetime for display
+function formatDateTimeShort(isoString: string | null): string {
+  if (!isoString) return '—'
+  const date = new Date(isoString)
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  })
 }
 
 // Delay type icons
@@ -408,6 +482,7 @@ export default function CompletedCaseView({
   milestoneAverages,
   implants,
   implantCategory,
+  deviceCompanies,
 }: CompletedCaseViewProps) {
   
   // Sort milestones by recorded time
@@ -946,7 +1021,79 @@ export default function CompletedCaseView({
       </div>
 
       {/* ================================================================== */}
-      {/* ROW 4: Implants (if applicable) */}
+      {/* ROW 4: Device Rep / Trays */}
+      {/* ================================================================== */}
+      {deviceCompanies && deviceCompanies.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Device Rep / Trays</h3>
+          
+          <div className="space-y-3">
+            {deviceCompanies.map((company, index) => {
+              const status = getTrayStatusConfig(company.trayStatus)
+
+              return (
+                <div key={company.id}>
+                  {/* Company Row */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">{company.companyName}</span>
+                    <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border ${status.bgColor} ${status.borderColor}`}>
+                      <span className="text-xs">{status.icon}</span>
+                      <span className={`text-xs font-semibold ${status.textColor}`}>
+                        {status.label}
+                        {company.trayStatus === 'loaners_confirmed' && company.loanerTrayCount && (
+                          <span className="ml-1">({company.loanerTrayCount})</span>
+                        )}
+                        {company.trayStatus === 'delivered' && company.deliveredTrayCount && (
+                          <span className="ml-1">({company.deliveredTrayCount})</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Timestamps */}
+                  {(company.confirmedAt || company.deliveredAt) && (
+                    <div className="text-xs text-slate-500 mb-2 space-y-0.5">
+                      {company.confirmedAt && (
+                        <p>
+                          Confirmed: {formatDateTimeShort(company.confirmedAt)}
+                          {company.confirmedByName && <span className="text-slate-400"> by {company.confirmedByName}</span>}
+                        </p>
+                      )}
+                      {company.deliveredAt && (
+                        <p>
+                          Delivered: {formatDateTimeShort(company.deliveredAt)}
+                          {company.deliveredByName && <span className="text-slate-400"> by {company.deliveredByName}</span>}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Rep Notes */}
+                  {company.repNotes && (
+                    <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                      <div className="flex items-start gap-2">
+                        <span className="text-blue-500">💬</span>
+                        <div>
+                          <p className="text-xs font-medium text-blue-700 mb-0.5">Rep Notes</p>
+                          <p className="text-xs text-blue-800">{company.repNotes}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Divider */}
+                  {index < deviceCompanies.length - 1 && (
+                    <div className="border-b border-slate-100 mt-3"></div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* ROW 5: Implants (if applicable) */}
       {/* ================================================================== */}
       {implants && implantCategory && (
         <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -1051,7 +1198,7 @@ export default function CompletedCaseView({
       )}
 
       {/* ================================================================== */}
-      {/* ROW 5: Notes */}
+      {/* ROW 6: Notes */}
       {/* ================================================================== */}
       {caseData.notes && (
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
