@@ -1,4 +1,3 @@
-
 // ============================================
 // FORMATTING FUNCTIONS
 // ============================================
@@ -18,7 +17,8 @@ export function formatPercent(value: number | null | undefined): string {
   return `${value.toFixed(1)}%`
 }
 
-export function formatDuration(minutes: number): string {
+export function formatDuration(minutes: number | null | undefined): string {
+  if (minutes === null || minutes === undefined) return '-'
   const hours = Math.floor(minutes / 60)
   const mins = Math.round(minutes % 60)
   if (hours === 0) return `${mins}m`
@@ -26,63 +26,67 @@ export function formatDuration(minutes: number): string {
 }
 
 // ============================================
-// CALCULATION FUNCTIONS
+// DATE FORMATTING
 // ============================================
 
-export function getCaseDurationMinutes(
-  milestones: CaseWithFinancials['case_milestones']
-): number | null {
-  const patientIn = milestones.find(m => m.milestone_types?.name === 'patient_in')
-  const patientOut = milestones.find(m => m.milestone_types?.name === 'patient_out')
-  
-  if (!patientIn || !patientOut) return null
-  
-  const start = new Date(patientIn.recorded_at)
-  const end = new Date(patientOut.recorded_at)
-  return (end.getTime() - start.getTime()) / (1000 * 60)
+export function formatDate(dateString: string | null | undefined): string {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: 'numeric'
+  })
 }
 
-export interface CaseProfitResult {
-  profit: number
-  reimbursement: number
-  orCost: number
-  payerReimbursement: number | null
-  defaultReimbursement: number | null
+export function formatShortDate(dateString: string | null | undefined): string {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric'
+  })
 }
 
-export function calculateCaseProfit(
-  caseData: CaseWithFinancials,
-  orHourlyRate: number,
-  reimbursements: ProcedureReimbursement[]
-): CaseProfitResult | null {
-  const procedure = caseData.procedure_types
-  if (!procedure) return null
-  
-  const duration = getCaseDurationMinutes(caseData.case_milestones)
-  if (duration === null) return null
-  
-  // Get default reimbursement
-  const defaultReimbursement = reimbursements.find(
-    r => r.procedure_type_id === procedure.id && r.payer_id === null
-  )?.reimbursement || null
+// ============================================
+// CALCULATION HELPERS (for UI display)
+// ============================================
 
-  // Get payer-specific reimbursement if applicable
-  let payerReimbursement: number | null = null
-  if (caseData.payer_id) {
-    payerReimbursement = reimbursements.find(
-      r => r.procedure_type_id === procedure.id && r.payer_id === caseData.payer_id
-    )?.reimbursement || null
-  }
-  
-  // Use payer rate if available, otherwise default
-  const reimbursement = payerReimbursement ?? defaultReimbursement
-  if (!reimbursement) return null
-  
-  const softGoods = procedure.soft_goods_cost || 0
-  const hardGoods = procedure.hard_goods_cost || 0
-  const orCost = (duration / 60) * orHourlyRate
-  
-  const profit = reimbursement - softGoods - hardGoods - orCost
-  
-  return { profit, reimbursement, orCost, payerReimbursement, defaultReimbursement }
+/**
+ * Calculate profit margin as a percentage
+ */
+export function calculateMargin(profit: number, reimbursement: number): number {
+  if (reimbursement === 0) return 0
+  return (profit / reimbursement) * 100
+}
+
+/**
+ * Calculate consistency rating based on coefficient of variation
+ * CV = stddev / mean
+ */
+export function getConsistencyRating(
+  median: number | null, 
+  stddev: number | null
+): 'high' | 'medium' | 'low' | null {
+  if (median === null || stddev === null || median === 0) return null
+  const cv = stddev / median
+  if (cv < 0.15) return 'high'    // < 15% variation
+  if (cv < 0.30) return 'medium'  // 15-30% variation
+  return 'low'                     // > 30% variation
+}
+
+/**
+ * Format a number with +/- sign for comparison displays
+ */
+export function formatDiff(value: number, formatter: (v: number) => string = String): string {
+  const formatted = formatter(Math.abs(value))
+  return value >= 0 ? `+${formatted}` : `-${formatted}`
+}
+
+/**
+ * Format minutes difference with +/- sign
+ */
+export function formatMinutesDiff(minutes: number): string {
+  const sign = minutes >= 0 ? '+' : ''
+  return `${sign}${Math.round(minutes)} min`
 }
