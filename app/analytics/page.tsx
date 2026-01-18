@@ -517,7 +517,7 @@ export default function AnalyticsOverviewPage() {
                       <XAxis type="number" stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v}m`} />
                       <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={12} width={80} />
                       <Tooltip
-                        formatter={(value: number) => [`${value} min`, 'Duration']}
+                        formatter={(value) => [`${value} min`, 'Duration']}
                         contentStyle={{ 
                           borderRadius: '8px', 
                           border: '1px solid #e2e8f0',
@@ -549,7 +549,7 @@ export default function AnalyticsOverviewPage() {
                         outerRadius={100}
                         paddingAngle={2}
                         dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         labelLine={false}
                       >
                         {phaseData.map((entry, index) => (
@@ -557,7 +557,7 @@ export default function AnalyticsOverviewPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number) => [`${value} min`, 'Duration']}
+                        formatter={(value) => [`${value} min`, 'Duration']}
                         contentStyle={{ 
                           borderRadius: '8px', 
                           border: '1px solid #e2e8f0',
