@@ -1019,7 +1019,7 @@ export default function SurgeonPerformancePage() {
                           index="date"
                           categories={['Robotic (Mako)', 'Traditional']}
                           colors={['cyan', 'rose']}
-                          valueFormatter={(v) => `${v} min`}
+valueFormatter={(v) => v.toString()}
                           yAxisWidth={40}
                           showAnimation={true}
                           connectNulls={true}
@@ -1039,7 +1039,7 @@ export default function SurgeonPerformancePage() {
                           index="date"
                           categories={['Robotic (Mako)', 'Traditional']}
                           colors={['cyan', 'rose']}
-                          valueFormatter={(v) => `${v} min`}
+valueFormatter={(v) => v.toString()}
                           yAxisWidth={40}
                           showAnimation={true}
                           connectNulls={true}

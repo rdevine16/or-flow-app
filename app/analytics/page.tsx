@@ -1087,7 +1087,7 @@ const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => 
                             index="date"
                             categories={['Robotic (Mako)', 'Traditional']}
                             colors={['cyan', 'slate']}
-                            valueFormatter={(v) => `${v} min`}
+valueFormatter={(v) => v.toString()}
                             yAxisWidth={48}
                             showAnimation={true}
                             connectNulls={true}
@@ -1117,7 +1117,7 @@ const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => 
                             index="date"
                             categories={['Robotic (Mako)', 'Traditional']}
                             colors={['cyan', 'slate']}
-                            valueFormatter={(v) => `${v} min`}
+valueFormatter={(v) => v.toString()}
                             yAxisWidth={48}
                             showAnimation={true}
                             connectNulls={true}
