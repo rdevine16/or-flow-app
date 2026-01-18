@@ -5,6 +5,9 @@
 //
 // This creates an invite record in user_invites table and sends
 // a professional email via Resend with a link to /invite/user/[token]
+//
+// UPDATED: Now handles inviting existing staff members who have email
+// but no auth account yet (staff-only records that got email added)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -30,12 +33,13 @@ interface InviteRequest {
   accessLevel: 'facility_admin' | 'user'
   facilityId: string
   roleId: string  // The user_roles id (surgeon, nurse, etc.)
+  existingUserId?: string  // If inviting an existing staff member
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: InviteRequest = await request.json()
-    const { email, firstName, lastName, accessLevel, facilityId, roleId } = body
+    const { email, firstName, lastName, accessLevel, facilityId, roleId, existingUserId } = body
 
     // Validation
     if (!email || !firstName || !lastName || !accessLevel || !facilityId || !roleId) {
@@ -54,9 +58,30 @@ export async function POST(request: NextRequest) {
       .eq('email', normalizedEmail)
       .single()
 
-    if (existingUser) {
+    // If user exists and we're NOT explicitly inviting them (existingUserId), that's an error
+    // If user exists and we ARE explicitly inviting them, that's fine (they're a staff-only record getting upgraded)
+    if (existingUser && !existingUserId) {
       return NextResponse.json(
         { success: false, error: 'A user with this email already exists' },
+        { status: 400 }
+      )
+    }
+
+    // If existingUserId provided, verify it matches the found user
+    if (existingUserId && existingUser && existingUser.id !== existingUserId) {
+      return NextResponse.json(
+        { success: false, error: 'Email is already associated with a different user' },
+        { status: 400 }
+      )
+    }
+
+    // Check if this email already has an auth account
+    const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+    const existingAuthUser = authData?.users?.find(u => u.email?.toLowerCase() === normalizedEmail)
+    
+    if (existingAuthUser) {
+      return NextResponse.json(
+        { success: false, error: 'This email already has an account. They can log in directly.' },
         { status: 400 }
       )
     }
@@ -113,6 +138,7 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
 
     // Create invite record in user_invites table
+    // Include existing_user_id if this is an upgrade for an existing staff member
     const { data: invite, error: inviteError } = await supabaseAdmin
       .from('user_invites')
       .insert({
@@ -125,6 +151,7 @@ export async function POST(request: NextRequest) {
         invite_token: inviteToken,
         expires_at: expiresAt,
         invited_by: invitedById,
+        existing_user_id: existingUserId || null,  // Track if upgrading existing staff
       })
       .select()
       .single()

@@ -87,27 +87,54 @@ export default function InviteUserModal({
     setError(null)
     setLoading(true)
 
+    const trimmedEmail = email.trim()
+
     try {
-      const response = await fetch('/api/admin/invite', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          firstName,
-          lastName,
-          accessLevel,
-          facilityId: selectedFacilityId,
-          roleId,
-        }),
-      })
+      if (trimmedEmail) {
+        // Has email - use existing invite flow
+        const response = await fetch('/api/admin/invite', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: trimmedEmail,
+            firstName,
+            lastName,
+            accessLevel,
+            facilityId: selectedFacilityId,
+            roleId,
+          }),
+        })
 
-      const data = await response.json()
+        const data = await response.json()
 
-      if (!response.ok || !data.success) {
-        setError(data.error || 'Failed to send invitation')
-        return
+        if (!response.ok || !data.success) {
+          setError(data.error || 'Failed to send invitation')
+          return
+        }
+      } else {
+        // No email - create staff-only record
+        const newUserId = crypto.randomUUID()
+        
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: newUserId,
+            first_name: firstName,
+            last_name: lastName,
+            email: null,
+            role_id: roleId,
+            access_level: accessLevel,
+            facility_id: selectedFacilityId,
+            is_active: true,
+          })
+
+        if (insertError) {
+          console.error('Insert error:', insertError)
+          setError(insertError.message || 'Failed to add staff member')
+          return
+        }
       }
 
       // Success!
@@ -115,7 +142,7 @@ export default function InviteUserModal({
       onClose()
 
     } catch (err) {
-      setError('Failed to send invitation. Please try again.')
+      setError('Failed to add staff member. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -123,14 +150,21 @@ export default function InviteUserModal({
 
   if (!isOpen) return null
 
+  const hasEmail = email.trim().length > 0
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Invite New User</h2>
-            <p className="text-sm text-slate-500 mt-0.5">They'll receive an email to set their password</p>
+            <h2 className="text-lg font-semibold text-slate-900">Add Staff Member</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {hasEmail 
+                ? "They'll receive an email to set their password"
+                : "Add to your facility's staff directory"
+              }
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -186,10 +220,11 @@ export default function InviteUserModal({
             </div>
           </div>
 
-          {/* Email */}
+          {/* Email - Now Optional */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
               Email Address
+              <span className="text-slate-400 font-normal ml-1">(optional)</span>
             </label>
             <input
               id="email"
@@ -198,8 +233,13 @@ export default function InviteUserModal({
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
               placeholder="john.smith@hospital.com"
-              required
             />
+            <p className="mt-1.5 text-xs text-slate-400">
+              {hasEmail 
+                ? "An invitation will be sent to this email"
+                : "Leave blank to add staff without app access. You can invite them later."
+              }
+            </p>
           </div>
 
           {/* Facility (only show for global admin) */}
@@ -286,10 +326,10 @@ export default function InviteUserModal({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Sending...
+                  {hasEmail ? 'Sending...' : 'Adding...'}
                 </span>
               ) : (
-                'Send Invitation'
+                hasEmail ? 'Add & Send Invite' : 'Add Staff Member'
               )}
             </button>
           </div>
