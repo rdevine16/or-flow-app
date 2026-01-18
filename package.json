@@ -1,6 +1,10 @@
 {
   "name": "or-flow-app",
   "version": "0.1.0",
+    "overrides": {
+    "react": "$react",
+    "react-dom": "$react-dom"
+  },
   "private": true,
   "scripts": {
     "dev": "next dev",
