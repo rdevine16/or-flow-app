@@ -22,7 +22,9 @@ export function useFinancialsMetrics(
   return useMemo(() => {
     const orRate = facilitySettings?.or_hourly_rate || 0
     
-    // Calculate profit for each case
+    // ============================================
+    // STEP 1: Calculate profit for each case
+    // ============================================
     const casesWithProfit: CaseWithProfitData[] = cases
       .map(c => {
         const result = calculateCaseProfit(c, orRate, reimbursements)
@@ -31,24 +33,9 @@ export function useFinancialsMetrics(
       })
       .filter((c): c is CaseWithProfitData => c !== null)
 
-    // Summary metrics
-    const totalProfit = casesWithProfit.reduce((sum, c) => sum + c.profit, 0)
-    const totalReimbursement = casesWithProfit.reduce((sum, c) => sum + c.reimbursement, 0)
-    const avgProfit = casesWithProfit.length > 0 ? totalProfit / casesWithProfit.length : 0
-    const avgMargin = totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0
-
-    // Calculate standard deviation for outlier detection
-    const profitValues = casesWithProfit.map(c => c.profit)
-    const profitMean = avgProfit
-    const profitStdDev = profitValues.length > 1 
-      ? Math.sqrt(profitValues.reduce((sum, p) => sum + Math.pow(p - profitMean, 2), 0) / profitValues.length)
-      : 0
-
-    // Outliers (cases below 1 std dev)
-    const outlierThreshold = profitMean - profitStdDev
-    const outlierCases = casesWithProfit.filter(c => c.profit < outlierThreshold)
-
-    // Procedure breakdown
+    // ============================================
+    // STEP 2: Build procedure map FIRST (needed for everything else)
+    // ============================================
     const procedureMap = new Map<string, CaseWithProfitData[]>()
     casesWithProfit.forEach(c => {
       if (c.procedure_types) {
@@ -58,11 +45,60 @@ export function useFinancialsMetrics(
       }
     })
 
+    // ============================================
+    // STEP 3: Calculate procedure-level averages
+    // ============================================
+    const procedureAverages = new Map<string, { avgProfit: number; avgDuration: number }>()
+    procedureMap.forEach((procCases, procId) => {
+      const avgProfit = procCases.reduce((sum, c) => sum + c.profit, 0) / procCases.length
+      const avgDuration = procCases.reduce((sum, c) => sum + c.duration, 0) / procCases.length
+      procedureAverages.set(procId, { avgProfit, avgDuration })
+    })
+
+    // ============================================
+    // STEP 4: Summary metrics
+    // ============================================
+    const totalProfit = casesWithProfit.reduce((sum, c) => sum + c.profit, 0)
+    const totalReimbursement = casesWithProfit.reduce((sum, c) => sum + c.reimbursement, 0)
+    const avgProfit = casesWithProfit.length > 0 ? totalProfit / casesWithProfit.length : 0
+    const avgMargin = totalReimbursement > 0 ? (totalProfit / totalReimbursement) * 100 : 0
+
+    // ============================================
+    // STEP 5: Outlier detection (FIXED - now procedure-specific)
+    // ============================================
+    // Calculate outliers PER PROCEDURE TYPE, not globally
+    const outlierCases: CaseWithProfitData[] = []
+    
+    procedureMap.forEach((procCases, procId) => {
+      if (procCases.length < 2) return // Need at least 2 cases to detect outliers
+      
+      const procAvg = procedureAverages.get(procId)!.avgProfit
+      const procStdDev = Math.sqrt(
+        procCases.reduce((sum, c) => sum + Math.pow(c.profit - procAvg, 2), 0) / procCases.length
+      )
+      
+      // Flag cases more than 1 std dev below THIS procedure's average
+      const threshold = procAvg - procStdDev
+      procCases.forEach(c => {
+        if (c.profit < threshold) {
+          outlierCases.push(c)
+        }
+      })
+    })
+
+    // Global threshold for display purposes (average of procedure thresholds)
+    const outlierThreshold = avgProfit - (casesWithProfit.length > 1 
+      ? Math.sqrt(casesWithProfit.reduce((sum, c) => sum + Math.pow(c.profit - avgProfit, 2), 0) / casesWithProfit.length)
+      : 0)
+
+    // ============================================
+    // STEP 6: Procedure stats with surgeon breakdown
+    // ============================================
     const procedureStats: ProcedureStats[] = Array.from(procedureMap.entries())
       .map(([procId, procCases]) => {
         const procTotal = procCases.reduce((sum, c) => sum + c.profit, 0)
         const procReimbursement = procCases.reduce((sum, c) => sum + c.reimbursement, 0)
-        const procAvgDuration = procCases.reduce((sum, c) => sum + c.duration, 0) / procCases.length
+        const procAvgDuration = procedureAverages.get(procId)!.avgDuration
         
         // Surgeon breakdown for this procedure
         const surgeonMap = new Map<string, CaseWithProfitData[]>()
@@ -80,6 +116,8 @@ export function useFinancialsMetrics(
               : 'Unknown'
             const surgeonTotal = surgeonCases.reduce((sum, c) => sum + c.profit, 0)
             const surgeonAvgDuration = surgeonCases.reduce((sum, c) => sum + c.duration, 0) / surgeonCases.length
+            
+            // Compare to THIS PROCEDURE's average (not global)
             const durationDiff = surgeonAvgDuration - procAvgDuration
             const profitImpact = -durationDiff * (orRate / 60)
 
@@ -110,7 +148,9 @@ export function useFinancialsMetrics(
       })
       .sort((a, b) => b.totalProfit - a.totalProfit)
 
-    // Overall surgeon stats
+    // ============================================
+    // STEP 7: Overall surgeon stats (FIXED - weighted by procedure mix)
+    // ============================================
     const surgeonMap = new Map<string, CaseWithProfitData[]>()
     casesWithProfit.forEach(c => {
       if (c.surgeon_id && c.surgeon) {
@@ -119,10 +159,6 @@ export function useFinancialsMetrics(
       }
     })
 
-    const overallAvgDuration = casesWithProfit.length > 0
-      ? casesWithProfit.reduce((sum, c) => sum + c.duration, 0) / casesWithProfit.length
-      : 0
-
     const surgeonStats: SurgeonStats[] = Array.from(surgeonMap.entries())
       .map(([surgeonId, surgeonCases]) => {
         const surgeonName = surgeonCases[0].surgeon 
@@ -130,8 +166,30 @@ export function useFinancialsMetrics(
           : 'Unknown'
         const surgeonTotal = surgeonCases.reduce((sum, c) => sum + c.profit, 0)
         const surgeonAvgDuration = surgeonCases.reduce((sum, c) => sum + c.duration, 0) / surgeonCases.length
-        const durationDiff = surgeonAvgDuration - overallAvgDuration
-        const profitImpact = -durationDiff * (orRate / 60)
+
+        // FIXED: Calculate weighted expected duration based on surgeon's procedure mix
+        // This compares apples to apples - what SHOULD their duration be given their procedures?
+        let weightedExpectedDuration = 0
+        let totalDurationDiff = 0
+        let totalProfitImpact = 0
+
+        surgeonCases.forEach(c => {
+          const procId = c.procedure_type_id
+          if (procId) {
+            const procAvg = procedureAverages.get(procId)
+            if (procAvg) {
+              weightedExpectedDuration += procAvg.avgDuration
+              // How much faster/slower was this case vs procedure average?
+              const caseDiff = c.duration - procAvg.avgDuration
+              totalDurationDiff += caseDiff
+              totalProfitImpact += -caseDiff * (orRate / 60)
+            }
+          }
+        })
+
+        // Average difference per case (not total)
+        const avgDurationDiff = surgeonCases.length > 0 ? totalDurationDiff / surgeonCases.length : 0
+        const avgProfitImpact = surgeonCases.length > 0 ? totalProfitImpact / surgeonCases.length : 0
 
         return {
           surgeonId,
@@ -140,24 +198,29 @@ export function useFinancialsMetrics(
           avgProfit: surgeonTotal / surgeonCases.length,
           caseCount: surgeonCases.length,
           avgDurationMinutes: surgeonAvgDuration,
-          durationVsAvgMinutes: durationDiff,
-          profitImpact,
+          // FIXED: Now shows how much faster/slower vs expected for THEIR procedure mix
+          durationVsAvgMinutes: avgDurationDiff,
+          // FIXED: Impact based on procedure-specific comparison
+          profitImpact: totalProfitImpact,
         }
       })
       .sort((a, b) => b.totalProfit - a.totalProfit)
 
-    // Outlier case details with multi-issue detection
+    // ============================================
+    // STEP 8: Outlier case details (FIXED - procedure-specific expected profit)
+    // ============================================
     const outlierDetails: OutlierCase[] = outlierCases.map(c => {
-      const procedureCases = procedureMap.get(c.procedure_type_id || '')
-      const expectedDuration = procedureCases 
-        ? procedureCases.reduce((sum, pc) => sum + pc.duration, 0) / procedureCases.length
-        : c.duration
-      const expectedProfit = avgProfit
+      const procId = c.procedure_type_id || ''
+      const procAvg = procedureAverages.get(procId)
+      
+      // FIXED: Expected profit is now THIS PROCEDURE's average, not global
+      const expectedProfit = procAvg?.avgProfit ?? avgProfit
+      const expectedDuration = procAvg?.avgDuration ?? c.duration
 
       // Detect all applicable issues
       const issues: CaseIssue[] = []
 
-      // 1. Over Time check (30% over expected)
+      // 1. Over Time check (30% over expected for THIS procedure)
       const actualDuration = c.duration
       if (actualDuration > expectedDuration * 1.3) {
         const percentOver = ((actualDuration - expectedDuration) / expectedDuration) * 100
@@ -202,7 +265,7 @@ export function useFinancialsMetrics(
         issues.push({ type: 'unknown' })
       }
 
-      // BUILD FINANCIAL BREAKDOWN FOR DRAWER
+      // Financial breakdown for drawer
       const financialBreakdown: FinancialBreakdown = {
         reimbursement: c.reimbursement,
         softGoodsCost: c.procedure_types?.soft_goods_cost || 0,
@@ -220,17 +283,19 @@ export function useFinancialsMetrics(
         date: c.scheduled_date,
         surgeonName: c.surgeon ? `Dr. ${c.surgeon.first_name} ${c.surgeon.last_name}` : 'Unknown',
         procedureName: c.procedure_types?.name || 'Unknown',
-        expectedProfit,
+        expectedProfit,  // FIXED: Now procedure-specific
         actualProfit: c.profit,
         gap: c.profit - expectedProfit,
         durationMinutes: actualDuration,
         expectedDurationMinutes: expectedDuration,
         issues,
-        financialBreakdown, // NEW: Include financial breakdown
+        financialBreakdown,
       }
     }).sort((a, b) => a.gap - b.gap)
 
-    // Count issues by type
+    // ============================================
+    // STEP 9: Issue stats
+    // ============================================
     const issueStats = {
       overTime: outlierDetails.filter(o => o.issues.some(i => i.type === 'overTime')).length,
       delay: outlierDetails.filter(o => o.issues.some(i => i.type === 'delay')).length,
@@ -238,18 +303,23 @@ export function useFinancialsMetrics(
       unknown: outlierDetails.filter(o => o.issues.some(i => i.type === 'unknown')).length,
     }
 
-    // Time = Money calculations
+    // ============================================
+    // STEP 10: Time = Money calculations (FIXED - uses procedure-specific avg)
+    // ============================================
     const costPerMinute = orRate / 60
     const excessTimeMinutes = casesWithProfit.reduce((sum, c) => {
-      const procedureCases = procedureMap.get(c.procedure_type_id || '')
-      if (!procedureCases) return sum
-      const avgDuration = procedureCases.reduce((s, pc) => s + pc.duration, 0) / procedureCases.length
-      const excess = Math.max(0, c.duration - avgDuration)
+      const procId = c.procedure_type_id
+      if (!procId) return sum
+      const procAvg = procedureAverages.get(procId)
+      if (!procAvg) return sum
+      const excess = Math.max(0, c.duration - procAvg.avgDuration)
       return sum + excess
     }, 0)
     const excessTimeCost = excessTimeMinutes * costPerMinute
 
-    // Profit trend by date
+    // ============================================
+    // STEP 11: Profit trend by date
+    // ============================================
     const profitByDate = new Map<string, number>()
     casesWithProfit.forEach(c => {
       const date = c.scheduled_date
@@ -259,6 +329,9 @@ export function useFinancialsMetrics(
       .map(([date, profit]) => ({ date, profit }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
+    // ============================================
+    // RETURN METRICS
+    // ============================================
     return {
       totalCases: casesWithProfit.length,
       totalProfit,
