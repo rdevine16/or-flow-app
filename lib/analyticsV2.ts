@@ -5,8 +5,7 @@
 // Supports all 8 Phase 1 KPIs with daily tracking
 // ============================================
 
-// Color type for tracker bars (matches our Tracker component)
-export type TrackerColor = 'emerald' | 'yellow' | 'red' | 'slate' | 'blue'
+import type { Color } from '@tremor/react'
 
 // ============================================
 // TYPES
@@ -46,7 +45,7 @@ export interface MilestoneMap {
 
 export interface DailyTrackerData {
   date: string
-  color: TrackerColor
+  color: Color
   tooltip: string
 }
 
@@ -295,7 +294,7 @@ export function calculateFCOTS(cases: CaseWithMilestones[]): KPIResult {
         : 100
       return {
         date,
-        color: dayRate >= 100 ? 'emerald' : dayRate >= 80 ? 'yellow' : 'red' as TrackerColor,
+        color: dayRate >= 100 ? 'emerald' : dayRate >= 80 ? 'yellow' : 'red' as Color,
         tooltip: `${date}: ${data.onTime}/${data.onTime + data.late} on-time`
       }
     })
@@ -362,7 +361,7 @@ export function calculateTurnoverTime(cases: CaseWithMilestones[]): KPIResult {
       const dayAvg = calculateAverage(dayTurnovers)
       return {
         date,
-        color: dayAvg <= 25 ? 'emerald' : dayAvg <= 30 ? 'yellow' : 'red' as TrackerColor,
+        color: dayAvg <= 25 ? 'emerald' : dayAvg <= 30 ? 'yellow' : 'red' as Color,
         tooltip: `${date}: ${Math.round(dayAvg)} min avg`
       }
     })
@@ -425,7 +424,7 @@ export function calculateORUtilization(
       const dayAvg = calculateAverage(dayUtils)
       return {
         date,
-        color: dayAvg >= 75 ? 'emerald' : dayAvg >= 60 ? 'yellow' : 'slate' as TrackerColor,
+        color: dayAvg >= 75 ? 'emerald' : dayAvg >= 60 ? 'yellow' : 'slate' as Color,
         tooltip: `${date}: ${Math.round(dayAvg)}% utilization`
       }
     })
@@ -501,7 +500,7 @@ export function calculateCancellationRate(cases: CaseWithMilestones[]): KPIResul
     .slice(-30)
     .map(([date, data]) => ({
       date,
-      color: data.cancelled === 0 ? 'emerald' : 'red' as TrackerColor,
+      color: data.cancelled === 0 ? 'emerald' : 'red' as Color,
       tooltip: data.cancelled === 0 
         ? `${date}: No cancellations` 
         : `${date}: ${data.cancelled} cancelled`
@@ -548,7 +547,7 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
     .slice(-30)
     .map(([date, minutes]) => ({
       date,
-      color: minutes <= 30 ? 'emerald' : minutes <= 45 ? 'yellow' : 'red' as TrackerColor,
+      color: minutes <= 30 ? 'emerald' : minutes <= 45 ? 'yellow' : 'red' as Color,
       tooltip: `${date}: ${Math.round(minutes)} min total delays`
     }))
   

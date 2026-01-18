@@ -1,10 +1,10 @@
 'use client'
 
 // ============================================================================
-// CASE DETAIL PAGE - REDESIGNED
+// CASE DETAIL PAGE - COMMAND CENTER DESIGN
 // ============================================================================
-// Compact header, horizontal timers, vertical milestone timeline,
-// combined team section, collapsible implants/notes
+// Dense, data-rich dashboard layout
+// Professional milestone section that sells the product
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -92,16 +92,6 @@ function getFirst<T>(data: T[] | T | null | undefined): T | null {
   return data
 }
 
-function formatDate(dateString: string): string {
-  const [year, month, day] = dateString.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
 function formatTime(time: string | null): string {
   if (!time) return '--:--'
   const parts = time.split(':')
@@ -122,18 +112,28 @@ function formatTimestamp(isoString: string | null): string {
   })
 }
 
+function formatTimestampShort(isoString: string | null): string {
+  if (!isoString) return '--:--'
+  const date = new Date(isoString)
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: false
+  })
+}
+
 function getStatusConfig(status: string | null) {
   switch (status) {
     case 'in_progress':
-      return { label: 'In Progress', color: 'bg-emerald-500', textColor: 'text-emerald-700', bgLight: 'bg-emerald-50' }
+      return { label: 'In Progress', color: 'bg-emerald-500', textColor: 'text-emerald-700', bgLight: 'bg-emerald-50', border: 'border-emerald-200' }
     case 'completed':
-      return { label: 'Completed', color: 'bg-slate-400', textColor: 'text-slate-600', bgLight: 'bg-slate-100' }
+      return { label: 'Completed', color: 'bg-slate-400', textColor: 'text-slate-600', bgLight: 'bg-slate-100', border: 'border-slate-200' }
     case 'delayed':
-      return { label: 'Delayed', color: 'bg-amber-500', textColor: 'text-amber-700', bgLight: 'bg-amber-50' }
+      return { label: 'Delayed', color: 'bg-amber-500', textColor: 'text-amber-700', bgLight: 'bg-amber-50', border: 'border-amber-200' }
     case 'cancelled':
-      return { label: 'Cancelled', color: 'bg-red-500', textColor: 'text-red-700', bgLight: 'bg-red-50' }
+      return { label: 'Cancelled', color: 'bg-red-500', textColor: 'text-red-700', bgLight: 'bg-red-50', border: 'border-red-200' }
     default:
-      return { label: 'Scheduled', color: 'bg-blue-500', textColor: 'text-blue-700', bgLight: 'bg-blue-50' }
+      return { label: 'Scheduled', color: 'bg-blue-500', textColor: 'text-blue-700', bgLight: 'bg-blue-50', border: 'border-blue-200' }
   }
 }
 
@@ -145,24 +145,11 @@ function formatDuration(ms: number): string {
   return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 }
 
-function getRoleIcon(role: string): string {
-  switch (role?.toLowerCase()) {
-    case 'surgeon': return '👨‍⚕️'
-    case 'anesthesiologist': return '💉'
-    case 'nurse': return '👤'
-    case 'tech': return '🔧'
-    default: return '👤'
-  }
-}
-
-function getRoleBadgeClass(role: string): string {
-  switch (role?.toLowerCase()) {
-    case 'surgeon': return 'bg-blue-100 text-blue-700'
-    case 'anesthesiologist': return 'bg-amber-100 text-amber-700'
-    case 'nurse': return 'bg-emerald-100 text-emerald-700'
-    case 'tech': return 'bg-purple-100 text-purple-700'
-    default: return 'bg-slate-100 text-slate-600'
-  }
+function formatMinutes(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = Math.round(mins % 60)
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:00`
+  return `0:${m.toString().padStart(2, '0')}:00`
 }
 
 // ============================================================================
@@ -211,7 +198,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [implants, setImplants] = useState<any>(null)
   const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | 'total_hip' | 'total_knee' | null>(null)
 
-  // Device companies (for completed view)
+  // Device companies
   const [deviceCompanies, setDeviceCompanies] = useState<DeviceCompanyData[]>([])
 
   // UI state
@@ -219,8 +206,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [userId, setUserId] = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [patientCallTime, setPatientCallTime] = useState<string | null>(null)
-  const [showImplants, setShowImplants] = useState(false)
-  const [showNotes, setShowNotes] = useState(false)
   const [showAddStaff, setShowAddStaff] = useState(false)
 
   // Live clock
@@ -642,29 +627,35 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const incisionTime = incisionMilestone ? getMilestoneByTypeId(incisionMilestone.id)?.recorded_at : null
   const closingTime = closingMilestone ? getMilestoneByTypeId(closingMilestone.id)?.recorded_at : null
 
-  let totalTime = '0:00:00'
+  let totalTimeMs = 0
   if (patientInTime) {
     const endTime = patientOutTime ? new Date(patientOutTime).getTime() : currentTime
-    totalTime = formatDuration(endTime - new Date(patientInTime).getTime())
+    totalTimeMs = endTime - new Date(patientInTime).getTime()
   }
+  const totalTime = formatDuration(totalTimeMs)
+  const totalMinutes = Math.round(totalTimeMs / 60000)
 
-  let surgicalTime = '0:00:00'
+  let surgicalTimeMs = 0
   if (incisionTime) {
     const endTime = closingTime ? new Date(closingTime).getTime() : currentTime
-    surgicalTime = formatDuration(endTime - new Date(incisionTime).getTime())
+    surgicalTimeMs = endTime - new Date(incisionTime).getTime()
   }
+  const surgicalTime = formatDuration(surgicalTimeMs)
+  const surgicalMinutes = Math.round(surgicalTimeMs / 60000)
+
+  // Variance calculations
+  const totalVariance = surgeonAverages.avgTotalTime ? totalMinutes - surgeonAverages.avgTotalTime : null
+  const surgicalVariance = surgeonAverages.avgSurgicalTime ? surgicalMinutes - surgeonAverages.avgSurgicalTime : null
 
   const completedMilestones = caseMilestones.length
-  const totalMilestoneTypes = milestoneTypes.length
-  const progressPercentage = totalMilestoneTypes > 0 ? (completedMilestones / totalMilestoneTypes) * 100 : 0
+  const totalMilestoneCount = milestoneTypes.length
 
-  // Get assigned staff excluding surgeon
+  // Get assigned staff
   const assignedStaff = caseStaff.filter(cs => {
     const role = getFirst(cs.user_roles)
     return role?.name !== 'surgeon'
   })
 
-  // Available staff not yet assigned
   const unassignedStaff = availableStaff.filter(s => !caseStaff.some(cs => cs.user_id === s.id))
 
   // ============================================================================
@@ -715,7 +706,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   <span className={`text-xs font-semibold ${statusConfig.textColor}`}>{statusConfig.label}</span>
                 </div>
               </div>
-              <p className="text-sm text-slate-500 mt-0.5">{formatDate(caseData.scheduled_date)}</p>
             </div>
           </div>
 
@@ -761,23 +751,32 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // ============================================================================
-  // ACTIVE CASE VIEW - REDESIGNED
+  // BUILD MILESTONE DATA FOR GRID
   // ============================================================================
 
-  // Helper for paired milestones
   const getPartnerMilestone = (milestone: FacilityMilestone): FacilityMilestone | undefined => {
     if (!milestone.pair_with_id) return undefined
     return milestoneTypes.find(mt => mt.id === milestone.pair_with_id)
   }
 
-  // Build timeline items
-  const timelineItems = milestoneTypes
+  // Build milestone cards (exclude 'end' milestones - they're shown with their start pair)
+  const milestoneCards = milestoneTypes
     .filter(mt => mt.pair_position !== 'end')
     .map(mt => {
       const recorded = getMilestoneByTypeId(mt.id)
       const isPaired = mt.pair_position === 'start'
-      const partner = isPaired ? getPartnerMilestone(mt) : null
-      const partnerRecorded = partner ? getMilestoneByTypeId(partner.id) : null
+      const partner = isPaired ? getPartnerMilestone(mt) : undefined
+      const partnerRecorded = partner ? getMilestoneByTypeId(partner.id) : undefined
+
+      // Calculate elapsed for paired milestones
+      let elapsedMs = 0
+      let elapsedDisplay = ''
+      if (isPaired && recorded) {
+        const endTime = partnerRecorded ? new Date(partnerRecorded.recorded_at).getTime() : currentTime
+        elapsedMs = endTime - new Date(recorded.recorded_at).getTime()
+        const mins = Math.floor(elapsedMs / 60000)
+        elapsedDisplay = `${mins} min`
+      }
 
       return {
         milestone: mt,
@@ -785,484 +784,308 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         isPaired,
         partner,
         partnerRecorded,
-        displayName: mt.display_name.replace(/ Start$/i, '')
+        elapsedMs,
+        elapsedDisplay,
+        displayName: mt.display_name.replace(/ Start$/i, ''),
+        isComplete: isPaired ? !!partnerRecorded : !!recorded,
+        isInProgress: isPaired ? (!!recorded && !partnerRecorded) : false,
       }
     })
+
+  // ============================================================================
+  // ACTIVE CASE VIEW - COMMAND CENTER
+  // ============================================================================
 
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-24">
 
         {/* ================================================================== */}
-        {/* COMPACT HEADER BAR */}
+        {/* TOP ROW: Timers + Quick Info */}
         {/* ================================================================== */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            {/* Left: Back + Case Info */}
-            <div className="flex items-center gap-4">
-              <Link href="/cases" className="flex items-center justify-center w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-lg font-bold text-slate-900">{caseData.case_number}</h1>
-                <span className="text-slate-300">|</span>
-                <span className="text-sm font-medium text-slate-700">{procedure?.name || 'No procedure'}</span>
-                {caseData.operative_side && caseData.operative_side !== 'n/a' && (
-                  <span className={`px-2 py-0.5 text-xs font-semibold rounded ${
-                    caseData.operative_side === 'left' ? 'bg-purple-100 text-purple-700' :
-                    caseData.operative_side === 'right' ? 'bg-indigo-100 text-indigo-700' :
-                    'bg-amber-100 text-amber-700'
-                  }`}>
-                    {caseData.operative_side.charAt(0).toUpperCase() + caseData.operative_side.slice(1)}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Room, Time, Status */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                <span className="font-medium">{room?.name || '—'}</span>
-              </div>
-
-              <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="font-medium">{formatTime(caseData.start_time)}</span>
-              </div>
-
-              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${statusConfig.bgLight}`}>
-                <div className={`w-2 h-2 rounded-full ${statusConfig.color} ${status?.name === 'in_progress' ? 'animate-pulse' : ''}`}></div>
-                <span className={`text-xs font-semibold ${statusConfig.textColor}`}>{statusConfig.label}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================== */}
-        {/* TIMER STRIP */}
-        {/* ================================================================== */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          {/* Total Time */}
-          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-emerald-100 text-[10px] font-medium uppercase tracking-wider">Total Time</p>
-                <p className="text-xs text-emerald-200">Patient In → Out</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-white font-mono tabular-nums">{totalTime}</p>
-              {surgeonAverages.avgTotalTime && (
-                <p className="text-[10px] text-emerald-200">avg {Math.floor(surgeonAverages.avgTotalTime / 60)}:{(surgeonAverages.avgTotalTime % 60).toString().padStart(2, '0')}:00</p>
-              )}
-            </div>
-          </div>
-
-          {/* Surgical Time */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-blue-100 text-[10px] font-medium uppercase tracking-wider">Surgical Time</p>
-                <p className="text-xs text-blue-200">Incision → Closing</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-white font-mono tabular-nums">{surgicalTime}</p>
-              {surgeonAverages.avgSurgicalTime && (
-                <p className="text-[10px] text-blue-200">avg {Math.floor(surgeonAverages.avgSurgicalTime / 60)}:{(surgeonAverages.avgSurgicalTime % 60).toString().padStart(2, '0')}:00</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================== */}
-        {/* MAIN CONTENT: TIMELINE + SIDEBAR */}
-        {/* ================================================================== */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-          {/* LEFT: MILESTONE TIMELINE (3 cols) */}
-          <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">Milestones</h2>
-              <div className="flex items-center gap-2">
-                <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${progressPercentage}%` }}
-                  />
+          {/* TIMERS (2 cols) */}
+          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+            {/* Total Time */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl" />
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Time</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-500">{completedMilestones}/{totalMilestoneTypes}</span>
-              </div>
-            </div>
-
-            {/* Timeline */}
-            <div className="p-4">
-              {milestoneTypes.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                  <p className="text-sm">No milestones configured for this procedure.</p>
-                  <p className="text-xs mt-1">Configure milestones in Settings → Procedure Milestones</p>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {timelineItems.map((item, index) => {
-                    const isRecorded = !!item.recorded
-                    const isPartnerRecorded = !!item.partnerRecorded
-                    const isLast = index === timelineItems.length - 1
-
-                    return (
-                      <div key={item.milestone.id} className="relative">
-                        {/* Timeline connector line */}
-                        {!isLast && (
-                          <div className={`absolute left-[15px] top-8 w-0.5 h-full -mb-1 ${isRecorded ? 'bg-emerald-300' : 'bg-slate-200'}`} />
-                        )}
-
-                        <div className="flex items-start gap-3 py-2">
-                          {/* Timeline dot */}
-                          <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            isRecorded
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-slate-200 text-slate-400'
-                          }`}>
-                            {isRecorded ? (
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            ) : (
-                              <div className="w-2 h-2 bg-slate-400 rounded-full" />
-                            )}
-                          </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
-                                <p className={`text-sm font-medium ${isRecorded ? 'text-slate-900' : 'text-slate-500'}`}>
-                                  {item.displayName}
-                                </p>
-                                {item.isPaired && isRecorded && item.partnerRecorded && (
-                                  <p className="text-xs text-slate-500">
-                                    {formatTimestamp(item.recorded?.recorded_at || null)} → {formatTimestamp(item.partnerRecorded?.recorded_at || null)}
-                                    <span className="ml-2 text-emerald-600 font-medium">
-                                      {Math.round((new Date(item.partnerRecorded.recorded_at).getTime() - new Date(item.recorded!.recorded_at).getTime()) / 60000)} min
-                                    </span>
-                                  </p>
-                                )}
-                                {!item.isPaired && isRecorded && (
-                                  <p className="text-xs text-slate-500">{formatTimestamp(item.recorded?.recorded_at || null)}</p>
-                                )}
-                              </div>
-
-                              {/* Action buttons */}
-                              <div className="flex items-center gap-1">
-                                {item.isPaired ? (
-                                  // Paired milestone buttons
-                                  <>
-                                    {!isRecorded ? (
-                                      <button
-                                        onClick={() => recordMilestone(item.milestone.id)}
-                                        className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                      >
-                                        Start
-                                      </button>
-                                    ) : !isPartnerRecorded ? (
-                                      <>
-                                        <button
-                                          onClick={() => recordMilestone(item.partner!.id)}
-                                          className="px-3 py-1.5 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                                        >
-                                          Stop
-                                        </button>
-                                        <button
-                                          onClick={() => undoMilestone(item.recorded!.id)}
-                                          className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                                          title="Undo"
-                                        >
-                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                          </svg>
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <button
-                                        onClick={() => undoMilestone(item.partnerRecorded!.id)}
-                                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                                        title="Undo"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                        </svg>
-                                      </button>
-                                    )}
-                                  </>
-                                ) : (
-                                  // Single milestone buttons
-                                  <>
-                                    {!isRecorded ? (
-                                      <button
-                                        onClick={() => recordMilestone(item.milestone.id)}
-                                        className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                                      >
-                                        Record
-                                      </button>
-                                    ) : (
-                                      <button
-                                        onClick={() => undoMilestone(item.recorded!.id)}
-                                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
-                                        title="Undo"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                                        </svg>
-                                      </button>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* RIGHT: SIDEBAR (2 cols) */}
-          <div className="lg:col-span-2 space-y-4">
-
-            {/* SURGICAL TEAM CARD */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-                <h3 className="text-sm font-semibold text-slate-900">Surgical Team</h3>
-              </div>
-              <div className="p-4 space-y-3">
-                {/* Surgeon */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm">
-                      👨‍⚕️
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : 'No surgeon assigned'}
-                      </p>
-                      <p className="text-xs text-slate-500">Surgeon</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Anesthesiologist */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-sm">
-                      💉
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">
-                        {anesthesiologist ? `Dr. ${anesthesiologist.first_name} ${anesthesiologist.last_name}` : 'No anesthesiologist'}
-                      </p>
-                      <p className="text-xs text-slate-500">Anesthesiologist</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Divider */}
-                {assignedStaff.length > 0 && <div className="border-t border-slate-100 pt-3 mt-3" />}
-
-                {/* Assigned Staff */}
-                {assignedStaff.map(cs => {
-                  const user = getFirst(cs.users)
-                  const role = getFirst(cs.user_roles)
-                  return (
-                    <div key={cs.id} className="flex items-center justify-between group">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
-                          role?.name === 'nurse' ? 'bg-emerald-100' :
-                          role?.name === 'tech' ? 'bg-purple-100' : 'bg-slate-100'
+                <p className="text-4xl font-bold text-white font-mono tabular-nums tracking-tight">
+                  {totalTime}
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  {surgeonAverages.avgTotalTime && (
+                    <>
+                      <span className="text-xs text-slate-500">Avg: {formatMinutes(surgeonAverages.avgTotalTime)}</span>
+                      {totalVariance !== null && patientInTime && (
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                          totalVariance > 10 ? 'bg-red-500/20 text-red-400' :
+                          totalVariance < -10 ? 'bg-emerald-500/20 text-emerald-400' :
+                          'bg-slate-700 text-slate-400'
                         }`}>
-                          {getRoleIcon(role?.name || '')}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">
-                            {user ? `${user.first_name} ${user.last_name}` : 'Unknown'}
-                          </p>
-                          <p className="text-xs text-slate-500 capitalize">{role?.name || 'Staff'}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeStaff(cs.id)}
-                        className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Remove"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )
-                })}
-
-                {/* Add Staff Button */}
-                <div className="pt-2">
-                  {showAddStaff ? (
-                    <div className="space-y-2">
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            addStaff(e.target.value)
-                            e.target.value = ''
-                          }
-                        }}
-                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Select staff to add...</option>
-                        {unassignedStaff.map(s => {
-                          const roleName = Array.isArray(s.user_roles) ? s.user_roles[0]?.name : (s.user_roles as any)?.name
-                          return (
-                            <option key={s.id} value={s.id}>
-                              {s.first_name} {s.last_name} ({roleName})
-                            </option>
-                          )
-                        })}
-                      </select>
-                      <button
-                        onClick={() => setShowAddStaff(false)}
-                        className="text-xs text-slate-500 hover:text-slate-700"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowAddStaff(true)}
-                      className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-dashed border-slate-200 rounded-lg hover:border-blue-300 transition-colors"
-                    >
-                      + Add Staff
-                    </button>
+                          {totalVariance > 0 ? '+' : ''}{totalVariance}m
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* DEVICE REP SECTION */}
-            <DeviceRepSection caseId={id} supabase={supabase} />
-
-            {/* IMPLANTS - Collapsible */}
-            {implants && implantCategory && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setShowImplants(!showImplants)}
-                  className="w-full px-4 py-3 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-slate-900">Implants</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!showImplants && (
-                      <span className="text-xs text-slate-500">
-                        {implantCategory === 'hip' || implantCategory === 'total_hip'
-                          ? `Cup: ${implants.cup_size_final || '—'} | Stem: ${implants.stem_size_final || '—'}`
-                          : `Femur: ${implants.femur_size_final || '—'} | Tibia: ${implants.tibia_size_final || '—'}`
-                        }
-                      </span>
-                    )}
-                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${showImplants ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-
-                {showImplants && (
-                  <div className="p-4 border-t border-slate-100">
-                    {implants.fixation_type && (
-                      <p className="text-xs text-slate-500 mb-3">
-                        Fixation: <span className="font-medium text-slate-700 capitalize">{implants.fixation_type}</span>
-                      </p>
-                    )}
-                    <div className="space-y-2 text-sm">
-                      {(implantCategory === 'hip' || implantCategory === 'total_hip') && (
-                        <>
-                          <ImplantRow label="Cup" brand={implants.cup_brand} size={implants.cup_size_final} templated={implants.cup_size_templated} />
-                          <ImplantRow label="Stem" brand={implants.stem_brand} size={implants.stem_size_final} templated={implants.stem_size_templated} />
-                          <ImplantRow label="Head" size={implants.head_size_final} templated={implants.head_size_templated} />
-                          <ImplantRow label="Liner" size={implants.liner_size_final} templated={implants.liner_size_templated} />
-                        </>
+            {/* Surgical Time */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-1">
+                  {incisionTime && !closingTime && <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />}
+                  {(!incisionTime || closingTime) && <div className="w-2 h-2 bg-slate-600 rounded-full" />}
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Surgical Time</span>
+                </div>
+                <p className="text-4xl font-bold text-white font-mono tabular-nums tracking-tight">
+                  {surgicalTime}
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  {surgeonAverages.avgSurgicalTime && (
+                    <>
+                      <span className="text-xs text-slate-500">Avg: {formatMinutes(surgeonAverages.avgSurgicalTime)}</span>
+                      {surgicalVariance !== null && incisionTime && (
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                          surgicalVariance > 10 ? 'bg-red-500/20 text-red-400' :
+                          surgicalVariance < -10 ? 'bg-emerald-500/20 text-emerald-400' :
+                          'bg-slate-700 text-slate-400'
+                        }`}>
+                          {surgicalVariance > 0 ? '+' : ''}{surgicalVariance}m
+                        </span>
                       )}
-                      {(implantCategory === 'knee' || implantCategory === 'total_knee') && (
-                        <>
-                          <ImplantRow label="Femur" brand={implants.femur_brand} size={implants.femur_size_final} templated={implants.femur_size_templated} />
-                          <ImplantRow label="Tibia" brand={implants.tibia_brand} size={implants.tibia_size_final} templated={implants.tibia_size_templated} />
-                          <ImplantRow label="Poly" brand={implants.poly_brand} size={implants.poly_size_final} templated={implants.poly_size_templated} />
-                          <ImplantRow label="Patella" brand={implants.patella_brand} size={implants.patella_size_final} templated={implants.patella_size_templated} />
-                        </>
-                      )}
-                    </div>
-                  </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* QUICK INFO (1 col) */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Link href="/cases" className="text-slate-400 hover:text-slate-600 transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </Link>
+                  <h1 className="text-lg font-bold text-slate-900">{caseData.case_number}</h1>
+                </div>
+                <p className="text-sm text-slate-600 mt-0.5">{procedure?.name || 'No procedure'}</p>
+              </div>
+              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${statusConfig.bgLight} ${statusConfig.border}`}>
+                <div className={`w-2 h-2 rounded-full ${statusConfig.color} ${status?.name === 'in_progress' ? 'animate-pulse' : ''}`}></div>
+                <span className={`text-xs font-semibold ${statusConfig.textColor}`}>{statusConfig.label}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-slate-400 text-xs">Room</p>
+                <p className="font-semibold text-slate-900">{room?.name || '—'}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs">Scheduled</p>
+                <p className="font-semibold text-slate-900">{formatTime(caseData.start_time)}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs">Surgeon</p>
+                <p className="font-semibold text-slate-900">{surgeon ? `Dr. ${surgeon.last_name}` : '—'}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs">Side</p>
+                <p className="font-semibold text-slate-900 capitalize">{caseData.operative_side || '—'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ================================================================== */}
+        {/* BOTTOM ROW: Milestones + Sidebar */}
+        {/* ================================================================== */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+          {/* MILESTONE SECTION (2 cols) */}
+          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {completedMilestones} of {totalMilestoneCount} recorded
+                </p>
+              </div>
+              {/* Progress bar */}
+              <div className="flex items-center gap-3">
+                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${(completedMilestones / totalMilestoneCount) * 100}%` }}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">
+                  {Math.round((completedMilestones / totalMilestoneCount) * 100)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Milestone Grid */}
+            <div className="p-5">
+              {milestoneTypes.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <svg className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <p className="text-sm font-medium">No milestones configured</p>
+                  <p className="text-xs mt-1">Configure milestones in Settings</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {milestoneCards.map((card) => (
+                    <MilestoneCard
+                      key={card.milestone.id}
+                      card={card}
+                      onRecord={() => recordMilestone(card.milestone.id)}
+                      onRecordEnd={() => card.partner && recordMilestone(card.partner.id)}
+                      onUndo={() => card.recorded && undoMilestone(card.recorded.id)}
+                      onUndoEnd={() => card.partnerRecorded && undoMilestone(card.partnerRecorded.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* SIDEBAR (1 col) */}
+          <div className="space-y-4">
+
+            {/* TEAM */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">Team</h3>
+                <span className="text-xs text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0) + (anesthesiologist ? 1 : 0)} assigned</span>
+              </div>
+              <div className="p-3 space-y-1">
+                {surgeon && (
+                  <TeamMember name={`Dr. ${surgeon.last_name}`} role="Surgeon" color="blue" />
                 )}
+                {anesthesiologist && (
+                  <TeamMember name={`Dr. ${anesthesiologist.last_name}`} role="Anesthesia" color="amber" />
+                )}
+                {assignedStaff.map(cs => {
+                  const user = getFirst(cs.users)
+                  const role = getFirst(cs.user_roles)
+                  return (
+                    <TeamMember
+                      key={cs.id}
+                      name={user ? `${user.first_name} ${user.last_name}` : 'Unknown'}
+                      role={role?.name || 'Staff'}
+                      color={role?.name === 'nurse' ? 'emerald' : 'purple'}
+                      onRemove={() => removeStaff(cs.id)}
+                    />
+                  )
+                })}
+
+                {/* Add Staff */}
+                {showAddStaff ? (
+                  <div className="pt-2">
+                    <select
+                      autoFocus
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          addStaff(e.target.value)
+                          setShowAddStaff(false)
+                        }
+                      }}
+                      onBlur={() => setShowAddStaff(false)}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      defaultValue=""
+                    >
+                      <option value="" disabled>Select staff...</option>
+                      {unassignedStaff.map(s => {
+                        const roleName = Array.isArray(s.user_roles) ? s.user_roles[0]?.name : (s.user_roles as any)?.name
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {s.first_name} {s.last_name} ({roleName})
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowAddStaff(true)}
+                    className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-2 mt-1 border border-dashed border-slate-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 transition-all"
+                  >
+                    + Add Staff
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* TRAYS */}
+            <DeviceRepSection caseId={id} supabase={supabase} compact />
+
+            {/* IMPLANTS */}
+            {implants && implantCategory && (
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100">
+                  <h3 className="text-sm font-semibold text-slate-900">Implants</h3>
+                </div>
+                <div className="p-3">
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {(implantCategory === 'hip' || implantCategory === 'total_hip') && (
+                      <>
+                        <ImplantBadge label="Cup" value={implants.cup_size_final} />
+                        <ImplantBadge label="Stem" value={implants.stem_size_final} />
+                        <ImplantBadge label="Head" value={implants.head_size_final} />
+                        <ImplantBadge label="Liner" value={implants.liner_size_final} />
+                      </>
+                    )}
+                    {(implantCategory === 'knee' || implantCategory === 'total_knee') && (
+                      <>
+                        <ImplantBadge label="Femur" value={implants.femur_size_final} />
+                        <ImplantBadge label="Tibia" value={implants.tibia_size_final} />
+                        <ImplantBadge label="Poly" value={implants.poly_size_final} />
+                        <ImplantBadge label="Patella" value={implants.patella_size_final} />
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* NOTES - Collapsible */}
+            {/* NOTES */}
             {caseData.notes && (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setShowNotes(!showNotes)}
-                  className="w-full px-4 py-3 flex items-center justify-between bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-slate-900">Notes</span>
-                  </div>
-                  <svg className={`w-4 h-4 text-slate-400 transition-transform ${showNotes ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {showNotes && (
-                  <div className="p-4 border-t border-slate-100">
-                    <p className="text-sm text-slate-600">{caseData.notes}</p>
-                  </div>
-                )}
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notes</h3>
+                <p className="text-sm text-slate-700">{caseData.notes}</p>
               </div>
             )}
 
             {/* DELAYS */}
             {delays.length > 0 && (
-              <div className="bg-amber-50 rounded-xl border border-amber-200 p-4">
-                <h3 className="text-sm font-semibold text-amber-800 mb-2">Delays ({delays.length})</h3>
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4">
+                <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">
+                  Delays ({delays.length})
+                </h3>
                 <div className="space-y-2">
-                  {delays.map(delay => (
-                    <div key={delay.id} className="text-xs">
-                      <span className="font-medium text-amber-700">{delay.typeName}</span>
-                      {delay.durationMinutes && <span className="text-amber-600 ml-1">({delay.durationMinutes} min)</span>}
-                      {delay.notes && <p className="text-amber-600 mt-0.5">{delay.notes}</p>}
+                  {delays.map(d => (
+                    <div key={d.id} className="text-sm">
+                      <span className="font-medium text-amber-800">{d.typeName}</span>
+                      {d.durationMinutes && (
+                        <span className="text-amber-600 ml-1">• {d.durationMinutes}m</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1286,7 +1109,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         />
       )}
 
-      {/* Call Next Patient Modal */}
+      {/* Modal */}
       {userFacilityId && userId && userEmail && (
         <CallNextPatientModal
           isOpen={showCallNextPatient}
@@ -1301,21 +1124,169 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 }
 
 // ============================================================================
+// MILESTONE CARD COMPONENT
+// ============================================================================
+
+interface MilestoneCardProps {
+  card: {
+    milestone: FacilityMilestone
+    recorded: CaseMilestone | undefined
+    isPaired: boolean
+    partner: FacilityMilestone | undefined
+    partnerRecorded: CaseMilestone | undefined
+    elapsedDisplay: string
+    displayName: string
+    isComplete: boolean
+    isInProgress: boolean
+  }
+  onRecord: () => void
+  onRecordEnd: () => void
+  onUndo: () => void
+  onUndoEnd: () => void
+}
+
+function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd }: MilestoneCardProps) {
+  const { recorded, isPaired, partnerRecorded, elapsedDisplay, displayName, isComplete, isInProgress } = card
+
+  // Determine state
+  const isNotStarted = !recorded
+  const showUndo = isComplete || isInProgress
+
+  return (
+    <div className={`
+      relative rounded-xl border-2 p-4 transition-all duration-200
+      ${isComplete 
+        ? 'bg-emerald-50 border-emerald-200' 
+        : isInProgress 
+          ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200 ring-offset-1' 
+          : 'bg-white border-slate-200 hover:border-slate-300'
+      }
+    `}>
+      {/* Status indicator */}
+      <div className="flex items-start justify-between mb-3">
+        <div className={`
+          w-8 h-8 rounded-lg flex items-center justify-center
+          ${isComplete 
+            ? 'bg-emerald-500' 
+            : isInProgress 
+              ? 'bg-blue-500' 
+              : 'bg-slate-200'
+          }
+        `}>
+          {isComplete ? (
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : isInProgress ? (
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+          ) : (
+            <div className="w-2 h-2 bg-slate-400 rounded-full" />
+          )}
+        </div>
+
+        {/* Undo button */}
+        {showUndo && (
+          <button
+            onClick={isComplete && isPaired ? onUndoEnd : onUndo}
+            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+            title="Undo"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Title */}
+      <h4 className={`text-sm font-semibold mb-1 ${
+        isComplete ? 'text-emerald-900' : isInProgress ? 'text-blue-900' : 'text-slate-700'
+      }`}>
+        {displayName}
+      </h4>
+
+      {/* Time display */}
+      {isComplete && (
+        <p className="text-xs text-emerald-600 font-medium">
+          {isPaired ? (
+            <>
+              {formatTimestampShort(recorded?.recorded_at || null)} → {formatTimestampShort(partnerRecorded?.recorded_at || null)}
+              <span className="ml-1 text-emerald-700 font-semibold">({elapsedDisplay})</span>
+            </>
+          ) : (
+            formatTimestamp(recorded?.recorded_at || null)
+          )}
+        </p>
+      )}
+
+      {isInProgress && (
+        <p className="text-xs text-blue-600 font-medium">
+          Started {formatTimestamp(recorded?.recorded_at || null)}
+          <span className="ml-1 text-blue-700 font-semibold animate-pulse">• {elapsedDisplay}</span>
+        </p>
+      )}
+
+      {/* Action button */}
+      {isNotStarted && (
+        <button
+          onClick={onRecord}
+          className="mt-3 w-full py-2 px-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm hover:shadow active:scale-[0.98]"
+        >
+          Record
+        </button>
+      )}
+
+      {isInProgress && isPaired && (
+        <button
+          onClick={onRecordEnd}
+          className="mt-3 w-full py-2 px-3 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-sm hover:shadow active:scale-[0.98]"
+        >
+          Complete
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
 // HELPER COMPONENTS
 // ============================================================================
 
-function ImplantRow({ label, brand, size, templated }: { label: string; brand?: string | null; size?: string | null; templated?: string | null }) {
-  if (!size && !templated && !brand) return null
+function TeamMember({ name, role, color, onRemove }: { name: string; role: string; color: string; onRemove?: () => void }) {
+  const colorClasses: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-700',
+    amber: 'bg-amber-100 text-amber-700',
+    emerald: 'bg-emerald-100 text-emerald-700',
+    purple: 'bg-purple-100 text-purple-700',
+  }
+
   return (
-    <div className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0">
-      <span className="text-slate-600">{label}</span>
-      <div className="text-right">
-        {brand && <span className="text-xs text-slate-400 mr-2">{brand}</span>}
-        <span className="font-medium text-slate-900">{size || '—'}</span>
-        {templated && templated !== size && (
-          <span className="text-xs text-slate-400 ml-1">(tmpl: {templated})</span>
-        )}
+    <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 group">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm font-medium text-slate-800 truncate">{name}</span>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${colorClasses[color] || colorClasses.purple}`}>
+          {role}
+        </span>
       </div>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ImplantBadge({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="bg-slate-50 rounded-lg px-2.5 py-1.5">
+      <span className="text-slate-500">{label}: </span>
+      <span className="font-semibold text-slate-800">{value || '—'}</span>
     </div>
   )
 }
