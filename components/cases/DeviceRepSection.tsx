@@ -24,17 +24,9 @@ interface DeviceCompany {
   confirmed_by: string | null
   delivered_at: string | null
   delivered_by: string | null
-  implant_companies: {
-    name: string
-  }
-  confirmed_by_user?: {
-    first_name: string
-    last_name: string
-  } | null
-  delivered_by_user?: {
-    first_name: string
-    last_name: string
-  } | null
+  companyName: string
+  confirmedByName: string | null
+  deliveredByName: string | null
 }
 
 interface TrayActivity {
@@ -203,7 +195,40 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
         .eq('case_id', caseId)
 
       if (!error && companies) {
-        setDeviceCompanies(companies as DeviceCompany[])
+        // Transform Supabase response to our cleaner interface
+        const transformed: DeviceCompany[] = companies.map((c: any) => {
+          // Handle nested objects - Supabase may return single object or array
+          const implantCompany = Array.isArray(c.implant_companies) 
+            ? c.implant_companies[0] 
+            : c.implant_companies
+          const confirmedUser = Array.isArray(c.confirmed_by_user) 
+            ? c.confirmed_by_user[0] 
+            : c.confirmed_by_user
+          const deliveredUser = Array.isArray(c.delivered_by_user) 
+            ? c.delivered_by_user[0] 
+            : c.delivered_by_user
+
+          return {
+            id: c.id,
+            implant_company_id: c.implant_company_id,
+            tray_status: c.tray_status,
+            loaner_tray_count: c.loaner_tray_count,
+            delivered_tray_count: c.delivered_tray_count,
+            rep_notes: c.rep_notes,
+            confirmed_at: c.confirmed_at,
+            confirmed_by: c.confirmed_by,
+            delivered_at: c.delivered_at,
+            delivered_by: c.delivered_by,
+            companyName: implantCompany?.name || 'Unknown Company',
+            confirmedByName: confirmedUser 
+              ? `${confirmedUser.first_name} ${confirmedUser.last_name}` 
+              : null,
+            deliveredByName: deliveredUser 
+              ? `${deliveredUser.first_name} ${deliveredUser.last_name}` 
+              : null,
+          }
+        })
+        setDeviceCompanies(transformed)
       }
 
       // Fetch activity history
@@ -221,7 +246,18 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
         .limit(10)
 
       if (activityData) {
-        setActivities(activityData as TrayActivity[])
+        // Transform activity data too
+        const transformedActivities: TrayActivity[] = activityData.map((a: any) => {
+          const user = Array.isArray(a.users) ? a.users[0] : a.users
+          return {
+            id: a.id,
+            activity_type: a.activity_type,
+            message: a.message,
+            created_at: a.created_at,
+            users: user || null,
+          }
+        })
+        setActivities(transformedActivities)
       }
 
       setLoading(false)
@@ -272,14 +308,13 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
       <div className="p-4 space-y-3">
         {deviceCompanies.map((company) => {
           const status = getStatusConfig(company.tray_status)
-          const companyName = company.implant_companies?.name || 'Unknown Company'
 
           return (
             <div key={company.id} className="space-y-2">
               {/* Company Header Row */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-slate-900">{companyName}</span>
+                  <span className="text-sm font-medium text-slate-900">{company.companyName}</span>
                 </div>
                 <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border ${status.bgColor} ${status.borderColor}`}>
                   <span className="text-xs">{status.icon}</span>
@@ -304,9 +339,9 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
                       <span className="text-slate-700 font-medium">
                         {formatDateTime(company.confirmed_at)}
                       </span>
-                      {company.confirmed_by_user && (
+                      {company.confirmedByName && (
                         <span className="text-slate-500 ml-1">
-                          by {company.confirmed_by_user.first_name} {company.confirmed_by_user.last_name}
+                          by {company.confirmedByName}
                         </span>
                       )}
                     </div>
@@ -317,9 +352,9 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
                       <span className="text-slate-700 font-medium">
                         {formatDateTime(company.delivered_at)}
                       </span>
-                      {company.delivered_by_user && (
+                      {company.deliveredByName && (
                         <span className="text-slate-500 ml-1">
-                          by {company.delivered_by_user.first_name} {company.delivered_by_user.last_name}
+                          by {company.deliveredByName}
                         </span>
                       )}
                     </div>
