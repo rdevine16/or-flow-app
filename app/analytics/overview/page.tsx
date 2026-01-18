@@ -11,6 +11,16 @@ import DateFilter from '@/components/ui/DateFilter'
 
 // Tremor components
 import {
+  Card,
+  Metric,
+  Text,
+  Title,
+  Subtitle,
+  Flex,
+  Grid,
+  BadgeDelta,
+  ProgressBar,
+  Tracker,
   BarChart,
   DonutChart,
   Legend,
@@ -38,14 +48,6 @@ import {
   SparklesIcon,
   ArrowRightIcon,
   XMarkIcon,
-  UserIcon,
-  BuildingOffice2Icon,
-  BeakerIcon,
-  ArrowPathIcon,
-  DocumentChartBarIcon,
-  PresentationChartLineIcon,
-  ClipboardDocumentListIcon,
-  CubeIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -64,157 +66,303 @@ interface KPIData {
 }
 
 // ============================================
-// REPORT NAVIGATION CARD
+// ENTERPRISE KPI CARD
 // ============================================
 
-interface ReportCardProps {
+function KPICard({ 
+  title, 
+  kpi, 
+  icon: Icon,
+  accentColor = 'blue',
+  showTracker = true,
+  onClick,
+  invertDelta = false
+}: { 
   title: string
-  description: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  accentColor: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'cyan'
-  badge?: string
-  stats?: { label: string; value: string }[]
-}
+  kpi: KPIData
+  icon?: React.ComponentType<{ className?: string }>
+  accentColor?: 'blue' | 'emerald' | 'amber' | 'rose' | 'violet'
+  showTracker?: boolean
+  onClick?: () => void
+  invertDelta?: boolean
+}) {
+  const getDeltaType = () => {
+    if (!kpi.deltaType || kpi.deltaType === 'unchanged') return 'unchanged'
+    if (invertDelta) {
+      return kpi.deltaType === 'decrease' ? 'increase' : 'decrease'
+    }
+    return kpi.deltaType
+  }
 
-function ReportCard({ title, description, href, icon: Icon, accentColor, badge, stats }: ReportCardProps) {
-  const colorClasses = {
+  const accentColors = {
     blue: {
-      iconBg: 'bg-blue-100',
+      iconBg: 'bg-blue-50',
       iconColor: 'text-blue-600',
-      hoverBorder: 'hover:border-blue-300',
-      badgeBg: 'bg-blue-50',
-      badgeText: 'text-blue-700',
+      ring: 'ring-blue-500/20',
+      metricColor: 'text-slate-900',
     },
     emerald: {
-      iconBg: 'bg-emerald-100',
+      iconBg: 'bg-emerald-50',
       iconColor: 'text-emerald-600',
-      hoverBorder: 'hover:border-emerald-300',
-      badgeBg: 'bg-emerald-50',
-      badgeText: 'text-emerald-700',
-    },
-    violet: {
-      iconBg: 'bg-violet-100',
-      iconColor: 'text-violet-600',
-      hoverBorder: 'hover:border-violet-300',
-      badgeBg: 'bg-violet-50',
-      badgeText: 'text-violet-700',
+      ring: 'ring-emerald-500/20',
+      metricColor: 'text-slate-900',
     },
     amber: {
-      iconBg: 'bg-amber-100',
+      iconBg: 'bg-amber-50',
       iconColor: 'text-amber-600',
-      hoverBorder: 'hover:border-amber-300',
-      badgeBg: 'bg-amber-50',
-      badgeText: 'text-amber-700',
+      ring: 'ring-amber-500/20',
+      metricColor: 'text-slate-900',
     },
     rose: {
-      iconBg: 'bg-rose-100',
+      iconBg: 'bg-rose-50',
       iconColor: 'text-rose-600',
-      hoverBorder: 'hover:border-rose-300',
-      badgeBg: 'bg-rose-50',
-      badgeText: 'text-rose-700',
+      ring: 'ring-rose-500/20',
+      metricColor: 'text-slate-900',
     },
-    cyan: {
-      iconBg: 'bg-cyan-100',
-      iconColor: 'text-cyan-600',
-      hoverBorder: 'hover:border-cyan-300',
-      badgeBg: 'bg-cyan-50',
-      badgeText: 'text-cyan-700',
+    violet: {
+      iconBg: 'bg-violet-50',
+      iconColor: 'text-violet-600',
+      ring: 'ring-violet-500/20',
+      metricColor: 'text-slate-900',
     },
   }
 
-  const colors = colorClasses[accentColor]
+  const colors = accentColors[accentColor]
 
   return (
-    <Link
-      href={href}
+    <div 
       className={`
-        group block bg-white rounded-xl border border-slate-200/60 
+        relative bg-white rounded-xl border border-slate-200/60 
         shadow-sm hover:shadow-md transition-all duration-200
-        ${colors.hoverBorder}
+        ${onClick ? 'cursor-pointer hover:border-slate-300' : ''}
       `}
+      onClick={onClick}
     >
+      {/* Subtle top accent line */}
+      <div className={`absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-${accentColor}-500/40 to-transparent`} />
+      
       <div className="p-5">
+        {/* Header */}
         <div className="flex items-start justify-between mb-3">
-          <div className={`p-2.5 rounded-xl ${colors.iconBg}`}>
-            <Icon className={`w-5 h-5 ${colors.iconColor}`} />
+          <div className="flex items-center gap-3">
+            {Icon && (
+              <div className={`p-2 rounded-lg ${colors.iconBg}`}>
+                <Icon className={`w-4 h-4 ${colors.iconColor}`} />
+              </div>
+            )}
+            <Text className="font-medium text-slate-600">{title}</Text>
           </div>
-          {badge && (
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors.badgeBg} ${colors.badgeText}`}>
-              {badge}
-            </span>
+          {kpi.delta !== undefined && kpi.deltaType && kpi.deltaType !== 'unchanged' && (
+            <div className={`
+              flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
+              ${getDeltaType() === 'increase' 
+                ? 'bg-emerald-50 text-emerald-700' 
+                : 'bg-rose-50 text-rose-700'
+              }
+            `}>
+              {getDeltaType() === 'increase' ? (
+                <ArrowTrendingUpIcon className="w-3 h-3" />
+              ) : (
+                <ArrowTrendingDownIcon className="w-3 h-3" />
+              )}
+              {Math.abs(kpi.delta)}%
+            </div>
           )}
         </div>
-        
-        <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-slate-700">
-          {title}
-        </h3>
-        <p className="text-sm text-slate-500 mb-4 line-clamp-2">
-          {description}
-        </p>
 
-        {stats && stats.length > 0 && (
-          <div className="flex items-center gap-4 pt-3 border-t border-slate-100">
-            {stats.map((stat, i) => (
-              <div key={i}>
-                <p className="text-xs text-slate-400">{stat.label}</p>
-                <p className="text-sm font-semibold text-slate-900">{stat.value}</p>
-              </div>
-            ))}
+        {/* Metric */}
+        <div className="mb-2">
+          <span className={`text-3xl font-semibold tracking-tight ${colors.metricColor}`}>
+            {kpi.displayValue}
+          </span>
+        </div>
+
+        {/* Target indicator */}
+        {kpi.target !== undefined && (
+          <div className="flex items-center gap-2 mb-3">
+            <div className={`
+              flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
+              ${kpi.targetMet 
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
+                : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+              }
+            `}>
+              {kpi.targetMet ? (
+                <CheckCircleIcon className="w-3.5 h-3.5" />
+              ) : (
+                <ExclamationTriangleIcon className="w-3.5 h-3.5" />
+              )}
+              Target: {title.includes('Cancellation') ? `<${kpi.target}%` : `${kpi.target}%`}
+            </div>
           </div>
         )}
 
-        <div className="flex items-center text-sm font-medium text-slate-600 group-hover:text-blue-600 mt-3">
-          View report
-          <ArrowRightIcon className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
-        </div>
+        {/* Subtitle */}
+        {kpi.subtitle && (
+          <Text className="text-slate-500 text-sm">{kpi.subtitle}</Text>
+        )}
+
+        {/* Tracker */}
+        {showTracker && kpi.dailyData && kpi.dailyData.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex justify-between items-center mb-2">
+              <Text className="text-xs text-slate-400 font-medium uppercase tracking-wide">
+                Daily Trend
+              </Text>
+              <Text className="text-xs text-slate-400">
+                {kpi.dailyData.length} days
+              </Text>
+            </div>
+            <Tracker data={kpi.dailyData} className="h-8" />
+          </div>
+        )}
+
+        {/* Click indicator */}
+        {onClick && (
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center text-xs font-medium text-blue-600 hover:text-blue-700">
+            View details
+            <ArrowRightIcon className="w-3 h-3 ml-1" />
+          </div>
+        )}
       </div>
-    </Link>
+    </div>
   )
 }
 
 // ============================================
-// QUICK STAT CARD (for overview row)
+// SURGEON IDLE TIME CARD (Insight Card)
 // ============================================
 
-function QuickStatCard({
+function SurgeonIdleTimeCard({ 
+  kpi, 
+  onClick 
+}: { 
+  kpi: KPIData
+  onClick?: () => void 
+}) {
+  return (
+    <div 
+      className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden"
+      onClick={onClick}
+    >
+      {/* Decorative elements */}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+      
+      <div className="relative p-5">
+        {/* Header with badge */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-100">
+              <SparklesIcon className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <Text className="font-medium text-slate-700">Surgeon Idle Time</Text>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 text-xs font-semibold bg-blue-600 text-white rounded-full shadow-sm">
+            AI Insight
+          </span>
+        </div>
+
+        {/* Metric */}
+        <div className="mb-2">
+          <span className="text-3xl font-semibold tracking-tight text-blue-900">
+            {kpi.displayValue}
+          </span>
+        </div>
+
+        <Text className="text-blue-700/70 text-sm mb-4">Avg wait between rooms</Text>
+
+        {/* Insight box */}
+        {kpi.subtitle && kpi.subtitle !== 'No optimization needed' && kpi.value > 0 ? (
+          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+            <div className="flex items-start gap-2">
+              <div className="p-1 rounded bg-blue-100 mt-0.5">
+                <SparklesIcon className="w-3 h-3 text-blue-600" />
+              </div>
+              <Text className="text-blue-800 text-sm font-medium">{kpi.subtitle}</Text>
+            </div>
+          </div>
+        ) : (kpi.targetMet || kpi.value <= 5) && (
+          <div className="p-3 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/40">
+            <div className="flex items-start gap-2">
+              <CheckCircleIcon className="w-4 h-4 text-emerald-600 mt-0.5" />
+              <Text className="text-emerald-800 text-sm font-medium">Excellent! Minimal surgeon wait time</Text>
+            </div>
+          </div>
+        )}
+
+        {/* Click indicator */}
+        <div className="mt-4 pt-3 border-t border-blue-200/40 flex items-center text-xs font-medium text-blue-700 hover:text-blue-800">
+          View flip room analysis
+          <ArrowRightIcon className="w-3 h-3 ml-1" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// TIME METRIC CARD (Compact)
+// ============================================
+
+function TimeMetricCard({
   title,
   value,
   subtitle,
   icon: Icon,
-  trend,
-  trendType,
 }: {
   title: string
   value: string
-  subtitle?: string
-  icon: React.ComponentType<{ className?: string }>
-  trend?: number
-  trendType?: 'up' | 'down'
+  subtitle: string
+  icon?: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="p-1.5 rounded-lg bg-slate-100">
-          <Icon className="w-4 h-4 text-slate-600" />
-        </div>
-        {trend !== undefined && trendType && (
-          <div className={`
-            flex items-center gap-0.5 text-xs font-medium
-            ${trendType === 'up' ? 'text-emerald-600' : 'text-rose-600'}
-          `}>
-            {trendType === 'up' ? (
-              <ArrowTrendingUpIcon className="w-3 h-3" />
-            ) : (
-              <ArrowTrendingDownIcon className="w-3 h-3" />
-            )}
-            {trend}%
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4 hover:shadow-md transition-shadow duration-200">
+      <div className="flex items-center gap-2 mb-2">
+        {Icon && (
+          <div className="p-1.5 rounded-md bg-slate-100">
+            <Icon className="w-3.5 h-3.5 text-slate-600" />
           </div>
         )}
+        <Text className="text-slate-600 font-medium text-sm">{title}</Text>
       </div>
-      <p className="text-2xl font-semibold text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500 mt-0.5">{title}</p>
-      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+      <div className="text-2xl font-semibold text-slate-900 mb-1">{value}</div>
+      <Text className="text-slate-400 text-xs">{subtitle}</Text>
+    </div>
+  )
+}
+
+// ============================================
+// CHART CARD WRAPPER
+// ============================================
+
+function ChartCard({
+  title,
+  subtitle,
+  children,
+  action,
+}: {
+  title: string
+  subtitle: string
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-100">
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+            <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+          </div>
+          {action}
+        </div>
+      </div>
+      <div className="p-6">
+        {children}
+      </div>
     </div>
   )
 }
@@ -226,25 +374,29 @@ function QuickStatCard({
 function SectionHeader({
   title,
   subtitle,
-  action,
+  badge,
 }: {
   title: string
-  subtitle?: string
-  action?: React.ReactNode
+  subtitle: string
+  badge?: string
 }) {
   return (
-    <div className="flex items-start justify-between mb-4">
-      <div>
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-1">
         <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+        {badge && (
+          <span className="px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">
+            {badge}
+          </span>
+        )}
       </div>
-      {action}
+      <p className="text-sm text-slate-500">{subtitle}</p>
     </div>
   )
 }
 
 // ============================================
-// FLIP ROOM MODAL (kept for surgeon idle time)
+// FLIP ROOM MODAL
 // ============================================
 
 function FlipRoomModal({ 
@@ -264,6 +416,7 @@ function FlipRoomModal({
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
         
         <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+          {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-100">
@@ -282,6 +435,7 @@ function FlipRoomModal({
             </button>
           </div>
           
+          {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
             {data.length === 0 ? (
               <div className="text-center py-16">
@@ -313,6 +467,7 @@ function FlipRoomModal({
                       </div>
                     </div>
                     
+                    {/* Room sequence */}
                     <div className="mb-4">
                       <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Room Sequence</p>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -330,6 +485,7 @@ function FlipRoomModal({
                       </div>
                     </div>
                     
+                    {/* Gaps */}
                     {analysis.idleGaps.length > 0 && (
                       <div>
                         <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Transition Gaps</p>
@@ -377,7 +533,7 @@ function FlipRoomModal({
 // MAIN PAGE COMPONENT
 // ============================================
 
-export default function AnalyticsHubPage() {
+export default function AnalyticsOverviewPage() {
   const supabase = createClient()
   const { userData, loading: userLoading, isGlobalAdmin } = useUser()
   
@@ -515,61 +671,9 @@ export default function AnalyticsHubPage() {
   ].filter(d => d.minutes > 0)
 
   const totalPhaseTime = phaseChartData.reduce((sum, d) => sum + d.minutes, 0)
-  const chartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet']
 
-  // Report cards configuration
-  const reportCards: ReportCardProps[] = [
-    {
-      title: 'KPI Overview',
-      description: 'Complete dashboard with all key performance indicators, targets, and daily trends',
-      href: '/analytics/overview',
-      icon: PresentationChartLineIcon,
-      accentColor: 'blue',
-      badge: 'Full Report',
-    },
-    {
-      title: 'Surgeon Performance',
-      description: 'Compare surgeon metrics, case times, and efficiency across procedures',
-      href: '/analytics/surgeons',
-      icon: UserIcon,
-      accentColor: 'emerald',
-    },
-    {
-      title: 'Room Utilization',
-      description: 'OR room efficiency, turnover times, and daily utilization rates',
-      href: '/analytics/rooms',
-      icon: BuildingOffice2Icon,
-      accentColor: 'emerald',
-    },
-    {
-      title: 'Procedure Analysis',
-      description: 'Time breakdowns by procedure type with facility benchmarks',
-      href: '/analytics/procedures',
-      icon: BeakerIcon,
-      accentColor: 'violet',
-    },
-    {
-      title: 'Turnover Analysis',
-      description: 'Detailed turnover metrics and optimization opportunities',
-      href: '/analytics/turnovers',
-      icon: ArrowPathIcon,
-      accentColor: 'amber',
-    },
-    {
-      title: 'Delay Reports',
-      description: 'Delay patterns, causes, and impact on schedule adherence',
-      href: '/analytics/delays',
-      icon: ExclamationTriangleIcon,
-      accentColor: 'rose',
-    },
-    {
-      title: 'Case Timeline',
-      description: 'Individual case deep-dives with milestone analysis',
-      href: '/analytics/timeline',
-      icon: ClipboardDocumentListIcon,
-      accentColor: 'cyan',
-    },
-  ]
+  // Chart colors - professional blue palette
+  const chartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet']
 
   // Loading state
   if (userLoading || !facilityCheckComplete) {
@@ -616,9 +720,12 @@ export default function AnalyticsHubPage() {
           {/* Page Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Analytics</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">Analytics Overview</h1>
               <p className="text-slate-500 mt-1">
-                Performance insights and operational metrics
+                {analytics.completedCases} completed cases analyzed
+                {analytics.totalCases > analytics.completedCases && (
+                  <span className="text-slate-400"> · {analytics.totalCases} total</span>
+                )}
               </p>
             </div>
             <DateFilter selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
@@ -633,162 +740,191 @@ export default function AnalyticsHubPage() {
             </div>
           ) : (
             <div className="space-y-8">
-              {/* QUICK STATS ROW */}
-              <section>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <QuickStatCard
-                    title="Completed Cases"
-                    value={analytics.completedCases.toString()}
-                    icon={CalendarDaysIcon}
-                    trend={analytics.caseVolume.delta}
-                    trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
-                  />
-                  <QuickStatCard
-                    title="FCOTS Rate"
-                    value={analytics.fcots.displayValue}
-                    icon={ClockIcon}
-                    trend={analytics.fcots.delta}
-                    trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
-                  />
-                  <QuickStatCard
-                    title="Avg Turnover"
-                    value={analytics.turnoverTime.displayValue}
-                    icon={ArrowPathIcon}
-                  />
-                  <QuickStatCard
-                    title="OR Utilization"
-                    value={analytics.orUtilization.displayValue}
-                    icon={ChartBarIcon}
-                  />
-                  <QuickStatCard
-                    title="Avg Case Time"
-                    value={formatMinutes(analytics.avgTotalCaseTime)}
-                    icon={ClockIcon}
-                  />
-                  <QuickStatCard
-                    title="Cancellation Rate"
-                    value={analytics.cancellationRate.displayValue}
-                    icon={ExclamationTriangleIcon}
-                  />
-                </div>
-              </section>
-
-              {/* CHARTS ROW */}
-              <section>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Bar Chart */}
-                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Time by Phase</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Average minutes per surgical phase</p>
-                    </div>
-                    <div className="p-6">
-                      {phaseChartData.length > 0 ? (
-                        <BarChart
-                          className="h-64"
-                          data={phaseChartData}
-                          index="name"
-                          categories={['minutes']}
-                          colors={['blue']}
-                          valueFormatter={(v) => `${v} min`}
-                          yAxisWidth={48}
-                          showAnimation={true}
-                          showLegend={false}
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-64 text-slate-400">
-                          <div className="text-center">
-                            <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                            <p>No data available</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Donut Chart */}
-                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Time Distribution</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Proportion of case time by phase</p>
-                    </div>
-                    <div className="p-6">
-                      {phaseChartData.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                          <DonutChart
-                            className="h-52"
-                            data={phaseChartData}
-                            index="name"
-                            category="minutes"
-                            colors={chartColors}
-                            valueFormatter={(v) => `${v} min`}
-                            showAnimation={true}
-                            label={`${totalPhaseTime} min`}
-                          />
-                          <Legend
-                            className="mt-4"
-                            categories={phaseChartData.map(d => d.name)}
-                            colors={chartColors}
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-64 text-slate-400">
-                          <div className="text-center">
-                            <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                            <p>No data available</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              {/* AI INSIGHT CARD */}
-              {analytics.surgeonIdleTime.value > 0 && (
-                <section>
-                  <button
-                    onClick={() => setShowFlipRoomModal(true)}
-                    className="w-full text-left bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
-                  >
-                    <div className="p-5">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-blue-100">
-                            <SparklesIcon className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-slate-900">Optimization Opportunity</h3>
-                              <span className="px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full">
-                                AI Insight
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-600 mt-1">
-                              Surgeons are waiting an average of <span className="font-semibold text-blue-700">{analytics.surgeonIdleTime.displayValue}</span> between rooms.
-                              {analytics.surgeonIdleTime.subtitle !== 'No optimization needed' && (
-                                <span className="text-blue-700"> {analytics.surgeonIdleTime.subtitle}</span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <ArrowRightIcon className="w-5 h-5 text-blue-600" />
-                      </div>
-                    </div>
-                  </button>
-                </section>
-              )}
-
-              {/* REPORTS GRID */}
+              {/* ROW 1: KEY PERFORMANCE INDICATORS */}
               <section>
                 <SectionHeader
-                  title="Detailed Reports"
-                  subtitle="Dive deeper into specific areas of OR performance"
+                  title="Key Performance Indicators"
+                  subtitle="Primary metrics for OR efficiency"
+                  badge="Core KPIs"
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {reportCards.map((card) => (
-                    <ReportCard key={card.href} {...card} />
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KPICard 
+                    title="First Case On-Time" 
+                    kpi={analytics.fcots}
+                    icon={ClockIcon}
+                    accentColor="blue"
+                  />
+                  <KPICard 
+                    title="Avg Turnover Time" 
+                    kpi={analytics.turnoverTime}
+                    icon={ClockIcon}
+                    accentColor="emerald"
+                  />
+                  <KPICard 
+                    title="OR Utilization" 
+                    kpi={analytics.orUtilization}
+                    icon={ChartBarIcon}
+                    accentColor="violet"
+                  />
+                  <KPICard 
+                    title="Case Volume" 
+                    kpi={analytics.caseVolume}
+                    icon={CalendarDaysIcon}
+                    accentColor="amber"
+                    showTracker={false}
+                  />
+                </div>
+              </section>
+
+              {/* ROW 2: EFFICIENCY INDICATORS */}
+              <section>
+                <SectionHeader
+                  title="Efficiency Indicators"
+                  subtitle="Secondary metrics that drive performance"
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <KPICard 
+                    title="Same-Day Cancellation" 
+                    kpi={analytics.cancellationRate}
+                    icon={ExclamationTriangleIcon}
+                    accentColor="rose"
+                    invertDelta
+                  />
+                  <KPICard 
+                    title="Cumulative Tardiness" 
+                    kpi={analytics.cumulativeTardiness}
+                    icon={ClockIcon}
+                    accentColor="amber"
+                    showTracker={false}
+                  />
+                  <KPICard 
+                    title="Non-Operative Time" 
+                    kpi={analytics.nonOperativeTime}
+                    icon={ClockIcon}
+                    accentColor="blue"
+                    showTracker={false}
+                  />
+                  <SurgeonIdleTimeCard 
+                    kpi={analytics.surgeonIdleTime}
+                    onClick={() => setShowFlipRoomModal(true)}
+                  />
+                </div>
+              </section>
+
+              {/* ROW 3: TIME BREAKDOWN */}
+              <section>
+                <SectionHeader
+                  title="Time Breakdown"
+                  subtitle="Average durations across all completed cases"
+                />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  <TimeMetricCard
+                    title="Total Case Time"
+                    value={formatMinutes(analytics.avgTotalCaseTime)}
+                    subtitle="Patient In → Out"
+                    icon={ClockIcon}
+                  />
+                  <TimeMetricCard
+                    title="Surgical Time"
+                    value={formatMinutes(analytics.avgSurgicalTime)}
+                    subtitle="Incision → Closing"
+                    icon={ClockIcon}
+                  />
+                  <TimeMetricCard
+                    title="Pre-Op Time"
+                    value={formatMinutes(analytics.avgPreOpTime)}
+                    subtitle="Patient In → Incision"
+                    icon={ClockIcon}
+                  />
+                  <TimeMetricCard
+                    title="Anesthesia Time"
+                    value={formatMinutes(analytics.avgAnesthesiaTime)}
+                    subtitle="Anes Start → End"
+                    icon={ClockIcon}
+                  />
+                  <TimeMetricCard
+                    title="Closing Time"
+                    value={formatMinutes(analytics.avgClosingTime)}
+                    subtitle="Closing → Complete"
+                    icon={ClockIcon}
+                  />
+                  <TimeMetricCard
+                    title="Emergence"
+                    value={formatMinutes(analytics.avgEmergenceTime)}
+                    subtitle="Close → Patient Out"
+                    icon={ClockIcon}
+                  />
+                </div>
+              </section>
+
+              {/* ROW 4: CHARTS */}
+              <section>
+                <SectionHeader
+                  title="Visual Analytics"
+                  subtitle="Time distribution and phase analysis"
+                />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Bar Chart */}
+                  <ChartCard
+                    title="Average Time by Phase"
+                    subtitle="Minutes spent in each surgical phase"
+                  >
+                    {phaseChartData.length > 0 ? (
+                      <BarChart
+                        className="h-72"
+                        data={phaseChartData}
+                        index="name"
+                        categories={['minutes']}
+                        colors={['blue']}
+                        valueFormatter={(v) => `${v} min`}
+                        yAxisWidth={48}
+                        showAnimation={true}
+                        showGridLines={true}
+                        showLegend={false}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center h-72 text-slate-400">
+                        <div className="text-center">
+                          <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                          <p>No data available</p>
+                        </div>
+                      </div>
+                    )}
+                  </ChartCard>
+
+                  {/* Donut Chart */}
+                  <ChartCard
+                    title="Time Distribution"
+                    subtitle="Proportion of case time by phase"
+                  >
+                    {phaseChartData.length > 0 ? (
+                      <div className="flex flex-col items-center">
+                        <DonutChart
+                          className="h-60"
+                          data={phaseChartData}
+                          index="name"
+                          category="minutes"
+                          colors={chartColors}
+                          valueFormatter={(v) => `${v} min`}
+                          showAnimation={true}
+                          showTooltip={true}
+                          label={`${totalPhaseTime} min`}
+                        />
+                        <Legend
+                          className="mt-4"
+                          categories={phaseChartData.map(d => d.name)}
+                          colors={chartColors}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-72 text-slate-400">
+                        <div className="text-center">
+                          <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                          <p>No data available</p>
+                        </div>
+                      </div>
+                    )}
+                  </ChartCard>
                 </div>
               </section>
 
