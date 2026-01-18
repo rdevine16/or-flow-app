@@ -38,6 +38,173 @@
   --color-tremor-content-inverted: #ffffff;
 }
 
+/* ============================================ */
+/* TREMOR CHART COLORS (Required for Tailwind v4) */
+/* These fill/stroke utilities are used by Tremor charts */
+/* ============================================ */
+
+/* Blue */
+.fill-blue-500 { fill: #3b82f6; }
+.fill-blue-400 { fill: #60a5fa; }
+.fill-blue-600 { fill: #2563eb; }
+.stroke-blue-500 { stroke: #3b82f6; }
+.stroke-blue-400 { stroke: #60a5fa; }
+
+/* Cyan */
+.fill-cyan-500 { fill: #06b6d4; }
+.fill-cyan-400 { fill: #22d3ee; }
+.fill-cyan-600 { fill: #0891b2; }
+.stroke-cyan-500 { stroke: #06b6d4; }
+.stroke-cyan-400 { stroke: #22d3ee; }
+
+/* Indigo */
+.fill-indigo-500 { fill: #6366f1; }
+.fill-indigo-400 { fill: #818cf8; }
+.fill-indigo-600 { fill: #4f46e5; }
+.stroke-indigo-500 { stroke: #6366f1; }
+.stroke-indigo-400 { stroke: #818cf8; }
+
+/* Violet */
+.fill-violet-500 { fill: #8b5cf6; }
+.fill-violet-400 { fill: #a78bfa; }
+.fill-violet-600 { fill: #7c3aed; }
+.stroke-violet-500 { stroke: #8b5cf6; }
+.stroke-violet-400 { stroke: #a78bfa; }
+
+/* Emerald */
+.fill-emerald-500 { fill: #10b981; }
+.fill-emerald-400 { fill: #34d399; }
+.fill-emerald-600 { fill: #059669; }
+.stroke-emerald-500 { stroke: #10b981; }
+.stroke-emerald-400 { stroke: #34d399; }
+
+/* Amber */
+.fill-amber-500 { fill: #f59e0b; }
+.fill-amber-400 { fill: #fbbf24; }
+.fill-amber-600 { fill: #d97706; }
+.stroke-amber-500 { stroke: #f59e0b; }
+.stroke-amber-400 { stroke: #fbbf24; }
+
+/* Rose */
+.fill-rose-500 { fill: #f43f5e; }
+.fill-rose-400 { fill: #fb7185; }
+.fill-rose-600 { fill: #e11d48; }
+.stroke-rose-500 { stroke: #f43f5e; }
+.stroke-rose-400 { stroke: #fb7185; }
+
+/* Sky */
+.fill-sky-500 { fill: #0ea5e9; }
+.fill-sky-400 { fill: #38bdf8; }
+.fill-sky-600 { fill: #0284c7; }
+.stroke-sky-500 { stroke: #0ea5e9; }
+.stroke-sky-400 { stroke: #38bdf8; }
+
+/* Teal */
+.fill-teal-500 { fill: #14b8a6; }
+.fill-teal-400 { fill: #2dd4bf; }
+.fill-teal-600 { fill: #0d9488; }
+.stroke-teal-500 { stroke: #14b8a6; }
+.stroke-teal-400 { stroke: #2dd4bf; }
+
+/* Green */
+.fill-green-500 { fill: #22c55e; }
+.fill-green-400 { fill: #4ade80; }
+.fill-green-600 { fill: #16a34a; }
+.stroke-green-500 { stroke: #22c55e; }
+.stroke-green-400 { stroke: #4ade80; }
+
+/* Red */
+.fill-red-500 { fill: #ef4444; }
+.fill-red-400 { fill: #f87171; }
+.fill-red-600 { fill: #dc2626; }
+.stroke-red-500 { stroke: #ef4444; }
+.stroke-red-400 { stroke: #f87171; }
+
+/* Orange */
+.fill-orange-500 { fill: #f97316; }
+.fill-orange-400 { fill: #fb923c; }
+.fill-orange-600 { fill: #ea580c; }
+.stroke-orange-500 { stroke: #f97316; }
+.stroke-orange-400 { stroke: #fb923c; }
+
+/* Yellow */
+.fill-yellow-500 { fill: #eab308; }
+.fill-yellow-400 { fill: #facc15; }
+.fill-yellow-600 { fill: #ca8a04; }
+.stroke-yellow-500 { stroke: #eab308; }
+.stroke-yellow-400 { stroke: #facc15; }
+
+/* Purple */
+.fill-purple-500 { fill: #a855f7; }
+.fill-purple-400 { fill: #c084fc; }
+.fill-purple-600 { fill: #9333ea; }
+.stroke-purple-500 { stroke: #a855f7; }
+.stroke-purple-400 { stroke: #c084fc; }
+
+/* Pink */
+.fill-pink-500 { fill: #ec4899; }
+.fill-pink-400 { fill: #f472b6; }
+.fill-pink-600 { fill: #db2777; }
+.stroke-pink-500 { stroke: #ec4899; }
+.stroke-pink-400 { stroke: #f472b6; }
+
+/* Fuchsia */
+.fill-fuchsia-500 { fill: #d946ef; }
+.fill-fuchsia-400 { fill: #e879f9; }
+.fill-fuchsia-600 { fill: #c026d3; }
+.stroke-fuchsia-500 { stroke: #d946ef; }
+.stroke-fuchsia-400 { stroke: #e879f9; }
+
+/* Lime */
+.fill-lime-500 { fill: #84cc16; }
+.fill-lime-400 { fill: #a3e635; }
+.fill-lime-600 { fill: #65a30d; }
+.stroke-lime-500 { stroke: #84cc16; }
+.stroke-lime-400 { stroke: #a3e635; }
+
+/* Slate (for neutral charts) */
+.fill-slate-500 { fill: #64748b; }
+.fill-slate-400 { fill: #94a3b8; }
+.fill-slate-600 { fill: #475569; }
+.stroke-slate-500 { stroke: #64748b; }
+.stroke-slate-400 { stroke: #94a3b8; }
+
+/* Gray */
+.fill-gray-500 { fill: #6b7280; }
+.fill-gray-400 { fill: #9ca3af; }
+.fill-gray-600 { fill: #4b5563; }
+.stroke-gray-500 { stroke: #6b7280; }
+.stroke-gray-400 { stroke: #9ca3af; }
+
+/* Zinc */
+.fill-zinc-500 { fill: #71717a; }
+.fill-zinc-400 { fill: #a1a1aa; }
+.fill-zinc-600 { fill: #52525b; }
+.stroke-zinc-500 { stroke: #71717a; }
+.stroke-zinc-400 { stroke: #a1a1aa; }
+
+/* Neutral */
+.fill-neutral-500 { fill: #737373; }
+.fill-neutral-400 { fill: #a3a3a3; }
+.fill-neutral-600 { fill: #525252; }
+.stroke-neutral-500 { stroke: #737373; }
+.stroke-neutral-400 { stroke: #a3a3a3; }
+
+/* Stone */
+.fill-stone-500 { fill: #78716c; }
+.fill-stone-400 { fill: #a8a29e; }
+.fill-stone-600 { fill: #57534e; }
+.stroke-stone-500 { stroke: #78716c; }
+.stroke-stone-400 { stroke: #a8a29e; }
+
+/* Additional fill/stroke for white/transparent */
+.fill-white { fill: #ffffff; }
+.fill-transparent { fill: transparent; }
+.fill-current { fill: currentColor; }
+.stroke-white { stroke: #ffffff; }
+.stroke-transparent { stroke: transparent; }
+.stroke-current { stroke: currentColor; }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
