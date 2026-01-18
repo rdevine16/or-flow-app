@@ -57,6 +57,7 @@ export default function DeviceRepsPage() {
   const [inviteForm, setInviteForm] = useState({ email: '', implant_company_id: '' })
   const [sending, setSending] = useState(false)
   const [revokeConfirm, setRevokeConfirm] = useState<string | null>(null)
+  const [cancelConfirm, setCancelConfirm] = useState<string | null>(null)
   const [inviteLinkModal, setInviteLinkModal] = useState<{ isOpen: boolean; link: string; email: string }>({ isOpen: false, link: '', email: '' })
 
   useEffect(() => {
@@ -88,27 +89,27 @@ export default function DeviceRepsPage() {
     }
 
     // Fetch device reps with access to this facility
-const { data: repsData } = await supabase
-  .from('facility_device_reps')
-  .select(`
-    id,
-    user_id,
-    facility_id,
-    status,
-    created_at,
-    accepted_at,
-    users!facility_device_reps_user_id_fkey (
-      id,
-      first_name,
-      last_name,
-      email,
-      phone,
-      implant_companies!users_implant_company_id_fkey (name)
-    )
-  `)
-  .eq('facility_id', userData.facility_id)
-  .neq('status', 'revoked')
-  .order('created_at', { ascending: false })
+    const { data: repsData } = await supabase
+      .from('facility_device_reps')
+      .select(`
+        id,
+        user_id,
+        facility_id,
+        status,
+        created_at,
+        accepted_at,
+        users!facility_device_reps_user_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          implant_companies!users_implant_company_id_fkey (name)
+        )
+      `)
+      .eq('facility_id', userData.facility_id)
+      .neq('status', 'revoked')
+      .order('created_at', { ascending: false })
 
     // Transform reps data - Supabase returns joined tables as arrays
     const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
@@ -298,6 +299,7 @@ const { data: repsData } = await supabase
 
     if (!error) {
       setPendingInvites(pendingInvites.filter(i => i.id !== inviteId))
+      setCancelConfirm(null)
     }
   }
 
@@ -317,21 +319,25 @@ const { data: repsData } = await supabase
       <Container className="py-8">
         <SettingsLayout
           title="Device Rep Access"
-          description="Manage implant company representative access to your cases"
+          description="Manage implant company representative access to your cases."
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
             </div>
           ) : (
             <div className="space-y-6">
               {/* Active Reps */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-slate-900">Active Device Reps</h3>
+                    <h3 className="font-medium text-slate-900">Device Representatives</h3>
                     <p className="text-sm text-slate-500">
-                      {activeReps.length} rep{activeReps.length !== 1 ? 's' : ''} with access
+                      {activeReps.length} active rep{activeReps.length !== 1 ? 's' : ''} with access
                     </p>
                   </div>
                   <button
@@ -345,71 +351,100 @@ const { data: repsData } = await supabase
                   </button>
                 </div>
 
+                {/* Table */}
                 {activeReps.length === 0 ? (
-                  <div className="px-6 py-8 text-center">
-                    <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <p className="text-slate-500 mb-2">No device reps with access</p>
-                    <p className="text-sm text-slate-400">
-                      Invite reps to let them view cases using their company's implants
-                    </p>
+                  <div className="px-6 py-12 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-500">No device reps with access yet.</p>
+                    <button
+                      onClick={openInviteModal}
+                      className="mt-2 text-blue-600 hover:underline text-sm"
+                    >
+                      Invite your first device rep
+                    </button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
-                    {activeReps.map((rep) => (
-                      <div key={rep.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-semibold text-blue-600">
-                              {rep.user_first_name?.charAt(0)}{rep.user_last_name?.charAt(0)}
+                  <div className="overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-4">Name</div>
+                      <div className="col-span-3">Company</div>
+                      <div className="col-span-3">Contact</div>
+                      <div className="col-span-2 text-right">Actions</div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="divide-y divide-slate-100">
+                      {activeReps.map((rep) => (
+                        <div 
+                          key={rep.id} 
+                          className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                        >
+                          {/* Name */}
+                          <div className="col-span-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-sm font-semibold text-blue-600 flex-shrink-0">
+                                {rep.user_first_name?.charAt(0)}{rep.user_last_name?.charAt(0)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-slate-900 truncate">
+                                  {rep.user_first_name} {rep.user_last_name}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Company */}
+                          <div className="col-span-3">
+                            <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">
+                              {rep.company_name}
                             </span>
                           </div>
-                          <div>
-                            <p className="font-medium text-slate-900">
-                              {rep.user_first_name} {rep.user_last_name}
-                            </p>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <span className="text-sm text-slate-500">{rep.user_email}</span>
-                              {rep.user_phone && (
-                                <>
-                                  <span className="text-slate-300">•</span>
-                                  <span className="text-sm text-slate-500">{rep.user_phone}</span>
-                                </>
-                              )}
-                            </div>
+
+                          {/* Contact */}
+                          <div className="col-span-3">
+                            <p className="text-sm text-slate-600 truncate">{rep.user_email}</p>
+                            {rep.user_phone && (
+                              <p className="text-sm text-slate-400 truncate">{rep.user_phone}</p>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="col-span-2 flex items-center justify-end gap-1">
+                            {revokeConfirm === rep.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleRevokeAccess(rep)}
+                                  className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setRevokeConfirm(null)}
+                                  className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setRevokeConfirm(rep.id)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Revoke access"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className="px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">
-                            {rep.company_name}
-                          </span>
-                          {revokeConfirm === rep.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleRevokeAccess(rep)}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setRevokeConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setRevokeConfirm(rep.id)}
-                              className="text-sm text-red-600 hover:text-red-700 font-medium"
-                            >
-                              Revoke
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -417,6 +452,7 @@ const { data: repsData } = await supabase
               {/* Pending Invites */}
               {(pendingInvites.length > 0 || pendingReps.length > 0) && (
                 <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  {/* Header */}
                   <div className="px-6 py-4 border-b border-slate-200 bg-amber-50">
                     <div className="flex items-center gap-2">
                       <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -424,35 +460,80 @@ const { data: repsData } = await supabase
                       </svg>
                       <h3 className="font-medium text-amber-900">Pending Invites</h3>
                     </div>
+                    <p className="text-sm text-amber-700 mt-1">
+                      {pendingInvites.length} pending invite{pendingInvites.length !== 1 ? 's' : ''}
+                    </p>
                   </div>
 
-                  <div className="divide-y divide-slate-100">
-                    {pendingInvites.map((invite) => (
-                      <div key={invite.id} className="px-6 py-4 flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-slate-900">{invite.email}</p>
-                          <div className="flex items-center gap-3 mt-0.5">
-                            <span className="text-sm text-slate-500">
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-4">Email</div>
+                      <div className="col-span-3">Company</div>
+                      <div className="col-span-3">Status</div>
+                      <div className="col-span-2 text-right">Actions</div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="divide-y divide-slate-100">
+                      {pendingInvites.map((invite) => (
+                        <div 
+                          key={invite.id} 
+                          className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                        >
+                          {/* Email */}
+                          <div className="col-span-4">
+                            <p className="font-medium text-slate-900">{invite.email}</p>
+                          </div>
+
+                          {/* Company */}
+                          <div className="col-span-3">
+                            <span className="inline-flex items-center px-2.5 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">
                               {invite.company_name}
                             </span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-sm text-slate-400">
-                              Invited {formatDate(invite.created_at)}
-                            </span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-sm text-amber-600">
-                              Expires {formatDate(invite.expires_at)}
-                            </span>
+                          </div>
+
+                          {/* Status */}
+                          <div className="col-span-3">
+                            <div className="text-sm">
+                              <p className="text-slate-500">Invited {formatDate(invite.created_at)}</p>
+                              <p className="text-amber-600">Expires {formatDate(invite.expires_at)}</p>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="col-span-2 flex items-center justify-end gap-1">
+                            {cancelConfirm === invite.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleCancelInvite(invite.id)}
+                                  className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setCancelConfirm(null)}
+                                  className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setCancelConfirm(invite.id)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Cancel invite"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleCancelInvite(invite.id)}
-                          className="text-sm text-slate-500 hover:text-slate-700"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -495,7 +576,7 @@ const { data: repsData } = await supabase
                 <div className="p-6 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Email Address
+                      Email Address *
                     </label>
                     <input
                       type="email"
@@ -508,7 +589,7 @@ const { data: repsData } = await supabase
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Implant Company
+                      Implant Company *
                     </label>
                     <select
                       value={inviteForm.implant_company_id}

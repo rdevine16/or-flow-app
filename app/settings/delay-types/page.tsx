@@ -153,11 +153,14 @@ export default function DelayTypesPage() {
       <Container className="py-8">
         <SettingsLayout
           title="Delay Types"
-          description="Categorize and track reasons for surgical delays"
+          description="Categorize and track reasons for surgical delays."
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
             </div>
           ) : (
             <div className="space-y-6">
@@ -171,25 +174,44 @@ export default function DelayTypesPage() {
                     <h3 className="font-medium text-slate-900">Standard Delay Types</h3>
                   </div>
                   <p className="text-sm text-slate-500 mt-1">
-                    These delay types are available to all facilities and cannot be edited
+                    {globalDelayTypes.length} standard types · Read-only
                   </p>
                 </div>
 
-                <div className="divide-y divide-slate-100">
-                  {globalDelayTypes.map((delayType) => (
-                    <div key={delayType.id} className="px-6 py-3 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-slate-900">{delayType.display_name}</p>
-                        <p className="text-xs text-slate-400">{delayType.name}</p>
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <div className="col-span-6">Display Name</div>
+                    <div className="col-span-4">System Name</div>
+                    <div className="col-span-2 text-right">Status</div>
+                  </div>
+
+                  {/* Table Body */}
+                  <div className="divide-y divide-slate-100">
+                    {globalDelayTypes.map((delayType) => (
+                      <div 
+                        key={delayType.id} 
+                        className="grid grid-cols-12 gap-4 px-6 py-4 items-center"
+                      >
+                        <div className="col-span-6">
+                          <p className="font-medium text-slate-900">{delayType.display_name}</p>
+                        </div>
+                        <div className="col-span-4">
+                          <span className="text-sm text-slate-500 font-mono">{delayType.name}</span>
+                        </div>
+                        <div className="col-span-2 text-right">
+                          <span className="text-xs text-slate-400">Read-only</span>
+                        </div>
                       </div>
-                      <span className="text-xs text-slate-400">Read-only</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Facility Delay Types */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
@@ -199,7 +221,7 @@ export default function DelayTypesPage() {
                       <h3 className="font-medium text-slate-900">Facility Delay Types</h3>
                     </div>
                     <p className="text-sm text-slate-500 mt-1">
-                      Custom delay types specific to your facility
+                      {facilityDelayTypes.length} custom type{facilityDelayTypes.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                   <button
@@ -213,9 +235,15 @@ export default function DelayTypesPage() {
                   </button>
                 </div>
 
+                {/* Table */}
                 {facilityDelayTypes.length === 0 ? (
-                  <div className="px-6 py-8 text-center">
-                    <p className="text-slate-500">No custom delay types defined</p>
+                  <div className="px-6 py-12 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-500">No custom delay types defined.</p>
                     <button
                       onClick={openAddModal}
                       className="mt-2 text-blue-600 hover:underline text-sm"
@@ -224,50 +252,69 @@ export default function DelayTypesPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
-                    {facilityDelayTypes.map((delayType) => (
-                      <div key={delayType.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div>
-                          <p className="font-medium text-slate-900">{delayType.display_name}</p>
-                          <p className="text-xs text-slate-400">{delayType.name}</p>
+                  <div className="overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-5">Display Name</div>
+                      <div className="col-span-4">System Name</div>
+                      <div className="col-span-3 text-right">Actions</div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="divide-y divide-slate-100">
+                      {facilityDelayTypes.map((delayType) => (
+                        <div 
+                          key={delayType.id} 
+                          className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="col-span-5">
+                            <p className="font-medium text-slate-900">{delayType.display_name}</p>
+                          </div>
+                          <div className="col-span-4">
+                            <span className="text-sm text-slate-500 font-mono">{delayType.name}</span>
+                          </div>
+                          <div className="col-span-3 flex items-center justify-end gap-1">
+                            {deleteConfirm === delayType.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleDelete(delayType.id)}
+                                  className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(null)}
+                                  className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openEditModal(delayType)}
+                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(delayType.id)}
+                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEditModal(delayType)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          {deleteConfirm === delayType.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(delayType.id)}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirm(delayType.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -286,7 +333,7 @@ export default function DelayTypesPage() {
                 <div className="p-6 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Display Name
+                      Display Name *
                     </label>
                     <input
                       type="text"
@@ -308,10 +355,10 @@ export default function DelayTypesPage() {
                       type="text"
                       value={formData.name}
                       readOnly
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
                       placeholder="waiting_for_interpreter"
                     />
-                    <p className="mt-1 text-xs text-slate-400">Auto-generated from display name</p>
+                    <p className="mt-1.5 text-xs text-slate-500">Auto-generated from display name</p>
                   </div>
                 </div>
                 <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
