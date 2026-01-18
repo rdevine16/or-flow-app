@@ -1,344 +1,331 @@
 'use client'
 
-import { Fragment } from 'react'
-import { Dialog, Transition } from '@headlessui/react'
-import { XMarkIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
-import { OutlierCase, FinancialBreakdown } from '../../../components/analytics/financials/types'
-import { formatCurrency } from '../../../components/analytics/financials/utils'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { createClient } from '../../../lib/supabase'
+import { useUser } from '../../../lib/UserContext'
+import { getImpersonationState } from '../../../lib/impersonation'
+import DashboardLayout from '../../../components/layouts/DashboardLayout'
+import Container from '../../../components/ui/Container'
+import { AnalyticsPageHeader } from '../../../components/analytics/AnalyticsBreadcrumb'
+import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
 
-interface OutlierDetailDrawerProps {
-  outlier: OutlierCase | null
-  financials: FinancialBreakdown | null
-  isOpen: boolean
-  onClose: () => void
-}
+// Local components
+import { 
+  CaseCompletionStats, 
+  SurgeonProcedureStats, 
+  FacilityProcedureStats,
+  FacilitySettings, 
+  SubTab 
+} from '../../../components/analytics/financials/types'
+import { useFinancialsMetrics } from '../../../components/analytics/financials/useFinancialsMetrics'
+import DateRangeSelector from '../../../components/analytics/financials/DateRangeSelector'
+import OverviewTab from '../../../components/analytics/financials/OverviewTab'
+import ProcedureTab from '../../../components/analytics/financials/ProcedureTab'
+import SurgeonTab from '../../../components/analytics/financials/SurgeonTab'
+import OutliersTab from '../../../components/analytics/financials/OutliersTab'
 
-export default function OutlierDetailDrawer({
-  outlier,
-  financials,
-  isOpen,
-  onClose,
-}: OutlierDetailDrawerProps) {
-  if (!outlier) return null
+export default function FinancialsAnalyticsPage() {
+  const supabase = createClient()
+  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
+  
+  // Facility handling
+  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
+  const [noFacilitySelected, setNoFacilitySelected] = useState(false)
+  const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
+  
+  // Data state - Using view data
+  const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
+  const [surgeonProcedureStats, setSurgeonProcedureStats] = useState<SurgeonProcedureStats[]>([])
+  const [facilityProcedureStats, setFacilityProcedureStats] = useState<FacilityProcedureStats[]>([])
+  const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  
+  // UI state
+  const [activeTab, setActiveTab] = useState<SubTab>('overview')
+  const [dateRange, setDateRange] = useState('mtd')
+  const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
+  const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
 
-  const { outlierFlags } = outlier
+  // Calculate metrics using custom hook
+  const metrics = useFinancialsMetrics(
+    caseStats, 
+    surgeonProcedureStats, 
+    facilityProcedureStats, 
+    facilitySettings
+  )
 
-  // Determine outlier type
-  const isBoth = (outlierFlags.isDurationPersonalOutlier || outlierFlags.isProfitPersonalOutlier) &&
-                 (outlierFlags.isDurationFacilityOutlier || outlierFlags.isProfitFacilityOutlier)
-  const isPersonalOnly = (outlierFlags.isDurationPersonalOutlier || outlierFlags.isProfitPersonalOutlier) &&
-                         !outlierFlags.isDurationFacilityOutlier && !outlierFlags.isProfitFacilityOutlier
-  const isFacilityOnly = (outlierFlags.isDurationFacilityOutlier || outlierFlags.isProfitFacilityOutlier) &&
-                         !outlierFlags.isDurationPersonalOutlier && !outlierFlags.isProfitPersonalOutlier
+  // Determine effective facility ID
+  useEffect(() => {
+    if (userLoading) return
+    
+    if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
+      const impersonation = getImpersonationState()
+      if (impersonation?.facilityId) {
+        setEffectiveFacilityId(impersonation.facilityId)
+      } else {
+        setNoFacilitySelected(true)
+      }
+    } else if (userData.facilityId) {
+      setEffectiveFacilityId(userData.facilityId)
+    }
+    
+    setFacilityCheckComplete(true)
+  }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
 
-  return (
-    <Transition.Root show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
-        <Transition.Child
-          as={Fragment}
-          enter="ease-in-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in-out duration-300"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-slate-900/25 transition-opacity" />
-        </Transition.Child>
+  // Fetch data from views
+  const fetchData = async (startDate?: string, endDate?: string) => {
+    if (!effectiveFacilityId) return
+    
+    setLoading(true)
 
-        <div className="fixed inset-0 overflow-hidden">
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-10">
-              <Transition.Child
-                as={Fragment}
-                enter="transform transition ease-in-out duration-300"
-                enterFrom="translate-x-full"
-                enterTo="translate-x-0"
-                leave="transform transition ease-in-out duration-300"
-                leaveFrom="translate-x-0"
-                leaveTo="translate-x-full"
+    // Get date range
+    const today = new Date()
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    const start = startDate || monthStart.toISOString().split('T')[0]
+    const end = endDate || today.toISOString().split('T')[0]
+
+    try {
+      const [caseStatsRes, surgeonStatsRes, facilityStatsRes, facilityRes] = await Promise.all([
+        // Fetch case-level stats with joins
+        supabase
+          .from('case_completion_stats')
+          .select(`
+            *,
+            surgeon:users!case_completion_stats_surgeon_id_fkey (first_name, last_name),
+            procedure_types (id, name),
+            payers (id, name),
+            or_rooms (name)
+          `)
+          .eq('facility_id', effectiveFacilityId)
+          .gte('case_date', start)
+          .lte('case_date', end)
+          .order('case_date', { ascending: false }),
+        
+        // Fetch surgeon+procedure stats (pre-computed)
+        supabase
+          .from('surgeon_procedure_stats')
+          .select('*')
+          .eq('facility_id', effectiveFacilityId),
+        
+        // Fetch facility+procedure stats (pre-computed)
+        supabase
+          .from('facility_procedure_stats')
+          .select('*')
+          .eq('facility_id', effectiveFacilityId),
+        
+        // Fetch facility settings
+        supabase
+          .from('facilities')
+          .select('or_hourly_rate')
+          .eq('id', effectiveFacilityId)
+          .single(),
+      ])
+
+      // Handle errors
+      if (caseStatsRes.error) {
+        console.error('Error fetching case stats:', caseStatsRes.error)
+      }
+      if (surgeonStatsRes.error) {
+        console.error('Error fetching surgeon stats:', surgeonStatsRes.error)
+      }
+      if (facilityStatsRes.error) {
+        console.error('Error fetching facility stats:', facilityStatsRes.error)
+      }
+
+      setCaseStats((caseStatsRes.data as unknown as CaseCompletionStats[]) || [])
+      setSurgeonProcedureStats((surgeonStatsRes.data as SurgeonProcedureStats[]) || [])
+      setFacilityProcedureStats((facilityStatsRes.data as FacilityProcedureStats[]) || [])
+      setFacilitySettings(facilityRes.data as FacilitySettings)
+    } catch (error) {
+      console.error('Error fetching financial data:', error)
+    }
+    
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (effectiveFacilityId) {
+      fetchData()
+    }
+  }, [effectiveFacilityId])
+
+  const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
+    setDateRange(range)
+    fetchData(startDate, endDate)
+  }
+
+  // Tab navigation handlers
+  const handleProcedureClick = (procedureId: string) => {
+    setSelectedProcedure(procedureId)
+    setActiveTab('procedure')
+  }
+
+  const handleSurgeonClick = (surgeonId: string) => {
+    setSelectedSurgeon(surgeonId)
+    setActiveTab('surgeon')
+  }
+
+  const handleOutliersClick = () => {
+    setActiveTab('outliers')
+  }
+
+  // Loading state
+  if (userLoading || !facilityCheckComplete) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-24">
+          <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  // No facility selected (global admin)
+  if (noFacilitySelected) {
+    return (
+      <DashboardLayout>
+        <Container className="py-8">
+          <AnalyticsPageHeader
+            title="Financial Analytics"
+            description="Profitability metrics and insights"
+            icon={CurrencyDollarIcon}
+          />
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
+              <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                Select a facility to view financial analytics.
+              </p>
+              <Link
+                href="/admin/facilities"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                <Dialog.Panel className="pointer-events-auto w-screen max-w-md">
-                  <div className="flex h-full flex-col overflow-y-scroll bg-white shadow-xl">
-                    {/* Header */}
-                    <div className="px-6 py-4 border-b border-slate-200">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <Dialog.Title className="text-lg font-semibold text-slate-900">
-                            Case Details
-                          </Dialog.Title>
-                          <p className="text-sm text-slate-500">{outlier.caseNumber}</p>
-                        </div>
-                        <button
-                          onClick={onClose}
-                          className="rounded-lg p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                        >
-                          <XMarkIcon className="h-5 w-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 px-6 py-4 space-y-6">
-                      {/* Case Info */}
-                      <div>
-                        <h4 className="text-sm font-medium text-slate-500 mb-2">Case Information</h4>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="text-slate-500">Date</span>
-                            <p className="font-medium text-slate-900">{outlier.date}</p>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Room</span>
-                            <p className="font-medium text-slate-900">{outlier.roomName || '—'}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-slate-500">Surgeon</span>
-                            <p className="font-medium text-slate-900">{outlier.surgeonName}</p>
-                          </div>
-                          <div className="col-span-2">
-                            <span className="text-slate-500">Procedure</span>
-                            <p className="font-medium text-slate-900">{outlier.procedureName}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Outlier Classification */}
-                      <div className={`p-4 rounded-lg border ${
-                        isBoth ? 'bg-red-50 border-red-200' :
-                        isPersonalOnly ? 'bg-blue-50 border-blue-200' :
-                        isFacilityOnly ? 'bg-orange-50 border-orange-200' :
-                        'bg-slate-50 border-slate-200'
-                      }`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            isBoth ? 'bg-red-100 text-red-700' :
-                            isPersonalOnly ? 'bg-blue-100 text-blue-700' :
-                            isFacilityOnly ? 'bg-orange-100 text-orange-700' :
-                            'bg-slate-100 text-slate-700'
-                          }`}>
-                            {isBoth ? 'Critical' : isPersonalOnly ? 'Personal' : isFacilityOnly ? 'Facility' : 'Unknown'}
-                          </span>
-                          <span className={`text-sm font-medium ${
-                            isBoth ? 'text-red-700' : isPersonalOnly ? 'text-blue-700' : 'text-orange-700'
-                          }`}>
-                            Outlier
-                          </span>
-                        </div>
-                        <p className={`text-sm ${
-                          isBoth ? 'text-red-600' : isPersonalOnly ? 'text-blue-600' : 'text-orange-600'
-                        }`}>
-                          {isBoth 
-                            ? 'This case is below both the surgeon\'s typical and the facility\'s typical baseline.'
-                            : isPersonalOnly 
-                            ? 'This case is below the surgeon\'s typical baseline, but within facility norms.'
-                            : 'This case is below the facility baseline, but within this surgeon\'s typical range.'}
-                        </p>
-                      </div>
-
-                      {/* Threshold Details */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-3">
-                          <h4 className="text-sm font-medium text-slate-500">Threshold Details</h4>
-                          <div className="group relative">
-                            <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                            <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
-                              Outlier if duration exceeds threshold (over time) or profit falls below threshold (low profit)
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          {/* Duration Thresholds */}
-                          <div className="bg-slate-50 rounded-lg p-3">
-                            <p className="text-xs font-medium text-slate-500 mb-2">DURATION</p>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-slate-400">Actual</span>
-                                <p className={`font-medium ${
-                                  outlierFlags.isDurationPersonalOutlier || outlierFlags.isDurationFacilityOutlier 
-                                    ? 'text-red-600' : 'text-slate-900'
-                                }`}>
-                                  {Math.round(outlier.actualDuration)} min
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Typical</span>
-                                <p className="font-medium text-slate-900">
-                                  {outlier.expectedDuration !== null ? `${Math.round(outlier.expectedDuration)} min` : '—'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Surgeon Threshold</span>
-                                <p className={`font-medium ${outlierFlags.isDurationPersonalOutlier ? 'text-blue-600' : 'text-slate-600'}`}>
-                                  {outlierFlags.personalDurationThreshold !== null 
-                                    ? `${Math.round(outlierFlags.personalDurationThreshold)} min`
-                                    : '—'}
-                                  {outlierFlags.isDurationPersonalOutlier && ' ⚠️'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Facility Threshold</span>
-                                <p className={`font-medium ${outlierFlags.isDurationFacilityOutlier ? 'text-orange-600' : 'text-slate-600'}`}>
-                                  {outlierFlags.facilityDurationThreshold !== null 
-                                    ? `${Math.round(outlierFlags.facilityDurationThreshold)} min`
-                                    : '—'}
-                                  {outlierFlags.isDurationFacilityOutlier && ' ⚠️'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Profit Thresholds */}
-                          <div className="bg-slate-50 rounded-lg p-3">
-                            <p className="text-xs font-medium text-slate-500 mb-2">PROFIT</p>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-slate-400">Actual</span>
-                                <p className={`font-medium ${
-                                  outlierFlags.isProfitPersonalOutlier || outlierFlags.isProfitFacilityOutlier 
-                                    ? 'text-red-600' : 'text-slate-900'
-                                }`}>
-                                  {formatCurrency(outlier.actualProfit)}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Typical</span>
-                                <p className="font-medium text-slate-900">
-                                  {outlier.expectedProfit !== null ? formatCurrency(outlier.expectedProfit) : '—'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Surgeon Threshold</span>
-                                <p className={`font-medium ${outlierFlags.isProfitPersonalOutlier ? 'text-blue-600' : 'text-slate-600'}`}>
-                                  {outlierFlags.personalProfitThreshold !== null 
-                                    ? formatCurrency(outlierFlags.personalProfitThreshold)
-                                    : '—'}
-                                  {outlierFlags.isProfitPersonalOutlier && ' ⚠️'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-slate-400">Facility Threshold</span>
-                                <p className={`font-medium ${outlierFlags.isProfitFacilityOutlier ? 'text-orange-600' : 'text-slate-600'}`}>
-                                  {outlierFlags.facilityProfitThreshold !== null 
-                                    ? formatCurrency(outlierFlags.facilityProfitThreshold)
-                                    : '—'}
-                                  {outlierFlags.isProfitFacilityOutlier && ' ⚠️'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Financial Breakdown */}
-                      {financials && (
-                        <div>
-                          <h4 className="text-sm font-medium text-slate-500 mb-3">Financial Breakdown</h4>
-                          <div className="bg-slate-50 rounded-lg divide-y divide-slate-200">
-                            <div className="p-3 flex justify-between">
-                              <span className="text-sm text-slate-600">Reimbursement</span>
-                              <span className="text-sm font-medium text-emerald-600">
-                                +{formatCurrency(financials.reimbursement)}
-                              </span>
-                            </div>
-                            <div className="p-3 flex justify-between">
-                              <span className="text-sm text-slate-600">Soft Goods Cost</span>
-                              <span className="text-sm font-medium text-red-500">
-                                −{formatCurrency(financials.softGoodsCost)}
-                              </span>
-                            </div>
-                            <div className="p-3 flex justify-between">
-                              <span className="text-sm text-slate-600">Hard Goods Cost</span>
-                              <span className="text-sm font-medium text-red-500">
-                                −{formatCurrency(financials.hardGoodsCost)}
-                              </span>
-                            </div>
-                            <div className="p-3 flex justify-between">
-                              <div>
-                                <span className="text-sm text-slate-600">OR Time Cost</span>
-                                <p className="text-xs text-slate-400">
-                                  {Math.round(outlier.actualDuration)} min × {formatCurrency(financials.orRate)}/hr
-                                </p>
-                              </div>
-                              <span className="text-sm font-medium text-red-500">
-                                −{formatCurrency(financials.orCost)}
-                              </span>
-                            </div>
-                            <div className="p-3 flex justify-between bg-white rounded-b-lg">
-                              <span className="text-sm font-semibold text-slate-900">Net Profit</span>
-                              <span className={`text-sm font-bold ${outlier.actualProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {formatCurrency(outlier.actualProfit)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Issues Detected */}
-                      {outlier.issues.length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium text-slate-500 mb-3">Issues Detected</h4>
-                          <div className="space-y-2">
-                            {outlier.issues.map((issue, idx) => (
-                              <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                {issue.type === 'overTime' && (
-                                  <div>
-                                    <p className="text-sm font-medium text-amber-800">Over Time</p>
-                                    <p className="text-xs text-amber-600 mt-1">
-                                      {Math.round(issue.actualMinutes)} min actual vs {Math.round(issue.expectedMinutes)} min typical
-                                      <br />
-                                      Threshold: {Math.round(issue.thresholdMinutes)} min • {Math.round(issue.minutesOver)} min over
-                                    </p>
-                                  </div>
-                                )}
-                                {issue.type === 'lowProfit' && (
-                                  <div>
-                                    <p className="text-sm font-medium text-amber-800">Low Profit</p>
-                                    <p className="text-xs text-amber-600 mt-1">
-                                      {formatCurrency(issue.actualProfit)} actual vs {formatCurrency(issue.expectedProfit)} typical
-                                      <br />
-                                      Threshold: {formatCurrency(issue.thresholdProfit)} • {formatCurrency(issue.amountBelow)} below
-                                    </p>
-                                  </div>
-                                )}
-                                {issue.type === 'delay' && (
-                                  <div>
-                                    <p className="text-sm font-medium text-amber-800">Recorded Delays</p>
-                                    <p className="text-xs text-amber-600 mt-1">
-                                      Total: {issue.totalMinutes} min
-                                      {issue.delays.map((d, i) => (
-                                        <span key={i}> • {d.name}{d.minutes ? ` (${d.minutes} min)` : ''}</span>
-                                      ))}
-                                    </p>
-                                  </div>
-                                )}
-                                {issue.type === 'lowPayer' && (
-                                  <div>
-                                    <p className="text-sm font-medium text-amber-800">Low Payer Rate</p>
-                                    <p className="text-xs text-amber-600 mt-1">
-                                      {issue.payerName}: {formatCurrency(issue.payerRate)} vs {formatCurrency(issue.defaultRate)} default
-                                      <br />
-                                      {Math.round(issue.percentBelow)}% below standard rate
-                                    </p>
-                                  </div>
-                                )}
-                                {issue.type === 'unknown' && (
-                                  <p className="text-sm text-slate-500">No specific issue identified</p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
+                View Facilities
+              </Link>
             </div>
           </div>
-        </div>
-      </Dialog>
-    </Transition.Root>
+        </Container>
+      </DashboardLayout>
+    )
+  }
+
+  // Not configured state
+  if (!facilitySettings?.or_hourly_rate) {
+    return (
+      <DashboardLayout>
+        <Container className="py-8">
+          <AnalyticsPageHeader
+            title="Financial Analytics"
+            description="Profitability metrics and insights"
+            icon={CurrencyDollarIcon}
+          />
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Financials Not Configured</h3>
+              <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                Set up your OR hourly rate and procedure costs to enable financial analytics.
+              </p>
+              <Link
+                href="/settings/financials"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Configure Financials
+              </Link>
+            </div>
+          </div>
+        </Container>
+      </DashboardLayout>
+    )
+  }
+
+  return (
+    <DashboardLayout>
+      <Container className="py-8">
+        <AnalyticsPageHeader
+          title="Financial Analytics"
+          description={`${metrics.totalCases} cases analyzed`}
+          icon={CurrencyDollarIcon}
+          actions={
+            <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+          }
+        />
+        {loading ? (
+          <div className="flex items-center justify-center py-24">
+            <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          </div>
+        ) : (
+          <>
+            {/* Sub-tabs */}
+            <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-lg w-fit">
+              {[
+                { id: 'overview' as SubTab, label: 'Overview' },
+                { id: 'procedure' as SubTab, label: 'By Procedure' },
+                { id: 'surgeon' as SubTab, label: 'By Surgeon' },
+                { id: 'outliers' as SubTab, label: `Outliers${metrics.outlierStats.total > 0 ? ` (${metrics.outlierStats.total})` : ''}` },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'overview' && (
+              <OverviewTab 
+                metrics={metrics}
+                onProcedureClick={handleProcedureClick}
+                onSurgeonClick={handleSurgeonClick}
+                onOutliersClick={handleOutliersClick}
+              />
+            )}
+
+            {activeTab === 'procedure' && (
+              <ProcedureTab 
+                metrics={metrics}
+                selectedProcedure={selectedProcedure}
+                onProcedureSelect={setSelectedProcedure}
+              />
+            )}
+
+            {activeTab === 'surgeon' && (
+              <SurgeonTab 
+                metrics={metrics}
+                selectedSurgeon={selectedSurgeon}
+                onSurgeonSelect={setSelectedSurgeon}
+              />
+            )}
+
+            {activeTab === 'outliers' && (
+              <OutliersTab metrics={metrics} />
+            )}
+          </>
+        )}
+      </Container>
+    </DashboardLayout>
   )
 }
