@@ -382,7 +382,7 @@ function AllSurgeonsView({
                 />
               )}
               <Tooltip 
-                formatter={(value: any, name: string) => {
+formatter={(value: any, name?: string) => {
                   if (value === undefined || value === null) return '—'
                   if (name === 'Typical Profit') return formatCurrency(value)
                   return `${Math.round(value)} min`
