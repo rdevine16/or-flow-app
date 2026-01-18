@@ -250,6 +250,37 @@ export interface SurgeonOverallStats {
 
 export type OutlierType = 'personal' | 'facility' | 'both' | 'none'
 
+export type Issue = 
+  | {
+      type: 'overTime'
+      actualMinutes: number
+      expectedMinutes: number
+      thresholdMinutes: number
+      minutesOver: number
+    }
+  | {
+      type: 'lowProfit'
+      actualProfit: number
+      expectedProfit: number
+      thresholdProfit: number
+      amountBelow: number
+    }
+  | {
+      type: 'delay'
+      totalMinutes: number
+      delays: Array<{ name: string; minutes?: number }>
+    }
+  | {
+      type: 'lowPayer'
+      payerName: string
+      payerRate: number
+      defaultRate: number
+      percentBelow: number
+    }
+  | {
+      type: 'unknown'
+    }
+
 export interface OutlierFlags {
   // Duration outliers (ABOVE threshold = bad)
   isDurationPersonalOutlier: boolean
