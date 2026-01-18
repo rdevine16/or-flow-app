@@ -1,15 +1,14 @@
 // app/invite/user/[token]/page.tsx
 // 
 // Accept invitation page for facility admins and staff
-// Mirrors the device rep flow: validate token → show info → create account
+// Calls API route to create user (bypasses Supabase email confirmation)
 //
 // Flow:
 // 1. User clicks link in email → lands here
 // 2. Page validates token and shows invite details
 // 3. User creates password
-// 4. Account created in auth.users and public.users
-// 5. Invite marked as accepted
-// 6. Redirect to success page
+// 4. API creates account (with service role key)
+// 5. Redirect to login page
 
 'use client'
 
@@ -137,58 +136,26 @@ function AcceptInviteContent() {
     setError(null)
 
     try {
-      // 1. Create auth user with Supabase
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: invite.email,
-        password: password,
-        options: {
-          data: {
-            first_name: invite.firstName,
-            last_name: invite.lastName,
-          },
+      // Call API to create user (uses service role key, bypasses email confirmation)
+      const response = await fetch('/api/invite/accept', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          token: token,
+          password: password,
+        }),
       })
 
-      if (authError) {
-        // Check if user already exists
-        if (authError.message.includes('already registered')) {
-          setError('An account with this email already exists. Please sign in instead.')
-          return
-        }
-        throw authError
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create account')
       }
 
-      if (!authData.user) {
-        throw new Error('Failed to create account')
-      }
-
-      // 2. Create user profile in public.users
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: invite.email,
-          first_name: invite.firstName,
-          last_name: invite.lastName,
-          facility_id: invite.facilityId,
-          role_id: invite.roleId,
-          access_level: invite.accessLevel,
-        })
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError)
-        // Note: Don't fail completely - auth user exists, they might need admin help
-        // but they can still try to sign in
-      }
-
-      // 3. Mark invite as accepted
-      await supabase
-        .from('user_invites')
-        .update({ accepted_at: new Date().toISOString() })
-        .eq('id', invite.id)
-
-      // 4. Redirect to success page
-      router.push('/invite/success')
+      // Success! Redirect to login page with success message
+      router.push('/login?registered=true')
 
     } catch (err: any) {
       console.error('Error creating account:', err)
@@ -248,16 +215,19 @@ function AcceptInviteContent() {
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
-          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-            isAdmin 
-              ? 'bg-purple-100 text-purple-700' 
-              : 'bg-blue-100 text-blue-700'
-          }`}>
-            {isAdmin ? '👑 Administrator' : '👤 Staff'}
-          </span>
-          <span className="text-xs text-slate-500">•</span>
-          <span className="text-xs text-slate-500 capitalize">{invite?.roleName}</span>
+        <div className="mt-4 pt-4 border-t border-slate-200">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Your Role</p>
+              <p className="font-medium text-slate-900">
+                {isAdmin ? 'Facility Administrator' : 'Staff Member'}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Position</p>
+              <p className="font-medium text-slate-900 capitalize">{invite?.roleName}</p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -309,7 +279,7 @@ function AcceptInviteContent() {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="Enter your password"
               className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-12"
               autoFocus
             />
@@ -366,7 +336,7 @@ function AcceptInviteContent() {
             type={showPassword ? 'text' : 'password'}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder="Confirm your password"
             className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               confirmPassword.length > 0
                 ? passwordsMatch
