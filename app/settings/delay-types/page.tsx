@@ -60,8 +60,8 @@ export default function DelayTypesPage() {
     setLoading(false)
   }
 
-  const globalDelayTypes = delayTypes.filter(dt => dt.facility_id === null)
-  const facilityDelayTypes = delayTypes.filter(dt => dt.facility_id !== null)
+  const globalCount = delayTypes.filter(dt => dt.facility_id === null).length
+  const customCount = delayTypes.filter(dt => dt.facility_id !== null).length
 
   const openAddModal = () => {
     setFormData({ name: '', display_name: '' })
@@ -99,7 +99,7 @@ export default function DelayTypesPage() {
         .single()
 
       if (!error && data) {
-        setDelayTypes([...delayTypes, data])
+        setDelayTypes([...delayTypes, data].sort((a, b) => a.display_order - b.display_order))
         closeModal()
         
         // Audit log
@@ -163,118 +163,90 @@ export default function DelayTypesPage() {
               </svg>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Global Delay Types */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-xs font-medium rounded">
-                      Global
-                    </span>
-                    <h3 className="font-medium text-slate-900">Standard Delay Types</h3>
-                  </div>
-                  <p className="text-sm text-slate-500 mt-1">
-                    {globalDelayTypes.length} standard types · Read-only
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-medium text-slate-900">Delay Types</h3>
+                  <p className="text-sm text-slate-500">
+                    {globalCount} global · {customCount} custom
                   </p>
                 </div>
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Delay Type
+                </button>
+              </div>
 
-                {/* Table */}
+              {/* Table */}
+              {delayTypes.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-500">No delay types configured.</p>
+                  <button
+                    onClick={openAddModal}
+                    className="mt-2 text-blue-600 hover:underline text-sm"
+                  >
+                    Add your first delay type
+                  </button>
+                </div>
+              ) : (
                 <div className="overflow-x-auto">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="col-span-6">Display Name</div>
-                    <div className="col-span-4">System Name</div>
-                    <div className="col-span-2 text-right">Status</div>
+                    <div className="col-span-5">Display Name</div>
+                    <div className="col-span-3">System Name</div>
+                    <div className="col-span-2">Type</div>
+                    <div className="col-span-2 text-right">Actions</div>
                   </div>
 
                   {/* Table Body */}
                   <div className="divide-y divide-slate-100">
-                    {globalDelayTypes.map((delayType) => (
-                      <div 
-                        key={delayType.id} 
-                        className="grid grid-cols-12 gap-4 px-6 py-4 items-center"
-                      >
-                        <div className="col-span-6">
-                          <p className="font-medium text-slate-900">{delayType.display_name}</p>
-                        </div>
-                        <div className="col-span-4">
-                          <span className="text-sm text-slate-500 font-mono">{delayType.name}</span>
-                        </div>
-                        <div className="col-span-2 text-right">
-                          <span className="text-xs text-slate-400">Read-only</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                    {delayTypes.map((delayType) => {
+                      const isGlobal = delayType.facility_id === null
 
-              {/* Facility Delay Types */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                        Custom
-                      </span>
-                      <h3 className="font-medium text-slate-900">Facility Delay Types</h3>
-                    </div>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {facilityDelayTypes.length} custom type{facilityDelayTypes.length !== 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={openAddModal}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Delay Type
-                  </button>
-                </div>
-
-                {/* Table */}
-                {facilityDelayTypes.length === 0 ? (
-                  <div className="px-6 py-12 text-center">
-                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <p className="text-slate-500">No custom delay types defined.</p>
-                    <button
-                      onClick={openAddModal}
-                      className="mt-2 text-blue-600 hover:underline text-sm"
-                    >
-                      Add your first custom delay type
-                    </button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    {/* Table Header */}
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      <div className="col-span-5">Display Name</div>
-                      <div className="col-span-4">System Name</div>
-                      <div className="col-span-3 text-right">Actions</div>
-                    </div>
-
-                    {/* Table Body */}
-                    <div className="divide-y divide-slate-100">
-                      {facilityDelayTypes.map((delayType) => (
+                      return (
                         <div 
                           key={delayType.id} 
                           className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
                         >
+                          {/* Display Name */}
                           <div className="col-span-5">
                             <p className="font-medium text-slate-900">{delayType.display_name}</p>
                           </div>
-                          <div className="col-span-4">
+
+                          {/* System Name */}
+                          <div className="col-span-3">
                             <span className="text-sm text-slate-500 font-mono">{delayType.name}</span>
                           </div>
-                          <div className="col-span-3 flex items-center justify-end gap-1">
-                            {deleteConfirm === delayType.id ? (
+
+                          {/* Type Badge */}
+                          <div className="col-span-2">
+                            {isGlobal ? (
+                              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600">
+                                Global
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+                                Custom
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="col-span-2 flex items-center justify-end gap-1">
+                            {isGlobal ? (
+                              <span className="text-xs text-slate-400">Read-only</span>
+                            ) : deleteConfirm === delayType.id ? (
                               <div className="flex items-center gap-1">
                                 <button
                                   onClick={() => handleDelete(delayType.id)}
@@ -313,11 +285,11 @@ export default function DelayTypesPage() {
                             )}
                           </div>
                         </div>
-                      ))}
-                    </div>
+                      )
+                    })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -345,6 +317,7 @@ export default function DelayTypesPage() {
                       })}
                       className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       placeholder="e.g., Waiting for Interpreter"
+                      autoFocus
                     />
                   </div>
                   <div>
