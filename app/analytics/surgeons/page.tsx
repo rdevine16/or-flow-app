@@ -20,6 +20,7 @@ import {
   Tracker,
   Legend,
   type Color,
+  type EventProps,
 } from '@tremor/react'
 
 import {
@@ -739,13 +740,13 @@ export default function SurgeonPerformancePage() {
                         index="date"
                         categories={['avgORTime', 'avgTurnover']}
                         colors={['blue', 'emerald']}
-                        valueFormatter={(v) => formatMinutesToHHMMSS(v)}
+                        valueFormatter={(v: number) => formatMinutesToHHMMSS(v)}
                         showLegend={false}
                         showAnimation={true}
                         curveType="monotone"
-                        onValueChange={(v) => {
-                          if (v?.eventType === 'dot' && v.date) {
-                            const metric = dailyMetrics.find(d => d.date === v.date)
+                        onValueChange={(v: EventProps) => {
+                          if (v?.eventType === 'dot' && v.categoryClicked) {
+                            const metric = dailyMetrics.find(d => d.date === v.categoryClicked)
                             if (metric) handleDayClick(metric.rawDate)
                           }
                         }}
@@ -775,7 +776,7 @@ export default function SurgeonPerformancePage() {
                         value: p.value,
                         href: '#',
                       }))}
-                      valueFormatter={(v) => `${v} cases`}
+                      valueFormatter={(v: number) => `${v} cases`}
                       color="blue"
                     />
                   ) : (
@@ -798,12 +799,12 @@ export default function SurgeonPerformancePage() {
                     index="date"
                     categories={['cases']}
                     colors={['blue']}
-                    valueFormatter={(v) => `${v} cases`}
+                    valueFormatter={(v: number) => `${v} cases`}
                     showLegend={false}
                     showAnimation={true}
-                    onValueChange={(v) => {
-                      if (v?.eventType === 'bar' && v.date) {
-                        const metric = dailyMetrics.find(d => d.date === v.date)
+                    onValueChange={(v: EventProps) => {
+                      if (v?.eventType === 'bar' && v.categoryClicked) {
+                        const metric = dailyMetrics.find(d => d.date === v.categoryClicked)
                         if (metric) handleDayClick(metric.rawDate)
                       }
                     }}

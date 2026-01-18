@@ -295,6 +295,30 @@
 .bg-lime-400 { background-color: #a3e635; }
 .bg-lime-600 { background-color: #65a30d; }
 
+/* ============================================ */
+/* TREMOR TEXT COLORS (for Legend text)         */
+/* ============================================ */
+
+.text-blue-500 { color: #3b82f6; }
+.text-cyan-500 { color: #06b6d4; }
+.text-indigo-500 { color: #6366f1; }
+.text-violet-500 { color: #8b5cf6; }
+.text-emerald-500 { color: #10b981; }
+.text-amber-500 { color: #f59e0b; }
+.text-rose-500 { color: #f43f5e; }
+.text-sky-500 { color: #0ea5e9; }
+.text-teal-500 { color: #14b8a6; }
+.text-green-500 { color: #22c55e; }
+.text-red-500 { color: #ef4444; }
+.text-orange-500 { color: #f97316; }
+.text-yellow-500 { color: #eab308; }
+.text-purple-500 { color: #a855f7; }
+.text-pink-500 { color: #ec4899; }
+.text-fuchsia-500 { color: #d946ef; }
+.text-lime-500 { color: #84cc16; }
+.text-slate-500 { color: #64748b; }
+.text-gray-500 { color: #6b7280; }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
