@@ -7,7 +7,8 @@ import { useUser } from '../../../lib/UserContext'
 import { getImpersonationState } from '../../../lib/impersonation'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
-import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
+import { AnalyticsPageHeader } from '../../../components/analytics/AnalyticsBreadcrumb'
+import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
 
 // Local components
 import { CaseWithFinancials, FacilitySettings, ProcedureReimbursement, SubTab } from '../../../components/analytics/financials/types'
@@ -166,30 +167,30 @@ export default function FinancialsAnalyticsPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <AnalyticsLayout
+          <AnalyticsPageHeader
             title="Financial Analytics"
             description="Profitability metrics and insights"
-          >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
-                <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-                  Select a facility to view financial analytics.
-                </p>
-                <Link
-                  href="/admin/facilities"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  View Facilities
-                </Link>
+            icon={CurrencyDollarIcon}
+          />
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
+              <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                Select a facility to view financial analytics.
+              </p>
+              <Link
+                href="/admin/facilities"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                View Facilities
+              </Link>
             </div>
-          </AnalyticsLayout>
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -200,30 +201,30 @@ export default function FinancialsAnalyticsPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <AnalyticsLayout
+          <AnalyticsPageHeader
             title="Financial Analytics"
             description="Profitability metrics and insights"
-          >
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-2">Financials Not Configured</h3>
-                <p className="text-slate-500 mb-6 max-w-sm mx-auto">
-                  Set up your OR hourly rate and procedure costs to enable financial analytics.
-                </p>
-                <Link
-                  href="/settings/financials"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Configure Financials
-                </Link>
+            icon={CurrencyDollarIcon}
+          />
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
               </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Financials Not Configured</h3>
+              <p className="text-slate-500 mb-6 max-w-sm mx-auto">
+                Set up your OR hourly rate and procedure costs to enable financial analytics.
+              </p>
+              <Link
+                href="/settings/financials"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Configure Financials
+              </Link>
             </div>
-          </AnalyticsLayout>
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -232,76 +233,76 @@ export default function FinancialsAnalyticsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <AnalyticsLayout
+        <AnalyticsPageHeader
           title="Financial Analytics"
           description={`${metrics.totalCases} cases analyzed`}
+          icon={CurrencyDollarIcon}
           actions={
             <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
           }
-        >
-          {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+        />
+        {loading ? (
+          <div className="flex items-center justify-center py-24">
+            <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          </div>
+        ) : (
+          <>
+            {/* Sub-tabs */}
+            <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-lg w-fit">
+              {[
+                { id: 'overview' as SubTab, label: 'Overview' },
+                { id: 'procedure' as SubTab, label: 'By Procedure' },
+                { id: 'surgeon' as SubTab, label: 'By Surgeon' },
+                { id: 'outliers' as SubTab, label: 'Outliers' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-          ) : (
-            <>
-              {/* Sub-tabs */}
-              <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-lg w-fit">
-                {[
-                  { id: 'overview' as SubTab, label: 'Overview' },
-                  { id: 'procedure' as SubTab, label: 'By Procedure' },
-                  { id: 'surgeon' as SubTab, label: 'By Surgeon' },
-                  { id: 'outliers' as SubTab, label: 'Outliers' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                      activeTab === tab.id
-                        ? 'bg-white text-slate-900 shadow-sm'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
 
-              {/* Tab Content */}
-              {activeTab === 'overview' && (
-                <OverviewTab 
-                  metrics={metrics}
-                  onProcedureClick={handleProcedureClick}
-                  onSurgeonClick={handleSurgeonClick}
-                  onOutliersClick={handleOutliersClick}
-                />
-              )}
+            {/* Tab Content */}
+            {activeTab === 'overview' && (
+              <OverviewTab 
+                metrics={metrics}
+                onProcedureClick={handleProcedureClick}
+                onSurgeonClick={handleSurgeonClick}
+                onOutliersClick={handleOutliersClick}
+              />
+            )}
 
-              {activeTab === 'procedure' && (
-                <ProcedureTab 
-                  metrics={metrics}
-                  selectedProcedure={selectedProcedure}
-                  onProcedureSelect={setSelectedProcedure}
-                />
-              )}
+            {activeTab === 'procedure' && (
+              <ProcedureTab 
+                metrics={metrics}
+                selectedProcedure={selectedProcedure}
+                onProcedureSelect={setSelectedProcedure}
+              />
+            )}
 
-              {activeTab === 'surgeon' && (
-                <SurgeonTab 
-                  metrics={metrics}
-                  selectedSurgeon={selectedSurgeon}
-                  onSurgeonSelect={setSelectedSurgeon}
-                />
-              )}
+            {activeTab === 'surgeon' && (
+              <SurgeonTab 
+                metrics={metrics}
+                selectedSurgeon={selectedSurgeon}
+                onSurgeonSelect={setSelectedSurgeon}
+              />
+            )}
 
-              {activeTab === 'outliers' && (
-                <OutliersTab metrics={metrics} />
-              )}
-            </>
-          )}
-        </AnalyticsLayout>
+            {activeTab === 'outliers' && (
+              <OutliersTab metrics={metrics} />
+            )}
+          </>
+        )}
       </Container>
     </DashboardLayout>
   )

@@ -46,6 +46,7 @@ import {
   PresentationChartLineIcon,
   ClipboardDocumentListIcon,
   CubeIcon,
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -715,26 +716,26 @@ export default function AnalyticsHubPage() {
 
   const categoryChartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet', 'fuchsia', 'pink', 'emerald', 'amber']
 
-// Helper to get surgical time from milestones
-const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
-  const milestones = caseData.case_milestones || []
-  let incisionTimestamp: number | null = null
-  let closingTimestamp: number | null = null
+  // Helper to get surgical time from milestones
+  const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
+    const milestones = caseData.case_milestones || []
+    let incisionTimestamp: number | null = null
+    let closingTimestamp: number | null = null
 
-  milestones.forEach(m => {
-    const mType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
-    if (mType?.name === 'incision') {
-      incisionTimestamp = new Date(m.recorded_at).getTime()
-    } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
-      closingTimestamp = new Date(m.recorded_at).getTime()
+    milestones.forEach(m => {
+      const mType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
+      if (mType?.name === 'incision') {
+        incisionTimestamp = new Date(m.recorded_at).getTime()
+      } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
+        closingTimestamp = new Date(m.recorded_at).getTime()
+      }
+    })
+
+    if (incisionTimestamp !== null && closingTimestamp !== null) {
+      return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
     }
-  })
-
-  if (incisionTimestamp !== null && closingTimestamp !== null) {
-    return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
+    return null
   }
-  return null
-}
 
   // Robotic vs Traditional Comparison Data for Total Knee
   const kneeComparisonData = useMemo(() => {
@@ -847,6 +848,13 @@ const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => 
       icon: PresentationChartLineIcon,
       accentColor: 'blue',
       badge: 'Full Report',
+    },
+    {
+      title: 'Financial Analytics',
+      description: 'Profitability metrics, cost analysis, and revenue insights',
+      href: '/analytics/financials',
+      icon: CurrencyDollarIcon,
+      accentColor: 'emerald',
     },
     {
       title: 'Surgeon Performance',
@@ -1087,7 +1095,7 @@ const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => 
                             index="date"
                             categories={['Robotic (Mako)', 'Traditional']}
                             colors={['cyan', 'slate']}
-valueFormatter={(v) => v.toString()}
+                            valueFormatter={(v) => `${v} min`}
                             yAxisWidth={48}
                             showAnimation={true}
                             connectNulls={true}
@@ -1117,7 +1125,7 @@ valueFormatter={(v) => v.toString()}
                             index="date"
                             categories={['Robotic (Mako)', 'Traditional']}
                             colors={['cyan', 'slate']}
-valueFormatter={(v) => v.toString()}
+                            valueFormatter={(v) => `${v} min`}
                             yAxisWidth={48}
                             showAnimation={true}
                             connectNulls={true}
