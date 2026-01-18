@@ -463,7 +463,7 @@ export function analyzeTurnovers(cases: CaseWithMilestones[], targetMinutes: num
         )
         
         // Only include reasonable turnover times (between 5 and 120 minutes = 300-7200 seconds)
-        if (turnoverTime !== null && turnoverTime >= 300 && turnoverTime <= 7200) {
+if (turnoverTime !== null && turnoverTime >= 300 && turnoverTime <= 21600) {
           const room = Array.isArray(currentCase.or_rooms) ? currentCase.or_rooms[0] : currentCase.or_rooms
           turnovers.push({
             fromCase: currentCase,
@@ -569,7 +569,7 @@ export function analyzeSurgicalTurnovers(cases: CaseWithMilestones[]): SurgicalT
         )
         
         // Only include reasonable turnover times (between 5 min and 120 min)
-        if (turnoverTime !== null && turnoverTime >= 300 && turnoverTime <= 7200) {
+if (turnoverTime !== null && turnoverTime >= 300 && turnoverTime <= 21600) {
           const room = Array.isArray(currentCase.or_rooms) ? currentCase.or_rooms[0] : currentCase.or_rooms
           turnovers.push({
             fromCase: currentCase,
