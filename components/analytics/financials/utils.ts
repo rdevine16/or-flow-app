@@ -1,4 +1,3 @@
-import { CaseWithFinancials, ProcedureReimbursement } from './types'
 
 // ============================================
 // FORMATTING FUNCTIONS
