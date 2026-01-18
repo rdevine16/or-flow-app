@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
-import { formatTimeInTimezone } from '../../../lib/date-utils'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
+import { formatTimeInTimezone } from '@/lib/date-utils'
+import { UserIcon } from '@heroicons/react/24/outline'
 import {
   getMilestoneMap,
   getTotalORTime,
@@ -23,7 +24,7 @@ import {
   getAllTurnovers,
   getAllSurgicalTurnovers,
   CaseWithMilestones,
-} from '../../../lib/analytics'
+} from '@/lib/analytics'
 
 interface Surgeon {
   id: string
@@ -297,13 +298,10 @@ export default function SurgeonAnalysisPage() {
   }
 
   // Get procedure performance data
-  // When "All" is selected, compare today vs 30-day average
-  // When a specific procedure is selected, compare that procedure vs overall day average
   const getProcedurePerformance = () => {
     const completedCases = getCompletedCases(dayCases)
     const completed30DayCases = getCompletedCases(last30DaysCases)
     
-    // Filter by selected procedure if not "all"
     const filteredCases = selectedProcedureFilter === 'all' 
       ? completedCases 
       : completedCases.filter(c => {
@@ -311,7 +309,6 @@ export default function SurgeonAnalysisPage() {
           return procType?.id === selectedProcedureFilter
         })
 
-    // Calculate averages for filtered/today's cases
     const filteredOrTimes = filteredCases.map(c => getTotalORTime(getMilestoneMap(c)))
     const filteredSurgicalTimes = filteredCases.map(c => getSurgicalTime(getMilestoneMap(c)))
     const filteredWheelsIn = filteredCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
@@ -319,7 +316,6 @@ export default function SurgeonAnalysisPage() {
     const filteredClosing = filteredCases.map(c => getClosingTime(getMilestoneMap(c)))
     const filteredWheelsOut = filteredCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
 
-    // For baseline: use 30-day average when "All" selected, otherwise use today's overall
     const baselineCases = selectedProcedureFilter === 'all' ? completed30DayCases : completedCases
     const baselineOrTimes = baselineCases.map(c => getTotalORTime(getMilestoneMap(c)))
     const baselineSurgicalTimes = baselineCases.map(c => getSurgicalTime(getMilestoneMap(c)))
@@ -345,123 +341,147 @@ export default function SurgeonAnalysisPage() {
         avgClosingTime: calculateAverage(baselineClosing),
         avgClosedToWheelsOut: calculateAverage(baselineWheelsOut),
       },
-      // Label changes based on filter
       baselineLabel: selectedProcedureFilter === 'all' ? '30-Day Avg' : 'Day Average'
     }
   }
+
   const caseBreakdown = useMemo(() => getCaseBreakdown(), [dayCases])
   const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases, selectedProcedureFilter])
 
   const selectedSurgeonData = selectedSurgeon ? surgeons.find(s => s.id === selectedSurgeon) : null
-
-  // Calculate max time for scaling bars
   const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
 
-  // Early return for loading/no facility
+  // ============================================
+  // FILTERS COMPONENT (for header actions)
+  // ============================================
+  const FiltersComponent = (
+    <div className="flex items-center gap-4">
+      {/* Surgeon Dropdown */}
+      <div>
+        <select
+          value={selectedSurgeon || ''}
+          onChange={(e) => setSelectedSurgeon(e.target.value || null)}
+          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+        >
+          <option value="">Choose surgeon...</option>
+          {surgeons.map(s => (
+            <option key={s.id} value={s.id}>
+              Dr. {s.first_name} {s.last_name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Date Picker */}
+      <div>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+        />
+      </div>
+    </div>
+  )
+
+  // ============================================
+  // LOADING STATE
+  // ============================================
   if (userLoading) {
     return (
       <DashboardLayout>
-        <Container className="py-8">
-          <AnalyticsLayout title="Surgeon Analysis" description="">
+        <div className="min-h-screen bg-slate-50/50">
+          <Container className="py-8">
             <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-slate-500">Loading...</p>
+              </div>
             </div>
-          </AnalyticsLayout>
-        </Container>
+          </Container>
+        </div>
       </DashboardLayout>
     )
   }
 
+  // ============================================
+  // NO FACILITY STATE
+  // ============================================
   if (!facilityId) {
     return (
       <DashboardLayout>
-        <Container className="py-8">
-          <AnalyticsLayout title="Surgeon Analysis" description="">
+        <div className="min-h-screen bg-slate-50/50">
+          <Container className="py-8">
+            <AnalyticsPageHeader
+              title="Surgeon Performance"
+              description="Individual surgeon performance metrics"
+              icon={UserIcon}
+            />
             <div className="text-center py-24 text-slate-500">
               No facility assigned to your account.
             </div>
-          </AnalyticsLayout>
-        </Container>
+          </Container>
+        </div>
       </DashboardLayout>
     )
   }
 
+  // ============================================
+  // MAIN RENDER
+  // ============================================
   return (
     <DashboardLayout>
-      <Container className="py-8">
-        <AnalyticsLayout
-          title="Surgeon Analysis"
-          description="Individual surgeon performance metrics"
-          actions={
-            <div className="flex items-center gap-4">
-              {/* Surgeon Dropdown */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Select Surgeon</label>
-                <select
-                  value={selectedSurgeon || ''}
-                  onChange={(e) => setSelectedSurgeon(e.target.value || null)}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  <option value="">Choose surgeon...</option>
-                  {surgeons.map(s => (
-                    <option key={s.id} value={s.id}>
-                      Dr. {s.first_name} {s.last_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      <div className="min-h-screen bg-slate-50/50">
+        <Container className="py-8">
+          {/* Page Header with Breadcrumb */}
+          <AnalyticsPageHeader
+            title="Surgeon Performance"
+            description="Individual surgeon performance metrics"
+            icon={UserIcon}
+            actions={FiltersComponent}
+          />
 
-              {/* Date Picker */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Select Date</label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          }
-        >
           {initialLoading ? (
             <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-slate-500">Loading surgeons...</p>
+              </div>
             </div>
           ) : !selectedSurgeon ? (
-            <div className="bg-slate-50 rounded-xl border border-slate-200 p-12 text-center">
-              <div className="w-16 h-16 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <UserIcon className="w-8 h-8 text-slate-400" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Surgeon</h3>
               <p className="text-slate-500">Choose a surgeon from the dropdown above to view their analytics</p>
             </div>
           ) : loading ? (
             <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-sm text-slate-500">Loading case data...</p>
+              </div>
             </div>
           ) : (
-            <>
+            <div className="space-y-6">
               {/* Surgeon Header */}
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 uppercase tracking-wide">
-                  {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
-                </h2>
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <span className="text-lg font-bold text-blue-600">
+                    {selectedSurgeonData?.first_name?.charAt(0)}{selectedSurgeonData?.last_name?.charAt(0)}
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">
+                    Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
+                  </h2>
+                  <p className="text-sm text-slate-500">{formatDateDisplay(selectedDate)}</p>
+                </div>
               </div>
 
               {/* Day Overview Section */}
-              <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -470,7 +490,7 @@ export default function SurgeonAnalysisPage() {
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold text-slate-900">Day Overview</h3>
-                    <p className="text-sm text-slate-500">Track your efficiency in the operating room by measuring key time metrics, optimizing workflows, and reducing delays.</p>
+                    <p className="text-sm text-slate-500">Track your efficiency in the operating room</p>
                   </div>
                 </div>
 
@@ -563,9 +583,7 @@ export default function SurgeonAnalysisPage() {
                     ) : (
                       <>
                         <div className="text-2xl font-bold text-slate-400">N/A</div>
-                        <div className="text-xs text-slate-400 mt-1">
-                          Requires 2+ cases in same room
-                        </div>
+                        <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
                       </>
                     )}
                   </div>
@@ -598,14 +616,12 @@ export default function SurgeonAnalysisPage() {
                     ) : (
                       <>
                         <div className="text-2xl font-bold text-slate-400">N/A</div>
-                        <div className="text-xs text-slate-400 mt-1">
-                          Requires 2+ cases in same room
-                        </div>
+                        <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
                       </>
                     )}
                   </div>
                   
-                  {/* Uptime vs Downtime - Spans 2 columns */}
+                  {/* Uptime vs Downtime */}
                   <div className="bg-slate-50 rounded-lg p-4 col-span-2">
                     <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -616,7 +632,6 @@ export default function SurgeonAnalysisPage() {
                     
                     {dayMetrics.totalORTime > 0 ? (
                       <>
-                        {/* Percentages */}
                         <div className="flex items-baseline gap-2 mb-2">
                           <span className="text-2xl font-bold text-slate-900">{dayMetrics.uptimePercent}%</span>
                           <span className="text-slate-400">vs.</span>
@@ -632,19 +647,11 @@ export default function SurgeonAnalysisPage() {
                           )}
                         </div>
                         
-                        {/* Stacked Bar */}
                         <div className="h-3 w-full rounded-full overflow-hidden flex">
-                          <div 
-                            className="h-full bg-blue-600 transition-all"
-                            style={{ width: `${dayMetrics.uptimePercent}%` }}
-                          />
-                          <div 
-                            className="h-full bg-red-500 transition-all"
-                            style={{ width: `${100 - dayMetrics.uptimePercent}%` }}
-                          />
+                          <div className="h-full bg-blue-600 transition-all" style={{ width: `${dayMetrics.uptimePercent}%` }} />
+                          <div className="h-full bg-red-500 transition-all" style={{ width: `${100 - dayMetrics.uptimePercent}%` }} />
                         </div>
                         
-                        {/* Legend */}
                         <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
                           <div className="flex items-center gap-1">
                             <div className="w-2 h-2 rounded-full bg-blue-600" />
@@ -665,8 +672,8 @@ export default function SurgeonAnalysisPage() {
 
               {/* Cases and Procedure Performance */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Cases List with Stacked Bars */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                {/* Cases List */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -690,14 +697,9 @@ export default function SurgeonAnalysisPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-slate-900 truncate">
-                                {c.procedureName}
-                              </span>
-                              <span className="text-sm text-slate-500">
-                                {formatMinutesToHHMMSS(c.totalORTime)}
-                              </span>
+                              <span className="text-sm font-medium text-slate-900 truncate">{c.procedureName}</span>
+                              <span className="text-sm text-slate-500">{formatMinutesToHHMMSS(c.totalORTime)}</span>
                             </div>
-                            {/* Stacked Bar */}
                             <div className="h-4 bg-slate-100 rounded-full overflow-hidden flex">
                               {c.wheelsInToIncision > 0 && (
                                 <div 
@@ -746,21 +748,21 @@ export default function SurgeonAnalysisPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-emerald-500 rounded" />
-                      <span className="text-slate-500">Closing Time</span>
+                      <span className="text-slate-500">Closing</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="w-3 h-3 bg-amber-400 rounded" />
-                      <span className="text-slate-500">Closed to Wheels-O...</span>
+                      <span className="text-slate-500">Wheels-Out</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Procedure Performance */}
-                <div className="bg-white rounded-xl border border-slate-200 p-6">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                       </svg>
                       <h3 className="font-semibold text-slate-900">Procedure Performance</h3>
                     </div>
@@ -769,20 +771,17 @@ export default function SurgeonAnalysisPage() {
                       onChange={(e) => setSelectedProcedureFilter(e.target.value)}
                       className="px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                     >
-                      <option value="all">All</option>
+                      <option value="all">All Procedures</option>
                       {procedures.map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
                   </div>
 
-                  {/* Overall Section */}
-                  <div className="mb-6">
-                    <h4 className="font-semibold text-slate-900 mb-3">Overall</h4>
-                    
-                    {/* Total OR Time */}
-                    <div className="mb-4">
-                      <div className="text-sm text-slate-500 mb-1">Total OR Time</div>
+                  <div className="space-y-4">
+                    {/* OR Time */}
+                    <div>
+                      <div className="text-sm text-slate-500 mb-1">OR Time</div>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
@@ -829,113 +828,6 @@ export default function SurgeonAnalysisPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Summary Section */}
-                  <div className="pt-4 border-t border-slate-100">
-                    <h4 className="font-semibold text-slate-900 mb-3">Summary</h4>
-                    
-                    <div className="space-y-3">
-                      {/* Wheels-in to Incision */}
-                      <div>
-                        <div className="text-sm text-slate-500 mb-1">Wheels-in to Incision</div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-600 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgWheelsInToIncision || 0) / Math.max(procedurePerformance.baseline.avgWheelsInToIncision || 1, procedurePerformance.procedure.avgWheelsInToIncision || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-semibold text-slate-900 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgWheelsInToIncision)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-slate-400 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgWheelsInToIncision || 0) / Math.max(procedurePerformance.baseline.avgWheelsInToIncision || 1, procedurePerformance.procedure.avgWheelsInToIncision || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-medium text-slate-700 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgWheelsInToIncision)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Incision to Closing */}
-                      <div>
-                        <div className="text-sm text-slate-500 mb-1">Incision to Closing</div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-600 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgIncisionToClosing || 0) / Math.max(procedurePerformance.baseline.avgIncisionToClosing || 1, procedurePerformance.procedure.avgIncisionToClosing || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-semibold text-slate-900 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgIncisionToClosing)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-slate-400 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgIncisionToClosing || 0) / Math.max(procedurePerformance.baseline.avgIncisionToClosing || 1, procedurePerformance.procedure.avgIncisionToClosing || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-medium text-slate-700 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgIncisionToClosing)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Closing Time */}
-                      <div>
-                        <div className="text-sm text-slate-500 mb-1">Closing Time</div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-emerald-500 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgClosingTime || 0) / Math.max(procedurePerformance.baseline.avgClosingTime || 1, procedurePerformance.procedure.avgClosingTime || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-semibold text-slate-900 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosingTime)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-slate-400 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgClosingTime || 0) / Math.max(procedurePerformance.baseline.avgClosingTime || 1, procedurePerformance.procedure.avgClosingTime || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-medium text-slate-700 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgClosingTime)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Closed to Wheels-Out */}
-                      <div>
-                        <div className="text-sm text-slate-500 mb-1">Closed to Wheels-Out</div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-amber-400 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgClosedToWheelsOut || 0) / Math.max(procedurePerformance.baseline.avgClosedToWheelsOut || 1, procedurePerformance.procedure.avgClosedToWheelsOut || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-semibold text-slate-900 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgClosedToWheelsOut)}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
-                              <div 
-                                className="h-full bg-slate-400 rounded" 
-                                style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgClosedToWheelsOut || 0) / Math.max(procedurePerformance.baseline.avgClosedToWheelsOut || 1, procedurePerformance.procedure.avgClosedToWheelsOut || 1)) * 100)}%` }} 
-                              />
-                            </div>
-                            <span className="text-xs font-medium text-slate-700 w-16 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgClosedToWheelsOut)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
 
                     {/* Legend */}
                     <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs">
@@ -951,10 +843,10 @@ export default function SurgeonAnalysisPage() {
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
-        </AnalyticsLayout>
-      </Container>
+        </Container>
+      </div>
     </DashboardLayout>
   )
 }
