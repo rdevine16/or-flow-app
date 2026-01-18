@@ -14,14 +14,13 @@ interface User {
   id: string
   first_name: string
   last_name: string
-  email: string | null  // Now nullable for staff-only records
+  email: string | null
   role_id: string
   access_level: string
   facility_id: string | null
   user_roles: { name: string }[] | { name: string } | null
   facilities?: { name: string } | null
-  email_confirmed?: boolean
-  last_login_at?: string | null  // To determine if user has logged in
+  last_login_at?: string | null
 }
 
 interface UserRole {
@@ -34,7 +33,6 @@ interface Facility {
   name: string
 }
 
-// Account status types
 type AccountStatus = 'active' | 'pending' | 'no_account'
 
 const getRoleName = (userRoles: { name: string }[] | { name: string } | null): string | null => {
@@ -68,11 +66,11 @@ export default function UsersSettingsPage() {
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set())
   const [authUserIds, setAuthUserIds] = useState<Set<string>>(new Set())
   
-  // Invite prompt state (Option C - prompt after adding email)
+  // Invite prompt state
   const [showInvitePrompt, setShowInvitePrompt] = useState(false)
   const [pendingInviteUser, setPendingInviteUser] = useState<User | null>(null)
 
-  // Edit form state - now includes email
+  // Edit form state
   const [editFormData, setEditFormData] = useState({
     first_name: '',
     last_name: '',
@@ -125,13 +123,11 @@ export default function UsersSettingsPage() {
     setRoles(rolesRes.data || [])
     setFacilities(facilitiesRes.data || [])
 
-    // Only check pending status for users with emails
     const emailsToCheck = usersData.filter(u => u.email).map(u => u.email as string)
     if (emailsToCheck.length > 0) {
       await fetchPendingStatus(emailsToCheck)
     }
 
-    // Fetch which user IDs have auth accounts
     await fetchAuthStatus(usersData.map(u => u.id))
 
     setLoading(false)
@@ -171,24 +167,10 @@ export default function UsersSettingsPage() {
     }
   }
 
-  // Determine account status for a user
   const getAccountStatus = (user: User): AccountStatus => {
-    // No email = definitely no account
-    if (!user.email) {
-      return 'no_account'
-    }
-    
-    // Has email but not in auth.users = no account (staff with email but not invited yet)
-    if (!authUserIds.has(user.id)) {
-      return 'no_account'
-    }
-    
-    // In auth.users but pending (hasn't confirmed/logged in)
-    if (pendingUserIds.has(user.id)) {
-      return 'pending'
-    }
-    
-    // Has auth account and has logged in
+    if (!user.email) return 'no_account'
+    if (!authUserIds.has(user.id)) return 'no_account'
+    if (pendingUserIds.has(user.id)) return 'pending'
     return 'active'
   }
 
@@ -228,7 +210,6 @@ export default function UsersSettingsPage() {
     setResendingInvite(null)
   }
 
-  // Send invite to staff member who has email but no auth account
   const handleSendInvite = async (user: User) => {
     if (!user.email) return
     
@@ -246,7 +227,7 @@ export default function UsersSettingsPage() {
           accessLevel: user.access_level,
           facilityId: user.facility_id,
           roleId: user.role_id,
-          existingUserId: user.id,  // Important: link to existing record
+          existingUserId: user.id,
         }),
       })
 
@@ -307,7 +288,6 @@ export default function UsersSettingsPage() {
       access_level: editFormData.access_level,
     }
 
-    // Only update email if it changed
     if (trimmedEmail !== (editingUser.email || '')) {
       updateData.email = trimmedEmail || null
     }
@@ -322,7 +302,6 @@ export default function UsersSettingsPage() {
       .eq('id', editingUser.id)
 
     if (!error) {
-      // Audit log
       const changes: Record<string, { old: string; new: string }> = {}
       if (editFormData.first_name !== editingUser.first_name) {
         changes.first_name = { old: editingUser.first_name, new: editFormData.first_name }
@@ -349,7 +328,6 @@ export default function UsersSettingsPage() {
 
       closeEditModal()
 
-      // If email was added to a staff-only record, prompt to send invite (Option C)
       if (emailWasAdded) {
         const updatedUser: User = {
           ...editingUser,
@@ -389,9 +367,7 @@ export default function UsersSettingsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (id === currentUserId) {
-      return
-    }
+    if (id === currentUserId) return
 
     const user = users.find(u => u.id === id)
     const userName = user ? `${user.first_name} ${user.last_name}` : 'Unknown'
@@ -401,7 +377,6 @@ export default function UsersSettingsPage() {
 
     if (!error) {
       await userAudit.deleted(supabase, userName, userEmail, id)
-
       setUsers(users.filter(u => u.id !== id))
       setDeleteConfirm(null)
       setSuccessMessage('User deleted successfully!')
@@ -420,14 +395,11 @@ export default function UsersSettingsPage() {
     }
   }
 
-  const getAccessLevelBadge = (accessLevel: string) => {
+  const getAccessLevelLabel = (accessLevel: string): string => {
     switch (accessLevel) {
-      case 'global_admin':
-        return <Badge variant="error" size="sm">Global Admin</Badge>
-      case 'facility_admin':
-        return <Badge variant="warning" size="sm">Facility Admin</Badge>
-      default:
-        return null
+      case 'global_admin': return 'Global Admin'
+      case 'facility_admin': return 'Facility Admin'
+      default: return 'Staff'
     }
   }
 
@@ -443,20 +415,22 @@ export default function UsersSettingsPage() {
           </span>
         )
       case 'pending':
-        return <Badge variant="warning" size="sm">Pending</Badge>
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+            Pending
+          </span>
+        )
       case 'no_account':
         return <span className="text-xs text-slate-400">No account</span>
-      default:
-        return null
     }
   }
 
   const showAllUsers = isGlobalAdmin && !isImpersonating
 
   // Count stats
-  const staffOnlyCount = users.filter(u => getAccountStatus(u) === 'no_account').length
   const activeCount = users.filter(u => getAccountStatus(u) === 'active').length
   const pendingCount = users.filter(u => getAccountStatus(u) === 'pending').length
+  const noAccountCount = users.filter(u => getAccountStatus(u) === 'no_account').length
 
   return (
     <DashboardLayout>
@@ -472,6 +446,10 @@ export default function UsersSettingsPage() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
+          ) : !effectiveFacilityId && !showAllUsers ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+              <p className="text-slate-500">No facility selected</p>
+            </div>
           ) : (
             <div className="space-y-4">
               {/* Success Message */}
@@ -481,10 +459,7 @@ export default function UsersSettingsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <p className="text-sm font-medium text-green-800">{successMessage}</p>
-                  <button 
-                    onClick={() => setSuccessMessage(null)}
-                    className="ml-auto text-green-500 hover:text-green-700"
-                  >
+                  <button onClick={() => setSuccessMessage(null)} className="ml-auto text-green-500 hover:text-green-700">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -499,10 +474,7 @@ export default function UsersSettingsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <p className="text-sm font-medium text-red-800">{errorMessage}</p>
-                  <button 
-                    onClick={() => setErrorMessage(null)}
-                    className="ml-auto text-red-500 hover:text-red-700"
-                  >
+                  <button onClick={() => setErrorMessage(null)} className="ml-auto text-red-500 hover:text-red-700">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -510,102 +482,132 @@ export default function UsersSettingsPage() {
                 </div>
               )}
 
-              {/* Add Staff Button */}
-              <button
-                onClick={() => setShowInviteModal(true)}
-                className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Staff Member
-              </button>
-
-              {/* Users List */}
-              {users.length === 0 ? (
-                <div className="text-center py-8 bg-white rounded-xl border border-slate-200">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+              {/* Main Card */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                {/* Header */}
+                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-slate-900">Staff Members</h3>
+                    <p className="text-sm text-slate-500">
+                      {users.length} total
+                      {activeCount > 0 && <span className="text-green-600"> · {activeCount} active</span>}
+                      {pendingCount > 0 && <span className="text-amber-600"> · {pendingCount} pending</span>}
+                      {noAccountCount > 0 && <span> · {noAccountCount} without account</span>}
+                    </p>
                   </div>
-                  <p className="text-slate-500 text-sm">No staff members yet</p>
-                  <p className="text-slate-400 text-xs mt-1">Add staff members to get started</p>
+                  <button
+                    onClick={() => setShowInviteModal(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Staff Member
+                  </button>
                 </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
-                  {users.map((user) => {
-                    const roleName = getRoleName(user.user_roles)
-                    const isCurrentUser = user.id === currentUserId
-                    const accountStatus = getAccountStatus(user)
 
-                    return (
-                      <div key={user.id} className="p-4 hover:bg-slate-50 transition-colors group">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold ${
-                              accountStatus === 'pending' 
-                                ? 'bg-amber-100 text-amber-600' 
-                                : accountStatus === 'no_account'
-                                ? 'bg-slate-100 text-slate-400'
-                                : 'bg-slate-200 text-slate-600'
-                            }`}>
-                              {user.first_name[0]}{user.last_name[0]}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-slate-900">
-                                  {roleName === 'surgeon' || roleName === 'anesthesiologist'
-                                    ? `Dr. ${user.first_name} ${user.last_name}`
-                                    : `${user.first_name} ${user.last_name}`
-                                  }
-                                </p>
-                                {getAccessLevelBadge(user.access_level)}
-                                {isCurrentUser && (
-                                  <span className="text-xs text-slate-400">(you)</span>
-                                )}
+                {/* Table */}
+                {users.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-500">No staff members yet.</p>
+                    <button
+                      onClick={() => setShowInviteModal(true)}
+                      className="mt-2 text-blue-600 hover:underline text-sm"
+                    >
+                      Add your first staff member
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-4">Name</div>
+                      <div className="col-span-2">Role</div>
+                      <div className="col-span-2">Permissions</div>
+                      <div className="col-span-2">Status</div>
+                      <div className="col-span-2 text-right">Actions</div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="divide-y divide-slate-100">
+                      {users.map((user) => {
+                        const roleName = getRoleName(user.user_roles)
+                        const isCurrentUser = user.id === currentUserId
+                        const accountStatus = getAccountStatus(user)
+
+                        return (
+                          <div 
+                            key={user.id} 
+                            className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                          >
+                            {/* Name */}
+                            <div className="col-span-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+                                  accountStatus === 'pending' 
+                                    ? 'bg-amber-100 text-amber-600' 
+                                    : accountStatus === 'no_account'
+                                    ? 'bg-slate-100 text-slate-400'
+                                    : 'bg-slate-200 text-slate-600'
+                                }`}>
+                                  {user.first_name[0]}{user.last_name[0]}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-slate-900 truncate">
+                                    {roleName === 'surgeon' || roleName === 'anesthesiologist'
+                                      ? `Dr. ${user.first_name} ${user.last_name}`
+                                      : `${user.first_name} ${user.last_name}`
+                                    }
+                                    {isCurrentUser && (
+                                      <span className="text-xs text-slate-400 font-normal ml-1">(you)</span>
+                                    )}
+                                  </p>
+                                  <p className="text-sm text-slate-500 truncate">
+                                    {user.email || <span className="italic text-slate-400">No email</span>}
+                                  </p>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                {user.email ? (
-                                  <p className="text-sm text-slate-500">{user.email}</p>
-                                ) : (
-                                  <p className="text-sm text-slate-400 italic">No email</p>
-                                )}
-                                <span className="text-slate-300">·</span>
-                                {getAccountStatusDisplay(accountStatus)}
-                              </div>
-                              {showAllUsers && user.facilities && (
-                                <p className="text-xs text-slate-400 mt-0.5">
-                                  {(user.facilities as { name: string }).name}
-                                </p>
-                              )}
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
-                              {roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : 'Unknown'}
-                            </Badge>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+                            {/* Role */}
+                            <div className="col-span-2">
+                              <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
+                                {roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : 'Unknown'}
+                              </Badge>
+                            </div>
+
+                            {/* Permissions */}
+                            <div className="col-span-2">
+                              <span className="text-sm text-slate-600">{getAccessLevelLabel(user.access_level)}</span>
+                            </div>
+
+                            {/* Status */}
+                            <div className="col-span-2">
+                              {getAccountStatusDisplay(accountStatus)}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="col-span-2 flex items-center justify-end gap-1">
                               {deleteConfirm === user.id ? (
-                                <>
-                                  <span className="text-xs text-slate-500 mr-2">Delete?</span>
+                                <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => handleDelete(user.id)}
-                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                    </svg>
+                                    Confirm
                                   </button>
                                   <button
                                     onClick={() => setDeleteConfirm(null)}
-                                    className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                                    className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                    Cancel
                                   </button>
-                                </>
+                                </div>
                               ) : (
                                 <>
                                   {/* Resend Invite - for pending users */}
@@ -613,8 +615,8 @@ export default function UsersSettingsPage() {
                                     <button
                                       onClick={() => handleResendInvite(user)}
                                       disabled={resendingInvite === user.id}
-                                      className="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
-                                      title="Resend invite email"
+                                      className="p-2 text-amber-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors disabled:opacity-50"
+                                      title="Resend invite"
                                     >
                                       {resendingInvite === user.id ? (
                                         <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
@@ -634,7 +636,7 @@ export default function UsersSettingsPage() {
                                     <button
                                       onClick={() => handleSendInvite(user)}
                                       disabled={sendingInvite === user.id}
-                                      className="p-1.5 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                                      className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
                                       title="Send invite"
                                     >
                                       {sendingInvite === user.id ? (
@@ -652,16 +654,19 @@ export default function UsersSettingsPage() {
                                   
                                   <button
                                     onClick={() => openEditModal(user)}
-                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit"
                                   >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                   </button>
+                                  
                                   {!isCurrentUser && (
                                     <button
                                       onClick={() => setDeleteConfirm(user.id)}
-                                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                      title="Delete"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -672,27 +677,12 @@ export default function UsersSettingsPage() {
                               )}
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {users.length > 0 && (
-                <p className="text-sm text-slate-400">
-                  {users.length} staff member{users.length !== 1 ? 's' : ''} total
-                  {activeCount > 0 && (
-                    <span className="text-green-500"> · {activeCount} active</span>
-                  )}
-                  {pendingCount > 0 && (
-                    <span className="text-amber-500"> · {pendingCount} pending</span>
-                  )}
-                  {staffOnlyCount > 0 && (
-                    <span className="text-slate-400"> · {staffOnlyCount} without account</span>
-                  )}
-                </p>
-              )}
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </SettingsLayout>
@@ -711,56 +701,37 @@ export default function UsersSettingsPage() {
       {editingUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Edit Staff Member</h2>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  {editingUser.email || 'No email on file'}
-                </p>
-              </div>
-              <button
-                onClick={closeEditModal}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+            <div className="px-6 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">Edit Staff Member</h3>
+              <p className="text-sm text-slate-500">{editingUser.email || 'No email on file'}</p>
             </div>
 
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    First Name
-                  </label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">First Name</label>
                   <input
                     type="text"
                     value={editFormData.first_name}
                     onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Last Name
-                  </label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Last Name</label>
                   <input
                     type="text"
                     value={editFormData.last_name}
                     onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
               </div>
 
-              {/* Email - editable if no auth account, disabled if has account */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Email Address
-                  {!editingUser.email && (
-                    <span className="text-slate-400 font-normal ml-1">(optional)</span>
-                  )}
+                  {!editingUser.email && <span className="text-slate-400 font-normal ml-1">(optional)</span>}
                 </label>
                 {getAccountStatus(editingUser) === 'no_account' ? (
                   <>
@@ -768,14 +739,11 @@ export default function UsersSettingsPage() {
                       type="email"
                       value={editFormData.email}
                       onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       placeholder="john.smith@hospital.com"
                     />
-                    <p className="mt-1 text-xs text-slate-400">
-                      {!editingUser.email 
-                        ? "Add an email to enable app access"
-                        : "You can send an invite after saving"
-                      }
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      {!editingUser.email ? "Add an email to enable app access" : "You can send an invite after saving"}
                     </p>
                   </>
                 ) : (
@@ -784,21 +752,19 @@ export default function UsersSettingsPage() {
                       type="email"
                       value={editFormData.email}
                       disabled
-                      className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-500 cursor-not-allowed"
+                      className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed"
                     />
-                    <p className="mt-1 text-xs text-slate-400">Email cannot be changed for users with accounts</p>
+                    <p className="text-xs text-slate-500 mt-1.5">Email cannot be changed for users with accounts</p>
                   </>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Staff Role
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Staff Role</label>
                 <select
                   value={editFormData.role_id}
                   onChange={(e) => setEditFormData({ ...editFormData, role_id: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 >
                   <option value="">Select a role...</option>
                   {roles.map((role) => (
@@ -810,68 +776,60 @@ export default function UsersSettingsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Permissions
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Permissions</label>
                 <select
                   value={editFormData.access_level}
                   onChange={(e) => setEditFormData({ ...editFormData, access_level: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   disabled={editingUser.id === currentUserId}
                 >
                   <option value="user">Staff — View cases, record milestones</option>
                   <option value="facility_admin">Facility Admin — Full facility access</option>
-                  {showAllUsers && (
-                    <option value="global_admin">Global Admin — All facilities access</option>
-                  )}
+                  {showAllUsers && <option value="global_admin">Global Admin — All facilities access</option>}
                 </select>
                 {editingUser.id === currentUserId && (
-                  <p className="mt-1 text-xs text-slate-400">You cannot change your own permissions</p>
+                  <p className="text-xs text-slate-500 mt-1.5">You cannot change your own permissions</p>
                 )}
               </div>
 
               {showAllUsers && facilities.length > 0 && editFormData.access_level !== 'global_admin' && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Facility
-                  </label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Facility</label>
                   <select
                     value={editFormData.facility_id}
                     onChange={(e) => setEditFormData({ ...editFormData, facility_id: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
                     <option value="">Select a facility...</option>
                     {facilities.map((facility) => (
-                      <option key={facility.id} value={facility.id}>
-                        {facility.name}
-                      </option>
+                      <option key={facility.id} value={facility.id}>{facility.name}</option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-slate-400">Move this user to a different facility</p>
+                  <p className="text-xs text-slate-500 mt-1.5">Move this user to a different facility</p>
                 </div>
               )}
+            </div>
 
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={closeEditModal}
-                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEdit}
-                  disabled={!editFormData.first_name || !editFormData.last_name || !editFormData.role_id}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Save Changes
-                </button>
-              </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={closeEditModal}
+                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEdit}
+                disabled={!editFormData.first_name || !editFormData.last_name || !editFormData.role_id}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Invite Prompt Modal (Option C) */}
+      {/* Invite Prompt Modal */}
       {showInvitePrompt && pendingInviteUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
@@ -881,9 +839,7 @@ export default function UsersSettingsPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-slate-900 text-center mb-2">
-                Email Added
-              </h3>
+              <h3 className="text-lg font-semibold text-slate-900 text-center mb-2">Email Added</h3>
               <p className="text-sm text-slate-500 text-center mb-6">
                 Would you like to send {pendingInviteUser.first_name} an invitation to access the app?
               </p>
