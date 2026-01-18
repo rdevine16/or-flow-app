@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { userAudit } from '@/lib/audit-logger'
 
 interface UserRole {
   id: string
@@ -135,6 +136,14 @@ export default function InviteUserModal({
           setError(insertError.message || 'Failed to add staff member')
           return
         }
+
+        // Audit log the staff creation (no email)
+        await userAudit.created(
+          supabase,
+          `${firstName} ${lastName}`,
+          '(no email)',
+          newUserId
+        )
       }
 
       // Success!

@@ -237,6 +237,9 @@ export default function UsersSettingsPage() {
         setErrorMessage(data.error || 'Failed to send invitation')
         setTimeout(() => setErrorMessage(null), 5000)
       } else {
+        // Audit log the invite
+        await userAudit.invited(supabase, user.email!, user.id)
+        
         setSuccessMessage(`Invitation sent to ${user.email}`)
         fetchData()
         setTimeout(() => setSuccessMessage(null), 5000)
