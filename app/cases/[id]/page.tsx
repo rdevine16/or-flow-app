@@ -58,6 +58,7 @@ interface User {
   id: string
   first_name: string
   last_name: string
+  role_id: string
   user_roles: { name: string }[] | null
 }
 
@@ -208,7 +209,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   // Implants
   const [implants, setImplants] = useState<any>(null)
-  const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | null>(null)
+  const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | 'total_hip' | 'total_knee' | null>(null)
 
   // Device companies (for completed view)
   const [deviceCompanies, setDeviceCompanies] = useState<DeviceCompanyData[]>([])
@@ -343,7 +344,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           .eq('id', caseResult.procedure_type_id)
           .single()
         if (procData?.implant_category) {
-          setImplantCategory(procData.implant_category as 'hip' | 'knee')
+          setImplantCategory(procData.implant_category as 'hip' | 'knee' | 'total_hip' | 'total_knee')
         }
       }
 
