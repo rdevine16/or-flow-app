@@ -1,30 +1,44 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
-import { UserIcon } from '@heroicons/react/24/outline'
+import { UserIcon, XMarkIcon, CalendarDaysIcon, ChartBarIcon } from '@heroicons/react/24/outline'
+
+// Tremor components
+import {
+  AreaChart,
+  BarChart,
+  BarList,
+  DonutChart,
+  Tracker,
+  Legend,
+  type Color,
+} from '@tremor/react'
+
 import {
   getMilestoneMap,
   getTotalORTime,
-  getSurgicalTime,
   getWheelsInToIncision,
   getIncisionToClosing,
   getClosingTime,
   getClosedToWheelsOut,
   calculateAverage,
   calculateSum,
-  calculatePercentageChange,
   formatMinutesToHHMMSS,
-  formatTimeFromTimestamp,
-  getAllTurnovers,
   getAllSurgicalTurnovers,
   CaseWithMilestones,
 } from '@/lib/analytics'
+
+// ============================================
+// TYPES
+// ============================================
 
 interface Surgeon {
   id: string
@@ -32,54 +46,337 @@ interface Surgeon {
   last_name: string
 }
 
-interface ProcedureType {
-  id: string
-  name: string
+interface DailyMetric {
+  date: string
+  rawDate: string
+  cases: number
+  avgORTime: number
+  avgSurgicalTime: number
+  avgTurnover: number
+  uptime: number
 }
 
-// Helper to get today's date in YYYY-MM-DD format
+interface TrackerDay {
+  color: Color
+  tooltip: string
+  date: string
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
 function getLocalDateString(date?: Date): string {
   const d = date || new Date()
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// Format date for display
 function formatDateDisplay(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
-  return date.toLocaleDateString('en-US', { 
-    month: 'numeric', 
-    day: 'numeric', 
-    year: 'numeric' 
-  })
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-export default function SurgeonAnalysisPage() {
+function formatDateShort(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function getDateRange(period: string): { startDate: Date; endDate: Date; label: string } {
+  const today = new Date()
+  let startDate: Date
+  let label: string
+
+  switch (period) {
+    case 'week':
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 7)
+      label = 'Last 7 Days'
+      break
+    case 'month':
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 30)
+      label = 'Last 30 Days'
+      break
+    case 'quarter':
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 90)
+      label = 'Last 90 Days'
+      break
+    case 'year':
+      startDate = new Date(today)
+      startDate.setFullYear(today.getFullYear() - 1)
+      label = 'Last Year'
+      break
+    default:
+      startDate = new Date(today)
+      startDate.setDate(today.getDate() - 30)
+      label = 'Last 30 Days'
+  }
+
+  return { startDate, endDate: today, label }
+}
+
+// ============================================
+// KPI CARD COMPONENT
+// ============================================
+
+function KPICard({ 
+  title, 
+  value, 
+  subtitle, 
+  trend,
+  icon: Icon,
+}: { 
+  title: string
+  value: string
+  subtitle?: string
+  trend?: { value: number; label: string }
+  icon?: React.ComponentType<{ className?: string }>
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-5">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="text-2xl font-semibold text-slate-900 mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+          {trend && (
+            <p className={`text-sm font-medium mt-2 ${trend.value >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {trend.value >= 0 ? '↑' : '↓'} {Math.abs(trend.value)}% {trend.label}
+            </p>
+          )}
+        </div>
+        {Icon && (
+          <div className="p-2 rounded-lg bg-slate-100">
+            <Icon className="w-5 h-5 text-slate-600" />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// DAY DETAIL PANEL (Slide-out)
+// ============================================
+
+interface DayDetailPanelProps {
+  isOpen: boolean
+  onClose: () => void
+  date: string
+  cases: CaseWithMilestones[]
+  facilityTimezone?: string
+}
+
+function DayDetailPanel({ isOpen, onClose, date, cases, facilityTimezone }: DayDetailPanelProps) {
+  if (!isOpen) return null
+
+  const completedCases = cases.filter(c => {
+    const m = getMilestoneMap(c)
+    return m.patient_in && m.patient_out
+  })
+
+  const caseBreakdown = completedCases.map((c, idx) => {
+    const m = getMilestoneMap(c)
+    const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+    return {
+      id: c.id,
+      caseNumber: c.case_number,
+      procedure: proc?.name || 'Unknown',
+      totalTime: getTotalORTime(m) || 0,
+      preOp: getWheelsInToIncision(m) || 0,
+      surgical: getIncisionToClosing(m) || 0,
+      closing: getClosingTime(m) || 0,
+      emergence: getClosedToWheelsOut(m) || 0,
+      startTime: m.patient_in,
+    }
+  })
+
+  const totalORTime = calculateSum(caseBreakdown.map(c => c.totalTime)) || 0
+  const totalSurgical = calculateSum(caseBreakdown.map(c => c.surgical)) || 0
+  const turnovers = getAllSurgicalTurnovers(completedCases)
+  const avgTurnover = calculateAverage(turnovers)
+
+  // Phase breakdown for donut chart
+  const phaseData = [
+    { name: 'Pre-Op', value: calculateSum(caseBreakdown.map(c => c.preOp)) || 0 },
+    { name: 'Surgical', value: calculateSum(caseBreakdown.map(c => c.surgical)) || 0 },
+    { name: 'Closing', value: calculateSum(caseBreakdown.map(c => c.closing)) || 0 },
+    { name: 'Emergence', value: calculateSum(caseBreakdown.map(c => c.emergence)) || 0 },
+  ].filter(d => d.value > 0)
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+      
+      {/* Panel */}
+      <div className="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">{formatDateDisplay(date)}</h2>
+            <p className="text-sm text-slate-500">{completedCases.length} cases completed</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {completedCases.length === 0 ? (
+            <div className="text-center py-12">
+              <CalendarDaysIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <p className="text-slate-500">No completed cases on this day</p>
+            </div>
+          ) : (
+            <>
+              {/* Day Summary Stats */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <p className="text-sm text-slate-500">Total OR Time</p>
+                  <p className="text-xl font-bold text-slate-900">{formatMinutesToHHMMSS(totalORTime)}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <p className="text-sm text-slate-500">Surgical Time</p>
+                  <p className="text-xl font-bold text-slate-900">{formatMinutesToHHMMSS(totalSurgical)}</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <p className="text-sm text-slate-500">Avg Turnover</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {turnovers.length > 0 ? formatMinutesToHHMMSS(avgTurnover) : 'N/A'}
+                  </p>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <p className="text-sm text-slate-500">OR Uptime</p>
+                  <p className="text-xl font-bold text-slate-900">
+                    {totalORTime > 0 ? `${Math.round((totalSurgical / totalORTime) * 100)}%` : '--'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Phase Distribution */}
+              {phaseData.length > 0 && (
+                <div className="bg-white rounded-lg border border-slate-200 p-4">
+                  <h3 className="text-sm font-semibold text-slate-900 mb-3">Time Distribution</h3>
+                  <div className="flex items-center gap-6">
+                    <DonutChart
+                      data={phaseData}
+                      index="name"
+                      category="value"
+                      colors={['blue', 'cyan', 'emerald', 'amber']}
+                      className="h-32 w-32"
+                      showLabel={false}
+                      showAnimation={true}
+                    />
+                    <Legend
+                      categories={phaseData.map(d => d.name)}
+                      colors={['blue', 'cyan', 'emerald', 'amber']}
+                      className="flex-col"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Cases List */}
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900 mb-3">Cases</h3>
+                <div className="space-y-3">
+                  {caseBreakdown.map((c, idx) => (
+                    <Link
+                      key={c.id}
+                      href={`/cases/${c.id}`}
+                      className="block bg-white rounded-lg border border-slate-200 p-4 hover:border-blue-300 hover:shadow-sm transition-all"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{c.procedure}</p>
+                            <p className="text-xs text-slate-400">{c.caseNumber}</p>
+                          </div>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-900">
+                          {formatMinutesToHHMMSS(c.totalTime)}
+                        </span>
+                      </div>
+                      
+                      {/* Mini phase bar */}
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                        {c.preOp > 0 && (
+                          <div className="h-full bg-blue-500" style={{ width: `${(c.preOp / c.totalTime) * 100}%` }} />
+                        )}
+                        {c.surgical > 0 && (
+                          <div className="h-full bg-cyan-500" style={{ width: `${(c.surgical / c.totalTime) * 100}%` }} />
+                        )}
+                        {c.closing > 0 && (
+                          <div className="h-full bg-emerald-500" style={{ width: `${(c.closing / c.totalTime) * 100}%` }} />
+                        )}
+                        {c.emergence > 0 && (
+                          <div className="h-full bg-amber-500" style={{ width: `${(c.emergence / c.totalTime) * 100}%` }} />
+                        )}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// MAIN PAGE COMPONENT
+// ============================================
+
+export default function SurgeonPerformancePage() {
   const supabase = createClient()
-  const { userData, loading: userLoading } = useUser()
-  const facilityId = userData.facilityId
-  const facilityTimezone = userData.facilityTimezone
+  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
   
+  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
-  const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
-  const [selectedDate, setSelectedDate] = useState(getLocalDateString())
-  const [selectedProcedureFilter, setSelectedProcedureFilter] = useState<string>('all')
+  const [timePeriod, setTimePeriod] = useState('month')
   
-  // Cases for different time periods
-  const [dayCases, setDayCases] = useState<CaseWithMilestones[]>([])
-  const [last30DaysCases, setLast30DaysCases] = useState<CaseWithMilestones[]>([])
-  const [allTimeCases, setAllTimeCases] = useState<CaseWithMilestones[]>([])
-  
+  const [allCases, setAllCases] = useState<CaseWithMilestones[]>([])
   const [loading, setLoading] = useState(true)
   const [initialLoading, setInitialLoading] = useState(true)
+  
+  // Day detail panel
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [selectedDayCases, setSelectedDayCases] = useState<CaseWithMilestones[]>([])
 
-  // Fetch surgeons on mount
+  // Determine facility
   useEffect(() => {
-    if (!facilityId) return
+    if (userLoading) return
+    
+    if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
+      const impersonation = getImpersonationState()
+      if (impersonation?.facilityId) {
+        setEffectiveFacilityId(impersonation.facilityId)
+      }
+    } else if (userData.facilityId) {
+      setEffectiveFacilityId(userData.facilityId)
+    }
+  }, [userLoading, isGlobalAdmin, userData])
+
+  // Fetch surgeons
+  useEffect(() => {
+    if (!effectiveFacilityId) return
     
     async function fetchSurgeons() {
       const { data: surgeonRole } = await supabase
@@ -91,312 +388,205 @@ export default function SurgeonAnalysisPage() {
       const { data: surgeonsData } = await supabase
         .from('users')
         .select('id, first_name, last_name, role_id')
-        .eq('facility_id', facilityId)
-
-      const { data: proceduresData } = await supabase
-        .from('procedure_types')
-        .select('id, name')
-        .eq('facility_id', facilityId)
-        .order('name')
+        .eq('facility_id', effectiveFacilityId)
 
       setSurgeons(
         (surgeonsData?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || []
       )
-      setProcedures(proceduresData || [])
       setInitialLoading(false)
     }
     fetchSurgeons()
-  }, [facilityId])
+  }, [effectiveFacilityId])
 
-  // Fetch cases when surgeon or date changes
+  // Fetch cases for selected period
   useEffect(() => {
-    if (!selectedSurgeon) {
-      setDayCases([])
-      setLast30DaysCases([])
-      setAllTimeCases([])
+    if (!selectedSurgeon || !effectiveFacilityId) {
+      setAllCases([])
       setLoading(false)
       return
     }
 
     async function fetchCases() {
       setLoading(true)
+      
+      const { startDate, endDate } = getDateRange(timePeriod)
 
-      // Calculate date ranges
-      const today = new Date()
-      const thirtyDaysAgo = new Date(today)
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-      // Query for selected day
-      const { data: dayData } = await supabase
+      const { data } = await supabase
         .from('cases')
         .select(`
-          id,
-          case_number,
-          scheduled_date,
-          start_time,
-          surgeon_id,
+          id, case_number, scheduled_date, start_time, surgeon_id,
           surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
           procedure_types (id, name),
           or_rooms (id, name),
-          case_milestones (
-            milestone_type_id,
-            recorded_at,
-            milestone_types (name)
-          )
+          case_milestones (milestone_type_id, recorded_at, milestone_types (name))
         `)
-        .eq('facility_id', facilityId)
+        .eq('facility_id', effectiveFacilityId)
         .eq('surgeon_id', selectedSurgeon)
-        .eq('scheduled_date', selectedDate)
-        .order('start_time', { ascending: true })
+        .gte('scheduled_date', getLocalDateString(startDate))
+        .lte('scheduled_date', getLocalDateString(endDate))
+        .order('scheduled_date', { ascending: true })
 
-      // Query for last 30 days
-      const { data: last30Data } = await supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          start_time,
-          surgeon_id,
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-          procedure_types (id, name),
-          or_rooms (id, name),
-          case_milestones (
-            milestone_type_id,
-            recorded_at,
-            milestone_types (name)
-          )
-        `)
-        .eq('facility_id', facilityId)
-        .eq('surgeon_id', selectedSurgeon)
-        .gte('scheduled_date', getLocalDateString(thirtyDaysAgo))
-        .lte('scheduled_date', getLocalDateString(today))
-
-      // Query for all time
-      const { data: allTimeData } = await supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          start_time,
-          surgeon_id,
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-          procedure_types (id, name),
-          or_rooms (id, name),
-          case_milestones (
-            milestone_type_id,
-            recorded_at,
-            milestone_types (name)
-          )
-        `)
-        .eq('facility_id', facilityId)
-        .eq('surgeon_id', selectedSurgeon)
-
-      setDayCases((dayData as unknown as CaseWithMilestones[]) || [])
-      setLast30DaysCases((last30Data as unknown as CaseWithMilestones[]) || [])
-      setAllTimeCases((allTimeData as unknown as CaseWithMilestones[]) || [])
+      setAllCases((data as unknown as CaseWithMilestones[]) || [])
       setLoading(false)
     }
 
     fetchCases()
-  }, [selectedSurgeon, selectedDate])
+  }, [selectedSurgeon, timePeriod, effectiveFacilityId])
 
-  // Get completed cases (have patient_in and patient_out milestones)
-  const getCompletedCases = (cases: CaseWithMilestones[]) => {
-    return cases.filter(c => {
-      const milestones = getMilestoneMap(c)
-      return milestones.patient_in && milestones.patient_out
+  // Calculate daily metrics
+  const dailyMetrics = useMemo((): DailyMetric[] => {
+    const byDate: { [key: string]: CaseWithMilestones[] } = {}
+    
+    allCases.forEach(c => {
+      const date = c.scheduled_date
+      if (!byDate[date]) byDate[date] = []
+      byDate[date].push(c)
     })
-  }
 
-  // Calculate metrics for a set of cases
-  const calculateMetrics = (cases: CaseWithMilestones[]) => {
-    const completedCases = getCompletedCases(cases)
-    
-    const orTimes = completedCases.map(c => getTotalORTime(getMilestoneMap(c)))
-    const surgicalTimes = completedCases.map(c => getSurgicalTime(getMilestoneMap(c)))
-    const incisionToClosingTimes = completedCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
-    const wheelsInToIncisionTimes = completedCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
-    const closingTimes = completedCases.map(c => getClosingTime(getMilestoneMap(c)))
-    const closedToWheelsOutTimes = completedCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
-    
-    // Get first case info
-    const firstCase = completedCases.length > 0 ? completedCases[0] : null
-    const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
-    const firstCaseScheduledTime = firstCase?.start_time || null
-
-    // Calculate turnovers (both return seconds now)
-    const roomTurnovers = getAllTurnovers(completedCases)
-    const surgicalTurnovers = getAllSurgicalTurnovers(completedCases)
-
-    // Calculate total times for uptime calculation
-    const totalORTime = calculateSum(orTimes) || 0
-    const totalSurgicalTime = calculateSum(incisionToClosingTimes) || 0
-    
-    // Uptime percentage (surgical time / total OR time)
-    const uptimePercent = totalORTime > 0 
-      ? Math.round((totalSurgicalTime / totalORTime) * 100) 
-      : 0
-
-    return {
-      totalCases: completedCases.length,
-      firstCaseStartTime: firstCaseTime,
-      firstCaseScheduledTime: firstCaseScheduledTime,
-      totalORTime: totalORTime,
-      totalSurgicalTime: totalSurgicalTime,
-      uptimePercent: uptimePercent,
-      avgORTime: calculateAverage(orTimes),
-      avgSurgicalTime: calculateAverage(surgicalTimes),
-      avgWheelsInToIncision: calculateAverage(wheelsInToIncisionTimes),
-      avgIncisionToClosing: calculateAverage(incisionToClosingTimes),
-      avgClosingTime: calculateAverage(closingTimes),
-      avgClosedToWheelsOut: calculateAverage(closedToWheelsOutTimes),
-      avgRoomTurnover: calculateAverage(roomTurnovers),
-      avgSurgicalTurnover: calculateAverage(surgicalTurnovers),
-      roomTurnoverCount: roomTurnovers.length,
-      surgicalTurnoverCount: surgicalTurnovers.length,
-    }
-  }
-
-  // Memoized metrics
-  const dayMetrics = useMemo(() => calculateMetrics(dayCases), [dayCases])
-  const last30Metrics = useMemo(() => calculateMetrics(last30DaysCases), [last30DaysCases])
-  const allTimeMetrics = useMemo(() => calculateMetrics(allTimeCases), [allTimeCases])
-
-  // Calculate percentage improvements
-  const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
-  const turnoverVsAllTime = calculatePercentageChange(dayMetrics.avgRoomTurnover, allTimeMetrics.avgRoomTurnover)
-  
-  // Calculate surgical turnover improvement (today vs 30-day average)
-  const surgicalTurnoverVs30Day = calculatePercentageChange(dayMetrics.avgSurgicalTurnover, last30Metrics.avgSurgicalTurnover)
-  
-  // Calculate uptime improvement (today vs all-time average)
-  const uptimeImprovement = allTimeMetrics.uptimePercent > 0 
-    ? dayMetrics.uptimePercent - allTimeMetrics.uptimePercent
-    : null
-
-  // Get case breakdown for the stacked bar chart
-  const getCaseBreakdown = () => {
-    const completedCases = getCompletedCases(dayCases)
-    
-    return completedCases.map(c => {
-      const milestones = getMilestoneMap(c)
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+    return Object.entries(byDate).map(([date, dayCases]) => {
+      const completed = dayCases.filter(c => {
+        const m = getMilestoneMap(c)
+        return m.patient_in && m.patient_out
+      })
+      
+      const orTimes = completed.map(c => getTotalORTime(getMilestoneMap(c)))
+      const surgicalTimes = completed.map(c => getIncisionToClosing(getMilestoneMap(c)))
+      const turnovers = getAllSurgicalTurnovers(completed)
+      
+      const totalOR = calculateSum(orTimes) || 0
+      const totalSurgical = calculateSum(surgicalTimes) || 0
       
       return {
-        id: c.id,
-        caseNumber: c.case_number,
-        procedureName: procType?.name || 'Unknown',
-        totalORTime: getTotalORTime(milestones) || 0,
-        wheelsInToIncision: getWheelsInToIncision(milestones) || 0,
-        incisionToClosing: getIncisionToClosing(milestones) || 0,
-        closingTime: getClosingTime(milestones) || 0,
-        closedToWheelsOut: getClosedToWheelsOut(milestones) || 0,
+        date: formatDateShort(date),
+        rawDate: date,
+        cases: completed.length,
+        avgORTime: calculateAverage(orTimes) || 0,
+        avgSurgicalTime: calculateAverage(surgicalTimes) || 0,
+        avgTurnover: calculateAverage(turnovers) || 0,
+        uptime: totalOR > 0 ? Math.round((totalSurgical / totalOR) * 100) : 0,
+      }
+    }).sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [allCases])
+
+  // Tracker data with click handler
+  const trackerData: TrackerDay[] = useMemo(() => {
+    const turnoverTarget = 15
+    
+    return dailyMetrics.map(d => {
+      let color: Color = 'slate'
+      
+      if (d.cases === 0) {
+        color = 'slate'
+      } else if (d.avgTurnover === 0 || d.cases < 2) {
+        color = 'blue' // Has cases but no turnover data
+      } else if (d.avgTurnover <= turnoverTarget) {
+        color = 'emerald'
+      } else if (d.avgTurnover <= turnoverTarget * 1.5) {
+        color = 'amber'
+      } else {
+        color = 'rose'
+      }
+      
+      return {
+        color,
+        tooltip: `${d.date}: ${d.cases} cases${d.avgTurnover > 0 ? `, ${formatMinutesToHHMMSS(d.avgTurnover)} avg turnover` : ''}`,
+        date: d.rawDate,
       }
     })
-  }
+  }, [dailyMetrics])
 
-  // Get procedure performance data
-  const getProcedurePerformance = () => {
-    const completedCases = getCompletedCases(dayCases)
-    const completed30DayCases = getCompletedCases(last30DaysCases)
+  // Period totals
+  const periodStats = useMemo(() => {
+    const completed = allCases.filter(c => {
+      const m = getMilestoneMap(c)
+      return m.patient_in && m.patient_out
+    })
     
-    const filteredCases = selectedProcedureFilter === 'all' 
-      ? completedCases 
-      : completedCases.filter(c => {
-          const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-          return procType?.id === selectedProcedureFilter
-        })
-
-    const filteredOrTimes = filteredCases.map(c => getTotalORTime(getMilestoneMap(c)))
-    const filteredSurgicalTimes = filteredCases.map(c => getSurgicalTime(getMilestoneMap(c)))
-    const filteredWheelsIn = filteredCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
-    const filteredIncisionClosing = filteredCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
-    const filteredClosing = filteredCases.map(c => getClosingTime(getMilestoneMap(c)))
-    const filteredWheelsOut = filteredCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
-
-    const baselineCases = selectedProcedureFilter === 'all' ? completed30DayCases : completedCases
-    const baselineOrTimes = baselineCases.map(c => getTotalORTime(getMilestoneMap(c)))
-    const baselineSurgicalTimes = baselineCases.map(c => getSurgicalTime(getMilestoneMap(c)))
-    const baselineWheelsIn = baselineCases.map(c => getWheelsInToIncision(getMilestoneMap(c)))
-    const baselineIncisionClosing = baselineCases.map(c => getIncisionToClosing(getMilestoneMap(c)))
-    const baselineClosing = baselineCases.map(c => getClosingTime(getMilestoneMap(c)))
-    const baselineWheelsOut = baselineCases.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
-
+    const orTimes = completed.map(c => getTotalORTime(getMilestoneMap(c)))
+    const surgicalTimes = completed.map(c => getIncisionToClosing(getMilestoneMap(c)))
+    const turnovers = getAllSurgicalTurnovers(completed)
+    
     return {
-      procedure: {
-        avgORTime: calculateAverage(filteredOrTimes),
-        avgSurgicalTime: calculateAverage(filteredSurgicalTimes),
-        avgWheelsInToIncision: calculateAverage(filteredWheelsIn),
-        avgIncisionToClosing: calculateAverage(filteredIncisionClosing),
-        avgClosingTime: calculateAverage(filteredClosing),
-        avgClosedToWheelsOut: calculateAverage(filteredWheelsOut),
-      },
-      baseline: {
-        avgORTime: calculateAverage(baselineOrTimes),
-        avgSurgicalTime: calculateAverage(baselineSurgicalTimes),
-        avgWheelsInToIncision: calculateAverage(baselineWheelsIn),
-        avgIncisionToClosing: calculateAverage(baselineIncisionClosing),
-        avgClosingTime: calculateAverage(baselineClosing),
-        avgClosedToWheelsOut: calculateAverage(baselineWheelsOut),
-      },
-      baselineLabel: selectedProcedureFilter === 'all' ? '30-Day Avg' : 'Day Average'
+      totalCases: completed.length,
+      avgORTime: calculateAverage(orTimes) || 0,
+      avgSurgicalTime: calculateAverage(surgicalTimes) || 0,
+      avgTurnover: calculateAverage(turnovers) || 0,
+      turnoverCount: turnovers.length,
+      totalORTime: calculateSum(orTimes) || 0,
     }
-  }
+  }, [allCases])
 
-  const caseBreakdown = useMemo(() => getCaseBreakdown(), [dayCases])
-  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases, selectedProcedureFilter])
+  // Procedure breakdown
+  const procedureBreakdown = useMemo(() => {
+    const completed = allCases.filter(c => {
+      const m = getMilestoneMap(c)
+      return m.patient_in && m.patient_out
+    })
+    
+    const byProcedure: { [key: string]: { times: number[]; count: number } } = {}
+    
+    completed.forEach(c => {
+      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      const name = proc?.name || 'Unknown'
+      if (!byProcedure[name]) byProcedure[name] = { times: [], count: 0 }
+      byProcedure[name].times.push(getTotalORTime(getMilestoneMap(c)) || 0)
+      byProcedure[name].count++
+    })
 
-  const selectedSurgeonData = selectedSurgeon ? surgeons.find(s => s.id === selectedSurgeon) : null
-  const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
+    return Object.entries(byProcedure)
+      .map(([name, data]) => ({
+        name,
+        value: data.count,
+        avgTime: calculateAverage(data.times) || 0,
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [allCases])
 
-  // ============================================
-  // FILTERS COMPONENT (for header actions)
-  // ============================================
+  // Handle day click
+  const handleDayClick = useCallback((date: string) => {
+    const dayCases = allCases.filter(c => c.scheduled_date === date)
+    setSelectedDayCases(dayCases)
+    setSelectedDay(date)
+  }, [allCases])
+
+  const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
+  const { label: periodLabel } = getDateRange(timePeriod)
+
+  // Filters component
   const FiltersComponent = (
-    <div className="flex items-center gap-4">
-      {/* Surgeon Dropdown */}
-      <div>
-        <select
-          value={selectedSurgeon || ''}
-          onChange={(e) => setSelectedSurgeon(e.target.value || null)}
-          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-        >
-          <option value="">Choose surgeon...</option>
-          {surgeons.map(s => (
-            <option key={s.id} value={s.id}>
-              Dr. {s.first_name} {s.last_name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Date Picker */}
-      <div>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-        />
-      </div>
+    <div className="flex items-center gap-3">
+      <select
+        value={selectedSurgeon || ''}
+        onChange={(e) => setSelectedSurgeon(e.target.value || null)}
+        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+      >
+        <option value="">Choose surgeon...</option>
+        {surgeons.map(s => (
+          <option key={s.id} value={s.id}>Dr. {s.first_name} {s.last_name}</option>
+        ))}
+      </select>
+      
+      <select
+        value={timePeriod}
+        onChange={(e) => setTimePeriod(e.target.value)}
+        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+      >
+        <option value="week">Last 7 Days</option>
+        <option value="month">Last 30 Days</option>
+        <option value="quarter">Last 90 Days</option>
+        <option value="year">Last Year</option>
+      </select>
     </div>
   )
 
-  // ============================================
-  // LOADING STATE
-  // ============================================
-  if (userLoading) {
+  // Loading states
+  if (userLoading || initialLoading) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-slate-50/50">
           <Container className="py-8">
             <div className="flex items-center justify-center py-24">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Loading...</p>
-              </div>
+              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
           </Container>
         </div>
@@ -404,21 +594,14 @@ export default function SurgeonAnalysisPage() {
     )
   }
 
-  // ============================================
-  // NO FACILITY STATE
-  // ============================================
-  if (!facilityId) {
+  if (!effectiveFacilityId) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-slate-50/50">
           <Container className="py-8">
-            <AnalyticsPageHeader
-              title="Surgeon Performance"
-              description="Individual surgeon performance metrics"
-              icon={UserIcon}
-            />
+            <AnalyticsPageHeader title="Surgeon Performance" icon={UserIcon} />
             <div className="text-center py-24 text-slate-500">
-              No facility assigned to your account.
+              {isGlobalAdmin ? 'Select a facility to view surgeon analytics.' : 'No facility assigned.'}
             </div>
           </Container>
         </div>
@@ -426,428 +609,224 @@ export default function SurgeonAnalysisPage() {
     )
   }
 
-  // ============================================
-  // MAIN RENDER
-  // ============================================
   return (
     <DashboardLayout>
       <div className="min-h-screen bg-slate-50/50">
         <Container className="py-8">
-          {/* Page Header with Breadcrumb */}
           <AnalyticsPageHeader
             title="Surgeon Performance"
-            description="Individual surgeon performance metrics"
+            description="Track trends over time — click any day to see details"
             icon={UserIcon}
             actions={FiltersComponent}
           />
 
-          {initialLoading ? (
-            <div className="flex items-center justify-center py-24">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Loading surgeons...</p>
-              </div>
-            </div>
-          ) : !selectedSurgeon ? (
+          {!selectedSurgeon ? (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <UserIcon className="w-8 h-8 text-slate-400" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Surgeon</h3>
-              <p className="text-slate-500">Choose a surgeon from the dropdown above to view their analytics</p>
+              <p className="text-slate-500">Choose a surgeon to view their performance trends</p>
             </div>
           ) : loading ? (
             <div className="flex items-center justify-center py-24">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Loading case data...</p>
-              </div>
+              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             <div className="space-y-6">
               {/* Surgeon Header */}
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <span className="text-lg font-bold text-blue-600">
-                    {selectedSurgeonData?.first_name?.charAt(0)}{selectedSurgeonData?.last_name?.charAt(0)}
-                  </span>
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">
-                    Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
-                  </h2>
-                  <p className="text-sm text-slate-500">{formatDateDisplay(selectedDate)}</p>
-                </div>
-              </div>
-
-              {/* Day Overview Section */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    <span className="text-xl font-bold text-white">
+                      {selectedSurgeonData?.first_name?.charAt(0)}{selectedSurgeonData?.last_name?.charAt(0)}
+                    </span>
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-900">Day Overview</h3>
-                    <p className="text-sm text-slate-500">Track your efficiency in the operating room</p>
-                  </div>
-                </div>
-
-                {/* Top Metrics Row */}
-                <div className="grid grid-cols-4 gap-4 mt-6">
-                  <div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      First Case Start Time
-                    </div>
-                    <div className="text-3xl font-bold text-slate-900">
-                      {formatTimeInTimezone(dayMetrics.firstCaseStartTime, facilityTimezone)}
-                    </div>
-                    {dayMetrics.firstCaseScheduledTime && (
-                      <div className="text-sm text-slate-500 mt-1">
-                        Scheduled: {(() => {
-                          const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
-                          const h = parseInt(hours)
-                          const suffix = h >= 12 ? 'pm' : 'am'
-                          const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
-                          return `${displayHour}:${minutes} ${suffix}`
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                      </svg>
-                      Total Case Count
-                    </div>
-                    <div className="text-3xl font-bold text-slate-900">
-                      {dayMetrics.totalCases}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Total OR Time
-                    </div>
-                    <div className="text-3xl font-bold text-slate-900">
-                      {formatMinutesToHHMMSS(dayMetrics.totalORTime)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Total Surgical Time
-                    </div>
-                    <div className="text-3xl font-bold text-slate-900">
-                      {formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Second Row - Turnovers and Uptime */}
-                <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
-                  {/* Surgical Turnover */}
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Avg. Surgical Turnover
-                    </div>
-                    {dayMetrics.surgicalTurnoverCount > 0 ? (
-                      <>
-                        <div className="text-3xl font-bold text-slate-900">
-                          {formatMinutesToHHMMSS(dayMetrics.avgSurgicalTurnover)}
-                        </div>
-                        <div className="flex items-center gap-4 mt-2 text-sm">
-                          {surgicalTurnoverVs30Day !== null && (
-                            <span className={`flex items-center gap-1 ${surgicalTurnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={surgicalTurnoverVs30Day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
-                              </svg>
-                              {Math.abs(surgicalTurnoverVs30Day)}%
-                            </span>
-                          )}
-                          <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgSurgicalTurnover)}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-2xl font-bold text-slate-400">N/A</div>
-                        <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Room Turnover */}
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                      Avg. Room Turnover
-                    </div>
-                    {dayMetrics.roomTurnoverCount > 0 ? (
-                      <>
-                        <div className="text-3xl font-bold text-slate-900">
-                          {formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}
-                        </div>
-                        <div className="flex items-center gap-4 mt-2 text-sm">
-                          {turnoverVs30Day !== null && (
-                            <span className={`flex items-center gap-1 ${turnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={turnoverVs30Day >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
-                              </svg>
-                              {Math.abs(turnoverVs30Day)}%
-                            </span>
-                          )}
-                          <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-2xl font-bold text-slate-400">N/A</div>
-                        <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
-                      </>
-                    )}
-                  </div>
-                  
-                  {/* Uptime vs Downtime */}
-                  <div className="bg-slate-50 rounded-lg p-4 col-span-2">
-                    <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                      Uptime vs Downtime
-                    </div>
-                    
-                    {dayMetrics.totalORTime > 0 ? (
-                      <>
-                        <div className="flex items-baseline gap-2 mb-2">
-                          <span className="text-2xl font-bold text-slate-900">{dayMetrics.uptimePercent}%</span>
-                          <span className="text-slate-400">vs.</span>
-                          <span className="text-xl font-semibold text-slate-600">{100 - dayMetrics.uptimePercent}%</span>
-                          {uptimeImprovement !== null && (
-                            <span className={`flex items-center gap-1 text-sm ml-2 ${uptimeImprovement >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={uptimeImprovement >= 0 ? "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" : "M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"} />
-                              </svg>
-                              {Math.abs(uptimeImprovement).toFixed(1)}%
-                              <span className="text-slate-400 ml-1">improvement in uptime</span>
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="h-3 w-full rounded-full overflow-hidden flex">
-                          <div className="h-full bg-blue-600 transition-all" style={{ width: `${dayMetrics.uptimePercent}%` }} />
-                          <div className="h-full bg-red-500 transition-all" style={{ width: `${100 - dayMetrics.uptimePercent}%` }} />
-                        </div>
-                        
-                        <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                          <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 rounded-full bg-blue-600" />
-                            <span>Surgical</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-2 h-2 rounded-full bg-red-500" />
-                            <span>Other</span>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-2xl font-bold text-slate-400">--</div>
-                    )}
+                    <h2 className="text-xl font-bold text-slate-900">
+                      Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
+                    </h2>
+                    <p className="text-sm text-slate-500">{periodLabel}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Cases and Procedure Performance */}
+              {/* KPI Row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KPICard
+                  title="Total Cases"
+                  value={periodStats.totalCases.toString()}
+                  subtitle={`${periodLabel.toLowerCase()}`}
+                  icon={CalendarDaysIcon}
+                />
+                <KPICard
+                  title="Avg OR Time"
+                  value={formatMinutesToHHMMSS(periodStats.avgORTime)}
+                  subtitle="per case"
+                  icon={ChartBarIcon}
+                />
+                <KPICard
+                  title="Avg Turnover"
+                  value={periodStats.turnoverCount > 0 ? formatMinutesToHHMMSS(periodStats.avgTurnover) : 'N/A'}
+                  subtitle={periodStats.turnoverCount > 0 ? `${periodStats.turnoverCount} turnovers` : 'Need 2+ cases/day'}
+                />
+                <KPICard
+                  title="Total OR Time"
+                  value={formatMinutesToHHMMSS(periodStats.totalORTime)}
+                  subtitle="cumulative"
+                />
+              </div>
+
+              {/* Performance Tracker - Clickable! */}
+              <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Daily Performance</h3>
+                    <p className="text-sm text-slate-500">Click any day to see case details</p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-sm bg-emerald-500" />
+                      <span>On target</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-sm bg-amber-500" />
+                      <span>Near target</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-sm bg-rose-500" />
+                      <span>Over target</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-sm bg-blue-500" />
+                      <span>No turnover data</span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Custom clickable tracker */}
+                <div className="flex flex-wrap gap-1">
+                  {trackerData.map((day, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleDayClick(day.date)}
+                      className={`
+                        w-4 h-8 rounded-sm transition-all hover:scale-110 hover:ring-2 hover:ring-offset-1
+                        ${day.color === 'emerald' ? 'bg-emerald-500 hover:ring-emerald-300' : ''}
+                        ${day.color === 'amber' ? 'bg-amber-500 hover:ring-amber-300' : ''}
+                        ${day.color === 'rose' ? 'bg-rose-500 hover:ring-rose-300' : ''}
+                        ${day.color === 'blue' ? 'bg-blue-500 hover:ring-blue-300' : ''}
+                        ${day.color === 'slate' ? 'bg-slate-200 hover:ring-slate-300' : ''}
+                      `}
+                      title={day.tooltip}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Charts Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Cases List */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center gap-2 mb-4">
-                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <div>
-                      <h3 className="font-semibold text-slate-900">Cases</h3>
-                      <p className="text-sm text-slate-500">{dayMetrics.totalCases} cases completed</p>
-                    </div>
-                  </div>
-
-                  {caseBreakdown.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400">
-                      No completed cases for this date
-                    </div>
+                {/* Trend Chart */}
+                <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6">
+                  <h3 className="text-base font-semibold text-slate-900 mb-1">Trends Over Time</h3>
+                  <p className="text-sm text-slate-500 mb-4">Click chart points to see day details</p>
+                  
+                  {dailyMetrics.length > 0 ? (
+                    <>
+                      <AreaChart
+                        className="h-56"
+                        data={dailyMetrics}
+                        index="date"
+                        categories={['avgORTime', 'avgTurnover']}
+                        colors={['blue', 'emerald']}
+                        valueFormatter={(v) => formatMinutesToHHMMSS(v)}
+                        showLegend={false}
+                        showAnimation={true}
+                        curveType="monotone"
+                        onValueChange={(v) => {
+                          if (v?.eventType === 'dot' && v.date) {
+                            const metric = dailyMetrics.find(d => d.date === v.date)
+                            if (metric) handleDayClick(metric.rawDate)
+                          }
+                        }}
+                      />
+                      <Legend
+                        className="mt-4"
+                        categories={['Avg OR Time', 'Avg Turnover']}
+                        colors={['blue', 'emerald']}
+                      />
+                    </>
                   ) : (
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                      {caseBreakdown.map((c, idx) => (
-                        <div key={c.id} className="flex items-center gap-3">
-                          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-slate-900 truncate">{c.procedureName}</span>
-                              <span className="text-sm text-slate-500">{formatMinutesToHHMMSS(c.totalORTime)}</span>
-                            </div>
-                            <div className="h-4 bg-slate-100 rounded-full overflow-hidden flex">
-                              {c.wheelsInToIncision > 0 && (
-                                <div 
-                                  className="h-full bg-blue-600" 
-                                  style={{ width: `${(c.wheelsInToIncision / maxCaseTime) * 100}%` }}
-                                  title={`Wheels-in to Incision: ${formatMinutesToHHMMSS(c.wheelsInToIncision)}`}
-                                />
-                              )}
-                              {c.incisionToClosing > 0 && (
-                                <div 
-                                  className="h-full bg-blue-400" 
-                                  style={{ width: `${(c.incisionToClosing / maxCaseTime) * 100}%` }}
-                                  title={`Incision to Closing: ${formatMinutesToHHMMSS(c.incisionToClosing)}`}
-                                />
-                              )}
-                              {c.closingTime > 0 && (
-                                <div 
-                                  className="h-full bg-emerald-500" 
-                                  style={{ width: `${(c.closingTime / maxCaseTime) * 100}%` }}
-                                  title={`Closing Time: ${formatMinutesToHHMMSS(c.closingTime)}`}
-                                />
-                              )}
-                              {c.closedToWheelsOut > 0 && (
-                                <div 
-                                  className="h-full bg-amber-400" 
-                                  style={{ width: `${(c.closedToWheelsOut / maxCaseTime) * 100}%` }}
-                                  title={`Closed to Wheels-Out: ${formatMinutesToHHMMSS(c.closedToWheelsOut)}`}
-                                />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="h-56 flex items-center justify-center text-slate-400">
+                      No data for this period
                     </div>
                   )}
-
-                  {/* Legend */}
-                  <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100 text-xs">
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-blue-600 rounded" />
-                      <span className="text-slate-500">Wheels-in to Incision</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-blue-400 rounded" />
-                      <span className="text-slate-500">Incision to Closing</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-emerald-500 rounded" />
-                      <span className="text-slate-500">Closing</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-amber-400 rounded" />
-                      <span className="text-slate-500">Wheels-Out</span>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Procedure Performance */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                      <h3 className="font-semibold text-slate-900">Procedure Performance</h3>
+                {/* Procedure Breakdown */}
+                <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6">
+                  <h3 className="text-base font-semibold text-slate-900 mb-1">Procedure Mix</h3>
+                  <p className="text-sm text-slate-500 mb-4">Cases by procedure type</p>
+                  
+                  {procedureBreakdown.length > 0 ? (
+                    <BarList
+                      data={procedureBreakdown.slice(0, 8).map(p => ({
+                        name: p.name,
+                        value: p.value,
+                        href: '#',
+                      }))}
+                      valueFormatter={(v) => `${v} cases`}
+                      color="blue"
+                    />
+                  ) : (
+                    <div className="py-8 text-center text-slate-400">
+                      No procedures found
                     </div>
-                    <select
-                      value={selectedProcedureFilter}
-                      onChange={(e) => setSelectedProcedureFilter(e.target.value)}
-                      className="px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    >
-                      <option value="all">All Procedures</option>
-                      {procedures.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* OR Time */}
-                    <div>
-                      <div className="text-sm text-slate-500 mb-1">OR Time</div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                            <div 
-                              className="h-full bg-blue-600 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgORTime)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                            <div 
-                              className="h-full bg-slate-400 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium text-slate-700 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgORTime)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Surgical Time */}
-                    <div>
-                      <div className="text-sm text-slate-500 mb-1">Surgical Time</div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                            <div 
-                              className="h-full bg-blue-600 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-semibold text-slate-900 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgSurgicalTime)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                            <div 
-                              className="h-full bg-slate-400 rounded"
-                              style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium text-slate-700 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgSurgicalTime)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Legend */}
-                    <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs">
-                      <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-blue-600 rounded" />
-                        <span className="text-slate-600">{selectedProcedureFilter === 'all' ? 'Today' : 'Procedure'}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 bg-slate-400 rounded" />
-                        <span className="text-slate-600">{procedurePerformance.baselineLabel}</span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Cases by Day Bar Chart */}
+              <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-6">
+                <h3 className="text-base font-semibold text-slate-900 mb-1">Cases per Day</h3>
+                <p className="text-sm text-slate-500 mb-4">Daily case volume — click bars to see details</p>
+                
+                {dailyMetrics.length > 0 ? (
+                  <BarChart
+                    className="h-48"
+                    data={dailyMetrics}
+                    index="date"
+                    categories={['cases']}
+                    colors={['blue']}
+                    valueFormatter={(v) => `${v} cases`}
+                    showLegend={false}
+                    showAnimation={true}
+                    onValueChange={(v) => {
+                      if (v?.eventType === 'bar' && v.date) {
+                        const metric = dailyMetrics.find(d => d.date === v.date)
+                        if (metric) handleDayClick(metric.rawDate)
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="h-48 flex items-center justify-center text-slate-400">
+                    No data for this period
+                  </div>
+                )}
               </div>
             </div>
           )}
+
+          {/* Day Detail Panel */}
+          <DayDetailPanel
+            isOpen={selectedDay !== null}
+            onClose={() => setSelectedDay(null)}
+            date={selectedDay || ''}
+            cases={selectedDayCases}
+            facilityTimezone={userData.facilityTimezone}
+          />
         </Container>
       </div>
     </DashboardLayout>
-    
   )
 }
