@@ -156,15 +156,15 @@ export default function CreateFacilityPage() {
           .select('name, body_region_id')
           .eq('is_active', true)
 
-        if (defaultProcs && defaultProcs.length > 0) {
-          await supabase
-            .from('procedure_types')
-            .insert(defaultProcs.map(p => ({
-              facility_id: facility.id,
-              name: p.name,
-              body_region_id: p.body_region_id,
-            })))
-        }
+if (defaultProcs && defaultProcs.length > 0) {
+  await supabase
+    .from('procedure_types')
+    .upsert(defaultProcs.map(p => ({
+      facility_id: facility.id,
+      name: p.name,
+      body_region_id: p.body_region_id,
+    })), { onConflict: 'facility_id,name', ignoreDuplicates: true })
+}
       }
 
  // 4. Send invite email if selected (uses token-based invite API)
