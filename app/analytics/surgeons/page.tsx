@@ -1250,7 +1250,7 @@ valueFormatter={(v) => v.toString()}
                       {caseBreakdown.length === 0 ? (
                         <div className="text-center py-8 text-slate-400">No completed cases for this date</div>
                       ) : (
-                        <div className="space-y-3 max-h-[400px] overflow-y-auto">
+<div className="space-y-3">
                           {caseBreakdown.map((c, idx) => (
                             <div key={c.id} className="flex items-center gap-3">
                               <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
