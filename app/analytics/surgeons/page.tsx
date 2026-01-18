@@ -51,6 +51,13 @@ interface Surgeon {
 interface ProcedureType {
   id: string
   name: string
+  technique_id?: string
+}
+
+interface ProcedureTechnique {
+  id: string
+  name: string
+  display_name: string
 }
 
 interface ProcedureBreakdown {
@@ -256,6 +263,7 @@ export default function SurgeonPerformancePage() {
   const [facilityTimezone, setFacilityTimezone] = useState<string>('America/New_York')
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
+  const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'day'>('overview')
   
@@ -304,7 +312,7 @@ export default function SurgeonPerformancePage() {
     fetchTimezone()
   }, [effectiveFacilityId])
 
-  // Fetch surgeons and procedures
+  // Fetch surgeons, procedures, and techniques
   useEffect(() => {
     if (!effectiveFacilityId) return
     
@@ -315,20 +323,26 @@ export default function SurgeonPerformancePage() {
         .eq('name', 'surgeon')
         .single()
 
-      const { data: surgeonsData } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, role_id')
-        .eq('facility_id', effectiveFacilityId)
-        .order('last_name')
+      const [surgeonsRes, proceduresRes, techniquesRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, first_name, last_name, role_id')
+          .eq('facility_id', effectiveFacilityId)
+          .order('last_name'),
+        supabase
+          .from('procedure_types')
+          .select('id, name, technique_id')
+          .eq('facility_id', effectiveFacilityId)
+          .order('name'),
+        supabase
+          .from('procedure_techniques')
+          .select('id, name, display_name')
+          .order('display_order'),
+      ])
 
-      const { data: proceduresData } = await supabase
-        .from('procedure_types')
-        .select('id, name')
-        .eq('facility_id', effectiveFacilityId)
-        .order('name')
-
-      setSurgeons((surgeonsData?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || [])
-      setProcedures(proceduresData || [])
+      setSurgeons((surgeonsRes.data?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || [])
+      setProcedures(proceduresRes.data || [])
+      setProcedureTechniques(techniquesRes.data || [])
       setInitialLoading(false)
     }
     fetchData()
@@ -337,7 +351,6 @@ export default function SurgeonPerformancePage() {
   // Helper to get date range (handles custom dates)
   const getEffectiveDateRange = () => {
     if (timePeriod === 'custom' && customStartDate && customEndDate) {
-      // Calculate previous period for custom range
       const start = new Date(customStartDate)
       const end = new Date(customEndDate)
       const periodLength = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
@@ -366,12 +379,12 @@ export default function SurgeonPerformancePage() {
       setLoading(true)
       const { startDate, endDate, prevStartDate, prevEndDate } = getEffectiveDateRange()
 
-      // Current period cases
+      // Current period cases - include technique info
       const { data: currentData } = await supabase
         .from('cases')
         .select(`
           id, case_number, scheduled_date, start_time, surgeon_id,
-          procedure_types (id, name),
+          procedure_types (id, name, technique_id),
           or_rooms (id, name),
           case_milestones (milestone_type_id, recorded_at, milestone_types (name))
         `)
@@ -386,7 +399,7 @@ export default function SurgeonPerformancePage() {
         .from('cases')
         .select(`
           id, case_number, scheduled_date, start_time, surgeon_id,
-          procedure_types (id, name),
+          procedure_types (id, name, technique_id),
           case_milestones (milestone_type_id, recorded_at, milestone_types (name))
         `)
         .eq('facility_id', effectiveFacilityId)
@@ -431,7 +444,7 @@ export default function SurgeonPerformancePage() {
       const caseSelect = `
         id, case_number, scheduled_date, start_time, surgeon_id,
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-        procedure_types (id, name),
+        procedure_types (id, name, technique_id),
         or_rooms (id, name),
         case_milestones (milestone_type_id, recorded_at, milestone_types (name))
       `
@@ -520,6 +533,126 @@ export default function SurgeonPerformancePage() {
       return m.patient_in && m.patient_out
     })
   }
+
+  // Helper to get surgical time from milestones (in minutes)
+  const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
+    const milestones = caseData.case_milestones || []
+    let incisionTimestamp: number | null = null
+    let closingTimestamp: number | null = null
+
+    milestones.forEach(m => {
+      const mType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
+      if (mType?.name === 'incision') {
+        incisionTimestamp = new Date(m.recorded_at).getTime()
+      } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
+        closingTimestamp = new Date(m.recorded_at).getTime()
+      }
+    })
+
+    if (incisionTimestamp !== null && closingTimestamp !== null) {
+      return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
+    }
+    return null
+  }
+
+  // ============================================
+  // ROBOTIC VS TRADITIONAL COMPARISON DATA
+  // ============================================
+
+  // Get robotic technique ID
+  const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
+  const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
+
+  // TKA Comparison Data (Robotic vs Traditional) - for this surgeon
+  const tkaComparisonData = useMemo(() => {
+    if (!roboticTechniqueId || !manualTechniqueId) return []
+
+    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
+
+    periodCases.forEach(c => {
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      // Check if this is a TKA (name contains TKA)
+      const procName = procType.name?.toUpperCase() || ''
+      if (!procName.includes('TKA')) return
+
+      const surgicalTime = getSurgicalTimeMinutes(c)
+      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return
+
+      const date = c.scheduled_date
+      if (!byDate[date]) {
+        byDate[date] = { robotic: [], traditional: [] }
+      }
+
+      if (procType.technique_id === roboticTechniqueId) {
+        byDate[date].robotic.push(surgicalTime)
+      } else if (procType.technique_id === manualTechniqueId) {
+        byDate[date].traditional.push(surgicalTime)
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, times]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Robotic (Mako)': times.robotic.length > 0 
+          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
+          : null,
+        'Traditional': times.traditional.length > 0 
+          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
+          : null,
+      }))
+      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [periodCases, roboticTechniqueId, manualTechniqueId])
+
+  // THA Comparison Data (Robotic vs Traditional) - for this surgeon
+  const thaComparisonData = useMemo(() => {
+    if (!roboticTechniqueId || !manualTechniqueId) return []
+
+    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
+
+    periodCases.forEach(c => {
+      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!procType) return
+
+      // Check if this is a THA (name contains THA)
+      const procName = procType.name?.toUpperCase() || ''
+      if (!procName.includes('THA')) return
+
+      const surgicalTime = getSurgicalTimeMinutes(c)
+      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return
+
+      const date = c.scheduled_date
+      if (!byDate[date]) {
+        byDate[date] = { robotic: [], traditional: [] }
+      }
+
+      if (procType.technique_id === roboticTechniqueId) {
+        byDate[date].robotic.push(surgicalTime)
+      } else if (procType.technique_id === manualTechniqueId) {
+        byDate[date].traditional.push(surgicalTime)
+      }
+    })
+
+    return Object.entries(byDate)
+      .map(([date, times]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        rawDate: date,
+        'Robotic (Mako)': times.robotic.length > 0 
+          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
+          : null,
+        'Traditional': times.traditional.length > 0 
+          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
+          : null,
+      }))
+      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+  }, [periodCases, roboticTechniqueId, manualTechniqueId])
+
+  // Check if we have comparison data to show
+  const hasComparisonData = tkaComparisonData.length > 0 || thaComparisonData.length > 0
 
   // Calculate metrics for day analysis
   const calculateDayMetrics = (cases: CaseWithMilestones[]) => {
@@ -652,7 +785,7 @@ export default function SurgeonPerformancePage() {
 
   const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases, selectedProcedureFilter])
 
-  // Daily trend data for overview chart - FIXED Y-axis formatting
+  // Daily trend data for overview chart
   const dailyTrendData = useMemo(() => {
     const byDate: { [key: string]: CaseWithMilestones[] } = {}
     periodCases.forEach(c => {
@@ -667,7 +800,7 @@ export default function SurgeonPerformancePage() {
         return {
           date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           rawDate: date,
-          'Cases': completed.length,  // Changed from 'cases' to 'Cases' for cleaner legend
+          'Cases': completed.length,
           avgORTime: Math.round((calculateAverage(orTimes) || 0) / 60),
         }
       })
@@ -824,7 +957,7 @@ export default function SurgeonPerformancePage() {
                     </div>
                   </div>
 
-                  {/* Trend Chart - FIXED Y-axis */}
+                  {/* Trend Chart */}
                   {dailyTrendData.length > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                       <h3 className="text-base font-semibold text-slate-900 mb-1">Daily Case Volume</h3>
@@ -843,33 +976,76 @@ export default function SurgeonPerformancePage() {
                     </div>
                   )}
 
-                  {/* Procedure Breakdown */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                    <h3 className="text-base font-semibold text-slate-900 mb-1">Procedure Breakdown</h3>
-                    <p className="text-sm text-slate-500 mb-4">Performance by procedure type</p>
-                    
-                    {procedureBreakdown.length > 0 ? (
-                      <div className="space-y-3">
-                        {procedureBreakdown.map(proc => {
-                          const consistency = getConsistencyLabel(proc.avg_surgical_seconds, proc.stddev_surgical_seconds)
-                          return (
-                            <div key={proc.procedure_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                              <div>
-                                <p className="font-medium text-slate-900">{proc.procedure_name}</p>
-                                <p className="text-sm text-slate-500">{proc.case_count} cases</p>
+                  {/* Procedure Breakdown + Comparison Charts Row */}
+                  <div className={`grid gap-6 ${hasComparisonData ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
+                    {/* Procedure Breakdown - narrower when comparison charts exist */}
+                    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 ${hasComparisonData ? '' : 'lg:col-span-3'}`}>
+                      <h3 className="text-base font-semibold text-slate-900 mb-1">Procedure Breakdown</h3>
+                      <p className="text-sm text-slate-500 mb-4">Performance by procedure type</p>
+                      
+                      {procedureBreakdown.length > 0 ? (
+                        <div className="space-y-3">
+                          {procedureBreakdown.map(proc => {
+                            const consistency = getConsistencyLabel(proc.avg_surgical_seconds, proc.stddev_surgical_seconds)
+                            return (
+                              <div key={proc.procedure_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                                <div>
+                                  <p className="font-medium text-slate-900">{proc.procedure_name}</p>
+                                  <p className="text-sm text-slate-500">{proc.case_count} cases</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-mono font-semibold text-slate-900">
+                                    {proc.avg_surgical_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_surgical_seconds)) : '--'}
+                                  </p>
+                                  <p className={`text-sm ${consistency.color}`}>{consistency.label}</p>
+                                </div>
                               </div>
-                              <div className="text-right">
-                                <p className="font-mono font-semibold text-slate-900">
-                                  {proc.avg_surgical_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_surgical_seconds)) : '--'}
-                                </p>
-                                <p className={`text-sm ${consistency.color}`}>{consistency.label}</p>
-                              </div>
-                            </div>
-                          )
-                        })}
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-400">No procedure data available</div>
+                      )}
+                    </div>
+
+                    {/* TKA Comparison Chart */}
+                    {tkaComparisonData.length > 0 && (
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                        <h3 className="text-base font-semibold text-slate-900 mb-1">TKA Surgical Time</h3>
+                        <p className="text-sm text-slate-500 mb-4">Robotic vs Traditional (minutes)</p>
+                        <AreaChart
+                          className="h-52"
+                          data={tkaComparisonData}
+                          index="date"
+                          categories={['Robotic (Mako)', 'Traditional']}
+                          colors={['cyan', 'rose']}
+                          valueFormatter={(v) => `${v} min`}
+                          yAxisWidth={40}
+                          showAnimation={true}
+                          connectNulls={true}
+                          showLegend={true}
+                        />
                       </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-400">No procedure data available</div>
+                    )}
+
+                    {/* THA Comparison Chart */}
+                    {thaComparisonData.length > 0 && (
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                        <h3 className="text-base font-semibold text-slate-900 mb-1">THA Surgical Time</h3>
+                        <p className="text-sm text-slate-500 mb-4">Robotic vs Traditional (minutes)</p>
+                        <AreaChart
+                          className="h-52"
+                          data={thaComparisonData}
+                          index="date"
+                          categories={['Robotic (Mako)', 'Traditional']}
+                          colors={['cyan', 'rose']}
+                          valueFormatter={(v) => `${v} min`}
+                          yAxisWidth={40}
+                          showAnimation={true}
+                          connectNulls={true}
+                          showLegend={true}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
