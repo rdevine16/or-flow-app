@@ -60,12 +60,13 @@ export default function ImplantCompaniesPage() {
     setLoading(false)
   }
 
-  // Filter and group companies
+  // Filter companies by search
   const filteredCompanies = companies.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
-  const globalCompanies = filteredCompanies.filter(c => c.facility_id === null)
-  const facilityCompanies = filteredCompanies.filter(c => c.facility_id !== null)
+
+  const globalCount = companies.filter(c => c.facility_id === null).length
+  const customCount = companies.filter(c => c.facility_id !== null).length
 
   const openAddModal = () => {
     setFormData({ name: '' })
@@ -149,77 +150,25 @@ export default function ImplantCompaniesPage() {
       <Container className="py-8">
         <SettingsLayout
           title="Implant Companies"
-          description="Manage surgical implant vendors for case assignments"
+          description="Manage surgical implant vendors for case assignments."
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Search */}
-              <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search companies..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
-              </div>
-
-              {/* Global Companies */}
+              {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-xs font-medium rounded">
-                      Global
-                    </span>
-                    <h3 className="font-medium text-slate-900">Standard Implant Companies</h3>
-                  </div>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Major implant vendors available to all facilities
-                  </p>
-                </div>
-
-                <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                  {globalCompanies.length === 0 ? (
-                    <div className="px-6 py-4 text-center text-slate-500 text-sm">
-                      {searchQuery ? 'No matching global companies' : 'No global companies defined'}
-                    </div>
-                  ) : (
-                    globalCompanies.map((company) => (
-                      <div key={company.id} className="px-6 py-3 flex items-center justify-between hover:bg-slate-50">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-                            <span className="text-sm font-semibold text-slate-600">
-                              {company.name.charAt(0)}
-                            </span>
-                          </div>
-                          <p className="font-medium text-slate-900">{company.name}</p>
-                        </div>
-                        <span className="text-xs text-slate-400">Read-only</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Facility Companies */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                        Custom
-                      </span>
-                      <h3 className="font-medium text-slate-900">Facility Implant Companies</h3>
-                    </div>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Additional vendors specific to your facility
+                    <h3 className="font-medium text-slate-900">Implant Companies</h3>
+                    <p className="text-sm text-slate-500">
+                      {globalCount} global · {customCount} custom
                     </p>
                   </div>
                   <button
@@ -233,87 +182,147 @@ export default function ImplantCompaniesPage() {
                   </button>
                 </div>
 
-                {facilityCompanies.length === 0 ? (
-                  <div className="px-6 py-8 text-center">
+                {/* Search */}
+                <div className="px-6 py-3 border-b border-slate-200 bg-slate-50">
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search companies..."
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Table */}
+                {filteredCompanies.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
                     <p className="text-slate-500">
-                      {searchQuery ? 'No matching custom companies' : 'No custom companies defined'}
+                      {searchQuery ? 'No companies match your search.' : 'No implant companies configured.'}
                     </p>
                     {!searchQuery && (
                       <button
                         onClick={openAddModal}
                         className="mt-2 text-blue-600 hover:underline text-sm"
                       >
-                        Add a custom implant company
+                        Add your first company
                       </button>
                     )}
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
-                    {facilityCompanies.map((company) => (
-                      <div key={company.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                            <span className="text-sm font-semibold text-blue-600">
-                              {company.name.charAt(0)}
-                            </span>
-                          </div>
-                          <p className="font-medium text-slate-900">{company.name}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => openEditModal(company)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  <div className="overflow-x-auto">
+                    {/* Table Header */}
+                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      <div className="col-span-6">Company Name</div>
+                      <div className="col-span-3">Type</div>
+                      <div className="col-span-3 text-right">Actions</div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="divide-y divide-slate-100">
+                      {filteredCompanies.map((company) => {
+                        const isGlobal = company.facility_id === null
+
+                        return (
+                          <div 
+                            key={company.id} 
+                            className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          {deleteConfirm === company.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(company.id)}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
-                                Cancel
-                              </button>
+                            {/* Company Name */}
+                            <div className="col-span-6">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                  isGlobal ? 'bg-slate-100' : 'bg-blue-100'
+                                }`}>
+                                  <span className={`text-sm font-semibold ${
+                                    isGlobal ? 'text-slate-600' : 'text-blue-600'
+                                  }`}>
+                                    {company.name.charAt(0)}
+                                  </span>
+                                </div>
+                                <p className="font-medium text-slate-900">{company.name}</p>
+                              </div>
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirm(company.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+
+                            {/* Type Badge */}
+                            <div className="col-span-3">
+                              {isGlobal ? (
+                                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600">
+                                  Global
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Actions */}
+                            <div className="col-span-3 flex items-center justify-end gap-1">
+                              {isGlobal ? (
+                                <span className="text-xs text-slate-400">Read-only</span>
+                              ) : deleteConfirm === company.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleDelete(company.id)}
+                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm(null)}
+                                    className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => openEditModal(company)}
+                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirm(company.id)}
+                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Delete"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Info Box */}
-              <div className="bg-blue-50 rounded-xl border border-blue-100 p-4">
-                <div className="flex gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-blue-900">
-                    <p className="font-medium">About Implant Companies</p>
-                    <p className="text-blue-700 mt-1">
-                      Implant companies are assigned to cases to track which vendors are involved. 
-                      Device reps from these companies can be granted access to view relevant case information.
-                    </p>
-                  </div>
-                </div>
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                <h4 className="font-medium text-slate-900 mb-2">About Implant Companies</h4>
+                <p className="text-sm text-slate-600">
+                  Implant companies are assigned to cases to track which vendors are involved. 
+                  Device reps from these companies can be granted access to view relevant case information.
+                </p>
               </div>
             </div>
           )}
@@ -329,12 +338,13 @@ export default function ImplantCompaniesPage() {
                 </div>
                 <div className="p-6">
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Company Name
+                    Company Name *
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ name: e.target.value })}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSave()}
                     className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     placeholder="e.g., Acme Medical Devices"
                     autoFocus
