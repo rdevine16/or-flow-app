@@ -39,6 +39,7 @@ export interface MilestoneMap {
   incision?: Date
   closing?: Date
   closing_complete?: Date
+  surgeon_left?: Date 
   patient_out?: Date
   room_cleaned?: Date
 }
@@ -82,6 +83,17 @@ export interface FlipRoomAnalysis {
   avgIdleTime: number
   totalIdleTime: number
 }
+
+export interface SurgeonProfile {
+  id: string
+  closing_workflow: 'surgeon_closes' | 'pa_closes'
+  closing_handoff_minutes: number
+}
+
+export interface CaseWithMilestonesAndSurgeon extends CaseWithMilestones {
+  surgeon_profile?: SurgeonProfile | null
+}
+
 
 export interface AnalyticsOverview {
   // Volume
@@ -133,6 +145,7 @@ export function getMilestoneMap(caseData: CaseWithMilestones): MilestoneMap {
         case 'incision': map.incision = date; break
         case 'closing': map.closing = date; break
         case 'closing_complete': map.closing_complete = date; break
+        case 'surgeon_left': map.surgeon_left = date; break
         case 'patient_out': map.patient_out = date; break
         case 'room_cleaned': map.room_cleaned = date; break
       }
@@ -187,6 +200,30 @@ export function calculateAverage(values: (number | null)[]): number {
   const valid = values.filter((v): v is number => v !== null && !isNaN(v))
   if (valid.length === 0) return 0
   return valid.reduce((a, b) => a + b, 0) / valid.length
+}
+
+export function getSurgeonDoneTime(
+  milestones: MilestoneMap,
+  surgeonProfile?: SurgeonProfile | null
+): Date | null {
+  // Priority 1: If surgeon_left milestone was recorded, always use it
+  if (milestones.surgeon_left) {
+    return milestones.surgeon_left
+  }
+
+  // Priority 2: Use surgeon profile settings
+  if (!surgeonProfile || surgeonProfile.closing_workflow === 'surgeon_closes') {
+    // Surgeon closes entirely - use closing_complete (or closing as fallback)
+    return milestones.closing_complete || milestones.closing || null
+  }
+
+  // PA closes - calculate from closing_start + handoff minutes
+  if (milestones.closing) {
+    const handoffMs = (surgeonProfile.closing_handoff_minutes || 0) * 60 * 1000
+    return new Date(milestones.closing.getTime() + handoffMs)
+  }
+
+  return null
 }
 
 /**
@@ -453,6 +490,8 @@ export function calculateTurnoverTime(
     }
   }
   
+
+  
   // For turnover, lower is better
   const { delta, deltaType } = calculateDelta(avgTurnover, previousAvg, true)
   
@@ -480,6 +519,168 @@ export function calculateTurnoverTime(
     dailyData
   }
 }
+
+export function calculateSurgicalTurnover(
+  cases: CaseWithMilestonesAndSurgeon[],
+  previousPeriodCases?: CaseWithMilestonesAndSurgeon[]
+): KPIResult {
+  const transitions: number[] = []
+  const dailyResults = new Map<string, number[]>()
+
+  // Group by surgeon and date
+  const bySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
+  cases.forEach(c => {
+    if (!c.surgeon_id) return
+    const key = `${c.surgeon_id}-${c.scheduled_date}`
+    const existing = bySurgeonDate.get(key) || []
+    existing.push(c)
+    bySurgeonDate.set(key, existing)
+  })
+
+  // Calculate transitions for flip room surgeons
+  bySurgeonDate.forEach((surgeonCases, key) => {
+    const date = key.split('-').slice(1).join('-') // Handle date with dashes
+    
+    // Only analyze if surgeon used multiple rooms (flip room scenario)
+    const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
+    if (rooms.size < 2) return
+
+    // Sort by scheduled time
+    const sorted = surgeonCases
+      .filter(c => c.start_time)
+      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+
+    // Calculate transitions between consecutive cases in different rooms
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const currentCase = sorted[i]
+      const nextCase = sorted[i + 1]
+
+      // Only count room switches
+      if (currentCase.or_room_id === nextCase.or_room_id) continue
+
+      const currentMilestones = getMilestoneMap(currentCase)
+      const nextMilestones = getMilestoneMap(nextCase)
+
+      // Get when surgeon was done with current case (uses priority logic)
+      const surgeonDone = getSurgeonDoneTime(
+        currentMilestones,
+        currentCase.surgeon_profile
+      )
+
+      // Get when surgeon made incision in next case
+      const nextIncision = nextMilestones.incision
+
+      if (surgeonDone && nextIncision) {
+        const transitionMinutes = getTimeDiffMinutes(surgeonDone, nextIncision)
+
+        // Only count reasonable transitions
+        // Can be negative if surgeon started before "done" (overlapping - very efficient!)
+        if (transitionMinutes !== null && transitionMinutes > -30 && transitionMinutes < 120) {
+          // Treat negative as 0 (surgeon was already operating - perfect efficiency)
+          const effectiveTransition = Math.max(0, transitionMinutes)
+          transitions.push(effectiveTransition)
+
+          // Track daily
+          const dayTransitions = dailyResults.get(date) || []
+          dayTransitions.push(effectiveTransition)
+          dailyResults.set(date, dayTransitions)
+        }
+      }
+    }
+  })
+
+  const avgTransition = transitions.length > 0 ? calculateAverage(transitions) : 0
+  const seamlessCount = transitions.filter(t => t <= 5).length
+  const seamlessRate = transitions.length > 0
+    ? Math.round((seamlessCount / transitions.length) * 100)
+    : 0
+
+  // Calculate previous period for delta
+  let previousAvg: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prevTransitions: number[] = []
+    
+    const prevBySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
+    previousPeriodCases.forEach(c => {
+      if (!c.surgeon_id) return
+      const key = `${c.surgeon_id}-${c.scheduled_date}`
+      const existing = prevBySurgeonDate.get(key) || []
+      existing.push(c)
+      prevBySurgeonDate.set(key, existing)
+    })
+
+    prevBySurgeonDate.forEach((surgeonCases) => {
+      const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
+      if (rooms.size < 2) return
+
+      const sorted = surgeonCases
+        .filter(c => c.start_time)
+        .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const currentCase = sorted[i]
+        const nextCase = sorted[i + 1]
+        if (currentCase.or_room_id === nextCase.or_room_id) continue
+
+        const currentMilestones = getMilestoneMap(currentCase)
+        const nextMilestones = getMilestoneMap(nextCase)
+        const surgeonDone = getSurgeonDoneTime(currentMilestones, currentCase.surgeon_profile)
+        const nextIncision = nextMilestones.incision
+
+        if (surgeonDone && nextIncision) {
+          const transitionMinutes = getTimeDiffMinutes(surgeonDone, nextIncision)
+          if (transitionMinutes !== null && transitionMinutes > -30 && transitionMinutes < 120) {
+            prevTransitions.push(Math.max(0, transitionMinutes))
+          }
+        }
+      }
+    })
+
+    if (prevTransitions.length > 0) {
+      previousAvg = calculateAverage(prevTransitions)
+    }
+  }
+
+  // Lower is better for surgical turnover
+  const { delta, deltaType } = calculateDelta(avgTransition, previousAvg, true)
+
+  // Build daily tracker
+  const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-30)
+    .map(([date, dayTransitions]) => {
+      const dayAvg = calculateAverage(dayTransitions)
+      return {
+        date,
+        color: (dayAvg <= 3 ? 'emerald' : dayAvg <= 8 ? 'yellow' : 'red') as Color,
+        tooltip: `${date}: ${Math.round(dayAvg)} min avg transition`
+      }
+    })
+
+  return {
+    value: Math.round(avgTransition),
+    displayValue: avgTransition === 0 && transitions.length === 0 
+      ? '--' 
+      : `${Math.round(avgTransition)} min`,
+    subtitle: transitions.length > 0
+      ? `${seamlessRate}% seamless (≤5 min) · ${transitions.length} transitions`
+      : 'No flip room data',
+    target: 5,
+    targetMet: avgTransition <= 5,
+    delta,
+    deltaType,
+    dailyData
+  }
+}
+
+
+
+
+
+
+
+
+
 
 /**
  * 3. OR Utilization
