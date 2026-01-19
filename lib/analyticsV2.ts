@@ -120,6 +120,7 @@ export interface AnalyticsOverview {
   // Flip room details
   standardSurgicalTurnover: KPIResult   // Same room turnover
   flipRoomTime: KPIResult               // Different room turnover
+  flipRoomAnalysis: FlipRoomAnalysis[]  // Detailed flip room data for modal
 
   // Time breakdown
   avgTotalCaseTime: number
@@ -129,7 +130,6 @@ export interface AnalyticsOverview {
   avgClosingTime: number
   avgEmergenceTime: number
 }
-
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -1603,7 +1603,7 @@ export function calculateAnalyticsOverview(
   // NEW: Calculate the split turnovers (same room vs flip room)
   const turnoverBreakdown = calculateSurgicalTurnovers(cases, previousPeriodCases)
   
-  return {
+ return {
     // Volume
     totalCases: cases.length,
     completedCases: completedCases.length,
@@ -1619,9 +1619,10 @@ export function calculateAnalyticsOverview(
     nonOperativeTime: calculateNonOperativeTime(cases),
     surgeonIdleTime: surgeonIdleResult.kpi,
     
-    // NEW: Split surgical turnovers (replaces old flipRoomAnalysis)
+    // Split surgical turnovers
     standardSurgicalTurnover: turnoverBreakdown.standardTurnover,
     flipRoomTime: turnoverBreakdown.flipRoomTime,
+    flipRoomAnalysis: surgeonIdleResult.details,  // Keep for modal compatibility
     
     // Time breakdown
     avgTotalCaseTime: timeBreakdown.avgTotalTime,
