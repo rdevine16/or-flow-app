@@ -237,6 +237,9 @@ export default function DataQualityPage() {
   // All issues for the current case (for multi-issue handling)
   const [caseIssues, setCaseIssues] = useState<CaseIssue[]>([])
   
+  // Set of milestone IDs that have issues (for highlighting)
+  const [issueMilestoneIds, setIssueMilestoneIds] = useState<Set<string>>(new Set())
+  
   // Editable milestones for modal
   const [editableMilestones, setEditableMilestones] = useState<EditableMilestone[]>([])
   const [loadingMilestones, setLoadingMilestones] = useState(false)
@@ -344,11 +347,11 @@ export default function DataQualityPage() {
       }
       
       // Build set of milestone IDs that have issues and their types
-      const issueMilestoneIds = new Set<string>()
+      const localIssueMilestoneIds = new Set<string>()
       const issueMilestoneTypes = new Map<string, string>() // milestone_id -> issue_type
       allCaseIssues?.forEach(issue => {
         if (issue.facility_milestone_id) {
-          issueMilestoneIds.add(issue.facility_milestone_id)
+          localIssueMilestoneIds.add(issue.facility_milestone_id)
           const issueTypeName = Array.isArray(issue.issue_types) 
             ? issue.issue_types[0]?.name 
             : (issue.issue_types as { name: string } | null)?.name
@@ -463,6 +466,9 @@ export default function DataQualityPage() {
       })
       
       setEditableMilestones(editable)
+      
+      // Store which milestones have issues for highlighting
+      setIssueMilestoneIds(localIssueMilestoneIds)
       
       // Calculate initial impact
       const newImpact = calculateImpact(editable)
@@ -835,6 +841,7 @@ export default function DataQualityPage() {
     setEditableMilestones([])
     setShowValidationWarning(false)
     setCaseIssues([])
+    setIssueMilestoneIds(new Set())
   }
 
   const openCaseInNewTab = () => {
@@ -1495,20 +1502,50 @@ export default function DataQualityPage() {
                       ) : (
                         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
                           {editableMilestones.map((milestone, index) => {
-                            const isIssueMilestone = milestone.id === getIssueMilestoneId()
-                            const isPaired = isPairedMilestone(milestone.id)
+                            // Check if this milestone has an issue (using global state)
+                            const hasIssue = issueMilestoneIds.has(milestone.id)
                             const isMissing = !milestone.recorded_at
-                            const isHighlighted = isIssueMilestone || isPaired
+                            
+                            // Find the paired milestone for visual indicator
+                            const pairedMilestone = milestone.pair_with_id 
+                              ? editableMilestones.find(m => m.id === milestone.pair_with_id)
+                              : null
+                            const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
+                            const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
+                            
+                            // Find if we should show the pairing bracket (only on start milestone)
+                            const showPairBracket = isStartOfPair && pairedMilestone
+                            const pairEndIndex = showPairBracket 
+                              ? editableMilestones.findIndex(m => m.id === pairedMilestone.id)
+                              : -1
+                            const pairSpan = pairEndIndex > index ? pairEndIndex - index : 0
                             
                             return (
                               <div 
                                 key={milestone.id || milestone.name}
-                                className={`px-4 py-3 ${
-                                  isIssueMilestone && isMissing ? 'bg-amber-50' :
-                                  isHighlighted ? 'bg-blue-50' : ''
+                                className={`relative ${
+                                  hasIssue ? 'bg-amber-50' : ''
                                 }`}
                               >
-                                <div className="flex items-center gap-3">
+                                <div className="px-4 py-3 flex items-center gap-3">
+                                  {/* Pair indicator column */}
+                                  <div className="w-8 flex-shrink-0 flex items-center justify-center">
+                                    {(isStartOfPair || isEndOfPair) && (
+                                      <div className={`flex items-center ${isStartOfPair ? 'text-slate-400' : 'text-slate-400'}`}>
+                                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                          {isStartOfPair ? (
+                                            // Top of bracket - curved arrow pointing down
+                                            <path d="M12 4 C12 4, 6 4, 6 10 L6 14" strokeLinecap="round" />
+                                          ) : (
+                                            // Bottom of bracket - curved arrow pointing up
+                                            <path d="M6 10 L6 14 C6 20, 12 20, 12 20" strokeLinecap="round" />
+                                          )}
+                                        </svg>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Status dot */}
                                   <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                                     isMissing 
                                       ? 'bg-slate-300' 
@@ -1517,21 +1554,34 @@ export default function DataQualityPage() {
                                         : 'bg-emerald-500'
                                   }`} />
                                   
-                                  <div className="flex-1 min-w-0">
+                                  {/* Milestone name and badges */}
+                                  <div className="flex-1 min-w-0 flex items-center gap-2">
                                     <span className={`text-sm font-medium ${
-                                      isIssueMilestone && isMissing ? 'text-amber-800' :
-                                      isHighlighted ? 'text-blue-800' : 'text-slate-900'
+                                      hasIssue ? 'text-amber-800' : 'text-slate-900'
                                     }`}>
                                       {milestone.display_name}
                                     </span>
-                                    {isIssueMilestone && (
-                                      <span className="ml-2 text-xs text-amber-600 font-medium">(Issue)</span>
+                                    
+                                    {/* Start/End badge for paired milestones */}
+                                    {isStartOfPair && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-500 rounded">
+                                        Start
+                                      </span>
                                     )}
-                                    {isPaired && !isIssueMilestone && (
-                                      <span className="ml-2 text-xs text-blue-600 font-medium">(Paired)</span>
+                                    {isEndOfPair && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-500 rounded">
+                                        End
+                                      </span>
                                     )}
+                                    
+                                    {/* Issue indicator */}
+                                    {hasIssue && (
+                                      <span className="text-xs text-amber-600 font-medium">(Issue)</span>
+                                    )}
+                                    
+                                    {/* Modified indicator */}
                                     {milestone.hasChanged && (
-                                      <span className="ml-2 text-xs text-blue-600 font-medium">(Modified)</span>
+                                      <span className="text-xs text-blue-600 font-medium">(Modified)</span>
                                     )}
                                   </div>
                                   
