@@ -323,20 +323,29 @@ function QuickStatCard({
         <div className="p-1.5 rounded-lg bg-slate-100">
           <Icon className="w-4 h-4 text-slate-600" />
         </div>
-        {trend !== undefined && trend > 0 && trendType && (
+        {trend !== undefined && trendType && (
           <div className={`
             flex items-center gap-1 text-sm font-semibold px-2 py-0.5 rounded-full
-            ${trendType === 'up' 
-              ? 'text-emerald-700 bg-emerald-50' 
-              : 'text-rose-700 bg-rose-50'
+            ${trend === 0 
+              ? 'text-slate-500 bg-slate-100'
+              : trendType === 'up' 
+                ? 'text-emerald-700 bg-emerald-50' 
+                : 'text-rose-700 bg-rose-50'
             }
           `}>
-            {trendType === 'up' ? (
-              <ArrowTrendingUpIcon className="w-4 h-4" />
+            {trend === 0 ? (
+              <span>— 0%</span>
+            ) : trendType === 'up' ? (
+              <>
+                <ArrowTrendingUpIcon className="w-4 h-4" />
+                {trend}%
+              </>
             ) : (
-              <ArrowTrendingDownIcon className="w-4 h-4" />
+              <>
+                <ArrowTrendingDownIcon className="w-4 h-4" />
+                {trend}%
+              </>
             )}
-            {trend}%
           </div>
         )}
       </div>
