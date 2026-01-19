@@ -284,7 +284,7 @@ export default function AdminBodyRegionsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <div className="max-w-4xl">
+        <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-slate-900">Body Regions</h1>
