@@ -313,85 +313,149 @@ export default function DataQualityPage() {
     setLoadingMilestones(true)
     
     try {
-      // 1. Get ALL facility milestones (the expected ones for this facility)
-      // Include pair_with_id for dynamic pairing
-      const { data: facilityMilestones, error: fmError } = await supabase
-        .from('facility_milestones')
-        .select('id, name, display_name, display_order, pair_with_id')
-        .eq('facility_id', facilityId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('display_order')
-      
-      if (fmError) {
-        console.error('Error loading facility milestones:', fmError)
-      }
-      
-      // 2. Get actual recorded milestones for this case
+      // 1. Get milestones FOR THIS SPECIFIC CASE with facility_milestone details
       const { data: caseMilestones, error: cmError } = await supabase
         .from('case_milestones')
-        .select('id, recorded_at, facility_milestone_id')
+        .select(`
+          id,
+          recorded_at,
+          facility_milestone_id,
+          facility_milestones(id, name, display_name, display_order, pair_with_id)
+        `)
         .eq('case_id', caseId)
       
       if (cmError) {
         console.error('Error loading case milestones:', cmError)
       }
       
-      // Build map of recorded milestones by facility_milestone_id
-      const recordedMap = new Map<string, string>()
-      caseMilestones?.forEach(cm => {
-        if (cm.facility_milestone_id) {
-          recordedMap.set(cm.facility_milestone_id, cm.recorded_at)
+      // 2. Get ALL unresolved issues for this case to know which milestones have problems
+      const { data: allCaseIssues, error: issuesError } = await supabase
+        .from('metric_issues')
+        .select(`
+          facility_milestone_id, 
+          issue_types(name),
+          facility_milestones(id, name, display_name, display_order, pair_with_id)
+        `)
+        .eq('case_id', caseId)
+        .is('resolved_at', null)
+      
+      if (issuesError) {
+        console.error('Error loading case issues:', issuesError)
+      }
+      
+      // Build set of milestone IDs that have issues and their types
+      const issueMilestoneIds = new Set<string>()
+      const issueMilestoneTypes = new Map<string, string>() // milestone_id -> issue_type
+      allCaseIssues?.forEach(issue => {
+        if (issue.facility_milestone_id) {
+          issueMilestoneIds.add(issue.facility_milestone_id)
+          const issueTypeName = Array.isArray(issue.issue_types) 
+            ? issue.issue_types[0]?.name 
+            : (issue.issue_types as { name: string } | null)?.name
+          if (issueTypeName) {
+            issueMilestoneTypes.set(issue.facility_milestone_id, issueTypeName)
+          }
         }
       })
       
-      // Determine which milestone IDs can be edited based on issue type
-      const editableMilestoneIds = new Set<string>()
+      // Build milestone map from case_milestones (recorded milestones)
+      const milestoneMap = new Map<string, {
+        id: string
+        name: string
+        display_name: string
+        display_order: number
+        pair_with_id: string | null
+        recorded_at: string | null
+      }>()
       
-      // For duration issues (too_fast, timeout, impossible), only allow editing the pair
-      if (issueType === 'too_fast' || issueType === 'timeout' || issueType === 'impossible') {
-        if (issueFacilityMilestoneId) {
-          // Add issue milestone
-          editableMilestoneIds.add(issueFacilityMilestoneId)
-          
-          // Find the issue milestone to get its pair_with_id
-          const issueMilestone = facilityMilestones?.find(fm => fm.id === issueFacilityMilestoneId)
-          if (issueMilestone?.pair_with_id) {
-            editableMilestoneIds.add(issueMilestone.pair_with_id)
-          }
-          // Also check if any other milestone is paired WITH the issue milestone
-          facilityMilestones?.forEach(fm => {
-            if (fm.pair_with_id === issueFacilityMilestoneId) {
-              editableMilestoneIds.add(fm.id)
-            }
+      caseMilestones?.forEach(cm => {
+        const fm = Array.isArray(cm.facility_milestones) 
+          ? cm.facility_milestones[0] 
+          : cm.facility_milestones
+        
+        if (fm && cm.facility_milestone_id) {
+          milestoneMap.set(cm.facility_milestone_id, {
+            id: cm.facility_milestone_id,
+            name: fm.name,
+            display_name: fm.display_name,
+            display_order: fm.display_order || 0,
+            pair_with_id: fm.pair_with_id || null,
+            recorded_at: cm.recorded_at
           })
         }
-      }
+      })
+      
+      // Add missing milestones from issues (they won't be in case_milestones)
+      allCaseIssues?.forEach(issue => {
+        if (issue.facility_milestone_id && !milestoneMap.has(issue.facility_milestone_id)) {
+          const fm = Array.isArray(issue.facility_milestones) 
+            ? issue.facility_milestones[0] 
+            : issue.facility_milestones
+          
+          if (fm) {
+            milestoneMap.set(issue.facility_milestone_id, {
+              id: issue.facility_milestone_id,
+              name: fm.name,
+              display_name: fm.display_name,
+              display_order: fm.display_order || 0,
+              pair_with_id: fm.pair_with_id || null,
+              recorded_at: null // Not recorded - that's why it's an issue
+            })
+          }
+        }
+      })
+      
+      // Convert map to sorted array
+      const milestoneList = Array.from(milestoneMap.values())
+        .sort((a, b) => a.display_order - b.display_order)
+      
+      // Determine which milestones can be EDITED based on ALL issues for this case
+      const editableMilestoneIds = new Set<string>()
+      
+      // Add all milestones that have issues (and their pairs for duration issues)
+      allCaseIssues?.forEach(issue => {
+        if (issue.facility_milestone_id) {
+          editableMilestoneIds.add(issue.facility_milestone_id)
+          
+          const issueTypeName = Array.isArray(issue.issue_types) 
+            ? issue.issue_types[0]?.name 
+            : (issue.issue_types as { name: string } | null)?.name
+          
+          // For duration issues, also add the paired milestone
+          if (issueTypeName === 'too_fast' || issueTypeName === 'timeout' || issueTypeName === 'impossible') {
+            const fm = milestoneMap.get(issue.facility_milestone_id)
+            if (fm?.pair_with_id) {
+              editableMilestoneIds.add(fm.pair_with_id)
+            }
+            // Also check reverse pairing
+            milestoneList.forEach(otherFm => {
+              if (otherFm.pair_with_id === issue.facility_milestone_id) {
+                editableMilestoneIds.add(otherFm.id)
+              }
+            })
+          }
+        }
+      })
+      
+      // Check if there's any "missing" type issue (allows editing unrecorded milestones)
+      const hasAnyMissingIssue = Array.from(issueMilestoneTypes.values()).includes('missing')
       
       // Build the editable milestone list
-      const editable: EditableMilestone[] = (facilityMilestones || []).map(fm => {
-        const recordedAt = recordedMap.get(fm.id) || null
-        
-        // Determine if this milestone can be edited
-        let canEdit = false
-        
-        if (issueType === 'missing') {
-          // For missing issues: can edit ANY milestone that is not recorded
-          canEdit = !recordedAt
-        } else if (issueType === 'too_fast' || issueType === 'timeout' || issueType === 'impossible') {
-          // For duration issues: can only edit the specific pair
-          canEdit = editableMilestoneIds.has(fm.id)
-        }
-        // For 'stale', 'incomplete', 'outlier': no editing (just acknowledgment)
+      const editable: EditableMilestone[] = milestoneList.map(fm => {
+        // Can edit if:
+        // 1. This milestone has an issue, OR
+        // 2. This milestone is paired with one that has an issue, OR
+        // 3. For missing issues: any unrecorded milestone in this case
+        const canEdit = editableMilestoneIds.has(fm.id) || (hasAnyMissingIssue && !fm.recorded_at)
         
         return {
           id: fm.id,
           name: fm.name,
           display_name: fm.display_name,
-          display_order: fm.display_order || 0,
-          pair_with_id: fm.pair_with_id || null,
-          recorded_at: recordedAt,
-          original_recorded_at: recordedAt,
+          display_order: fm.display_order,
+          pair_with_id: fm.pair_with_id,
+          recorded_at: fm.recorded_at,
+          original_recorded_at: fm.recorded_at,
           isEditing: false,
           hasChanged: false,
           canEdit
@@ -889,21 +953,35 @@ export default function DataQualityPage() {
         </div>
 
         {/* Last Scan Info - Always visible if we have a time */}
-        {lastScanTime && (
-          <div className="mb-4 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Current
-            </span>
-            <span className="text-sm text-slate-500">
-              Last scan: {lastScanTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-              {' · '}
-              {lastScanTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-          </div>
-        )}
+        {lastScanTime && (() => {
+          const hourAgo = new Date(Date.now() - 60 * 60 * 1000)
+          const isCurrent = lastScanTime > hourAgo
+          
+          return (
+            <div className="mb-4 flex items-center gap-2">
+              {isCurrent ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Current
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Not Current
+                </span>
+              )}
+              <span className="text-sm text-slate-500">
+                Last scan: {lastScanTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                {' · '}
+                {lastScanTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+          )
+        })()}
 
         {detectionResult && (
           <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700">
