@@ -581,11 +581,16 @@ export default function DataQualityPage() {
   const impact = calculateImpact(editableMilestones)
 
   // Check if the issue is now stale (milestone was recorded after issue was created)
+  // Only applies to "missing" issue type - other issue types have milestones that already exist
   const isIssueStale = () => {
     if (!modalState.issue) return false
     if (editableMilestones.length === 0) return false // Still loading or no milestones
     
-    // facility_milestone now has name directly on it
+    // Only "missing" issues can become stale by recording the milestone
+    const issueType = modalState.issue.issue_type as IssueType | null
+    if (issueType?.name !== 'missing') return false
+    
+    // Check if the missing milestone now exists
     const issueMilestoneName = modalState.issue.facility_milestone?.name
     if (!issueMilestoneName) return false
     
