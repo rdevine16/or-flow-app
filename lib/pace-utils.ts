@@ -1,5 +1,5 @@
 // lib/pace-utils.ts
-// Pace calculation utilities - ported from iOS CasePaceData.swift
+// Pace calculation utilities - UPDATED for median-based statistics
 
 import { CasePaceData, PaceStatus, CasePhase } from '../types/pace'
 
@@ -9,18 +9,20 @@ export const MIN_SAMPLE_SIZE = 10
 /**
  * Calculate progress through the case (0.0 - 1.0)
  * Based on how far into the estimated total time the current milestone represents
+ * UPDATED: Now uses expectedTotalMinutes (median) instead of avgTotalMinutes
  */
 export function calculateProgress(paceData: CasePaceData): number {
-  if (paceData.avgTotalMinutes <= 0) return 0
-  return Math.min(paceData.avgMinutesToMilestone / paceData.avgTotalMinutes, 1.0)
+  if (paceData.expectedTotalMinutes <= 0) return 0
+  return Math.min(paceData.expectedMinutesToMilestone / paceData.expectedTotalMinutes, 1.0)
 }
 
 /**
  * Calculate expected time to reach current milestone
- * scheduledStart + avgMinutesToMilestone
+ * scheduledStart + expectedMinutesToMilestone
+ * UPDATED: Now uses expectedMinutesToMilestone (median) instead of avgMinutesToMilestone
  */
 export function getExpectedTimeAtMilestone(paceData: CasePaceData): Date {
-  return new Date(paceData.scheduledStart.getTime() + paceData.avgMinutesToMilestone * 60 * 1000)
+  return new Date(paceData.scheduledStart.getTime() + paceData.expectedMinutesToMilestone * 60 * 1000)
 }
 
 /**
@@ -68,6 +70,22 @@ export function formatDuration(minutes: number): string {
     return `${hours}h ${mins}m`
   }
   return `${mins}m`
+}
+
+/**
+ * Format duration range for display
+ * e.g., (55, 85) -> "(55m-1h 25m)" or "(55-85m)" for short format
+ */
+export function formatDurationRange(low: number | null, high: number | null, shortFormat: boolean = true): string | null {
+  if (low === null || high === null) return null
+  
+  if (shortFormat) {
+    // Simple format: just show the numbers with "m"
+    return `(${Math.round(low)}-${Math.round(high)}m)`
+  }
+  
+  // Full format with hours
+  return `(${formatDuration(low)}-${formatDuration(high)})`
 }
 
 /**
