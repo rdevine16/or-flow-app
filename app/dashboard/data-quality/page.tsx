@@ -66,7 +66,8 @@ export default function DataQualityPage() {
 const [runningDetection, setRunningDetection] = useState(false)
 const [detectionResult, setDetectionResult] = useState<string | null>(null)
 const [detectionStep, setDetectionStep] = useState(0)
-
+// Case detail slide-out state
+const [selectedIssue, setSelectedIssue] = useState<MetricIssue | null>(null)
   const loadData = useCallback(async () => {
     if (!effectiveFacilityId) return
 
@@ -421,16 +422,17 @@ const handleRunDetection = async () => {
                   const daysUntilExpiry = getDaysUntilExpiration(issue.expires_at)
 
                   return (
-                    <div
-                      key={issue.id}
-                      className={`bg-white rounded-xl border p-4 transition-colors ${
-                        issue.resolved_at 
-                          ? 'border-slate-200 opacity-60' 
-                          : isSelected
-                            ? 'border-blue-400 bg-blue-50/30'
-                            : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
+  <div
+    key={issue.id}
+    onClick={() => !issue.resolved_at && setSelectedIssue(issue)}
+    className={`bg-white rounded-xl border p-4 transition-colors ${
+      issue.resolved_at 
+        ? 'border-slate-200 opacity-60' 
+        : isSelected
+          ? 'border-blue-400 bg-blue-50/30'
+          : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+    }`}
+  >
                       <div className="flex items-start gap-3">
                         {/* Checkbox (only for unresolved) */}
                         {!issue.resolved_at && (
@@ -574,6 +576,198 @@ const handleRunDetection = async () => {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  </div>
+)}
+{/* Case Detail Slide-out */}
+{selectedIssue && (
+  <div className="fixed inset-0 z-50 flex">
+    {/* Backdrop */}
+    <div 
+      className="flex-1 bg-black/30"
+      onClick={() => setSelectedIssue(null)}
+    />
+    
+    {/* Slide-out Panel */}
+    <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">
+            Case Details
+          </h3>
+          <p className="text-sm text-slate-500">
+            {selectedIssue.cases?.case_number || 'Unknown Case'}
+          </p>
+        </div>
+        <button
+          onClick={() => setSelectedIssue(null)}
+          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+        >
+          <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Case Info */}
+        <div className="bg-slate-50 rounded-xl p-4">
+          <h4 className="text-sm font-medium text-slate-700 mb-3">Case Information</h4>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-slate-500">Procedure</span>
+              <p className="font-medium text-slate-900">
+                {selectedIssue.cases?.procedure_types?.name || 'Not specified'}
+              </p>
+            </div>
+            <div>
+              <span className="text-slate-500">Date</span>
+              <p className="font-medium text-slate-900">
+                {selectedIssue.cases?.scheduled_date 
+                  ? new Date(selectedIssue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric', 
+                      year: 'numeric' 
+                    })
+                  : 'Unknown'
+                }
+              </p>
+            </div>
+            <div>
+              <span className="text-slate-500">Surgeon</span>
+              <p className="font-medium text-slate-900">
+                {selectedIssue.cases?.surgeon 
+                  ? `Dr. ${selectedIssue.cases.surgeon.first_name} ${selectedIssue.cases.surgeon.last_name}`
+                  : 'Not assigned'
+                }
+              </p>
+            </div>
+            <div>
+              <span className="text-slate-500">Room</span>
+              <p className="font-medium text-slate-900">
+                {selectedIssue.cases?.or_rooms?.name || 'Not assigned'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Issue Detected */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-amber-800">
+                {(selectedIssue.issue_type as IssueType)?.display_name || 'Issue Detected'}
+              </h4>
+              <p className="text-sm text-amber-700 mt-1">
+                {selectedIssue.facility_milestone?.display_name 
+                  ? `${selectedIssue.facility_milestone.display_name}: ` 
+                  : ''
+                }
+                {formatDetectedValue(selectedIssue)}
+              </p>
+              <p className="text-xs text-amber-600 mt-2">
+                Detected {formatTimeAgo(selectedIssue.detected_at)}
+                {selectedIssue.expires_at && (
+                  <> · Expires in {getDaysUntilExpiration(selectedIssue.expires_at)} days</>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Milestones Timeline */}
+        {selectedIssue.cases?.case_milestones && selectedIssue.cases.case_milestones.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
+            <div className="space-y-2">
+              {selectedIssue.cases.case_milestones
+                .sort((a: { recorded_at: string }, b: { recorded_at: string }) => 
+                  new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+                )
+                .map((milestone: { 
+                  id: string
+                  recorded_at: string
+                  milestone_types?: { name: string; display_name: string } | null 
+                }) => {
+                  const isRelatedToIssue = selectedIssue.milestone_id === milestone.id
+                  return (
+                    <div 
+                      key={milestone.id}
+                      className={`flex items-center gap-3 p-2 rounded-lg ${
+                        isRelatedToIssue ? 'bg-amber-50 border border-amber-200' : ''
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${
+                        isRelatedToIssue ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-slate-900">
+                          {milestone.milestone_types?.display_name || 'Unknown'}
+                        </span>
+                      </div>
+                      <span className="text-sm text-slate-500">
+                        {new Date(milestone.recorded_at).toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions Info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-blue-800 mb-2">Resolution Options</h4>
+          <ul className="text-sm text-blue-700 space-y-1">
+            <li><strong>Approved:</strong> Data is correct, no action needed</li>
+            <li><strong>Corrected:</strong> I fixed the data in the case</li>
+            <li><strong>Excluded:</strong> Exclude this case from analytics</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
+        <button
+          onClick={() => {
+  const caseId = selectedIssue?.case_id
+  setSelectedIssue(null)
+  if (caseId) {
+    window.open(`/cases/${caseId}`, '_blank')
+  }
+}}
+          className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+        >
+          Open Case
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={() => setSelectedIssue(null)}
+          className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            openResolveModal([selectedIssue.id])
+            setSelectedIssue(null)
+          }}
+          className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+        >
+          Resolve Issue
+        </button>
       </div>
     </div>
   </div>

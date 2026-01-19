@@ -32,6 +32,7 @@ export interface MetricIssue {
   case_id: string
   issue_type_id: string
   facility_milestone_id: string | null
+  milestone_id: string | null  // <-- ADDED: Links to the specific case_milestone that caused the issue
   detected_value: number | null
   expected_min: number | null
   expected_max: number | null
@@ -56,6 +57,12 @@ export interface MetricIssue {
     scheduled_date: string
     procedure_types?: { name: string } | null
     surgeon?: { first_name: string; last_name: string } | null
+    or_rooms?: { name: string } | null  // <-- ADDED: For slide-out panel
+    case_milestones?: Array<{            // <-- ADDED: For milestone timeline in slide-out
+      id: string
+      recorded_at: string
+      milestone_types?: { name: string; display_name: string } | null
+    }>
   } | null
   resolved_by_user?: {
     first_name: string
@@ -131,7 +138,13 @@ export async function fetchMetricIssues(
         case_number,
         scheduled_date,
         procedure_types(name),
-        surgeon:users!cases_surgeon_id_fkey(first_name, last_name)
+        surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
+        or_rooms(name),
+        case_milestones(
+          id,
+          recorded_at,
+          milestone_types(name, display_name)
+        )
       ),
       resolved_by_user:users!metric_issues_resolved_by_fkey(first_name, last_name)
     `)
