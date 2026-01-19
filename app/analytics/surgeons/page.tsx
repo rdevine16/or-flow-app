@@ -35,8 +35,8 @@ import {
   formatSecondsToHHMMSS,
   getAllTurnovers,
   getAllSurgicalTurnovers,
-  CaseWithMilestones,
-} from '@/lib/analytics'
+  type CaseWithMilestones,
+} from '@/lib/analyticsV2'
 
 // ============================================
 // TYPES
@@ -665,9 +665,9 @@ export default function SurgeonPerformancePage() {
     const closingTimes = completed.map(c => getClosingTime(getMilestoneMap(c)))
     const closedToWheelsOutTimes = completed.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
     
-    const firstCase = completed.length > 0 ? completed[0] : null
-    const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
-    const firstCaseScheduledTime = firstCase?.start_time || null
+const firstCase = completed.length > 0 ? completed[0] : null
+const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
+const firstCaseScheduledTime = firstCase?.start_time || null
 
     const roomTurnovers = getAllTurnovers(completed)
     const surgicalTurnovers = getAllSurgicalTurnovers(completed)
@@ -1087,9 +1087,9 @@ valueFormatter={(v) => v.toString()}
                           </svg>
                           First Case Start Time
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">
-                          {formatTimeInTimezone(dayMetrics.firstCaseStartTime, facilityTimezone)}
-                        </div>
+<div className="text-3xl font-bold text-slate-900">
+  {formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone)}
+</div>
                         {dayMetrics.firstCaseScheduledTime && (
                           <div className="text-sm text-slate-500 mt-1">
                             Scheduled: {(() => {

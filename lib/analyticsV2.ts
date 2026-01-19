@@ -199,7 +199,53 @@ export function formatMinutes(minutes: number | null): string {
   const mins = Math.round(minutes % 60)
   return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`
 }
+/**
+ * Format seconds to human readable (e.g., "1h 23m 45s")
+ */
+export function formatSecondsHuman(totalSeconds: number | null): string {
+  if (totalSeconds === null) return '-'
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = Math.round(totalSeconds % 60)
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`
+  }
+  return `${seconds}s`
+}
 
+/**
+ * Format time from timestamp to display time (e.g., "06:06 am")
+ */
+export function formatTimeFromTimestamp(timestamp: string | Date | null): string {
+  if (!timestamp) return '--:-- --'
+  
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  
+  const ampm = hours >= 12 ? 'pm' : 'am'
+  const displayHour = hours % 12 || 12
+  return `${displayHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`
+}
+
+/**
+ * Alias for formatSecondsToHHMMSS (v1 compatibility)
+ * Note: Despite the name, this expects SECONDS
+ */
+export function formatMinutesToHHMMSS(seconds: number | null): string {
+  return formatSecondsToHHMMSS(seconds)
+}
+
+/**
+ * Alias for formatSecondsToHHMMSS (v1 compatibility)
+ */
+export function formatDurationHHMMSS(totalSeconds: number | null): string {
+  return formatSecondsToHHMMSS(totalSeconds)
+}
 /**
  * Calculate average of numbers, ignoring nulls
  */
@@ -208,7 +254,47 @@ export function calculateAverage(values: (number | null)[]): number {
   if (valid.length === 0) return 0
   return valid.reduce((a, b) => a + b, 0) / valid.length
 }
+/**
+ * Calculate sum of numbers, ignoring nulls
+ */
+export function calculateSum(values: (number | null)[]): number | null {
+  const valid = values.filter((v): v is number => v !== null && !isNaN(v))
+  if (valid.length === 0) return null
+  return valid.reduce((a, b) => a + b, 0)
+}
 
+/**
+ * Calculate standard deviation
+ */
+export function calculateStdDev(values: (number | null)[]): number | null {
+  const valid = values.filter((v): v is number => v !== null && !isNaN(v))
+  if (valid.length < 2) return null
+  const avg = valid.reduce((a, b) => a + b, 0) / valid.length
+  const squareDiffs = valid.map(n => Math.pow(n - avg, 2))
+  const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / valid.length
+  return Math.round(Math.sqrt(avgSquareDiff))
+}
+
+/**
+ * Calculate median of numbers
+ */
+export function calculateMedian(values: (number | null)[]): number | null {
+  const valid = values.filter((v): v is number => v !== null && !isNaN(v)).sort((a, b) => a - b)
+  if (valid.length === 0) return null
+  const mid = Math.floor(valid.length / 2)
+  return valid.length % 2 !== 0
+    ? valid[mid]
+    : Math.round((valid[mid - 1] + valid[mid]) / 2)
+}
+
+/**
+ * Calculate percentage change between current and baseline
+ * Returns positive if current is lower (improved), negative if higher
+ */
+export function calculatePercentageChange(current: number | null, baseline: number | null): number | null {
+  if (current === null || baseline === null || baseline === 0) return null
+  return Math.round(((baseline - current) / baseline) * 100)
+}
 export function getSurgeonDoneTime(
   milestones: MilestoneMap,
   surgeonProfile?: SurgeonProfile | null
@@ -231,6 +317,92 @@ export function getSurgeonDoneTime(
   }
 
   return null
+}
+// ============================================
+// PHASE DURATION FUNCTIONS (SECONDS)
+// These return durations in SECONDS for v1 compatibility
+// ============================================
+
+/**
+ * Total OR Time: patient_in -> patient_out (returns seconds)
+ */
+export function getTotalORTime(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.patient_in, milestones.patient_out)
+}
+
+/**
+ * Surgical Time: incision -> closing (returns seconds)
+ */
+export function getSurgicalTime(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.incision, milestones.closing)
+}
+
+/**
+ * Wheels-in to Incision: patient_in -> incision (returns seconds)
+ */
+export function getWheelsInToIncision(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.patient_in, milestones.incision)
+}
+
+/**
+ * Incision to Closing: incision -> closing (returns seconds)
+ */
+export function getIncisionToClosing(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.incision, milestones.closing)
+}
+
+/**
+ * Closing Time: closing -> closing_complete (returns seconds)
+ */
+export function getClosingTime(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.closing, milestones.closing_complete)
+}
+
+/**
+ * Closed to Wheels-Out: closing_complete -> patient_out (returns seconds)
+ */
+export function getClosedToWheelsOut(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.closing_complete, milestones.patient_out)
+}
+
+/**
+ * Anesthesia Time: anes_start -> anes_end (returns seconds)
+ */
+export function getAnesthesiaTime(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.anes_start, milestones.anes_end)
+}
+
+/**
+ * Pre-Op Time: patient_in -> incision (returns seconds)
+ * Alias for getWheelsInToIncision
+ */
+export function getPreOpTime(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.patient_in, milestones.incision)
+}
+
+/**
+ * Room Turnover Time: patient_out -> room_cleaned (returns seconds)
+ */
+export function getRoomTurnoverTime(milestones: MilestoneMap): number | null {
+  return getTimeDiffSeconds(milestones.patient_out, milestones.room_cleaned)
+}
+
+/**
+ * Total Case Time - alias for getTotalORTime (v1 compatibility)
+ */
+export function getTotalCaseTime(milestones: MilestoneMap): number | null {
+  return getTotalORTime(milestones)
+}
+
+/**
+ * Get duration between any two milestones (returns seconds)
+ */
+export function getMilestoneDuration(
+  milestones: MilestoneMap,
+  startMilestone: keyof MilestoneMap,
+  endMilestone: keyof MilestoneMap
+): number | null {
+  return getTimeDiffSeconds(milestones[startMilestone], milestones[endMilestone])
 }
 
 /**
@@ -1459,4 +1631,99 @@ export function calculateAnalyticsOverview(
     avgClosingTime: timeBreakdown.avgClosingTime,
     avgEmergenceTime: timeBreakdown.avgEmergenceTime
   }
+}
+// ============================================
+// LEGACY TURNOVER FUNCTIONS (v1 COMPATIBILITY)
+// These provide simple arrays of turnover durations in seconds
+// Used by Surgeons page for basic turnover calculations
+// ============================================
+
+/**
+ * Get all room turnovers for a set of cases
+ * Room Turnover = patient_out (Case A) → patient_in (Case B) in same room
+ * Returns array of turnover durations in SECONDS
+ */
+export function getAllTurnovers(cases: CaseWithMilestones[]): number[] {
+  const turnovers: number[] = []
+  
+  // Group cases by room and date
+  const byRoomDate = new Map<string, CaseWithMilestones[]>()
+  cases.forEach(c => {
+    if (!c.or_room_id) return
+    const key = `${c.scheduled_date}-${c.or_room_id}`
+    const existing = byRoomDate.get(key) || []
+    existing.push(c)
+    byRoomDate.set(key, existing)
+  })
+  
+  // Calculate turnovers between consecutive cases in same room
+  byRoomDate.forEach((roomCases) => {
+    const sorted = roomCases.sort((a, b) => 
+      (a.start_time || '').localeCompare(b.start_time || '')
+    )
+    
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const current = getMilestoneMap(sorted[i])
+      const next = getMilestoneMap(sorted[i + 1])
+      
+      if (current.patient_out && next.patient_in) {
+        const turnoverSeconds = getTimeDiffSeconds(current.patient_out, next.patient_in)
+        // Only include reasonable turnovers (5 min to 6 hours)
+        if (turnoverSeconds !== null && turnoverSeconds >= 300 && turnoverSeconds <= 21600) {
+          turnovers.push(turnoverSeconds)
+        }
+      }
+    }
+  })
+  
+  return turnovers
+}
+
+/**
+ * Alias for getAllTurnovers (v1 compatibility)
+ */
+export function calculateRoomTurnovers(cases: CaseWithMilestones[]): number[] {
+  return getAllTurnovers(cases)
+}
+
+/**
+ * Get all surgical turnovers for a set of cases
+ * Surgical Turnover = closing_complete (Case A) → incision (Case B) in same room
+ * Returns array of turnover durations in SECONDS
+ */
+export function getAllSurgicalTurnovers(cases: CaseWithMilestones[]): number[] {
+  const turnovers: number[] = []
+  
+  // Group cases by room and date
+  const byRoomDate = new Map<string, CaseWithMilestones[]>()
+  cases.forEach(c => {
+    if (!c.or_room_id) return
+    const key = `${c.scheduled_date}-${c.or_room_id}`
+    const existing = byRoomDate.get(key) || []
+    existing.push(c)
+    byRoomDate.set(key, existing)
+  })
+  
+  // Calculate surgical turnovers between consecutive cases
+  byRoomDate.forEach((roomCases) => {
+    const sorted = roomCases.sort((a, b) => 
+      (a.start_time || '').localeCompare(b.start_time || '')
+    )
+    
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const current = getMilestoneMap(sorted[i])
+      const next = getMilestoneMap(sorted[i + 1])
+      
+      // Surgical turnover: closing_complete → incision
+      if (current.closing_complete && next.incision) {
+        const turnoverSeconds = getTimeDiffSeconds(current.closing_complete, next.incision)
+        // Only include reasonable turnovers (5 min to 6 hours)
+        if (turnoverSeconds !== null && turnoverSeconds >= 300 && turnoverSeconds <= 21600) {
+          turnovers.push(turnoverSeconds)
+        }
+      }
+    }
+  })
+  
+  return turnovers
 }
