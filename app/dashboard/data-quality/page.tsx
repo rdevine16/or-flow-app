@@ -477,16 +477,13 @@ export default function DataQualityPage() {
         }
       })
       
-      // Check if there's any "missing" type issue (allows editing unrecorded milestones)
-      const hasAnyMissingIssue = Array.from(issueMilestoneTypes.values()).includes('missing')
-      
       // Build the editable milestone list
       const editable: EditableMilestone[] = milestoneList.map(fm => {
         // Can edit if:
         // 1. This milestone has an issue, OR
         // 2. This milestone is paired with one that has an issue, OR
-        // 3. For missing issues: any unrecorded milestone in this case
-        const canEdit = editableMilestoneIds.has(fm.id) || (hasAnyMissingIssue && !fm.recorded_at)
+        // 3. ANY unrecorded milestone (user is already reviewing, let them fix everything)
+        const canEdit = editableMilestoneIds.has(fm.id) || !fm.recorded_at
         
         return {
           id: fm.id,
@@ -783,6 +780,22 @@ export default function DataQualityPage() {
       )
     }
     
+    // ============================================
+    // MARK CASE AS VALIDATED
+    // Now that all issues are resolved, this case's
+    // data is approved for inclusion in analytics
+    // ============================================
+    if (modalState.issue.case_id) {
+      await supabase
+        .from('cases')
+        .update({
+          data_validated: true,
+          validated_at: new Date().toISOString(),
+          validated_by: currentUserId
+        })
+        .eq('id', modalState.issue.case_id)
+    }
+    
     // Audit log
     await dataQualityAudit.issueResolved(
       supabase,
@@ -813,11 +826,16 @@ export default function DataQualityPage() {
     
     const caseIds = [...new Set(issueCases?.map(ic => ic.case_id) || [])]
     
-    // Mark all cases as excluded
+    // Mark all cases as excluded AND validated (reviewed but excluded)
     if (caseIds.length > 0) {
       await supabase
         .from('cases')
-        .update({ is_excluded_from_metrics: true })
+        .update({ 
+          is_excluded_from_metrics: true,
+          data_validated: true,  // Marked as reviewed
+          validated_at: new Date().toISOString(),
+          validated_by: currentUserId
+        })
         .in('id', caseIds)
     }
     
