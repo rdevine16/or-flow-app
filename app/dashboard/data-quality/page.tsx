@@ -316,15 +316,10 @@ export default function DataQualityPage() {
     setLoadingMilestones(true)
     
     try {
-      // 1. Get milestones FOR THIS SPECIFIC CASE with facility_milestone details
+      // 1. Get milestones FOR THIS SPECIFIC CASE (without join to avoid RLS issues)
       const { data: caseMilestones, error: cmError } = await supabase
         .from('case_milestones')
-        .select(`
-          id,
-          recorded_at,
-          facility_milestone_id,
-          facility_milestones(id, name, display_name, display_order, pair_with_id)
-        `)
+        .select('id, recorded_at, facility_milestone_id')
         .eq('case_id', caseId)
       
       if (cmError) {
@@ -333,19 +328,60 @@ export default function DataQualityPage() {
       
       console.log('Loaded case_milestones:', caseMilestones?.length, caseMilestones)
       
-      // 2. Get ALL unresolved issues for this case to know which milestones have problems
+      // 2. Get unique facility_milestone_ids to look up
+      const facilityMilestoneIds = [...new Set(
+        caseMilestones?.map(cm => cm.facility_milestone_id).filter(Boolean) || []
+      )]
+      
+      // 3. Fetch facility_milestones separately (bypasses join RLS issues)
+      let facilityMilestones: Array<{
+        id: string
+        name: string
+        display_name: string
+        display_order: number
+        pair_with_id: string | null
+      }> = []
+      
+      if (facilityMilestoneIds.length > 0) {
+        const { data: fmData, error: fmError } = await supabase
+          .from('facility_milestones')
+          .select('id, name, display_name, display_order, pair_with_id')
+          .in('id', facilityMilestoneIds)
+        
+        if (fmError) {
+          console.error('Error loading facility_milestones:', fmError)
+        } else {
+          facilityMilestones = fmData || []
+        }
+        console.log('Loaded facility_milestones:', facilityMilestones?.length, facilityMilestones)
+      }
+      
+      // Create lookup map for facility_milestones
+      const fmLookup = new Map(facilityMilestones.map(fm => [fm.id, fm]))
+      
+      // 4. Get ALL unresolved issues for this case
       const { data: allCaseIssues, error: issuesError } = await supabase
         .from('metric_issues')
-        .select(`
-          facility_milestone_id, 
-          issue_types(name),
-          facility_milestones(id, name, display_name, display_order, pair_with_id)
-        `)
+        .select('facility_milestone_id, issue_type_id, issue_types(name)')
         .eq('case_id', caseId)
         .is('resolved_at', null)
       
       if (issuesError) {
         console.error('Error loading case issues:', issuesError)
+      }
+      
+      // Also fetch facility_milestones for issues (might have some not in case_milestones)
+      const issueFmIds = [...new Set(
+        allCaseIssues?.map(i => i.facility_milestone_id).filter(Boolean) || []
+      )].filter(id => !fmLookup.has(id))
+      
+      if (issueFmIds.length > 0) {
+        const { data: issueFmData } = await supabase
+          .from('facility_milestones')
+          .select('id, name, display_name, display_order, pair_with_id')
+          .in('id', issueFmIds)
+        
+        issueFmData?.forEach(fm => fmLookup.set(fm.id, fm))
       }
       
       // Build set of milestone IDs that have issues and their types
@@ -363,7 +399,7 @@ export default function DataQualityPage() {
         }
       })
       
-      // Build milestone map from case_milestones (recorded milestones)
+      // Build milestone map from case_milestones
       const milestoneMap = new Map<string, {
         id: string
         name: string
@@ -373,61 +409,28 @@ export default function DataQualityPage() {
         recorded_at: string | null
       }>()
       
-      // Track which facility_milestone_ids we need to look up separately
-      const missingFmIds: string[] = []
-      
       caseMilestones?.forEach(cm => {
-        const fm = Array.isArray(cm.facility_milestones) 
-          ? cm.facility_milestones[0] 
-          : cm.facility_milestones
-        
-        if (fm && cm.facility_milestone_id) {
-          milestoneMap.set(cm.facility_milestone_id, {
-            id: cm.facility_milestone_id,
-            name: fm.name,
-            display_name: fm.display_name,
-            display_order: fm.display_order || 0,
-            pair_with_id: fm.pair_with_id || null,
-            recorded_at: cm.recorded_at
-          })
-        } else if (cm.facility_milestone_id) {
-          // Join failed - need to look up separately
-          missingFmIds.push(cm.facility_milestone_id)
-          console.log('Missing facility_milestone join for:', cm.facility_milestone_id, 'recorded_at:', cm.recorded_at)
-        }
-      })
-      
-      // If we have missing facility_milestones, fetch them directly
-      if (missingFmIds.length > 0) {
-        const { data: missingFms } = await supabase
-          .from('facility_milestones')
-          .select('id, name, display_name, display_order, pair_with_id')
-          .in('id', missingFmIds)
-        
-        console.log('Fetched missing facility_milestones:', missingFms)
-        
-        // Now add them to the map with their recorded_at from case_milestones
-        missingFms?.forEach(fm => {
-          const cm = caseMilestones?.find(c => c.facility_milestone_id === fm.id)
-          if (cm) {
-            milestoneMap.set(fm.id, {
-              id: fm.id,
+        if (cm.facility_milestone_id) {
+          const fm = fmLookup.get(cm.facility_milestone_id)
+          if (fm) {
+            milestoneMap.set(cm.facility_milestone_id, {
+              id: cm.facility_milestone_id,
               name: fm.name,
               display_name: fm.display_name,
               display_order: fm.display_order || 0,
               pair_with_id: fm.pair_with_id || null,
               recorded_at: cm.recorded_at
             })
+          } else {
+            console.log('Missing facility_milestone for id:', cm.facility_milestone_id)
           }
-        })
-      }
+        }
+      })
       
-      // Add missing milestones from issues (they won't be in case_milestones)
+      // Add missing milestones from issues (they won't be in case_milestones yet)
       allCaseIssues?.forEach(issue => {
         if (issue.facility_milestone_id && !milestoneMap.has(issue.facility_milestone_id)) {
-          const fm = Array.isArray(issue.facility_milestones) 
-            ? issue.facility_milestones[0] 
-            : issue.facility_milestones
+          const fm = fmLookup.get(issue.facility_milestone_id)
           
           if (fm) {
             milestoneMap.set(issue.facility_milestone_id, {
