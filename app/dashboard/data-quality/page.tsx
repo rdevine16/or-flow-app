@@ -222,17 +222,18 @@ export default function DataQualityPage() {
     
     try {
       // Get facility milestones (the expected ones)
+      // facility_milestones has name and display_name directly
       const { data: facilityMilestones, error: fmError } = await supabase
         .from('facility_milestones')
         .select(`
           id,
+          name,
           display_name,
-          display_order,
-          is_enabled,
-          milestone_types(name, display_name)
+          display_order
         `)
         .eq('facility_id', facilityId)
-        .eq('is_enabled', true)
+        .eq('is_active', true)
+        .is('deleted_at', null)
         .order('display_order')
       
       if (fmError) {
@@ -270,12 +271,12 @@ export default function DataQualityPage() {
       })
       
       // Build editable milestone list
+      // facility_milestones now has name and display_name directly
       const editable: EditableMilestone[] = (facilityMilestones || [])
         .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
         .map(fm => {
-          const milestoneType = normalizeJoin(fm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
-          const name = milestoneType?.name || ''
-          const displayName = fm.display_name || milestoneType?.display_name || name
+          const name = fm.name || ''
+          const displayName = fm.display_name || name
           const recordedAt = milestoneMap.get(name) || null
           
           return {
@@ -565,13 +566,8 @@ export default function DataQualityPage() {
     if (!modalState.issue) return false
     if (editableMilestones.length === 0) return false // Still loading or no milestones
     
-    // Get the milestone name from the nested milestone_types
-    const facilityMilestone = modalState.issue.facility_milestone
-    const milestoneTypes = facilityMilestone?.milestone_types
-    // Handle Supabase returning array vs object
-    const normalizedType = Array.isArray(milestoneTypes) ? milestoneTypes[0] : milestoneTypes
-    const issueMilestoneName = normalizedType?.name
-    
+    // facility_milestone now has name directly on it
+    const issueMilestoneName = modalState.issue.facility_milestone?.name
     if (!issueMilestoneName) return false
     
     const milestone = editableMilestones.find(m => m.name === issueMilestoneName)
@@ -582,11 +578,7 @@ export default function DataQualityPage() {
   
   // Helper to get the issue's milestone name
   const getIssueMilestoneName = (): string | null => {
-    if (!modalState.issue) return null
-    const facilityMilestone = modalState.issue.facility_milestone
-    const milestoneTypes = facilityMilestone?.milestone_types
-    const normalizedType = Array.isArray(milestoneTypes) ? milestoneTypes[0] : milestoneTypes
-    return normalizedType?.name || null
+    return modalState.issue?.facility_milestone?.name || null
   }
 
   return (
@@ -828,13 +820,37 @@ export default function DataQualityPage() {
                             {formatIssueDescription(issue)}
                           </p>
 
-                          <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
+                          {/* Case Info Row */}
+                          <div className="flex items-center gap-2 mt-2 text-xs text-slate-600 flex-wrap">
                             {issue.cases && (
-                              <span className="font-medium">
-                                Case: {issue.cases.case_number}
-                                {issue.cases.procedure_types?.name && ` · ${issue.cases.procedure_types.name}`}
-                              </span>
+                              <>
+                                <span className="font-semibold text-slate-700">
+                                  {issue.cases.case_number}
+                                </span>
+                                <span className="text-slate-300">•</span>
+                                {issue.cases.surgeon && (
+                                  <>
+                                    <span>
+                                      Dr. {issue.cases.surgeon.last_name}
+                                    </span>
+                                    <span className="text-slate-300">•</span>
+                                  </>
+                                )}
+                                {issue.cases.procedure_types?.name && (
+                                  <span>{issue.cases.procedure_types.name}</span>
+                                )}
+                                {issue.cases.operative_side && (
+                                  <>
+                                    <span className="text-slate-300">•</span>
+                                    <span className="capitalize">{issue.cases.operative_side}</span>
+                                  </>
+                                )}
+                              </>
                             )}
+                          </div>
+
+                          {/* Timing Info Row */}
+                          <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 flex-wrap">
                             <span>Detected {formatTimeAgo(issue.detected_at)}</span>
                             {!issue.resolved_at && (
                               <span className={daysUntilExpiry <= 7 ? 'text-amber-600 font-medium' : ''}>
@@ -1059,6 +1075,10 @@ export default function DataQualityPage() {
                       <div>
                         <span className="text-slate-500">Procedure</span>
                         <p className="font-medium text-slate-900">{modalState.issue.cases?.procedure_types?.name || 'Not specified'}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Operative Side</span>
+                        <p className="font-medium text-slate-900 capitalize">{modalState.issue.cases?.operative_side || 'Not specified'}</p>
                       </div>
                       <div>
                         <span className="text-slate-500">Date</span>

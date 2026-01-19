@@ -49,17 +49,18 @@ export interface MetricIssue {
   issue_type?: IssueType | null
   resolution_type?: ResolutionType | null
   facility_milestone?: {
+    name: string
     display_name: string
-    milestone_types?: { name: string; display_name: string } | null
   } | null
   cases?: {
     case_number: string
     scheduled_date: string
-    start_time?: string | null  // <-- ADDED: Scheduled surgery start time
+    start_time?: string | null
+    operative_side?: string | null
     procedure_types?: { name: string } | null
     surgeon?: { first_name: string; last_name: string } | null
-    or_rooms?: { name: string } | null  // <-- ADDED: For modal
-    case_milestones?: Array<{            // <-- ADDED: For milestone timeline in modal
+    or_rooms?: { name: string } | null
+    case_milestones?: Array<{
       id: string
       recorded_at: string
       milestone_types?: { name: string; display_name: string } | null
@@ -134,14 +135,12 @@ export async function fetchMetricIssues(
       *,
       issue_type:issue_types(*),
       resolution_type:resolution_types(*),
-      facility_milestone:facility_milestones(
-        display_name,
-        milestone_types(name, display_name)
-      ),
+      facility_milestone:facility_milestones(name, display_name),
       cases(
         case_number,
         scheduled_date,
         start_time,
+        operative_side,
         procedure_types(name),
         surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
         or_rooms(name),
