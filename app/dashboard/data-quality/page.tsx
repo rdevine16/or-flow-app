@@ -331,6 +331,8 @@ export default function DataQualityPage() {
         console.error('Error loading case milestones:', cmError)
       }
       
+      console.log('Loaded case_milestones:', caseMilestones?.length, caseMilestones)
+      
       // 2. Get ALL unresolved issues for this case to know which milestones have problems
       const { data: allCaseIssues, error: issuesError } = await supabase
         .from('metric_issues')
@@ -371,6 +373,9 @@ export default function DataQualityPage() {
         recorded_at: string | null
       }>()
       
+      // Track which facility_milestone_ids we need to look up separately
+      const missingFmIds: string[] = []
+      
       caseMilestones?.forEach(cm => {
         const fm = Array.isArray(cm.facility_milestones) 
           ? cm.facility_milestones[0] 
@@ -385,8 +390,37 @@ export default function DataQualityPage() {
             pair_with_id: fm.pair_with_id || null,
             recorded_at: cm.recorded_at
           })
+        } else if (cm.facility_milestone_id) {
+          // Join failed - need to look up separately
+          missingFmIds.push(cm.facility_milestone_id)
+          console.log('Missing facility_milestone join for:', cm.facility_milestone_id, 'recorded_at:', cm.recorded_at)
         }
       })
+      
+      // If we have missing facility_milestones, fetch them directly
+      if (missingFmIds.length > 0) {
+        const { data: missingFms } = await supabase
+          .from('facility_milestones')
+          .select('id, name, display_name, display_order, pair_with_id')
+          .in('id', missingFmIds)
+        
+        console.log('Fetched missing facility_milestones:', missingFms)
+        
+        // Now add them to the map with their recorded_at from case_milestones
+        missingFms?.forEach(fm => {
+          const cm = caseMilestones?.find(c => c.facility_milestone_id === fm.id)
+          if (cm) {
+            milestoneMap.set(fm.id, {
+              id: fm.id,
+              name: fm.name,
+              display_name: fm.display_name,
+              display_order: fm.display_order || 0,
+              pair_with_id: fm.pair_with_id || null,
+              recorded_at: cm.recorded_at
+            })
+          }
+        })
+      }
       
       // Add missing milestones from issues (they won't be in case_milestones)
       allCaseIssues?.forEach(issue => {
@@ -1579,7 +1613,7 @@ export default function DataQualityPage() {
                           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                         </div>
                       ) : (
-                        <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+                        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
                           {editableMilestones.map((milestone, index) => {
                             // Check if this milestone has an issue (using global state)
                             const hasIssue = milestone.id ? issueMilestoneIds.has(milestone.id) : false
@@ -1592,34 +1626,37 @@ export default function DataQualityPage() {
                             const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
                             const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
                             
-                            // Find if we should show the pairing bracket (only on start milestone)
-                            const showPairBracket = isStartOfPair && pairedMilestone
-                            const pairEndIndex = showPairBracket 
-                              ? editableMilestones.findIndex(m => m.id === pairedMilestone.id)
+                            // Calculate if this milestone is between a pair (for vertical line)
+                            const isPaired = isStartOfPair || isEndOfPair
+                            
+                            // Find how many rows between start and end of this pair
+                            const pairEndIndex = isStartOfPair 
+                              ? editableMilestones.findIndex(m => m.id === milestone.pair_with_id)
                               : -1
-                            const pairSpan = pairEndIndex > index ? pairEndIndex - index : 0
                             
                             return (
                               <div 
                                 key={milestone.id || milestone.name}
                                 className={`relative ${
                                   hasIssue ? 'bg-amber-50' : ''
-                                }`}
+                                } ${index > 0 ? 'border-t border-slate-100' : ''}`}
                               >
                                 <div className="px-4 py-3 flex items-center gap-3">
-                                  {/* Pair indicator column */}
-                                  <div className="w-8 flex-shrink-0 flex items-center justify-center">
-                                    {(isStartOfPair || isEndOfPair) && (
-                                      <div className={`flex items-center ${isStartOfPair ? 'text-slate-400' : 'text-slate-400'}`}>
-                                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                                          {isStartOfPair ? (
-                                            // Top of bracket - curved arrow pointing down
-                                            <path d="M12 4 C12 4, 6 4, 6 10 L6 14" strokeLinecap="round" />
-                                          ) : (
-                                            // Bottom of bracket - curved arrow pointing up
-                                            <path d="M6 10 L6 14 C6 20, 12 20, 12 20" strokeLinecap="round" />
-                                          )}
-                                        </svg>
+                                  {/* Pair bracket indicator */}
+                                  <div className="w-6 flex-shrink-0 relative">
+                                    {isPaired && (
+                                      <div className="absolute inset-0 flex items-center justify-center">
+                                        {/* Vertical line segment */}
+                                        <div className={`absolute left-1/2 w-0.5 bg-blue-300 ${
+                                          isStartOfPair ? 'top-1/2 bottom-0 rounded-t-full' : 
+                                          isEndOfPair ? 'top-0 bottom-1/2 rounded-b-full' : ''
+                                        }`} style={{ transform: 'translateX(-50%)' }} />
+                                        
+                                        {/* Horizontal connector */}
+                                        <div className="absolute right-0 w-2 h-0.5 bg-blue-300" />
+                                        
+                                        {/* Circle at connection point */}
+                                        <div className="absolute right-0 w-1.5 h-1.5 rounded-full bg-blue-400" />
                                       </div>
                                     )}
                                   </div>
@@ -1643,12 +1680,12 @@ export default function DataQualityPage() {
                                     
                                     {/* Start/End badge for paired milestones */}
                                     {isStartOfPair && (
-                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-500 rounded">
+                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-600 rounded">
                                         Start
                                       </span>
                                     )}
                                     {isEndOfPair && (
-                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-500 rounded">
+                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-600 rounded">
                                         End
                                       </span>
                                     )}
