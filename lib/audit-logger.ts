@@ -1421,6 +1421,39 @@ export const adminAudit = {
       targetLabel: facilityName,
     })
   },
+
+  // Body Regions
+  async bodyRegionCreated(supabase: SupabaseClient, regionName: string, regionId: string) {
+    await log(supabase, 'admin.body_region_created', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: regionName,
+      newValues: { name: regionName },
+    })
+  },
+
+  async bodyRegionUpdated(
+    supabase: SupabaseClient,
+    regionId: string,
+    oldName: string,
+    newName: string
+  ) {
+    await log(supabase, 'admin.body_region_updated', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: newName,
+      oldValues: { name: oldName },
+      newValues: { name: newName },
+    })
+  },
+
+  async bodyRegionDeleted(supabase: SupabaseClient, regionName: string, regionId: string) {
+    await log(supabase, 'admin.body_region_deleted', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: regionName,
+    })
+  },
 }
 
 // =====================================================
