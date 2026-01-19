@@ -191,6 +191,7 @@ export function calculateAverage(values: (number | null)[]): number {
 
 /**
  * Parse scheduled start time and date into a Date object
+ * FIXED: Creates date in local time to avoid timezone issues
  */
 export function parseScheduledDateTime(date: string, time: string | null): Date | null {
   if (!time) return null
@@ -230,15 +231,46 @@ export function getDateRange(startDate: Date, endDate: Date): string[] {
   return dates
 }
 
+/**
+ * Calculate delta between current and previous values
+ * Returns { delta, deltaType } for trend display
+ */
+function calculateDelta(
+  current: number, 
+  previous: number | undefined,
+  lowerIsBetter: boolean = false
+): { delta?: number; deltaType?: 'increase' | 'decrease' | 'unchanged' } {
+  if (previous === undefined || previous === 0) {
+    return {}
+  }
+  
+  const rawDelta = Math.round(((current - previous) / previous) * 100)
+  const delta = Math.abs(rawDelta)
+  
+  let deltaType: 'increase' | 'decrease' | 'unchanged'
+  if (rawDelta > 0) {
+    deltaType = lowerIsBetter ? 'decrease' : 'increase' // If lower is better, increase is bad
+  } else if (rawDelta < 0) {
+    deltaType = lowerIsBetter ? 'increase' : 'decrease' // If lower is better, decrease is good
+  } else {
+    deltaType = 'unchanged'
+  }
+  
+  return { delta, deltaType }
+}
+
 // ============================================
 // METRIC CALCULATIONS
 // ============================================
 
 /**
  * 1. FCOTS - First Case On-Time Start
- * Measures if the first case of each OR room starts within 5 minutes of scheduled time
+ * Measures if the first case of each OR room starts within 2 minutes of scheduled time
  */
-export function calculateFCOTS(cases: CaseWithMilestones[]): KPIResult {
+export function calculateFCOTS(
+  cases: CaseWithMilestones[],
+  previousPeriodCases?: CaseWithMilestones[]
+): KPIResult {
   const casesByDateRoom = new Map<string, CaseWithMilestones>()
   
   // Find first case per room per day
@@ -283,6 +315,38 @@ export function calculateFCOTS(cases: CaseWithMilestones[]): KPIResult {
   const total = onTimeCount + lateCount
   const rate = total > 0 ? Math.round((onTimeCount / total) * 100) : 0
   
+  // Calculate previous period rate for delta
+  let previousRate: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prevByDateRoom = new Map<string, CaseWithMilestones>()
+    previousPeriodCases.forEach(c => {
+      if (!c.or_room_id || !c.start_time) return
+      const key = `${c.scheduled_date}-${c.or_room_id}`
+      const existing = prevByDateRoom.get(key)
+      if (!existing || (c.start_time < (existing.start_time || ''))) {
+        prevByDateRoom.set(key, c)
+      }
+    })
+    
+    let prevOnTime = 0
+    let prevTotal = 0
+    Array.from(prevByDateRoom.values()).forEach(c => {
+      const milestones = getMilestoneMap(c)
+      const scheduled = parseScheduledDateTime(c.scheduled_date, c.start_time)
+      const actual = milestones.patient_in
+      if (!scheduled || !actual) return
+      prevTotal++
+      const delayMinutes = getTimeDiffMinutes(scheduled, actual) || 0
+      if (delayMinutes <= 2) prevOnTime++
+    })
+    
+    if (prevTotal > 0) {
+      previousRate = Math.round((prevOnTime / prevTotal) * 100)
+    }
+  }
+  
+  const { delta, deltaType } = calculateDelta(rate, previousRate)
+  
   // Build daily tracker data
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -304,6 +368,8 @@ export function calculateFCOTS(cases: CaseWithMilestones[]): KPIResult {
     subtitle: `${lateCount} late of ${total} first cases`,
     target: 85,
     targetMet: rate >= 85,
+    delta,
+    deltaType,
     dailyData
   }
 }
@@ -312,7 +378,10 @@ export function calculateFCOTS(cases: CaseWithMilestones[]): KPIResult {
  * 2. Turnover Time
  * Time from patient_out of one case to patient_in of the next case in same room
  */
-export function calculateTurnoverTime(cases: CaseWithMilestones[]): KPIResult {
+export function calculateTurnoverTime(
+  cases: CaseWithMilestones[],
+  previousPeriodCases?: CaseWithMilestones[]
+): KPIResult {
   const turnovers: number[] = []
   const dailyResults = new Map<string, number[]>()
   
@@ -352,6 +421,41 @@ export function calculateTurnoverTime(cases: CaseWithMilestones[]): KPIResult {
   const metTarget = turnovers.filter(t => t <= 30).length
   const complianceRate = turnovers.length > 0 ? Math.round((metTarget / turnovers.length) * 100) : 0
   
+  // Calculate previous period average for delta
+  let previousAvg: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prevTurnovers: number[] = []
+    const prevByRoomDate = new Map<string, CaseWithMilestones[]>()
+    previousPeriodCases.forEach(c => {
+      if (!c.or_room_id) return
+      const key = `${c.scheduled_date}-${c.or_room_id}`
+      const existing = prevByRoomDate.get(key) || []
+      existing.push(c)
+      prevByRoomDate.set(key, existing)
+    })
+    
+    prevByRoomDate.forEach((roomCases) => {
+      const sorted = roomCases.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+      for (let i = 0; i < sorted.length - 1; i++) {
+        const current = getMilestoneMap(sorted[i])
+        const next = getMilestoneMap(sorted[i + 1])
+        if (current.patient_out && next.patient_in) {
+          const turnoverMinutes = getTimeDiffMinutes(current.patient_out, next.patient_in)
+          if (turnoverMinutes !== null && turnoverMinutes > 0 && turnoverMinutes < 180) {
+            prevTurnovers.push(turnoverMinutes)
+          }
+        }
+      }
+    })
+    
+    if (prevTurnovers.length > 0) {
+      previousAvg = calculateAverage(prevTurnovers)
+    }
+  }
+  
+  // For turnover, lower is better
+  const { delta, deltaType } = calculateDelta(avgTurnover, previousAvg, true)
+  
   // Build daily tracker
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -371,6 +475,8 @@ export function calculateTurnoverTime(cases: CaseWithMilestones[]): KPIResult {
     subtitle: `${complianceRate}% under 30 min target`,
     target: 80,
     targetMet: complianceRate >= 80,
+    delta,
+    deltaType,
     dailyData
   }
 }
@@ -381,7 +487,8 @@ export function calculateTurnoverTime(cases: CaseWithMilestones[]): KPIResult {
  */
 export function calculateORUtilization(
   cases: CaseWithMilestones[], 
-  availableHoursPerRoom: number = 10
+  availableHoursPerRoom: number = 10,
+  previousPeriodCases?: CaseWithMilestones[]
 ): KPIResult {
   const roomDays = new Map<string, number>() // Total minutes used per room-day
   const uniqueRoomDays = new Set<string>()
@@ -415,6 +522,34 @@ export function calculateORUtilization(
   
   const avgUtilization = calculateAverage(utilizations)
   
+  // Calculate previous period utilization for delta
+  let previousAvg: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prevRoomDays = new Map<string, number>()
+    previousPeriodCases.forEach(c => {
+      if (!c.or_room_id) return
+      const milestones = getMilestoneMap(c)
+      const caseMinutes = getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
+      if (caseMinutes !== null && caseMinutes > 0) {
+        const key = `${c.scheduled_date}-${c.or_room_id}`
+        const existing = prevRoomDays.get(key) || 0
+        prevRoomDays.set(key, existing + caseMinutes)
+      }
+    })
+    
+    const prevUtilizations: number[] = []
+    prevRoomDays.forEach((minutes) => {
+      const utilization = (minutes / (availableHoursPerRoom * 60)) * 100
+      prevUtilizations.push(utilization)
+    })
+    
+    if (prevUtilizations.length > 0) {
+      previousAvg = calculateAverage(prevUtilizations)
+    }
+  }
+  
+  const { delta, deltaType } = calculateDelta(avgUtilization, previousAvg)
+  
   // Build daily tracker
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -434,6 +569,8 @@ export function calculateORUtilization(
     subtitle: `Across ${new Set(cases.map(c => c.or_room_id).filter(Boolean)).size} rooms`,
     target: 75,
     targetMet: avgUtilization >= 75,
+    delta,
+    deltaType,
     dailyData
   }
 }
@@ -455,6 +592,7 @@ export function calculateCaseVolume(
   if (previousTotal > 0) {
     delta = Math.round(((totalCases - previousTotal) / previousTotal) * 100)
     deltaType = delta > 0 ? 'increase' : delta < 0 ? 'decrease' : 'unchanged'
+    delta = Math.abs(delta)
   }
   
   // Weekly trend for sparkline
@@ -470,8 +608,8 @@ export function calculateCaseVolume(
   return {
     value: totalCases,
     displayValue: totalCases.toString(),
-    subtitle: delta !== undefined ? `${delta > 0 ? '+' : ''}${delta}% vs last period` : 'This period',
-    delta: delta !== undefined ? Math.abs(delta) : undefined,
+    subtitle: delta !== undefined ? `${deltaType === 'increase' ? '+' : '-'}${delta}% vs last period` : 'This period',
+    delta,
     deltaType
   }
 }
@@ -480,10 +618,23 @@ export function calculateCaseVolume(
  * 5. Cancellation Rate
  * Percentage of cases that were cancelled
  */
-export function calculateCancellationRate(cases: CaseWithMilestones[]): KPIResult {
+export function calculateCancellationRate(
+  cases: CaseWithMilestones[],
+  previousPeriodCases?: CaseWithMilestones[]
+): KPIResult {
   const cancelled = cases.filter(c => c.case_statuses?.name === 'cancelled')
   const total = cases.length
   const rate = total > 0 ? (cancelled.length / total) * 100 : 0
+  
+  // Calculate previous period rate for delta
+  let previousRate: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prevCancelled = previousPeriodCases.filter(c => c.case_statuses?.name === 'cancelled')
+    previousRate = (prevCancelled.length / previousPeriodCases.length) * 100
+  }
+  
+  // For cancellation rate, lower is better
+  const { delta, deltaType } = calculateDelta(rate, previousRate, true)
   
   // Daily tracker for zero-cancellation days
   const dailyResults = new Map<string, { total: number; cancelled: number }>()
@@ -511,6 +662,8 @@ export function calculateCancellationRate(cases: CaseWithMilestones[]): KPIResul
     subtitle: `${cancelled.length} of ${total} cases`,
     target: 5,
     targetMet: rate <= 5,
+    delta,
+    deltaType,
     dailyData
   }
 }
@@ -768,6 +921,59 @@ export function calculateTimeBreakdown(cases: CaseWithMilestones[]) {
   }
 }
 
+/**
+ * Calculate average case time with delta
+ */
+export function calculateAvgCaseTime(
+  cases: CaseWithMilestones[],
+  previousPeriodCases?: CaseWithMilestones[]
+): KPIResult {
+  const completedCases = cases.filter(c => {
+    const m = getMilestoneMap(c)
+    return m.patient_in && m.patient_out
+  })
+  
+  const totalTimes: number[] = []
+  completedCases.forEach(c => {
+    const m = getMilestoneMap(c)
+    const total = getTimeDiffMinutes(m.patient_in, m.patient_out)
+    if (total && total > 0) totalTimes.push(total)
+  })
+  
+  const avgTime = calculateAverage(totalTimes)
+  
+  // Calculate previous period average for delta
+  let previousAvg: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prevCompleted = previousPeriodCases.filter(c => {
+      const m = getMilestoneMap(c)
+      return m.patient_in && m.patient_out
+    })
+    
+    const prevTimes: number[] = []
+    prevCompleted.forEach(c => {
+      const m = getMilestoneMap(c)
+      const total = getTimeDiffMinutes(m.patient_in, m.patient_out)
+      if (total && total > 0) prevTimes.push(total)
+    })
+    
+    if (prevTimes.length > 0) {
+      previousAvg = calculateAverage(prevTimes)
+    }
+  }
+  
+  // For case time, lower is generally better (more efficient)
+  const { delta, deltaType } = calculateDelta(avgTime, previousAvg, true)
+  
+  return {
+    value: Math.round(avgTime),
+    displayValue: formatMinutes(avgTime),
+    subtitle: `${completedCases.length} completed cases`,
+    delta,
+    deltaType
+  }
+}
+
 // ============================================
 // MAIN ANALYTICS FUNCTION
 // ============================================
@@ -795,12 +1001,12 @@ export function calculateAnalyticsOverview(
     completedCases: completedCases.length,
     cancelledCases: cancelledCases.length,
     
-    // KPIs
-    fcots: calculateFCOTS(cases),
-    turnoverTime: calculateTurnoverTime(cases),
-    orUtilization: calculateORUtilization(cases),
+    // KPIs - now with deltas
+    fcots: calculateFCOTS(cases, previousPeriodCases),
+    turnoverTime: calculateTurnoverTime(cases, previousPeriodCases),
+    orUtilization: calculateORUtilization(cases, 10, previousPeriodCases),
     caseVolume: calculateCaseVolume(cases, previousPeriodCases),
-    cancellationRate: calculateCancellationRate(cases),
+    cancellationRate: calculateCancellationRate(cases, previousPeriodCases),
     cumulativeTardiness: calculateCumulativeTardiness(cases),
     nonOperativeTime: calculateNonOperativeTime(cases),
     surgeonIdleTime: surgeonIdleResult.kpi,
