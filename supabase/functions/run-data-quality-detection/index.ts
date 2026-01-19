@@ -7,22 +7,33 @@
 // - Go to Database → Extensions → Enable pg_cron if not already
 // - Go to SQL Editor and run the cron setup SQL below
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Issue type names
+// ============================================
+// ISSUE TYPE NAMES
+// ============================================
+
 const ISSUE_TYPES = {
   MISSING: 'missing',
   IMPOSSIBLE: 'impossible_value',
   NEGATIVE: 'negative_duration',
   OUT_OF_SEQUENCE: 'out_of_sequence',
   STALE: 'stale_case',
-  INCOMPLETE: 'incomplete_case'
+  INCOMPLETE: 'incomplete_case',
+  // Stale case types
+  STALE_IN_PROGRESS: 'stale_in_progress',
+  ABANDONED_SCHEDULED: 'abandoned_scheduled',
+  NO_ACTIVITY: 'no_activity'
 }
+
+// ============================================
+// INTERFACES
+// ============================================
 
 interface DetectionResult {
   facilityId: string
@@ -30,7 +41,33 @@ interface DetectionResult {
   casesChecked: number
   issuesFound: number
   expiredCount: number
+  // Stale case counts
+  staleCasesDetected: number
+  staleCasesCreated: number
+  staleErrors: string[]
 }
+
+interface StaleCase {
+  case_id: string
+  case_number: string
+  facility_id: string
+  issue_type: 'stale_in_progress' | 'abandoned_scheduled' | 'no_activity'
+  details: {
+    hours_elapsed?: number
+    days_overdue?: number
+    last_activity?: string
+  }
+}
+
+interface StaleDetectionResult {
+  detected: number
+  created: number
+  errors: string[]
+}
+
+// ============================================
+// MAIN HANDLER
+// ============================================
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -207,12 +244,25 @@ Deno.serve(async (req) => {
           }
         }
         
+        // ============================================
+        // 4. STALE CASE DETECTION
+        // ============================================
+        const staleResults = await detectStaleCases(supabase, facility.id)
+        console.log(`Stale cases for ${facility.name}: ${staleResults.detected} found, ${staleResults.created} created`)
+        
+        if (staleResults.errors.length > 0) {
+          console.error(`Stale detection errors for ${facility.name}:`, staleResults.errors)
+        }
+        
         results.push({
           facilityId: facility.id,
           facilityName: facility.name,
           casesChecked: cases?.length || 0,
           issuesFound,
-          expiredCount
+          expiredCount,
+          staleCasesDetected: staleResults.detected,
+          staleCasesCreated: staleResults.created,
+          staleErrors: staleResults.errors
         })
         
         console.log(`Facility ${facility.name}: ${cases?.length || 0} cases, ${issuesFound} issues found, ${expiredCount} expired`)
@@ -226,15 +276,16 @@ Deno.serve(async (req) => {
     const totalIssues = results.reduce((sum, r) => sum + r.issuesFound, 0)
     const totalCases = results.reduce((sum, r) => sum + r.casesChecked, 0)
     const totalExpired = results.reduce((sum, r) => sum + r.expiredCount, 0)
+    const totalStaleDetected = results.reduce((sum, r) => sum + r.staleCasesDetected, 0)
+    const totalStaleCreated = results.reduce((sum, r) => sum + r.staleCasesCreated, 0)
     
     console.log(`\nNightly detection complete:`)
     console.log(`- Facilities processed: ${results.length}`)
     console.log(`- Total cases checked: ${totalCases}`)
     console.log(`- Total issues found: ${totalIssues}`)
     console.log(`- Total issues expired: ${totalExpired}`)
-    
-    // Optionally: Send notification if issues were found
-    // await sendNotificationIfNeeded(supabase, results)
+    console.log(`- Total stale cases detected: ${totalStaleDetected}`)
+    console.log(`- Total stale issues created: ${totalStaleCreated}`)
     
     return new Response(
       JSON.stringify({
@@ -243,7 +294,9 @@ Deno.serve(async (req) => {
           facilitiesProcessed: results.length,
           totalCasesChecked: totalCases,
           totalIssuesFound: totalIssues,
-          totalIssuesExpired: totalExpired
+          totalIssuesExpired: totalExpired,
+          totalStaleCasesDetected: totalStaleDetected,
+          totalStaleCasesCreated: totalStaleCreated
         },
         results
       }),
@@ -266,14 +319,16 @@ Deno.serve(async (req) => {
   }
 })
 
-// Helper functions
+// ============================================
+// ORIGINAL HELPER FUNCTIONS
+// ============================================
 
 function normalizeJoin<T>(data: T | T[] | null): T | null {
   if (Array.isArray(data)) return data[0] || null
   return data
 }
 
-async function getIssueTypeIds(supabase: any): Promise<Record<string, string>> {
+async function getIssueTypeIds(supabase: SupabaseClient): Promise<Record<string, string>> {
   const { data } = await supabase
     .from('issue_types')
     .select('id, name')
@@ -285,7 +340,7 @@ async function getIssueTypeIds(supabase: any): Promise<Record<string, string>> {
   return map
 }
 
-async function getResolutionTypeId(supabase: any, name: string): Promise<string | null> {
+async function getResolutionTypeId(supabase: SupabaseClient, name: string): Promise<string | null> {
   const { data } = await supabase
     .from('resolution_types')
     .select('id')
@@ -295,7 +350,7 @@ async function getResolutionTypeId(supabase: any, name: string): Promise<string 
   return data?.id || null
 }
 
-async function getFacilityMilestoneId(supabase: any, facilityId: string, milestoneName: string): Promise<string | null> {
+async function getFacilityMilestoneId(supabase: SupabaseClient, facilityId: string, milestoneName: string): Promise<string | null> {
   const { data } = await supabase
     .from('facility_milestones')
     .select('id')
@@ -306,7 +361,7 @@ async function getFacilityMilestoneId(supabase: any, facilityId: string, milesto
   return data?.id || null
 }
 
-async function createIssueIfNotExists(supabase: any, params: {
+async function createIssueIfNotExists(supabase: SupabaseClient, params: {
   facilityId: string
   caseId: string
   issueTypeId: string
@@ -348,4 +403,253 @@ async function createIssueIfNotExists(supabase: any, params: {
     })
   
   return !error
+}
+
+// ============================================
+// STALE CASE DETECTION FUNCTIONS
+// ============================================
+
+/**
+ * Detect all types of stale/orphaned cases for a facility
+ */
+async function detectStaleCases(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleDetectionResult> {
+  const results: StaleDetectionResult = { detected: 0, created: 0, errors: [] }
+  
+  // Get issue type IDs for stale cases
+  const { data: issueTypes } = await supabase
+    .from('issue_types')
+    .select('id, name')
+    .in('name', ['stale_in_progress', 'abandoned_scheduled', 'no_activity'])
+  
+  const issueTypeMap = new Map(issueTypes?.map(it => [it.name, it.id]) || [])
+  
+  // Run all detections
+  const staleCases: StaleCase[] = []
+  
+  // 1. Stale In-Progress (over 24 hours)
+  const staleInProgress = await detectStaleInProgress(supabase, facilityId)
+  staleCases.push(...staleInProgress)
+  
+  // 2. Abandoned Scheduled (2+ days past scheduled date)
+  const abandoned = await detectAbandonedScheduled(supabase, facilityId)
+  staleCases.push(...abandoned)
+  
+  // 3. No Activity (4+ hours since last milestone)
+  const noActivity = await detectNoActivity(supabase, facilityId)
+  staleCases.push(...noActivity)
+  
+  results.detected = staleCases.length
+  
+  // Create issues for each stale case
+  for (const staleCase of staleCases) {
+    const issueTypeId = issueTypeMap.get(staleCase.issue_type)
+    if (!issueTypeId) {
+      results.errors.push(`Unknown issue type: ${staleCase.issue_type}`)
+      continue
+    }
+    
+    // Check if issue already exists
+    const { data: existing } = await supabase
+      .from('metric_issues')
+      .select('id')
+      .eq('case_id', staleCase.case_id)
+      .eq('issue_type_id', issueTypeId)
+      .is('resolved_at', null)
+      .single()
+    
+    if (existing) continue // Skip if already flagged
+    
+    // Create the issue
+    const { error } = await supabase
+      .from('metric_issues')
+      .insert({
+        case_id: staleCase.case_id,
+        facility_id: staleCase.facility_id,
+        issue_type_id: issueTypeId,
+        facility_milestone_id: null, // Stale cases aren't milestone-specific
+        detected_value: JSON.stringify(staleCase.details),
+        detected_at: new Date().toISOString(),
+        expires_at: null // Stale cases don't auto-expire
+      })
+    
+    if (error) {
+      results.errors.push(`Failed to create issue for ${staleCase.case_number}: ${error.message}`)
+    } else {
+      results.created++
+      
+      // Invalidate case data
+      await supabase
+        .from('cases')
+        .update({ data_validated: false })
+        .eq('id', staleCase.case_id)
+    }
+  }
+  
+  return results
+}
+
+/**
+ * Find cases that have been "in_progress" for over 24 hours
+ */
+async function detectStaleInProgress(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleCase[]> {
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  
+  // Get in_progress status ID
+  const { data: statusData } = await supabase
+    .from('case_statuses')
+    .select('id')
+    .eq('name', 'in_progress')
+    .single()
+  
+  if (!statusData) return []
+  
+  // Find Patient In milestone for this facility
+  const { data: patientInMilestone } = await supabase
+    .from('facility_milestones')
+    .select('id')
+    .eq('facility_id', facilityId)
+    .eq('name', 'patient_in')
+    .single()
+  
+  if (!patientInMilestone) return []
+  
+  // Find stale cases
+  const { data: cases } = await supabase
+    .from('cases')
+    .select(`
+      id,
+      case_number,
+      facility_id,
+      case_milestones!inner(recorded_at, facility_milestone_id)
+    `)
+    .eq('facility_id', facilityId)
+    .eq('status_id', statusData.id)
+    .eq('case_milestones.facility_milestone_id', patientInMilestone.id)
+    .lt('case_milestones.recorded_at', twentyFourHoursAgo)
+  
+  return (cases || []).map(c => {
+    const patientInTime = Array.isArray(c.case_milestones) 
+      ? c.case_milestones[0]?.recorded_at 
+      : (c.case_milestones as any)?.recorded_at
+    
+    const hoursElapsed = patientInTime 
+      ? (Date.now() - new Date(patientInTime).getTime()) / (1000 * 60 * 60)
+      : 0
+    
+    return {
+      case_id: c.id,
+      case_number: c.case_number,
+      facility_id: c.facility_id,
+      issue_type: 'stale_in_progress' as const,
+      details: { hours_elapsed: Math.round(hoursElapsed * 10) / 10 }
+    }
+  })
+}
+
+/**
+ * Find scheduled cases that are 2+ days past their scheduled date
+ */
+async function detectAbandonedScheduled(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleCase[]> {
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  
+  // Get scheduled status ID
+  const { data: statusData } = await supabase
+    .from('case_statuses')
+    .select('id')
+    .eq('name', 'scheduled')
+    .single()
+  
+  if (!statusData) return []
+  
+  const { data: cases } = await supabase
+    .from('cases')
+    .select('id, case_number, facility_id, scheduled_date')
+    .eq('facility_id', facilityId)
+    .eq('status_id', statusData.id)
+    .lt('scheduled_date', twoDaysAgo)
+  
+  return (cases || []).map(c => {
+    const scheduledDate = new Date(c.scheduled_date)
+    const daysOverdue = Math.floor((Date.now() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+    
+    return {
+      case_id: c.id,
+      case_number: c.case_number,
+      facility_id: c.facility_id,
+      issue_type: 'abandoned_scheduled' as const,
+      details: { days_overdue: daysOverdue }
+    }
+  })
+}
+
+/**
+ * Find in-progress cases with no milestone activity for 4+ hours
+ */
+async function detectNoActivity(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleCase[]> {
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+  
+  // Get in_progress status ID
+  const { data: statusData } = await supabase
+    .from('case_statuses')
+    .select('id')
+    .eq('name', 'in_progress')
+    .single()
+  
+  if (!statusData) return []
+  
+  // Get all in-progress cases
+  const { data: cases } = await supabase
+    .from('cases')
+    .select(`
+      id,
+      case_number,
+      facility_id,
+      case_milestones(recorded_at)
+    `)
+    .eq('facility_id', facilityId)
+    .eq('status_id', statusData.id)
+  
+  const staleCases: StaleCase[] = []
+  
+  for (const c of cases || []) {
+    const milestones = Array.isArray(c.case_milestones) ? c.case_milestones : []
+    const recordedMilestones = milestones.filter((m: any) => m.recorded_at)
+    
+    if (recordedMilestones.length === 0) continue // Skip if no milestones at all
+    
+    // Find most recent activity
+    const lastActivity = recordedMilestones.reduce((latest: string | null, m: any) => {
+      if (!latest || m.recorded_at > latest) return m.recorded_at
+      return latest
+    }, null)
+    
+    if (lastActivity && lastActivity < fourHoursAgo) {
+      const hoursSinceActivity = (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60)
+      
+      staleCases.push({
+        case_id: c.id,
+        case_number: c.case_number,
+        facility_id: c.facility_id,
+        issue_type: 'no_activity',
+        details: { 
+          hours_elapsed: Math.round(hoursSinceActivity * 10) / 10,
+          last_activity: lastActivity 
+        }
+      })
+    }
+  }
+  
+  return staleCases
 }

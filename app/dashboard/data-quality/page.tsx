@@ -704,6 +704,127 @@ export default function DataQualityPage() {
     await saveAndResolve('excluded')
   }
 
+  // ============================================
+  // STALE CASE HELPERS
+  // ============================================
+  
+  const STALE_ISSUE_TYPES = ['stale_in_progress', 'abandoned_scheduled', 'no_activity']
+  
+  const isStaleCase = (): boolean => {
+    const issueTypeName = (modalState.issue?.issue_type as IssueType)?.name
+    return STALE_ISSUE_TYPES.includes(issueTypeName || '')
+  }
+  
+  const getStaleCaseDetails = (): { hours_elapsed?: number; days_overdue?: number; last_activity?: string } | null => {
+    if (!modalState.issue) return null
+    try {
+      const detectedValue = modalState.issue.detected_value
+      if (typeof detectedValue === 'string') {
+        return JSON.parse(detectedValue)
+      }
+      return detectedValue as any
+    } catch {
+      return null
+    }
+  }
+  
+  const handleMarkCompleted = async () => {
+    if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
+    
+    setSaving(true)
+    
+    // Get completed status ID
+    const { data: completedStatus } = await supabase
+      .from('case_statuses')
+      .select('id')
+      .eq('name', 'completed')
+      .single()
+    
+    if (completedStatus) {
+      // Update case status to completed
+      await supabase
+        .from('cases')
+        .update({ 
+          status_id: completedStatus.id,
+          data_validated: false // Will need review for missing milestones
+        })
+        .eq('id', modalState.issue.case_id)
+    }
+    
+    // Resolve the stale issue
+    await resolveIssue(
+      supabase,
+      modalState.issue.id,
+      currentUserId,
+      'approved',
+      'Case marked as completed'
+    )
+    
+    // Audit log
+    await dataQualityAudit.issueResolved(
+      supabase,
+      modalState.issue.id,
+      (modalState.issue.issue_type as IssueType)?.name || 'unknown',
+      modalState.issue.cases?.case_number || 'unknown',
+      'approved',
+      effectiveFacilityId,
+      'Case marked as completed'
+    )
+    
+    closeModal()
+    setSaving(false)
+    await loadData()
+  }
+  
+  const handleMarkCancelled = async () => {
+    if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
+    
+    setSaving(true)
+    
+    // Get cancelled status ID
+    const { data: cancelledStatus } = await supabase
+      .from('case_statuses')
+      .select('id')
+      .eq('name', 'cancelled')
+      .single()
+    
+    if (cancelledStatus) {
+      // Update case status to cancelled and exclude from metrics
+      await supabase
+        .from('cases')
+        .update({ 
+          status_id: cancelledStatus.id,
+          is_excluded_from_metrics: true,
+          data_validated: true // Cancelled = reviewed and excluded
+        })
+        .eq('id', modalState.issue.case_id)
+    }
+    
+    // Resolve the stale issue
+    await resolveIssue(
+      supabase,
+      modalState.issue.id,
+      currentUserId,
+      'excluded',
+      'Case marked as cancelled'
+    )
+    
+    // Audit log
+    await dataQualityAudit.issueResolved(
+      supabase,
+      modalState.issue.id,
+      (modalState.issue.issue_type as IssueType)?.name || 'unknown',
+      modalState.issue.cases?.case_number || 'unknown',
+      'excluded',
+      effectiveFacilityId,
+      'Case marked as cancelled'
+    )
+    
+    closeModal()
+    setSaving(false)
+    await loadData()
+  }
+
   const saveAndResolve = async (resolutionType: 'approved' | 'excluded') => {
     if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
     
@@ -1473,8 +1594,57 @@ export default function DataQualityPage() {
                 {/* Single Issue Mode */}
                 {!modalState.isBulk && modalState.issue && (
                   <>
+                    {/* Stale Case Banner - special handling for orphaned cases */}
+                    {isStaleCase() && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-orange-800">
+                              {(modalState.issue.issue_type as IssueType)?.display_name || 'Stale Case'}
+                            </h4>
+                            <p className="text-sm text-orange-700 mt-1">
+                              {(() => {
+                                const details = getStaleCaseDetails()
+                                const issueType = (modalState.issue.issue_type as IssueType)?.name
+                                
+                                if (issueType === 'stale_in_progress' && details?.hours_elapsed) {
+                                  return `This case has been in progress for ${Math.round(details.hours_elapsed)} hours without being completed.`
+                                }
+                                if (issueType === 'abandoned_scheduled' && details?.days_overdue) {
+                                  return `This case was scheduled ${details.days_overdue} days ago but was never started.`
+                                }
+                                if (issueType === 'no_activity') {
+                                  const hours = details?.hours_elapsed
+                                  return `No milestone activity recorded for ${hours ? Math.round(hours) : 'several'} hours.`
+                                }
+                                return 'This case appears to be orphaned or abandoned.'
+                              })()}
+                            </p>
+                            <div className="mt-3 p-2 bg-orange-100 rounded-lg">
+                              <p className="text-xs text-orange-800 font-medium">
+                                What would you like to do?
+                              </p>
+                              <ul className="mt-1 text-xs text-orange-700 space-y-1">
+                                <li>• <strong>Mark Completed</strong> — Case is done, will be reviewed for missing milestones</li>
+                                <li>• <strong>Mark Cancelled</strong> — Case was cancelled, exclude from metrics</li>
+                                <li>• <strong>Open Case</strong> — Review and update the case directly</li>
+                              </ul>
+                            </div>
+                            <p className="text-xs text-orange-600 mt-2">
+                              Detected {formatTimeAgo(modalState.issue.detected_at)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Stale Issue Alert (only for "missing" type that's now recorded) */}
-                    {isIssueStale() && (
+                    {!isStaleCase() && isIssueStale() && (
                       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1493,8 +1663,8 @@ export default function DataQualityPage() {
                       </div>
                     )}
 
-                    {/* Unified Issue Banner - shows ALL issues for this case */}
-                    {!isIssueStale() && (
+                    {/* Unified Issue Banner - shows ALL issues for this case (not for stale cases) */}
+                    {!isStaleCase() && !isIssueStale() && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1539,8 +1709,9 @@ export default function DataQualityPage() {
                       </div>
                     )}
 
-                    {/* Impact Analysis */}
-                    <div className="bg-slate-50 rounded-xl p-4">
+                    {/* Impact Analysis - NOT shown for stale cases */}
+                    {!isStaleCase() && (
+                      <div className="bg-slate-50 rounded-xl p-4">
                       <h4 className="text-sm font-semibold text-slate-700 mb-3">Impact Analysis</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -1579,8 +1750,9 @@ export default function DataQualityPage() {
                         </div>
                       </div>
                     </div>
+                    )}
 
-                    {/* Case Information */}
+                    {/* Case Information - shown for all issue types */}
                     <div className="bg-white border border-slate-200 rounded-xl p-4">
                       <h4 className="text-sm font-medium text-slate-700 mb-3">Case Information</h4>
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
@@ -1626,8 +1798,9 @@ export default function DataQualityPage() {
                       </div>
                     </div>
 
-                    {/* All Milestones Timeline */}
-                    <div>
+                    {/* All Milestones Timeline - NOT shown for stale cases */}
+                    {!isStaleCase() && (
+                      <div>
                       <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
                       {loadingMilestones ? (
                         <div className="flex items-center justify-center py-8">
@@ -1748,6 +1921,7 @@ export default function DataQualityPage() {
                         </div>
                       )}
                     </div>
+                    )}
 
                     {/* Notes */}
                     <div>
@@ -1855,20 +2029,43 @@ export default function DataQualityPage() {
                       >
                         Cancel
                       </button>
-                      <button
-                        onClick={handleExclude}
-                        disabled={saving}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                      >
-                        Exclude from Metrics
-                      </button>
-                      <button
-                        onClick={handleValidate}
-                        disabled={saving}
-                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors text-sm font-medium"
-                      >
-                        {saving ? 'Saving...' : 'Validate'}
-                      </button>
+                      
+                      {/* Different actions for stale cases vs regular issues */}
+                      {isStaleCase() ? (
+                        <>
+                          <button
+                            onClick={handleMarkCancelled}
+                            disabled={saving}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                          >
+                            {saving ? 'Saving...' : 'Mark Cancelled'}
+                          </button>
+                          <button
+                            onClick={handleMarkCompleted}
+                            disabled={saving}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                          >
+                            {saving ? 'Saving...' : 'Mark Completed'}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={handleExclude}
+                            disabled={saving}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                          >
+                            Exclude from Metrics
+                          </button>
+                          <button
+                            onClick={handleValidate}
+                            disabled={saving}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors text-sm font-medium"
+                          >
+                            {saving ? 'Saving...' : 'Validate'}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </>
                 )}
