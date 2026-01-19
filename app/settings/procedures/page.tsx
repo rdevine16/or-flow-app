@@ -21,14 +21,23 @@ interface ProcedureTechnique {
   display_name: string
 }
 
+interface ProcedureCategory {
+  id: string
+  name: string
+  display_name: string
+  body_region_id: string | null
+}
+
 interface ProcedureType {
   id: string
   name: string
   body_region_id: string | null
   technique_id: string | null
+  procedure_category_id: string | null
   implant_category: string | null
   body_regions: BodyRegion[] | null
   procedure_techniques: ProcedureTechnique[] | null
+  procedure_categories: ProcedureCategory[] | null
 }
 
 interface ModalState {
@@ -52,9 +61,16 @@ export default function ProceduresSettingsPage() {
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [techniques, setTechniques] = useState<ProcedureTechnique[]>([])
+  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', procedure: null })
-  const [formData, setFormData] = useState({ name: '', body_region_id: '', technique_id: '', implant_category: '' })
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    body_region_id: '', 
+    technique_id: '', 
+    procedure_category_id: '',
+    implant_category: '' 
+  })
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
@@ -71,7 +87,7 @@ export default function ProceduresSettingsPage() {
     if (!effectiveFacilityId) return
     setLoading(true)
 
-    const [proceduresResult, regionsResult, techniquesResult] = await Promise.all([
+    const [proceduresResult, regionsResult, techniquesResult, categoriesResult] = await Promise.all([
       supabase
         .from('procedure_types')
         .select(`
@@ -79,24 +95,28 @@ export default function ProceduresSettingsPage() {
           name, 
           body_region_id,
           technique_id,
+          procedure_category_id,
           implant_category,
           body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name)
+          procedure_techniques (id, name, display_name),
+          procedure_categories (id, name, display_name, body_region_id)
         `)
         .eq('facility_id', effectiveFacilityId)
         .order('name'),
       supabase.from('body_regions').select('id, name, display_name').order('display_name'),
       supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
+      supabase.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
     ])
 
     setProcedures(proceduresResult.data as ProcedureType[] || [])
     setBodyRegions(regionsResult.data || [])
     setTechniques(techniquesResult.data || [])
+    setProcedureCategories(categoriesResult.data || [])
     setLoading(false)
   }
 
   const openAddModal = () => {
-    setFormData({ name: '', body_region_id: '', technique_id: '', implant_category: '' })
+    setFormData({ name: '', body_region_id: '', technique_id: '', procedure_category_id: '', implant_category: '' })
     setModal({ isOpen: true, mode: 'add', procedure: null })
   }
 
@@ -105,6 +125,7 @@ export default function ProceduresSettingsPage() {
       name: procedure.name,
       body_region_id: procedure.body_region_id || '',
       technique_id: procedure.technique_id || '',
+      procedure_category_id: procedure.procedure_category_id || '',
       implant_category: procedure.implant_category || '',
     })
     setModal({ isOpen: true, mode: 'edit', procedure })
@@ -112,7 +133,7 @@ export default function ProceduresSettingsPage() {
 
   const closeModal = () => {
     setModal({ isOpen: false, mode: 'add', procedure: null })
-    setFormData({ name: '', body_region_id: '', technique_id: '', implant_category: '' })
+    setFormData({ name: '', body_region_id: '', technique_id: '', procedure_category_id: '', implant_category: '' })
   }
 
   const handleSave = async () => {
@@ -128,6 +149,7 @@ export default function ProceduresSettingsPage() {
           facility_id: effectiveFacilityId,
           body_region_id: formData.body_region_id || null,
           technique_id: formData.technique_id || null,
+          procedure_category_id: formData.procedure_category_id || null,
           implant_category: formData.implant_category || null,
         })
         .select(`
@@ -135,9 +157,11 @@ export default function ProceduresSettingsPage() {
           name, 
           body_region_id,
           technique_id,
+          procedure_category_id,
           implant_category,
           body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name)
+          procedure_techniques (id, name, display_name),
+          procedure_categories (id, name, display_name, body_region_id)
         `)
         .single()
 
@@ -157,6 +181,7 @@ export default function ProceduresSettingsPage() {
           name: formData.name.trim(),
           body_region_id: formData.body_region_id || null,
           technique_id: formData.technique_id || null,
+          procedure_category_id: formData.procedure_category_id || null,
           implant_category: formData.implant_category || null,
         })
         .eq('id', modal.procedure.id)
@@ -165,9 +190,11 @@ export default function ProceduresSettingsPage() {
           name, 
           body_region_id,
           technique_id,
+          procedure_category_id,
           implant_category,
           body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name)
+          procedure_techniques (id, name, display_name),
+          procedure_categories (id, name, display_name, body_region_id)
         `)
         .single()
 
@@ -223,11 +250,22 @@ export default function ProceduresSettingsPage() {
     return technique?.display_name || '—'
   }
 
+  const getCategoryName = (procedure: ProcedureType): string => {
+    if (!procedure.procedure_categories) return '—'
+    const category = Array.isArray(procedure.procedure_categories) ? procedure.procedure_categories[0] : procedure.procedure_categories
+    return category?.display_name || '—'
+  }
+
   const getImplantCategoryLabel = (category: string | null): string => {
     if (!category) return '—'
     const found = IMPLANT_CATEGORIES.find(c => c.value === category)
     return found?.label || '—'
   }
+
+  // Filter categories based on selected body region (optional - shows all if no region selected)
+  const filteredCategories = formData.body_region_id
+    ? procedureCategories.filter(c => !c.body_region_id || c.body_region_id === formData.body_region_id)
+    : procedureCategories
 
   return (
     <DashboardLayout>
@@ -281,11 +319,12 @@ export default function ProceduresSettingsPage() {
                 <div className="overflow-x-auto">
                   {/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="col-span-4">Procedure Name</div>
+                    <div className="col-span-3">Procedure Name</div>
                     <div className="col-span-2">Body Region</div>
+                    <div className="col-span-2">Category</div>
                     <div className="col-span-2">Technique</div>
                     <div className="col-span-2">Implant Tracking</div>
-                    <div className="col-span-2 text-right">Actions</div>
+                    <div className="col-span-1 text-right">Actions</div>
                   </div>
 
                   {/* Table Body */}
@@ -296,13 +335,24 @@ export default function ProceduresSettingsPage() {
                         className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
                       >
                         {/* Procedure Name */}
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <p className="font-medium text-slate-900">{procedure.name}</p>
                         </div>
 
                         {/* Body Region */}
                         <div className="col-span-2">
                           <span className="text-sm text-slate-600">{getRegionName(procedure)}</span>
+                        </div>
+
+                        {/* Category */}
+                        <div className="col-span-2">
+                          {procedure.procedure_category_id ? (
+                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                              {getCategoryName(procedure)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-400">—</span>
+                          )}
                         </div>
 
                         {/* Technique */}
@@ -326,7 +376,7 @@ export default function ProceduresSettingsPage() {
                         </div>
 
                         {/* Actions */}
-                        <div className="col-span-2 flex items-center justify-end gap-1">
+                        <div className="col-span-1 flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEditModal(procedure)}
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -409,6 +459,26 @@ export default function ProceduresSettingsPage() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Procedure Category
+                    </label>
+                    <select
+                      value={formData.procedure_category_id}
+                      onChange={(e) => setFormData({ ...formData, procedure_category_id: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      <option value="">Select category...</option>
+                      {filteredCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.display_name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-1.5">
+                      Used for analytics grouping and comparisons
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
