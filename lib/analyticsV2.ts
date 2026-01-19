@@ -195,11 +195,10 @@ export function calculateAverage(values: (number | null)[]): number {
 export function parseScheduledDateTime(date: string, time: string | null): Date | null {
   if (!time) return null
   try {
-    // Handle time formats like "07:30:00" or "07:30"
     const [hours, minutes] = time.split(':').map(Number)
-    const dateObj = new Date(date)
-    dateObj.setHours(hours, minutes, 0, 0)
-    return dateObj
+    const [year, month, day] = date.split('-').map(Number)
+    // Create date directly in local time (month is 0-indexed)
+    return new Date(year, month - 1, day, hours, minutes, 0, 0)
   } catch {
     return null
   }
@@ -266,7 +265,7 @@ export function calculateFCOTS(cases: CaseWithMilestones[]): KPIResult {
     if (!scheduled || !actual) return
     
     const delayMinutes = getTimeDiffMinutes(scheduled, actual) || 0
-    const isOnTime = delayMinutes <= 5 // Within 5 minutes is considered on-time
+    const isOnTime = delayMinutes <= 2 // Within 2 minutes is considered on-time
     
     if (isOnTime) {
       onTimeCount++
