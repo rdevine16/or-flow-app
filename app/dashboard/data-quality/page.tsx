@@ -24,32 +24,88 @@ import {
   type DataQualitySummary
 } from '@/lib/dataQuality'
 
-// Helper to format the issue description more clearly
+// ============================================
+// IMPACT ANALYSIS - What metrics require which milestones
+// ============================================
+const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> = {
+  total_case_time: {
+    name: 'Total Case Time',
+    requires: ['patient_in', 'patient_out']
+  },
+  fcots: {
+    name: 'First Case On-Time Start (FCOTS)',
+    requires: ['patient_in'] // Also needs scheduled_time but that's case-level
+  },
+  surgical_time: {
+    name: 'Surgical Time',
+    requires: ['incision', 'closing']
+  },
+  anesthesia_duration: {
+    name: 'Anesthesia Duration',
+    requires: ['anes_start', 'anes_end']
+  },
+  room_turnover: {
+    name: 'Room Turnover Time',
+    requires: ['patient_out', 'room_cleaned']
+  },
+  pre_incision_time: {
+    name: 'Pre-Incision Time',
+    requires: ['patient_in', 'incision']
+  },
+  closing_time: {
+    name: 'Closing Duration',
+    requires: ['closing', 'closing_complete']
+  },
+  emergence_time: {
+    name: 'Emergence Time',
+    requires: ['closing_complete', 'patient_out']
+  }
+}
+
+// Standard milestone order for display
+const MILESTONE_ORDER = [
+  'patient_in',
+  'anes_start',
+  'anes_end',
+  'prepped',
+  'draping_complete',
+  'incision',
+  'closing',
+  'closing_complete',
+  'patient_out',
+  'room_cleaned'
+]
+
+interface EditableMilestone {
+  name: string
+  display_name: string
+  recorded_at: string | null
+  original_recorded_at: string | null
+  isEditing: boolean
+  hasChanged: boolean
+}
+
+// Helper to format issue description
 function formatIssueDescription(issue: MetricIssue): string {
   const issueType = issue.issue_type as IssueType | null
   const typeName = issueType?.name || ''
   
-  // For "missing" type - don't show N/A, just describe what's missing
   if (typeName === 'missing') {
     return 'Not recorded'
   }
   
-  // For issues with numeric values
   if (issue.detected_value !== null) {
     const value = Math.round(issue.detected_value)
     const details = issue.details as Record<string, unknown> | null
     
-    // For stale cases, it's days
     if (details?.days_overdue !== undefined) {
       return `${value} day${value !== 1 ? 's' : ''} overdue`
     }
     
-    // For incomplete cases, it's hours
     if (details?.hours_since_activity !== undefined) {
       return `${value} hour${value !== 1 ? 's' : ''} since activity`
     }
     
-    // For milestone durations, it's minutes
     const min = issue.expected_min !== null ? Math.round(issue.expected_min) : null
     const max = issue.expected_max !== null ? Math.round(issue.expected_max) : null
     
@@ -68,12 +124,21 @@ function formatIssueDescription(issue: MetricIssue): string {
   return 'Issue detected'
 }
 
+// Format time with seconds
+function formatTimeWithSeconds(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  })
+}
+
 export default function DataQualityPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  // Get user ID from Supabase auth
   useEffect(() => {
     const getUserId = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -93,10 +158,10 @@ export default function DataQualityPage() {
   const [showResolved, setShowResolved] = useState(false)
   const [filterType, setFilterType] = useState<string>('all')
 
-  // Selection state for bulk actions
+  // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  // Combined modal state (detail + resolve)
+  // Modal state
   const [modalState, setModalState] = useState<{
     isOpen: boolean
     issue: MetricIssue | null
@@ -104,11 +169,19 @@ export default function DataQualityPage() {
     bulkIds: string[]
   }>({ isOpen: false, issue: null, isBulk: false, bulkIds: [] })
   
-  const [selectedResolution, setSelectedResolution] = useState<string>('approved')
+  // Editable milestones for the modal
+  const [editableMilestones, setEditableMilestones] = useState<EditableMilestone[]>([])
+  const [loadingMilestones, setLoadingMilestones] = useState(false)
+  
+  // Validation warning state
+  const [showValidationWarning, setShowValidationWarning] = useState(false)
+  const [missingMilestones, setMissingMilestones] = useState<string[]>([])
+  const [affectedMetrics, setAffectedMetrics] = useState<string[]>([])
+  
   const [resolutionNotes, setResolutionNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Running detection state
+  // Detection state
   const [runningDetection, setRunningDetection] = useState(false)
   const [detectionResult, setDetectionResult] = useState<string | null>(null)
   const [detectionStep, setDetectionStep] = useState(0)
@@ -131,7 +204,7 @@ export default function DataQualityPage() {
 
     setIssues(issuesData)
     setIssueTypes(typesData)
-    setResolutionTypes(resTypesData.filter(rt => rt.name !== 'expired')) // Hide auto-expire from manual options
+    setResolutionTypes(resTypesData.filter(rt => rt.name !== 'expired'))
     setSummary(summaryData)
     setSelectedIds(new Set())
     setLoading(false)
@@ -143,6 +216,93 @@ export default function DataQualityPage() {
     }
   }, [userLoading, effectiveFacilityId, loadData])
 
+  // Fetch FRESH milestone data when modal opens
+  const loadFreshMilestones = async (caseId: string) => {
+    setLoadingMilestones(true)
+    
+    // Get facility milestones (the expected ones)
+    const { data: facilityMilestones } = await supabase
+      .from('facility_milestones')
+      .select(`
+        id,
+        display_name,
+        display_order,
+        is_enabled,
+        milestone_types(name, display_name)
+      `)
+      .eq('facility_id', effectiveFacilityId)
+      .eq('is_enabled', true)
+      .order('display_order')
+    
+    // Get actual recorded milestones for this case
+    const { data: caseMilestones } = await supabase
+      .from('case_milestones')
+      .select(`
+        id,
+        recorded_at,
+        milestone_type_id,
+        milestone_types(name, display_name)
+      `)
+      .eq('case_id', caseId)
+    
+    // Helper to normalize Supabase join data (may come as array or object)
+    const normalizeJoin = <T,>(data: T | T[] | null): T | null => {
+      if (Array.isArray(data)) return data[0] || null
+      return data
+    }
+    
+    // Build editable milestone list
+    const milestoneMap = new Map<string, string>()
+    caseMilestones?.forEach(cm => {
+      const milestoneType = normalizeJoin(cm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
+      if (milestoneType?.name) {
+        milestoneMap.set(milestoneType.name, cm.recorded_at)
+      }
+    })
+    
+    const editable: EditableMilestone[] = (facilityMilestones || [])
+      .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+      .map(fm => {
+        const milestoneType = normalizeJoin(fm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
+        const name = milestoneType?.name || ''
+        const displayName = fm.display_name || milestoneType?.display_name || name
+        const recordedAt = milestoneMap.get(name) || null
+        
+        return {
+          name,
+          display_name: displayName,
+          recorded_at: recordedAt,
+          original_recorded_at: recordedAt,
+          isEditing: false,
+          hasChanged: false
+        }
+      })
+    
+    setEditableMilestones(editable)
+    setLoadingMilestones(false)
+  }
+
+  // Calculate impact analysis based on current milestone state
+  const calculateImpact = (milestones: EditableMilestone[]) => {
+    const recordedNames = new Set(
+      milestones.filter(m => m.recorded_at).map(m => m.name)
+    )
+    
+    const canCalculate: string[] = []
+    const cannotCalculate: string[] = []
+    
+    Object.entries(METRIC_REQUIREMENTS).forEach(([key, config]) => {
+      const hasAll = config.requires.every(req => recordedNames.has(req))
+      if (hasAll) {
+        canCalculate.push(config.name)
+      } else {
+        cannotCalculate.push(config.name)
+      }
+    })
+    
+    return { canCalculate, cannotCalculate }
+  }
+
   const handleRunDetection = async () => {
     if (!effectiveFacilityId) return
     
@@ -150,14 +310,10 @@ export default function DataQualityPage() {
     setDetectionResult(null)
     setDetectionStep(0)
 
-    // Step 1: Expire old issues
     setDetectionStep(1)
     const expiredCount = await expireOldIssues(supabase)
 
-    // Step 2: Run detection (this does multiple checks internally)
     setDetectionStep(2)
-    
-    // Simulate progress through detection steps
     const stepTimer = setInterval(() => {
       setDetectionStep(prev => Math.min(prev + 1, 6))
     }, 800)
@@ -165,14 +321,12 @@ export default function DataQualityPage() {
     const result = await runDetectionForFacility(supabase, effectiveFacilityId, 7)
     
     clearInterval(stepTimer)
-    setDetectionStep(7) // Complete
+    setDetectionStep(7)
 
-    // Brief pause to show completion
     await new Promise(resolve => setTimeout(resolve, 500))
 
     setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues${expiredCount ? ` · Expired ${expiredCount} old issues` : ''}`)
 
-    // AUDIT LOG: Detection run
     await dataQualityAudit.detectionRun(
       supabase,
       effectiveFacilityId,
@@ -186,66 +340,185 @@ export default function DataQualityPage() {
     setDetectionStep(0)
   }
 
-  const handleResolve = async () => {
-    if (!currentUserId || !effectiveFacilityId) return
+  // Handle milestone time change
+  const updateMilestoneTime = (index: number, newTime: string) => {
+    setEditableMilestones(prev => {
+      const updated = [...prev]
+      updated[index] = {
+        ...updated[index],
+        recorded_at: newTime || null,
+        hasChanged: newTime !== updated[index].original_recorded_at
+      }
+      return updated
+    })
+  }
+
+  // Toggle editing mode for a milestone
+  const toggleMilestoneEdit = (index: number) => {
+    setEditableMilestones(prev => {
+      const updated = [...prev]
+      updated[index] = {
+        ...updated[index],
+        isEditing: !updated[index].isEditing
+      }
+      return updated
+    })
+  }
+
+  // Handle Validate button click
+  const handleValidate = async () => {
+    if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
     
-    const issueIds = modalState.isBulk ? modalState.bulkIds : (modalState.issue ? [modalState.issue.id] : [])
-    if (issueIds.length === 0) return
+    // Check what's still missing
+    const stillMissing = editableMilestones
+      .filter(m => !m.recorded_at)
+      .map(m => m.display_name)
+    
+    const { cannotCalculate } = calculateImpact(editableMilestones)
+    
+    // If there are still missing milestones, show warning
+    if (stillMissing.length > 0) {
+      setMissingMilestones(stillMissing)
+      setAffectedMetrics(cannotCalculate)
+      setShowValidationWarning(true)
+      return
+    }
+    
+    // All milestones filled - proceed with save
+    await saveAndResolve('approved')
+  }
+
+  // Handle "Continue Anyway" from warning
+  const handleContinueAnyway = async () => {
+    setShowValidationWarning(false)
+    await saveAndResolve('approved')
+  }
+
+  // Handle Exclude from Metrics
+  const handleExclude = async () => {
+    if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
+    await saveAndResolve('excluded')
+  }
+
+  // Save milestone changes and resolve issue
+  const saveAndResolve = async (resolutionType: 'approved' | 'excluded') => {
+    if (!modalState.issue || !currentUserId || !effectiveFacilityId) return
     
     setSaving(true)
-
-    if (issueIds.length === 1) {
-      // Single issue resolution
-      await resolveIssue(supabase, issueIds[0], currentUserId, selectedResolution, resolutionNotes)
+    
+    // Save any changed milestones
+    const changedMilestones = editableMilestones.filter(m => m.hasChanged && m.recorded_at)
+    
+    for (const milestone of changedMilestones) {
+      // Get milestone type ID
+      const { data: milestoneType } = await supabase
+        .from('milestone_types')
+        .select('id')
+        .eq('name', milestone.name)
+        .single()
       
-      // Find the issue for audit log details
-      const issue = issues.find(i => i.id === issueIds[0])
-      
-      // AUDIT LOG: Single issue resolved
-      await dataQualityAudit.issueResolved(
-        supabase,
-        issueIds[0],
-        (issue?.issue_type as IssueType)?.name || 'unknown',
-        issue?.cases?.case_number || 'unknown',
-        selectedResolution as 'corrected' | 'excluded' | 'approved',
-        effectiveFacilityId,
-        resolutionNotes || undefined
-      )
-    } else {
-      // Bulk resolution
-      await resolveMultipleIssues(supabase, issueIds, currentUserId, selectedResolution, resolutionNotes)
-      
-      // AUDIT LOG: Bulk resolved
-      await dataQualityAudit.bulkResolved(
-        supabase,
-        issueIds.length,
-        selectedResolution as 'corrected' | 'excluded' | 'approved',
-        effectiveFacilityId,
-        resolutionNotes || undefined
-      )
+      if (milestoneType) {
+        // Check if milestone exists
+        const { data: existing } = await supabase
+          .from('case_milestones')
+          .select('id')
+          .eq('case_id', modalState.issue.case_id)
+          .eq('milestone_type_id', milestoneType.id)
+          .single()
+        
+        if (existing) {
+          // Update existing
+          await supabase
+            .from('case_milestones')
+            .update({
+              recorded_at: milestone.recorded_at,
+              recorded_by: currentUserId
+            })
+            .eq('id', existing.id)
+        } else {
+          // Insert new
+          await supabase
+            .from('case_milestones')
+            .insert({
+              case_id: modalState.issue.case_id,
+              milestone_type_id: milestoneType.id,
+              recorded_at: milestone.recorded_at,
+              recorded_by: currentUserId
+            })
+        }
+      }
     }
-
+    
+    // Resolve the issue
+    await resolveIssue(
+      supabase,
+      modalState.issue.id,
+      currentUserId,
+      resolutionType,
+      resolutionNotes || undefined
+    )
+    
+    // Audit log
+    await dataQualityAudit.issueResolved(
+      supabase,
+      modalState.issue.id,
+      (modalState.issue.issue_type as IssueType)?.name || 'unknown',
+      modalState.issue.cases?.case_number || 'unknown',
+      resolutionType === 'approved' ? 'approved' : 'excluded',
+      effectiveFacilityId,
+      resolutionNotes || undefined
+    )
+    
     closeModal()
     setSaving(false)
     await loadData()
   }
 
-  const openModal = (issue: MetricIssue) => {
+  // Bulk resolve (for excluded only in bulk mode)
+  const handleBulkExclude = async () => {
+    if (!currentUserId || !effectiveFacilityId || modalState.bulkIds.length === 0) return
+    
+    setSaving(true)
+    
+    await resolveMultipleIssues(
+      supabase,
+      modalState.bulkIds,
+      currentUserId,
+      'excluded',
+      resolutionNotes
+    )
+    
+    await dataQualityAudit.bulkResolved(
+      supabase,
+      modalState.bulkIds.length,
+      'excluded',
+      effectiveFacilityId,
+      resolutionNotes || undefined
+    )
+    
+    closeModal()
+    setSaving(false)
+    await loadData()
+  }
+
+  const openModal = async (issue: MetricIssue) => {
     setModalState({ isOpen: true, issue, isBulk: false, bulkIds: [] })
-    setSelectedResolution('approved')
     setResolutionNotes('')
+    setShowValidationWarning(false)
+    await loadFreshMilestones(issue.case_id)
   }
 
   const openBulkModal = (ids: string[]) => {
     setModalState({ isOpen: true, issue: null, isBulk: true, bulkIds: ids })
-    setSelectedResolution('approved')
     setResolutionNotes('')
+    setEditableMilestones([])
   }
 
   const closeModal = () => {
     setModalState({ isOpen: false, issue: null, isBulk: false, bulkIds: [] })
-    setSelectedResolution('approved')
     setResolutionNotes('')
+    setEditableMilestones([])
+    setShowValidationWarning(false)
   }
 
   const toggleSelect = (id: string) => {
@@ -269,9 +542,17 @@ export default function DataQualityPage() {
 
   const unresolvedIssues = issues.filter(i => !i.resolved_at)
 
-  // Get the milestone name that has the issue (for highlighting in timeline)
-  const getIssueMilestoneName = (issue: MetricIssue): string | null => {
-    return issue.facility_milestone?.name || null
+  // Get impact analysis for display
+  const impact = calculateImpact(editableMilestones)
+
+  // Check if the issue is now stale (milestone was recorded after issue was created)
+  const isIssueStale = () => {
+    if (!modalState.issue) return false
+    const issueMilestoneName = modalState.issue.facility_milestone?.name
+    if (!issueMilestoneName) return false
+    
+    const milestone = editableMilestones.find(m => m.name === issueMilestoneName)
+    return milestone?.recorded_at !== null
   }
 
   return (
@@ -318,7 +599,6 @@ export default function DataQualityPage() {
             {/* Summary Cards */}
             {summary && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                {/* Quality Score */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <p className="text-sm font-medium text-slate-500">Quality Score</p>
                   <p className={`text-3xl font-bold mt-1 ${
@@ -338,7 +618,6 @@ export default function DataQualityPage() {
                   </div>
                 </div>
 
-                {/* Open Issues */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <p className="text-sm font-medium text-slate-500">Open Issues</p>
                   <p className="text-3xl font-bold text-slate-900 mt-1">{summary.totalUnresolved}</p>
@@ -347,18 +626,14 @@ export default function DataQualityPage() {
                   </p>
                 </div>
 
-                {/* Expiring Soon */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <p className="text-sm font-medium text-slate-500">Expiring This Week</p>
                   <p className={`text-3xl font-bold mt-1 ${summary.expiringThisWeek > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
                     {summary.expiringThisWeek}
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Auto-resolved if not addressed
-                  </p>
+                  <p className="text-xs text-slate-400 mt-1">Auto-resolved if not addressed</p>
                 </div>
 
-                {/* By Severity */}
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <p className="text-sm font-medium text-slate-500">By Severity</p>
                   <div className="flex items-center gap-3 mt-2">
@@ -437,26 +712,20 @@ export default function DataQualityPage() {
 
               <div className="flex items-center gap-2">
                 {unresolvedIssues.length > 0 && selectedIds.size === 0 && (
-                  <button
-                    onClick={selectAll}
-                    className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                  >
+                  <button onClick={selectAll} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
                     Select All
                   </button>
                 )}
                 {selectedIds.size > 0 && (
                   <>
-                    <button
-                      onClick={clearSelection}
-                      className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                    >
+                    <button onClick={clearSelection} className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">
                       Clear
                     </button>
                     <button
                       onClick={() => openBulkModal(Array.from(selectedIds))}
-                      className="px-4 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                      className="px-4 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
-                      Resolve Selected
+                      Exclude Selected
                     </button>
                   </>
                 )}
@@ -474,10 +743,7 @@ export default function DataQualityPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-1">No Issues Found</h3>
                   <p className="text-slate-500">
-                    {showResolved 
-                      ? 'No data quality issues to display.' 
-                      : 'All data quality issues have been resolved!'
-                    }
+                    {showResolved ? 'No data quality issues to display.' : 'All data quality issues have been resolved!'}
                   </p>
                 </div>
               ) : (
@@ -499,30 +765,23 @@ export default function DataQualityPage() {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        {/* Checkbox (only for unresolved) */}
                         {!issue.resolved_at && (
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={(e) => {
-                              e.stopPropagation()
-                              toggleSelect(issue.id)
-                            }}
+                            onChange={(e) => { e.stopPropagation(); toggleSelect(issue.id) }}
                             onClick={(e) => e.stopPropagation()}
                             className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300"
                           />
                         )}
 
-                        {/* Issue Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            {/* Issue Type Badge */}
                             {issueType && (
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getSeverityColor(issueType.severity)}`}>
                                 {issueType.display_name}
                               </span>
                             )}
-                            {/* Resolved Badge */}
                             {issue.resolved_at && issue.resolution_type && (
                               <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
                                 {(issue.resolution_type as ResolutionType).display_name}
@@ -530,16 +789,11 @@ export default function DataQualityPage() {
                             )}
                           </div>
 
-                          {/* Description */}
                           <p className="text-sm text-slate-900 font-medium">
-                            {issue.facility_milestone?.display_name 
-                              ? `${issue.facility_milestone.display_name}: ` 
-                              : ''
-                            }
+                            {issue.facility_milestone?.display_name ? `${issue.facility_milestone.display_name}: ` : ''}
                             {formatIssueDescription(issue)}
                           </p>
 
-                          {/* Case Info */}
                           <div className="flex items-center gap-4 mt-2 text-xs text-slate-500 flex-wrap">
                             {issue.cases && (
                               <span className="font-medium">
@@ -554,25 +808,14 @@ export default function DataQualityPage() {
                               </span>
                             )}
                           </div>
-
-                          {/* Resolution Notes */}
-                          {issue.resolved_at && issue.resolution_notes && (
-                            <p className="mt-2 text-xs text-slate-500 italic">
-                              Note: {issue.resolution_notes}
-                            </p>
-                          )}
                         </div>
 
-                        {/* Resolve Button (only for unresolved) */}
                         {!issue.resolved_at && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              openModal(issue)
-                            }}
+                            onClick={(e) => { e.stopPropagation(); openModal(issue) }}
                             className="px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
                           >
-                            Resolve
+                            Review
                           </button>
                         )}
                       </div>
@@ -590,13 +833,9 @@ export default function DataQualityPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                Running Data Quality Check
-              </h3>
+              <h3 className="text-lg font-semibold text-slate-900">Running Data Quality Check</h3>
             </div>
-
             <div className="p-6">
-              {/* Progress Bar */}
               <div className="mb-6">
                 <div className="flex justify-between text-sm text-slate-600 mb-2">
                   <span>Progress</span>
@@ -609,8 +848,6 @@ export default function DataQualityPage() {
                   />
                 </div>
               </div>
-
-              {/* Steps List */}
               <div className="space-y-3">
                 {[
                   { step: 1, label: 'Expiring old issues' },
@@ -638,11 +875,7 @@ export default function DataQualityPage() {
                       </div>
                     )}
                     <span className={`text-sm ${
-                      detectionStep > step 
-                        ? 'text-emerald-700' 
-                        : detectionStep === step 
-                          ? 'text-blue-700 font-medium' 
-                          : 'text-slate-400'
+                      detectionStep > step ? 'text-emerald-700' : detectionStep === step ? 'text-blue-700 font-medium' : 'text-slate-400'
                     }`}>
                       {label}
                     </span>
@@ -654,128 +887,150 @@ export default function DataQualityPage() {
         </div>
       )}
 
-      {/* Combined Issue Detail + Resolution Modal */}
+      {/* Main Issue Modal */}
       {modalState.isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">
-                  {modalState.isBulk 
-                    ? `Resolve ${modalState.bulkIds.length} Issues` 
-                    : 'Issue Details'
-                  }
+                  {modalState.isBulk ? `Exclude ${modalState.bulkIds.length} Issues` : 'Review Issue'}
                 </h3>
                 {!modalState.isBulk && modalState.issue?.cases && (
-                  <p className="text-sm text-slate-500">
-                    Case: {modalState.issue.cases.case_number}
-                  </p>
+                  <p className="text-sm text-slate-500">Case: {modalState.issue.cases.case_number}</p>
                 )}
               </div>
-              <button
-                onClick={closeModal}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+              <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Content - Scrollable */}
+            {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* Resolution Options - Always at Top */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                <h4 className="text-sm font-semibold text-emerald-800 mb-3">Resolution Action</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {resolutionTypes.map(type => (
-                    <label 
-                      key={type.id} 
-                      className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedResolution === type.name
-                          ? 'border-emerald-500 bg-emerald-100'
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="resolutionType"
-                        value={type.name}
-                        checked={selectedResolution === type.name}
-                        onChange={() => setSelectedResolution(type.name)}
-                        className="w-4 h-4 text-emerald-600 border-slate-300"
-                      />
-                      <div>
-                        <span className="text-sm font-medium text-slate-900">{type.display_name}</span>
-                      </div>
-                    </label>
-                  ))}
+              {/* Bulk Mode */}
+              {modalState.isBulk && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-red-800 mb-2">Exclude from Metrics</h4>
+                  <p className="text-sm text-red-700">
+                    You are about to exclude {modalState.bulkIds.length} cases from all analytics calculations.
+                    This action marks the issues as resolved but removes the cases from aggregate metrics.
+                  </p>
+                  <div className="mt-3">
+                    <textarea
+                      value={resolutionNotes}
+                      onChange={(e) => setResolutionNotes(e.target.value)}
+                      placeholder="Add notes (optional)..."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                    />
+                  </div>
                 </div>
-                
-                {/* Notes */}
-                <div className="mt-3">
-                  <textarea
-                    value={resolutionNotes}
-                    onChange={(e) => setResolutionNotes(e.target.value)}
-                    placeholder="Add notes (optional)..."
-                    rows={2}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Single Issue Details (not shown for bulk) */}
+              {/* Single Issue Mode */}
               {!modalState.isBulk && modalState.issue && (
                 <>
-                  {/* Issue Description */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
+                  {/* Stale Issue Alert */}
+                  {isIssueStale() && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-emerald-800">Issue Already Resolved</h4>
+                          <p className="text-sm text-emerald-700 mt-1">
+                            The {modalState.issue.facility_milestone?.display_name} milestone has been recorded since this issue was detected.
+                            You can validate to close this issue.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Issue Description (only if not stale) */}
+                  {!isIssueStale() && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-semibold text-amber-800">
+                            {(modalState.issue.issue_type as IssueType)?.display_name || 'Issue Detected'}
+                          </h4>
+                          <p className="text-sm text-amber-700 mt-1">
+                            {modalState.issue.facility_milestone?.display_name}: {formatIssueDescription(modalState.issue)}
+                          </p>
+                          <p className="text-xs text-amber-600 mt-2">
+                            Detected {formatTimeAgo(modalState.issue.detected_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Impact Analysis */}
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <h4 className="text-sm font-semibold text-slate-700 mb-3">Impact Analysis</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs font-medium text-red-600 uppercase tracking-wide mb-2">Cannot Calculate</p>
+                        {impact.cannotCalculate.length > 0 ? (
+                          <ul className="space-y-1">
+                            {impact.cannotCalculate.map(metric => (
+                              <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
+                                <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                {metric}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500 italic">All metrics can be calculated</p>
+                        )}
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-amber-800">
-                          {(modalState.issue.issue_type as IssueType)?.display_name || 'Issue Detected'}
-                        </h4>
-                        <p className="text-sm text-amber-700 mt-1">
-                          {modalState.issue.facility_milestone?.display_name 
-                            ? `${modalState.issue.facility_milestone.display_name}: ` 
-                            : ''
-                          }
-                          {formatIssueDescription(modalState.issue)}
-                        </p>
-                        <p className="text-xs text-amber-600 mt-2">
-                          Detected {formatTimeAgo(modalState.issue.detected_at)}
-                          {modalState.issue.expires_at && (
-                            <> · Expires in {getDaysUntilExpiration(modalState.issue.expires_at)} days</>
-                          )}
-                        </p>
+                        <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-2">Can Calculate</p>
+                        {impact.canCalculate.length > 0 ? (
+                          <ul className="space-y-1">
+                            {impact.canCalculate.map(metric => (
+                              <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
+                                <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                                {metric}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-sm text-slate-500 italic">No metrics available</p>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   {/* Case Information */}
-                  <div className="bg-slate-50 rounded-xl p-4">
+                  <div className="bg-white border border-slate-200 rounded-xl p-4">
                     <h4 className="text-sm font-medium text-slate-700 mb-3">Case Information</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="text-slate-500">Procedure</span>
-                        <p className="font-medium text-slate-900">
-                          {modalState.issue.cases?.procedure_types?.name || 'Not specified'}
-                        </p>
+                        <p className="font-medium text-slate-900">{modalState.issue.cases?.procedure_types?.name || 'Not specified'}</p>
                       </div>
                       <div>
                         <span className="text-slate-500">Date</span>
                         <p className="font-medium text-slate-900">
                           {modalState.issue.cases?.scheduled_date 
-                            ? new Date(modalState.issue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { 
-                                month: 'short', 
-                                day: 'numeric', 
-                                year: 'numeric' 
-                              })
+                            ? new Date(modalState.issue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                             : 'Unknown'
                           }
                         </p>
@@ -784,11 +1039,7 @@ export default function DataQualityPage() {
                         <span className="text-slate-500">Scheduled Start</span>
                         <p className="font-medium text-slate-900">
                           {modalState.issue.cases?.start_time 
-                            ? new Date(`2000-01-01T${modalState.issue.cases.start_time}`).toLocaleTimeString('en-US', {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              })
+                            ? new Date(`2000-01-01T${modalState.issue.cases.start_time}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                             : 'Not set'
                           }
                         </p>
@@ -804,113 +1055,204 @@ export default function DataQualityPage() {
                       </div>
                       <div>
                         <span className="text-slate-500">Room</span>
-                        <p className="font-medium text-slate-900">
-                          {modalState.issue.cases?.or_rooms?.name || 'Not assigned'}
-                        </p>
+                        <p className="font-medium text-slate-900">{modalState.issue.cases?.or_rooms?.name || 'Not assigned'}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Milestones Timeline */}
-                  {modalState.issue.cases?.case_milestones && modalState.issue.cases.case_milestones.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
+                  {/* Editable Milestones */}
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
+                    {loadingMilestones ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : (
                       <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
-                        {modalState.issue.cases.case_milestones
-                          .sort((a, b) => 
-                            new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
-                          )
-                          .map((milestone) => {
-                            const issueMilestoneName = getIssueMilestoneName(modalState.issue!)
-                            const isRelatedToIssue = milestone.milestone_types?.name === issueMilestoneName
-                            return (
-                              <div 
-                                key={milestone.id}
-                                className={`flex items-center gap-3 px-4 py-3 ${
-                                  isRelatedToIssue ? 'bg-amber-50' : ''
-                                }`}
-                              >
+                        {editableMilestones.map((milestone, index) => {
+                          const isIssueMilestone = milestone.name === modalState.issue?.facility_milestone?.name
+                          const isMissing = !milestone.recorded_at
+                          
+                          return (
+                            <div 
+                              key={milestone.name}
+                              className={`px-4 py-3 ${isIssueMilestone && isMissing ? 'bg-amber-50' : ''}`}
+                            >
+                              <div className="flex items-center gap-3">
                                 <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                                  isRelatedToIssue ? 'bg-amber-500' : 'bg-emerald-500'
+                                  isMissing 
+                                    ? 'bg-slate-300' 
+                                    : milestone.hasChanged 
+                                      ? 'bg-blue-500' 
+                                      : 'bg-emerald-500'
                                 }`} />
+                                
                                 <div className="flex-1 min-w-0">
                                   <span className={`text-sm font-medium ${
-                                    isRelatedToIssue ? 'text-amber-800' : 'text-slate-900'
+                                    isIssueMilestone && isMissing ? 'text-amber-800' : 'text-slate-900'
                                   }`}>
-                                    {milestone.milestone_types?.display_name || 'Unknown'}
+                                    {milestone.display_name}
                                   </span>
-                                  {isRelatedToIssue && (
-                                    <span className="ml-2 text-xs text-amber-600 font-medium">
-                                      (Issue related)
-                                    </span>
+                                  {isIssueMilestone && isMissing && (
+                                    <span className="ml-2 text-xs text-amber-600 font-medium">(Issue)</span>
+                                  )}
+                                  {milestone.hasChanged && (
+                                    <span className="ml-2 text-xs text-blue-600 font-medium">(Modified)</span>
                                   )}
                                 </div>
-                                <span className="text-sm text-slate-500">
-                                  {new Date(milestone.recorded_at).toLocaleTimeString('en-US', {
-                                    hour: 'numeric',
-                                    minute: '2-digit',
-                                    hour12: true
-                                  })}
-                                </span>
+                                
+                                {/* Time display/edit */}
+                                <div className="flex items-center gap-2">
+                                  {milestone.isEditing ? (
+                                    <input
+                                      type="datetime-local"
+                                      step="1"
+                                      value={milestone.recorded_at ? milestone.recorded_at.slice(0, 19) : ''}
+                                      onChange={(e) => updateMilestoneTime(index, e.target.value ? new Date(e.target.value).toISOString() : '')}
+                                      className="px-2 py-1 text-sm border border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  ) : (
+                                    <span className={`text-sm ${isMissing ? 'text-slate-400 italic' : 'text-slate-600'}`}>
+                                      {milestone.recorded_at 
+                                        ? formatTimeWithSeconds(milestone.recorded_at)
+                                        : 'Not recorded'
+                                      }
+                                    </span>
+                                  )}
+                                  
+                                  <button
+                                    onClick={() => toggleMilestoneEdit(index)}
+                                    className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                                      milestone.isEditing
+                                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                    }`}
+                                  >
+                                    {milestone.isEditing ? 'Done' : isMissing ? 'Add' : 'Edit'}
+                                  </button>
+                                </div>
                               </div>
-                            )
-                          })}
+                            </div>
+                          )
+                        })}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Resolution Options Help */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                    <h4 className="text-sm font-semibold text-blue-800 mb-2">Resolution Guide</h4>
-                    <ul className="text-sm text-blue-700 space-y-1">
-                      <li><strong>Approved:</strong> The data is actually correct as-is</li>
-                      <li><strong>Corrected:</strong> I fixed the data in the case record</li>
-                      <li><strong>Excluded:</strong> Exclude this case from analytics</li>
-                    </ul>
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
+                    <textarea
+                      value={resolutionNotes}
+                      onChange={(e) => setResolutionNotes(e.target.value)}
+                      placeholder="Add any context about this resolution..."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
                   </div>
                 </>
               )}
-
-              {/* Bulk Resolution Info */}
-              {modalState.isBulk && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <h4 className="text-sm font-semibold text-blue-800 mb-2">Bulk Resolution</h4>
-                  <p className="text-sm text-blue-700">
-                    You are about to resolve {modalState.bulkIds.length} issues with the same resolution type. 
-                    This action cannot be undone.
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Footer Actions */}
+            {/* Footer */}
             <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3 flex-shrink-0">
               {!modalState.isBulk && modalState.issue && (
                 <button
-                  onClick={() => {
-                    const caseId = modalState.issue?.case_id
-                    if (caseId) {
-                      window.open(`/cases/${caseId}`, '_blank')
-                    }
-                  }}
+                  onClick={() => window.open(`/cases/${modalState.issue?.case_id}`, '_blank')}
                   className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
                 >
                   Open Case
                 </button>
               )}
               <div className="flex-1" />
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+              <button onClick={closeModal} className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
                 Cancel
               </button>
+              
+              {modalState.isBulk ? (
+                <button
+                  onClick={handleBulkExclude}
+                  disabled={saving}
+                  className="px-6 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {saving ? 'Excluding...' : 'Exclude All'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleExclude}
+                    disabled={saving}
+                    className="px-4 py-2 text-sm font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Exclude from Metrics
+                  </button>
+                  <button
+                    onClick={handleValidate}
+                    disabled={saving}
+                    className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Validating...' : 'Validate'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Warning Modal */}
+      {showValidationWarning && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-amber-800">Missing Milestones</h3>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-700">
+                The following milestones are still not recorded:
+              </p>
+              <ul className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
+                {missingMilestones.map(name => (
+                  <li key={name} className="flex items-center gap-2 text-sm text-amber-800">
+                    <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    {name}
+                  </li>
+                ))}
+              </ul>
+              
+              {affectedMetrics.length > 0 && (
+                <>
+                  <p className="text-sm text-slate-700">
+                    The following metrics will <strong>NOT</strong> be saved to analytics:
+                  </p>
+                  <ul className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-1">
+                    {affectedMetrics.map(metric => (
+                      <li key={metric} className="flex items-center gap-2 text-sm text-red-800">
+                        <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        {metric}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
               <button
-                onClick={handleResolve}
-                disabled={saving}
-                className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
+                onClick={() => setShowValidationWarning(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                {saving ? 'Resolving...' : 'Resolve Issue'}
+                Go Back
+              </button>
+              <button
+                onClick={handleContinueAnyway}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Processing...' : 'Continue Anyway'}
               </button>
             </div>
           </div>
