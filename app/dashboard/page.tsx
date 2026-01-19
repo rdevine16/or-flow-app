@@ -228,7 +228,7 @@ export default function DashboardPage() {
     facilityId: string
   ): Promise<CasePaceData | null> => {
     try {
-      // Query median-based procedure stats
+      // Query median-based procedure stats (always needed for total duration)
       const { data: procStats } = await supabase
         .from('surgeon_procedure_stats')
         .select('median_duration, p25_duration, p75_duration, sample_size')
@@ -239,6 +239,23 @@ export default function DashboardPage() {
       
       if (!procStats) return null
       
+      // Special case: patient_in is the START of the case
+      // Progress = 0%, but we still show expected total duration
+      if (currentMilestoneName === 'patient_in') {
+        return {
+          scheduledStart,
+          expectedMinutesToMilestone: 0,
+          milestoneRangeLow: 0,
+          milestoneRangeHigh: 0,
+          expectedTotalMinutes: procStats.median_duration,
+          totalRangeLow: procStats.p25_duration,
+          totalRangeHigh: procStats.p75_duration,
+          sampleSize: procStats.sample_size,
+          currentMilestoneName
+        }
+      }
+      
+      // For all other milestones, get the milestone stats
       // Get the milestone type ID
       const { data: milestoneType } = await supabase
         .from('milestone_types')
