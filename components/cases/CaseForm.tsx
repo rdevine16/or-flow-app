@@ -1,6 +1,8 @@
 // ============================================
 // FILE: components/cases/CaseForm.tsx
-// UPDATED: Added rep_required_override and case_device_companies for SPD tray tracking
+// UPDATED: Added milestone initialization on case creation
+// When a case is created, all expected milestones for the procedure type
+// are inserted into case_milestones with recorded_at = NULL
 // ============================================
 
 'use client'
@@ -276,6 +278,51 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }
   }
 
+  // ============================================
+  // NEW: Initialize milestones for a case
+  // Creates case_milestones entries with recorded_at = NULL
+  // for all enabled milestones in the procedure type
+  // ============================================
+  const initializeCaseMilestones = async (caseId: string, procedureTypeId: string, facilityId: string) => {
+    // Get all enabled milestones for this procedure type
+    const { data: procedureMilestones, error: pmError } = await supabase
+      .from('procedure_milestone_config')
+      .select('facility_milestone_id, display_order')
+      .eq('procedure_type_id', procedureTypeId)
+      .eq('facility_id', facilityId)
+      .eq('is_enabled', true)
+      .order('display_order')
+
+    if (pmError) {
+      console.error('Error fetching procedure milestones:', pmError)
+      return
+    }
+
+    if (!procedureMilestones || procedureMilestones.length === 0) {
+      console.log('No milestones configured for this procedure type')
+      return
+    }
+
+    // Build the case_milestones insert data
+    const caseMilestonesData = procedureMilestones.map(pm => ({
+      case_id: caseId,
+      facility_milestone_id: pm.facility_milestone_id,
+      recorded_at: null,  // Not recorded yet
+      recorded_by: null,
+    }))
+
+    // Insert all milestones for this case
+    const { error: insertError } = await supabase
+      .from('case_milestones')
+      .insert(caseMilestonesData)
+
+    if (insertError) {
+      console.error('Error initializing case milestones:', insertError)
+    } else {
+      console.log(`Initialized ${caseMilestonesData.length} milestones for case ${caseId}`)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -331,6 +378,15 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           case_number: formData.case_number,
           procedure_name: procedure?.name,
         })
+
+        // ============================================
+        // NEW: Initialize milestones for this case
+        // This creates case_milestones with recorded_at = NULL
+        // so we have a snapshot of expected milestones at creation time
+        // ============================================
+        if (formData.procedure_type_id) {
+          await initializeCaseMilestones(savedCaseId, formData.procedure_type_id, userFacilityId)
+        }
 
         // Save implant companies
         if (selectedCompanyIds.length > 0) {
@@ -450,7 +506,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           changes.payer = newPayer?.name || 'None (Default)'
           oldValues.payer = oldPayer?.name || 'None (Default)'
         }
-        // NEW: Track rep_required_override changes
+        // Track rep_required_override changes
         if (repRequiredOverride !== originalRepRequiredOverride) {
           changes.rep_required = repRequiredOverride === null ? 'Use Procedure Default' : repRequiredOverride ? 'Required' : 'Not Required'
           oldValues.rep_required = originalRepRequiredOverride === null ? 'Use Procedure Default' : originalRepRequiredOverride ? 'Required' : 'Not Required'
@@ -478,7 +534,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             .eq('case_id', savedCaseId)
             .in('implant_company_id', removedCompanies)
 
-          // NEW: Also remove from case_device_companies
+          // Also remove from case_device_companies
           await supabase
             .from('case_device_companies')
             .delete()
@@ -496,31 +552,11 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                 companyId,
                 userFacilityId
               )
-
-              // Activity log
-              await supabase.from('case_device_activity').insert({
-                case_id: savedCaseId,
-                implant_company_id: companyId,
-                activity_type: 'company_removed',
-                actor_id: (await supabase.auth.getUser()).data.user?.id,
-                actor_type: 'facility_staff',
-                message: `${company.name} removed from case`,
-                metadata: { company_name: company.name },
-              })
-
-              await caseDeviceAudit.companyRemoved(
-                supabase,
-                savedCaseId,
-                formData.case_number,
-                company.name,
-                companyId,
-                userFacilityId
-              )
             }
           }
         }
 
-        // Add new companies
+        // Add newly selected companies
         if (addedCompanies.length > 0) {
           await supabase.from('case_implant_companies').insert(
             addedCompanies.map(companyId => ({
@@ -529,7 +565,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             }))
           )
 
-          // NEW: If rep is required, also add to case_device_companies
+          // If rep is required, also add to case_device_companies
           if (effectiveRepRequired) {
             await supabase.from('case_device_companies').insert(
               addedCompanies.map(companyId => ({
@@ -538,8 +574,25 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                 tray_status: 'pending',
               }))
             )
+
+            // Create activity log entries for new companies
+            for (const companyId of addedCompanies) {
+              const company = implantCompanies.find(c => c.id === companyId)
+              if (company) {
+                await supabase.from('case_device_activity').insert({
+                  case_id: savedCaseId,
+                  implant_company_id: companyId,
+                  activity_type: 'company_assigned',
+                  actor_id: (await supabase.auth.getUser()).data.user?.id,
+                  actor_type: 'facility_staff',
+                  message: `${company.name} assigned to case`,
+                  metadata: { company_name: company.name },
+                })
+              }
+            }
           }
 
+          // Audit log additions
           for (const companyId of addedCompanies) {
             const company = implantCompanies.find(c => c.id === companyId)
             if (company) {
@@ -551,49 +604,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                 companyId,
                 userFacilityId
               )
-
-              if (effectiveRepRequired) {
-                // Activity log
-                await supabase.from('case_device_activity').insert({
-                  case_id: savedCaseId,
-                  implant_company_id: companyId,
-                  activity_type: 'company_assigned',
-                  actor_id: (await supabase.auth.getUser()).data.user?.id,
-                  actor_type: 'facility_staff',
-                  message: `${company.name} assigned to case`,
-                  metadata: { company_name: company.name },
-                })
-
-                await caseDeviceAudit.companyAssigned(
-                  supabase,
-                  savedCaseId,
-                  formData.case_number,
-                  company.name,
-                  companyId,
-                  userFacilityId
-                )
-              }
             }
-          }
-        }
-
-        // NEW: Handle case where rep required status changed but companies stayed the same
-        // If rep is now required but wasn't before, create case_device_companies entries
-        const wasRepRequired = originalRepRequiredOverride !== null 
-          ? originalRepRequiredOverride 
-          : (procedureTypes.find(p => p.id === originalData.procedure_type_id)?.requires_rep ?? false)
-        
-        if (effectiveRepRequired && !wasRepRequired && selectedCompanyIds.length > 0) {
-          // Rep is now required, create case_device_companies entries for existing companies
-          const existingCompanies = selectedCompanyIds.filter(id => originalCompanyIds.includes(id))
-          if (existingCompanies.length > 0) {
-            await supabase.from('case_device_companies').insert(
-              existingCompanies.map(companyId => ({
-                case_id: savedCaseId,
-                implant_company_id: companyId,
-                tray_status: 'pending',
-              }))
-            )
           }
         }
       }
@@ -610,11 +621,19 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
   if (initialLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center gap-3 text-slate-600">
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          Loading...
+        </div>
+      </div>
+    )
+  }
+
+  if (error && !userFacilityId) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-xl">
+        <p className="text-red-700">{error}</p>
       </div>
     )
   }
@@ -622,30 +641,35 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="p-4 rounded-xl bg-red-50 border border-red-200">
-          <p className="text-sm text-red-600">{error}</p>
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-red-700 text-sm">{error}</p>
         </div>
       )}
 
-      {/* Case Number, Date & Start Time */}
+      {/* Surgeon Preference Quick Fill - Only show in create mode */}
+      {mode === 'create' && formData.surgeon_id && userFacilityId && (
+        <SurgeonPreferenceSelect
+          surgeonId={formData.surgeon_id}
+          facilityId={userFacilityId}
+          onSelect={handlePreferenceSelect}
+        />
+      )}
+
+      {/* Case Number & Date/Time Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Case Number <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Case Number</label>
           <input
             type="text"
             value={formData.case_number}
             onChange={(e) => setFormData({ ...formData, case_number: e.target.value })}
             required
-            placeholder="e.g., C-2025-001"
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            placeholder="e.g., C-2025-001"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Scheduled Date <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Scheduled Date</label>
           <input
             type="date"
             value={formData.scheduled_date}
@@ -655,24 +679,21 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Start Time <span className="text-red-500">*</span>
-          </label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Start Time</label>
           <input
             type="time"
             value={formData.start_time}
             onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-            required
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
           />
         </div>
       </div>
 
-      {/* OR Room & Surgeon */}
+      {/* Room & Surgeon */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SearchableDropdown
           label="OR Room"
-          placeholder="Select OR Room"
+          placeholder="Select Room"
           value={formData.or_room_id}
           onChange={(id) => setFormData({ ...formData, or_room_id: id })}
           options={orRooms.map(r => ({ id: r.id, label: r.name }))}
@@ -686,18 +707,9 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         />
       </div>
 
-      {/* Surgeon Preference Quick-Fill */}
-      {userFacilityId && (
-        <SurgeonPreferenceSelect
-          surgeonId={formData.surgeon_id || null}
-          facilityId={userFacilityId}
-          onSelect={handlePreferenceSelect}
-        />
-      )}
-
-      {/* Procedure Type & Operative Side */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
+      {/* Procedure & Operative Side */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
           <SearchableDropdown
             label="Procedure Type"
             placeholder="Select Procedure"
