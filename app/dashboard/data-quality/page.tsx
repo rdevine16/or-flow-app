@@ -18,12 +18,55 @@ import {
   getSeverityColor,
   formatTimeAgo,
   getDaysUntilExpiration,
-  formatDetectedValue,
   type MetricIssue,
   type IssueType,
   type ResolutionType,
   type DataQualitySummary
 } from '@/lib/dataQuality'
+
+// Helper to format the issue description more clearly
+function formatIssueDescription(issue: MetricIssue): string {
+  const issueType = issue.issue_type as IssueType | null
+  const typeName = issueType?.name || ''
+  
+  // For "missing" type - don't show N/A, just describe what's missing
+  if (typeName === 'missing') {
+    return 'Not recorded'
+  }
+  
+  // For issues with numeric values
+  if (issue.detected_value !== null) {
+    const value = Math.round(issue.detected_value)
+    const details = issue.details as Record<string, unknown> | null
+    
+    // For stale cases, it's days
+    if (details?.days_overdue !== undefined) {
+      return `${value} day${value !== 1 ? 's' : ''} overdue`
+    }
+    
+    // For incomplete cases, it's hours
+    if (details?.hours_since_activity !== undefined) {
+      return `${value} hour${value !== 1 ? 's' : ''} since activity`
+    }
+    
+    // For milestone durations, it's minutes
+    const min = issue.expected_min !== null ? Math.round(issue.expected_min) : null
+    const max = issue.expected_max !== null ? Math.round(issue.expected_max) : null
+    
+    let rangeStr = ''
+    if (min !== null && max !== null) {
+      rangeStr = ` (expected ${min}-${max} min)`
+    } else if (max !== null) {
+      rangeStr = ` (expected ≤${max} min)`
+    } else if (min !== null) {
+      rangeStr = ` (expected ≥${min} min)`
+    }
+    
+    return `${value} min${rangeStr}`
+  }
+  
+  return 'Issue detected'
+}
 
 export default function DataQualityPage() {
   const supabase = createClient()
@@ -53,21 +96,23 @@ export default function DataQualityPage() {
   // Selection state for bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  // Resolution modal state
-  const [resolveModal, setResolveModal] = useState<{
+  // Combined modal state (detail + resolve)
+  const [modalState, setModalState] = useState<{
     isOpen: boolean
-    issueIds: string[]
-  }>({ isOpen: false, issueIds: [] })
+    issue: MetricIssue | null
+    isBulk: boolean
+    bulkIds: string[]
+  }>({ isOpen: false, issue: null, isBulk: false, bulkIds: [] })
+  
   const [selectedResolution, setSelectedResolution] = useState<string>('approved')
   const [resolutionNotes, setResolutionNotes] = useState('')
   const [saving, setSaving] = useState(false)
 
-// Running detection state
-const [runningDetection, setRunningDetection] = useState(false)
-const [detectionResult, setDetectionResult] = useState<string | null>(null)
-const [detectionStep, setDetectionStep] = useState(0)
-// Case detail slide-out state
-const [selectedIssue, setSelectedIssue] = useState<MetricIssue | null>(null)
+  // Running detection state
+  const [runningDetection, setRunningDetection] = useState(false)
+  const [detectionResult, setDetectionResult] = useState<string | null>(null)
+  const [detectionStep, setDetectionStep] = useState(0)
+
   const loadData = useCallback(async () => {
     if (!effectiveFacilityId) return
 
@@ -98,94 +143,109 @@ const [selectedIssue, setSelectedIssue] = useState<MetricIssue | null>(null)
     }
   }, [userLoading, effectiveFacilityId, loadData])
 
-const handleRunDetection = async () => {
-  if (!effectiveFacilityId) return
-  
-  setRunningDetection(true)
-  setDetectionResult(null)
-  setDetectionStep(0)
-
-  // Step 1: Expire old issues
-  setDetectionStep(1)
-  const expiredCount = await expireOldIssues(supabase)
-
-  // Step 2: Run detection (this does multiple checks internally)
-  setDetectionStep(2)
-  
-  // Simulate progress through detection steps
-  const stepTimer = setInterval(() => {
-    setDetectionStep(prev => Math.min(prev + 1, 6))
-  }, 800)
-
-  const result = await runDetectionForFacility(supabase, effectiveFacilityId, 7)
-  
-  clearInterval(stepTimer)
-  setDetectionStep(7) // Complete
-
-  // Brief pause to show completion
-  await new Promise(resolve => setTimeout(resolve, 500))
-
-  setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues${expiredCount ? ` · Expired ${expiredCount} old issues` : ''}`)
-
-  // AUDIT LOG: Detection run
-  await dataQualityAudit.detectionRun(
-    supabase,
-    effectiveFacilityId,
-    7,
-    result.issuesFound,
-    expiredCount || 0
-  )
-
-  await loadData()
-  setRunningDetection(false)
-  setDetectionStep(0)
-}
-
- const handleResolve = async () => {
-  if (!currentUserId || resolveModal.issueIds.length === 0 || !effectiveFacilityId) return
-  
-  setSaving(true)
-
-  if (resolveModal.issueIds.length === 1) {
-    // Single issue resolution
-    await resolveIssue(supabase, resolveModal.issueIds[0], currentUserId, selectedResolution, resolutionNotes)
+  const handleRunDetection = async () => {
+    if (!effectiveFacilityId) return
     
-    // Find the issue for audit log details
-    const issue = issues.find(i => i.id === resolveModal.issueIds[0])
+    setRunningDetection(true)
+    setDetectionResult(null)
+    setDetectionStep(0)
+
+    // Step 1: Expire old issues
+    setDetectionStep(1)
+    const expiredCount = await expireOldIssues(supabase)
+
+    // Step 2: Run detection (this does multiple checks internally)
+    setDetectionStep(2)
     
-    // AUDIT LOG: Single issue resolved
-    await dataQualityAudit.issueResolved(
+    // Simulate progress through detection steps
+    const stepTimer = setInterval(() => {
+      setDetectionStep(prev => Math.min(prev + 1, 6))
+    }, 800)
+
+    const result = await runDetectionForFacility(supabase, effectiveFacilityId, 7)
+    
+    clearInterval(stepTimer)
+    setDetectionStep(7) // Complete
+
+    // Brief pause to show completion
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues${expiredCount ? ` · Expired ${expiredCount} old issues` : ''}`)
+
+    // AUDIT LOG: Detection run
+    await dataQualityAudit.detectionRun(
       supabase,
-      resolveModal.issueIds[0],
-      (issue?.issue_type as IssueType)?.name || 'unknown',
-      issue?.cases?.case_number || 'unknown',
-      selectedResolution as 'corrected' | 'excluded' | 'approved',
       effectiveFacilityId,
-      resolutionNotes || undefined
+      7,
+      result.issuesFound,
+      expiredCount || 0
     )
-  } else {
-    // Bulk resolution
-    await resolveMultipleIssues(supabase, resolveModal.issueIds, currentUserId, selectedResolution, resolutionNotes)
-    
-    // AUDIT LOG: Bulk resolved
-    await dataQualityAudit.bulkResolved(
-      supabase,
-      resolveModal.issueIds.length,
-      selectedResolution as 'corrected' | 'excluded' | 'approved',
-      effectiveFacilityId,
-      resolutionNotes || undefined
-    )
+
+    await loadData()
+    setRunningDetection(false)
+    setDetectionStep(0)
   }
 
-  setResolveModal({ isOpen: false, issueIds: [] })
-  setSelectedResolution('approved')
-  setResolutionNotes('')
-  setSaving(false)
-  await loadData()
-}
+  const handleResolve = async () => {
+    if (!currentUserId || !effectiveFacilityId) return
+    
+    const issueIds = modalState.isBulk ? modalState.bulkIds : (modalState.issue ? [modalState.issue.id] : [])
+    if (issueIds.length === 0) return
+    
+    setSaving(true)
 
-  const openResolveModal = (issueIds: string[]) => {
-    setResolveModal({ isOpen: true, issueIds })
+    if (issueIds.length === 1) {
+      // Single issue resolution
+      await resolveIssue(supabase, issueIds[0], currentUserId, selectedResolution, resolutionNotes)
+      
+      // Find the issue for audit log details
+      const issue = issues.find(i => i.id === issueIds[0])
+      
+      // AUDIT LOG: Single issue resolved
+      await dataQualityAudit.issueResolved(
+        supabase,
+        issueIds[0],
+        (issue?.issue_type as IssueType)?.name || 'unknown',
+        issue?.cases?.case_number || 'unknown',
+        selectedResolution as 'corrected' | 'excluded' | 'approved',
+        effectiveFacilityId,
+        resolutionNotes || undefined
+      )
+    } else {
+      // Bulk resolution
+      await resolveMultipleIssues(supabase, issueIds, currentUserId, selectedResolution, resolutionNotes)
+      
+      // AUDIT LOG: Bulk resolved
+      await dataQualityAudit.bulkResolved(
+        supabase,
+        issueIds.length,
+        selectedResolution as 'corrected' | 'excluded' | 'approved',
+        effectiveFacilityId,
+        resolutionNotes || undefined
+      )
+    }
+
+    closeModal()
+    setSaving(false)
+    await loadData()
+  }
+
+  const openModal = (issue: MetricIssue) => {
+    setModalState({ isOpen: true, issue, isBulk: false, bulkIds: [] })
+    setSelectedResolution('approved')
+    setResolutionNotes('')
+  }
+
+  const openBulkModal = (ids: string[]) => {
+    setModalState({ isOpen: true, issue: null, isBulk: true, bulkIds: ids })
+    setSelectedResolution('approved')
+    setResolutionNotes('')
+  }
+
+  const closeModal = () => {
+    setModalState({ isOpen: false, issue: null, isBulk: false, bulkIds: [] })
+    setSelectedResolution('approved')
+    setResolutionNotes('')
   }
 
   const toggleSelect = (id: string) => {
@@ -208,6 +268,11 @@ const handleRunDetection = async () => {
   }
 
   const unresolvedIssues = issues.filter(i => !i.resolved_at)
+
+  // Get the milestone name that has the issue (for highlighting in timeline)
+  const getIssueMilestoneName = (issue: MetricIssue): string | null => {
+    return issue.facility_milestone?.name || null
+  }
 
   return (
     <DashboardLayout>
@@ -388,7 +453,7 @@ const handleRunDetection = async () => {
                       Clear
                     </button>
                     <button
-                      onClick={() => openResolveModal(Array.from(selectedIds))}
+                      onClick={() => openBulkModal(Array.from(selectedIds))}
                       className="px-4 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                     >
                       Resolve Selected
@@ -422,24 +487,28 @@ const handleRunDetection = async () => {
                   const daysUntilExpiry = getDaysUntilExpiration(issue.expires_at)
 
                   return (
-  <div
-    key={issue.id}
-    onClick={() => !issue.resolved_at && setSelectedIssue(issue)}
-    className={`bg-white rounded-xl border p-4 transition-colors ${
-      issue.resolved_at 
-        ? 'border-slate-200 opacity-60' 
-        : isSelected
-          ? 'border-blue-400 bg-blue-50/30'
-          : 'border-slate-200 hover:border-slate-300 cursor-pointer'
-    }`}
-  >
+                    <div
+                      key={issue.id}
+                      onClick={() => !issue.resolved_at && openModal(issue)}
+                      className={`bg-white rounded-xl border p-4 transition-colors ${
+                        issue.resolved_at 
+                          ? 'border-slate-200 opacity-60' 
+                          : isSelected
+                            ? 'border-blue-400 bg-blue-50/30'
+                            : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                      }`}
+                    >
                       <div className="flex items-start gap-3">
                         {/* Checkbox (only for unresolved) */}
                         {!issue.resolved_at && (
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => toggleSelect(issue.id)}
+                            onChange={(e) => {
+                              e.stopPropagation()
+                              toggleSelect(issue.id)
+                            }}
+                            onClick={(e) => e.stopPropagation()}
                             className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300"
                           />
                         )}
@@ -467,7 +536,7 @@ const handleRunDetection = async () => {
                               ? `${issue.facility_milestone.display_name}: ` 
                               : ''
                             }
-                            {formatDetectedValue(issue)}
+                            {formatIssueDescription(issue)}
                           </p>
 
                           {/* Case Info */}
@@ -497,7 +566,10 @@ const handleRunDetection = async () => {
                         {/* Resolve Button (only for unresolved) */}
                         {!issue.resolved_at && (
                           <button
-                            onClick={() => openResolveModal([issue.id])}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openModal(issue)
+                            }}
                             className="px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors"
                           >
                             Resolve
@@ -512,335 +584,333 @@ const handleRunDetection = async () => {
           </>
         )}
       </Container>
-{/* Detection Progress Modal */}
-{runningDetection && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-      <div className="px-6 py-4 border-b border-slate-200">
-        <h3 className="text-lg font-semibold text-slate-900">
-          Running Data Quality Check
-        </h3>
-      </div>
 
-      <div className="p-6">
-        {/* Progress Bar */}
-        <div className="mb-6">
-          <div className="flex justify-between text-sm text-slate-600 mb-2">
-            <span>Progress</span>
-            <span>{Math.round((detectionStep / 7) * 100)}%</span>
-          </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-blue-600 rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${(detectionStep / 7) * 100}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Steps List */}
-        <div className="space-y-3">
-          {[
-            { step: 1, label: 'Expiring old issues' },
-            { step: 2, label: 'Loading recent cases' },
-            { step: 3, label: 'Checking impossible values' },
-            { step: 4, label: 'Checking negative durations' },
-            { step: 5, label: 'Checking milestone sequences' },
-            { step: 6, label: 'Checking missing milestones' },
-            { step: 7, label: 'Finalizing results' },
-          ].map(({ step, label }) => (
-            <div key={step} className="flex items-center gap-3">
-              {detectionStep > step ? (
-                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              ) : detectionStep === step ? (
-                <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
-                </div>
-              ) : (
-                <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
-                  <div className="w-2 h-2 bg-slate-300 rounded-full" />
-                </div>
-              )}
-              <span className={`text-sm ${
-                detectionStep > step 
-                  ? 'text-emerald-700' 
-                  : detectionStep === step 
-                    ? 'text-blue-700 font-medium' 
-                    : 'text-slate-400'
-              }`}>
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-{/* Case Detail Slide-out */}
-{selectedIssue && (
-  <div className="fixed inset-0 z-50 flex">
-    {/* Backdrop */}
-    <div 
-      className="flex-1 bg-black/30"
-      onClick={() => setSelectedIssue(null)}
-    />
-    
-    {/* Slide-out Panel */}
-    <div className="w-full max-w-lg bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">
-            Case Details
-          </h3>
-          <p className="text-sm text-slate-500">
-            {selectedIssue.cases?.case_number || 'Unknown Case'}
-          </p>
-        </div>
-        <button
-          onClick={() => setSelectedIssue(null)}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Case Info */}
-        <div className="bg-slate-50 rounded-xl p-4">
-          <h4 className="text-sm font-medium text-slate-700 mb-3">Case Information</h4>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-slate-500">Procedure</span>
-              <p className="font-medium text-slate-900">
-                {selectedIssue.cases?.procedure_types?.name || 'Not specified'}
-              </p>
-            </div>
-            <div>
-              <span className="text-slate-500">Date</span>
-              <p className="font-medium text-slate-900">
-                {selectedIssue.cases?.scheduled_date 
-                  ? new Date(selectedIssue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { 
-                      month: 'short', 
-                      day: 'numeric', 
-                      year: 'numeric' 
-                    })
-                  : 'Unknown'
-                }
-              </p>
-            </div>
-            <div>
-              <span className="text-slate-500">Surgeon</span>
-              <p className="font-medium text-slate-900">
-                {selectedIssue.cases?.surgeon 
-                  ? `Dr. ${selectedIssue.cases.surgeon.first_name} ${selectedIssue.cases.surgeon.last_name}`
-                  : 'Not assigned'
-                }
-              </p>
-            </div>
-            <div>
-              <span className="text-slate-500">Room</span>
-              <p className="font-medium text-slate-900">
-                {selectedIssue.cases?.or_rooms?.name || 'Not assigned'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Issue Detected */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-amber-800">
-                {(selectedIssue.issue_type as IssueType)?.display_name || 'Issue Detected'}
-              </h4>
-              <p className="text-sm text-amber-700 mt-1">
-                {selectedIssue.facility_milestone?.display_name 
-                  ? `${selectedIssue.facility_milestone.display_name}: ` 
-                  : ''
-                }
-                {formatDetectedValue(selectedIssue)}
-              </p>
-              <p className="text-xs text-amber-600 mt-2">
-                Detected {formatTimeAgo(selectedIssue.detected_at)}
-                {selectedIssue.expires_at && (
-                  <> · Expires in {getDaysUntilExpiration(selectedIssue.expires_at)} days</>
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Milestones Timeline */}
-        {selectedIssue.cases?.case_milestones && selectedIssue.cases.case_milestones.length > 0 && (
-          <div>
-            <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
-            <div className="space-y-2">
-              {selectedIssue.cases.case_milestones
-                .sort((a: { recorded_at: string }, b: { recorded_at: string }) => 
-                  new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
-                )
-                .map((milestone: { 
-                  id: string
-                  recorded_at: string
-                  milestone_types?: { name: string; display_name: string } | null 
-                }) => {
-                  const isRelatedToIssue = selectedIssue.milestone_id === milestone.id
-                  return (
-                    <div 
-                      key={milestone.id}
-                      className={`flex items-center gap-3 p-2 rounded-lg ${
-                        isRelatedToIssue ? 'bg-amber-50 border border-amber-200' : ''
-                      }`}
-                    >
-                      <div className={`w-2 h-2 rounded-full ${
-                        isRelatedToIssue ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`} />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-slate-900">
-                          {milestone.milestone_types?.display_name || 'Unknown'}
-                        </span>
-                      </div>
-                      <span className="text-sm text-slate-500">
-                        {new Date(milestone.recorded_at).toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                          hour12: true
-                        })}
-                      </span>
-                    </div>
-                  )
-                })}
-            </div>
-          </div>
-        )}
-
-        {/* Quick Actions Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <h4 className="text-sm font-semibold text-blue-800 mb-2">Resolution Options</h4>
-          <ul className="text-sm text-blue-700 space-y-1">
-            <li><strong>Approved:</strong> Data is correct, no action needed</li>
-            <li><strong>Corrected:</strong> I fixed the data in the case</li>
-            <li><strong>Excluded:</strong> Exclude this case from analytics</li>
-          </ul>
-        </div>
-      </div>
-
-      {/* Footer Actions */}
-      <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
-        <button
-          onClick={() => {
-  const caseId = selectedIssue?.case_id
-  setSelectedIssue(null)
-  if (caseId) {
-    window.open(`/cases/${caseId}`, '_blank')
-  }
-}}
-          className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          Open Case
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={() => setSelectedIssue(null)}
-          className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => {
-            openResolveModal([selectedIssue.id])
-            setSelectedIssue(null)
-          }}
-          className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
-        >
-          Resolve Issue
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-      {/* Resolution Modal */}
-      {resolveModal.isOpen && (
-        
+      {/* Detection Progress Modal */}
+      {runningDetection && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-slate-200">
               <h3 className="text-lg font-semibold text-slate-900">
-                Resolve {resolveModal.issueIds.length > 1 ? `${resolveModal.issueIds.length} Issues` : 'Issue'}
+                Running Data Quality Check
               </h3>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6">
+              {/* Progress Bar */}
+              <div className="mb-6">
+                <div className="flex justify-between text-sm text-slate-600 mb-2">
+                  <span>Progress</span>
+                  <span>{Math.round((detectionStep / 7) * 100)}%</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-600 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${(detectionStep / 7) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Steps List */}
+              <div className="space-y-3">
+                {[
+                  { step: 1, label: 'Expiring old issues' },
+                  { step: 2, label: 'Loading recent cases' },
+                  { step: 3, label: 'Checking impossible values' },
+                  { step: 4, label: 'Checking negative durations' },
+                  { step: 5, label: 'Checking milestone sequences' },
+                  { step: 6, label: 'Checking missing milestones' },
+                  { step: 7, label: 'Finalizing results' },
+                ].map(({ step, label }) => (
+                  <div key={step} className="flex items-center gap-3">
+                    {detectionStep > step ? (
+                      <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    ) : detectionStep === step ? (
+                      <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
+                        <div className="w-2 h-2 bg-slate-300 rounded-full" />
+                      </div>
+                    )}
+                    <span className={`text-sm ${
+                      detectionStep > step 
+                        ? 'text-emerald-700' 
+                        : detectionStep === step 
+                          ? 'text-blue-700 font-medium' 
+                          : 'text-slate-400'
+                    }`}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Combined Issue Detail + Resolution Modal */}
+      {modalState.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Resolution Type
-                </label>
-                <div className="space-y-2">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {modalState.isBulk 
+                    ? `Resolve ${modalState.bulkIds.length} Issues` 
+                    : 'Issue Details'
+                  }
+                </h3>
+                {!modalState.isBulk && modalState.issue?.cases && (
+                  <p className="text-sm text-slate-500">
+                    Case: {modalState.issue.cases.case_number}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={closeModal}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Resolution Options - Always at Top */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                <h4 className="text-sm font-semibold text-emerald-800 mb-3">Resolution Action</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {resolutionTypes.map(type => (
-                    <label key={type.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50">
+                    <label 
+                      key={type.id} 
+                      className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        selectedResolution === type.name
+                          ? 'border-emerald-500 bg-emerald-100'
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="resolutionType"
                         value={type.name}
                         checked={selectedResolution === type.name}
                         onChange={() => setSelectedResolution(type.name)}
-                        className="mt-0.5 w-4 h-4 text-blue-600 border-slate-300"
+                        className="w-4 h-4 text-emerald-600 border-slate-300"
                       />
                       <div>
                         <span className="text-sm font-medium text-slate-900">{type.display_name}</span>
-                        {type.description && (
-                          <p className="text-xs text-slate-500">{type.description}</p>
-                        )}
                       </div>
                     </label>
                   ))}
                 </div>
+                
+                {/* Notes */}
+                <div className="mt-3">
+                  <textarea
+                    value={resolutionNotes}
+                    onChange={(e) => setResolutionNotes(e.target.value)}
+                    placeholder="Add notes (optional)..."
+                    rows={2}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Notes (optional)
-                </label>
-                <textarea
-                  value={resolutionNotes}
-                  onChange={(e) => setResolutionNotes(e.target.value)}
-                  placeholder="Add any context about this resolution..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                />
-              </div>
+              {/* Single Issue Details (not shown for bulk) */}
+              {!modalState.isBulk && modalState.issue && (
+                <>
+                  {/* Issue Description */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold text-amber-800">
+                          {(modalState.issue.issue_type as IssueType)?.display_name || 'Issue Detected'}
+                        </h4>
+                        <p className="text-sm text-amber-700 mt-1">
+                          {modalState.issue.facility_milestone?.display_name 
+                            ? `${modalState.issue.facility_milestone.display_name}: ` 
+                            : ''
+                          }
+                          {formatIssueDescription(modalState.issue)}
+                        </p>
+                        <p className="text-xs text-amber-600 mt-2">
+                          Detected {formatTimeAgo(modalState.issue.detected_at)}
+                          {modalState.issue.expires_at && (
+                            <> · Expires in {getDaysUntilExpiration(modalState.issue.expires_at)} days</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Case Information */}
+                  <div className="bg-slate-50 rounded-xl p-4">
+                    <h4 className="text-sm font-medium text-slate-700 mb-3">Case Information</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-slate-500">Procedure</span>
+                        <p className="font-medium text-slate-900">
+                          {modalState.issue.cases?.procedure_types?.name || 'Not specified'}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Date</span>
+                        <p className="font-medium text-slate-900">
+                          {modalState.issue.cases?.scheduled_date 
+                            ? new Date(modalState.issue.cases.scheduled_date + 'T00:00:00').toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })
+                            : 'Unknown'
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Scheduled Start</span>
+                        <p className="font-medium text-slate-900">
+                          {modalState.issue.cases?.start_time 
+                            ? new Date(`2000-01-01T${modalState.issue.cases.start_time}`).toLocaleTimeString('en-US', {
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                hour12: true
+                              })
+                            : 'Not set'
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Surgeon</span>
+                        <p className="font-medium text-slate-900">
+                          {modalState.issue.cases?.surgeon 
+                            ? `Dr. ${modalState.issue.cases.surgeon.first_name} ${modalState.issue.cases.surgeon.last_name}`
+                            : 'Not assigned'
+                          }
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Room</span>
+                        <p className="font-medium text-slate-900">
+                          {modalState.issue.cases?.or_rooms?.name || 'Not assigned'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Milestones Timeline */}
+                  {modalState.issue.cases?.case_milestones && modalState.issue.cases.case_milestones.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 mb-3">Milestone Timeline</h4>
+                      <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+                        {modalState.issue.cases.case_milestones
+                          .sort((a, b) => 
+                            new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()
+                          )
+                          .map((milestone) => {
+                            const issueMilestoneName = getIssueMilestoneName(modalState.issue!)
+                            const isRelatedToIssue = milestone.milestone_types?.name === issueMilestoneName
+                            return (
+                              <div 
+                                key={milestone.id}
+                                className={`flex items-center gap-3 px-4 py-3 ${
+                                  isRelatedToIssue ? 'bg-amber-50' : ''
+                                }`}
+                              >
+                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                                  isRelatedToIssue ? 'bg-amber-500' : 'bg-emerald-500'
+                                }`} />
+                                <div className="flex-1 min-w-0">
+                                  <span className={`text-sm font-medium ${
+                                    isRelatedToIssue ? 'text-amber-800' : 'text-slate-900'
+                                  }`}>
+                                    {milestone.milestone_types?.display_name || 'Unknown'}
+                                  </span>
+                                  {isRelatedToIssue && (
+                                    <span className="ml-2 text-xs text-amber-600 font-medium">
+                                      (Issue related)
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-slate-500">
+                                  {new Date(milestone.recorded_at).toLocaleTimeString('en-US', {
+                                    hour: 'numeric',
+                                    minute: '2-digit',
+                                    hour12: true
+                                  })}
+                                </span>
+                              </div>
+                            )
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resolution Options Help */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <h4 className="text-sm font-semibold text-blue-800 mb-2">Resolution Guide</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li><strong>Approved:</strong> The data is actually correct as-is</li>
+                      <li><strong>Corrected:</strong> I fixed the data in the case record</li>
+                      <li><strong>Excluded:</strong> Exclude this case from analytics</li>
+                    </ul>
+                  </div>
+                </>
+              )}
+
+              {/* Bulk Resolution Info */}
+              {modalState.isBulk && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <h4 className="text-sm font-semibold text-blue-800 mb-2">Bulk Resolution</h4>
+                  <p className="text-sm text-blue-700">
+                    You are about to resolve {modalState.bulkIds.length} issues with the same resolution type. 
+                    This action cannot be undone.
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+            {/* Footer Actions */}
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3 flex-shrink-0">
+              {!modalState.isBulk && modalState.issue && (
+                <button
+                  onClick={() => {
+                    const caseId = modalState.issue?.case_id
+                    if (caseId) {
+                      window.open(`/cases/${caseId}`, '_blank')
+                    }
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Open Case
+                </button>
+              )}
+              <div className="flex-1" />
               <button
-                onClick={() => {
-                  setResolveModal({ isOpen: false, issueIds: [] })
-                  setSelectedResolution('approved')
-                  setResolutionNotes('')
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                onClick={closeModal}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleResolve}
                 disabled={saving}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50"
               >
-                {saving ? 'Resolving...' : 'Resolve'}
+                {saving ? 'Resolving...' : 'Resolve Issue'}
               </button>
             </div>
           </div>
