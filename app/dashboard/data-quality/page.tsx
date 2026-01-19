@@ -217,68 +217,82 @@ export default function DataQualityPage() {
   }, [userLoading, effectiveFacilityId, loadData])
 
   // Fetch FRESH milestone data when modal opens
-  const loadFreshMilestones = async (caseId: string) => {
+  const loadFreshMilestones = async (caseId: string, facilityId: string) => {
     setLoadingMilestones(true)
     
-    // Get facility milestones (the expected ones)
-    const { data: facilityMilestones } = await supabase
-      .from('facility_milestones')
-      .select(`
-        id,
-        display_name,
-        display_order,
-        is_enabled,
-        milestone_types(name, display_name)
-      `)
-      .eq('facility_id', effectiveFacilityId)
-      .eq('is_enabled', true)
-      .order('display_order')
-    
-    // Get actual recorded milestones for this case
-    const { data: caseMilestones } = await supabase
-      .from('case_milestones')
-      .select(`
-        id,
-        recorded_at,
-        milestone_type_id,
-        milestone_types(name, display_name)
-      `)
-      .eq('case_id', caseId)
-    
-    // Helper to normalize Supabase join data (may come as array or object)
-    const normalizeJoin = <T,>(data: T | T[] | null): T | null => {
-      if (Array.isArray(data)) return data[0] || null
-      return data
-    }
-    
-    // Build editable milestone list
-    const milestoneMap = new Map<string, string>()
-    caseMilestones?.forEach(cm => {
-      const milestoneType = normalizeJoin(cm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
-      if (milestoneType?.name) {
-        milestoneMap.set(milestoneType.name, cm.recorded_at)
+    try {
+      // Get facility milestones (the expected ones)
+      const { data: facilityMilestones, error: fmError } = await supabase
+        .from('facility_milestones')
+        .select(`
+          id,
+          display_name,
+          display_order,
+          is_enabled,
+          milestone_types(name, display_name)
+        `)
+        .eq('facility_id', facilityId)
+        .eq('is_enabled', true)
+        .order('display_order')
+      
+      if (fmError) {
+        console.error('Error loading facility milestones:', fmError)
       }
-    })
-    
-    const editable: EditableMilestone[] = (facilityMilestones || [])
-      .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-      .map(fm => {
-        const milestoneType = normalizeJoin(fm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
-        const name = milestoneType?.name || ''
-        const displayName = fm.display_name || milestoneType?.display_name || name
-        const recordedAt = milestoneMap.get(name) || null
-        
-        return {
-          name,
-          display_name: displayName,
-          recorded_at: recordedAt,
-          original_recorded_at: recordedAt,
-          isEditing: false,
-          hasChanged: false
+      
+      // Get actual recorded milestones for this case
+      const { data: caseMilestones, error: cmError } = await supabase
+        .from('case_milestones')
+        .select(`
+          id,
+          recorded_at,
+          milestone_type_id,
+          milestone_types(name, display_name)
+        `)
+        .eq('case_id', caseId)
+      
+      if (cmError) {
+        console.error('Error loading case milestones:', cmError)
+      }
+      
+      // Helper to normalize Supabase join data (may come as array or object)
+      const normalizeJoin = <T,>(data: T | T[] | null): T | null => {
+        if (Array.isArray(data)) return data[0] || null
+        return data
+      }
+      
+      // Build map of recorded milestones by name
+      const milestoneMap = new Map<string, string>()
+      caseMilestones?.forEach(cm => {
+        const milestoneType = normalizeJoin(cm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
+        if (milestoneType?.name) {
+          milestoneMap.set(milestoneType.name, cm.recorded_at)
         }
       })
+      
+      // Build editable milestone list
+      const editable: EditableMilestone[] = (facilityMilestones || [])
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        .map(fm => {
+          const milestoneType = normalizeJoin(fm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
+          const name = milestoneType?.name || ''
+          const displayName = fm.display_name || milestoneType?.display_name || name
+          const recordedAt = milestoneMap.get(name) || null
+          
+          return {
+            name,
+            display_name: displayName,
+            recorded_at: recordedAt,
+            original_recorded_at: recordedAt,
+            isEditing: false,
+            hasChanged: false
+          }
+        })
+      
+      setEditableMilestones(editable)
+    } catch (err) {
+      console.error('Error in loadFreshMilestones:', err)
+    }
     
-    setEditableMilestones(editable)
     setLoadingMilestones(false)
   }
 
@@ -505,7 +519,8 @@ export default function DataQualityPage() {
     setModalState({ isOpen: true, issue, isBulk: false, bulkIds: [] })
     setResolutionNotes('')
     setShowValidationWarning(false)
-    await loadFreshMilestones(issue.case_id)
+    // Use facility_id from the issue
+    await loadFreshMilestones(issue.case_id, issue.facility_id)
   }
 
   const openBulkModal = (ids: string[]) => {
@@ -548,11 +563,30 @@ export default function DataQualityPage() {
   // Check if the issue is now stale (milestone was recorded after issue was created)
   const isIssueStale = () => {
     if (!modalState.issue) return false
-    const issueMilestoneName = modalState.issue.facility_milestone?.name
+    if (editableMilestones.length === 0) return false // Still loading or no milestones
+    
+    // Get the milestone name from the nested milestone_types
+    const facilityMilestone = modalState.issue.facility_milestone
+    const milestoneTypes = facilityMilestone?.milestone_types
+    // Handle Supabase returning array vs object
+    const normalizedType = Array.isArray(milestoneTypes) ? milestoneTypes[0] : milestoneTypes
+    const issueMilestoneName = normalizedType?.name
+    
     if (!issueMilestoneName) return false
     
     const milestone = editableMilestones.find(m => m.name === issueMilestoneName)
-    return milestone?.recorded_at !== null
+    if (!milestone) return false // Milestone not found in list
+    
+    return milestone.recorded_at !== null
+  }
+  
+  // Helper to get the issue's milestone name
+  const getIssueMilestoneName = (): string | null => {
+    if (!modalState.issue) return null
+    const facilityMilestone = modalState.issue.facility_milestone
+    const milestoneTypes = facilityMilestone?.milestone_types
+    const normalizedType = Array.isArray(milestoneTypes) ? milestoneTypes[0] : milestoneTypes
+    return normalizedType?.name || null
   }
 
   return (
@@ -1070,7 +1104,7 @@ export default function DataQualityPage() {
                     ) : (
                       <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
                         {editableMilestones.map((milestone, index) => {
-                          const isIssueMilestone = milestone.name === modalState.issue?.facility_milestone?.name
+                          const isIssueMilestone = milestone.name === getIssueMilestoneName()
                           const isMissing = !milestone.recorded_at
                           
                           return (

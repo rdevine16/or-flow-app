@@ -50,7 +50,7 @@ export interface MetricIssue {
   resolution_type?: ResolutionType | null
   facility_milestone?: {
     display_name: string
-    name: string
+    milestone_types?: { name: string; display_name: string } | null
   } | null
   cases?: {
     case_number: string
@@ -134,7 +134,10 @@ export async function fetchMetricIssues(
       *,
       issue_type:issue_types(*),
       resolution_type:resolution_types(*),
-      facility_milestone:facility_milestones(display_name, name),
+      facility_milestone:facility_milestones(
+        display_name,
+        milestone_types(name, display_name)
+      ),
       cases(
         case_number,
         scheduled_date,
