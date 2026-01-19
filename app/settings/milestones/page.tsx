@@ -20,6 +20,10 @@ interface FacilityMilestone {
   source_milestone_type_id: string | null
   is_active: boolean
   deleted_at: string | null
+  // Phase 2: Validation fields
+  min_minutes: number | null
+  max_minutes: number | null
+  validation_type: 'duration' | 'sequence_gap' | null
 }
 
 // Confirmation Modal Component
@@ -116,6 +120,10 @@ export default function MilestonesSettingsPage() {
   const [editDisplayName, setEditDisplayName] = useState('')
   const [selectedPairId, setSelectedPairId] = useState<string>('')
 
+  // Phase 2: Validation range form state
+  const [editMinMinutes, setEditMinMinutes] = useState<number>(0)
+  const [editMaxMinutes, setEditMaxMinutes] = useState<number>(90)
+
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
 
@@ -134,7 +142,7 @@ export default function MilestonesSettingsPage() {
     setLoading(true)
     const { data } = await supabase
       .from('facility_milestones')
-      .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at')
+      .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, min_minutes, max_minutes, validation_type')
       .eq('facility_id', effectiveFacilityId)
       .order('display_order')
 
@@ -190,6 +198,9 @@ export default function MilestonesSettingsPage() {
         display_order: maxOrder + 1,
         source_milestone_type_id: null,
         is_active: true,
+        min_minutes: 1,
+        max_minutes: 90,
+        validation_type: 'sequence_gap',
       })
       .select()
       .single()
@@ -204,6 +215,7 @@ export default function MilestonesSettingsPage() {
     setSaving(false)
   }
 
+  // Phase 2: Updated edit handler to save validation ranges
   const handleEdit = async () => {
     if (!editingMilestone || !editDisplayName.trim()) return
     
@@ -212,7 +224,11 @@ export default function MilestonesSettingsPage() {
 
     const { error } = await supabase
       .from('facility_milestones')
-      .update({ display_name: editDisplayName.trim() })
+      .update({ 
+        display_name: editDisplayName.trim(),
+        min_minutes: editMinMinutes,
+        max_minutes: editMaxMinutes,
+      })
       .eq('id', editingMilestone.id)
 
     if (!error) {
@@ -222,7 +238,7 @@ export default function MilestonesSettingsPage() {
 
       setMilestones(
         milestones.map(m => m.id === editingMilestone.id 
-          ? { ...m, display_name: editDisplayName.trim() } 
+          ? { ...m, display_name: editDisplayName.trim(), min_minutes: editMinMinutes, max_minutes: editMaxMinutes } 
           : m
         )
       )
@@ -399,7 +415,6 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     .eq('id', milestone.id)
 
   if (!error) {
-    // ADD THIS LINE:
     await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
     
     setMilestones(milestones.map(m => 
@@ -443,12 +458,12 @@ const handleRestore = async (milestone: FacilityMilestone) => {
 
         await supabase
           .from('facility_milestones')
-          .update({ pair_with_id: null, pair_position: null })
+          .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
           .eq('id', milestone.id)
 
         await supabase
           .from('facility_milestones')
-          .update({ pair_with_id: null, pair_position: null })
+          .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
           .eq('id', milestone.pair_with_id)
 
         await milestoneTypeAudit.unlinked(
@@ -459,7 +474,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
 
         setMilestones(milestones.map(m => {
           if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-            return { ...m, pair_with_id: null, pair_position: null }
+            return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
           }
           return m
         }))
@@ -472,55 +487,62 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     })
   }
 
-  // Set up pairing
+  // Set up new pairing
   const handleSetPair = async () => {
     if (!pairingMilestone || !selectedPairId) return
-    
-    setSaving(true)
 
     const partner = milestones.find(m => m.id === selectedPairId)
-    const oldPartner = pairingMilestone.pair_with_id
-      ? milestones.find(m => m.id === pairingMilestone.pair_with_id)
-      : null
+    if (!partner) return
 
+    setSaving(true)
+
+    // If either was previously paired, unlink first
     if (pairingMilestone.pair_with_id && pairingMilestone.pair_with_id !== selectedPairId) {
       await supabase
         .from('facility_milestones')
-        .update({ pair_with_id: null, pair_position: null })
+        .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
         .eq('id', pairingMilestone.pair_with_id)
-
-      await milestoneTypeAudit.unlinked(
-        supabase,
-        pairingMilestone.display_name,
-        oldPartner?.display_name || 'Unknown'
-      )
     }
 
+    if (partner.pair_with_id && partner.pair_with_id !== pairingMilestone.id) {
+      await supabase
+        .from('facility_milestones')
+        .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
+        .eq('id', partner.pair_with_id)
+    }
+
+    // Set the pairing: first selected is start, second is end
+    // The START milestone gets validation_type = 'duration'
     await supabase
       .from('facility_milestones')
-      .update({ pair_with_id: selectedPairId, pair_position: 'start' })
+      .update({ pair_with_id: selectedPairId, pair_position: 'start', validation_type: 'duration' })
       .eq('id', pairingMilestone.id)
 
     await supabase
       .from('facility_milestones')
-      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
+      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end', validation_type: 'sequence_gap' })
       .eq('id', selectedPairId)
 
     await milestoneTypeAudit.linked(
       supabase,
       pairingMilestone.display_name,
-      partner?.display_name || 'Unknown'
+      partner.display_name
     )
 
+    // Update local state
     setMilestones(milestones.map(m => {
+      // Clear old pairings
+      if (m.id === pairingMilestone.pair_with_id || m.id === partner.pair_with_id) {
+        if (m.id !== pairingMilestone.id && m.id !== selectedPairId) {
+          return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
+        }
+      }
+      // Set new pairing
       if (m.id === pairingMilestone.id) {
-        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
+        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' as const, validation_type: 'duration' as const }
       }
       if (m.id === selectedPairId) {
-        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
-      }
-      if (m.id === pairingMilestone.pair_with_id) {
-        return { ...m, pair_with_id: null, pair_position: null }
+        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' as const, validation_type: 'sequence_gap' as const }
       }
       return m
     }))
@@ -531,18 +553,19 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     setSaving(false)
   }
 
-  const getPairedName = (pairWithId: string | null): string | null => {
-    if (!pairWithId) return null
+  // Get paired milestone name
+  const getPairedName = (pairWithId: string): string => {
     const paired = milestones.find(m => m.id === pairWithId)
-    return paired?.display_name || null
+    return paired?.display_name || 'Unknown'
   }
 
-  const getAvailableForPairing = (currentId: string): FacilityMilestone[] => {
+  // Get milestones available for pairing (active, not deleted, not already paired)
+  const getAvailableForPairing = (excludeId: string): FacilityMilestone[] => {
     return milestones.filter(m => 
-      m.id !== currentId && 
-      !m.pair_with_id &&
-      m.is_active &&
-      !m.deleted_at
+      m.id !== excludeId && 
+      !m.deleted_at && 
+      m.is_active && 
+      !m.pair_with_id
     )
   }
 
@@ -562,6 +585,15 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     if (diffDays < 7) return `${diffDays} days ago`
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) !== 1 ? 's' : ''} ago`
     return date.toLocaleDateString()
+  }
+
+  // Phase 2: Helper to get validation description
+  const getValidationDescription = (milestone: FacilityMilestone): string => {
+    if (milestone.validation_type === 'duration' && milestone.pair_with_id) {
+      const partner = milestones.find(m => m.id === milestone.pair_with_id)
+      return `Duration: ${milestone.min_minutes || 0}-${milestone.max_minutes || 90} min (${milestone.display_name} → ${partner?.display_name || 'End'})`
+    }
+    return `Gap from previous: ${milestone.min_minutes || 0}-${milestone.max_minutes || 90} min`
   }
 
   // Filter milestones
@@ -720,7 +752,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                             {milestone.pair_with_id && milestone.is_active && (
                               <p className="text-xs text-slate-500">
                                 Paired with: <span className="font-medium">{getPairedName(milestone.pair_with_id)}</span>
@@ -729,6 +761,12 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             {usageCount > 0 && (
                               <p className="text-xs text-slate-400">
                                 Used in {usageCount} case{usageCount !== 1 ? 's' : ''}
+                              </p>
+                            )}
+                            {/* Phase 2: Show validation range */}
+                            {milestone.is_active && (milestone.min_minutes !== null || milestone.max_minutes !== null) && (
+                              <p className="text-xs text-slate-400">
+                                Valid: {milestone.min_minutes || 0}-{milestone.max_minutes || 90} min
                               </p>
                             )}
                           </div>
@@ -756,6 +794,8 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             onClick={() => {
                               setEditingMilestone(milestone)
                               setEditDisplayName(milestone.display_name)
+                              setEditMinMinutes(milestone.min_minutes ?? 1)
+                              setEditMaxMinutes(milestone.max_minutes ?? 90)
                               setShowEditModal(true)
                             }}
                             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -931,7 +971,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Edit Modal - PHASE 2: Added validation range inputs */}
       {showEditModal && editingMilestone && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
@@ -959,6 +999,47 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                   </p>
                 </div>
               )}
+
+              {/* Phase 2: Validation Range Section */}
+              <div className="pt-2 border-t border-slate-200">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Expected Duration Range
+                </label>
+                <p className="text-xs text-slate-500 mb-3">
+                  {editingMilestone.validation_type === 'duration' && editingMilestone.pair_with_id
+                    ? `Time between ${editingMilestone.display_name} and ${getPairedName(editingMilestone.pair_with_id)}`
+                    : 'Time from previous milestone to this one'
+                  }
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-500 mb-1">Min (minutes)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="999"
+                      value={editMinMinutes}
+                      onChange={(e) => setEditMinMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
+                    />
+                  </div>
+                  <span className="text-slate-400 pt-5">—</span>
+                  <div className="flex-1">
+                    <label className="block text-xs text-slate-500 mb-1">Max (minutes)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="999"
+                      value={editMaxMinutes}
+                      onChange={(e) => setEditMaxMinutes(Math.max(1, parseInt(e.target.value) || 90))}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">
+                  Milestones outside this range will be flagged for review in Data Quality.
+                </p>
+              </div>
             </div>
 
             <div className="mt-6 flex justify-between">
