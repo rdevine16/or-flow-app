@@ -79,6 +79,7 @@ const MILESTONE_ORDER = [
 interface EditableMilestone {
   name: string
   display_name: string
+  display_order: number
   recorded_at: string | null
   original_recorded_at: string | null
   isEditing: boolean
@@ -185,6 +186,7 @@ export default function DataQualityPage() {
   const [runningDetection, setRunningDetection] = useState(false)
   const [detectionResult, setDetectionResult] = useState<string | null>(null)
   const [detectionStep, setDetectionStep] = useState(0)
+  const [lastScanTime, setLastScanTime] = useState<Date | null>(null)
 
   const loadData = useCallback(async () => {
     if (!effectiveFacilityId) return
@@ -217,29 +219,11 @@ export default function DataQualityPage() {
   }, [userLoading, effectiveFacilityId, loadData])
 
   // Fetch FRESH milestone data when modal opens
-  const loadFreshMilestones = async (caseId: string, facilityId: string) => {
+  // Only shows milestones that actually exist for this case, plus the issue milestone if missing
+  const loadFreshMilestones = async (caseId: string, issueMilestoneName: string | null) => {
     setLoadingMilestones(true)
     
     try {
-      // Get facility milestones (the expected ones)
-      // facility_milestones has name and display_name directly
-      const { data: facilityMilestones, error: fmError } = await supabase
-        .from('facility_milestones')
-        .select(`
-          id,
-          name,
-          display_name,
-          display_order
-        `)
-        .eq('facility_id', facilityId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('display_order')
-      
-      if (fmError) {
-        console.error('Error loading facility milestones:', fmError)
-      }
-      
       // Get actual recorded milestones for this case
       const { data: caseMilestones, error: cmError } = await supabase
         .from('case_milestones')
@@ -247,9 +231,12 @@ export default function DataQualityPage() {
           id,
           recorded_at,
           milestone_type_id,
+          facility_milestone_id,
+          facility_milestones(name, display_name, display_order),
           milestone_types(name, display_name)
         `)
         .eq('case_id', caseId)
+        .order('recorded_at', { ascending: true })
       
       if (cmError) {
         console.error('Error loading case milestones:', cmError)
@@ -261,33 +248,63 @@ export default function DataQualityPage() {
         return data
       }
       
-      // Build map of recorded milestones by name
-      const milestoneMap = new Map<string, string>()
-      caseMilestones?.forEach(cm => {
-        const milestoneType = normalizeJoin(cm.milestone_types as { name: string; display_name: string } | { name: string; display_name: string }[] | null)
-        if (milestoneType?.name) {
-          milestoneMap.set(milestoneType.name, cm.recorded_at)
-        }
-      })
-      
-      // Build editable milestone list
-      // facility_milestones now has name and display_name directly
-      const editable: EditableMilestone[] = (facilityMilestones || [])
-        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-        .map(fm => {
-          const name = fm.name || ''
-          const displayName = fm.display_name || name
-          const recordedAt = milestoneMap.get(name) || null
+      // Build editable milestone list from actual case milestones
+      const editable: EditableMilestone[] = (caseMilestones || [])
+        .map(cm => {
+          // Normalize Supabase join data (may come as array or object)
+          const rawFacilityMilestone = cm.facility_milestones
+          const facilityMilestone = Array.isArray(rawFacilityMilestone) 
+            ? rawFacilityMilestone[0] as { name: string; display_name: string; display_order: number } | undefined
+            : rawFacilityMilestone as { name: string; display_name: string; display_order: number } | null
+          
+          const rawMilestoneType = cm.milestone_types
+          const milestoneType = Array.isArray(rawMilestoneType)
+            ? rawMilestoneType[0] as { name: string; display_name: string } | undefined
+            : rawMilestoneType as { name: string; display_name: string } | null
+          
+          // Use facility milestone name if available, otherwise fall back to milestone type
+          const name = facilityMilestone?.name || milestoneType?.name || ''
+          const displayName = facilityMilestone?.display_name || milestoneType?.display_name || name
+          const displayOrder = facilityMilestone?.display_order || 0
           
           return {
             name,
             display_name: displayName,
-            recorded_at: recordedAt,
-            original_recorded_at: recordedAt,
+            display_order: displayOrder,
+            recorded_at: cm.recorded_at,
+            original_recorded_at: cm.recorded_at,
             isEditing: false,
             hasChanged: false
           }
         })
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+      
+      // If the issue is about a missing milestone, add it to the list if not present
+      if (issueMilestoneName) {
+        const existsInList = editable.some(m => m.name === issueMilestoneName)
+        if (!existsInList) {
+          // Fetch the facility milestone info for this missing milestone
+          const { data: missingMilestone } = await supabase
+            .from('facility_milestones')
+            .select('name, display_name, display_order')
+            .eq('name', issueMilestoneName)
+            .single()
+          
+          if (missingMilestone) {
+            editable.push({
+              name: missingMilestone.name,
+              display_name: missingMilestone.display_name,
+              display_order: missingMilestone.display_order || 999,
+              recorded_at: null,
+              original_recorded_at: null,
+              isEditing: false,
+              hasChanged: false
+            })
+            // Re-sort after adding
+            editable.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+          }
+        }
+      }
       
       setEditableMilestones(editable)
     } catch (err) {
@@ -341,6 +358,7 @@ export default function DataQualityPage() {
     await new Promise(resolve => setTimeout(resolve, 500))
 
     setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues${expiredCount ? ` · Expired ${expiredCount} old issues` : ''}`)
+    setLastScanTime(new Date())
 
     await dataQualityAudit.detectionRun(
       supabase,
@@ -520,8 +538,9 @@ export default function DataQualityPage() {
     setModalState({ isOpen: true, issue, isBulk: false, bulkIds: [] })
     setResolutionNotes('')
     setShowValidationWarning(false)
-    // Use facility_id from the issue
-    await loadFreshMilestones(issue.case_id, issue.facility_id)
+    // Pass the issue's milestone name so we can add it if missing
+    const issueMilestoneName = issue.facility_milestone?.name || null
+    await loadFreshMilestones(issue.case_id, issueMilestoneName)
   }
 
   const openBulkModal = (ids: string[]) => {
@@ -609,6 +628,23 @@ export default function DataQualityPage() {
             )}
           </button>
         </div>
+
+        {/* Last Scan Info */}
+        {lastScanTime && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Current
+            </span>
+            <span className="text-sm text-slate-500">
+              Last scan: {lastScanTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+              {' · '}
+              {lastScanTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
+          </div>
+        )}
 
         {detectionResult && (
           <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-700">
