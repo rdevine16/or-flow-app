@@ -560,6 +560,15 @@ export default function AnalyticsHubPage() {
       if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
     }
     fetchLookups()
+    // Calculate all analytics
+const analytics = useMemo(() => {
+  return calculateAnalyticsOverview(cases, previousPeriodCases)
+}, [cases, previousPeriodCases])
+
+// Calculate avg case time with delta - ADD THIS
+const avgCaseTimeKPIData = useMemo(() => {
+  return calculateAvgCaseTime(cases, previousPeriodCases)
+}, [cases, previousPeriodCases])
   }, [])
 
   // Fetch data
