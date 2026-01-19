@@ -64,6 +64,12 @@ export type AuditAction =
   | 'admin.procedure_category_updated'
   | 'admin.procedure_category_deleted'
   | 'admin.procedure_category_reordered'
+   // Data Quality
+  | 'data_quality.issue_resolved'
+  | 'data_quality.issue_excluded'
+  | 'data_quality.issue_approved'
+  | 'data_quality.detection_run'
+  | 'data_quality.bulk_resolved'
   // Milestones
   | 'milestone.recorded'
   | 'milestone.updated'
@@ -262,8 +268,14 @@ export const auditActionLabels: Record<AuditAction, string> = {
 'procedure_reimbursement.deleted': 'deleted a reimbursement rate',
 'facility.or_rate_updated': 'updated OR hourly rate',
 'procedure_type.costs_updated': 'updated procedure costs',
-}
 
+// Data Quality
+  'data_quality.issue_resolved': 'resolved a data quality issue',
+  'data_quality.issue_excluded': 'excluded a data quality issue',
+  'data_quality.issue_approved': 'approved a flagged metric',
+  'data_quality.detection_run': 'ran data quality detection',
+  'data_quality.bulk_resolved': 'bulk resolved data quality issues',
+}
 // =====================================================
 // CORE LOGGING FUNCTION (single source of truth)
 // =====================================================
@@ -699,7 +711,77 @@ export const caseAudit = {
     })
   },
 }
+// =====================================================
+// DATA QUALITY
+// =====================================================
 
+export const dataQualityAudit = {
+  async issueResolved(
+    supabase: SupabaseClient,
+    issueId: string,
+    issueType: string,
+    caseNumber: string,
+    resolutionType: 'corrected' | 'excluded' | 'approved',
+    facilityId: string,
+    notes?: string
+  ) {
+    const actionMap = {
+      corrected: 'data_quality.issue_resolved',
+      excluded: 'data_quality.issue_excluded',
+      approved: 'data_quality.issue_approved',
+    } as const
+    
+    await log(supabase, actionMap[resolutionType], {
+      targetType: 'metric_issue',
+      targetId: issueId,
+      targetLabel: `${issueType} on Case #${caseNumber}`,
+      facilityId,
+      newValues: { 
+        resolution_type: resolutionType,
+        notes: notes || null 
+      },
+    })
+  },
+
+  async bulkResolved(
+    supabase: SupabaseClient,
+    issueCount: number,
+    resolutionType: 'corrected' | 'excluded' | 'approved',
+    facilityId: string,
+    notes?: string
+  ) {
+    await log(supabase, 'data_quality.bulk_resolved', {
+      targetType: 'metric_issue',
+      targetLabel: `${issueCount} issues`,
+      facilityId,
+      newValues: { 
+        count: issueCount,
+        resolution_type: resolutionType,
+        notes: notes || null 
+      },
+    })
+  },
+
+  async detectionRun(
+    supabase: SupabaseClient,
+    facilityId: string,
+    daysScanned: number,
+    issuesFound: number,
+    issuesExpired: number
+  ) {
+    await log(supabase, 'data_quality.detection_run', {
+      targetType: 'facility',
+      targetId: facilityId,
+      targetLabel: `${issuesFound} issues found`,
+      facilityId,
+      metadata: {
+        days_scanned: daysScanned,
+        issues_found: issuesFound,
+        issues_expired: issuesExpired,
+      },
+    })
+  },
+}
 // =====================================================
 // MILESTONES
 // =====================================================

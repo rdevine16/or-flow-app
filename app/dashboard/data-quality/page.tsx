@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import {
   fetchMetricIssues,
@@ -95,40 +96,74 @@ export default function DataQualityPage() {
     }
   }, [userLoading, effectiveFacilityId, loadData])
 
-  const handleRunDetection = async () => {
-    if (!effectiveFacilityId) return
+const handleRunDetection = async () => {
+  if (!effectiveFacilityId) return
+  
+  setRunningDetection(true)
+  setDetectionResult(null)
+
+  // First expire old issues
+  const expiredCount = await expireOldIssues(supabase)
+
+  // Then run detection
+  const result = await runDetectionForFacility(supabase, effectiveFacilityId, 7)
+  setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues`)
+
+  // AUDIT LOG: Detection run
+  await dataQualityAudit.detectionRun(
+    supabase,
+    effectiveFacilityId,
+    7,
+    result.issuesFound,
+    expiredCount || 0
+  )
+
+  await loadData()
+  setRunningDetection(false)
+}
+
+ const handleResolve = async () => {
+  if (!currentUserId || resolveModal.issueIds.length === 0 || !effectiveFacilityId) return
+  
+  setSaving(true)
+
+  if (resolveModal.issueIds.length === 1) {
+    // Single issue resolution
+    await resolveIssue(supabase, resolveModal.issueIds[0], currentUserId, selectedResolution, resolutionNotes)
     
-    setRunningDetection(true)
-    setDetectionResult(null)
-
-    // First expire old issues
-    await expireOldIssues(supabase)
-
-    // Then run detection
-    const result = await runDetectionForFacility(supabase, effectiveFacilityId, 7)
-    setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues`)
-
-    await loadData()
-    setRunningDetection(false)
+    // Find the issue for audit log details
+    const issue = issues.find(i => i.id === resolveModal.issueIds[0])
+    
+    // AUDIT LOG: Single issue resolved
+    await dataQualityAudit.issueResolved(
+      supabase,
+      resolveModal.issueIds[0],
+      (issue?.issue_type as IssueType)?.name || 'unknown',
+      issue?.cases?.case_number || 'unknown',
+      selectedResolution as 'corrected' | 'excluded' | 'approved',
+      effectiveFacilityId,
+      resolutionNotes || undefined
+    )
+  } else {
+    // Bulk resolution
+    await resolveMultipleIssues(supabase, resolveModal.issueIds, currentUserId, selectedResolution, resolutionNotes)
+    
+    // AUDIT LOG: Bulk resolved
+    await dataQualityAudit.bulkResolved(
+      supabase,
+      resolveModal.issueIds.length,
+      selectedResolution as 'corrected' | 'excluded' | 'approved',
+      effectiveFacilityId,
+      resolutionNotes || undefined
+    )
   }
 
-  const handleResolve = async () => {
-    if (!currentUserId || resolveModal.issueIds.length === 0) return
-    
-    setSaving(true)
-
-    if (resolveModal.issueIds.length === 1) {
-      await resolveIssue(supabase, resolveModal.issueIds[0], currentUserId, selectedResolution, resolutionNotes)
-    } else {
-      await resolveMultipleIssues(supabase, resolveModal.issueIds, currentUserId, selectedResolution, resolutionNotes)
-    }
-
-    setResolveModal({ isOpen: false, issueIds: [] })
-    setSelectedResolution('approved')
-    setResolutionNotes('')
-    setSaving(false)
-    await loadData()
-  }
+  setResolveModal({ isOpen: false, issueIds: [] })
+  setSelectedResolution('approved')
+  setResolutionNotes('')
+  setSaving(false)
+  await loadData()
+}
 
   const openResolveModal = (issueIds: string[]) => {
     setResolveModal({ isOpen: true, issueIds })
