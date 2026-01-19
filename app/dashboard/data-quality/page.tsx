@@ -29,6 +29,10 @@ import {
 
 // What metrics require which milestones
 const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> = {
+  case_count: {
+    name: 'Case Count',
+    requires: [] // Always calculable - just counting the case
+  },
   total_case_time: {
     name: 'Total Case Time',
     requires: ['patient_in', 'patient_out']
@@ -344,12 +348,12 @@ export default function DataQualityPage() {
       // Determine which milestone IDs can be edited based on issue type
       const editableMilestoneIds = new Set<string>()
       
-      if (issueFacilityMilestoneId) {
-        // Always can edit the issue milestone
-        editableMilestoneIds.add(issueFacilityMilestoneId)
-        
-        // For duration issues (too_fast, timeout), also allow editing the paired milestone
-        if (issueType === 'too_fast' || issueType === 'timeout' || issueType === 'impossible') {
+      // For duration issues (too_fast, timeout, impossible), only allow editing the pair
+      if (issueType === 'too_fast' || issueType === 'timeout' || issueType === 'impossible') {
+        if (issueFacilityMilestoneId) {
+          // Add issue milestone
+          editableMilestoneIds.add(issueFacilityMilestoneId)
+          
           // Find the issue milestone to get its pair_with_id
           const issueMilestone = facilityMilestones?.find(fm => fm.id === issueFacilityMilestoneId)
           if (issueMilestone?.pair_with_id) {
@@ -364,14 +368,21 @@ export default function DataQualityPage() {
         }
       }
       
-      // For 'missing' issues, only the missing milestone is editable
-      // For 'stale' or 'incomplete', no milestone editing (just acknowledgment)
-      const allowAnyEdit = ['missing', 'too_fast', 'timeout', 'impossible'].includes(issueType)
-      
       // Build the editable milestone list
       const editable: EditableMilestone[] = (facilityMilestones || []).map(fm => {
         const recordedAt = recordedMap.get(fm.id) || null
-        const canEdit = allowAnyEdit && (editableMilestoneIds.size === 0 || editableMilestoneIds.has(fm.id))
+        
+        // Determine if this milestone can be edited
+        let canEdit = false
+        
+        if (issueType === 'missing') {
+          // For missing issues: can edit ANY milestone that is not recorded
+          canEdit = !recordedAt
+        } else if (issueType === 'too_fast' || issueType === 'timeout' || issueType === 'impossible') {
+          // For duration issues: can only edit the specific pair
+          canEdit = editableMilestoneIds.has(fm.id)
+        }
+        // For 'stale', 'incomplete', 'outlier': no editing (just acknowledgment)
         
         return {
           id: fm.id,
@@ -495,9 +506,16 @@ export default function DataQualityPage() {
     await new Promise(resolve => setTimeout(resolve, 500))
 
     const now = new Date()
-    setDetectionResult(`Checked ${result.casesChecked} cases, found ${result.issuesFound} issues${expiredCount ? ` · Expired ${expiredCount} old issues` : ''}`)
     setLastScanTime(now)
     storeLastScan(now)
+
+    // Reload data to get actual current counts
+    await loadData()
+    
+    // Get the actual unresolved count from the refreshed summary
+    const updatedSummary = await calculateDataQualitySummary(supabase, effectiveFacilityId)
+    
+    setDetectionResult(`Scanned ${result.casesChecked} cases · ${updatedSummary.totalUnresolved} open issues${expiredCount ? ` · Expired ${expiredCount}` : ''}`)
 
     await dataQualityAudit.detectionRun(
       supabase,
@@ -507,7 +525,6 @@ export default function DataQualityPage() {
       expiredCount || 0
     )
 
-    await loadData()
     setRunningDetection(false)
     setDetectionStep(0)
   }
@@ -941,15 +958,15 @@ export default function DataQualityPage() {
                   <div className="flex items-center gap-4 mt-2">
                     <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-500" />
-                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.error}</span>
+                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.error || 0}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-amber-500" />
-                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.warning}</span>
+                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.warning || 0}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.info}</span>
+                      <span className="text-sm font-medium text-slate-900">{summary.bySeverity.info || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -1125,6 +1142,65 @@ export default function DataQualityPage() {
               )}
             </div>
           </>
+        )}
+
+        {/* Detection Progress Modal */}
+        {runningDetection && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+              <div className="px-6 py-4 border-b border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-900">Running Data Quality Check</h3>
+              </div>
+              <div className="p-6">
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm text-slate-600 mb-2">
+                    <span>Progress</span>
+                    <span>{Math.round((detectionStep / 7) * 100)}%</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-600 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${(detectionStep / 7) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { step: 1, label: 'Expiring old issues' },
+                    { step: 2, label: 'Loading recent cases' },
+                    { step: 3, label: 'Checking impossible values' },
+                    { step: 4, label: 'Checking negative durations' },
+                    { step: 5, label: 'Checking milestone sequences' },
+                    { step: 6, label: 'Checking missing milestones' },
+                    { step: 7, label: 'Finalizing results' },
+                  ].map(({ step, label }) => (
+                    <div key={step} className="flex items-center gap-3">
+                      {detectionStep > step ? (
+                        <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                          <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      ) : detectionStep === step ? (
+                        <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+                        </div>
+                      ) : (
+                        <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-slate-300 rounded-full" />
+                        </div>
+                      )}
+                      <span className={`text-sm ${
+                        detectionStep > step ? 'text-emerald-700' : detectionStep === step ? 'text-blue-700 font-medium' : 'text-slate-400'
+                      }`}>
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Modal */}
