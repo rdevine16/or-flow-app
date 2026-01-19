@@ -513,13 +513,6 @@ export default function AnalyticsHubPage() {
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
-
-  const [avgCaseTimeKPI, setAvgCaseTimeKPI] = useState<{
-  value: number
-  displayValue: string
-  delta?: number
-  deltaType?: 'increase' | 'decrease' | 'unchanged'
-} | null>(null)
   
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
@@ -560,15 +553,7 @@ export default function AnalyticsHubPage() {
       if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
     }
     fetchLookups()
-    // Calculate all analytics
-const analytics = useMemo(() => {
-  return calculateAnalyticsOverview(cases, previousPeriodCases)
-}, [cases, previousPeriodCases])
 
-// Calculate avg case time with delta - ADD THIS
-const avgCaseTimeKPIData = useMemo(() => {
-  return calculateAvgCaseTime(cases, previousPeriodCases)
-}, [cases, previousPeriodCases])
   }, [])
 
   // Fetch data
@@ -615,7 +600,7 @@ const avgCaseTimeKPIData = useMemo(() => {
     const { data: casesData } = await query
     setCases((casesData as unknown as CaseWithMilestones[]) || [])
     
-    // Fetch previous period for comparison
+  // Fetch previous period for comparison
     if (startDate && endDate) {
       const start = new Date(startDate)
       const end = new Date(endDate)
@@ -679,6 +664,11 @@ const avgCaseTimeKPIData = useMemo(() => {
   // Calculate all analytics
   const analytics = useMemo(() => {
     return calculateAnalyticsOverview(cases, previousPeriodCases)
+  }, [cases, previousPeriodCases])
+
+  // Calculate avg case time with delta
+  const avgCaseTimeKPIData = useMemo(() => {
+    return calculateAvgCaseTime(cases, previousPeriodCases)
   }, [cases, previousPeriodCases])
 
   // ============================================
@@ -1014,13 +1004,13 @@ const avgCaseTimeKPIData = useMemo(() => {
       trend={analytics.orUtilization.delta}
       trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
     />
-    <QuickStatCard
-      title="Avg Case Time"
-      value={avgCaseTimeKPI?.displayValue || formatMinutes(analytics.avgTotalCaseTime)}
-      icon={ClockIcon}
-      trend={avgCaseTimeKPI?.delta}
-      trendType={avgCaseTimeKPI?.deltaType === 'increase' ? 'up' : avgCaseTimeKPI?.deltaType === 'decrease' ? 'down' : undefined}
-    />
+<QuickStatCard
+  title="Avg Case Time"
+  value={avgCaseTimeKPIData.displayValue}
+  icon={ClockIcon}
+  trend={avgCaseTimeKPIData.delta}
+  trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
+/>
     <QuickStatCard
       title="Cancellation Rate"
       value={analytics.cancellationRate.displayValue}
