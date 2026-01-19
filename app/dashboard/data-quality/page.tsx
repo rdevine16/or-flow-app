@@ -679,6 +679,9 @@ export default function DataQualityPage() {
     const changedMilestones = editableMilestones.filter(m => m.hasChanged && m.recorded_at)
     
     for (const milestone of changedMilestones) {
+      // Skip if no milestone id
+      if (!milestone.id) continue
+      
       // Check if milestone exists
       const { data: existing } = await supabase
         .from('case_milestones')
@@ -1113,12 +1116,25 @@ export default function DataQualityPage() {
                     className="w-4 h-4 text-blue-600 rounded border-slate-300"
                   />
                   <span className="text-sm font-medium text-slate-700">
-                    {issues.length} issue{issues.length !== 1 ? 's' : ''}
+                    {/* Group by case for display */}
+                    {(() => {
+                      const caseGroups = new Map<string, MetricIssue[]>()
+                      issues.forEach(issue => {
+                        const caseId = issue.case_id || 'unknown'
+                        if (!caseGroups.has(caseId)) {
+                          caseGroups.set(caseId, [])
+                        }
+                        caseGroups.get(caseId)!.push(issue)
+                      })
+                      const caseCount = caseGroups.size
+                      const issueCount = issues.length
+                      return `${caseCount} case${caseCount !== 1 ? 's' : ''} with ${issueCount} issue${issueCount !== 1 ? 's' : ''}`
+                    })()}
                   </span>
                 </div>
               </div>
               
-              {/* Issue rows */}
+              {/* Issue rows - GROUPED BY CASE */}
               {issues.length === 0 ? (
                 <div className="px-4 py-12 text-center">
                   <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1131,98 +1147,166 @@ export default function DataQualityPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {issues.map(issue => {
-                    const issueType = issueTypes.find(t => t.id === issue.issue_type_id)
-                    const daysUntilExpiry = getDaysUntilExpiration(issue.expires_at)
+                  {/* Group issues by case_id */}
+                  {(() => {
+                    const caseGroups = new Map<string, MetricIssue[]>()
+                    issues.forEach(issue => {
+                      const caseId = issue.case_id || 'unknown'
+                      if (!caseGroups.has(caseId)) {
+                        caseGroups.set(caseId, [])
+                      }
+                      caseGroups.get(caseId)!.push(issue)
+                    })
                     
-                    return (
-                      <div 
-                        key={issue.id}
-                        className={`px-4 py-3 hover:bg-slate-50 transition-colors ${
-                          issue.resolved_at ? 'opacity-60' : ''
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          {!issue.resolved_at && (
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(issue.id)}
-                              onChange={() => toggleSelect(issue.id)}
-                              className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300"
-                            />
-                          )}
+                    return Array.from(caseGroups.entries()).map(([caseId, caseIssues]) => {
+                      const firstIssue = caseIssues[0]
+                      const isResolved = caseIssues.every(i => i.resolved_at)
+                      const unresolvedIssues = caseIssues.filter(i => !i.resolved_at)
+                      const earliestExpiry = caseIssues
+                        .filter(i => !i.resolved_at && i.expires_at)
+                        .map(i => getDaysUntilExpiration(i.expires_at))
+                        .sort((a, b) => a - b)[0]
+                      
+                      // Get all issue IDs for this case (for bulk selection)
+                      const caseIssueIds = caseIssues.map(i => i.id)
+                      const allSelected = unresolvedIssues.every(i => selectedIds.has(i.id))
+                      const someSelected = unresolvedIssues.some(i => selectedIds.has(i.id))
+                      
+                      return (
+                        <div 
+                          key={caseId}
+                          className={`px-4 py-3 hover:bg-slate-50 transition-colors ${
+                            isResolved ? 'opacity-60' : ''
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {!isResolved && (
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                ref={el => {
+                                  if (el) el.indeterminate = someSelected && !allSelected
+                                }}
+                                onChange={() => {
+                                  // Toggle all issues for this case
+                                  setSelectedIds(prev => {
+                                    const next = new Set(prev)
+                                    if (allSelected) {
+                                      unresolvedIssues.forEach(i => next.delete(i.id))
+                                    } else {
+                                      unresolvedIssues.forEach(i => next.add(i.id))
+                                    }
+                                    return next
+                                  })
+                                }}
+                                className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300"
+                              />
+                            )}
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              {issueType && (
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getSeverityColor(issueType.severity)}`}>
-                                  {issueType.display_name}
-                                </span>
-                              )}
-                              {issue.resolved_at && issue.resolution_type && (
-                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                                  {(issue.resolution_type as ResolutionType).display_name}
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="text-sm text-slate-900 font-medium">
-                              {issue.facility_milestone?.display_name ? `${issue.facility_milestone.display_name}: ` : ''}
-                              {formatIssueDescription(issue)}
-                            </p>
-
-                            {/* Case Info Row */}
-                            <div className="flex items-center gap-2 mt-2 text-xs text-slate-600 flex-wrap">
-                              {issue.cases && (
-                                <>
-                                  <span className="font-semibold text-slate-700">
-                                    {issue.cases.case_number}
+                            <div className="flex-1 min-w-0">
+                              {/* Issue Type Badges Row */}
+                              <div className="flex items-center gap-2 flex-wrap mb-2">
+                                {/* Group issue types to avoid duplicates */}
+                                {(() => {
+                                  const typeMap = new Map<string, { type: IssueType; count: number; milestones: string[] }>()
+                                  caseIssues.forEach(issue => {
+                                    const issueType = issueTypes.find(t => t.id === issue.issue_type_id)
+                                    if (issueType) {
+                                      const key = issueType.id
+                                      if (!typeMap.has(key)) {
+                                        typeMap.set(key, { type: issueType, count: 0, milestones: [] })
+                                      }
+                                      typeMap.get(key)!.count++
+                                      if (issue.facility_milestone?.display_name) {
+                                        typeMap.get(key)!.milestones.push(issue.facility_milestone.display_name)
+                                      }
+                                    }
+                                  })
+                                  
+                                  return Array.from(typeMap.values()).map(({ type, count, milestones }) => (
+                                    <span 
+                                      key={type.id}
+                                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${getSeverityColor(type.severity)}`}
+                                      title={milestones.length > 0 ? milestones.join(', ') : undefined}
+                                    >
+                                      {type.display_name}{count > 1 ? ` (${count})` : ''}
+                                    </span>
+                                  ))
+                                })()}
+                                
+                                {isResolved && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+                                    Resolved
                                   </span>
-                                  <span className="text-slate-300">•</span>
-                                  {issue.cases.surgeon && (
-                                    <>
-                                      <span>
-                                        Dr. {issue.cases.surgeon.last_name}
-                                      </span>
-                                      <span className="text-slate-300">•</span>
-                                    </>
-                                  )}
-                                  {issue.cases.procedure_types?.name && (
-                                    <span>{issue.cases.procedure_types.name}</span>
-                                  )}
-                                  {issue.cases.operative_side && (
-                                    <>
-                                      <span className="text-slate-300">•</span>
-                                      <span className="capitalize">{issue.cases.operative_side}</span>
-                                    </>
-                                  )}
-                                </>
-                              )}
+                                )}
+                              </div>
+
+                              {/* Milestones with issues */}
+                              <p className="text-sm text-slate-900 font-medium">
+                                {(() => {
+                                  const milestones = caseIssues
+                                    .filter(i => i.facility_milestone?.display_name)
+                                    .map(i => i.facility_milestone!.display_name)
+                                  const uniqueMilestones = [...new Set(milestones)]
+                                  if (uniqueMilestones.length === 0) return 'No milestone specified'
+                                  if (uniqueMilestones.length <= 3) return uniqueMilestones.join(', ')
+                                  return `${uniqueMilestones.slice(0, 3).join(', ')} +${uniqueMilestones.length - 3} more`
+                                })()}
+                              </p>
+
+                              {/* Case Info Row */}
+                              <div className="flex items-center gap-2 mt-2 text-xs text-slate-600 flex-wrap">
+                                {firstIssue.cases && (
+                                  <>
+                                    <span className="font-semibold text-slate-700">
+                                      {firstIssue.cases.case_number}
+                                    </span>
+                                    <span className="text-slate-300">•</span>
+                                    {firstIssue.cases.surgeon && (
+                                      <>
+                                        <span>
+                                          Dr. {firstIssue.cases.surgeon.last_name}
+                                        </span>
+                                        <span className="text-slate-300">•</span>
+                                      </>
+                                    )}
+                                    {firstIssue.cases.procedure_types?.name && (
+                                      <span>{firstIssue.cases.procedure_types.name}</span>
+                                    )}
+                                    {firstIssue.cases.operative_side && (
+                                      <>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="capitalize">{firstIssue.cases.operative_side}</span>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Timing Info Row */}
+                              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 flex-wrap">
+                                <span>{unresolvedIssues.length} issue{unresolvedIssues.length !== 1 ? 's' : ''}</span>
+                                {!isResolved && earliestExpiry !== undefined && (
+                                  <span className={earliestExpiry <= 7 ? 'text-amber-600 font-medium' : ''}>
+                                    Expires in {earliestExpiry} day{earliestExpiry !== 1 ? 's' : ''}
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
-                            {/* Timing Info Row */}
-                            <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 flex-wrap">
-                              <span>Detected {formatTimeAgo(issue.detected_at)}</span>
-                              {!issue.resolved_at && (
-                                <span className={daysUntilExpiry <= 7 ? 'text-amber-600 font-medium' : ''}>
-                                  Expires in {daysUntilExpiry} day{daysUntilExpiry !== 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </div>
+                            {!isResolved && (
+                              <button
+                                onClick={() => openModal(firstIssue)}
+                                className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors"
+                              >
+                                Review
+                              </button>
+                            )}
                           </div>
-
-                          {!issue.resolved_at && (
-                            <button
-                              onClick={() => openModal(issue)}
-                              className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors"
-                            >
-                              Review
-                            </button>
-                          )}
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  })()}
                 </div>
               )}
             </div>
@@ -1503,7 +1587,7 @@ export default function DataQualityPage() {
                         <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
                           {editableMilestones.map((milestone, index) => {
                             // Check if this milestone has an issue (using global state)
-                            const hasIssue = issueMilestoneIds.has(milestone.id)
+                            const hasIssue = milestone.id ? issueMilestoneIds.has(milestone.id) : false
                             const isMissing = !milestone.recorded_at
                             
                             // Find the paired milestone for visual indicator
