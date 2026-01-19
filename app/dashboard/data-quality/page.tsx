@@ -1626,14 +1626,6 @@ export default function DataQualityPage() {
                             const isStartOfPair = pairedMilestone && milestone.display_order < (pairedMilestone.display_order || 999)
                             const isEndOfPair = pairedMilestone && milestone.display_order > (pairedMilestone.display_order || 0)
                             
-                            // Calculate if this milestone is between a pair (for vertical line)
-                            const isPaired = isStartOfPair || isEndOfPair
-                            
-                            // Find how many rows between start and end of this pair
-                            const pairEndIndex = isStartOfPair 
-                              ? editableMilestones.findIndex(m => m.id === milestone.pair_with_id)
-                              : -1
-                            
                             return (
                               <div 
                                 key={milestone.id || milestone.name}
@@ -1642,22 +1634,17 @@ export default function DataQualityPage() {
                                 } ${index > 0 ? 'border-t border-slate-100' : ''}`}
                               >
                                 <div className="px-4 py-3 flex items-center gap-3">
-                                  {/* Pair bracket indicator */}
-                                  <div className="w-6 flex-shrink-0 relative">
-                                    {isPaired && (
-                                      <div className="absolute inset-0 flex items-center justify-center">
-                                        {/* Vertical line segment */}
-                                        <div className={`absolute left-1/2 w-0.5 bg-blue-300 ${
-                                          isStartOfPair ? 'top-1/2 bottom-0 rounded-t-full' : 
-                                          isEndOfPair ? 'top-0 bottom-1/2 rounded-b-full' : ''
-                                        }`} style={{ transform: 'translateX(-50%)' }} />
-                                        
-                                        {/* Horizontal connector */}
-                                        <div className="absolute right-0 w-2 h-0.5 bg-blue-300" />
-                                        
-                                        {/* Circle at connection point */}
-                                        <div className="absolute right-0 w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                      </div>
+                                  {/* Pair arrow indicator */}
+                                  <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                                    {isStartOfPair && (
+                                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                      </svg>
+                                    )}
+                                    {isEndOfPair && (
+                                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                      </svg>
                                     )}
                                   </div>
                                   
