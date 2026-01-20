@@ -2,7 +2,7 @@
 // lib/dataQuality.ts
 // ============================================
 // Data quality issue detection and resolution utilities
-// Add this file to your lib/ directory
+// Includes stale/orphan case detection
 // ============================================
 
 import { SupabaseClient } from '@supabase/supabase-js'
@@ -32,7 +32,7 @@ export interface MetricIssue {
   case_id: string
   issue_type_id: string
   facility_milestone_id: string | null
-  milestone_id: string | null  // <-- ADDED: Links to the specific case_milestone that caused the issue
+  milestone_id: string | null
   detected_value: number | null
   expected_min: number | null
   expected_max: number | null
@@ -44,8 +44,6 @@ export interface MetricIssue {
   detected_at: string
   expires_at: string
   created_at: string
-  // Joined data - Supabase returns these as arrays when using .select() with joins
-  // We normalize them to single objects in the fetch function
   issue_type?: IssueType | null
   resolution_type?: ResolutionType | null
   facility_milestone?: {
@@ -78,6 +76,24 @@ export interface DataQualitySummary {
   bySeverity: Record<string, number>
   qualityScore: number
   expiringThisWeek: number
+}
+
+interface StaleCase {
+  case_id: string
+  case_number: string
+  facility_id: string
+  issue_type: 'stale_in_progress' | 'abandoned_scheduled' | 'no_activity'
+  details: {
+    hours_elapsed?: number
+    days_overdue?: number
+    last_activity?: string
+  }
+}
+
+interface StaleDetectionResult {
+  detected: number
+  created: number
+  errors: string[]
 }
 
 // ============================================
@@ -160,7 +176,6 @@ export async function fetchMetricIssues(
   }
 
   if (options?.issueTypeName) {
-    // Need to filter by issue_type name via subquery
     const { data: issueType } = await supabase
       .from('issue_types')
       .select('id')
@@ -187,7 +202,6 @@ export async function fetchMetricIssues(
     return []
   }
 
-  // Normalize joined data (Supabase sometimes returns arrays for 1:1 joins)
   const normalizedData = (data || []).map((issue: Record<string, unknown>) => ({
     ...issue,
     issue_type: Array.isArray(issue.issue_type) ? issue.issue_type[0] : issue.issue_type,
@@ -207,7 +221,6 @@ export async function calculateDataQualitySummary(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<DataQualitySummary> {
-  // Fetch unresolved issues
   const { data: issues, error } = await supabase
     .from('metric_issues')
     .select(`
@@ -235,7 +248,6 @@ export async function calculateDataQualitySummary(
   let expiringThisWeek = 0
 
   issues.forEach((issue: Record<string, unknown>) => {
-    // Normalize issue_type (may come as array)
     const rawIssueType = issue.issue_type
     const issueType = Array.isArray(rawIssueType) ? rawIssueType[0] : rawIssueType
     
@@ -249,13 +261,11 @@ export async function calculateDataQualitySummary(
       }
     }
     
-    if (new Date(issue.expires_at as string) < oneWeekFromNow) {
+    if (issue.expires_at && new Date(issue.expires_at as string) < oneWeekFromNow) {
       expiringThisWeek++
     }
   })
 
-  // Calculate quality score (100 - penalty for issues)
-  // Errors = 10 points each, Warnings = 3 points, Info = 1 point
   const penalty = (bySeverity.error * 10) + (bySeverity.warning * 3) + (bySeverity.info * 1)
   const qualityScore = Math.max(0, Math.min(100, 100 - penalty))
 
@@ -282,7 +292,6 @@ export async function resolveIssue(
   resolutionTypeName: string,
   notes?: string
 ): Promise<boolean> {
-  // Get resolution type ID
   const { data: resType } = await supabase
     .from('resolution_types')
     .select('id')
@@ -322,7 +331,6 @@ export async function resolveMultipleIssues(
   resolutionTypeName: string,
   notes?: string
 ): Promise<number> {
-  // Get resolution type ID
   const { data: resType } = await supabase
     .from('resolution_types')
     .select('id')
@@ -367,7 +375,6 @@ export async function reopenIssue(
       resolved_at: null,
       resolved_by: null,
       resolution_notes: null,
-      // Reset expiration to 30 days from now
       expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     })
     .eq('id', issueId)
@@ -385,7 +392,7 @@ export async function reopenIssue(
 // ============================================
 
 /**
- * Run issue detection for a single case
+ * Run issue detection for a single case (calls Postgres function)
  */
 export async function runDetectionForCase(
   supabase: SupabaseClient,
@@ -418,12 +425,13 @@ export async function expireOldIssues(supabase: SupabaseClient): Promise<number>
 
 /**
  * Run detection for all recent cases in a facility
+ * Includes both milestone detection AND stale case detection
  */
 export async function runDetectionForFacility(
   supabase: SupabaseClient,
   facilityId: string,
   daysBack: number = 7
-): Promise<{ casesChecked: number; issuesFound: number }> {
+): Promise<{ casesChecked: number; issuesFound: number; staleCasesFound: number }> {
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - daysBack)
 
@@ -436,16 +444,280 @@ export async function runDetectionForFacility(
 
   if (casesError || !cases) {
     console.error('Error fetching cases:', casesError)
-    return { casesChecked: 0, issuesFound: 0 }
+    return { casesChecked: 0, issuesFound: 0, staleCasesFound: 0 }
   }
 
+  // Run milestone detection for each case
   let totalIssues = 0
   for (const caseRow of cases) {
     const issueCount = await runDetectionForCase(supabase, caseRow.id)
     totalIssues += issueCount
   }
 
-  return { casesChecked: cases.length, issuesFound: totalIssues }
+  // Run stale case detection
+  const staleResult = await detectStaleCases(supabase, facilityId)
+  console.log(`Stale cases: ${staleResult.detected} found, ${staleResult.created} created`)
+
+  return { 
+    casesChecked: cases.length, 
+    issuesFound: totalIssues + staleResult.created,
+    staleCasesFound: staleResult.created
+  }
+}
+
+// ============================================
+// STALE CASE DETECTION
+// ============================================
+
+/**
+ * Detect all types of stale/orphaned cases for a facility
+ */
+export async function detectStaleCases(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleDetectionResult> {
+  const results: StaleDetectionResult = { detected: 0, created: 0, errors: [] }
+  
+  // Get issue type IDs for stale cases
+  const { data: issueTypes } = await supabase
+    .from('issue_types')
+    .select('id, name')
+    .in('name', ['stale_in_progress', 'abandoned_scheduled', 'no_activity'])
+  
+  const issueTypeMap = new Map(issueTypes?.map(it => [it.name, it.id]) || [])
+  
+  // If issue types don't exist yet, skip stale detection
+  if (issueTypeMap.size === 0) {
+    console.log('Stale case issue types not found in database - skipping stale detection')
+    return results
+  }
+  
+  // Run all detections
+  const staleCases: StaleCase[] = []
+  
+  // 1. Stale In-Progress (over 24 hours)
+  const staleInProgress = await detectStaleInProgress(supabase, facilityId)
+  staleCases.push(...staleInProgress)
+  
+  // 2. Abandoned Scheduled (2+ days past scheduled date)
+  const abandoned = await detectAbandonedScheduled(supabase, facilityId)
+  staleCases.push(...abandoned)
+  
+  // 3. No Activity (4+ hours since last milestone)
+  const noActivity = await detectNoActivity(supabase, facilityId)
+  staleCases.push(...noActivity)
+  
+  results.detected = staleCases.length
+  
+  // Create issues for each stale case
+  for (const staleCase of staleCases) {
+    const issueTypeId = issueTypeMap.get(staleCase.issue_type)
+    if (!issueTypeId) {
+      results.errors.push(`Unknown issue type: ${staleCase.issue_type}`)
+      continue
+    }
+    
+    // Check if issue already exists
+    const { data: existing } = await supabase
+      .from('metric_issues')
+      .select('id')
+      .eq('case_id', staleCase.case_id)
+      .eq('issue_type_id', issueTypeId)
+      .is('resolved_at', null)
+      .maybeSingle()
+    
+    if (existing) continue // Skip if already flagged
+    
+    // Create the issue
+    const { error } = await supabase
+      .from('metric_issues')
+      .insert({
+        case_id: staleCase.case_id,
+        facility_id: staleCase.facility_id,
+        issue_type_id: issueTypeId,
+        facility_milestone_id: null, // Stale cases aren't milestone-specific
+        detected_value: JSON.stringify(staleCase.details),
+        detected_at: new Date().toISOString(),
+        expires_at: null // Stale cases don't auto-expire
+      })
+    
+    if (error) {
+      results.errors.push(`Failed to create issue for ${staleCase.case_number}: ${error.message}`)
+    } else {
+      results.created++
+      
+      // Invalidate case data
+      await supabase
+        .from('cases')
+        .update({ data_validated: false })
+        .eq('id', staleCase.case_id)
+    }
+  }
+  
+  return results
+}
+
+/**
+ * Find cases that have been "in_progress" for over 24 hours
+ */
+async function detectStaleInProgress(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleCase[]> {
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  
+  // Get in_progress status ID
+  const { data: statusData } = await supabase
+    .from('case_statuses')
+    .select('id')
+    .eq('name', 'in_progress')
+    .single()
+  
+  if (!statusData) return []
+  
+  // Find Patient In milestone for this facility
+  const { data: patientInMilestone } = await supabase
+    .from('facility_milestones')
+    .select('id')
+    .eq('facility_id', facilityId)
+    .eq('name', 'patient_in')
+    .single()
+  
+  if (!patientInMilestone) return []
+  
+  // Find stale cases
+  const { data: cases } = await supabase
+    .from('cases')
+    .select(`
+      id,
+      case_number,
+      facility_id,
+      case_milestones!inner(recorded_at, facility_milestone_id)
+    `)
+    .eq('facility_id', facilityId)
+    .eq('status_id', statusData.id)
+    .eq('case_milestones.facility_milestone_id', patientInMilestone.id)
+    .lt('case_milestones.recorded_at', twentyFourHoursAgo)
+  
+  return (cases || []).map(c => {
+    const patientInTime = Array.isArray(c.case_milestones) 
+      ? c.case_milestones[0]?.recorded_at 
+      : (c.case_milestones as any)?.recorded_at
+    
+    const hoursElapsed = patientInTime 
+      ? (Date.now() - new Date(patientInTime).getTime()) / (1000 * 60 * 60)
+      : 0
+    
+    return {
+      case_id: c.id,
+      case_number: c.case_number,
+      facility_id: c.facility_id,
+      issue_type: 'stale_in_progress' as const,
+      details: { hours_elapsed: Math.round(hoursElapsed * 10) / 10 }
+    }
+  })
+}
+
+/**
+ * Find scheduled cases that are 2+ days past their scheduled date
+ */
+async function detectAbandonedScheduled(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleCase[]> {
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  
+  // Get scheduled status ID
+  const { data: statusData } = await supabase
+    .from('case_statuses')
+    .select('id')
+    .eq('name', 'scheduled')
+    .single()
+  
+  if (!statusData) return []
+  
+  const { data: cases } = await supabase
+    .from('cases')
+    .select('id, case_number, facility_id, scheduled_date')
+    .eq('facility_id', facilityId)
+    .eq('status_id', statusData.id)
+    .lt('scheduled_date', twoDaysAgo)
+  
+  return (cases || []).map(c => {
+    const scheduledDate = new Date(c.scheduled_date)
+    const daysOverdue = Math.floor((Date.now() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+    
+    return {
+      case_id: c.id,
+      case_number: c.case_number,
+      facility_id: c.facility_id,
+      issue_type: 'abandoned_scheduled' as const,
+      details: { days_overdue: daysOverdue }
+    }
+  })
+}
+
+/**
+ * Find in-progress cases with no milestone activity for 4+ hours
+ */
+async function detectNoActivity(
+  supabase: SupabaseClient,
+  facilityId: string
+): Promise<StaleCase[]> {
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()
+  
+  // Get in_progress status ID
+  const { data: statusData } = await supabase
+    .from('case_statuses')
+    .select('id')
+    .eq('name', 'in_progress')
+    .single()
+  
+  if (!statusData) return []
+  
+  // Get all in-progress cases
+  const { data: cases } = await supabase
+    .from('cases')
+    .select(`
+      id,
+      case_number,
+      facility_id,
+      case_milestones(recorded_at)
+    `)
+    .eq('facility_id', facilityId)
+    .eq('status_id', statusData.id)
+  
+  const staleCases: StaleCase[] = []
+  
+  for (const c of cases || []) {
+    const milestones = Array.isArray(c.case_milestones) ? c.case_milestones : []
+    const recordedMilestones = milestones.filter((m: any) => m.recorded_at)
+    
+    if (recordedMilestones.length === 0) continue // Skip if no milestones at all
+    
+    // Find most recent activity
+    const lastActivity = recordedMilestones.reduce((latest: string | null, m: any) => {
+      if (!latest || m.recorded_at > latest) return m.recorded_at
+      return latest
+    }, null)
+    
+    if (lastActivity && lastActivity < fourHoursAgo) {
+      const hoursSinceActivity = (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60)
+      
+      staleCases.push({
+        case_id: c.id,
+        case_number: c.case_number,
+        facility_id: c.facility_id,
+        issue_type: 'no_activity',
+        details: { 
+          hours_elapsed: Math.round(hoursSinceActivity * 10) / 10,
+          last_activity: lastActivity 
+        }
+      })
+    }
+  }
+  
+  return staleCases
 }
 
 // ============================================
@@ -465,7 +737,7 @@ export function getSeverityColor(severity: string): string {
 }
 
 /**
- * Get issue type icon name (for your icon system)
+ * Get issue type icon name
  */
 export function getIssueTypeIcon(typeName: string): string {
   switch (typeName) {
@@ -476,6 +748,9 @@ export function getIssueTypeIcon(typeName: string): string {
     case 'outlier': return 'trending-up'
     case 'stale': return 'archive'
     case 'incomplete': return 'loader'
+    case 'stale_in_progress': return 'clock'
+    case 'abandoned_scheduled': return 'calendar-x'
+    case 'no_activity': return 'pause-circle'
     default: return 'help-circle'
   }
 }
@@ -511,25 +786,20 @@ export function getDaysUntilExpiration(expiresAt: string): number {
 /**
  * Format detected value with context
  */
-export function formatDetectedValue(
-  issue: MetricIssue
-): string {
+export function formatDetectedValue(issue: MetricIssue): string {
   if (issue.detected_value === null) return 'N/A'
   
   const value = Math.round(issue.detected_value)
   const details = issue.details as Record<string, unknown> | null
   
-  // For stale cases, it's days
   if (details?.days_overdue !== undefined) {
     return `${value} day${value !== 1 ? 's' : ''} overdue`
   }
   
-  // For incomplete cases, it's hours
   if (details?.hours_since_activity !== undefined) {
     return `${value} hour${value !== 1 ? 's' : ''} since activity`
   }
   
-  // For milestone durations, it's minutes
   const min = issue.expected_min !== null ? Math.round(issue.expected_min) : null
   const max = issue.expected_max !== null ? Math.round(issue.expected_max) : null
   
