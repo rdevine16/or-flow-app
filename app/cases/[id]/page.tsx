@@ -719,7 +719,6 @@ if (milestoneType?.name === 'patient_in') {
   // Surgeon Left button visibility
   const closingStarted = !!closingTime
   const patientOutRecorded = !!patientOutTime
-  const showSurgeonLeftButton = closingStarted && !patientOutRecorded && !surgeonLeftAt
 
   // Get assigned staff
   const assignedStaff = caseStaff.filter(cs => {
@@ -1035,24 +1034,7 @@ if (milestoneType?.name === 'patient_in') {
                 </div>
               )}
 
-              {/* Surgeon Left Button - Shows when closing started but patient not out yet */}
-              {showSurgeonLeftButton && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <button
-                    onClick={recordSurgeonLeft}
-                    className="w-full py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold rounded-xl hover:from-orange-600 hover:to-amber-600 transition-all shadow-sm hover:shadow flex items-center justify-center gap-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    Surgeon Left OR
-                  </button>
-                  <p className="text-xs text-slate-500 text-center mt-2">
-                    Records when surgeon hands off to PA for closing
-                  </p>
-                </div>
-              )}
-
+              
               {/* Surgeon Left Confirmation - Shows after button is clicked */}
               {surgeonLeftAt && !patientOutRecorded && (
                 <div className="mt-4 pt-4 border-t border-slate-100">
@@ -1145,7 +1127,59 @@ if (milestoneType?.name === 'patient_in') {
                 )}
               </div>
             </div>
-
+            {/* SURGEON LEFT */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-900">Surgeon Status</h3>
+              </div>
+              <div className="p-3">
+                {/* Not yet recorded - show button */}
+                {!surgeonLeftAt ? (
+                  <button
+                    onClick={recordSurgeonLeft}
+                    disabled={!closingStarted || patientOutRecorded}
+                    className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      closingStarted && !patientOutRecorded
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Surgeon Left OR
+                  </button>
+                ) : (
+                  /* Already recorded - show confirmation */
+                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                      </div>
+                      <p className="text-xs text-orange-600 mt-0.5">
+                        {formatTimestamp(surgeonLeftAt)}
+                      </p>
+                    </div>
+                    {!patientOutRecorded && (
+                      <button
+                        onClick={clearSurgeonLeft}
+                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!closingStarted && !surgeonLeftAt && (
+                  <p className="text-xs text-slate-400 text-center mt-2">
+                    Available after closing starts
+                  </p>
+                )}
+              </div>
+            </div>
             {/* TRAYS */}
             <DeviceRepSection caseId={id} supabase={supabase} compact />
 
