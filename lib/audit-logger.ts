@@ -143,7 +143,22 @@ export type AuditAction =
   | 'admin.procedure_type_created'
   | 'admin.procedure_type_updated'
   | 'admin.procedure_type_deleted'
-
+// Cost Categories (Facility)
+  | 'cost_category.created'
+  | 'cost_category.updated'
+  | 'cost_category.deleted'
+  // Cost Categories (Global Admin)
+  | 'admin.cost_category_created'
+  | 'admin.cost_category_updated'
+  | 'admin.cost_category_deleted'
+  // Procedure Cost Items
+  | 'procedure_cost_item.created'
+  | 'procedure_cost_item.updated'
+  | 'procedure_cost_item.deleted'
+  // Surgeon Cost Items (Variance)
+  | 'surgeon_cost_item.created'
+  | 'surgeon_cost_item.updated'
+  | 'surgeon_cost_item.deleted'
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
   // Auth
@@ -268,7 +283,22 @@ export const auditActionLabels: Record<AuditAction, string> = {
 'procedure_reimbursement.deleted': 'deleted a reimbursement rate',
 'facility.or_rate_updated': 'updated OR hourly rate',
 'procedure_type.costs_updated': 'updated procedure costs',
-
+// Cost Categories (Facility)
+  'cost_category.created': 'created a cost category',
+  'cost_category.updated': 'updated a cost category',
+  'cost_category.deleted': 'deleted a cost category',
+  // Cost Categories (Global Admin)
+  'admin.cost_category_created': 'created a default cost category',
+  'admin.cost_category_updated': 'updated a default cost category',
+  'admin.cost_category_deleted': 'deleted a default cost category',
+  // Procedure Cost Items
+  'procedure_cost_item.created': 'added cost item to procedure',
+  'procedure_cost_item.updated': 'updated procedure cost item',
+  'procedure_cost_item.deleted': 'removed cost item from procedure',
+  // Surgeon Cost Items (Variance)
+  'surgeon_cost_item.created': 'created surgeon cost variance',
+  'surgeon_cost_item.updated': 'updated surgeon cost variance',
+  'surgeon_cost_item.deleted': 'deleted surgeon cost variance',
 // Data Quality
   'data_quality.issue_resolved': 'resolved a data quality issue',
   'data_quality.issue_excluded': 'excluded a data quality issue',
@@ -833,6 +863,219 @@ async deleted(
     oldValues: recordedAt ? { recorded_at: recordedAt } : undefined,  // ADD THIS
   })
 },
+}
+// =====================================================
+// COST CATEGORIES (Facility-Level)
+// =====================================================
+
+export const costCategoryAudit = {
+  async created(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    categoryType: 'credit' | 'debit',
+    facilityId: string
+  ) {
+    await log(supabase, 'cost_category.created', {
+      targetType: 'cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      facilityId,
+      newValues: { name: categoryName, type: categoryType },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    categoryId: string,
+    oldValues: { name?: string; type?: string; description?: string },
+    newValues: { name?: string; type?: string; description?: string },
+    facilityId: string
+  ) {
+    await log(supabase, 'cost_category.updated', {
+      targetType: 'cost_category',
+      targetId: categoryId,
+      targetLabel: newValues.name || oldValues.name || 'Cost Category',
+      facilityId,
+      oldValues,
+      newValues,
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'cost_category.deleted', {
+      targetType: 'cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      facilityId,
+    })
+  },
+
+  // Global admin versions
+  async adminCreated(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    categoryType: 'credit' | 'debit'
+  ) {
+    await log(supabase, 'admin.cost_category_created', {
+      targetType: 'default_cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      newValues: { name: categoryName, type: categoryType, scope: 'global' },
+    })
+  },
+
+  async adminUpdated(
+  supabase: SupabaseClient,
+  categoryId: string,
+  oldValues: { name?: string; type?: string; description?: string; is_active?: boolean },
+  newValues: { name?: string; type?: string; description?: string; is_active?: boolean }
+) {
+    await log(supabase, 'admin.cost_category_updated', {
+      targetType: 'default_cost_category',
+      targetId: categoryId,
+      targetLabel: newValues.name || oldValues.name || 'Cost Category',
+      oldValues,
+      newValues: { ...newValues, scope: 'global' },
+    })
+  },
+
+  async adminDeleted(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string
+  ) {
+    await log(supabase, 'admin.cost_category_deleted', {
+      targetType: 'default_cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+    })
+  },
+}
+
+
+// =====================================================
+// PROCEDURE COST ITEMS
+// =====================================================
+
+export const procedureCostItemAudit = {
+  async created(
+    supabase: SupabaseClient,
+    procedureName: string,
+    categoryName: string,
+    amount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'procedure_cost_item.created', {
+      targetType: 'procedure_cost_item',
+      targetId: itemId,
+      targetLabel: `${procedureName} - ${categoryName}`,
+      facilityId,
+      newValues: { procedure: procedureName, category: categoryName, amount },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    procedureName: string,
+    categoryName: string,
+    oldAmount: number,
+    newAmount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'procedure_cost_item.updated', {
+      targetType: 'procedure_cost_item',
+      targetId: itemId,
+      targetLabel: `${procedureName} - ${categoryName}`,
+      facilityId,
+      oldValues: { amount: oldAmount },
+      newValues: { amount: newAmount },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    procedureName: string,
+    categoryName: string,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'procedure_cost_item.deleted', {
+      targetType: 'procedure_cost_item',
+      targetId: itemId,
+      targetLabel: `${procedureName} - ${categoryName}`,
+      facilityId,
+    })
+  },
+}
+
+
+// =====================================================
+// SURGEON COST ITEMS (Variance)
+// =====================================================
+
+export const surgeonCostItemAudit = {
+  async created(
+    supabase: SupabaseClient,
+    surgeonName: string,
+    procedureName: string,
+    categoryName: string,
+    amount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_cost_item.created', {
+      targetType: 'surgeon_cost_item',
+      targetId: itemId,
+      targetLabel: `${surgeonName} - ${procedureName} - ${categoryName}`,
+      facilityId,
+      newValues: { surgeon: surgeonName, procedure: procedureName, category: categoryName, amount },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    surgeonName: string,
+    procedureName: string,
+    categoryName: string,
+    oldAmount: number,
+    newAmount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_cost_item.updated', {
+      targetType: 'surgeon_cost_item',
+      targetId: itemId,
+      targetLabel: `${surgeonName} - ${procedureName} - ${categoryName}`,
+      facilityId,
+      oldValues: { amount: oldAmount },
+      newValues: { amount: newAmount },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    surgeonName: string,
+    procedureName: string,
+    categoryName: string,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_cost_item.deleted', {
+      targetType: 'surgeon_cost_item',
+      targetId: itemId,
+      targetLabel: `${surgeonName} - ${procedureName} - ${categoryName}`,
+      facilityId,
+    })
+  },
 }
 
 // =====================================================
