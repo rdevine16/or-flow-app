@@ -40,7 +40,6 @@ interface ProcedureType {
   id: string
   name: string
   facility_id: string
-  deleted_at: string | null
 }
 
 interface Payer {
@@ -95,9 +94,8 @@ export default function ProcedurePricingPage() {
     const [proceduresRes, categoriesRes, costItemsRes, reimbursementsRes, payersRes, facilityRes] = await Promise.all([
       supabase
         .from('procedure_types')
-        .select('id, name, facility_id, deleted_at')
+        .select('id, name, facility_id')
         .eq('facility_id', effectiveFacilityId)
-        .is('deleted_at', null)
         .order('name'),
       supabase
         .from('cost_categories')
@@ -118,7 +116,6 @@ export default function ProcedurePricingPage() {
         .from('payers')
         .select('id, name')
         .eq('facility_id', effectiveFacilityId)
-        .is('deleted_at', null)
         .order('name'),
       supabase
         .from('facilities')
@@ -338,8 +335,19 @@ export default function ProcedurePricingPage() {
     return {
       costItemCount: costItems.length,
       reimbursement: defaultReimb,
+      totalDebits,
+      totalCredits,
       margin: defaultReimb - totalDebits + totalCredits,
     }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
   }
 
   const totals = calculateTotals()
@@ -460,66 +468,139 @@ export default function ProcedurePricingPage() {
                 </div>
               )}
 
-              {/* Procedures List */}
+              {/* Procedures Table */}
               <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                  <h3 className="font-medium text-slate-900">Procedures</h3>
-                  <span className="text-sm text-slate-500">{procedures.length} procedures</span>
+                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Procedures</h3>
+                    <p className="text-sm text-slate-500">{procedures.length} procedure types</p>
+                  </div>
                 </div>
 
                 {procedures.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-slate-500">
-                    No procedures configured
+                  <div className="px-6 py-12 text-center">
+                    <svg className="w-12 h-12 text-slate-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p className="text-slate-500 mb-4">No procedures configured</p>
+                    <a
+                      href="/settings/procedures"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    >
+                      Go to Procedure Types
+                    </a>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-200">
-                    {procedures.map((proc) => {
-                      const summary = getProcedureSummary(proc.id)
-                      return (
-                        <button
-                          key={proc.id}
-                          onClick={() => openProcedurePanel(proc)}
-                          className="w-full px-4 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors text-left"
-                        >
-                          <div>
-                            <span className="font-medium text-slate-900">{proc.name}</span>
-                            <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
-                              {summary.costItemCount > 0 && (
-                                <span>{summary.costItemCount} cost items</span>
-                              )}
-                              {summary.reimbursement > 0 && (
-                                <span>Reimb: ${summary.reimbursement.toLocaleString()}</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            {summary.reimbursement > 0 && (
-                              <div className="text-right">
-                                <span className={`text-lg font-semibold ${summary.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  ${summary.margin.toLocaleString()}
-                                </span>
-                                <p className="text-xs text-slate-500">margin</p>
-                              </div>
-                            )}
-                            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </button>
-                      )
-                    })}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="px-6 py-3 text-left text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Procedure Name
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Reimbursement
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Debits
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Credits
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Margin
+                          </th>
+                          <th className="px-6 py-3 text-center text-xs font-semibold text-blue-600 uppercase tracking-wider">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {procedures.map((proc) => {
+                          const summary = getProcedureSummary(proc.id)
+                          const hasData = summary.reimbursement > 0 || summary.totalDebits > 0 || summary.totalCredits > 0
+                          
+                          return (
+                            <tr key={proc.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-6 py-4">
+                                <span className="font-medium text-slate-900">{proc.name}</span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {summary.reimbursement > 0 ? (
+                                  <span className="text-slate-700">{formatCurrency(summary.reimbursement)}</span>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {summary.totalDebits > 0 ? (
+                                  <span className="text-red-600">{formatCurrency(summary.totalDebits)}</span>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {summary.totalCredits > 0 ? (
+                                  <span className="text-emerald-600">{formatCurrency(summary.totalCredits)}</span>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {hasData ? (
+                                  <span className={`font-semibold ${summary.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {formatCurrency(summary.margin)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openProcedurePanel(proc)}
+                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="Edit pricing"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-6 text-sm text-slate-500">
+                <div className="flex items-center gap-2">
+                  <span className="text-red-600 font-medium">Debits</span>
+                  <span>= Costs (supplies, implants)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-600 font-medium">Credits</span>
+                  <span>= Offsets (rebates, discounts)</span>
+                </div>
               </div>
             </div>
           )}
         </SettingsLayout>
       </Container>
 
-      {/* Edit Panel */}
+      {/* Edit Panel (Slideout) */}
       {panelOpen && selectedProcedure && (
         <div className="fixed inset-0 bg-black/50 flex justify-end z-50">
-          <div className="w-full max-w-xl bg-white shadow-xl flex flex-col">
+          <div 
+            className="absolute inset-0" 
+            onClick={closePanel}
+          />
+          <div className="relative w-full max-w-xl bg-white shadow-xl flex flex-col animate-slide-in-right">
             {/* Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -540,14 +621,25 @@ export default function ProcedurePricingPage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Margin Preview */}
               <div className={`p-4 rounded-xl ${totals.margin >= 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-slate-700">Estimated Margin</span>
                   <span className={`text-2xl font-bold ${totals.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    ${totals.margin.toLocaleString()}
+                    {formatCurrency(totals.margin)}
                   </span>
                 </div>
-                <div className="mt-2 text-xs text-slate-500">
-                  ${defaultReimbursement.toLocaleString()} reimbursement − ${totals.totalDebits.toLocaleString()} debits + ${totals.totalCredits.toLocaleString()} credits
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-slate-500">Reimbursement</span>
+                    <p className="font-medium text-slate-900">{formatCurrency(defaultReimbursement)}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Debits</span>
+                    <p className="font-medium text-red-600">−{formatCurrency(totals.totalDebits)}</p>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Credits</span>
+                    <p className="font-medium text-emerald-600">+{formatCurrency(totals.totalCredits)}</p>
+                  </div>
                 </div>
               </div>
 
@@ -575,6 +667,7 @@ export default function ProcedurePricingPage() {
                     <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                       Debits (Costs)
+                      <span className="text-xs font-normal text-slate-500">— reduce margin</span>
                     </h4>
                     <div className="space-y-3">
                       {costCategories.filter(c => c.type === 'debit').map((cat) => (
@@ -602,6 +695,7 @@ export default function ProcedurePricingPage() {
                       <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                         Credits (Offsets)
+                        <span className="text-xs font-normal text-slate-500">— increase margin</span>
                       </h4>
                       <div className="space-y-3">
                         {costCategories.filter(c => c.type === 'credit').map((cat) => (
@@ -629,7 +723,7 @@ export default function ProcedurePricingPage() {
               {/* Payer-Specific Reimbursements */}
               {payers.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-3">Payer-Specific Reimbursements</h4>
+                  <h4 className="text-sm font-semibold text-slate-900 mb-1">Payer-Specific Reimbursements</h4>
                   <p className="text-xs text-slate-500 mb-3">Override the default reimbursement for specific payers</p>
                   <div className="space-y-3">
                     {payers.map((payer) => (
@@ -672,6 +766,21 @@ export default function ProcedurePricingPage() {
           </div>
         </div>
       )}
+
+      {/* Animation styles */}
+      <style jsx>{`
+        @keyframes slide-in-right {
+          from {
+            transform: translateX(100%);
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+        .animate-slide-in-right {
+          animation: slide-in-right 0.2s ease-out;
+        }
+      `}</style>
     </DashboardLayout>
   )
 }
