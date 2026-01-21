@@ -8,7 +8,7 @@ import { createClient } from '../../../../lib/supabase'
 import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import Container from '../../../../components/ui/Container'
-import FinancialsLayout from '../../../../components/settings/FinancialsLayout'
+import SettingsLayout from '../../../../components/settings/SettingsLayout'
 import { genericAuditLog } from '../../../../lib/audit-logger'
 
 interface Payer {
@@ -210,11 +210,11 @@ export default function PayersPage() {
     return (
       <DashboardLayout>
         <Container>
-          <FinancialsLayout>
+          <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
-          </FinancialsLayout>
+          </SettingsLayout>
         </Container>
       </DashboardLayout>
     )
@@ -224,11 +224,11 @@ export default function PayersPage() {
     return (
       <DashboardLayout>
         <Container>
-          <FinancialsLayout>
+          <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
             <div className="text-center py-12 text-slate-500">
               No facility selected
             </div>
-          </FinancialsLayout>
+          </SettingsLayout>
         </Container>
       </DashboardLayout>
     )
@@ -237,15 +237,9 @@ export default function PayersPage() {
   return (
     <DashboardLayout>
       <Container>
-        <FinancialsLayout>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">Payers</h1>
-              <p className="text-sm text-slate-600 mt-1">
-                Manage insurance companies and payer contracts
-              </p>
-            </div>
+        <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
+          {/* Action Button */}
+          <div className="flex justify-end mb-6">
             <button
               onClick={openAddModal}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
@@ -380,7 +374,7 @@ export default function PayersPage() {
               )}
             </>
           )}
-        </FinancialsLayout>
+        </SettingsLayout>
       </Container>
 
       {/* Add/Edit Modal */}

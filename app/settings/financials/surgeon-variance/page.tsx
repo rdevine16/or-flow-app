@@ -1,15 +1,15 @@
 // app/settings/financials/surgeon-variance/page.tsx
-// Manage surgeon-specific cost overrides and additions
+// Surgeon-specific cost overrides
 
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '../../../../lib/supabase'
 import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import Container from '../../../../components/ui/Container'
-import FinancialsLayout from '../../../../components/settings/FinancialsLayout'
-import { surgeonCostItemAudit } from '../../../../lib/audit-logger'
+import SettingsLayout from '../../../../components/settings/SettingsLayout'
+import { genericAuditLog } from '../../../../lib/audit-logger'
 
 interface Surgeon {
   id: string
@@ -25,15 +25,7 @@ interface ProcedureType {
 interface CostCategory {
   id: string
   name: string
-  type: 'credit' | 'debit'
-}
-
-interface ProcedureCostItem {
-  id: string
-  procedure_type_id: string
-  cost_category_id: string
-  amount: number
-  cost_category?: CostCategory
+  type: 'debit' | 'credit'
 }
 
 interface SurgeonCostItem {
@@ -42,52 +34,36 @@ interface SurgeonCostItem {
   procedure_type_id: string
   cost_category_id: string
   amount: number
-  notes: string | null
-  surgeon?: Surgeon
-  procedure_type?: ProcedureType
   cost_category?: CostCategory
 }
 
-interface GroupedVariance {
-  surgeon: Surgeon
-  procedures: {
-    procedure: ProcedureType
-    items: SurgeonCostItem[]
-    procedureDefaults: ProcedureCostItem[]
-  }[]
+interface ProcedureCostItem {
+  id: string
+  procedure_type_id: string
+  cost_category_id: string
+  amount: number
 }
 
 export default function SurgeonVariancePage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
-  const [surgeonCostItems, setSurgeonCostItems] = useState<SurgeonCostItem[]>([])
-  const [procedureCostItems, setProcedureCostItems] = useState<ProcedureCostItem[]>([])
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
-  const [categories, setCategories] = useState<CostCategory[]>([])
+  const [costCategories, setCostCategories] = useState<CostCategory[]>([])
+  const [surgeonCostItems, setSurgeonCostItems] = useState<SurgeonCostItem[]>([])
+  const [procedureCostItems, setProcedureCostItems] = useState<ProcedureCostItem[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // Filters
-  const [filterSurgeon, setFilterSurgeon] = useState<string>('all')
-  const [filterProcedure, setFilterProcedure] = useState<string>('all')
+  // Selection state
+  const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
+  const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
 
-  // Modal state
-  const [showModal, setShowModal] = useState(false)
-  const [editingItem, setEditingItem] = useState<SurgeonCostItem | null>(null)
+  // Edit panel state
+  const [editPanelOpen, setEditPanelOpen] = useState(false)
+  const [editingItems, setEditingItems] = useState<Map<string, number>>(new Map())
 
-  // Form state
-  const [formSurgeonId, setFormSurgeonId] = useState('')
-  const [formProcedureId, setFormProcedureId] = useState('')
-  const [formCategoryId, setFormCategoryId] = useState('')
-  const [formAmount, setFormAmount] = useState('')
-  const [formNotes, setFormNotes] = useState('')
-
-  // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-
-  // Fetch data
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchData()
@@ -100,323 +76,165 @@ export default function SurgeonVariancePage() {
     if (!effectiveFacilityId) return
     setLoading(true)
 
-    try {
-      // Fetch surgeons (users with surgeon role)
-      const { data: surgeonsData } = await supabase
+    const [surgeonsRes, proceduresRes, categoriesRes, surgeonItemsRes, procedureItemsRes] = await Promise.all([
+      supabase
         .from('users')
-        .select('id, first_name, last_name, user_roles!inner(name)')
+        .select('id, first_name, last_name')
         .eq('facility_id', effectiveFacilityId)
-        .eq('is_active', true)
-        .eq('user_roles.name', 'surgeon')
-        .order('last_name')
-
-      // Fetch procedure types
-      const { data: proceduresData } = await supabase
+        .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id)
+        .order('last_name'),
+      supabase
         .from('procedure_types')
         .select('id, name')
         .eq('facility_id', effectiveFacilityId)
-        .order('name')
-
-      // Fetch cost categories
-      const { data: categoriesData } = await supabase
+        .is('deleted_at', null)
+        .order('name'),
+      supabase
         .from('cost_categories')
         .select('id, name, type')
         .eq('facility_id', effectiveFacilityId)
         .eq('is_active', true)
         .order('type')
-        .order('display_order')
-
-      // Fetch procedure cost items (defaults)
-      const { data: procedureCostsData } = await supabase
-        .from('procedure_cost_items')
-        .select(`
-          id,
-          procedure_type_id,
-          cost_category_id,
-          amount,
-          cost_category:cost_categories(id, name, type)
-        `)
-        .in('procedure_type_id', (proceduresData || []).map(p => p.id))
-
-      // Fetch surgeon cost items
-      const { data: surgeonCostsData } = await supabase
+        .order('display_order'),
+      supabase
         .from('surgeon_cost_items')
-        .select(`
-          id,
-          surgeon_id,
-          procedure_type_id,
-          cost_category_id,
-          amount,
-          notes,
-          surgeon:users(id, first_name, last_name),
-          procedure_type:procedure_types(id, name),
-          cost_category:cost_categories(id, name, type)
-        `)
-        .in('surgeon_id', (surgeonsData || []).map(s => s.id))
-        .order('surgeon_id')
+        .select('*, cost_category:cost_categories(id, name, type)')
+        .eq('facility_id', effectiveFacilityId),
+      supabase
+        .from('procedure_cost_items')
+        .select('id, procedure_type_id, cost_category_id, amount')
+        .eq('facility_id', effectiveFacilityId),
+    ])
 
-      setSurgeons(surgeonsData?.map(s => ({
-        id: s.id,
-        first_name: s.first_name,
-        last_name: s.last_name
-      })) || [])
-      setProcedures(proceduresData || [])
-      setCategories(categoriesData || [])
-      setProcedureCostItems(procedureCostsData?.map(item => ({
-        ...item,
-        cost_category: Array.isArray(item.cost_category) ? item.cost_category[0] : item.cost_category
-      })) || [])
-      setSurgeonCostItems(surgeonCostsData?.map(item => ({
-        ...item,
-        surgeon: Array.isArray(item.surgeon) ? item.surgeon[0] : item.surgeon,
-        procedure_type: Array.isArray(item.procedure_type) ? item.procedure_type[0] : item.procedure_type,
-        cost_category: Array.isArray(item.cost_category) ? item.cost_category[0] : item.cost_category
-      })) || [])
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
-    }
+    if (surgeonsRes.data) setSurgeons(surgeonsRes.data)
+    if (proceduresRes.data) setProcedures(proceduresRes.data)
+    if (categoriesRes.data) setCostCategories(categoriesRes.data)
+    if (surgeonItemsRes.data) setSurgeonCostItems(surgeonItemsRes.data)
+    if (procedureItemsRes.data) setProcedureCostItems(procedureItemsRes.data)
+
+    setLoading(false)
   }
 
-  // Group and filter data
-  const groupedData = useMemo(() => {
-    let filtered = surgeonCostItems
+  const openEditPanel = (surgeonId: string, procedureId: string) => {
+    setSelectedSurgeon(surgeonId)
+    setSelectedProcedure(procedureId)
 
-    // Apply filters
-    if (filterSurgeon !== 'all') {
-      filtered = filtered.filter(item => item.surgeon_id === filterSurgeon)
-    }
-    if (filterProcedure !== 'all') {
-      filtered = filtered.filter(item => item.procedure_type_id === filterProcedure)
-    }
+    // Get existing surgeon cost items for this combination
+    const existingItems = surgeonCostItems.filter(
+      item => item.surgeon_id === surgeonId && item.procedure_type_id === procedureId
+    )
 
-    // Group by surgeon, then by procedure
-    const grouped: GroupedVariance[] = []
-    const surgeonMap = new Map<string, GroupedVariance>()
-
-    filtered.forEach(item => {
-      if (!item.surgeon) return
-
-      let surgeonGroup = surgeonMap.get(item.surgeon_id)
-      if (!surgeonGroup) {
-        surgeonGroup = {
-          surgeon: item.surgeon,
-          procedures: []
-        }
-        surgeonMap.set(item.surgeon_id, surgeonGroup)
-        grouped.push(surgeonGroup)
-      }
-
-      let procedureGroup = surgeonGroup.procedures.find(
-        p => p.procedure.id === item.procedure_type_id
-      )
-      if (!procedureGroup && item.procedure_type) {
-        const defaults = procedureCostItems.filter(
-          pci => pci.procedure_type_id === item.procedure_type_id
-        )
-        procedureGroup = {
-          procedure: item.procedure_type,
-          items: [],
-          procedureDefaults: defaults
-        }
-        surgeonGroup.procedures.push(procedureGroup)
-      }
-
-      if (procedureGroup) {
-        procedureGroup.items.push(item)
-      }
+    // Initialize editing map with existing values
+    const editMap = new Map<string, number>()
+    existingItems.forEach(item => {
+      editMap.set(item.cost_category_id, item.amount)
     })
+    setEditingItems(editMap)
 
-    // Sort
-    grouped.sort((a, b) => a.surgeon.last_name.localeCompare(b.surgeon.last_name))
-    grouped.forEach(g => {
-      g.procedures.sort((a, b) => a.procedure.name.localeCompare(b.procedure.name))
-    })
-
-    return grouped
-  }, [surgeonCostItems, procedureCostItems, filterSurgeon, filterProcedure])
-
-  const handleNew = () => {
-    setEditingItem(null)
-    setFormSurgeonId('')
-    setFormProcedureId('')
-    setFormCategoryId('')
-    setFormAmount('')
-    setFormNotes('')
-    setShowModal(true)
+    setEditPanelOpen(true)
   }
 
-  const handleEdit = (item: SurgeonCostItem) => {
-    setEditingItem(item)
-    setFormSurgeonId(item.surgeon_id)
-    setFormProcedureId(item.procedure_type_id)
-    setFormCategoryId(item.cost_category_id)
-    setFormAmount(item.amount.toString())
-    setFormNotes(item.notes || '')
-    setShowModal(true)
+  const closeEditPanel = () => {
+    setEditPanelOpen(false)
+    setSelectedSurgeon(null)
+    setSelectedProcedure(null)
+    setEditingItems(new Map())
+  }
+
+  const handleAmountChange = (categoryId: string, value: string) => {
+    const newMap = new Map(editingItems)
+    if (value === '') {
+      newMap.delete(categoryId)
+    } else {
+      newMap.set(categoryId, parseFloat(value) || 0)
+    }
+    setEditingItems(newMap)
   }
 
   const handleSave = async () => {
-    if (!formSurgeonId || !formProcedureId || !formCategoryId || !formAmount || !effectiveFacilityId) return
-
+    if (!selectedSurgeon || !selectedProcedure || !effectiveFacilityId) return
     setSaving(true)
 
     try {
-      const amount = parseFloat(formAmount)
-      if (isNaN(amount)) throw new Error('Invalid amount')
-
-      const surgeon = surgeons.find(s => s.id === formSurgeonId)
-      const procedure = procedures.find(p => p.id === formProcedureId)
-      const category = categories.find(c => c.id === formCategoryId)
-
-      if (editingItem) {
-        // Update
-        const { error } = await supabase
-          .from('surgeon_cost_items')
-          .update({
-            amount,
-            notes: formNotes.trim() || null,
-          })
-          .eq('id', editingItem.id)
-
-        if (error) throw error
-
-        await surgeonCostItemAudit.updated(
-          supabase,
-          `Dr. ${surgeon?.last_name}`,
-          procedure?.name || '',
-          category?.name || '',
-          editingItem.amount,
-          amount,
-          editingItem.id,
-          effectiveFacilityId
-        )
-
-        setSurgeonCostItems(surgeonCostItems.map(item =>
-          item.id === editingItem.id
-            ? { ...item, amount, notes: formNotes.trim() || null }
-            : item
-        ))
-      } else {
-        // Create
-        const { data: newItem, error } = await supabase
-          .from('surgeon_cost_items')
-          .insert({
-            surgeon_id: formSurgeonId,
-            procedure_type_id: formProcedureId,
-            cost_category_id: formCategoryId,
-            amount,
-            notes: formNotes.trim() || null,
-          })
-          .select(`
-            id,
-            surgeon_id,
-            procedure_type_id,
-            cost_category_id,
-            amount,
-            notes,
-            surgeon:users(id, first_name, last_name),
-            procedure_type:procedure_types(id, name),
-            cost_category:cost_categories(id, name, type)
-          `)
-          .single()
-
-        if (error) throw error
-
-        await surgeonCostItemAudit.created(
-          supabase,
-          `Dr. ${surgeon?.last_name}`,
-          procedure?.name || '',
-          category?.name || '',
-          amount,
-          newItem.id,
-          effectiveFacilityId
-        )
-
-        const normalizedItem = {
-          ...newItem,
-          surgeon: Array.isArray(newItem.surgeon) ? newItem.surgeon[0] : newItem.surgeon,
-          procedure_type: Array.isArray(newItem.procedure_type) ? newItem.procedure_type[0] : newItem.procedure_type,
-          cost_category: Array.isArray(newItem.cost_category) ? newItem.cost_category[0] : newItem.cost_category
-        }
-
-        setSurgeonCostItems([...surgeonCostItems, normalizedItem])
-      }
-
-      setShowModal(false)
-    } catch (error) {
-      console.error('Error saving:', error)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleDelete = async (item: SurgeonCostItem) => {
-    if (!effectiveFacilityId) return
-    setSaving(true)
-
-    try {
-      const { error } = await supabase
+      // Delete existing items for this surgeon/procedure
+      await supabase
         .from('surgeon_cost_items')
         .delete()
-        .eq('id', item.id)
+        .eq('surgeon_id', selectedSurgeon)
+        .eq('procedure_type_id', selectedProcedure)
 
-      if (error) throw error
+      // Insert new items
+      const itemsToInsert = Array.from(editingItems.entries())
+        .filter(([_, amount]) => amount > 0)
+        .map(([categoryId, amount]) => ({
+          facility_id: effectiveFacilityId,
+          surgeon_id: selectedSurgeon,
+          procedure_type_id: selectedProcedure,
+          cost_category_id: categoryId,
+          amount,
+        }))
 
-      await surgeonCostItemAudit.deleted(
-        supabase,
-        `Dr. ${item.surgeon?.last_name}`,
-        item.procedure_type?.name || '',
-        item.cost_category?.name || '',
-        item.id,
-        effectiveFacilityId
-      )
+      if (itemsToInsert.length > 0) {
+        const { error } = await supabase
+          .from('surgeon_cost_items')
+          .insert(itemsToInsert)
 
-      setSurgeonCostItems(surgeonCostItems.filter(i => i.id !== item.id))
-      setDeleteConfirm(null)
+        if (error) throw error
+      }
+
+      // Refresh data
+      await fetchData()
+
+      const surgeon = surgeons.find(s => s.id === selectedSurgeon)
+      const procedure = procedures.find(p => p.id === selectedProcedure)
+
+      await genericAuditLog(supabase, 'surgeon_cost_item.updated', {
+        targetType: 'surgeon_cost_item',
+        targetId: selectedSurgeon,
+        targetLabel: `Dr. ${surgeon?.last_name} - ${procedure?.name}`,
+        newValues: Object.fromEntries(editingItems),
+        facilityId: effectiveFacilityId,
+      })
+
+      closeEditPanel()
     } catch (error) {
-      console.error('Error deleting:', error)
+      console.error('Error saving surgeon cost items:', error)
     } finally {
       setSaving(false)
     }
   }
 
-  // Get procedure default for a category
-  const getProcedureDefault = (procedureId: string, categoryId: string) => {
+  const getDefaultAmount = (categoryId: string) => {
+    if (!selectedProcedure) return null
     const item = procedureCostItems.find(
-      pci => pci.procedure_type_id === procedureId && pci.cost_category_id === categoryId
+      i => i.procedure_type_id === selectedProcedure && i.cost_category_id === categoryId
     )
-    return item?.amount
+    return item?.amount ?? null
   }
 
-  // Get categories available for variance (either on procedure or new)
-  const getAvailableCategories = () => {
-    if (!formProcedureId) return categories
-
-    const procedureCategories = procedureCostItems
-      .filter(pci => pci.procedure_type_id === formProcedureId)
-      .map(pci => pci.cost_category_id)
-
-    // Show categories that are either on the procedure OR not yet used by this surgeon for this procedure
-    const existingForSurgeonProcedure = surgeonCostItems
-      .filter(sci => sci.surgeon_id === formSurgeonId && sci.procedure_type_id === formProcedureId)
-      .map(sci => sci.cost_category_id)
-
-    return categories.filter(c => 
-      !existingForSurgeonProcedure.includes(c.id) || (editingItem && editingItem.cost_category_id === c.id)
-    )
+  const getSurgeonVarianceCount = (surgeonId: string) => {
+    return surgeonCostItems.filter(item => item.surgeon_id === surgeonId).length
   }
+
+  const getVarianceSummary = (surgeonId: string, procedureId: string) => {
+    const items = surgeonCostItems.filter(
+      item => item.surgeon_id === surgeonId && item.procedure_type_id === procedureId
+    )
+    return items.length
+  }
+
+  const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
+  const selectedProcedureData = procedures.find(p => p.id === selectedProcedure)
 
   if (userLoading) {
     return (
       <DashboardLayout>
         <Container>
-          <FinancialsLayout>
+          <SettingsLayout title="Surgeon Variance" description="Configure surgeon-specific cost overrides">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
-          </FinancialsLayout>
+          </SettingsLayout>
         </Container>
       </DashboardLayout>
     )
@@ -426,11 +244,11 @@ export default function SurgeonVariancePage() {
     return (
       <DashboardLayout>
         <Container>
-          <FinancialsLayout>
+          <SettingsLayout title="Surgeon Variance" description="Configure surgeon-specific cost overrides">
             <div className="text-center py-12 text-slate-500">
               No facility selected
             </div>
-          </FinancialsLayout>
+          </SettingsLayout>
         </Container>
       </DashboardLayout>
     )
@@ -439,354 +257,211 @@ export default function SurgeonVariancePage() {
   return (
     <DashboardLayout>
       <Container>
-        <FinancialsLayout>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">Surgeon Variance</h1>
-              <p className="text-sm text-slate-600 mt-1">
-                Override or add cost items for specific surgeons
-              </p>
-            </div>
-            <button
-              onClick={handleNew}
-              disabled={surgeons.length === 0 || procedures.length === 0}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Variance
-            </button>
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4 mb-6">
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-700">Surgeon:</label>
-              <select
-                value={filterSurgeon}
-                onChange={(e) => setFilterSurgeon(e.target.value)}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Surgeons</option>
-                {surgeons.map(surgeon => (
-                  <option key={surgeon.id} value={surgeon.id}>
-                    Dr. {surgeon.last_name}, {surgeon.first_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-700">Procedure:</label>
-              <select
-                value={filterProcedure}
-                onChange={(e) => setFilterProcedure(e.target.value)}
-                className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Procedures</option>
-                {procedures.map(procedure => (
-                  <option key={procedure.id} value={procedure.id}>
-                    {procedure.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
+        <SettingsLayout title="Surgeon Variance" description="Configure surgeon-specific cost overrides">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
-          ) : groupedData.length === 0 ? (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-              <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          ) : costCategories.length === 0 ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+              <svg className="w-10 h-10 text-amber-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
-              <h3 className="text-lg font-medium text-slate-900 mb-2">No Surgeon Variances</h3>
-              <p className="text-slate-600 mb-4">
-                {surgeons.length === 0 
-                  ? 'Add surgeons to your facility first.'
-                  : 'Add variance overrides when surgeons have different costs than the procedure defaults.'}
+              <h3 className="text-lg font-medium text-amber-900 mb-2">No Cost Categories</h3>
+              <p className="text-amber-700 mb-4">
+                Set up cost categories first before configuring surgeon variances.
               </p>
-              {surgeons.length > 0 && procedures.length > 0 && (
-                <button
-                  onClick={handleNew}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Variance
-                </button>
-              )}
+              <a
+                href="/settings/financials/cost-categories"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
+              >
+                Set Up Cost Categories
+              </a>
+            </div>
+          ) : surgeons.length === 0 ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No Surgeons</h3>
+              <p className="text-slate-600">
+                Add surgeons to your facility to configure cost variances.
+              </p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {groupedData.map((surgeonGroup) => (
-                <div key={surgeonGroup.surgeon.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                  {/* Surgeon Header */}
-                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                    <h3 className="font-semibold text-slate-900">
-                      Dr. {surgeonGroup.surgeon.last_name}, {surgeonGroup.surgeon.first_name}
-                    </h3>
-                  </div>
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <p className="text-sm text-slate-600">
+                  Click a surgeon/procedure cell to override the default costs. Surgeon variances take precedence over procedure defaults.
+                </p>
+              </div>
 
-                  {/* Procedures */}
-                  <div className="divide-y divide-slate-200">
-                    {surgeonGroup.procedures.map((procGroup) => (
-                      <div key={procGroup.procedure.id} className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium text-slate-700">{procGroup.procedure.name}</h4>
-                        </div>
-
-                        {/* Cost Items */}
-                        <div className="space-y-2">
-                          {procGroup.items.map((item) => {
-                            const defaultAmount = getProcedureDefault(item.procedure_type_id, item.cost_category_id)
-                            const isOverride = defaultAmount !== undefined
-                            const diff = defaultAmount !== undefined ? item.amount - defaultAmount : null
-
-                            return (
-                              <div
-                                key={item.id}
-                                className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${
-                                    item.cost_category?.type === 'credit' ? 'bg-green-500' : 'bg-red-500'
-                                  }`} />
-                                  <div>
-                                    <span className="text-sm font-medium text-slate-900">
-                                      {item.cost_category?.name}
-                                    </span>
-                                    {isOverride && (
-                                      <span className="text-xs text-slate-500 ml-2">
-                                        (vs ${defaultAmount?.toLocaleString()} default)
-                                      </span>
-                                    )}
-                                    {!isOverride && (
-                                      <span className="text-xs text-blue-600 ml-2">(added)</span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-4">
-                                  <div className="text-right">
-                                    <span className="font-medium text-slate-900">
-                                      ${item.amount.toLocaleString()}
-                                    </span>
-                                    {diff !== null && diff !== 0 && (
-                                      <span className={`text-xs ml-2 ${
-                                        diff > 0 ? 'text-red-600' : 'text-green-600'
-                                      }`}>
-                                        {diff > 0 ? '↑' : '↓'}${Math.abs(diff).toLocaleString()}
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => handleEdit(item)}
-                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                      title="Edit"
-                                    >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                      </svg>
-                                    </button>
-                                    {deleteConfirm === item.id ? (
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          onClick={() => handleDelete(item)}
-                                          disabled={saving}
-                                          className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
-                                        >
-                                          Delete
-                                        </button>
-                                        <button
-                                          onClick={() => setDeleteConfirm(null)}
-                                          className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                        >
-                                          Cancel
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={() => setDeleteConfirm(item.id)}
-                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                        title="Delete"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-
-                        {/* Notes if any */}
-                        {procGroup.items.some(i => i.notes) && (
-                          <div className="mt-2 text-xs text-slate-500">
-                            {procGroup.items.filter(i => i.notes).map(i => (
-                              <p key={i.id}>📝 {i.cost_category?.name}: {i.notes}</p>
-                            ))}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider sticky left-0 bg-slate-50">
+                        Surgeon
+                      </th>
+                      {procedures.map((proc) => (
+                        <th key={proc.id} className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[120px]">
+                          {proc.name}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {surgeons.map((surgeon) => (
+                      <tr key={surgeon.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 text-sm font-medium text-slate-900 sticky left-0 bg-white">
+                          <div className="flex items-center gap-2">
+                            <span>Dr. {surgeon.first_name} {surgeon.last_name}</span>
+                            {getSurgeonVarianceCount(surgeon.id) > 0 && (
+                              <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                                {getSurgeonVarianceCount(surgeon.id)} override{getSurgeonVarianceCount(surgeon.id) !== 1 ? 's' : ''}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </td>
+                        {procedures.map((proc) => {
+                          const varianceCount = getVarianceSummary(surgeon.id, proc.id)
+                          return (
+                            <td key={proc.id} className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => openEditPanel(surgeon.id, proc.id)}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                                  varianceCount > 0
+                                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'
+                                }`}
+                              >
+                                {varianceCount > 0 ? `${varianceCount} override${varianceCount !== 1 ? 's' : ''}` : 'Default'}
+                              </button>
+                            </td>
+                          )
+                        })}
+                      </tr>
                     ))}
-                  </div>
-                </div>
-              ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-
-          {/* Info Box */}
-          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-sm text-slate-600">
-                <p className="font-medium text-slate-700 mb-1">How Variance Works</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li><strong>Override:</strong> If a category exists on the procedure, surgeon's value replaces it</li>
-                  <li><strong>Addition:</strong> If a category doesn't exist on the procedure, it's added for this surgeon only</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </FinancialsLayout>
+        </SettingsLayout>
       </Container>
 
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {editingItem ? 'Edit Surgeon Variance' : 'Add Surgeon Variance'}
-            </h3>
-
-            <div className="space-y-4">
+      {/* Edit Panel */}
+      {editPanelOpen && selectedSurgeonData && selectedProcedureData && (
+        <div className="fixed inset-0 bg-black/50 flex justify-end z-50">
+          <div className="w-full max-w-lg bg-white shadow-xl flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Surgeon <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formSurgeonId}
-                  onChange={(e) => setFormSurgeonId(e.target.value)}
-                  disabled={!!editingItem}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">Select surgeon...</option>
-                  {surgeons.map(surgeon => (
-                    <option key={surgeon.id} value={surgeon.id}>
-                      Dr. {surgeon.last_name}, {surgeon.first_name}
-                    </option>
-                  ))}
-                </select>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Cost Overrides
+                </h3>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  Dr. {selectedSurgeonData.first_name} {selectedSurgeonData.last_name} • {selectedProcedureData.name}
+                </p>
               </div>
+              <button
+                onClick={closeEditPanel}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Procedure <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formProcedureId}
-                  onChange={(e) => setFormProcedureId(e.target.value)}
-                  disabled={!!editingItem}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">Select procedure...</option>
-                  {procedures.map(procedure => (
-                    <option key={procedure.id} value={procedure.id}>
-                      {procedure.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <p className="text-sm text-slate-600 mb-4">
+                Leave blank to use the procedure default. Enter a value to override.
+              </p>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Cost Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formCategoryId}
-                  onChange={(e) => setFormCategoryId(e.target.value)}
-                  disabled={!!editingItem}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100"
-                >
-                  <option value="">Select category...</option>
-                  {getAvailableCategories().map(category => {
-                    const defaultAmount = formProcedureId 
-                      ? getProcedureDefault(formProcedureId, category.id)
-                      : undefined
+              {/* Debits */}
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                  Debits (Costs)
+                </h4>
+                <div className="space-y-3">
+                  {costCategories.filter(c => c.type === 'debit').map((cat) => {
+                    const defaultAmount = getDefaultAmount(cat.id)
+                    const currentValue = editingItems.get(cat.id)
                     return (
-                      <option key={category.id} value={category.id}>
-                        {category.name} ({category.type})
-                        {defaultAmount !== undefined ? ` - Default: $${defaultAmount}` : ' - New'}
-                      </option>
+                      <div key={cat.id} className="flex items-center gap-4">
+                        <label className="flex-1 text-sm text-slate-700">
+                          {cat.name}
+                          {defaultAmount !== null && (
+                            <span className="text-slate-400 ml-2">(default: ${defaultAmount.toFixed(2)})</span>
+                          )}
+                        </label>
+                        <div className="relative w-32">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                          <input
+                            type="number"
+                            value={currentValue ?? ''}
+                            onChange={(e) => handleAmountChange(cat.id, e.target.value)}
+                            className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            placeholder={defaultAmount?.toFixed(2) ?? '0.00'}
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
                     )
                   })}
-                </select>
-                {formCategoryId && formProcedureId && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    {getProcedureDefault(formProcedureId, formCategoryId) !== undefined
-                      ? '⚠️ This will override the procedure default'
-                      : '➕ This will be added for this surgeon only'}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Amount <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
-                  <input
-                    type="number"
-                    value={formAmount}
-                    onChange={(e) => setFormAmount(e.target.value)}
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                    className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
                 </div>
               </div>
 
+              {/* Credits */}
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)}
-                  placeholder="e.g., Uses Zimmer Persona system"
-                  rows={2}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
+                <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  Credits (Offsets)
+                </h4>
+                <div className="space-y-3">
+                  {costCategories.filter(c => c.type === 'credit').map((cat) => {
+                    const defaultAmount = getDefaultAmount(cat.id)
+                    const currentValue = editingItems.get(cat.id)
+                    return (
+                      <div key={cat.id} className="flex items-center gap-4">
+                        <label className="flex-1 text-sm text-slate-700">
+                          {cat.name}
+                          {defaultAmount !== null && (
+                            <span className="text-slate-400 ml-2">(default: ${defaultAmount.toFixed(2)})</span>
+                          )}
+                        </label>
+                        <div className="relative w-32">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                          <input
+                            type="number"
+                            value={currentValue ?? ''}
+                            onChange={(e) => handleAmountChange(cat.id, e.target.value)}
+                            className="w-full pl-7 pr-3 py-2 border border-slate-200 rounded-lg text-right focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            placeholder={defaultAmount?.toFixed(2) ?? '0.00'}
+                            step="0.01"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={closeEditPanel}
                 className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !formSurgeonId || !formProcedureId || !formCategoryId || !formAmount}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
-                {saving ? 'Saving...' : editingItem ? 'Save Changes' : 'Add Variance'}
+                {saving ? 'Saving...' : 'Save Overrides'}
               </button>
             </div>
           </div>
