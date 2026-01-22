@@ -1,5 +1,6 @@
 // app/settings/financials/cost-categories/page.tsx
 // Facility-level cost categories (debit/credit items)
+// With soft delete - items can be restored within 30 days
 
 'use client'
 
@@ -19,6 +20,7 @@ interface CostCategory {
   description?: string
   display_order: number
   is_active: boolean
+  deleted_at?: string | null
 }
 
 export default function CostCategoriesPage() {
@@ -39,8 +41,12 @@ export default function CostCategoriesPage() {
     description: '',
   })
 
-  // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  // Delete confirmation modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<CostCategory | null>(null)
+
+  // Show/hide recently deleted section
+  const [showDeleted, setShowDeleted] = useState(false)
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -54,10 +60,15 @@ export default function CostCategoriesPage() {
     if (!effectiveFacilityId) return
     setLoading(true)
 
+    // Calculate 30 days ago for filtering deleted items in UI
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
     const { data, error } = await supabase
       .from('cost_categories')
       .select('*')
       .eq('facility_id', effectiveFacilityId)
+      .or(`deleted_at.is.null,deleted_at.gte.${thirtyDaysAgo.toISOString()}`)
       .order('type')
       .order('display_order')
 
@@ -71,7 +82,6 @@ export default function CostCategoriesPage() {
     setSaving(true)
 
     try {
-      // Call the function to copy defaults
       const { error } = await supabase.rpc('copy_default_cost_categories_to_facility', {
         p_facility_id: effectiveFacilityId
       })
@@ -123,8 +133,7 @@ export default function CostCategoriesPage() {
 
     try {
       if (modalMode === 'add') {
-        // Get max display order for this type
-        const sameTypeCategories = categories.filter(c => c.type === formData.type)
+        const sameTypeCategories = categories.filter(c => c.type === formData.type && !c.deleted_at)
         const maxOrder = sameTypeCategories.length > 0 
           ? Math.max(...sameTypeCategories.map(c => c.display_order))
           : 0
@@ -220,29 +229,40 @@ export default function CostCategoriesPage() {
     }
   }
 
-  const handleDelete = async (categoryId: string) => {
-    const category = categories.find(c => c.id === categoryId)
-    if (!category || !effectiveFacilityId) return
+  // Open delete confirmation modal
+  const openDeleteModal = (category: CostCategory) => {
+    setCategoryToDelete(category)
+    setDeleteModalOpen(true)
+  }
+
+  // Soft delete - sets deleted_at timestamp
+  const handleDelete = async () => {
+    if (!categoryToDelete || !effectiveFacilityId) return
     setSaving(true)
 
     try {
       const { error } = await supabase
         .from('cost_categories')
-        .delete()
-        .eq('id', categoryId)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', categoryToDelete.id)
 
       if (error) throw error
 
-      setCategories(categories.filter(c => c.id !== categoryId))
+      setCategories(categories.map(c =>
+        c.id === categoryToDelete.id 
+          ? { ...c, deleted_at: new Date().toISOString() } 
+          : c
+      ))
 
       await genericAuditLog(supabase, 'cost_category.deleted', {
         targetType: 'cost_category',
-        targetId: categoryId,
-        targetLabel: category.name,
+        targetId: categoryToDelete.id,
+        targetLabel: categoryToDelete.name,
         facilityId: effectiveFacilityId,
       })
 
-      setDeleteConfirm(null)
+      setDeleteModalOpen(false)
+      setCategoryToDelete(null)
     } catch (error) {
       console.error('Error deleting category:', error)
     } finally {
@@ -250,8 +270,51 @@ export default function CostCategoriesPage() {
     }
   }
 
-  const debitCategories = categories.filter(c => c.type === 'debit')
-  const creditCategories = categories.filter(c => c.type === 'credit')
+  // Restore a soft-deleted category
+  const handleRestore = async (category: CostCategory) => {
+    if (!effectiveFacilityId) return
+    setSaving(true)
+
+    try {
+      const { error } = await supabase
+        .from('cost_categories')
+        .update({ deleted_at: null })
+        .eq('id', category.id)
+
+      if (error) throw error
+
+      setCategories(categories.map(c =>
+        c.id === category.id ? { ...c, deleted_at: null } : c
+      ))
+
+      await genericAuditLog(supabase, 'cost_category.restored', {
+        targetType: 'cost_category',
+        targetId: category.id,
+        targetLabel: category.name,
+        facilityId: effectiveFacilityId,
+      })
+    } catch (error) {
+      console.error('Error restoring category:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Helper to calculate days until permanent deletion
+  const getDaysRemaining = (deletedAt: string): number => {
+    const deleted = new Date(deletedAt)
+    const expiresAt = new Date(deleted)
+    expiresAt.setDate(expiresAt.getDate() + 30)
+    const now = new Date()
+    const diffTime = expiresAt.getTime() - now.getTime()
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  }
+
+  // Filter active vs deleted categories
+  const activeCategories = categories.filter(c => !c.deleted_at)
+  const deletedCategories = categories.filter(c => c.deleted_at)
+  const debitCategories = activeCategories.filter(c => c.type === 'debit')
+  const creditCategories = activeCategories.filter(c => c.type === 'credit')
 
   if (userLoading) {
     return (
@@ -289,7 +352,7 @@ export default function CostCategoriesPage() {
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
-          ) : categories.length === 0 ? (
+          ) : activeCategories.length === 0 && deletedCategories.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
               <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -308,9 +371,9 @@ export default function CostCategoriesPage() {
                 </button>
                 <button
                   onClick={() => openAddModal('debit')}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                 >
-                  Create Custom
+                  Create from Scratch
                 </button>
               </div>
             </div>
@@ -372,33 +435,15 @@ export default function CostCategoriesPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                          {deleteConfirm === cat.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(cat.id)}
-                                disabled={saving}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirm(cat.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
+                          <button
+                            onClick={() => openDeleteModal(cat)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     ))
@@ -462,33 +507,15 @@ export default function CostCategoriesPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                             </svg>
                           </button>
-                          {deleteConfirm === cat.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(cat.id)}
-                                disabled={saving}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteConfirm(cat.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
+                          <button
+                            onClick={() => openDeleteModal(cat)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     ))
@@ -498,8 +525,66 @@ export default function CostCategoriesPage() {
             </div>
           )}
 
+          {/* Recently Deleted Section */}
+          {deletedCategories.length > 0 && (
+            <div className="mt-8">
+              <button
+                onClick={() => setShowDeleted(!showDeleted)}
+                className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
+              >
+                <svg 
+                  className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-90' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+                Recently Deleted ({deletedCategories.length})
+              </button>
+
+              {showDeleted && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-100 border-b border-slate-200">
+                    <p className="text-sm text-slate-600">
+                      These items can be restored within 30 days of deletion. After that, they will be permanently removed from view.
+                    </p>
+                  </div>
+                  <div className="divide-y divide-slate-200">
+                    {deletedCategories.map((cat) => {
+                      const daysLeft = getDaysRemaining(cat.deleted_at!)
+                      return (
+                        <div key={cat.id} className="px-4 py-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2.5 h-2.5 rounded-full ${cat.type === 'debit' ? 'bg-red-300' : 'bg-emerald-300'}`} />
+                            <div>
+                              <span className="font-medium text-slate-600">{cat.name}</span>
+                              <p className="text-xs text-slate-400">
+                                {daysLeft > 0 
+                                  ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} until removed`
+                                  : 'Expires today'
+                                }
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRestore(cat)}
+                            disabled={saving}
+                            className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Info Box */}
-          {categories.length > 0 && (
+          {activeCategories.length > 0 && (
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
               <div className="flex gap-3">
                 <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -568,6 +653,69 @@ export default function CostCategoriesPage() {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving...' : modalMode === 'add' ? 'Add Category' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && categoryToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">Delete Cost Category</h3>
+            </div>
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-slate-700 mb-3">
+                    Are you sure you want to delete <strong>"{categoryToDelete.name}"</strong>?
+                  </p>
+                  <ul className="text-sm text-slate-500 space-y-1">
+                    <li className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      It will be hidden from new cases
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Historical case data will not be affected
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      You can restore it within 30 days
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setDeleteModalOpen(false)
+                  setCategoryToDelete(null)
+                }}
+                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Deleting...' : 'Delete Category'}
               </button>
             </div>
           </div>
