@@ -923,7 +923,14 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           }))}
         />
       )}
-
+ {/* Case Complexities */}
+      {userFacilityId && (
+        <CaseComplexitySelector
+          facilityId={userFacilityId}
+          selectedIds={selectedComplexityIds}
+          onChange={setSelectedComplexityIds}
+        />
+      )}
       {/* Notes */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
