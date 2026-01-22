@@ -1,5 +1,6 @@
 // components/cases/CaseComplexitySelector.tsx
 // Toggle-badge style complexity selector - click badges to turn on/off
+// Only shows after procedure type is selected
 
 'use client'
 
@@ -10,13 +11,14 @@ interface Complexity {
   id: string
   display_name: string
   description: string | null
+  procedure_category_ids: string[]
 }
 
 interface CaseComplexitySelectorProps {
   facilityId: string
   selectedIds: string[]
   onChange: (ids: string[]) => void
-  procedureCategoryId?: string // Optional: filter by procedure category
+  procedureCategoryId?: string | null // Required to show complexities
 }
 
 export default function CaseComplexitySelector({
@@ -26,48 +28,25 @@ export default function CaseComplexitySelector({
   procedureCategoryId
 }: CaseComplexitySelectorProps) {
   const supabase = createClient()
-  const [complexities, setComplexities] = useState<Complexity[]>([])
+  const [allComplexities, setAllComplexities] = useState<Complexity[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchComplexities()
-  }, [facilityId, procedureCategoryId])
+  }, [facilityId])
 
   const fetchComplexities = async () => {
     setLoading(true)
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('complexities')
-        .select('id, display_name, description')
+        .select('id, display_name, description, procedure_category_ids')
         .eq('facility_id', facilityId)
         .eq('is_active', true)
         .order('display_order')
 
-      const { data, error } = await query
-
       if (error) throw error
-
-      // Filter by procedure category if specified
-      let filtered = data || []
-      if (procedureCategoryId && filtered.length > 0) {
-        // Re-fetch with category filter
-        const { data: filteredData } = await supabase
-          .from('complexities')
-          .select('id, display_name, description, procedure_category_ids')
-          .eq('facility_id', facilityId)
-          .eq('is_active', true)
-          .order('display_order')
-
-        if (filteredData) {
-          filtered = filteredData.filter(c => {
-            // Show if no categories assigned (applies to all) or matches
-            const cats = c.procedure_category_ids || []
-            return cats.length === 0 || cats.includes(procedureCategoryId)
-          })
-        }
-      }
-
-      setComplexities(filtered)
+      setAllComplexities(data || [])
     } catch (error) {
       console.error('Error fetching complexities:', error)
     } finally {
@@ -75,12 +54,24 @@ export default function CaseComplexitySelector({
     }
   }
 
+  // Filter complexities based on procedure category
+  const filteredComplexities = allComplexities.filter(c => {
+    const cats = c.procedure_category_ids || []
+    // Show if no categories assigned (applies to all) OR matches selected category
+    return cats.length === 0 || (procedureCategoryId && cats.includes(procedureCategoryId))
+  })
+
   const toggleComplexity = (id: string) => {
     if (selectedIds.includes(id)) {
       onChange(selectedIds.filter(cid => cid !== id))
     } else {
       onChange([...selectedIds, id])
     }
+  }
+
+  // Don't show anything until procedure type is selected
+  if (!procedureCategoryId) {
+    return null
   }
 
   if (loading) {
@@ -98,8 +89,8 @@ export default function CaseComplexitySelector({
     )
   }
 
-  if (complexities.length === 0) {
-    return null // Don't show section if no complexities available
+  if (filteredComplexities.length === 0) {
+    return null // No complexities for this procedure category
   }
 
   return (
@@ -108,7 +99,7 @@ export default function CaseComplexitySelector({
         Case Complexities
       </label>
       <div className="flex flex-wrap gap-2">
-        {complexities.map((complexity) => {
+        {filteredComplexities.map((complexity) => {
           const isSelected = selectedIds.includes(complexity.id)
           return (
             <button
