@@ -40,6 +40,7 @@ interface ProcedureType {
   id: string
   name: string
   requires_rep: boolean
+  procedure_category_id: string | null
 }
 
 // Operative side options
@@ -140,7 +141,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
         // UPDATED: Fetch requires_rep along with procedure types
-        supabase.from('procedure_types').select('id, name, requires_rep')
+        supabase.from('procedure_types').select('id, name, requires_rep, procedure_category_id') 
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
@@ -923,12 +924,16 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           }))}
         />
       )}
- {/* Case Complexities */}
+      {/* Case Complexities */}
       {userFacilityId && (
         <CaseComplexitySelector
           facilityId={userFacilityId}
           selectedIds={selectedComplexityIds}
           onChange={setSelectedComplexityIds}
+procedureCategoryId={
+  procedureTypes.find(p => p.id === formData.procedure_type_id)?.procedure_category_id ?? undefined
+
+          }
         />
       )}
       {/* Notes */}
