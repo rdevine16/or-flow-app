@@ -147,6 +147,9 @@ export type AuditAction =
   | 'cost_category.created'
   | 'cost_category.updated'
   | 'cost_category.deleted'
+  | 'cost_category.restored'      
+  | 'cost_category.activated'     
+  | 'cost_category.deactivated' 
   // Cost Categories (Global Admin)
   | 'admin.cost_category_created'
   | 'admin.cost_category_updated'
@@ -284,9 +287,12 @@ export const auditActionLabels: Record<AuditAction, string> = {
 'facility.or_rate_updated': 'updated OR hourly rate',
 'procedure_type.costs_updated': 'updated procedure costs',
 // Cost Categories (Facility)
-  'cost_category.created': 'created a cost category',
-  'cost_category.updated': 'updated a cost category',
-  'cost_category.deleted': 'deleted a cost category',
+'cost_category.created': 'created a cost category',
+'cost_category.updated': 'updated a cost category',
+'cost_category.deleted': 'deleted a cost category',
+'cost_category.restored': 'restored a cost category',
+'cost_category.activated': 'activated a cost category',
+'cost_category.deactivated': 'deactivated a cost category', 
   // Cost Categories (Global Admin)
   'admin.cost_category_created': 'created a default cost category',
   'admin.cost_category_updated': 'updated a default cost category',
