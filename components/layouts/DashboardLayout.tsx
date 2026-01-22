@@ -152,6 +152,12 @@ const adminNavGroups: NavGroup[] = [
         icon: adminIcons.delays,
         allowedRoles: ['global_admin'],
       },
+            {
+        name: 'Complexities',
+        href: '/admin/complexities',
+        icon: adminIcons.delays,
+        allowedRoles: ['global_admin'],
+      },
       {
         name: 'Body Regions',
         href: '/admin/settings/body-regions',
