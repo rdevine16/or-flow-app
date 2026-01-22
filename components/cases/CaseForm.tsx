@@ -15,6 +15,7 @@ import { getLocalDateString } from '../../lib/date-utils'
 import { caseAudit, caseDeviceAudit } from '../../lib/audit-logger'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
+import CaseComplexitySelector from '../cases/CaseComplexitySelector'
 
 interface CaseFormProps {
   caseId?: string
@@ -75,7 +76,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // State for implant companies
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([])
   const [originalCompanyIds, setOriginalCompanyIds] = useState<string[]>([])
-
+  const [selectedComplexityIds, setSelectedComplexityIds] = useState<string[]>([])
+  const [originalComplexityIds, setOriginalComplexityIds] = useState<string[]>([])
   // NEW: Rep required override state
   // null = use procedure default, true = force require, false = force no require
   const [repRequiredOverride, setRepRequiredOverride] = useState<boolean | null>(null)
@@ -248,7 +250,19 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         setSelectedCompanyIds(companyIds)
         setOriginalCompanyIds(companyIds)
       }
+      // Fetch existing complexities for this case
+      const { data: caseComplexities } = await supabase
+        .from('case_complexities')
+        .select('complexity_id')
+        .eq('case_id', caseId)
 
+      if (caseComplexities) {
+        const complexityIds = caseComplexities.map(cc => cc.complexity_id)
+        setSelectedComplexityIds(complexityIds)
+        setOriginalComplexityIds(complexityIds)
+      }
+
+      setInitialLoading(false)
       setInitialLoading(false)
     }
 
@@ -378,7 +392,15 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           case_number: formData.case_number,
           procedure_name: procedure?.name,
         })
-
+        // Save case complexities
+        if (selectedComplexityIds.length > 0) {
+          await supabase.from('case_complexities').insert(
+            selectedComplexityIds.map(complexityId => ({
+              case_id: savedCaseId,
+              complexity_id: complexityId,
+            }))
+          )
+        }
         // ============================================
         // NEW: Initialize milestones for this case
         // This creates case_milestones with recorded_at = NULL
@@ -606,6 +628,25 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
               )
             }
           }
+        }
+         const addedComplexities = selectedComplexityIds.filter(id => !originalComplexityIds.includes(id))
+        const removedComplexities = originalComplexityIds.filter(id => !selectedComplexityIds.includes(id))
+
+        if (removedComplexities.length > 0) {
+          await supabase
+            .from('case_complexities')
+            .delete()
+            .eq('case_id', savedCaseId)
+            .in('complexity_id', removedComplexities)
+        }
+
+        if (addedComplexities.length > 0) {
+          await supabase.from('case_complexities').insert(
+            addedComplexities.map(complexityId => ({
+              case_id: savedCaseId,
+              complexity_id: complexityId,
+            }))
+          )
         }
       }
     }
