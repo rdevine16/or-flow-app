@@ -69,9 +69,18 @@ export default function CaseComplexitySelector({
     }
   }
 
-  // Don't show anything until procedure type is selected
+  // Show message if no procedure type selected
   if (!procedureCategoryId) {
-    return null
+    return (
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Case Complexities
+        </label>
+        <p className="text-sm text-slate-400 italic">
+          Select a procedure type to see available complexities
+        </p>
+      </div>
+    )
   }
 
   if (loading) {
