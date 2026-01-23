@@ -104,10 +104,12 @@ export default function BlockSchedulePage() {
       if (data) {
         setSurgeons(data)
         setSelectedSurgeonIds(new Set(data.map(s => s.id)))
+        // Fetch colors after we have surgeon IDs
+        fetchColors(data.map(s => s.id))
       }
     }
     loadSurgeons()
-  }, [facilityId, supabase])
+  }, [facilityId, supabase, fetchColors])
 
   // Load data when facility or week changes
   useEffect(() => {
@@ -119,8 +121,7 @@ export default function BlockSchedulePage() {
     fetchBlocksForRange(startDate, endDate)
     fetchHolidays()
     fetchClosures(startDate, endDate)
-    fetchColors()
-  }, [facilityId, currentWeekStart, fetchBlocksForRange, fetchHolidays, fetchClosures, fetchColors])
+  }, [facilityId, currentWeekStart, fetchBlocksForRange, fetchHolidays, fetchClosures])
 
   // Navigation
   const goToPreviousWeek = () => {
