@@ -207,14 +207,84 @@ export function WeekCalendar({
     onBlockClick(block, { x: e.clientX, y: e.clientY })
   }
 
-  // Group blocks by day
+  // Helper to get day index from date string safely (avoid timezone issues)
+  const getDayIndexFromDateString = (dateStr: string): number => {
+    // Parse as local date to avoid timezone shifts
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    return date.getDay()
+  }
+
+  // Helper to check if date string matches a weekDay
+  const dateMatchesWeekDay = (dateStr: string, weekDay: Date): boolean => {
+    const [year, month, day] = dateStr.split('-').map(Number)
+    return (
+      weekDay.getFullYear() === year &&
+      weekDay.getMonth() === month - 1 &&
+      weekDay.getDate() === day
+    )
+  }
+
+  // Group blocks by day index (0-6) based on actual week dates
   const blocksByDay: Record<number, ExpandedBlock[]> = {}
   blocks.forEach(block => {
-    const date = new Date(block.block_date)
-    const day = date.getDay()
-    if (!blocksByDay[day]) blocksByDay[day] = []
-    blocksByDay[day].push(block)
+    // Find which day of the current week this block belongs to
+    weekDays.forEach((weekDay, dayIndex) => {
+      if (dateMatchesWeekDay(block.block_date, weekDay)) {
+        if (!blocksByDay[dayIndex]) blocksByDay[dayIndex] = []
+        blocksByDay[dayIndex].push(block)
+      }
+    })
   })
+
+  // Calculate overlap columns for blocks (Google Calendar style)
+  const calculateBlockLayout = (dayBlocks: ExpandedBlock[]): Map<string, { columnIndex: number; totalColumns: number }> => {
+    const layout = new Map<string, { columnIndex: number; totalColumns: number }>()
+    
+    if (dayBlocks.length === 0) return layout
+    
+    // Sort by start time
+    const sorted = [...dayBlocks].sort((a, b) => a.start_time.localeCompare(b.start_time))
+    
+    // Find overlapping groups
+    const groups: ExpandedBlock[][] = []
+    let currentGroup: ExpandedBlock[] = []
+    
+    sorted.forEach(block => {
+      const [startH, startM] = block.start_time.split(':').map(Number)
+      const [endH, endM] = block.end_time.split(':').map(Number)
+      const blockStart = startH * 60 + startM
+      const blockEnd = endH * 60 + endM
+      
+      // Check if this block overlaps with any in the current group
+      const overlapsWithGroup = currentGroup.some(groupBlock => {
+        const [gStartH, gStartM] = groupBlock.start_time.split(':').map(Number)
+        const [gEndH, gEndM] = groupBlock.end_time.split(':').map(Number)
+        const gStart = gStartH * 60 + gStartM
+        const gEnd = gEndH * 60 + gEndM
+        return blockStart < gEnd && blockEnd > gStart
+      })
+      
+      if (overlapsWithGroup || currentGroup.length === 0) {
+        currentGroup.push(block)
+      } else {
+        if (currentGroup.length > 0) groups.push(currentGroup)
+        currentGroup = [block]
+      }
+    })
+    
+    if (currentGroup.length > 0) groups.push(currentGroup)
+    
+    // Assign column indices within each group
+    groups.forEach(group => {
+      const totalColumns = group.length
+      group.forEach((block, index) => {
+        layout.set(block.block_id, { columnIndex: index, totalColumns })
+      })
+    })
+    
+    return layout
+  }
 
   // Calculate drag selection display values (handle dragging up or down)
   const dragStartHour = dragStart && dragEnd 
@@ -324,17 +394,25 @@ export function WeekCalendar({
                   </div>
                 )}
 
-                {/* Blocks */}
-                {!isClosed && dayBlocks.map(block => (
-                  <BlockCard
-                    key={block.block_id}
-                    block={block}
-                    color={colorMap[block.surgeon_id] || '#6B7280'}
-                    hourHeight={HOUR_HEIGHT}
-                    startHour={0}
-                    onClick={(e) => handleBlockClick(block, e)}
-                  />
-                ))}
+                {/* Blocks - with overlap handling */}
+                {!isClosed && (() => {
+                  const blockLayout = calculateBlockLayout(dayBlocks)
+                  return dayBlocks.map(block => {
+                    const layout = blockLayout.get(block.block_id) || { columnIndex: 0, totalColumns: 1 }
+                    return (
+                      <BlockCard
+                        key={block.block_id}
+                        block={block}
+                        color={colorMap[block.surgeon_id] || '#3B82F6'}
+                        hourHeight={HOUR_HEIGHT}
+                        startHour={0}
+                        onClick={(e) => handleBlockClick(block, e)}
+                        columnIndex={layout.columnIndex}
+                        totalColumns={layout.totalColumns}
+                      />
+                    )
+                  })
+                })()}
 
                 {/* Drag selection preview with live time display */}
                 {isDragging && dragStart?.day === dayIndex && (

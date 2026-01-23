@@ -13,7 +13,7 @@ import {
   formatTime12Hour,
   SURGEON_COLOR_PALETTE,
 } from '@/types/block-scheduling'
-import { CustomRecurrenceModal, CustomRecurrenceConfig, getCustomRecurrenceDescription } from '../block-schedule/CustomRecurrenceModal'
+import { CustomRecurrenceModal, CustomRecurrenceConfig, getCustomRecurrenceDescription } from './CustomRecurrenceModal'
 
 interface Surgeon {
   id: string
@@ -128,9 +128,14 @@ export function BlockPopover({
     }
   }, [showMoreOptions, open])
 
+  // Track whether we've initialized this session
+  const hasInitialized = useRef(false)
+
   // Reset form when dialog opens
   useEffect(() => {
-    if (open) {
+    if (open && !hasInitialized.current) {
+      hasInitialized.current = true
+      
       if (editingBlock) {
         setSurgeonId(editingBlock.surgeon_id)
         setDayOfWeek(editingBlock.day_of_week)
@@ -141,12 +146,13 @@ export function BlockPopover({
         setEffectiveEnd(editingBlock.effective_end || '')
         setHasEndDate(!!editingBlock.effective_end)
         setShowMoreOptions(!!editingBlock.effective_end)
-        // Reset custom recurrence for now (could be enhanced to load from DB)
         setIsCustom(false)
         setCustomRecurrence(null)
       } else {
+        // New block - use drag selection values
         setSurgeonId(surgeons[0]?.id || '')
         setDayOfWeek(initialDayOfWeek ?? 1)
+        // Use the times from drag selection
         setStartTime(initialStartTime || '07:00:00')
         setEndTime(initialEndTime || '15:00:00')
         setRecurrenceType('weekly')
@@ -158,6 +164,10 @@ export function BlockPopover({
         setCustomRecurrence(null)
       }
       setShowDeleteConfirm(false)
+    }
+    
+    if (!open) {
+      hasInitialized.current = false
     }
   }, [open, editingBlock, surgeons, initialDayOfWeek, initialStartTime, initialEndTime])
 
