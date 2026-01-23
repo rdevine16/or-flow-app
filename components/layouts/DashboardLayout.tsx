@@ -33,6 +33,68 @@ interface NavGroup {
   items: NavItem[]
 }
 
+// ORbit Logo Components
+const OrbitLogoMark = ({ className = "w-9 h-9" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 488 488" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Orbital ring with small circle (O element) */}
+    <path 
+      d="M326.75,474.73c83.46-4.13,157.32-52.48,194.68-126.83,1.71-3.4,5.17-4.74,8.39-3.57,3.14,1.14,5.51,5.2,3.76,8.72-18.2,36.64-45.34,68.21-78.97,91.63-38.39,26.73-83.48,41.54-130.25,43.39-29.69,1.17-59.54-2.85-87.48-12.71l-3.99-1.41-3.51-1.26c-67.14-24.19-119.72-78.57-144.08-145.75C36.34,330.74-1.66,291.31-.57,243.21c.16-37.53,24.27-71.32,61.26-80.2,8.18-1.96,16.29-2.4,24.71-2.12C119.41,67.62,206.6,3.66,305.94.02c6.14-.54,11.8-.2,17.53,0,88.67,2.89,168.52,53.61,208.91,132.53,1.68,3.27,1.02,7.32-2.49,9.22-3.76,2.03-7.58.09-9.38-3.42-35.75-69.74-104.38-117.1-182.48-124.14l-3.78-.34c-38.47-3.47-77.12,3.19-112.43,18.87-56.51,25.08-100.91,71.71-122.98,129.87,34.72,8.19,58.43,36.7,61.95,71.9,4.32,42.28-20.95,81.41-62.01,90.85,35.89,94.13,127.34,154.37,227.99,149.39l-.02-.02ZM148.84,242.69c-.24-12.67-3.22-24.44-9.24-35.54-9.16-16.9-24.86-29.44-43.72-33.68-29.98-6.74-59.58,5.64-74.5,32.36-14.64,26.23-12.65,60.42,5.56,84.29,14.58,19.12,37.61,28.57,61.47,25.91,37.33-4.17,61.14-36.46,60.43-73.33h0Z"
+      fill="currentColor"
+      transform="translate(-0.59, -0.27) scale(0.68)"
+    />
+    {/* Right arc segment */}
+    <path 
+      d="M544.76,327.2c-1.43,3.96-4.92,5.45-8.4,4.4-3.09-.94-5.58-4.58-4.24-8.24,15.81-43.39,18.21-90.52,7.14-135.36-.91-3.7,1.17-6.89,4.37-7.89s7.33.48,8.28,4.26c11.83,47.23,9.42,96.83-7.14,142.83h-.01Z"
+      fill="currentColor"
+      transform="translate(-0.59, -0.27) scale(0.68)"
+    />
+    {/* Dot */}
+    <path 
+      d="M535.11,155.86c3.76-1.26,7.34.82,8.41,4.35.95,3.12-.84,6.75-4.1,7.89-3.31,1.17-7.11-.49-8.29-3.95-1.06-3.1.23-7.04,3.98-8.29h0Z"
+      fill="currentColor"
+      transform="translate(-0.59, -0.27) scale(0.68)"
+    />
+  </svg>
+)
+
+const OrbitLogoFull = ({ className = "h-8", isExpanded = true }: { className?: string; isExpanded?: boolean }) => (
+  <svg className={className} viewBox="0 0 718 488" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Orbital ring with small circle (O element) - always visible */}
+    <path 
+      d="M327.34,475c83.46-4.13,157.32-52.48,194.68-126.83,1.71-3.4,5.17-4.74,8.39-3.57,3.14,1.14,5.51,5.2,3.76,8.72-18.2,36.64-45.34,68.21-78.97,91.63-38.39,26.73-83.48,41.54-130.25,43.39-29.69,1.17-59.54-2.85-87.48-12.71l-3.99-1.41-3.51-1.26c-67.14-24.19-119.72-78.57-144.08-145.75C36.93,331.01-1.07,291.58.02,243.48c.16-37.53,24.27-71.32,61.26-80.2,8.18-1.96,16.29-2.4,24.71-2.12C120,67.89,207.19,3.93,306.53.29c6.14-.54,11.8-.2,17.53,0,88.67,2.89,168.52,53.61,208.91,132.53,1.68,3.27,1.02,7.32-2.49,9.22-3.76,2.03-7.58.09-9.38-3.42-35.75-69.74-104.38-117.1-182.48-124.14l-3.78-.34c-38.47-3.47-77.12,3.19-112.43,18.87-56.51,25.08-100.91,71.71-122.98,129.87,34.72,8.19,58.43,36.7,61.95,71.9,4.32,42.28-20.95,81.41-62.01,90.85,35.89,94.13,127.34,154.37,227.99,149.39l-.02-.02ZM149.43,242.96c-.24-12.67-3.22-24.44-9.24-35.54-9.16-16.9-24.86-29.44-43.72-33.68-29.98-6.74-59.58,5.64-74.5,32.36-14.64,26.23-12.65,60.42,5.56,84.29,14.58,19.12,37.61,28.57,61.47,25.91,37.33-4.17,61.14-36.46,60.43-73.33h0Z"
+      fill="currentColor"
+    />
+    {/* R letter */}
+    <path 
+      className={`transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}
+      d="M330.85,314.9c2.55,3.3,2.54,6.97-.55,9.35s-7.32,1.38-9.23-2.3l-50.97-66.27h-52.6v65.54c-.19,3.29-2.4,5.59-5.45,5.92-2.51.26-6.55-1.53-6.55-5l-.03-151.17c0-5.19,3.53-9.5,8.9-9.5h60.92c7.47,0,14.4,1.18,21.4,3.29,19.88,6.01,34.49,21.91,33.82,43.33.04,27.48-21.63,42.1-47.04,45.56l47.37,61.24h.01ZM318.58,205.68c-.85-14.46-8.22-23.57-20.94-29.12-7.25-2.96-14.64-3.99-22.56-4.28l-57.61-.05.03,72.72,56.85-.02c9.7-.48,18.7-2.45,27.03-7.2,11.49-6.56,18-18.24,17.19-32.04h.01Z"
+      fill="currentColor"
+    />
+    {/* B letter */}
+    <path 
+      className={`transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}
+      d="M462.8,242.19c19.56,4.84,35.99,16.09,36.39,38.23.28,15.53-7.82,29-21.65,36.22-9.88,5.16-20.75,8.01-32.21,8.03l-65.7.09c-4.24,0-7.87-3.59-7.87-7.95v-144.82c0-4.82,3.79-8.18,8.34-8.17l59.98.04c25.83.02,51.89,13.63,50.08,42.9-1.11,17.96-11.89,28.95-27.36,35.44h0ZM478.28,205.76c.28-10.93-4.7-20.07-14.06-25.33-6.96-4.06-14.75-5.24-22.98-5.78l-57.55-.06v63.76l53.98-.03c20.18-.11,40.03-9.67,40.61-32.56h0ZM476.7,258.77c-4.6-3.46-9.77-5.57-15.33-7.14-5.94-1.4-11.56-2.05-17.74-2.51l-59.92-.06.03,64.87h60.18c8.03-.13,15.43-1.27,22.75-4.19,6.36-2.69,11.95-6.57,15.83-12.31,7.54-11.17,6.69-29.28-5.78-38.65h-.02Z"
+      fill="currentColor"
+    />
+    {/* i and T letters (using the arc) */}
+    <path 
+      d="M545.35,327.47c-1.43,3.96-4.92,5.45-8.4,4.4-3.09-.94-5.58-4.58-4.24-8.24,15.81-43.39,18.21-90.52,7.14-135.36-.91-3.7,1.17-6.89,4.37-7.89s7.33.48,8.28,4.26c11.83,47.23,9.42,96.83-7.14,142.83h-.01Z"
+      fill="currentColor"
+    />
+    {/* Dot for i */}
+    <path 
+      d="M535.7,156.13c3.76-1.26,7.34.82,8.41,4.35.95,3.12-.84,6.75-4.1,7.89-3.31,1.17-7.11-.49-8.29-3.95-1.06-3.1.23-7.04,3.98-8.29h0Z"
+      fill="currentColor"
+    />
+    {/* T letter */}
+    <path 
+      className={`transition-opacity duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0'}`}
+      d="M645.44,321.18l-.02-148.1-54.89.05c-3.34,0-5.91-1.02-6.59-4.53-.46-2.36,1.24-6.24,4.68-6.24l123.17-.04c3.64,0,6.26,1.74,6.38,5.03.16,4.27-2.87,5.82-6.69,5.82l-54.1-.06v147.6c0,3.3-3.01,5.45-5.72,5.6-2.49.14-6.23-1.82-6.23-5.13h.01Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 // Icons for admin nav
 const adminIcons = {
   dashboard: (
@@ -476,7 +538,7 @@ console.log('DEBUG:', { loading, mounted, checkingAccess })
 if (!mounted) {   return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-sm text-slate-500 font-medium">Loading...</p>
         </div>
       </div>
@@ -507,17 +569,16 @@ if (!mounted) {   return (
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{ width: sidebarWidth }}
-        className="fixed top-0 left-0 h-full bg-slate-900 text-white z-50 flex flex-col transition-all duration-300 ease-out"
+        className="fixed top-0 left-0 h-full bg-[#141414] text-white z-50 flex flex-col transition-all duration-300 ease-out"
       >
         {/* Logo */}
-<div className={`h-16 flex items-center border-b border-slate-800 ${isExpanded ? 'px-4' : 'justify-center'}`}>
-  <Link href="/dashboard" className={`flex items-center ${isExpanded ? 'gap-3' : 'justify-center w-full'}`}>
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30 flex-shrink-0">
-              <span className="text-white font-bold text-lg">O</span>
-            </div>
-            <span className={`text-xl font-bold text-white whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
-              ORbit
-            </span>
+        <div className={`h-16 flex items-center border-b border-white/10 ${isExpanded ? 'px-4' : 'justify-center'}`}>
+          <Link href="/dashboard" className={`flex items-center ${isExpanded ? 'gap-3' : 'justify-center w-full'}`}>
+            {isExpanded ? (
+              <OrbitLogoFull className="h-7 text-white" isExpanded={isExpanded} />
+            ) : (
+              <OrbitLogoMark className="w-8 h-8 text-white" />
+            )}
           </Link>
         </div>
 
@@ -530,7 +591,7 @@ if (!mounted) {   return (
                 <div key={group.id}>
                   {/* Group Header */}
                   {isExpanded && (
-                    <h3 className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <h3 className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">
                       {group.label}
                     </h3>
                   )}
@@ -543,14 +604,14 @@ if (!mounted) {   return (
                           key={item.name}
                           href={item.href}
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                            ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                            ${active ? 'bg-white text-[#141414]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
                           title={!isExpanded ? item.name : undefined}
                         >
                           <span className="flex-shrink-0">{item.icon}</span>
                           <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
                             {item.name}
                           </span>
-                          {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-400 rounded-r-full" />}
+                          {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/60 rounded-r-full" />}
                         </Link>
                       )
                     })}
@@ -568,14 +629,14 @@ if (!mounted) {   return (
                     key={item.name}
                     href={item.href}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                      ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                      ${active ? 'bg-white text-[#141414]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
                     title={!isExpanded ? item.name : undefined}
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
                     <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
                       {item.name}
                     </span>
-                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-400 rounded-r-full" />}
+                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/60 rounded-r-full" />}
                   </Link>
                 )
               })}
@@ -584,11 +645,11 @@ if (!mounted) {   return (
         </nav>
 
         {/* Pin & Version */}
-        <div className="p-3 border-t border-slate-800">
+        <div className="p-3 border-t border-white/10">
           {isExpanded && (
             <button
               onClick={() => setIsPinned(!isPinned)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isPinned ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isPinned ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
             >
               <svg className="w-4 h-4 flex-shrink-0" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -596,7 +657,7 @@ if (!mounted) {   return (
               <span className="whitespace-nowrap">{isPinned ? 'Unpin sidebar' : 'Pin sidebar'}</span>
             </button>
           )}
-          <p className={`text-xs text-slate-600 mt-2 ${isExpanded ? 'px-3' : 'text-center'}`}>
+          <p className={`text-xs text-white/30 mt-2 ${isExpanded ? 'px-3' : 'text-center'}`}>
             {isExpanded ? 'Version 1.0.0' : 'v1.0'}
           </p>
         </div>
@@ -619,15 +680,15 @@ if (!mounted) {   return (
                   key={item.id}
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                    ${active ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    ${active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                 >
                   {item.icon && (
-                    <span className={`flex-shrink-0 ${active ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                    <span className={`flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>
                       {item.icon}
                     </span>
                   )}
                   <span>{item.label}</span>
-                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />}
+                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-slate-600 rounded-r-full" />}
                 </Link>
               )
             })}
@@ -702,7 +763,7 @@ if (!mounted) {   return (
           <div className="flex items-center gap-2">
             {/* Search */}
             <div className="relative hidden md:block">
-              <input type="text" placeholder="Search cases, rooms..." className="w-64 pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white transition-all placeholder:text-slate-400" />
+              <input type="text" placeholder="Search cases, rooms..." className="w-64 pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 focus:bg-white transition-all placeholder:text-slate-400" />
               <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -724,7 +785,7 @@ if (!mounted) {   return (
             {/* User Menu */}
             <div className="relative" ref={menuRef}>
               <button onClick={() => setUserMenuOpen(!userMenuOpen)} className="flex items-center gap-3 p-1.5 pr-3 hover:bg-slate-50 rounded-xl transition-all">
-                <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-md shadow-blue-500/20">
+                <div className="w-9 h-9 bg-slate-700 rounded-xl flex items-center justify-center text-white text-sm font-bold">
                   {userInitials}
                 </div>
                 <div className="text-left hidden sm:block">
@@ -740,7 +801,7 @@ if (!mounted) {   return (
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200/80 py-2 z-50">
                   <div className="px-4 py-3 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20">
+                      <div className="w-11 h-11 bg-slate-700 rounded-xl flex items-center justify-center text-white font-bold">
                         {userInitials}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -818,7 +879,7 @@ function BlockedScreen({ type, facilityName, onLogout }: { type: 'trial' | 'disa
           <div className="bg-slate-50 rounded-xl p-4 mb-6">
             <h3 className="text-sm font-semibold text-slate-700 mb-2">Need help?</h3>
             <p className="text-sm text-slate-500">
-              Contact <a href="mailto:support@orbitsurgical.com" className="text-blue-600 hover:underline">support@orbitsurgical.com</a>
+              Contact <a href="mailto:support@orbitsurgical.com" className="text-slate-900 font-medium hover:underline">support@orbitsurgical.com</a>
             </p>
           </div>
           <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-xl font-medium hover:bg-slate-800 transition-colors">
