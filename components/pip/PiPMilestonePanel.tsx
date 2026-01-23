@@ -222,8 +222,8 @@ export default function PiPMilestonePanel({
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: '12px', fontWeight: 600, margin: 0 }}>{roomName}</p>
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>{caseNumber}</p>
+            <p style={{ fontSize: '12px', fontWeight: 600, margin: 0 }}>{roomName} - {procedureName}</p>
+            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', margin: 0 }}>{caseNumber} - {surgeonName}</p>
           </div>
         </div>
         <button 

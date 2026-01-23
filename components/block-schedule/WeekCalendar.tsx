@@ -1,7 +1,7 @@
 // components/block-schedule/WeekCalendar.tsx
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { ExpandedBlock, formatTime12Hour, DAY_OF_WEEK_SHORT } from '@/types/block-scheduling'
 import { BlockCard } from './BlockCard'
 
@@ -15,9 +15,9 @@ interface WeekCalendarProps {
 }
 
 // Full 24 hours
-const HOURS = Array.from({ length: 24 }, (_, i) => i) // 0 (12 AM) to 23 (11 PM)
-const HOUR_HEIGHT = 60 // pixels per hour
-const DEFAULT_SCROLL_HOUR = 6 // Scroll to 6 AM on load
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const HOUR_HEIGHT = 60
+const DEFAULT_SCROLL_HOUR = 6
 
 export function WeekCalendar({
   weekStart,
@@ -47,34 +47,55 @@ export function WeekCalendar({
     }
   }, [])
 
-  // Get time from Y position (now supports 0-23)
+  // Get time from Y position with 15-min snapping for precision
   const getTimeFromY = (y: number): number => {
     const rect = gridRef.current?.getBoundingClientRect()
     if (!rect) return DEFAULT_SCROLL_HOUR
     const relativeY = y - rect.top
-    const hour = Math.floor(relativeY / HOUR_HEIGHT)
-    return Math.max(0, Math.min(23, hour))
+    // Snap to 15-minute increments
+    const rawHour = relativeY / HOUR_HEIGHT
+    const snappedHour = Math.round(rawHour * 4) / 4 // Round to nearest 0.25
+    return Math.max(0, Math.min(24, snappedHour))
   }
 
   // Get day from X position
   const getDayFromX = (x: number): number => {
     const rect = gridRef.current?.getBoundingClientRect()
     if (!rect) return 0
-    const relativeX = x - rect.left - 60 // Account for time column
+    const relativeX = x - rect.left - 60
     const dayWidth = (rect.width - 60) / 7
     const day = Math.floor(relativeX / dayWidth)
     return Math.max(0, Math.min(6, day))
   }
 
+  // Format hour to time string
+  const hourToTimeString = (hour: number): string => {
+    const h = Math.floor(hour)
+    const m = Math.round((hour % 1) * 60)
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:00`
+  }
+
+  // Format duration nicely
+  const formatDuration = (hours: number): string => {
+    if (hours < 1) {
+      return `${Math.round(hours * 60)} min`
+    }
+    const h = Math.floor(hours)
+    const m = Math.round((hours % 1) * 60)
+    if (m === 0) {
+      return `${h} hr${h !== 1 ? 's' : ''}`
+    }
+    return `${h}h ${m}m`
+  }
+
   // Mouse handlers for drag selection
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return // Only left click
-    if ((e.target as HTMLElement).closest('.block-card')) return // Don't start drag on blocks
+    if (e.button !== 0) return
+    if ((e.target as HTMLElement).closest('.block-card')) return
 
     const day = getDayFromX(e.clientX)
     const hour = getTimeFromY(e.clientY)
 
-    // Don't allow selection on closed days
     if (isDateClosed(weekDays[day])) return
 
     setIsDragging(true)
@@ -86,19 +107,21 @@ export function WeekCalendar({
     if (!isDragging || !dragStart) return
 
     const hour = getTimeFromY(e.clientY)
-    // Keep same day, only adjust time
-    setDragEnd({ day: dragStart.day, hour: Math.max(dragStart.hour + 1, hour + 1) })
+    // Allow dragging in both directions
+    setDragEnd({ day: dragStart.day, hour })
   }
 
   const handleMouseUp = (e: React.MouseEvent) => {
     if (isDragging && dragStart && dragEnd) {
-      const startHour = Math.min(dragStart.hour, dragEnd.hour - 1)
-      const endHour = Math.max(dragStart.hour + 1, dragEnd.hour)
+      const startHour = Math.min(dragStart.hour, dragEnd.hour)
+      const endHour = Math.max(dragStart.hour, dragEnd.hour)
 
-      const startTime = `${startHour.toString().padStart(2, '0')}:00:00`
-      const endTime = `${endHour.toString().padStart(2, '0')}:00:00`
+      // Ensure minimum 30-min block
+      const finalEndHour = endHour <= startHour + 0.25 ? startHour + 0.5 : endHour
 
-      // Pass click position for popover positioning
+      const startTime = hourToTimeString(startHour)
+      const endTime = hourToTimeString(finalEndHour)
+
       onDragSelect(dragStart.day, startTime, endTime, { x: e.clientX, y: e.clientY })
     }
 
@@ -107,7 +130,6 @@ export function WeekCalendar({
     setDragEnd(null)
   }
 
-  // Handle block click with position
   const handleBlockClick = (block: ExpandedBlock, e: React.MouseEvent) => {
     e.stopPropagation()
     onBlockClick(block, { x: e.clientX, y: e.clientY })
@@ -122,11 +144,20 @@ export function WeekCalendar({
     blocksByDay[day].push(block)
   })
 
+  // Calculate drag selection display values (handle dragging up or down)
+  const dragStartHour = dragStart && dragEnd 
+    ? Math.min(dragStart.hour, dragEnd.hour) 
+    : dragStart?.hour ?? 0
+  const dragEndHour = dragStart && dragEnd 
+    ? Math.max(dragStart.hour, dragEnd.hour) 
+    : (dragStart?.hour ?? 0) + 1
+  const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
+
   return (
     <div className="flex flex-col h-full">
       {/* Day Headers - Fixed */}
       <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0">
-        <div className="w-[60px] flex-shrink-0" /> {/* Time column spacer */}
+        <div className="w-[60px] flex-shrink-0" />
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
           const isClosed = isDateClosed(date)
@@ -210,10 +241,13 @@ export function WeekCalendar({
                 {HOURS.map(hour => (
                   <div
                     key={hour}
-                    className={`h-[60px] border-b border-gray-100 ${
-                      hour === 12 ? 'border-gray-200' : '' // Slightly darker line at noon
+                    className={`h-[60px] border-b ${
+                      hour === 12 ? 'border-gray-200' : 'border-gray-100'
                     }`}
-                  />
+                  >
+                    {/* Half-hour line */}
+                    <div className="h-1/2 border-b border-dashed border-gray-100" />
+                  </div>
                 ))}
 
                 {/* Closed overlay */}
@@ -233,15 +267,28 @@ export function WeekCalendar({
                   />
                 ))}
 
-                {/* Drag selection preview */}
-                {isDragging && dragStart?.day === dayIndex && dragEnd && (
+                {/* Drag selection preview with live time display */}
+                {isDragging && dragStart?.day === dayIndex && (
                   <div
-                    className="absolute left-1 right-1 bg-blue-200/50 border-2 border-blue-400 border-dashed rounded-lg pointer-events-none z-20"
+                    className="absolute left-1 right-1 bg-blue-500 rounded-lg pointer-events-none z-20 overflow-hidden"
                     style={{
-                      top: `${Math.min(dragStart.hour, dragEnd.hour - 1) * HOUR_HEIGHT}px`,
-                      height: `${Math.abs(dragEnd.hour - dragStart.hour) * HOUR_HEIGHT}px`,
+                      top: `${dragStartHour * HOUR_HEIGHT}px`,
+                      height: `${Math.max(dragDuration * HOUR_HEIGHT, 20)}px`,
+                      opacity: 0.9,
                     }}
-                  />
+                  >
+                    {/* Time badge - always visible */}
+                    <div className="absolute inset-x-0 top-0 p-2">
+                      <div className="text-white text-sm font-semibold">
+                        {formatTime12Hour(hourToTimeString(dragStartHour))} – {formatTime12Hour(hourToTimeString(dragEndHour))}
+                      </div>
+                      {dragDuration >= 0.5 && (
+                        <div className="text-white/80 text-xs mt-0.5">
+                          {formatDuration(dragDuration)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             )
