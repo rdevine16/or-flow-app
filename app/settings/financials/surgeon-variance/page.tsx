@@ -110,6 +110,7 @@ export default function SurgeonVariancePage() {
         .select('id, name, type')
         .eq('facility_id', effectiveFacilityId)
         .eq('is_active', true)
+        .is('deleted_at', null) 
         .order('type')
         .order('display_order'),
       supabase
