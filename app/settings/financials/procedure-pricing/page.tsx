@@ -102,6 +102,7 @@ export default function ProcedurePricingPage() {
         .select('id, name, type, description')
         .eq('facility_id', effectiveFacilityId)
         .eq('is_active', true)
+        .is('deleted_at', null)
         .order('type')
         .order('display_order'),
       supabase
