@@ -38,7 +38,7 @@ interface CaseMilestone {
   id: string
   milestone_type_id: string
   facility_milestone_id: string | null
-  recorded_at: string
+  recorded_at: string | null  // <-- Allow null
 }
 
 interface CaseData {
@@ -841,10 +841,13 @@ if (milestoneType?.name === 'patient_in') {
       const partnerRecorded = partner ? getMilestoneByTypeId(partner.id) : undefined
 
       // Calculate elapsed for paired milestones
+ // Calculate elapsed for paired milestones
       let elapsedMs = 0
       let elapsedDisplay = ''
-      if (isPaired && recorded) {
-        const endTime = partnerRecorded ? new Date(partnerRecorded.recorded_at).getTime() : currentTime
+      if (isPaired && recorded?.recorded_at) {
+        const endTime = partnerRecorded?.recorded_at 
+          ? new Date(partnerRecorded.recorded_at).getTime() 
+          : currentTime
         elapsedMs = endTime - new Date(recorded.recorded_at).getTime()
         const mins = Math.floor(elapsedMs / 60000)
         elapsedDisplay = `${mins} min`
@@ -859,8 +862,8 @@ if (milestoneType?.name === 'patient_in') {
         elapsedMs,
         elapsedDisplay,
         displayName: mt.display_name.replace(/ Start$/i, ''),
-        isComplete: isPaired ? !!partnerRecorded : !!recorded,
-        isInProgress: isPaired ? (!!recorded && !partnerRecorded) : false,
+        isComplete: isPaired ? !!partnerRecorded?.recorded_at : !!recorded?.recorded_at,
+        isInProgress: isPaired ? (!!recorded?.recorded_at && !partnerRecorded?.recorded_at) : false,
       }
     })
 
@@ -1290,11 +1293,13 @@ if (milestoneType?.name === 'patient_in') {
             pair_with_id: mt.pair_with_id,
             pair_position: mt.pair_position,
           }))}
-          recordedMilestones={caseMilestones.map(cm => ({
-            id: cm.id,
-            facility_milestone_id: cm.facility_milestone_id || cm.milestone_type_id,
-            recorded_at: cm.recorded_at,
-          }))}
+recordedMilestones={caseMilestones
+  .filter(cm => cm.recorded_at !== null)  // <-- Only pass recorded ones
+  .map(cm => ({
+    id: cm.id,
+    facility_milestone_id: cm.facility_milestone_id || cm.milestone_type_id,
+    recorded_at: cm.recorded_at!,  // <-- Non-null assertion (safe because we filtered)
+  }))}
           onRecordMilestone={recordMilestone}
           onUndoMilestone={undoMilestone}
           onRefresh={() => {
@@ -1340,7 +1345,7 @@ function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd }: Miles
   const { recorded, isPaired, partnerRecorded, elapsedDisplay, displayName, isComplete, isInProgress } = card
 
   // Determine state
-  const isNotStarted = !recorded
+const isNotStarted = !recorded?.recorded_at
   const showUndo = isComplete || isInProgress
 
   return (
