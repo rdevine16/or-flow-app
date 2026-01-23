@@ -556,7 +556,7 @@ if (!mounted) {   return (
         style={{ width: sidebarWidth }}
         className="fixed top-0 left-0 h-full bg-slate-900 text-white z-50 flex flex-col transition-all duration-300 ease-out"
       >
-        {/* Logo - Static, always the O mark */}
+        {/* Logo - Static O mark (fits both collapsed and expanded) */}
         <div className="h-16 flex items-center justify-center border-b border-slate-800">
           <Link href="/dashboard" className="flex items-center justify-center text-white">
             <OrbitLogoMark className="w-9 h-9" />
@@ -564,7 +564,7 @@ if (!mounted) {   return (
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden">
           {isAdminMode ? (
             /* Grouped Admin Navigation */
             <div className="space-y-6">
@@ -572,26 +572,29 @@ if (!mounted) {   return (
                 <div key={group.id}>
                   {/* Group Header */}
                   {isExpanded && (
-                    <h3 className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <h3 className="px-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       {group.label}
                     </h3>
                   )}
                   {/* Group Items */}
-                  <div className="space-y-1">
+                  <div className="space-y-1 px-2">
                     {group.items.map((item) => {
                       const active = isActive(item.href)
                       return (
                         <Link
                           key={item.name}
                           href={item.href}
-                          className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 group relative
-                            ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}
-                            ${isExpanded ? 'px-3 py-2.5 gap-3' : 'w-10 h-10 justify-center mx-auto'}`}
+                          className={`flex items-center h-10 rounded-xl text-sm font-medium transition-colors duration-200
+                            ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                           title={!isExpanded ? item.name : undefined}
                         >
-                          <span className="flex-shrink-0">{item.icon}</span>
+                          {/* Fixed-width icon container - NEVER changes */}
+                          <div className="w-12 flex items-center justify-center flex-shrink-0">
+                            {item.icon}
+                          </div>
+                          {/* Text - only rendered when expanded */}
                           {isExpanded && (
-                            <span className="whitespace-nowrap">
+                            <span className="pr-3 whitespace-nowrap">
                               {item.name}
                             </span>
                           )}
@@ -604,21 +607,24 @@ if (!mounted) {   return (
             </div>
           ) : (
             /* Flat Facility Navigation */
-            <div className="space-y-1">
+            <div className="space-y-1 px-2">
               {navigation.map((item) => {
                 const active = isActive(item.href)
                 return (
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 group relative
-                      ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}
-                      ${isExpanded ? 'px-3 py-2.5 gap-3' : 'w-10 h-10 justify-center mx-auto'}`}
+                    className={`flex items-center h-10 rounded-xl text-sm font-medium transition-colors duration-200
+                      ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                     title={!isExpanded ? item.name : undefined}
                   >
-                    <span className="flex-shrink-0">{item.icon}</span>
+                    {/* Fixed-width icon container - NEVER changes */}
+                    <div className="w-12 flex items-center justify-center flex-shrink-0">
+                      {item.icon}
+                    </div>
+                    {/* Text - only rendered when expanded */}
                     {isExpanded && (
-                      <span className="whitespace-nowrap">
+                      <span className="pr-3 whitespace-nowrap">
                         {item.name}
                       </span>
                     )}
@@ -630,20 +636,23 @@ if (!mounted) {   return (
         </nav>
 
         {/* Pin & Version */}
-        <div className={`p-3 border-t border-slate-800 ${!isExpanded ? 'flex flex-col items-center' : ''}`}>
+        <div className="px-2 py-3 border-t border-slate-800">
           {isExpanded && (
             <button
               onClick={() => setIsPinned(!isPinned)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isPinned ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
+              className={`w-full flex items-center h-10 rounded-lg text-sm transition-colors ${isPinned ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
             >
-              <svg className="w-4 h-4 flex-shrink-0" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-              </svg>
+              <div className="w-12 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                </svg>
+              </div>
               <span className="whitespace-nowrap">{isPinned ? 'Unpin sidebar' : 'Pin sidebar'}</span>
             </button>
           )}
-          <p className={`text-xs text-slate-600 mt-2 ${isExpanded ? 'px-3' : 'text-center'}`}>
+          <p className={`text-xs text-slate-600 mt-2 ${isExpanded ? 'pl-12' : 'text-center'}`}>
             {isExpanded ? 'Version 1.0.0' : 'v1.0'}
+          </p>
           </p>
         </div>
       </aside>
