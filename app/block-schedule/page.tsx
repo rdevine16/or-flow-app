@@ -319,6 +319,7 @@ export default function BlockSchedulePage() {
                   isDateClosed={isDateClosed}
                   onDragSelect={handleDragSelect}
                   onBlockClick={handleBlockClick}
+                  activeSelection={popoverOpen && dragSelection ? dragSelection : null}
                 />
               </div>
             </div>
@@ -337,7 +338,7 @@ export default function BlockSchedulePage() {
             onDelete={handleDelete}
             facilityId={facilityId}
             surgeons={surgeons}
-colorMap={colorMap}
+            colorMap={colorMap}
             editingBlock={editingBlock}
             initialDayOfWeek={dragSelection?.dayOfWeek}
             initialStartTime={dragSelection?.startTime}

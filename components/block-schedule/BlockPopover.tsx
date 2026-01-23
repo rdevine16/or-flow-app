@@ -13,6 +13,7 @@ import {
   formatTime12Hour,
   SURGEON_COLOR_PALETTE,
 } from '@/types/block-scheduling'
+import { CustomRecurrenceModal, CustomRecurrenceConfig, getCustomRecurrenceDescription } from '../block-schedule/CustomRecurrenceModal'
 
 interface Surgeon {
   id: string
@@ -78,6 +79,11 @@ export function BlockPopover({
   const [effectiveEnd, setEffectiveEnd] = useState<string>('')
   const [hasEndDate, setHasEndDate] = useState(false)
 
+  // Custom recurrence state
+  const [showCustomModal, setShowCustomModal] = useState(false)
+  const [customRecurrence, setCustomRecurrence] = useState<CustomRecurrenceConfig | null>(null)
+  const [isCustom, setIsCustom] = useState(false)
+
   // Calculate initial position - ensure popover stays on screen
   useEffect(() => {
     if (open && clickPosition) {
@@ -135,6 +141,9 @@ export function BlockPopover({
         setEffectiveEnd(editingBlock.effective_end || '')
         setHasEndDate(!!editingBlock.effective_end)
         setShowMoreOptions(!!editingBlock.effective_end)
+        // Reset custom recurrence for now (could be enhanced to load from DB)
+        setIsCustom(false)
+        setCustomRecurrence(null)
       } else {
         setSurgeonId(surgeons[0]?.id || '')
         setDayOfWeek(initialDayOfWeek ?? 1)
@@ -145,6 +154,8 @@ export function BlockPopover({
         setEffectiveEnd('')
         setHasEndDate(false)
         setShowMoreOptions(false)
+        setIsCustom(false)
+        setCustomRecurrence(null)
       }
       setShowDeleteConfirm(false)
     }
@@ -438,15 +449,36 @@ export function BlockPopover({
             <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
               <Repeat className="h-5 w-5 text-gray-500" />
             </div>
-            <select
-              value={recurrenceType}
-              onChange={e => setRecurrenceType(e.target.value as RecurrenceType)}
-              className="flex-1 px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-100 transition-colors"
-            >
-              {(Object.entries(RECURRENCE_LABELS) as [RecurrenceType, string][]).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
+            <div className="flex-1">
+              {isCustom && customRecurrence ? (
+                // Custom recurrence display
+                <button
+                  onClick={() => setShowCustomModal(true)}
+                  className="w-full px-3 py-2 text-sm text-left bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-gray-900">{getCustomRecurrenceDescription(customRecurrence)}</span>
+                </button>
+              ) : (
+                <select
+                  value={isCustom ? 'custom' : recurrenceType}
+                  onChange={e => {
+                    if (e.target.value === 'custom') {
+                      setShowCustomModal(true)
+                    } else {
+                      setIsCustom(false)
+                      setCustomRecurrence(null)
+                      setRecurrenceType(e.target.value as RecurrenceType)
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-100 transition-colors"
+                >
+                  {(Object.entries(RECURRENCE_LABELS) as [RecurrenceType, string][]).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                  <option value="custom">Custom...</option>
+                </select>
+              )}
+            </div>
           </div>
 
           {/* More Options */}
@@ -552,6 +584,31 @@ export function BlockPopover({
           </div>
         </div>
       </div>
+
+      {/* Custom Recurrence Modal */}
+      <CustomRecurrenceModal
+        open={showCustomModal}
+        onClose={() => setShowCustomModal(false)}
+        onSave={(config) => {
+          setCustomRecurrence(config)
+          setIsCustom(true)
+          setShowCustomModal(false)
+          
+          // Also update effective dates based on custom config
+          if (config.endType === 'on' && config.endDate) {
+            setHasEndDate(true)
+            setEffectiveEnd(config.endDate)
+          } else if (config.endType === 'never') {
+            setHasEndDate(false)
+            setEffectiveEnd('')
+          }
+          
+          // Set recurrence type to 'weekly' as base (custom config has more detail)
+          setRecurrenceType('weekly')
+        }}
+        initialConfig={customRecurrence || undefined}
+        initialDayOfWeek={dayOfWeek}
+      />
     </>
   )
 }

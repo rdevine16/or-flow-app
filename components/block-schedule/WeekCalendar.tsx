@@ -12,6 +12,12 @@ interface WeekCalendarProps {
   isDateClosed: (date: Date) => boolean
   onDragSelect: (dayOfWeek: number, startTime: string, endTime: string, clickPosition?: { x: number; y: number }) => void
   onBlockClick: (block: ExpandedBlock, clickPosition?: { x: number; y: number }) => void
+  // Keep selection visible while popover is open
+  activeSelection?: {
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+  } | null
 }
 
 // Full 24 hours
@@ -26,12 +32,15 @@ export function WeekCalendar({
   isDateClosed,
   onDragSelect,
   onBlockClick,
+  activeSelection,
 }: WeekCalendarProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState<{ day: number; hour: number } | null>(null)
   const [dragEnd, setDragEnd] = useState<{ day: number; hour: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const autoScrollRef = useRef<number | null>(null)
+  const lastMouseYRef = useRef<number>(0)
 
   // Generate week days
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -88,6 +97,46 @@ export function WeekCalendar({
     return `${h}h ${m}m`
   }
 
+  // Auto-scroll when dragging near edges
+  const SCROLL_ZONE = 60 // pixels from edge to trigger scroll
+  const SCROLL_SPEED = 8 // pixels per frame
+
+  const startAutoScroll = (direction: 'up' | 'down') => {
+    if (autoScrollRef.current) return
+
+    const scroll = () => {
+      if (!scrollContainerRef.current || !gridRef.current) return
+      
+      const delta = direction === 'up' ? -SCROLL_SPEED : SCROLL_SPEED
+      scrollContainerRef.current.scrollTop += delta
+
+      // Update drag end position based on scroll position and last mouse Y
+      const gridRect = gridRef.current.getBoundingClientRect()
+      const relativeY = lastMouseYRef.current - gridRect.top
+      const rawHour = relativeY / HOUR_HEIGHT
+      const snappedHour = Math.round(rawHour * 4) / 4
+      const newHour = Math.max(0, Math.min(24, snappedHour))
+      
+      setDragEnd(prev => prev ? { ...prev, hour: newHour } : null)
+
+      autoScrollRef.current = requestAnimationFrame(scroll)
+    }
+
+    autoScrollRef.current = requestAnimationFrame(scroll)
+  }
+
+  const stopAutoScroll = () => {
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current)
+      autoScrollRef.current = null
+    }
+  }
+
+  // Cleanup auto-scroll on unmount
+  useEffect(() => {
+    return () => stopAutoScroll()
+  }, [])
+
   // Mouse handlers for drag selection
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
@@ -106,12 +155,35 @@ export function WeekCalendar({
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !dragStart) return
 
+    // Track mouse position for auto-scroll
+    lastMouseYRef.current = e.clientY
+
     const hour = getTimeFromY(e.clientY)
     // Allow dragging in both directions
     setDragEnd({ day: dragStart.day, hour })
+
+    // Check if near edges for auto-scroll
+    if (scrollContainerRef.current) {
+      const rect = scrollContainerRef.current.getBoundingClientRect()
+      const mouseY = e.clientY
+
+      if (mouseY < rect.top + SCROLL_ZONE && scrollContainerRef.current.scrollTop > 0) {
+        // Near top edge - scroll up
+        startAutoScroll('up')
+      } else if (mouseY > rect.bottom - SCROLL_ZONE && 
+                 scrollContainerRef.current.scrollTop < scrollContainerRef.current.scrollHeight - rect.height) {
+        // Near bottom edge - scroll down
+        startAutoScroll('down')
+      } else {
+        // Not near edge - stop auto-scroll
+        stopAutoScroll()
+      }
+    }
   }
 
   const handleMouseUp = (e: React.MouseEvent) => {
+    stopAutoScroll() // Always stop auto-scroll on mouse up
+    
     if (isDragging && dragStart && dragEnd) {
       const startHour = Math.min(dragStart.hour, dragEnd.hour)
       const endHour = Math.max(dragStart.hour, dragEnd.hour)
@@ -204,6 +276,7 @@ export function WeekCalendar({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={() => {
+            stopAutoScroll()
             if (isDragging) {
               setIsDragging(false)
               setDragStart(null)
@@ -290,6 +363,37 @@ export function WeekCalendar({
                     </div>
                   </div>
                 )}
+
+                {/* Active selection (shown while popover is open) */}
+                {!isDragging && activeSelection && activeSelection.dayOfWeek === dayIndex && (() => {
+                  const [startH, startM] = activeSelection.startTime.split(':').map(Number)
+                  const [endH, endM] = activeSelection.endTime.split(':').map(Number)
+                  const selectionStartHour = startH + startM / 60
+                  const selectionEndHour = endH + endM / 60
+                  const selectionDuration = selectionEndHour - selectionStartHour
+
+                  return (
+                    <div
+                      className="absolute left-1 right-1 bg-blue-500 rounded-lg pointer-events-none z-20 overflow-hidden"
+                      style={{
+                        top: `${selectionStartHour * HOUR_HEIGHT}px`,
+                        height: `${Math.max(selectionDuration * HOUR_HEIGHT, 20)}px`,
+                        opacity: 0.9,
+                      }}
+                    >
+                      <div className="absolute inset-x-0 top-0 p-2">
+                        <div className="text-white text-sm font-semibold">
+                          {formatTime12Hour(activeSelection.startTime)} – {formatTime12Hour(activeSelection.endTime)}
+                        </div>
+                        {selectionDuration >= 0.5 && (
+                          <div className="text-white/80 text-xs mt-0.5">
+                            {formatDuration(selectionDuration)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}
