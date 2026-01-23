@@ -337,7 +337,7 @@ export default function BlockSchedulePage() {
             onDelete={handleDelete}
             facilityId={facilityId}
             surgeons={surgeons}
-            surgeonColors={colorMap}
+colorMap={colorMap}
             editingBlock={editingBlock}
             initialDayOfWeek={dragSelection?.dayOfWeek}
             initialStartTime={dragSelection?.startTime}
