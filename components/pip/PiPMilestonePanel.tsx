@@ -128,11 +128,29 @@ export default function PiPMilestonePanel({
   const completedCount = displayItems.filter(i => i.isComplete).length
   const totalCount = displayItems.length
 
+  // Total case time (patient_in → now or patient_out)
   const patientInMilestone = milestones.find(m => m.name === 'patient_in')
   const patientInRecorded = patientInMilestone ? getRecorded(patientInMilestone.id) : null
+  const patientOutMilestone = milestones.find(m => m.name === 'patient_out')
+  const patientOutRecorded = patientOutMilestone ? getRecorded(patientOutMilestone.id) : null
   const totalCaseMs = patientInRecorded 
-    ? currentTime - new Date(patientInRecorded.recorded_at).getTime()
+    ? (patientOutRecorded 
+        ? new Date(patientOutRecorded.recorded_at).getTime() - new Date(patientInRecorded.recorded_at).getTime()
+        : currentTime - new Date(patientInRecorded.recorded_at).getTime())
     : 0
+
+  // Surgical time (incision → closing or now)
+  const incisionMilestone = milestones.find(m => m.name === 'incision')
+  const incisionRecorded = incisionMilestone ? getRecorded(incisionMilestone.id) : null
+  // Handle both 'closing' and 'closing_complete' for the end of surgical time
+  const closingMilestone = milestones.find(m => m.name === 'closing_complete' || m.name === 'closing')
+  const closingRecorded = closingMilestone ? getRecorded(closingMilestone.id) : null
+  const surgicalTimeMs = incisionRecorded
+    ? (closingRecorded
+        ? new Date(closingRecorded.recorded_at).getTime() - new Date(incisionRecorded.recorded_at).getTime()
+        : currentTime - new Date(incisionRecorded.recorded_at).getTime())
+    : 0
+  const isSurgicalActive = incisionRecorded && !closingRecorded
 
   const handleRecord = async (milestoneId: string) => {
     setLoading(milestoneId)
@@ -218,25 +236,71 @@ export default function PiPMilestonePanel({
         </button>
       </div>
 
-      {/* Total Time - Compact inline */}
-      {patientInRecorded && (
+      {/* Timer Cards - Two columns */}
+      {(patientInRecorded || incisionRecorded) && (
         <div style={{
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: '8px',
           margin: '8px 12px',
-          padding: '8px 12px',
-          borderRadius: '8px',
-          background: 'rgba(16,185,129,0.15)',
-          border: '1px solid rgba(16,185,129,0.2)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div style={{ width: '6px', height: '6px', backgroundColor: '#34d399', borderRadius: '50%', animation: 'pulse 2s infinite' }} />
-            <span style={{ fontSize: '10px', fontWeight: 600, color: '#34d399', textTransform: 'uppercase' }}>Total</span>
-          </div>
-          <span style={{ fontSize: '16px', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>
-            {formatElapsed(totalCaseMs)}
-          </span>
+          {/* Total Case Time */}
+          {patientInRecorded && (
+            <div style={{
+              flex: 1,
+              padding: '8px 10px',
+              borderRadius: '8px',
+              background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05))',
+              border: '1px solid rgba(16,185,129,0.2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                <div style={{ 
+                  width: '5px', 
+                  height: '5px', 
+                  backgroundColor: '#34d399', 
+                  borderRadius: '50%', 
+                  animation: patientOutRecorded ? 'none' : 'pulse 2s infinite' 
+                }} />
+                <span style={{ fontSize: '9px', fontWeight: 600, color: '#34d399', textTransform: 'uppercase' }}>Total</span>
+              </div>
+              <p style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'ui-monospace, monospace', margin: 0 }}>
+                {formatElapsed(totalCaseMs)}
+              </p>
+            </div>
+          )}
+
+          {/* Surgical Time */}
+          {incisionRecorded && (
+            <div style={{
+              flex: 1,
+              padding: '8px 10px',
+              borderRadius: '8px',
+              background: isSurgicalActive 
+                ? 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(59,130,246,0.05))'
+                : 'linear-gradient(135deg, rgba(148,163,184,0.2), rgba(148,163,184,0.05))',
+              border: isSurgicalActive 
+                ? '1px solid rgba(59,130,246,0.2)'
+                : '1px solid rgba(148,163,184,0.2)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                <div style={{ 
+                  width: '5px', 
+                  height: '5px', 
+                  backgroundColor: isSurgicalActive ? '#60a5fa' : '#94a3b8', 
+                  borderRadius: '50%', 
+                  animation: isSurgicalActive ? 'pulse 2s infinite' : 'none' 
+                }} />
+                <span style={{ 
+                  fontSize: '9px', 
+                  fontWeight: 600, 
+                  color: isSurgicalActive ? '#60a5fa' : '#94a3b8', 
+                  textTransform: 'uppercase' 
+                }}>Surgical</span>
+              </div>
+              <p style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'ui-monospace, monospace', margin: 0 }}>
+                {formatElapsed(surgicalTimeMs)}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
