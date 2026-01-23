@@ -1,9 +1,10 @@
-// app/settings/block-schedule/page.tsx
+// app/block-schedule/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '../../lib/supabase'
+import DashboardLayout from '../../components/layouts/DashboardLayout'
 import { useBlockSchedules } from '@/hooks/useBlockSchedules'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import { useSurgeonColors } from '@/hooks/useSurgeonColors'
@@ -213,124 +214,122 @@ export default function BlockSchedulePage() {
     setSelectedSurgeonIds(new Set())
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    )
-  }
-
   const colorMap = getColorMap()
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 140px)' }}>
-      {/* Page Header - inside the card */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">Block Schedule</h1>
-            <p className="text-sm text-slate-500">Manage surgeon block time allocations</p>
-          </div>
+    <DashboardLayout>
+      {loading ? (
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
-
-        <button
-          onClick={() => {
-            setEditingBlock(null)
-            setDragSelection(null)
-            setDialogOpen(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-        >
-          <Plus className="h-4 w-4" />
-          Add Block
-        </button>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <BlockSidebar
-          surgeons={surgeons}
-          selectedSurgeonIds={selectedSurgeonIds}
-          colorMap={colorMap}
-          onToggleSurgeon={toggleSurgeon}
-          onSelectAll={selectAllSurgeons}
-          onDeselectAll={deselectAllSurgeons}
-          currentWeekStart={currentWeekStart}
-          onDateSelect={(date) => {
-            const day = date.getDay()
-            const diff = date.getDate() - day
-            setCurrentWeekStart(new Date(new Date(date).setDate(diff)))
-          }}
-        />
-
-        {/* Calendar Section */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Calendar Navigation */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={goToPreviousWeek}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <ChevronLeft className="h-5 w-5 text-slate-600" />
-              </button>
-              <button
-                onClick={goToToday}
-                className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Today
-              </button>
-              <button
-                onClick={goToNextWeek}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <ChevronRight className="h-5 w-5 text-slate-600" />
-              </button>
-              <span className="ml-2 text-base font-medium text-slate-700">
-                {formatWeekRange(currentWeekStart)}
-              </span>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 160px)' }}>
+          {/* Page Header - inside the card */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
+            <div>
+              <h1 className="text-xl font-semibold text-slate-900">Block Schedule</h1>
+              <p className="text-sm text-slate-500">Manage surgeon block time allocations</p>
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Calendar className="h-4 w-4" />
-              <span>Week View</span>
-            </div>
+            <button
+              onClick={() => {
+                setEditingBlock(null)
+                setDragSelection(null)
+                setDialogOpen(true)
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Block
+            </button>
           </div>
 
-          {/* Calendar Grid */}
-          <div className="flex-1 overflow-auto">
-            <WeekCalendar
-              weekStart={currentWeekStart}
-              blocks={filteredBlocks}
+          {/* Main Content Area */}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar */}
+            <BlockSidebar
+              surgeons={surgeons}
+              selectedSurgeonIds={selectedSurgeonIds}
               colorMap={colorMap}
-              isDateClosed={isDateClosed}
-              onDragSelect={handleDragSelect}
-              onBlockClick={handleBlockClick}
+              onToggleSurgeon={toggleSurgeon}
+              onSelectAll={selectAllSurgeons}
+              onDeselectAll={deselectAllSurgeons}
+              currentWeekStart={currentWeekStart}
+              onDateSelect={(date) => {
+                const day = date.getDay()
+                const diff = date.getDate() - day
+                setCurrentWeekStart(new Date(new Date(date).setDate(diff)))
+              }}
             />
-          </div>
-        </div>
-      </div>
 
-      {/* Dialog */}
-      <BlockDialog
-        open={dialogOpen}
-        onClose={() => {
-          setDialogOpen(false)
-          setEditingBlock(null)
-          setDragSelection(null)
-        }}
-        onSave={handleSave}
-        onDelete={handleDelete}
-        facilityId={facilityId}
-        surgeons={surgeons}
-        editingBlock={editingBlock}
-        initialDayOfWeek={dragSelection?.dayOfWeek}
-        initialStartTime={dragSelection?.startTime}
-        initialEndTime={dragSelection?.endTime}
-      />
-    </div>
+            {/* Calendar Section */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {/* Calendar Navigation */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={goToPreviousWeek}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <ChevronLeft className="h-5 w-5 text-slate-600" />
+                  </button>
+                  <button
+                    onClick={goToToday}
+                    className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={goToNextWeek}
+                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="h-5 w-5 text-slate-600" />
+                  </button>
+                  <span className="ml-2 text-base font-medium text-slate-700">
+                    {formatWeekRange(currentWeekStart)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                  <Calendar className="h-4 w-4" />
+                  <span>Week View</span>
+                </div>
+              </div>
+
+              {/* Calendar Grid */}
+              <div className="flex-1 overflow-auto">
+                <WeekCalendar
+                  weekStart={currentWeekStart}
+                  blocks={filteredBlocks}
+                  colorMap={colorMap}
+                  isDateClosed={isDateClosed}
+                  onDragSelect={handleDragSelect}
+                  onBlockClick={handleBlockClick}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Dialog */}
+          <BlockDialog
+            open={dialogOpen}
+            onClose={() => {
+              setDialogOpen(false)
+              setEditingBlock(null)
+              setDragSelection(null)
+            }}
+            onSave={handleSave}
+            onDelete={handleDelete}
+            facilityId={facilityId}
+            surgeons={surgeons}
+            editingBlock={editingBlock}
+            initialDayOfWeek={dragSelection?.dayOfWeek}
+            initialStartTime={dragSelection?.startTime}
+            initialEndTime={dragSelection?.endTime}
+          />
+        </div>
+      )}
+    </DashboardLayout>
   )
 }
 
