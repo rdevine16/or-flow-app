@@ -497,9 +497,17 @@ function CasesPageContent() {
           surgeons={surgeons}
           rooms={rooms}
           procedureTypes={procedureTypes}
+          cases={cases.map(c => ({
+            id: c.id,
+            case_number: c.case_number,
+            procedure_name: getValue(c.procedure_types) || undefined,
+            surgeon_name: getSurgeon(c.surgeon).name,
+            room_name: getValue(c.or_rooms) || undefined,
+          }))}
           totalCount={cases.length}
           filteredCount={cases.length}
           onFiltersChange={handleFiltersChange}
+          onCaseSelect={(id) => router.push(`/cases/${id}`)}
         />
       </div>
 

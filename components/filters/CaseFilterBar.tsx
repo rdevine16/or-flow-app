@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 // ============================================================================
@@ -29,13 +29,29 @@ interface ProcedureType {
   name: string
 }
 
+interface SearchResult {
+  type: 'case' | 'surgeon' | 'room' | 'procedure' | 'filter'
+  id: string
+  title: string
+  subtitle?: string
+  action: () => void
+}
+
 interface CasesFilterBarProps {
   surgeons: Surgeon[]
   rooms: Room[]
   procedureTypes: ProcedureType[]
+  cases?: Array<{
+    id: string
+    case_number: string
+    procedure_name?: string
+    surgeon_name?: string
+    room_name?: string
+  }>
   totalCount: number
   filteredCount: number
   onFiltersChange: (filters: FilterState) => void
+  onCaseSelect?: (caseId: string) => void
 }
 
 export interface FilterState {
@@ -160,7 +176,7 @@ function FilterDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-2 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-slate-200 shadow-xl z-[100] py-2 max-h-64 overflow-y-auto">
           {multiSelect && selected.length > 0 && (
             <>
               <button
@@ -244,6 +260,270 @@ function FilterPill({ label, onRemove }: FilterPillProps) {
 }
 
 // ============================================================================
+// INLINE SEARCH WITH DROPDOWN
+// ============================================================================
+
+interface InlineSearchProps {
+  value: string
+  onChange: (value: string) => void
+  surgeons: Surgeon[]
+  rooms: Room[]
+  procedureTypes: ProcedureType[]
+  cases?: CasesFilterBarProps['cases']
+  onSurgeonSelect: (id: string) => void
+  onRoomSelect: (id: string) => void
+  onProcedureSelect: (id: string) => void
+  onCaseSelect?: (id: string) => void
+}
+
+function InlineSearch({
+  value,
+  onChange,
+  surgeons,
+  rooms,
+  procedureTypes,
+  cases = [],
+  onSurgeonSelect,
+  onRoomSelect,
+  onProcedureSelect,
+  onCaseSelect,
+}: InlineSearchProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Close on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Build search results
+  const getResults = useCallback((): SearchResult[] => {
+    if (!value.trim()) return []
+    
+    const q = value.toLowerCase().trim()
+    const results: SearchResult[] = []
+
+    // Search cases
+    cases.forEach(c => {
+      if (
+        c.case_number.toLowerCase().includes(q) ||
+        c.procedure_name?.toLowerCase().includes(q) ||
+        c.surgeon_name?.toLowerCase().includes(q) ||
+        c.room_name?.toLowerCase().includes(q)
+      ) {
+        results.push({
+          type: 'case',
+          id: c.id,
+          title: c.case_number,
+          subtitle: [c.procedure_name, c.surgeon_name].filter(Boolean).join(' • '),
+          action: () => onCaseSelect?.(c.id),
+        })
+      }
+    })
+
+    // Search surgeons
+    surgeons.forEach(s => {
+      const name = `${s.first_name} ${s.last_name}`.toLowerCase()
+      if (name.includes(q) || s.last_name.toLowerCase().includes(q)) {
+        results.push({
+          type: 'surgeon',
+          id: s.id,
+          title: `Dr. ${s.last_name}`,
+          subtitle: 'Filter by surgeon',
+          action: () => {
+            onSurgeonSelect(s.id)
+            onChange('')
+            setIsOpen(false)
+          },
+        })
+      }
+    })
+
+    // Search rooms
+    rooms.forEach(r => {
+      if (r.name.toLowerCase().includes(q)) {
+        results.push({
+          type: 'room',
+          id: r.id,
+          title: r.name,
+          subtitle: 'Filter by room',
+          action: () => {
+            onRoomSelect(r.id)
+            onChange('')
+            setIsOpen(false)
+          },
+        })
+      }
+    })
+
+    // Search procedures
+    procedureTypes.forEach(p => {
+      if (p.name.toLowerCase().includes(q)) {
+        results.push({
+          type: 'procedure',
+          id: p.id,
+          title: p.name,
+          subtitle: 'Filter by procedure',
+          action: () => {
+            onProcedureSelect(p.id)
+            onChange('')
+            setIsOpen(false)
+          },
+        })
+      }
+    })
+
+    return results.slice(0, 8) // Limit results
+  }, [value, cases, surgeons, rooms, procedureTypes, onSurgeonSelect, onRoomSelect, onProcedureSelect, onCaseSelect, onChange])
+
+  const results = getResults()
+
+  // Reset selected index when results change
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [results.length])
+
+  // Handle keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen || results.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSelectedIndex(prev => Math.min(prev + 1, results.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSelectedIndex(prev => Math.max(prev - 1, 0))
+    } else if (e.key === 'Enter' && results[selectedIndex]) {
+      e.preventDefault()
+      results[selectedIndex].action()
+    } else if (e.key === 'Escape') {
+      setIsOpen(false)
+      inputRef.current?.blur()
+    }
+  }
+
+  const getIcon = (type: SearchResult['type']) => {
+    switch (type) {
+      case 'case':
+        return (
+          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        )
+      case 'surgeon':
+        return (
+          <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        )
+      case 'room':
+        return (
+          <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+        )
+      case 'procedure':
+        return (
+          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        )
+      default:
+        return null
+    }
+  }
+
+  return (
+    <div className="relative flex-1 min-w-[200px] max-w-md" ref={containerRef}>
+      <svg 
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" 
+        fill="none" 
+        stroke="currentColor" 
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        ref={inputRef}
+        type="text"
+        placeholder="Search cases, surgeons, rooms..."
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setIsOpen(true)
+        }}
+        onFocus={() => value && setIsOpen(true)}
+        onKeyDown={handleKeyDown}
+        className="w-full pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      />
+
+      {/* Dropdown Results */}
+      {isOpen && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-200 shadow-xl z-[100] py-2 max-h-80 overflow-y-auto">
+          {results.map((result, idx) => (
+            <button
+              key={`${result.type}-${result.id}`}
+              onClick={() => result.action()}
+              onMouseEnter={() => setSelectedIndex(idx)}
+              className={`
+                w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors
+                ${idx === selectedIndex ? 'bg-blue-50' : 'hover:bg-slate-50'}
+              `}
+            >
+              <div className={`
+                w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+                ${idx === selectedIndex ? 'bg-blue-100' : 'bg-slate-100'}
+              `}>
+                {getIcon(result.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium truncate ${idx === selectedIndex ? 'text-blue-900' : 'text-slate-900'}`}>
+                  {result.title}
+                </p>
+                {result.subtitle && (
+                  <p className="text-xs text-slate-500 truncate">{result.subtitle}</p>
+                )}
+              </div>
+              {result.type !== 'case' && (
+                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                  {result.type === 'surgeon' ? 'Filter' : result.type === 'room' ? 'Filter' : 'Filter'}
+                </span>
+              )}
+              {idx === selectedIndex && (
+                <kbd className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">↵</kbd>
+              )}
+            </button>
+          ))}
+          
+          {/* Footer hint */}
+          <div className="px-4 py-2 border-t border-slate-100 mt-1">
+            <p className="text-xs text-slate-400">
+              <span className="font-medium">↑↓</span> navigate • <span className="font-medium">↵</span> select • <span className="font-medium">esc</span> close
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* No results state */}
+      {isOpen && value && results.length === 0 && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-200 shadow-xl z-[100] py-6 px-4 text-center">
+          <p className="text-sm text-slate-500">No results for "{value}"</p>
+          <p className="text-xs text-slate-400 mt-1">Try a different search term</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
 // MAIN FILTER BAR COMPONENT
 // ============================================================================
 
@@ -251,9 +531,11 @@ export default function CasesFilterBar({
   surgeons,
   rooms,
   procedureTypes,
+  cases = [],
   totalCount,
   filteredCount,
   onFiltersChange,
+  onCaseSelect,
 }: CasesFilterBarProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -295,7 +577,7 @@ export default function CasesFilterBar({
     setSearchInput(filters.search)
   }, [])
 
-  // Debounced search
+  // Debounced search (for filtering the list, not the dropdown)
   useEffect(() => {
     const timeout = setTimeout(() => {
       setFilters(prev => ({ ...prev, search: searchInput }))
@@ -318,6 +600,33 @@ export default function CasesFilterBar({
     value: p.id,
     label: p.name,
   }))
+
+  // Handlers for search selections
+  const handleSurgeonSelect = (id: string) => {
+    if (!filters.surgeonIds.includes(id)) {
+      setFilters(prev => ({ ...prev, surgeonIds: [...prev.surgeonIds, id] }))
+    }
+  }
+
+  const handleRoomSelect = (id: string) => {
+    if (!filters.roomIds.includes(id)) {
+      setFilters(prev => ({ ...prev, roomIds: [...prev.roomIds, id] }))
+    }
+  }
+
+  const handleProcedureSelect = (id: string) => {
+    if (!filters.procedureIds.includes(id)) {
+      setFilters(prev => ({ ...prev, procedureIds: [...prev.procedureIds, id] }))
+    }
+  }
+
+  const handleCaseSelect = (id: string) => {
+    if (onCaseSelect) {
+      onCaseSelect(id)
+    } else {
+      router.push(`/cases/${id}`)
+    }
+  }
 
   // Get active filter pills
   const getActivePills = () => {
@@ -401,29 +710,33 @@ export default function CasesFilterBar({
     setSearchInput('')
   }
 
+  // Transform cases for search
+  const searchableCases = cases.map(c => ({
+    id: c.id,
+    case_number: c.case_number,
+    procedure_name: c.procedure_name,
+    surgeon_name: c.surgeon_name,
+    room_name: c.room_name,
+  }))
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible">
       {/* Main Filter Row */}
       <div className="p-4">
         <div className="flex flex-wrap items-center gap-3">
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs">
-            <svg 
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search cases..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+          {/* Inline Search with Dropdown */}
+          <InlineSearch
+            value={searchInput}
+            onChange={setSearchInput}
+            surgeons={surgeons}
+            rooms={rooms}
+            procedureTypes={procedureTypes}
+            cases={searchableCases}
+            onSurgeonSelect={handleSurgeonSelect}
+            onRoomSelect={handleRoomSelect}
+            onProcedureSelect={handleProcedureSelect}
+            onCaseSelect={handleCaseSelect}
+          />
 
           {/* Divider */}
           <div className="h-8 w-px bg-slate-200" />
