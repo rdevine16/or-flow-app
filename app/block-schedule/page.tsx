@@ -56,7 +56,7 @@ export default function BlockSchedulePage() {
   // Hooks
   const { blocks, fetchBlocksForRange, deleteBlock } = useBlockSchedules({ facilityId })
   const { holidays, closures, fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
-  const { fetchColors, getColorMap } = useSurgeonColors({ facilityId })
+  const { fetchColors, getColorMap, setColor } = useSurgeonColors({ facilityId })
 
   // Load user and facility
   useEffect(() => {
@@ -233,6 +233,13 @@ export default function BlockSchedulePage() {
     setSelectedSurgeonIds(new Set())
   }
 
+  // Handle surgeon color change
+  const handleColorChange = async (surgeonId: string, color: string) => {
+    if (setColor) {
+      await setColor(surgeonId, color)
+    }
+  }
+
   const colorMap = getColorMap()
 
   // Format week range for header - Google style
@@ -276,6 +283,7 @@ export default function BlockSchedulePage() {
             onAddBlock={handleAddBlockButton}
             showHolidays={showHolidays}
             onToggleHolidays={() => setShowHolidays(!showHolidays)}
+            onColorChange={handleColorChange}
           />
 
           {/* Main Calendar Area */}

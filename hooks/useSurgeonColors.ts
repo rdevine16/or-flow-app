@@ -1,182 +1,129 @@
 // hooks/useSurgeonColors.ts
+'use client'
 
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import { surgeonColorAudit } from '@/lib/audit-logger'
-import { SurgeonColor, SURGEON_COLOR_PALETTE, getNextAvailableColor } from '@/types/block-scheduling'
+
+// Default color palette - assigned to surgeons in order
+const DEFAULT_COLORS = [
+  '#3B82F6', // blue
+  '#10B981', // emerald
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#06B6D4', // cyan
+  '#84CC16', // lime
+  '#F97316', // orange
+  '#6366F1', // indigo
+]
 
 interface UseSurgeonColorsOptions {
   facilityId: string | null
 }
 
-interface SurgeonInfo {
-  id: string
-  first_name: string
-  last_name: string
-}
-
 export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
-const supabase = createClient()
-const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [colors, setColors] = useState<SurgeonColor[]>([])
+  const supabase = createClient()
+  const [colors, setColors] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(false)
 
-  // Fetch all surgeon colors for facility
-  const fetchColors = useCallback(async () => {
-    if (!facilityId) return []
+  // Fetch colors from database (or localStorage as fallback)
+  const fetchColors = useCallback(async (surgeonIds: string[]) => {
+    if (!facilityId || surgeonIds.length === 0) return
 
     setLoading(true)
-    setError(null)
-
     try {
-      const { data, error: fetchError } = await supabase
+      // Try to fetch from surgeon_colors table
+      const { data, error } = await supabase
         .from('surgeon_colors')
-        .select('*')
+        .select('surgeon_id, color')
         .eq('facility_id', facilityId)
+        .in('surgeon_id', surgeonIds)
 
-      if (fetchError) throw fetchError
-
-      setColors(data || [])
-      return data || []
+      if (!error && data) {
+        const colorMap: Record<string, string> = {}
+        data.forEach(row => {
+          colorMap[row.surgeon_id] = row.color
+        })
+        
+        // Assign default colors to surgeons without a color
+        surgeonIds.forEach((id, index) => {
+          if (!colorMap[id]) {
+            colorMap[id] = DEFAULT_COLORS[index % DEFAULT_COLORS.length]
+          }
+        })
+        
+        setColors(colorMap)
+      } else {
+        // Table doesn't exist or error - use localStorage fallback
+        const stored = localStorage.getItem(`surgeon-colors-${facilityId}`)
+        if (stored) {
+          setColors(JSON.parse(stored))
+        } else {
+          // Assign default colors
+          const colorMap: Record<string, string> = {}
+          surgeonIds.forEach((id, index) => {
+            colorMap[id] = DEFAULT_COLORS[index % DEFAULT_COLORS.length]
+          })
+          setColors(colorMap)
+        }
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch colors'
-      setError(message)
       console.error('Error fetching surgeon colors:', err)
-      return []
+      // Fallback to localStorage
+      const stored = localStorage.getItem(`surgeon-colors-${facilityId}`)
+      if (stored) {
+        setColors(JSON.parse(stored))
+      }
     } finally {
       setLoading(false)
     }
   }, [facilityId, supabase])
 
-  // Get color for a surgeon (returns existing or auto-assigns new)
-  const getColorForSurgeon = useCallback(
-    async (surgeon: SurgeonInfo): Promise<string> => {
-      if (!facilityId) return SURGEON_COLOR_PALETTE[0]
+  // Set a surgeon's color
+  const setColor = useCallback(async (surgeonId: string, color: string) => {
+    if (!facilityId) return
 
-      // Check if surgeon already has a color
-      const existing = colors.find(c => c.surgeon_id === surgeon.id)
-      if (existing) return existing.color
-
-      // Auto-assign a new color
-      const usedColors = colors.map(c => c.color)
-      const newColor = getNextAvailableColor(usedColors)
-
-      try {
-        const { data, error: insertError } = await supabase
-          .from('surgeon_colors')
-          .insert({
-            facility_id: facilityId,
-            surgeon_id: surgeon.id,
-            color: newColor,
-          })
-          .select()
-          .single()
-
-        if (insertError) throw insertError
-
-        // Audit log
-        const surgeonName = `Dr. ${surgeon.last_name}`
-        await surgeonColorAudit.assigned(supabase, surgeon.id, surgeonName, newColor, facilityId)
-
-        // Update local state
-        setColors(prev => [...prev, data])
-
-        return newColor
-      } catch (err) {
-        console.error('Error assigning surgeon color:', err)
-        return newColor // Return the color even if save fails
-      }
-    },
-    [facilityId, colors, supabase]
-  )
-
-  // Change a surgeon's color
-  const changeColor = useCallback(
-    async (surgeon: SurgeonInfo, newColor: string): Promise<boolean> => {
-      if (!facilityId) return false
-
-      const existing = colors.find(c => c.surgeon_id === surgeon.id)
-      const oldColor = existing?.color || SURGEON_COLOR_PALETTE[0]
-
-      setLoading(true)
-      setError(null)
-
-      try {
-        if (existing) {
-          // Update existing
-          const { error: updateError } = await supabase
-            .from('surgeon_colors')
-            .update({ color: newColor })
-            .eq('id', existing.id)
-
-          if (updateError) throw updateError
-        } else {
-          // Insert new
-          const { data, error: insertError } = await supabase
-            .from('surgeon_colors')
-            .insert({
-              facility_id: facilityId,
-              surgeon_id: surgeon.id,
-              color: newColor,
-            })
-            .select()
-            .single()
-
-          if (insertError) throw insertError
-
-          setColors(prev => [...prev, data])
-        }
-
-        // Audit log
-        const surgeonName = `Dr. ${surgeon.last_name}`
-        if (existing) {
-          await surgeonColorAudit.changed(
-            supabase,
-            surgeon.id,
-            surgeonName,
-            oldColor,
-            newColor,
-            facilityId
-          )
-        } else {
-          await surgeonColorAudit.assigned(supabase, surgeon.id, surgeonName, newColor, facilityId)
-        }
-
-        // Update local state
-        setColors(prev =>
-          prev.map(c => (c.surgeon_id === surgeon.id ? { ...c, color: newColor } : c))
-        )
-
-        return true
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to change color'
-        setError(message)
-        console.error('Error changing surgeon color:', err)
-        return false
-      } finally {
-        setLoading(false)
-      }
-    },
-    [facilityId, colors, supabase]
-  )
-
-  // Get color map (surgeonId -> color)
-  const getColorMap = useCallback((): Record<string, string> => {
-    const map: Record<string, string> = {}
-    colors.forEach(c => {
-      map[c.surgeon_id] = c.color
+    // Update local state immediately
+    setColors(prev => {
+      const updated = { ...prev, [surgeonId]: color }
+      // Also save to localStorage as backup
+      localStorage.setItem(`surgeon-colors-${facilityId}`, JSON.stringify(updated))
+      return updated
     })
-    return map
+
+    // Try to save to database
+    try {
+      const { error } = await supabase
+        .from('surgeon_colors')
+        .upsert({
+          facility_id: facilityId,
+          surgeon_id: surgeonId,
+          color: color,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'facility_id,surgeon_id'
+        })
+
+      if (error) {
+        // Table might not exist - that's ok, localStorage is the backup
+        console.log('Could not save color to database, using localStorage')
+      }
+    } catch (err) {
+      console.error('Error saving surgeon color:', err)
+    }
+  }, [facilityId, supabase])
+
+  // Get the color map (for passing to components)
+  const getColorMap = useCallback(() => {
+    return colors
   }, [colors])
 
   return {
     colors,
     loading,
-    error,
     fetchColors,
-    getColorForSurgeon,
-    changeColor,
+    setColor,
     getColorMap,
-    colorPalette: SURGEON_COLOR_PALETTE,
   }
 }

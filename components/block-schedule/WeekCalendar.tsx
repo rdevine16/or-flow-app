@@ -238,49 +238,68 @@ export function WeekCalendar({
   })
 
   // Calculate overlap columns for blocks (Google Calendar style)
-  const calculateBlockLayout = (dayBlocks: ExpandedBlock[]): Map<string, { columnIndex: number; totalColumns: number }> => {
-    const layout = new Map<string, { columnIndex: number; totalColumns: number }>()
+  // - Same start time blocks = side by side (equal width columns)
+  // - Different start times = cascading offset
+  const calculateBlockLayout = (dayBlocks: ExpandedBlock[]): Map<string, { columnIndex: number; totalColumns: number; isSameStart: boolean }> => {
+    const layout = new Map<string, { columnIndex: number; totalColumns: number; isSameStart: boolean }>()
     
     if (dayBlocks.length === 0) return layout
     
-    // Sort by start time
-    const sorted = [...dayBlocks].sort((a, b) => a.start_time.localeCompare(b.start_time))
-    
-    // Find overlapping groups
-    const groups: ExpandedBlock[][] = []
-    let currentGroup: ExpandedBlock[] = []
-    
-    sorted.forEach(block => {
-      const [startH, startM] = block.start_time.split(':').map(Number)
-      const [endH, endM] = block.end_time.split(':').map(Number)
-      const blockStart = startH * 60 + startM
-      const blockEnd = endH * 60 + endM
-      
-      // Check if this block overlaps with any in the current group
-      const overlapsWithGroup = currentGroup.some(groupBlock => {
-        const [gStartH, gStartM] = groupBlock.start_time.split(':').map(Number)
-        const [gEndH, gEndM] = groupBlock.end_time.split(':').map(Number)
-        const gStart = gStartH * 60 + gStartM
-        const gEnd = gEndH * 60 + gEndM
-        return blockStart < gEnd && blockEnd > gStart
-      })
-      
-      if (overlapsWithGroup || currentGroup.length === 0) {
-        currentGroup.push(block)
-      } else {
-        if (currentGroup.length > 0) groups.push(currentGroup)
-        currentGroup = [block]
-      }
+    // First, group blocks by exact start time
+    const byStartTime = new Map<string, ExpandedBlock[]>()
+    dayBlocks.forEach(block => {
+      const key = block.start_time
+      if (!byStartTime.has(key)) byStartTime.set(key, [])
+      byStartTime.get(key)!.push(block)
     })
     
-    if (currentGroup.length > 0) groups.push(currentGroup)
-    
-    // Assign column indices within each group
-    groups.forEach(group => {
-      const totalColumns = group.length
+    // Process each start time group
+    // Blocks with same start time get equal columns (side by side)
+    byStartTime.forEach((group, startTime) => {
       group.forEach((block, index) => {
-        layout.set(block.block_id, { columnIndex: index, totalColumns })
+        layout.set(block.block_id, {
+          columnIndex: index,
+          totalColumns: group.length,
+          isSameStart: group.length > 1
+        })
       })
+    })
+    
+    // Now handle cascading for different start times
+    // Sort all blocks by start time
+    const sorted = [...dayBlocks].sort((a, b) => a.start_time.localeCompare(b.start_time))
+    
+    // For blocks that are the only one at their start time, 
+    // calculate cascade offset based on how many earlier blocks they overlap with
+    sorted.forEach((block, i) => {
+      const currentLayout = layout.get(block.block_id)
+      
+      // Only adjust single blocks (not part of same-start group)
+      if (currentLayout && currentLayout.totalColumns === 1) {
+        const [startH, startM] = block.start_time.split(':').map(Number)
+        const blockStart = startH * 60 + startM
+        
+        // Count how many earlier blocks this one overlaps with
+        let cascadeOffset = 0
+        for (let j = 0; j < i; j++) {
+          const prevBlock = sorted[j]
+          const [pEndH, pEndM] = prevBlock.end_time.split(':').map(Number)
+          const prevEnd = pEndH * 60 + pEndM
+          
+          if (prevEnd > blockStart) {
+            // This block overlaps with a previous block
+            cascadeOffset++
+          }
+        }
+        
+        if (cascadeOffset > 0) {
+          layout.set(block.block_id, {
+            columnIndex: cascadeOffset,
+            totalColumns: 1, // Keep as 1 for cascade style
+            isSameStart: false
+          })
+        }
+      }
     })
     
     return layout
@@ -398,7 +417,7 @@ export function WeekCalendar({
                 {!isClosed && (() => {
                   const blockLayout = calculateBlockLayout(dayBlocks)
                   return dayBlocks.map(block => {
-                    const layout = blockLayout.get(block.block_id) || { columnIndex: 0, totalColumns: 1 }
+                    const layout = blockLayout.get(block.block_id) || { columnIndex: 0, totalColumns: 1, isSameStart: false }
                     return (
                       <BlockCard
                         key={block.block_id}
@@ -409,6 +428,7 @@ export function WeekCalendar({
                         onClick={(e) => handleBlockClick(block, e)}
                         columnIndex={layout.columnIndex}
                         totalColumns={layout.totalColumns}
+                        isSameStart={layout.isSameStart}
                       />
                     )
                   })
