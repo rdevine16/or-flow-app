@@ -715,9 +715,8 @@ if (milestoneType?.name === 'patient_in') {
   const totalVariance = surgeonAverages.avgTotalTime ? totalMinutes - surgeonAverages.avgTotalTime : null
   const surgicalVariance = surgeonAverages.avgSurgicalTime ? surgicalMinutes - surgeonAverages.avgSurgicalTime : null
 
-  const completedMilestones = caseMilestones.length
-  const totalMilestoneCount = milestoneTypes.length
-  
+const completedMilestones = caseMilestones.filter(cm => cm.recorded_at !== null).length
+const totalMilestoneCount = milestoneTypes.length
   // Surgeon Left button visibility
   const closingStarted = !!closingTime
   const patientOutRecorded = !!patientOutTime
@@ -880,25 +879,30 @@ if (milestoneType?.name === 'patient_in') {
         {/* ================================================================== */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
-          {/* TIMERS (2 cols) */}
+{/* TIMERS (2 cols) - HERO SIZE */}
           <div className="lg:col-span-2 grid grid-cols-2 gap-4">
             {/* Total Time */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl" />
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl" />
               <div className="relative">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Time</span>
+                <div className="flex items-center gap-2 mb-2">
+                  {patientInTime && !patientOutTime ? (
+                    <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+                  ) : (
+                    <div className="w-2.5 h-2.5 bg-slate-600 rounded-full" />
+                  )}
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Time</span>
                 </div>
-                <p className="text-4xl font-bold text-white font-mono tabular-nums tracking-tight">
+                <p className="text-5xl lg:text-6xl font-bold text-white font-mono tabular-nums tracking-tight">
                   {totalTime}
                 </p>
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-3">
                   {surgeonAverages.avgTotalTime && (
                     <>
-                      <span className="text-xs text-slate-500">Avg: {formatMinutes(surgeonAverages.avgTotalTime)}</span>
+                      <span className="text-sm text-slate-500">Avg: {formatMinutes(surgeonAverages.avgTotalTime)}</span>
                       {totalVariance !== null && patientInTime && (
-                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                           totalVariance > 10 ? 'bg-red-500/20 text-red-400' :
                           totalVariance < -10 ? 'bg-emerald-500/20 text-emerald-400' :
                           'bg-slate-700 text-slate-400'
@@ -913,23 +917,27 @@ if (milestoneType?.name === 'patient_in') {
             </div>
 
             {/* Surgical Time */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl" />
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl" />
               <div className="relative">
-                <div className="flex items-center gap-2 mb-1">
-                  {incisionTime && !closingTime && <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />}
-                  {(!incisionTime || closingTime) && <div className="w-2 h-2 bg-slate-600 rounded-full" />}
-                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Surgical Time</span>
+                <div className="flex items-center gap-2 mb-2">
+                  {incisionTime && !closingTime ? (
+                    <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
+                  ) : (
+                    <div className="w-2.5 h-2.5 bg-slate-600 rounded-full" />
+                  )}
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Surgical Time</span>
                 </div>
-                <p className="text-4xl font-bold text-white font-mono tabular-nums tracking-tight">
+                <p className="text-5xl lg:text-6xl font-bold text-white font-mono tabular-nums tracking-tight">
                   {surgicalTime}
                 </p>
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-3">
                   {surgeonAverages.avgSurgicalTime && (
                     <>
-                      <span className="text-xs text-slate-500">Avg: {formatMinutes(surgeonAverages.avgSurgicalTime)}</span>
+                      <span className="text-sm text-slate-500">Avg: {formatMinutes(surgeonAverages.avgSurgicalTime)}</span>
                       {surgicalVariance !== null && incisionTime && (
-                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                           surgicalVariance > 10 ? 'bg-red-500/20 text-red-400' :
                           surgicalVariance < -10 ? 'bg-emerald-500/20 text-emerald-400' :
                           'bg-slate-700 text-slate-400'
@@ -1344,102 +1352,125 @@ interface MilestoneCardProps {
 function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd }: MilestoneCardProps) {
   const { recorded, isPaired, partnerRecorded, elapsedDisplay, displayName, isComplete, isInProgress } = card
 
-  // Determine state
-const isNotStarted = !recorded?.recorded_at
+  // Determine state - check recorded_at, not just existence
+  const isNotStarted = !recorded?.recorded_at
   const showUndo = isComplete || isInProgress
 
+  // Professional card with subtle depth
   return (
     <div className={`
-      relative rounded-xl border-2 p-4 transition-all duration-200
+      relative rounded-2xl transition-all duration-300 overflow-hidden
       ${isComplete 
-        ? 'bg-emerald-50 border-emerald-200' 
+        ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 shadow-sm shadow-emerald-200/50' 
         : isInProgress 
-          ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200 ring-offset-1' 
-          : 'bg-white border-slate-200 hover:border-slate-300'
+          ? 'bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md shadow-blue-200/50 ring-2 ring-blue-400/30' 
+          : 'bg-white shadow-sm hover:shadow-md border border-slate-200/60'
       }
     `}>
-      {/* Status indicator */}
-      <div className="flex items-start justify-between mb-3">
-        <div className={`
-          w-8 h-8 rounded-lg flex items-center justify-center
-          ${isComplete 
-            ? 'bg-emerald-500' 
-            : isInProgress 
-              ? 'bg-blue-500' 
-              : 'bg-slate-200'
-          }
-        `}>
-          {isComplete ? (
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : isInProgress ? (
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-          ) : (
-            <div className="w-2 h-2 bg-slate-400 rounded-full" />
+      {/* Top accent bar */}
+      <div className={`h-1 w-full ${
+        isComplete 
+          ? 'bg-gradient-to-r from-emerald-400 to-teal-400' 
+          : isInProgress 
+            ? 'bg-gradient-to-r from-blue-400 to-indigo-400' 
+            : 'bg-slate-200'
+      }`} />
+
+      <div className="p-4">
+        {/* Header row */}
+        <div className="flex items-start justify-between mb-3">
+          {/* Status icon */}
+          <div className={`
+            w-10 h-10 rounded-xl flex items-center justify-center shadow-sm
+            ${isComplete 
+              ? 'bg-gradient-to-br from-emerald-500 to-teal-500' 
+              : isInProgress 
+                ? 'bg-gradient-to-br from-blue-500 to-indigo-500' 
+                : 'bg-slate-100'
+            }
+          `}>
+            {isComplete ? (
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : isInProgress ? (
+              <div className="relative">
+                <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
+                <div className="absolute inset-0 w-3 h-3 bg-white rounded-full animate-ping opacity-30" />
+              </div>
+            ) : (
+              <div className="w-3 h-3 border-2 border-slate-300 rounded-full" />
+            )}
+          </div>
+
+          {/* Undo button */}
+          {showUndo && (
+            <button
+              onClick={isComplete && isPaired ? onUndoEnd : onUndo}
+              className="p-2 -m-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              title="Undo"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+            </button>
           )}
         </div>
 
-        {/* Undo button */}
-        {showUndo && (
-          <button
-            onClick={isComplete && isPaired ? onUndoEnd : onUndo}
-            className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-            title="Undo"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+        {/* Title */}
+        <h4 className={`text-sm font-bold mb-1 ${
+          isComplete ? 'text-emerald-900' : isInProgress ? 'text-blue-900' : 'text-slate-800'
+        }`}>
+          {displayName}
+        </h4>
+
+        {/* Time display */}
+        {isComplete && (
+          <div className="flex items-center gap-1.5 text-emerald-700">
+            <svg className="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
+            {isPaired ? (
+              <span className="text-xs font-semibold">
+                {formatTimestampShort(recorded?.recorded_at || null)} → {formatTimestampShort(partnerRecorded?.recorded_at || null)}
+                <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-200/50 rounded text-emerald-800">{elapsedDisplay}</span>
+              </span>
+            ) : (
+              <span className="text-xs font-semibold">{formatTimestamp(recorded?.recorded_at || null)}</span>
+            )}
+          </div>
+        )}
+
+        {isInProgress && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-blue-600">Started {formatTimestamp(recorded?.recorded_at || null)}</span>
+            <span className="text-sm font-bold text-blue-700 tabular-nums animate-pulse">{elapsedDisplay}</span>
+          </div>
+        )}
+
+        {isNotStarted && (
+          <p className="text-xs text-slate-400">Waiting to record</p>
+        )}
+
+        {/* Action buttons */}
+        {isNotStarted && (
+          <button
+            onClick={onRecord}
+            className="mt-4 w-full py-2.5 px-4 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98]"
+          >
+            Record
+          </button>
+        )}
+
+        {isInProgress && isPaired && (
+          <button
+            onClick={onRecordEnd}
+            className="mt-4 w-full py-2.5 px-4 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[0.98]"
+          >
+            Complete
           </button>
         )}
       </div>
-
-      {/* Title */}
-      <h4 className={`text-sm font-semibold mb-1 ${
-        isComplete ? 'text-emerald-900' : isInProgress ? 'text-blue-900' : 'text-slate-700'
-      }`}>
-        {displayName}
-      </h4>
-
-      {/* Time display */}
-      {isComplete && (
-        <p className="text-xs text-emerald-600 font-medium">
-          {isPaired ? (
-            <>
-              {formatTimestampShort(recorded?.recorded_at || null)} → {formatTimestampShort(partnerRecorded?.recorded_at || null)}
-              <span className="ml-1 text-emerald-700 font-semibold">({elapsedDisplay})</span>
-            </>
-          ) : (
-            formatTimestamp(recorded?.recorded_at || null)
-          )}
-        </p>
-      )}
-
-      {isInProgress && (
-        <p className="text-xs text-blue-600 font-medium">
-          Started {formatTimestamp(recorded?.recorded_at || null)}
-          <span className="ml-1 text-blue-700 font-semibold animate-pulse">• {elapsedDisplay}</span>
-        </p>
-      )}
-
-      {/* Action button */}
-      {isNotStarted && (
-        <button
-          onClick={onRecord}
-          className="mt-3 w-full py-2 px-3 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm hover:shadow active:scale-[0.98]"
-        >
-          Record
-        </button>
-      )}
-
-      {isInProgress && isPaired && (
-        <button
-          onClick={onRecordEnd}
-          className="mt-3 w-full py-2 px-3 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-sm hover:shadow active:scale-[0.98]"
-        >
-          Complete
-        </button>
-      )}
     </div>
   )
 }
