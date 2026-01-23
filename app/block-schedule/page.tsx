@@ -12,7 +12,7 @@ import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
 import { BlockPopover } from '@/components/block-schedule/BlockPopover'
-import { DeleteBlockModal } from '@/components/block-schedule/DeleteBlockModal'
+import { DeleteBlockModal } from '../../components/block-schedule/DeleteBlockModal'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Surgeon {
@@ -207,15 +207,16 @@ export default function BlockSchedulePage() {
     const block = blocks.find(b => b.block_id === blockId)
     if (!block) return
 
-    // Check if it's a recurring block (anything other than 'daily' which would be single)
-    const isRecurring = block.recurrence_type && block.recurrence_type !== 'daily'
+    // All blocks with a recurrence_type are recurring (weekly, biweekly, monthly, etc.)
+    // Show modal for all recurring blocks
+    const isRecurring = !!block.recurrence_type
 
     if (isRecurring) {
       // Show delete modal for recurring blocks
       setBlockToDelete(block)
       setDeleteModalOpen(true)
     } else {
-      // Delete single block directly
+      // Delete single block directly (shouldn't happen with current schema)
       handleDeleteAll(block)
     }
   }
@@ -403,7 +404,7 @@ export default function BlockSchedulePage() {
             onDeleteSingle={handleDeleteSingle}
             onDeleteAll={() => handleDeleteAll()}
             surgeonName={blockToDelete ? `Dr. ${blockToDelete.surgeon_last_name}` : ''}
-            isRecurring={blockToDelete?.recurrence_type !== 'daily'}
+            isRecurring={!!blockToDelete?.recurrence_type}
           />
         </div>
       )}

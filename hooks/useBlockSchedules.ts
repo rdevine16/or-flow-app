@@ -310,14 +310,14 @@ const supabase = createClient()
 
         if (updateError) throw updateError
 
-        // Audit log
+        // Audit log - use a simple format that the logger accepts
         const surgeonName = `Dr. ${surgeon.last_name}`
         await blockScheduleAudit.updated(
           supabase,
           blockId,
           surgeonName,
-          { exception_dates: currentExceptions.join(', ') || 'none' },
-          { exception_dates: updatedExceptions.join(', ') },
+          {},
+          { effective_end: `Exception added: ${exceptionDate}` },
           facilityId
         )
 
