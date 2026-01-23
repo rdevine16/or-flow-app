@@ -31,7 +31,7 @@ interface PiPMilestonePanelProps {
   onRefresh: () => void
 }
 
-// Format elapsed time as MM:SS or HHH:MM
+// Format elapsed time as MM:SS or H:MM:SS
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
   const hours = Math.floor(totalSeconds / 3600)
@@ -102,7 +102,6 @@ export default function PiPMilestonePanel({
       const isInProgress = isPaired ? (!!recorded && !partnerRecorded) : false
       const isNotStarted = !recorded
 
-      // Calculate elapsed time for in-progress milestones
       let elapsedMs = 0
       if (isInProgress && recorded) {
         elapsedMs = currentTime - new Date(recorded.recorded_at).getTime()
@@ -122,12 +121,12 @@ export default function PiPMilestonePanel({
       }
     })
 
-  // Find the current active milestone (first not completed, or last if all done)
+  // Find the current active milestone
   useEffect(() => {
     const firstIncomplete = displayItems.findIndex(item => !item.isComplete)
     if (firstIncomplete !== -1) {
       setActiveIndex(firstIncomplete)
-    } else {
+    } else if (displayItems.length > 0) {
       setActiveIndex(displayItems.length - 1)
     }
   }, [recordedMilestones.length])
@@ -136,7 +135,7 @@ export default function PiPMilestonePanel({
   const completedCount = displayItems.filter(i => i.isComplete).length
   const totalCount = displayItems.length
 
-  // Calculate total case time (from patient_in)
+  // Calculate total case time
   const patientInMilestone = milestones.find(m => m.name === 'patient_in')
   const patientInRecorded = patientInMilestone ? getRecorded(patientInMilestone.id) : null
   const totalCaseMs = patientInRecorded 
@@ -162,142 +161,372 @@ export default function PiPMilestonePanel({
     }
   }
 
-  // Navigate between milestones
   const goNext = () => setActiveIndex(Math.min(activeIndex + 1, displayItems.length - 1))
   const goPrev = () => setActiveIndex(Math.max(activeIndex - 1, 0))
 
   if (!activeItem) return null
 
-  // Determine colors based on state
-  const getAccentColor = () => {
-    if (activeItem.isComplete) return { ring: '#10b981', text: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' } // green
-    if (activeItem.isInProgress) return { ring: '#f59e0b', text: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' } // amber
-    return { ring: '#3b82f6', text: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' } // blue
+  // Colors
+  const colors = {
+    complete: '#10b981',
+    inProgress: '#f59e0b', 
+    notStarted: '#3b82f6',
+    bg: '#000000',
+    cardBg: '#18181b',
+    textPrimary: '#ffffff',
+    textSecondary: 'rgba(255,255,255,0.6)',
+    textMuted: 'rgba(255,255,255,0.4)',
+    border: 'rgba(255,255,255,0.1)',
   }
-  const accent = getAccentColor()
+
+  const accentColor = activeItem.isComplete 
+    ? colors.complete 
+    : activeItem.isInProgress 
+      ? colors.inProgress 
+      : colors.notStarted
+
+  // Styles
+  const styles = {
+    container: {
+      minHeight: '100vh',
+      backgroundColor: colors.bg,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      color: colors.textPrimary,
+      userSelect: 'none' as const,
+    },
+    header: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px 16px',
+      borderBottom: `1px solid ${colors.border}`,
+    },
+    headerLeft: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+    },
+    logo: {
+      width: '24px',
+      height: '24px',
+      borderRadius: '6px',
+      background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    roomName: {
+      fontSize: '13px',
+      fontWeight: 600,
+      color: colors.textPrimary,
+      margin: 0,
+    },
+    caseNumber: {
+      fontSize: '11px',
+      color: colors.textMuted,
+      margin: 0,
+    },
+    closeBtn: {
+      padding: '8px',
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      borderRadius: '8px',
+    },
+    totalCard: {
+      margin: '12px 16px',
+      padding: '12px 16px',
+      borderRadius: '12px',
+      background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(16,185,129,0.05))',
+      border: '1px solid rgba(16,185,129,0.2)',
+    },
+    totalCardHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    totalCardLabel: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+    },
+    pulseDot: {
+      width: '8px',
+      height: '8px',
+      backgroundColor: '#34d399',
+      borderRadius: '50%',
+      animation: 'pulse 2s infinite',
+    },
+    totalLabel: {
+      fontSize: '10px',
+      fontWeight: 600,
+      color: '#34d399',
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.05em',
+    },
+    totalStarted: {
+      fontSize: '11px',
+      color: colors.textMuted,
+    },
+    totalTime: {
+      fontSize: '24px',
+      fontWeight: 700,
+      color: colors.textPrimary,
+      fontFamily: 'ui-monospace, monospace',
+      marginTop: '4px',
+    },
+    main: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column' as const,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '24px',
+    },
+    ringContainer: {
+      position: 'relative' as const,
+      width: '96px',
+      height: '96px',
+      marginBottom: '16px',
+    },
+    ringSvg: {
+      width: '100%',
+      height: '100%',
+      transform: 'rotate(-90deg)',
+    },
+    ringCenter: {
+      position: 'absolute' as const,
+      inset: 0,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    milestoneName: {
+      fontSize: '20px',
+      fontWeight: 600,
+      color: colors.textPrimary,
+      textAlign: 'center' as const,
+      marginBottom: '8px',
+    },
+    timer: {
+      fontSize: '48px',
+      fontWeight: 700,
+      fontFamily: 'ui-monospace, monospace',
+      color: accentColor,
+      marginBottom: '24px',
+    },
+    statusText: {
+      fontSize: '16px',
+      color: colors.textSecondary,
+      marginBottom: '24px',
+    },
+    recordBtn: {
+      width: '100%',
+      maxWidth: '280px',
+      padding: '16px 24px',
+      fontSize: '18px',
+      fontWeight: 600,
+      color: '#ffffff',
+      background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+      border: 'none',
+      borderRadius: '16px',
+      cursor: 'pointer',
+      boxShadow: '0 4px 20px rgba(59,130,246,0.4)',
+    },
+    stopBtn: {
+      width: '100%',
+      maxWidth: '280px',
+      padding: '16px 24px',
+      fontSize: '18px',
+      fontWeight: 600,
+      color: '#ffffff',
+      background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+      border: 'none',
+      borderRadius: '16px',
+      cursor: 'pointer',
+      boxShadow: '0 4px 20px rgba(239,68,68,0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+    },
+    stopIcon: {
+      width: '12px',
+      height: '12px',
+      backgroundColor: '#ffffff',
+      borderRadius: '2px',
+    },
+    undoBtn: {
+      marginTop: '16px',
+      padding: '8px 16px',
+      fontSize: '14px',
+      color: colors.textMuted,
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+    },
+    dots: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '8px',
+      padding: '12px',
+    },
+    dot: (isActive: boolean, isComplete: boolean, isInProgress: boolean) => ({
+      width: isActive ? '24px' : '8px',
+      height: '8px',
+      borderRadius: '4px',
+      backgroundColor: isActive 
+        ? '#ffffff' 
+        : isComplete 
+          ? '#10b981' 
+          : isInProgress 
+            ? '#f59e0b' 
+            : 'rgba(255,255,255,0.3)',
+      border: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+    }),
+    footer: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '12px 16px',
+      borderTop: `1px solid ${colors.border}`,
+    },
+    navBtn: {
+      padding: '8px',
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      borderRadius: '8px',
+      opacity: 1,
+    },
+    navBtnDisabled: {
+      opacity: 0.3,
+      cursor: 'default',
+    },
+    footerText: {
+      fontSize: '14px',
+      color: colors.textMuted,
+    },
+  }
+
+  const progressPercent = (completedCount / totalCount) * 100
+  const circumference = 2 * Math.PI * 42
 
   return (
-    <div className="min-h-screen bg-black flex flex-col text-white select-none">
-      
+    <div style={styles.container}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.98); }
+      `}</style>
+
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="8" strokeWidth={2} />
+      <div style={styles.header}>
+        <div style={styles.headerLeft}>
+          <div style={styles.logo}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <circle cx="12" cy="12" r="8" />
             </svg>
           </div>
           <div>
-            <p className="text-xs font-semibold text-white/90">{roomName}</p>
-            <p className="text-[10px] text-white/50">{caseNumber}</p>
+            <p style={styles.roomName}>{roomName}</p>
+            <p style={styles.caseNumber}>{caseNumber}</p>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <button style={styles.closeBtn} onClick={onClose}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       </div>
 
-      {/* Total Time Card */}
+      {/* Total Case Time */}
       {patientInRecorded && (
-        <div className="mx-4 mt-3 px-4 py-3 rounded-xl bg-gradient-to-br from-emerald-600/20 to-emerald-600/5 border border-emerald-500/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Total Case</span>
+        <div style={styles.totalCard}>
+          <div style={styles.totalCardHeader}>
+            <div style={styles.totalCardLabel}>
+              <div style={styles.pulseDot} />
+              <span style={styles.totalLabel}>Total Case</span>
             </div>
-            <span className="text-xs text-white/50">Started {formatTime(patientInRecorded.recorded_at)}</span>
+            <span style={styles.totalStarted}>Started {formatTime(patientInRecorded.recorded_at)}</span>
           </div>
-          <p className="text-2xl font-bold text-white font-mono tabular-nums mt-1">
-            {formatElapsed(totalCaseMs)}
-          </p>
+          <p style={styles.totalTime}>{formatElapsed(totalCaseMs)}</p>
         </div>
       )}
 
-      {/* Main Content - Current Milestone */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
-        
-        {/* Circular Progress Indicator */}
-        <div className="relative w-24 h-24 mb-4">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-            {/* Background circle */}
+      {/* Main Content */}
+      <div style={styles.main}>
+        {/* Progress Ring */}
+        <div style={styles.ringContainer}>
+          <svg style={styles.ringSvg} viewBox="0 0 100 100">
             <circle
-              cx="50"
-              cy="50"
-              r="42"
+              cx="50" cy="50" r="42"
               fill="none"
               stroke="rgba(255,255,255,0.1)"
               strokeWidth="6"
             />
-            {/* Progress circle */}
             <circle
-              cx="50"
-              cy="50"
-              r="42"
+              cx="50" cy="50" r="42"
               fill="none"
-              stroke={accent.ring}
+              stroke={accentColor}
               strokeWidth="6"
               strokeLinecap="round"
-              strokeDasharray={`${(completedCount / totalCount) * 264} 264`}
-              style={{ transition: 'stroke-dasharray 0.5s ease' }}
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference - (progressPercent / 100) * circumference}
+              style={{ transition: 'stroke-dashoffset 0.5s ease' }}
             />
           </svg>
-          {/* Center icon */}
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div style={styles.ringCenter}>
             {activeItem.isComplete ? (
-              <svg className="w-10 h-10" fill="none" stroke={accent.ring} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2.5">
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             ) : activeItem.isInProgress ? (
-              <div className="w-4 h-4 rounded-full animate-pulse" style={{ backgroundColor: accent.ring }} />
+              <div style={{ width: '16px', height: '16px', borderRadius: '50%', backgroundColor: accentColor, animation: 'pulse 2s infinite' }} />
             ) : (
-              <div className="w-4 h-4 rounded-full border-2" style={{ borderColor: accent.ring }} />
+              <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: `2px solid ${accentColor}` }} />
             )}
           </div>
         </div>
 
         {/* Milestone Name */}
-        <h2 className="text-xl font-semibold text-white text-center mb-2">
-          {activeItem.displayName}
-        </h2>
+        <h2 style={styles.milestoneName}>{activeItem.displayName}</h2>
 
         {/* Timer / Status */}
         {activeItem.isInProgress && (
-          <p className="text-5xl font-bold font-mono tabular-nums mb-6" style={{ color: accent.text }}>
-            {formatElapsed(activeItem.elapsedMs)}
-          </p>
+          <p style={styles.timer}>{formatElapsed(activeItem.elapsedMs)}</p>
         )}
 
         {activeItem.isComplete && activeItem.recorded && (
-          <p className="text-lg text-white/60 mb-6">
-            {activeItem.isPaired && activeItem.partnerRecorded ? (
-              <>
-                {formatTime(activeItem.recorded.recorded_at)} → {formatTime(activeItem.partnerRecorded.recorded_at)}
-              </>
-            ) : (
-              formatTime(activeItem.recorded.recorded_at)
-            )}
+          <p style={styles.statusText}>
+            {activeItem.isPaired && activeItem.partnerRecorded 
+              ? `${formatTime(activeItem.recorded.recorded_at)} → ${formatTime(activeItem.partnerRecorded.recorded_at)}`
+              : formatTime(activeItem.recorded.recorded_at)
+            }
           </p>
         )}
 
         {activeItem.isNotStarted && (
-          <p className="text-lg text-white/40 mb-6">Not started</p>
+          <p style={styles.statusText}>Not started</p>
         )}
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         {activeItem.isNotStarted && (
           <button
+            style={styles.recordBtn}
             onClick={() => handleRecord(activeItem.milestone.id)}
             disabled={loading === activeItem.milestone.id}
-            className="w-full max-w-xs py-4 px-6 text-lg font-semibold text-white rounded-2xl transition-all active:scale-[0.98]"
-            style={{ 
-              background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-              boxShadow: '0 4px 20px rgba(59, 130, 246, 0.4)'
-            }}
           >
             {loading === activeItem.milestone.id ? 'Recording...' : 'Record'}
           </button>
@@ -305,106 +534,74 @@ export default function PiPMilestonePanel({
 
         {activeItem.isInProgress && activeItem.isPaired && activeItem.partner && (
           <button
+            style={styles.stopBtn}
             onClick={() => handleRecord(activeItem.partner!.id)}
             disabled={loading === activeItem.partner.id}
-            className="w-full max-w-xs py-4 px-6 text-lg font-semibold text-white rounded-2xl transition-all active:scale-[0.98]"
-            style={{ 
-              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
-              boxShadow: '0 4px 20px rgba(239, 68, 68, 0.4)'
-            }}
           >
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-3 h-3 bg-white rounded-sm" />
-              {loading === activeItem.partner.id ? 'Stopping...' : 'Stop'}
-            </span>
+            <div style={styles.stopIcon} />
+            {loading === activeItem.partner.id ? 'Stopping...' : 'Stop'}
           </button>
         )}
 
-        {/* Secondary Actions */}
-        {(activeItem.isInProgress || activeItem.isComplete) && (
-          <div className="flex items-center gap-6 mt-4">
-            {activeItem.isInProgress && activeItem.recorded && (
-              <button
-                onClick={() => handleUndo(activeItem.recorded!.id)}
-                disabled={loading === 'undo'}
-                className="text-sm text-white/50 hover:text-white/80 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                Undo Start
-              </button>
+        {/* Undo Button */}
+        {activeItem.isInProgress && activeItem.recorded && (
+          <button style={styles.undoBtn} onClick={() => handleUndo(activeItem.recorded!.id)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Undo Start
+          </button>
+        )}
+
+        {activeItem.isComplete && (
+          <button 
+            style={styles.undoBtn} 
+            onClick={() => handleUndo(
+              activeItem.isPaired && activeItem.partnerRecorded 
+                ? activeItem.partnerRecorded.id 
+                : activeItem.recorded!.id
             )}
-            {activeItem.isComplete && activeItem.isPaired && activeItem.partnerRecorded && (
-              <button
-                onClick={() => handleUndo(activeItem.partnerRecorded!.id)}
-                disabled={loading === 'undo'}
-                className="text-sm text-white/50 hover:text-white/80 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                Undo
-              </button>
-            )}
-            {activeItem.isComplete && !activeItem.isPaired && activeItem.recorded && (
-              <button
-                onClick={() => handleUndo(activeItem.recorded!.id)}
-                disabled={loading === 'undo'}
-                className="text-sm text-white/50 hover:text-white/80 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-                Undo
-              </button>
-            )}
-          </div>
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Undo
+          </button>
         )}
       </div>
 
       {/* Navigation Dots */}
-      <div className="flex items-center justify-center gap-2 py-3">
+      <div style={styles.dots}>
         {displayItems.map((item, idx) => (
           <button
             key={item.milestone.id}
+            style={styles.dot(idx === activeIndex, item.isComplete, item.isInProgress)}
             onClick={() => setActiveIndex(idx)}
-            className={`w-2 h-2 rounded-full transition-all ${
-              idx === activeIndex 
-                ? 'w-6 bg-white' 
-                : item.isComplete 
-                  ? 'bg-emerald-500' 
-                  : item.isInProgress
-                    ? 'bg-amber-500'
-                    : 'bg-white/30'
-            }`}
           />
         ))}
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-white/10 flex items-center justify-between">
+      <div style={styles.footer}>
         <button
+          style={{ ...styles.navBtn, ...(activeIndex === 0 ? styles.navBtnDisabled : {}) }}
           onClick={goPrev}
           disabled={activeIndex === 0}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
         >
-          <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2">
+            <path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
         
-        <p className="text-sm text-white/50">
-          {completedCount} of {totalCount} completed
-        </p>
+        <span style={styles.footerText}>{completedCount} of {totalCount} completed</span>
         
         <button
+          style={{ ...styles.navBtn, ...(activeIndex === displayItems.length - 1 ? styles.navBtnDisabled : {}) }}
           onClick={goNext}
           disabled={activeIndex === displayItems.length - 1}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
         >
-          <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2">
+            <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
       </div>
