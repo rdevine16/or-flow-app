@@ -13,9 +13,7 @@ interface SearchResult {
   id: string
   title: string
   subtitle?: string
-  icon: 'case' | 'person' | 'room' | 'page' | 'action'
   href?: string
-  action?: () => void
   meta?: {
     status?: string
     date?: string
@@ -53,18 +51,17 @@ interface GlobalSearchProps {
 // ============================================================================
 
 const STATIC_PAGES: SearchResult[] = [
-  { type: 'page', id: 'dashboard', title: 'Dashboard', subtitle: 'Overview and metrics', icon: 'page', href: '/dashboard' },
-  { type: 'page', id: 'cases', title: 'Cases', subtitle: 'All surgical cases', icon: 'page', href: '/cases' },
-  { type: 'page', id: 'rooms', title: 'Rooms', subtitle: 'OR room status', icon: 'room', href: '/rooms' },
-  { type: 'page', id: 'analytics', title: 'Analytics', subtitle: 'Performance metrics', icon: 'page', href: '/analytics' },
-  { type: 'page', id: 'settings', title: 'Settings', subtitle: 'Facility configuration', icon: 'page', href: '/settings' },
+  { type: 'page', id: 'dashboard', title: 'Dashboard', subtitle: 'Overview and metrics', href: '/dashboard' },
+  { type: 'page', id: 'cases', title: 'Cases', subtitle: 'All surgical cases', href: '/cases' },
+  { type: 'page', id: 'rooms', title: 'Rooms', subtitle: 'OR room status', href: '/rooms' },
+  { type: 'page', id: 'analytics', title: 'Analytics', subtitle: 'Performance metrics', href: '/analytics' },
+  { type: 'page', id: 'settings', title: 'Settings', subtitle: 'Facility configuration', href: '/settings' },
 ]
 
 const STATIC_ACTIONS: SearchResult[] = [
-  { type: 'action', id: 'new-case', title: 'Create New Case', subtitle: 'Add a surgical case', icon: 'action', href: '/cases/new' },
-  { type: 'action', id: 'active-cases', title: 'View Active Cases', subtitle: 'Cases in progress', icon: 'action', href: '/cases?status=in_progress&status=scheduled&status=delayed' },
-  { type: 'action', id: 'today-cases', title: "View Today's Cases", subtitle: 'All cases for today', icon: 'action', href: '/cases?date=today' },
-  { type: 'action', id: 'completed-cases', title: 'View Completed Cases', subtitle: 'Finished cases', icon: 'action', href: '/cases?status=completed' },
+  { type: 'action', id: 'new-case', title: 'Create New Case', subtitle: 'Add a surgical case', href: '/cases/new' },
+  { type: 'action', id: 'active-cases', title: 'View Active Cases', subtitle: 'Cases in progress', href: '/cases?status=in_progress&status=scheduled&status=delayed' },
+  { type: 'action', id: 'today-cases', title: "View Today's Cases", subtitle: 'All cases for today', href: '/cases?date=today' },
 ]
 
 // ============================================================================
@@ -105,40 +102,38 @@ const formatDate = (dateString: string): string => {
 }
 
 // ============================================================================
-// ICON COMPONENTS
+// ICONS
 // ============================================================================
 
-function ResultIcon({ type }: { type: SearchResult['icon'] }) {
-  const baseClass = "w-5 h-5"
-  
+function ResultIcon({ type }: { type: SearchResult['type'] }) {
   switch (type) {
     case 'case':
       return (
-        <svg className={`${baseClass} text-blue-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
       )
-    case 'person':
+    case 'surgeon':
       return (
-        <svg className={`${baseClass} text-violet-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
         </svg>
       )
     case 'room':
       return (
-        <svg className={`${baseClass} text-emerald-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
         </svg>
       )
     case 'page':
       return (
-        <svg className={`${baseClass} text-slate-400`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
         </svg>
       )
     case 'action':
       return (
-        <svg className={`${baseClass} text-amber-500`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
       )
@@ -163,6 +158,7 @@ function StatusDot({ status }: { status: string }) {
 export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
   const router = useRouter()
   const supabase = createClient()
+  const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   
   const [isOpen, setIsOpen] = useState(false)
@@ -175,53 +171,44 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
   const [cases, setCases] = useState<Case[]>([])
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
+  const [dataLoaded, setDataLoaded] = useState(false)
 
-  // ============================================================================
-  // KEYBOARD SHORTCUTS
-  // ============================================================================
+  // Close on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
+  // Keyboard shortcut to focus search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Open with Cmd+K or Ctrl+K
+      // Open/focus with Cmd+K or Ctrl+K
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
+        inputRef.current?.focus()
         setIsOpen(true)
       }
       
-      // Also open with /
-      if (e.key === '/' && !isOpen && document.activeElement?.tagName !== 'INPUT') {
+      // Also open with / when not in an input
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
         e.preventDefault()
+        inputRef.current?.focus()
         setIsOpen(true)
-      }
-      
-      // Close with Escape
-      if (e.key === 'Escape' && isOpen) {
-        setIsOpen(false)
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+  }, [])
 
-  // Focus input when opening
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 0)
-      loadInitialData()
-    } else {
-      setQuery('')
-      setResults([])
-      setSelectedIndex(0)
-    }
-  }, [isOpen])
-
-  // ============================================================================
-  // DATA LOADING
-  // ============================================================================
-
-  const loadInitialData = async () => {
-    if (!facilityId || cases.length > 0) return // Already loaded
+  // Load data when focused
+  const loadData = async () => {
+    if (!facilityId || dataLoaded) return
     
     setIsLoading(true)
     
@@ -229,6 +216,13 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
       // Load recent cases (last 30 days)
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      
+      // Get surgeon role
+      const { data: surgeonRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'surgeon')
+        .single()
       
       const [casesRes, surgeonsRes, roomsRes] = await Promise.all([
         supabase
@@ -251,7 +245,7 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
           .from('users')
           .select('id, first_name, last_name')
           .eq('facility_id', facilityId)
-          .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id),
+          .eq('role_id', surgeonRole?.id || ''),
         
         supabase
           .from('or_rooms')
@@ -263,6 +257,7 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
       setCases((casesRes.data as unknown as Case[]) || [])
       setSurgeons((surgeonsRes.data as Surgeon[]) || [])
       setRooms((roomsRes.data as Room[]) || [])
+      setDataLoaded(true)
     } catch (error) {
       console.error('Error loading search data:', error)
     }
@@ -270,17 +265,14 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
     setIsLoading(false)
   }
 
-  // ============================================================================
-  // SEARCH LOGIC
-  // ============================================================================
-
+  // Search logic
   const performSearch = useCallback((searchQuery: string) => {
     const q = searchQuery.toLowerCase().trim()
     
     if (!q) {
-      // Show recent/suggested items when no query
+      // Show suggestions when empty
       setResults([
-        ...STATIC_ACTIONS.slice(0, 3),
+        ...STATIC_ACTIONS.slice(0, 2),
         ...STATIC_PAGES.slice(0, 3),
       ])
       return
@@ -306,7 +298,6 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
           id: c.id,
           title: c.case_number,
           subtitle: `${getValue(c.procedure_types) || 'No procedure'} • ${getSurgeonName(c.surgeon)}`,
-          icon: 'case',
           href: `/cases/${c.id}`,
           meta: {
             status: getValue(c.case_statuses) || 'scheduled',
@@ -321,23 +312,17 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
     surgeons.forEach(s => {
       const name = `${s.first_name} ${s.last_name}`.toLowerCase()
       if (name.includes(q) || s.last_name.toLowerCase().includes(q)) {
-        const surgeonCaseCount = cases.filter(c => {
-          const cSurgeon = Array.isArray(c.surgeon) ? c.surgeon[0] : c.surgeon
-          return cSurgeon?.last_name === s.last_name
-        }).length
-        
         searchResults.push({
           type: 'surgeon',
           id: s.id,
           title: `Dr. ${s.last_name}`,
-          subtitle: `${surgeonCaseCount} recent cases • View all cases`,
-          icon: 'person',
+          subtitle: 'View all cases',
           href: `/cases?surgeon=${s.id}`,
         })
       }
     })
 
-    // Search rooms → link to rooms page or filtered cases
+    // Search rooms
     rooms.forEach(r => {
       if (r.name.toLowerCase().includes(q)) {
         searchResults.push({
@@ -345,7 +330,6 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
           id: r.id,
           title: r.name,
           subtitle: 'View room cases',
-          icon: 'room',
           href: `/cases?room=${r.id}`,
         })
       }
@@ -377,7 +361,7 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
       return order[a.type] - order[b.type]
     })
 
-    setResults(searchResults.slice(0, 10))
+    setResults(searchResults.slice(0, 8))
     setSelectedIndex(0)
   }, [cases, surgeons, rooms])
 
@@ -387,19 +371,16 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
     return () => clearTimeout(timeout)
   }, [query, performSearch])
 
-  // ============================================================================
-  // NAVIGATION
-  // ============================================================================
-
+  // Handle selection
   const handleSelect = (result: SearchResult) => {
-    if (result.action) {
-      result.action()
-    } else if (result.href) {
+    if (result.href) {
       router.push(result.href)
     }
     setIsOpen(false)
+    setQuery('')
   }
 
+  // Keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -410,172 +391,145 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
     } else if (e.key === 'Enter' && results[selectedIndex]) {
       e.preventDefault()
       handleSelect(results[selectedIndex])
+    } else if (e.key === 'Escape') {
+      setIsOpen(false)
+      inputRef.current?.blur()
     }
   }
 
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-
-  if (!isOpen) {
-    // Render just the trigger button
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors group"
-      >
-        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  return (
+    <div className="relative" ref={containerRef}>
+      {/* Search Input */}
+      <div className="relative">
+        <svg 
+          className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <span className="text-sm text-slate-500">Search...</span>
-        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 bg-white rounded border border-slate-200">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Search cases, surgeons..."
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setIsOpen(true)
+          }}
+          onFocus={() => {
+            setIsOpen(true)
+            loadData()
+          }}
+          onKeyDown={handleKeyDown}
+          className="w-64 pl-10 pr-12 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-400 focus:bg-white transition-all placeholder:text-slate-400"
+        />
+        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 bg-slate-100 rounded border border-slate-200">
           ⌘K
         </kbd>
-      </button>
-    )
-  }
+      </div>
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50"
-        onClick={() => setIsOpen(false)}
-      />
-      
-      {/* Modal */}
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4">
-        <div 
-          className="w-full max-w-xl bg-white rounded-2xl shadow-2xl overflow-hidden"
-          onClick={e => e.stopPropagation()}
-        >
-          {/* Search Input */}
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-200">
-            <svg className="w-5 h-5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Search cases, surgeons, or type a command..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1 text-base text-slate-900 placeholder-slate-400 outline-none"
-            />
-            {isLoading && (
-              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            )}
-            <kbd className="px-2 py-1 text-xs font-medium text-slate-400 bg-slate-100 rounded">
-              ESC
-            </kbd>
-          </div>
-
-          {/* Results */}
-          <div className="max-h-[400px] overflow-y-auto">
-            {results.length === 0 && query ? (
-              <div className="px-4 py-8 text-center">
-                <p className="text-slate-500">No results found for "{query}"</p>
-                <p className="text-sm text-slate-400 mt-1">Try searching for a case number, surgeon, or procedure</p>
-              </div>
-            ) : (
-              <div className="py-2">
-                {/* Group results by type */}
-                {['case', 'surgeon', 'room', 'action', 'page'].map(type => {
-                  const typeResults = results.filter(r => r.type === type)
-                  if (typeResults.length === 0) return null
-                  
-                  const labels: Record<string, string> = {
-                    case: 'Cases',
-                    surgeon: 'Surgeons',
-                    room: 'Rooms',
-                    action: 'Quick Actions',
-                    page: 'Pages',
-                  }
-                  
-                  return (
-                    <div key={type}>
-                      <div className="px-4 py-2">
-                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                          {labels[type]}
-                        </span>
-                      </div>
-                      {typeResults.map((result, idx) => {
-                        const globalIndex = results.findIndex(r => r.id === result.id)
-                        const isSelected = globalIndex === selectedIndex
-                        
-                        return (
-                          <button
-                            key={result.id}
-                            onClick={() => handleSelect(result)}
-                            onMouseEnter={() => setSelectedIndex(globalIndex)}
-                            className={`
-                              w-full px-4 py-3 flex items-center gap-3 text-left transition-colors
-                              ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}
-                            `}
-                          >
-                            <div className={`
-                              w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
-                              ${isSelected ? 'bg-blue-100' : 'bg-slate-100'}
-                            `}>
-                              <ResultIcon type={result.icon} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className={`font-medium truncate ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
-                                  {result.title}
-                                </span>
-                                {result.meta?.status && (
-                                  <StatusDot status={result.meta.status} />
-                                )}
-                              </div>
-                              {result.subtitle && (
-                                <p className="text-sm text-slate-500 truncate">{result.subtitle}</p>
+      {/* Dropdown Results */}
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-200 shadow-xl z-[200] overflow-hidden">
+          {isLoading ? (
+            <div className="px-4 py-6 text-center">
+              <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="text-sm text-slate-500 mt-2">Loading...</p>
+            </div>
+          ) : results.length === 0 && query ? (
+            <div className="px-4 py-6 text-center">
+              <p className="text-sm text-slate-500">No results for "{query}"</p>
+              <p className="text-xs text-slate-400 mt-1">Try a case number, surgeon name, or procedure</p>
+            </div>
+          ) : (
+            <div className="max-h-80 overflow-y-auto">
+              {/* Group results */}
+              {['case', 'surgeon', 'room', 'action', 'page'].map(type => {
+                const typeResults = results.filter(r => r.type === type)
+                if (typeResults.length === 0) return null
+                
+                const labels: Record<string, string> = {
+                  case: 'Cases',
+                  surgeon: 'Surgeons',
+                  room: 'Rooms',
+                  action: 'Quick Actions',
+                  page: 'Pages',
+                }
+                
+                return (
+                  <div key={type}>
+                    <div className="px-3 py-1.5 bg-slate-50 border-b border-slate-100">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        {labels[type]}
+                      </span>
+                    </div>
+                    {typeResults.map((result) => {
+                      const globalIndex = results.findIndex(r => r.id === result.id && r.type === result.type)
+                      const isSelected = globalIndex === selectedIndex
+                      
+                      return (
+                        <button
+                          key={`${result.type}-${result.id}`}
+                          onClick={() => handleSelect(result)}
+                          onMouseEnter={() => setSelectedIndex(globalIndex)}
+                          className={`
+                            w-full px-3 py-2.5 flex items-center gap-3 text-left transition-colors
+                            ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}
+                          `}
+                        >
+                          <div className={`
+                            w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+                            ${isSelected ? 'bg-blue-100' : 'bg-slate-100'}
+                          `}>
+                            <ResultIcon type={result.type} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-medium truncate ${isSelected ? 'text-blue-900' : 'text-slate-900'}`}>
+                                {result.title}
+                              </span>
+                              {result.meta?.status && (
+                                <StatusDot status={result.meta.status} />
                               )}
                             </div>
-                            {result.meta?.date && (
-                              <span className="text-xs text-slate-400 flex-shrink-0">{result.meta.date}</span>
+                            {result.subtitle && (
+                              <p className="text-xs text-slate-500 truncate">{result.subtitle}</p>
                             )}
-                            {result.meta?.room && (
-                              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex-shrink-0">
-                                {result.meta.room}
-                              </span>
-                            )}
-                            {isSelected && (
-                              <kbd className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded flex-shrink-0">
-                                ↵
-                              </kbd>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-400">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded">↑</kbd>
-                <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded">↓</kbd>
-                to navigate
-              </span>
-              <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded">↵</kbd>
-                to select
-              </span>
+                          </div>
+                          {result.meta?.date && (
+                            <span className="text-xs text-slate-400 flex-shrink-0">{result.meta.date}</span>
+                          )}
+                          {result.meta?.room && (
+                            <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                              {result.meta.room}
+                            </span>
+                          )}
+                          {isSelected && (
+                            <kbd className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded flex-shrink-0">
+                              ↵
+                            </kbd>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })}
             </div>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded">esc</kbd>
-              to close
-            </span>
+          )}
+          
+          {/* Footer */}
+          <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-[10px] text-slate-400">
+            <div className="flex items-center gap-3">
+              <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 rounded">↑</kbd> <kbd className="px-1 py-0.5 bg-white border border-slate-200 rounded">↓</kbd> navigate</span>
+              <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 rounded">↵</kbd> select</span>
+            </div>
+            <span><kbd className="px-1 py-0.5 bg-white border border-slate-200 rounded">esc</kbd> close</span>
           </div>
         </div>
-      </div>
-    </>
+      )}
+    </div>
   )
 }
