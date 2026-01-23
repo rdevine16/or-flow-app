@@ -64,6 +64,12 @@ export type AuditAction =
   | 'admin.procedure_category_updated'
   | 'admin.procedure_category_deleted'
   | 'admin.procedure_category_reordered'
+   // Data Quality
+  | 'data_quality.issue_resolved'
+  | 'data_quality.issue_excluded'
+  | 'data_quality.issue_approved'
+  | 'data_quality.detection_run'
+  | 'data_quality.bulk_resolved'
   // Milestones
   | 'milestone.recorded'
   | 'milestone.updated'
@@ -153,7 +159,6 @@ export type AuditAction =
   | 'admin.procedure_type_created'
   | 'admin.procedure_type_updated'
   | 'admin.procedure_type_deleted'
-  
 
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
@@ -295,8 +300,29 @@ export const auditActionLabels: Record<AuditAction, string> = {
 'procedure_reimbursement.deleted': 'deleted a reimbursement rate',
 'facility.or_rate_updated': 'updated OR hourly rate',
 'procedure_type.costs_updated': 'updated procedure costs',
+// Cost Categories (Facility)
+  'cost_category.created': 'created a cost category',
+  'cost_category.updated': 'updated a cost category',
+  'cost_category.deleted': 'deleted a cost category',
+  // Cost Categories (Global Admin)
+  'admin.cost_category_created': 'created a default cost category',
+  'admin.cost_category_updated': 'updated a default cost category',
+  'admin.cost_category_deleted': 'deleted a default cost category',
+  // Procedure Cost Items
+  'procedure_cost_item.created': 'added cost item to procedure',
+  'procedure_cost_item.updated': 'updated procedure cost item',
+  'procedure_cost_item.deleted': 'removed cost item from procedure',
+  // Surgeon Cost Items (Variance)
+  'surgeon_cost_item.created': 'created surgeon cost variance',
+  'surgeon_cost_item.updated': 'updated surgeon cost variance',
+  'surgeon_cost_item.deleted': 'deleted surgeon cost variance',
+// Data Quality
+  'data_quality.issue_resolved': 'resolved a data quality issue',
+  'data_quality.issue_excluded': 'excluded a data quality issue',
+  'data_quality.issue_approved': 'approved a flagged metric',
+  'data_quality.detection_run': 'ran data quality detection',
+  'data_quality.bulk_resolved': 'bulk resolved data quality issues',
 }
-
 // =====================================================
 // CORE LOGGING FUNCTION (single source of truth)
 // =====================================================
@@ -973,7 +999,77 @@ export const caseAudit = {
     })
   },
 }
+// =====================================================
+// DATA QUALITY
+// =====================================================
 
+export const dataQualityAudit = {
+  async issueResolved(
+    supabase: SupabaseClient,
+    issueId: string,
+    issueType: string,
+    caseNumber: string,
+    resolutionType: 'corrected' | 'excluded' | 'approved',
+    facilityId: string,
+    notes?: string
+  ) {
+    const actionMap = {
+      corrected: 'data_quality.issue_resolved',
+      excluded: 'data_quality.issue_excluded',
+      approved: 'data_quality.issue_approved',
+    } as const
+    
+    await log(supabase, actionMap[resolutionType], {
+      targetType: 'metric_issue',
+      targetId: issueId,
+      targetLabel: `${issueType} on Case #${caseNumber}`,
+      facilityId,
+      newValues: { 
+        resolution_type: resolutionType,
+        notes: notes || null 
+      },
+    })
+  },
+
+  async bulkResolved(
+    supabase: SupabaseClient,
+    issueCount: number,
+    resolutionType: 'corrected' | 'excluded' | 'approved',
+    facilityId: string,
+    notes?: string
+  ) {
+    await log(supabase, 'data_quality.bulk_resolved', {
+      targetType: 'metric_issue',
+      targetLabel: `${issueCount} issues`,
+      facilityId,
+      newValues: { 
+        count: issueCount,
+        resolution_type: resolutionType,
+        notes: notes || null 
+      },
+    })
+  },
+
+  async detectionRun(
+    supabase: SupabaseClient,
+    facilityId: string,
+    daysScanned: number,
+    issuesFound: number,
+    issuesExpired: number
+  ) {
+    await log(supabase, 'data_quality.detection_run', {
+      targetType: 'facility',
+      targetId: facilityId,
+      targetLabel: `${issuesFound} issues found`,
+      facilityId,
+      metadata: {
+        days_scanned: daysScanned,
+        issues_found: issuesFound,
+        issues_expired: issuesExpired,
+      },
+    })
+  },
+}
 // =====================================================
 // MILESTONES
 // =====================================================
@@ -1025,6 +1121,219 @@ async deleted(
     oldValues: recordedAt ? { recorded_at: recordedAt } : undefined,  // ADD THIS
   })
 },
+}
+// =====================================================
+// COST CATEGORIES (Facility-Level)
+// =====================================================
+
+export const costCategoryAudit = {
+  async created(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    categoryType: 'credit' | 'debit',
+    facilityId: string
+  ) {
+    await log(supabase, 'cost_category.created', {
+      targetType: 'cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      facilityId,
+      newValues: { name: categoryName, type: categoryType },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    categoryId: string,
+    oldValues: { name?: string; type?: string; description?: string },
+    newValues: { name?: string; type?: string; description?: string },
+    facilityId: string
+  ) {
+    await log(supabase, 'cost_category.updated', {
+      targetType: 'cost_category',
+      targetId: categoryId,
+      targetLabel: newValues.name || oldValues.name || 'Cost Category',
+      facilityId,
+      oldValues,
+      newValues,
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'cost_category.deleted', {
+      targetType: 'cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      facilityId,
+    })
+  },
+
+  // Global admin versions
+  async adminCreated(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string,
+    categoryType: 'credit' | 'debit'
+  ) {
+    await log(supabase, 'admin.cost_category_created', {
+      targetType: 'default_cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+      newValues: { name: categoryName, type: categoryType, scope: 'global' },
+    })
+  },
+
+  async adminUpdated(
+  supabase: SupabaseClient,
+  categoryId: string,
+  oldValues: { name?: string; type?: string; description?: string; is_active?: boolean },
+  newValues: { name?: string; type?: string; description?: string; is_active?: boolean }
+) {
+    await log(supabase, 'admin.cost_category_updated', {
+      targetType: 'default_cost_category',
+      targetId: categoryId,
+      targetLabel: newValues.name || oldValues.name || 'Cost Category',
+      oldValues,
+      newValues: { ...newValues, scope: 'global' },
+    })
+  },
+
+  async adminDeleted(
+    supabase: SupabaseClient,
+    categoryName: string,
+    categoryId: string
+  ) {
+    await log(supabase, 'admin.cost_category_deleted', {
+      targetType: 'default_cost_category',
+      targetId: categoryId,
+      targetLabel: categoryName,
+    })
+  },
+}
+
+
+// =====================================================
+// PROCEDURE COST ITEMS
+// =====================================================
+
+export const procedureCostItemAudit = {
+  async created(
+    supabase: SupabaseClient,
+    procedureName: string,
+    categoryName: string,
+    amount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'procedure_cost_item.created', {
+      targetType: 'procedure_cost_item',
+      targetId: itemId,
+      targetLabel: `${procedureName} - ${categoryName}`,
+      facilityId,
+      newValues: { procedure: procedureName, category: categoryName, amount },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    procedureName: string,
+    categoryName: string,
+    oldAmount: number,
+    newAmount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'procedure_cost_item.updated', {
+      targetType: 'procedure_cost_item',
+      targetId: itemId,
+      targetLabel: `${procedureName} - ${categoryName}`,
+      facilityId,
+      oldValues: { amount: oldAmount },
+      newValues: { amount: newAmount },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    procedureName: string,
+    categoryName: string,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'procedure_cost_item.deleted', {
+      targetType: 'procedure_cost_item',
+      targetId: itemId,
+      targetLabel: `${procedureName} - ${categoryName}`,
+      facilityId,
+    })
+  },
+}
+
+
+// =====================================================
+// SURGEON COST ITEMS (Variance)
+// =====================================================
+
+export const surgeonCostItemAudit = {
+  async created(
+    supabase: SupabaseClient,
+    surgeonName: string,
+    procedureName: string,
+    categoryName: string,
+    amount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_cost_item.created', {
+      targetType: 'surgeon_cost_item',
+      targetId: itemId,
+      targetLabel: `${surgeonName} - ${procedureName} - ${categoryName}`,
+      facilityId,
+      newValues: { surgeon: surgeonName, procedure: procedureName, category: categoryName, amount },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    surgeonName: string,
+    procedureName: string,
+    categoryName: string,
+    oldAmount: number,
+    newAmount: number,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_cost_item.updated', {
+      targetType: 'surgeon_cost_item',
+      targetId: itemId,
+      targetLabel: `${surgeonName} - ${procedureName} - ${categoryName}`,
+      facilityId,
+      oldValues: { amount: oldAmount },
+      newValues: { amount: newAmount },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    surgeonName: string,
+    procedureName: string,
+    categoryName: string,
+    itemId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_cost_item.deleted', {
+      targetType: 'surgeon_cost_item',
+      targetId: itemId,
+      targetLabel: `${surgeonName} - ${procedureName} - ${categoryName}`,
+      facilityId,
+    })
+  },
 }
 
 // =====================================================
@@ -1693,6 +2002,39 @@ export const adminAudit = {
       targetType: 'facility',
       targetId: facilityId,
       targetLabel: facilityName,
+    })
+  },
+
+  // Body Regions
+  async bodyRegionCreated(supabase: SupabaseClient, regionName: string, regionId: string) {
+    await log(supabase, 'admin.body_region_created', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: regionName,
+      newValues: { name: regionName },
+    })
+  },
+
+  async bodyRegionUpdated(
+    supabase: SupabaseClient,
+    regionId: string,
+    oldName: string,
+    newName: string
+  ) {
+    await log(supabase, 'admin.body_region_updated', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: newName,
+      oldValues: { name: oldName },
+      newValues: { name: newName },
+    })
+  },
+
+  async bodyRegionDeleted(supabase: SupabaseClient, regionName: string, regionId: string) {
+    await log(supabase, 'admin.body_region_deleted', {
+      targetType: 'body_region',
+      targetId: regionId,
+      targetLabel: regionName,
     })
   },
 }

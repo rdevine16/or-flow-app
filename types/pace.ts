@@ -1,5 +1,5 @@
 // types/pace.ts
-// TypeScript interfaces for pace tracking - ported from iOS app
+// TypeScript interfaces for pace tracking - UPDATED for median-based statistics
 
 export type PaceStatus = 'ahead' | 'onPace' | 'slightlyBehind' | 'behind'
 
@@ -14,6 +14,7 @@ export function getJoinedValue<T>(data: JoinedData<T>): T | null {
   return data
 }
 
+// DEPRECATED - keeping for reference, use SurgeonProcedureStats instead
 export interface SurgeonProcedureAverage {
   id: string
   surgeon_id: string
@@ -23,6 +24,7 @@ export interface SurgeonProcedureAverage {
   updated_at?: string
 }
 
+// DEPRECATED - keeping for reference, use SurgeonMilestoneStats instead
 export interface SurgeonMilestoneAverage {
   id: string
   surgeon_id: string
@@ -33,10 +35,49 @@ export interface SurgeonMilestoneAverage {
   updated_at?: string
 }
 
+// NEW: Median-based procedure stats from materialized view
+export interface SurgeonProcedureStats {
+  facility_id: string
+  surgeon_id: string
+  procedure_type_id: string
+  sample_size: number
+  median_duration: number
+  p25_duration: number | null
+  p75_duration: number | null
+  avg_duration: number | null
+  stddev_duration: number | null
+}
+
+// NEW: Median-based milestone stats from materialized view
+export interface SurgeonMilestoneStats {
+  facility_id: string
+  surgeon_id: string
+  procedure_type_id: string
+  milestone_type_id: string
+  milestone_name: string
+  sample_size: number
+  median_minutes_from_start: number
+  p25_minutes_from_start: number | null
+  p75_minutes_from_start: number | null
+  avg_minutes_from_start: number | null
+  stddev_minutes_from_start: number | null
+}
+
+// UPDATED: CasePaceData now uses median-based values
 export interface CasePaceData {
   scheduledStart: Date           // From cases.start_time combined with scheduled_date
-  avgMinutesToMilestone: number  // Surgeon avg to current milestone
-  avgTotalMinutes: number        // Surgeon avg total case time
+  
+  // Milestone timing (median-based)
+  expectedMinutesToMilestone: number    // Surgeon's typical time to current milestone
+  milestoneRangeLow: number | null      // p25 - fast end of typical range
+  milestoneRangeHigh: number | null     // p75 - slow end of typical range
+  
+  // Total duration (median-based)
+  expectedTotalMinutes: number          // Surgeon's typical total case time
+  totalRangeLow: number | null          // p25 - fast end of typical range
+  totalRangeHigh: number | null         // p75 - slow end of typical range
+  
+  // Metadata
   sampleSize: number
   currentMilestoneName: string
 }

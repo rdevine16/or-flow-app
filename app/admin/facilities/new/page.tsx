@@ -110,7 +110,7 @@ export default function CreateFacilityPage() {
     adminData.roleId.length > 0
 
   // Handle form submission
-  const handleSubmit = async () => {
+ const handleSubmit = async () => {
     if (!isStep1Valid || !isStep2Valid) return
 
     setSubmitting(true)
@@ -138,7 +138,6 @@ export default function CreateFacilityPage() {
       if (facilityError) throw new Error('Failed to create facility: ' + facilityError.message)
 
       // 2. Create default OR rooms if selected
-
       if (setupOptions.createDefaultRooms) {
         const defaultRooms = ['OR 1', 'OR 2', 'OR 3']
         await supabase
@@ -149,29 +148,112 @@ export default function CreateFacilityPage() {
           })))
       }
 
-      // 6. Copy default procedure types if selected
+      // 3. Copy default procedure types if selected
       if (setupOptions.createDefaultProcedures) {
         const { data: defaultProcs } = await supabase
           .from('default_procedure_types')
-          .select('name, body_region_id')
+          .select('id, name, body_region_id, implant_category')
           .eq('is_active', true)
 
-if (defaultProcs && defaultProcs.length > 0) {
-  await supabase
-    .from('procedure_types')
-    .upsert(defaultProcs.map(p => ({
-      facility_id: facility.id,
-      name: p.name,
-      body_region_id: p.body_region_id,
-    })), { onConflict: 'facility_id,name', ignoreDuplicates: true })
-}
+        if (defaultProcs && defaultProcs.length > 0) {
+          await supabase
+            .from('procedure_types')
+            .upsert(defaultProcs.map(p => ({
+              facility_id: facility.id,
+              name: p.name,
+              body_region_id: p.body_region_id,
+              implant_category: p.implant_category,
+              source_template_id: p.id,  // IMPORTANT: Track the source for milestone mapping
+            })), { onConflict: 'facility_id,name', ignoreDuplicates: true })
+        }
+
+        // 4. Copy milestone types to facility_milestones
+        const { data: milestoneTypes } = await supabase
+          .from('milestone_types')
+          .select('*')
+          .eq('is_active', true)
+          .order('display_order')
+
+        if (milestoneTypes && milestoneTypes.length > 0) {
+          const milestoneIdMap: Record<string, string> = {}
+
+          // Insert facility milestones
+          for (const mt of milestoneTypes) {
+            const { data: newMilestone } = await supabase
+              .from('facility_milestones')
+              .insert({
+                facility_id: facility.id,
+                name: mt.name,
+                display_name: mt.display_name,
+                display_order: mt.display_order,
+                pair_position: mt.pair_position,
+                source_milestone_type_id: mt.id,
+                is_active: true
+              })
+              .select()
+              .single()
+
+            if (newMilestone) {
+              milestoneIdMap[mt.id] = newMilestone.id
+            }
+          }
+
+          // Update pair_with_id references
+          for (const mt of milestoneTypes) {
+            if (mt.pair_with_id && milestoneIdMap[mt.id] && milestoneIdMap[mt.pair_with_id]) {
+              await supabase
+                .from('facility_milestones')
+                .update({ pair_with_id: milestoneIdMap[mt.pair_with_id] })
+                .eq('id', milestoneIdMap[mt.id])
+            }
+          }
+
+          // 5. Copy procedure-milestone configs
+          const { data: facilityProcedures } = await supabase
+            .from('procedure_types')
+            .select('id, source_template_id')
+            .eq('facility_id', facility.id)
+
+          if (facilityProcedures) {
+            const procedureIdMap: Record<string, string> = {}
+            for (const fp of facilityProcedures) {
+              if (fp.source_template_id) {
+                procedureIdMap[fp.source_template_id] = fp.id
+              }
+            }
+
+            const { data: defaultConfigs } = await supabase
+              .from('default_procedure_milestones')
+              .select('*')
+
+            if (defaultConfigs && defaultConfigs.length > 0) {
+              const facilityConfigs = defaultConfigs
+                .filter(dc => 
+                  procedureIdMap[dc.default_procedure_id] && 
+                  milestoneIdMap[dc.milestone_type_id]
+                )
+                .map(dc => ({
+                  facility_id: facility.id,
+                  procedure_type_id: procedureIdMap[dc.default_procedure_id],
+                  facility_milestone_id: milestoneIdMap[dc.milestone_type_id],
+                  display_order: dc.display_order
+                }))
+
+              if (facilityConfigs.length > 0) {
+                await supabase
+                  .from('procedure_milestone_config')
+                  .insert(facilityConfigs)
+              }
+            }
+          }
+        }
       }
 
- // 4. Send invite email if selected (uses token-based invite API)
+      // 6. Send invite email if selected
       if (setupOptions.sendWelcomeEmail) {
         const { data: session } = await supabase.auth.getSession()
         
-const inviteResponse = await fetch('/api/admin/invite', {
+        const inviteResponse = await fetch('/api/admin/invite', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -191,11 +273,10 @@ const inviteResponse = await fetch('/api/admin/invite', {
 
         if (!inviteResponse.ok) {
           console.error('Invite failed:', inviteResult.error)
-          // Facility created but invite failed - still redirect, they can resend
         }
       }
 
-      // 5. Log audit events
+      // 7. Log audit events
       await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
 
       // Success! Redirect to facility detail page

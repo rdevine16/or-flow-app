@@ -1,6 +1,7 @@
 // app/dashboard/page.tsx
 // Enhanced dashboard with pace tracking, polished room cards, Call Next Patient FAB,
 // and drag-and-drop staff assignment
+// UPDATED: Now uses median-based statistics from surgeon_procedure_stats and surgeon_milestone_stats
 
 'use client'
 
@@ -218,22 +219,44 @@ export default function DashboardPage() {
   }
 
   // Fetch pace data for a specific case
+  // UPDATED: Now uses median-based statistics from surgeon_procedure_stats and surgeon_milestone_stats
   const fetchPaceData = useCallback(async (
     surgeonId: string,
     procedureTypeId: string,
     currentMilestoneName: string,
-    scheduledStart: Date
+    scheduledStart: Date,
+    facilityId: string
   ): Promise<CasePaceData | null> => {
     try {
-      const { data: procAverages } = await supabase
-        .from('surgeon_procedure_averages')
-        .select('*')
+      // Query median-based procedure stats (always needed for total duration)
+      const { data: procStats } = await supabase
+        .from('surgeon_procedure_stats')
+        .select('median_duration, p25_duration, p75_duration, sample_size')
         .eq('surgeon_id', surgeonId)
         .eq('procedure_type_id', procedureTypeId)
+        .eq('facility_id', facilityId)
         .single()
       
-      if (!procAverages) return null
+      if (!procStats) return null
       
+      // Special case: patient_in is the START of the case
+      // Progress = 0%, but we still show expected total duration
+      if (currentMilestoneName === 'patient_in') {
+        return {
+          scheduledStart,
+          expectedMinutesToMilestone: 0,
+          milestoneRangeLow: 0,
+          milestoneRangeHigh: 0,
+          expectedTotalMinutes: procStats.median_duration,
+          totalRangeLow: procStats.p25_duration,
+          totalRangeHigh: procStats.p75_duration,
+          sampleSize: procStats.sample_size,
+          currentMilestoneName
+        }
+      }
+      
+      // For all other milestones, get the milestone stats
+      // Get the milestone type ID
       const { data: milestoneType } = await supabase
         .from('milestone_types')
         .select('id, name')
@@ -242,21 +265,27 @@ export default function DashboardPage() {
       
       if (!milestoneType) return null
       
-      const { data: msAverage } = await supabase
-        .from('surgeon_milestone_averages')
-        .select('*')
+      // Query median-based milestone stats
+      const { data: msStats } = await supabase
+        .from('surgeon_milestone_stats')
+        .select('median_minutes_from_start, p25_minutes_from_start, p75_minutes_from_start, sample_size')
         .eq('surgeon_id', surgeonId)
         .eq('procedure_type_id', procedureTypeId)
         .eq('milestone_type_id', milestoneType.id)
+        .eq('facility_id', facilityId)
         .single()
       
-      if (!msAverage) return null
+      if (!msStats) return null
       
       return {
         scheduledStart,
-        avgMinutesToMilestone: msAverage.avg_minutes_from_start,
-        avgTotalMinutes: procAverages.avg_total_minutes,
-        sampleSize: Math.min(procAverages.sample_size, msAverage.sample_size),
+        expectedMinutesToMilestone: msStats.median_minutes_from_start,
+        milestoneRangeLow: msStats.p25_minutes_from_start,
+        milestoneRangeHigh: msStats.p75_minutes_from_start,
+        expectedTotalMinutes: procStats.median_duration,
+        totalRangeLow: procStats.p25_duration,
+        totalRangeHigh: procStats.p75_duration,
+        sampleSize: Math.min(procStats.sample_size, msStats.sample_size),
         currentMilestoneName
       }
     } catch (error) {
@@ -374,11 +403,13 @@ export default function DashboardPage() {
             )
             
             if (currentMilestone && scheduledStart) {
+              // UPDATED: Now passing facilityId to fetchPaceData
               paceData = await fetchPaceData(
                 currentCase.surgeon_id,
                 currentCase.procedure_type_id,
                 currentMilestone,
-                scheduledStart
+                scheduledStart,
+                userFacilityId
               )
             }
           }

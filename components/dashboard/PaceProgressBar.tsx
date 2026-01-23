@@ -1,5 +1,6 @@
 // components/dashboard/PaceProgressBar.tsx
 // Progress bar showing case progress with pace indicator
+// UPDATED: Now uses median-based values and shows typical range
 
 'use client'
 
@@ -12,6 +13,7 @@ import {
   getPaceStatus,
   hasEnoughData,
   formatDuration,
+  formatDurationRange,
   getPaceStatusColors
 } from '../../lib/pace-utils'
 
@@ -38,7 +40,8 @@ export default function PaceProgressBar({ paceData }: PaceProgressBarProps) {
       paceMinutes,
       status,
       colors,
-      estDuration: formatDuration(paceData.avgTotalMinutes)
+      expectedDuration: formatDuration(paceData.expectedTotalMinutes),
+      durationRange: formatDurationRange(paceData.totalRangeLow, paceData.totalRangeHigh, true)
     }
   }, [paceData, currentTime])
   
@@ -47,7 +50,7 @@ export default function PaceProgressBar({ paceData }: PaceProgressBarProps) {
     return null
   }
   
-  const { progress, progressPercent, paceMinutes, status, colors, estDuration } = progressData
+  const { progress, progressPercent, paceMinutes, status, colors, expectedDuration, durationRange } = progressData
   const absMinutes = Math.abs(Math.round(paceMinutes))
   
   // Determine pace text
@@ -100,7 +103,10 @@ export default function PaceProgressBar({ paceData }: PaceProgressBarProps) {
       {/* Labels row */}
       <div className="flex items-center justify-between text-[10px]">
         <span className="text-slate-400 font-medium">
-          Est. {estDuration}
+          Expected {expectedDuration}
+          {durationRange && (
+            <span className="text-slate-300 ml-1">{durationRange}</span>
+          )}
         </span>
         
         <div className={`flex items-center gap-1 ${colors.text} font-semibold`}>

@@ -20,6 +20,7 @@ import {
 // Analytics functions
 import {
   calculateAnalyticsOverview,
+  calculateAvgCaseTime,  // ADD THIS
   formatMinutes,
   type CaseWithMilestones,
   type FlipRoomAnalysis,
@@ -324,15 +325,27 @@ function QuickStatCard({
         </div>
         {trend !== undefined && trendType && (
           <div className={`
-            flex items-center gap-0.5 text-xs font-medium
-            ${trendType === 'up' ? 'text-emerald-600' : 'text-rose-600'}
+            flex items-center gap-1 text-sm font-semibold px-2 py-0.5 rounded-full
+            ${trend === 0 
+              ? 'text-slate-500 bg-slate-100'
+              : trendType === 'up' 
+                ? 'text-emerald-700 bg-emerald-50' 
+                : 'text-rose-700 bg-rose-50'
+            }
           `}>
-            {trendType === 'up' ? (
-              <ArrowTrendingUpIcon className="w-3 h-3" />
+            {trend === 0 ? (
+              <span>— 0%</span>
+            ) : trendType === 'up' ? (
+              <>
+                <ArrowTrendingUpIcon className="w-4 h-4" />
+                {trend}%
+              </>
             ) : (
-              <ArrowTrendingDownIcon className="w-3 h-3" />
+              <>
+                <ArrowTrendingDownIcon className="w-4 h-4" />
+                {trend}%
+              </>
             )}
-            {trend}%
           </div>
         )}
       </div>
@@ -342,6 +355,7 @@ function QuickStatCard({
     </div>
   )
 }
+
 
 // ============================================
 // SECTION HEADER
@@ -548,6 +562,7 @@ export default function AnalyticsHubPage() {
       if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
     }
     fetchLookups()
+
   }, [])
 
   // Fetch data
@@ -594,7 +609,7 @@ export default function AnalyticsHubPage() {
     const { data: casesData } = await query
     setCases((casesData as unknown as CaseWithMilestones[]) || [])
     
-    // Fetch previous period for comparison
+  // Fetch previous period for comparison
     if (startDate && endDate) {
       const start = new Date(startDate)
       const end = new Date(endDate)
@@ -658,6 +673,11 @@ export default function AnalyticsHubPage() {
   // Calculate all analytics
   const analytics = useMemo(() => {
     return calculateAnalyticsOverview(cases, previousPeriodCases)
+  }, [cases, previousPeriodCases])
+
+  // Calculate avg case time with delta
+  const avgCaseTimeKPIData = useMemo(() => {
+    return calculateAvgCaseTime(cases, previousPeriodCases)
   }, [cases, previousPeriodCases])
 
   // ============================================
@@ -963,44 +983,52 @@ export default function AnalyticsHubPage() {
           ) : (
             <div className="space-y-8">
               {/* QUICK STATS ROW */}
-              <section>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  <QuickStatCard
-                    title="Completed Cases"
-                    value={analytics.completedCases.toString()}
-                    icon={CalendarDaysIcon}
-                    trend={analytics.caseVolume.delta}
-                    trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
-                  />
-                  <QuickStatCard
-                    title="FCOTS Rate"
-                    value={analytics.fcots.displayValue}
-                    icon={ClockIcon}
-                    trend={analytics.fcots.delta}
-                    trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
-                  />
-                  <QuickStatCard
-                    title="Avg Turnover"
-                    value={analytics.turnoverTime.displayValue}
-                    icon={ArrowPathIcon}
-                  />
-                  <QuickStatCard
-                    title="OR Utilization"
-                    value={analytics.orUtilization.displayValue}
-                    icon={ChartBarIcon}
-                  />
-                  <QuickStatCard
-                    title="Avg Case Time"
-                    value={formatMinutes(analytics.avgTotalCaseTime)}
-                    icon={ClockIcon}
-                  />
-                  <QuickStatCard
-                    title="Cancellation Rate"
-                    value={analytics.cancellationRate.displayValue}
-                    icon={ExclamationTriangleIcon}
-                  />
-                </div>
-              </section>
+<section>
+  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+    <QuickStatCard
+      title="Completed Cases"
+      value={analytics.completedCases.toString()}
+      icon={CalendarDaysIcon}
+      trend={analytics.caseVolume.delta}
+      trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
+    />
+    <QuickStatCard
+      title="FCOTS Rate"
+      value={analytics.fcots.displayValue}
+      icon={ClockIcon}
+      trend={analytics.fcots.delta}
+      trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
+    />
+    <QuickStatCard
+      title="Avg Turnover"
+      value={analytics.turnoverTime.displayValue}
+      icon={ArrowPathIcon}
+      trend={analytics.turnoverTime.delta}
+      trendType={analytics.turnoverTime.deltaType === 'increase' ? 'up' : analytics.turnoverTime.deltaType === 'decrease' ? 'down' : undefined}
+    />
+    <QuickStatCard
+      title="OR Utilization"
+      value={analytics.orUtilization.displayValue}
+      icon={ChartBarIcon}
+      trend={analytics.orUtilization.delta}
+      trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
+    />
+<QuickStatCard
+  title="Avg Case Time"
+  value={avgCaseTimeKPIData.displayValue}
+  icon={ClockIcon}
+  trend={avgCaseTimeKPIData.delta}
+  trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
+/>
+    <QuickStatCard
+      title="Cancellation Rate"
+      value={analytics.cancellationRate.displayValue}
+      icon={ExclamationTriangleIcon}
+      trend={analytics.cancellationRate.delta}
+      trendType={analytics.cancellationRate.deltaType === 'increase' ? 'up' : analytics.cancellationRate.deltaType === 'decrease' ? 'down' : undefined}
+    />
+  </div>
+</section>
 
               {/* CHARTS ROW - Case Trends & Category Breakdown */}
               <section>

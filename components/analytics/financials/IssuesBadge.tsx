@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CaseIssue } from './types'
+import { Issue } from './types'
 import { formatCurrency, formatDuration } from './utils'
 
 interface IssuesBadgeProps {
-  issues: CaseIssue[]
+  issues: Issue[]
   caseId: string
 }
 
@@ -41,6 +41,14 @@ export default function IssuesBadge({ issues, caseId }: IssuesBadgeProps) {
                 Over Time
               </span>
             )}
+            {issue.type === 'lowProfit' && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full cursor-pointer hover:bg-red-200 transition-colors">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                </svg>
+                Low Profit
+              </span>
+            )}
             {issue.type === 'delay' && (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-medium rounded-full cursor-pointer hover:bg-purple-200 transition-colors">
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,8 +80,15 @@ export default function IssuesBadge({ issues, caseId }: IssuesBadgeProps) {
               {issue.type === 'overTime' && (
                 <div>
                   <p className="font-medium mb-1">Over Time</p>
-                  <p>{formatDuration(issue.actualMinutes)} vs {formatDuration(issue.expectedMinutes)} expected</p>
-                  <p className="text-amber-300">+{issue.percentOver.toFixed(0)}% over average</p>
+                  <p>{formatDuration(issue.actualMinutes)} vs {formatDuration(issue.expectedMinutes)} typical</p>
+                  <p className="text-amber-300">+{formatDuration(issue.minutesOver)} over threshold</p>
+                </div>
+              )}
+              {issue.type === 'lowProfit' && (
+                <div>
+                  <p className="font-medium mb-1">Low Profit</p>
+                  <p>{formatCurrency(issue.actualProfit)} vs {formatCurrency(issue.expectedProfit)} typical</p>
+                  <p className="text-red-300">{formatCurrency(issue.amountBelow)} below threshold</p>
                 </div>
               )}
               {issue.type === 'delay' && (
@@ -136,7 +151,19 @@ export default function IssuesBadge({ issues, caseId }: IssuesBadgeProps) {
                         Over Time
                       </div>
                       <p className="text-slate-300">{formatDuration(issue.actualMinutes)} vs {formatDuration(issue.expectedMinutes)}</p>
-                      <p className="text-slate-400">+{issue.percentOver.toFixed(0)}% over average</p>
+                      <p className="text-slate-400">+{formatDuration(issue.minutesOver)} over threshold</p>
+                    </div>
+                  )}
+                  {issue.type === 'lowProfit' && (
+                    <div>
+                      <div className="flex items-center gap-1.5 font-medium text-red-300 mb-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                        </svg>
+                        Low Profit
+                      </div>
+                      <p className="text-slate-300">{formatCurrency(issue.actualProfit)} vs {formatCurrency(issue.expectedProfit)}</p>
+                      <p className="text-slate-400">{formatCurrency(issue.amountBelow)} below threshold</p>
                     </div>
                   )}
                   {issue.type === 'delay' && (

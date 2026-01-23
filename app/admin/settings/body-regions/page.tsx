@@ -1,12 +1,15 @@
+// app/admin/settings/body-regions/page.tsx
+// Manage body regions for procedure categorization
+
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import { useUser } from '@/lib/UserContext'
-import { genericAuditLog } from '@/lib/audit-logger'
+import { createClient } from '../../../../lib/supabase'
+import { useUser } from '../../../../lib/UserContext'
+import DashboardLayout from '../../../../components/layouts/DashboardLayout'
+import Container from '../../../../components/ui/Container'
+import { adminAudit } from '../../../../lib/audit-logger'
 
 interface BodyRegion {
   id: string
@@ -16,10 +19,56 @@ interface BodyRegion {
   created_at: string
 }
 
-interface ModalState {
+// Confirmation Modal Component
+function ConfirmModal({
+  isOpen,
+  title,
+  message,
+  confirmLabel,
+  confirmVariant = 'danger',
+  onConfirm,
+  onCancel,
+  isLoading,
+}: {
   isOpen: boolean
-  mode: 'add' | 'edit'
-  bodyRegion: BodyRegion | null
+  title: string
+  message: React.ReactNode
+  confirmLabel: string
+  confirmVariant?: 'danger' | 'primary'
+  onConfirm: () => void
+  onCancel: () => void
+  isLoading?: boolean
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+        <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
+        <div className="text-sm text-slate-600 mb-6">{message}</div>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+              confirmVariant === 'danger'
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {isLoading ? 'Processing...' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function AdminBodyRegionsPage() {
@@ -29,10 +78,34 @@ export default function AdminBodyRegionsPage() {
 
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', bodyRegion: null })
-  const [formData, setFormData] = useState({ name: '', display_name: '', display_order: 0 })
   const [saving, setSaving] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingRegion, setEditingRegion] = useState<BodyRegion | null>(null)
+
+  // Form states
+  const [formName, setFormName] = useState('')
+  const [formDisplayName, setFormDisplayName] = useState('')
+  const [formDisplayOrder, setFormDisplayOrder] = useState<number>(1)
+
+  // Confirmation modal
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean
+    title: string
+    message: React.ReactNode
+    confirmLabel: string
+    confirmVariant: 'danger' | 'primary'
+    onConfirm: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmLabel: '',
+    confirmVariant: 'danger',
+    onConfirm: () => {},
+  })
 
   // Redirect non-admins
   useEffect(() => {
@@ -48,15 +121,24 @@ export default function AdminBodyRegionsPage() {
   }, [isGlobalAdmin])
 
   const fetchData = async () => {
-    const { data } = await supabase
+    setLoading(true)
+
+    const { data, error } = await supabase
       .from('body_regions')
       .select('*')
       .order('display_order')
 
-    setBodyRegions(data || [])
+    if (!error && data) {
+      setBodyRegions(data)
+    }
     setLoading(false)
   }
 
+  const closeConfirmModal = () => {
+    setConfirmModal(prev => ({ ...prev, isOpen: false }))
+  }
+
+  // Generate internal name from display name
   const generateName = (displayName: string): string => {
     return displayName
       .toLowerCase()
@@ -65,104 +147,129 @@ export default function AdminBodyRegionsPage() {
       .substring(0, 50)
   }
 
+  const resetForm = () => {
+    setFormName('')
+    setFormDisplayName('')
+    setFormDisplayOrder(bodyRegions.length > 0 ? Math.max(...bodyRegions.map(r => r.display_order)) + 1 : 1)
+  }
+
   const openAddModal = () => {
-    const maxOrder = Math.max(...bodyRegions.map(br => br.display_order), 0)
-    setFormData({ name: '', display_name: '', display_order: maxOrder + 1 })
-    setModal({ isOpen: true, mode: 'add', bodyRegion: null })
+    resetForm()
+    setFormDisplayOrder(bodyRegions.length > 0 ? Math.max(...bodyRegions.map(r => r.display_order)) + 1 : 1)
+    setShowAddModal(true)
   }
 
-  const openEditModal = (bodyRegion: BodyRegion) => {
-    setFormData({ 
-      name: bodyRegion.name, 
-      display_name: bodyRegion.display_name,
-      display_order: bodyRegion.display_order 
-    })
-    setModal({ isOpen: true, mode: 'edit', bodyRegion })
+  const openEditModal = (region: BodyRegion) => {
+    setEditingRegion(region)
+    setFormName(region.name)
+    setFormDisplayName(region.display_name)
+    setFormDisplayOrder(region.display_order)
+    setShowEditModal(true)
   }
 
-  const closeModal = () => {
-    setModal({ isOpen: false, mode: 'add', bodyRegion: null })
-    setFormData({ name: '', display_name: '', display_order: 0 })
-  }
+  const handleAdd = async () => {
+    if (!formDisplayName.trim()) return
 
-  const handleSave = async () => {
-    if (!formData.display_name.trim()) return
-    
     setSaving(true)
-    const nameValue = formData.name.trim() || generateName(formData.display_name)
+    const name = formName.trim() || generateName(formDisplayName)
 
-    if (modal.mode === 'add') {
-      const { data, error } = await supabase
-        .from('body_regions')
-        .insert({
-          name: nameValue,
-          display_name: formData.display_name.trim(),
-          display_order: formData.display_order,
-        })
-        .select()
-        .single()
+    const { data, error } = await supabase
+      .from('body_regions')
+      .insert({
+        name,
+        display_name: formDisplayName.trim(),
+        display_order: formDisplayOrder,
+      })
+      .select()
+      .single()
 
-      if (!error && data) {
-        setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
-        closeModal()
-        await genericAuditLog(supabase, 'admin.body_region_created', {
-          targetType: 'body_region',
-          targetId: data.id,
-          targetLabel: data.display_name,
-          newValues: { name: data.name, display_name: data.display_name },
-        })
-      }
-    } else if (modal.mode === 'edit' && modal.bodyRegion) {
-      const oldName = modal.bodyRegion.display_name
-      
-      const { data, error } = await supabase
-        .from('body_regions')
-        .update({
-          name: nameValue,
-          display_name: formData.display_name.trim(),
-          display_order: formData.display_order,
-        })
-        .eq('id', modal.bodyRegion.id)
-        .select()
-        .single()
+    if (!error && data) {
+      // Audit log
+      await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
 
-      if (!error && data) {
-        setBodyRegions(bodyRegions.map(br => br.id === data.id ? data : br).sort((a, b) => a.display_order - b.display_order))
-        closeModal()
-        await genericAuditLog(supabase, 'admin.body_region_updated', {
-          targetType: 'body_region',
-          targetId: data.id,
-          targetLabel: data.display_name,
-          oldValues: { display_name: oldName },
-          newValues: { display_name: data.display_name },
-        })
-      }
+      setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
+      resetForm()
+      setShowAddModal(false)
+    } else if (error) {
+      console.error('Error adding body region:', error)
+      alert('Failed to add body region. The name might already exist.')
     }
-
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
-    const bodyRegion = bodyRegions.find(br => br.id === id)
-    if (!bodyRegion) return
+  const handleEdit = async () => {
+    if (!editingRegion || !formDisplayName.trim()) return
 
-    const { error } = await supabase
+    setSaving(true)
+    const oldDisplayName = editingRegion.display_name
+
+    const { data, error } = await supabase
       .from('body_regions')
-      .delete()
-      .eq('id', id)
-
-    if (!error) {
-      setBodyRegions(bodyRegions.filter(br => br.id !== id))
-      setDeleteConfirm(null)
-      await genericAuditLog(supabase, 'admin.body_region_deleted', {
-        targetType: 'body_region',
-        targetId: id,
-        targetLabel: bodyRegion.display_name,
+      .update({
+        display_name: formDisplayName.trim(),
+        display_order: formDisplayOrder,
       })
+      .eq('id', editingRegion.id)
+      .select()
+      .single()
+
+    if (!error && data) {
+      // Audit log if name changed
+      if (oldDisplayName !== formDisplayName.trim()) {
+        await adminAudit.bodyRegionUpdated(supabase, editingRegion.id, oldDisplayName, formDisplayName.trim())
+      }
+
+      setBodyRegions(
+        bodyRegions
+          .map(r => r.id === editingRegion.id ? data : r)
+          .sort((a, b) => a.display_order - b.display_order)
+      )
+      setShowEditModal(false)
+      setEditingRegion(null)
+      resetForm()
+    } else if (error) {
+      console.error('Error updating body region:', error)
+      alert('Failed to update body region.')
     }
+    setSaving(false)
   }
 
-  if (userLoading || loading) {
+  const handleDelete = (region: BodyRegion) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Body Region',
+      message: (
+        <>
+          Are you sure you want to delete <strong>{region.display_name}</strong>?
+          <br /><br />
+          <span className="text-amber-600">
+            Warning: This may fail if the body region is being used by procedures or categories.
+          </span>
+        </>
+      ),
+      confirmLabel: 'Delete',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setSaving(true)
+        const { error } = await supabase
+          .from('body_regions')
+          .delete()
+          .eq('id', region.id)
+
+        if (!error) {
+          await adminAudit.bodyRegionDeleted(supabase, region.display_name, region.id)
+          setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
+          closeConfirmModal()
+        } else {
+          console.error('Error deleting body region:', error)
+          alert('Cannot delete this body region. It may be in use by procedures or categories.')
+        }
+        setSaving(false)
+      },
+    })
+  }
+
+  if (userLoading || !isGlobalAdmin) {
     return (
       <DashboardLayout>
         <Container className="py-8">
@@ -174,106 +281,96 @@ export default function AdminBodyRegionsPage() {
     )
   }
 
-  if (!isGlobalAdmin) {
-    return null
-  }
-
   return (
     <DashboardLayout>
       <Container className="py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Body Regions</h1>
-              <p className="text-slate-500 mt-1">
-                Anatomical regions used to categorize procedures and analytics.
-              </p>
-            </div>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Body Region
-            </button>
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-900">Body Regions</h1>
+            <p className="text-slate-500 mt-1">
+              Manage body regions used to categorize procedures across facilities.
+            </p>
           </div>
 
-          {/* Stats Bar */}
-          <div className="flex items-center gap-4 mb-4">
-            <span className="text-sm text-slate-500">
-              {bodyRegions.length} body region{bodyRegions.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {/* Table */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            {bodyRegions.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+          {/* Content Card */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            {/* Card Header */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="font-medium text-slate-900">All Body Regions</h3>
+                <p className="text-sm text-slate-500">{bodyRegions.length} regions defined</p>
+              </div>
+              <button
+                onClick={openAddModal}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <p>No body regions defined</p>
+                Add Region
+              </button>
+            </div>
+
+            {/* Table */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : bodyRegions.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <p className="text-slate-500 mb-2">No body regions defined yet</p>
                 <button
                   onClick={openAddModal}
-                  className="mt-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
+                  className="text-blue-600 hover:underline text-sm font-medium"
                 >
                   Add your first body region
                 </button>
               </div>
             ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-12">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Display Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Internal Name</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {bodyRegions.map((bodyRegion) => (
-                    <tr key={bodyRegion.id} className="group hover:bg-slate-50 transition-colors">
-                      {/* Order */}
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-slate-400 font-medium">{bodyRegion.display_order}</span>
-                      </td>
-
-                      {/* Display Name */}
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-medium text-slate-900">{bodyRegion.display_name}</span>
-                      </td>
-
-                      {/* Internal Name */}
-                      <td className="px-4 py-3">
-                        <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                          {bodyRegion.name}
-                        </code>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        {deleteConfirm === bodyRegion.id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleDelete(bodyRegion.id)}
-                              className="px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="px-2 py-1 bg-slate-200 text-slate-700 text-xs font-medium rounded hover:bg-slate-300 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200">
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Order
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Display Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Internal Name
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {bodyRegions.map((region) => (
+                      <tr key={region.id} className="group hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center justify-center w-8 h-8 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg">
+                            {region.display_order}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-medium text-slate-900">{region.display_name}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                            {region.name}
+                          </code>
+                        </td>
+                        <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => openEditModal(bodyRegion)}
+                              onClick={() => openEditModal(region)}
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Edit"
                             >
@@ -282,7 +379,7 @@ export default function AdminBodyRegionsPage() {
                               </svg>
                             </button>
                             <button
-                              onClick={() => setDeleteConfirm(bodyRegion.id)}
+                              onClick={() => handleDelete(region)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete"
                             >
@@ -291,12 +388,12 @@ export default function AdminBodyRegionsPage() {
                               </svg>
                             </button>
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
@@ -307,10 +404,11 @@ export default function AdminBodyRegionsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="text-sm text-slate-600">
-                <p className="font-medium text-slate-700 mb-1">About body regions</p>
+                <p className="font-medium text-slate-700 mb-1">How body regions work</p>
                 <p>
-                  Body regions are used to group procedure categories and types for filtering and analytics. 
-                  For example, "Hip" and "Knee" are common body regions for orthopedic procedures.
+                  Body regions are used to categorize procedures (e.g., Hip, Knee, Shoulder). 
+                  They help organize procedure types and enable body-region-specific analytics. 
+                  The display order controls how they appear in dropdowns throughout the app.
                 </p>
               </div>
             </div>
@@ -318,14 +416,12 @@ export default function AdminBodyRegionsPage() {
         </div>
       </Container>
 
-      {/* Modal */}
-      {modal.isOpen && (
+      {/* Add Modal */}
+      {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {modal.mode === 'add' ? 'Add Body Region' : 'Edit Body Region'}
-            </h3>
-            
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Body Region</h3>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -333,27 +429,24 @@ export default function AdminBodyRegionsPage() {
                 </label>
                 <input
                   type="text"
-                  value={formData.display_name}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    display_name: e.target.value,
-                    name: generateName(e.target.value)
-                  })}
-                  placeholder="e.g., Shoulder"
+                  value={formDisplayName}
+                  onChange={(e) => setFormDisplayName(e.target.value)}
+                  placeholder="e.g., Hip"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   autoFocus
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Internal Name <span className="text-slate-400 font-normal">(auto-generated)</span>
+                  Internal Name <span className="text-slate-400 font-normal">(auto-generated if blank)</span>
                 </label>
                 <input
                   type="text"
-                  value={formData.name || generateName(formData.display_name)}
-                  disabled
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder={formDisplayName ? generateName(formDisplayName) : 'e.g., hip'}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                 />
               </div>
 
@@ -363,33 +456,122 @@ export default function AdminBodyRegionsPage() {
                 </label>
                 <input
                   type="number"
-                  value={formData.display_order}
-                  onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formDisplayOrder}
+                  onChange={(e) => setFormDisplayOrder(parseInt(e.target.value) || 1)}
                   min={1}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <p className="text-xs text-slate-500 mt-1">Lower numbers appear first in lists</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Lower numbers appear first in dropdowns
+                </p>
               </div>
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
               <button
-                onClick={closeModal}
+                onClick={() => {
+                  setShowAddModal(false)
+                  resetForm()
+                }}
                 className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSave}
-                disabled={saving || !formData.display_name.trim()}
+                onClick={handleAdd}
+                disabled={!formDisplayName.trim() || saving}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Body Region' : 'Save Changes'}
+                {saving ? 'Adding...' : 'Add Region'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Edit Modal */}
+      {showEditModal && editingRegion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Edit Body Region</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Internal Name <span className="text-slate-400 font-normal">(read-only)</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingRegion.name}
+                  disabled
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Display Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formDisplayName}
+                  onChange={(e) => setFormDisplayName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Display Order
+                </label>
+                <input
+                  type="number"
+                  value={formDisplayOrder}
+                  onChange={(e) => setFormDisplayOrder(parseInt(e.target.value) || 1)}
+                  min={1}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Lower numbers appear first in dropdowns
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowEditModal(false)
+                  setEditingRegion(null)
+                  resetForm()
+                }}
+                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEdit}
+                disabled={!formDisplayName.trim() || saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        confirmVariant={confirmModal.confirmVariant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeConfirmModal}
+        isLoading={saving}
+      />
     </DashboardLayout>
   )
 }

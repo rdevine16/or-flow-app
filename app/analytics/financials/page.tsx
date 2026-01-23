@@ -11,7 +11,13 @@ import { AnalyticsPageHeader } from '../../../components/analytics/AnalyticsBrea
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
 
 // Local components
-import { CaseWithFinancials, FacilitySettings, ProcedureReimbursement, SubTab } from '../../../components/analytics/financials/types'
+import { 
+  CaseCompletionStats, 
+  SurgeonProcedureStats, 
+  FacilityProcedureStats,
+  FacilitySettings, 
+  SubTab 
+} from '../../../components/analytics/financials/types'
 import { useFinancialsMetrics } from '../../../components/analytics/financials/useFinancialsMetrics'
 import DateRangeSelector from '../../../components/analytics/financials/DateRangeSelector'
 import OverviewTab from '../../../components/analytics/financials/OverviewTab'
@@ -28,10 +34,11 @@ export default function FinancialsAnalyticsPage() {
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
   
-  // Data state
-  const [cases, setCases] = useState<CaseWithFinancials[]>([])
+  // Data state - Using view data
+  const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
+  const [surgeonProcedureStats, setSurgeonProcedureStats] = useState<SurgeonProcedureStats[]>([])
+  const [facilityProcedureStats, setFacilityProcedureStats] = useState<FacilityProcedureStats[]>([])
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
-  const [reimbursements, setReimbursements] = useState<ProcedureReimbursement[]>([])
   const [loading, setLoading] = useState(true)
   
   // UI state
@@ -41,7 +48,12 @@ export default function FinancialsAnalyticsPage() {
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
 
   // Calculate metrics using custom hook
-  const metrics = useFinancialsMetrics(cases, facilitySettings, reimbursements)
+  const metrics = useFinancialsMetrics(
+    caseStats, 
+    surgeonProcedureStats, 
+    facilityProcedureStats, 
+    facilitySettings
+  )
 
   // Determine effective facility ID
   useEffect(() => {
@@ -61,7 +73,7 @@ export default function FinancialsAnalyticsPage() {
     setFacilityCheckComplete(true)
   }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
 
-  // Fetch data
+  // Fetch data from views
   const fetchData = async (startDate?: string, endDate?: string) => {
     if (!effectiveFacilityId) return
     
@@ -73,52 +85,62 @@ export default function FinancialsAnalyticsPage() {
     const start = startDate || monthStart.toISOString().split('T')[0]
     const end = endDate || today.toISOString().split('T')[0]
 
-    const [casesRes, facilityRes, reimbursementsRes] = await Promise.all([
-      supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          surgeon_id,
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-          procedure_type_id,
-          procedure_types (id, name, soft_goods_cost, hard_goods_cost),
-          payer_id,
-          payers (id, name),
-          case_milestones (
-            milestone_type_id,
-            recorded_at,
-            milestone_types (name)
-          ),
-          case_delays (
-            id,
-            delay_type_id,
-            duration_minutes,
-            notes,
-            delay_types (name)
-          )
-        `)
-        .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', start)
-        .lte('scheduled_date', end)
-        .order('scheduled_date', { ascending: false }),
-      
-      supabase
-        .from('facilities')
-        .select('or_hourly_rate')
-        .eq('id', effectiveFacilityId)
-        .single(),
-      
-      supabase
-        .from('procedure_reimbursements')
-        .select('procedure_type_id, payer_id, reimbursement')
-        .order('effective_date', { ascending: false }),
-    ])
+    try {
+      const [caseStatsRes, surgeonStatsRes, facilityStatsRes, facilityRes] = await Promise.all([
+        // Fetch case-level stats with joins
+        supabase
+          .from('case_completion_stats')
+          .select(`
+            *,
+            surgeon:users!case_completion_stats_surgeon_id_fkey (first_name, last_name),
+            procedure_types (id, name),
+            payers (id, name),
+            or_rooms (name)
+          `)
+          .eq('facility_id', effectiveFacilityId)
+          .gte('case_date', start)
+          .lte('case_date', end)
+          .order('case_date', { ascending: false }),
+        
+        // Fetch surgeon+procedure stats (pre-computed)
+        supabase
+          .from('surgeon_procedure_stats')
+          .select('*')
+          .eq('facility_id', effectiveFacilityId),
+        
+        // Fetch facility+procedure stats (pre-computed)
+        supabase
+          .from('facility_procedure_stats')
+          .select('*')
+          .eq('facility_id', effectiveFacilityId),
+        
+        // Fetch facility settings
+        supabase
+          .from('facilities')
+          .select('or_hourly_rate')
+          .eq('id', effectiveFacilityId)
+          .single(),
+      ])
 
-    setCases((casesRes.data as unknown as CaseWithFinancials[]) || [])
-    setFacilitySettings(facilityRes.data as FacilitySettings)
-    setReimbursements((reimbursementsRes.data as ProcedureReimbursement[]) || [])
+      // Handle errors
+      if (caseStatsRes.error) {
+        console.error('Error fetching case stats:', caseStatsRes.error)
+      }
+      if (surgeonStatsRes.error) {
+        console.error('Error fetching surgeon stats:', surgeonStatsRes.error)
+      }
+      if (facilityStatsRes.error) {
+        console.error('Error fetching facility stats:', facilityStatsRes.error)
+      }
+
+      setCaseStats((caseStatsRes.data as unknown as CaseCompletionStats[]) || [])
+      setSurgeonProcedureStats((surgeonStatsRes.data as SurgeonProcedureStats[]) || [])
+      setFacilityProcedureStats((facilityStatsRes.data as FacilityProcedureStats[]) || [])
+      setFacilitySettings(facilityRes.data as FacilitySettings)
+    } catch (error) {
+      console.error('Error fetching financial data:', error)
+    }
+    
     setLoading(false)
   }
 
@@ -256,7 +278,7 @@ export default function FinancialsAnalyticsPage() {
                 { id: 'overview' as SubTab, label: 'Overview' },
                 { id: 'procedure' as SubTab, label: 'By Procedure' },
                 { id: 'surgeon' as SubTab, label: 'By Surgeon' },
-                { id: 'outliers' as SubTab, label: 'Outliers' },
+                { id: 'outliers' as SubTab, label: `Outliers${metrics.outlierStats.total > 0 ? ` (${metrics.outlierStats.total})` : ''}` },
               ].map(tab => (
                 <button
                   key={tab.id}

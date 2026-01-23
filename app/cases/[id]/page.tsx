@@ -16,6 +16,8 @@ import FloatingActionButton from '../../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import CompletedCaseView from '../../../components/cases/CompletedCaseView'
 import DeviceRepSection from '../../../components/cases/DeviceRepSection'
+import { runDetectionForCase } from '../../../lib/dataQuality'
+
 
 // ============================================================================
 // TYPES
@@ -47,6 +49,7 @@ interface CaseData {
   operative_side: string | null
   procedure_type_id: string | null
   notes: string | null
+  surgeon_left_at: string | null
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { id: string; name: string }[] | { id: string; name: string } | null
@@ -207,6 +210,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [patientCallTime, setPatientCallTime] = useState<string | null>(null)
   const [showAddStaff, setShowAddStaff] = useState(false)
+  const [surgeonLeftAt, setSurgeonLeftAt] = useState<string | null>(null)
+
 
   // Live clock
   useEffect(() => {
@@ -244,7 +249,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const { data: caseResult } = await supabase
         .from('cases')
         .select(`
-          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, notes, call_time,
+          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, notes, call_time, surgeon_left_at,
           or_rooms (name),
           procedure_types (name),
           case_statuses (id, name),
@@ -459,6 +464,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       // Set state
       setCaseData(caseResult)
+      setSurgeonLeftAt(caseResult?.surgeon_left_at || null)
       setMilestoneTypes(milestoneTypesResult)
       setCaseMilestones(milestonesResult || [])
       setCaseStaff(staffResult as CaseStaff[] || [])
@@ -495,10 +501,44 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (!error && data) {
       setCaseMilestones([...caseMilestones, data])
 
-      if (milestoneType?.name === 'patient_in') {
+if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('in_progress')
       } else if (milestoneType?.name === 'patient_out') {
         await updateCaseStatus('completed')
+        
+        // ========================================
+        // AUTO-DETECTION: Run quality checks on completed case
+        // ========================================
+        try {
+          const issuesFound = await runDetectionForCase(supabase, id)
+          
+          if (issuesFound === 0) {
+            // No issues - auto-validate for analytics
+            await supabase
+              .from('cases')
+              .update({ 
+                data_validated: true, 
+                validated_at: new Date().toISOString(),
+                validated_by: null  // System auto-validation
+              })
+              .eq('id', id)
+            console.log('✅ Case auto-validated (no issues)')
+          } else {
+            // Issues found - mark as NOT validated (needs review)
+            await supabase
+              .from('cases')
+              .update({ 
+                data_validated: false,
+                validated_at: null,
+                validated_by: null
+              })
+              .eq('id', id)
+            console.log(`⚠️ Case has ${issuesFound} quality issues - needs review`)
+          }
+        } catch (err) {
+          console.error('Detection error:', err)
+          // Don't block case completion if detection fails
+        }
       }
 
       if (milestoneType && caseData) {
@@ -554,7 +594,33 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       }
     }
   }
+  // ============================================================================
+  // SURGEON LEFT FUNCTIONS
+  // ============================================================================
 
+  const recordSurgeonLeft = async () => {
+    const timestamp = new Date().toISOString()
+    
+    const { error } = await supabase
+      .from('cases')
+      .update({ surgeon_left_at: timestamp })
+      .eq('id', id)
+    
+    if (!error) {
+      setSurgeonLeftAt(timestamp)
+    }
+  }
+
+  const clearSurgeonLeft = async () => {
+    const { error } = await supabase
+      .from('cases')
+      .update({ surgeon_left_at: null })
+      .eq('id', id)
+    
+    if (!error) {
+      setSurgeonLeftAt(null)
+    }
+  }
   // ============================================================================
   // STAFF FUNCTIONS
   // ============================================================================
@@ -649,6 +715,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   const completedMilestones = caseMilestones.length
   const totalMilestoneCount = milestoneTypes.length
+  
+  // Surgeon Left button visibility
+  const closingStarted = !!closingTime
+  const patientOutRecorded = !!patientOutTime
 
   // Get assigned staff
   const assignedStaff = caseStaff.filter(cs => {
@@ -940,7 +1010,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             {/* Milestone Grid */}
-            <div className="p-5">
+              <div className="p-5">
               {milestoneTypes.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
                   <svg className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -963,9 +1033,34 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   ))}
                 </div>
               )}
+
+              
+              {/* Surgeon Left Confirmation - Shows after button is clicked */}
+              {surgeonLeftAt && !patientOutRecorded && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                      </div>
+                      <p className="text-xs text-orange-600 mt-0.5">
+                        {formatTimestamp(surgeonLeftAt)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={clearSurgeonLeft}
+                      className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                    >
+                      Undo
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
           {/* SIDEBAR (1 col) */}
           <div className="space-y-4">
 
@@ -1032,7 +1127,59 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 )}
               </div>
             </div>
-
+            {/* SURGEON LEFT */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-900">Surgeon Status</h3>
+              </div>
+              <div className="p-3">
+                {/* Not yet recorded - show button */}
+                {!surgeonLeftAt ? (
+                  <button
+                    onClick={recordSurgeonLeft}
+                    disabled={!closingStarted || patientOutRecorded}
+                    className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      closingStarted && !patientOutRecorded
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Surgeon Left OR
+                  </button>
+                ) : (
+                  /* Already recorded - show confirmation */
+                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                      </div>
+                      <p className="text-xs text-orange-600 mt-0.5">
+                        {formatTimestamp(surgeonLeftAt)}
+                      </p>
+                    </div>
+                    {!patientOutRecorded && (
+                      <button
+                        onClick={clearSurgeonLeft}
+                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!closingStarted && !surgeonLeftAt && (
+                  <p className="text-xs text-slate-400 text-center mt-2">
+                    Available after closing starts
+                  </p>
+                )}
+              </div>
+            </div>
             {/* TRAYS */}
             <DeviceRepSection caseId={id} supabase={supabase} compact />
 
@@ -1094,7 +1241,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
       </div>
-
+          
       {/* FAB */}
       {userFacilityId && (
         <FloatingActionButton

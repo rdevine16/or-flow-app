@@ -85,6 +85,26 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
+  pricing: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+    </svg>
+  ),
+  payers: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ),
+  surgeonVariance: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  ),
+  costCategories: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  ),
 }
 
 // =====================================================
@@ -170,12 +190,44 @@ const settingsGroups: SettingsGroup[] = [
         badge: 'new',
         requiredAccess: ['global_admin', 'facility_admin'],
       },
+    ],
+  },
+  {
+    id: 'financials',
+    label: 'Financials',
+    items: [
       {
-        id: 'financials',
-        label: 'Financials',
-        href: '/settings/financials',
-        description: 'Procedure costs and reimbursements',
-        icon: icons.financials,
+        id: 'procedure-pricing',
+        label: 'Procedure Pricing',
+        href: '/settings/financials/procedure-pricing',
+        description: 'Costs and reimbursements per procedure',
+        icon: icons.pricing,
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'payers',
+        label: 'Payers',
+        href: '/settings/financials/payers',
+        description: 'Insurance companies and contracts',
+        icon: icons.payers,
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'surgeon-variance',
+        label: 'Surgeon Variance',
+        href: '/settings/financials/surgeon-variance',
+        description: 'Surgeon-specific cost overrides',
+        icon: icons.surgeonVariance,
+        badge: 'new',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'cost-categories',
+        label: 'Cost Categories',
+        href: '/settings/financials/cost-categories',
+        description: 'Debit and credit categories',
+        icon: icons.costCategories,
+        badge: 'new',
         requiredAccess: ['global_admin', 'facility_admin'],
       },
     ],
@@ -258,6 +310,13 @@ export default function SettingsLayout({ children, title, description }: Setting
     })
   })).filter(group => group.items.length > 0)
 
+  // Check if current path is within a group (for highlighting section)
+  const isInGroup = (groupId: string) => {
+    const group = settingsGroups.find(g => g.id === groupId)
+    if (!group) return false
+    return group.items.some(item => pathname.startsWith(item.href))
+  }
+
   // Render badge
   const renderBadge = (badge?: 'new' | 'admin') => {
     if (!badge) return null
@@ -323,7 +382,9 @@ export default function SettingsLayout({ children, title, description }: Setting
                 <div key={group.id}>
                   {/* Group Header */}
                   {!sidebarCollapsed && (
-                    <h3 className="px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    <h3 className={`px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider ${
+                      isInGroup(group.id) ? 'text-blue-600' : 'text-slate-400'
+                    }`}>
                       {group.label}
                     </h3>
                   )}
@@ -331,7 +392,7 @@ export default function SettingsLayout({ children, title, description }: Setting
                   {/* Group Items */}
                   <div className="space-y-1">
                     {group.items.map((item) => {
-                      const isActive = pathname === item.href
+                      const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                       
                       return (
                         <Link

@@ -9,7 +9,7 @@ import { getImpersonationState } from '../../../lib/impersonation'
 import DashboardLayout from '../../../components/layouts/DashboardLayout'
 import Container from '../../../components/ui/Container'
 import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
-import { formatSecondsToHHMMSS } from '../../../lib/analytics'
+import { formatSecondsToHHMMSS } from '@/lib/analyticsV2'
 
 // ============================================
 // TYPES
