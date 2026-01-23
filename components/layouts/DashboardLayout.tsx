@@ -554,21 +554,17 @@ if (!mounted) {   return (
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{ width: sidebarWidth }}
-        className="fixed top-0 left-0 h-full bg-[#141414] text-white z-50 flex flex-col transition-all duration-300 ease-out"
+        className="fixed top-0 left-0 h-full bg-slate-900 text-white z-50 flex flex-col transition-all duration-300 ease-out"
       >
-        {/* Logo */}
-        <div className={`h-16 flex items-center border-b border-white/10 ${isExpanded ? 'px-4' : 'justify-center px-2'}`}>
-          <Link href="/dashboard" className="flex items-center text-white">
-            {isExpanded ? (
-              <OrbitLogo className="h-7" />
-            ) : (
-              <OrbitLogoMark className="w-10 h-10" />
-            )}
+        {/* Logo - Static, always the O mark */}
+        <div className="h-16 flex items-center justify-center border-b border-slate-800">
+          <Link href="/dashboard" className="flex items-center justify-center text-white">
+            <OrbitLogoMark className="w-9 h-9" />
           </Link>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 py-4 px-2 overflow-y-auto overflow-x-hidden">
           {isAdminMode ? (
             /* Grouped Admin Navigation */
             <div className="space-y-6">
@@ -576,7 +572,7 @@ if (!mounted) {   return (
                 <div key={group.id}>
                   {/* Group Header */}
                   {isExpanded && (
-                    <h3 className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                    <h3 className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       {group.label}
                     </h3>
                   )}
@@ -588,15 +584,17 @@ if (!mounted) {   return (
                         <Link
                           key={item.name}
                           href={item.href}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                            ${active ? 'bg-white text-[#141414]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+                          className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 group relative
+                            ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+                            ${isExpanded ? 'px-3 py-2.5 gap-3' : 'w-10 h-10 justify-center mx-auto'}`}
                           title={!isExpanded ? item.name : undefined}
                         >
                           <span className="flex-shrink-0">{item.icon}</span>
-                          <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
-                            {item.name}
-                          </span>
-                          {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/60 rounded-r-full" />}
+                          {isExpanded && (
+                            <span className="whitespace-nowrap">
+                              {item.name}
+                            </span>
+                          )}
                         </Link>
                       )
                     })}
@@ -613,15 +611,17 @@ if (!mounted) {   return (
                   <Link
                     key={item.name}
                     href={item.href}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                      ${active ? 'bg-white text-[#141414]' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+                    className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 group relative
+                      ${active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}
+                      ${isExpanded ? 'px-3 py-2.5 gap-3' : 'w-10 h-10 justify-center mx-auto'}`}
                     title={!isExpanded ? item.name : undefined}
                   >
                     <span className="flex-shrink-0">{item.icon}</span>
-                    <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${isExpanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'}`}>
-                      {item.name}
-                    </span>
-                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-white/60 rounded-r-full" />}
+                    {isExpanded && (
+                      <span className="whitespace-nowrap">
+                        {item.name}
+                      </span>
+                    )}
                   </Link>
                 )
               })}
@@ -630,11 +630,11 @@ if (!mounted) {   return (
         </nav>
 
         {/* Pin & Version */}
-        <div className="p-3 border-t border-white/10">
+        <div className={`p-3 border-t border-slate-800 ${!isExpanded ? 'flex flex-col items-center' : ''}`}>
           {isExpanded && (
             <button
               onClick={() => setIsPinned(!isPinned)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isPinned ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${isPinned ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
             >
               <svg className="w-4 h-4 flex-shrink-0" fill={isPinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -642,7 +642,7 @@ if (!mounted) {   return (
               <span className="whitespace-nowrap">{isPinned ? 'Unpin sidebar' : 'Pin sidebar'}</span>
             </button>
           )}
-          <p className={`text-xs text-white/30 mt-2 ${isExpanded ? 'px-3' : 'text-center'}`}>
+          <p className={`text-xs text-slate-600 mt-2 ${isExpanded ? 'px-3' : 'text-center'}`}>
             {isExpanded ? 'Version 1.0.0' : 'v1.0'}
           </p>
         </div>
@@ -665,15 +665,15 @@ if (!mounted) {   return (
                   key={item.id}
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative
-                    ${active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
+                    ${active ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}`}
                 >
                   {item.icon && (
-                    <span className={`flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                    <span className={`flex-shrink-0 ${active ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
                       {item.icon}
                     </span>
                   )}
                   <span>{item.label}</span>
-                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-slate-600 rounded-r-full" />}
+                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-600 rounded-r-full" />}
                 </Link>
               )
             })}
