@@ -122,6 +122,22 @@ export type AuditAction =
   | 'delay_type.created'
   | 'delay_type.updated'
   | 'delay_type.deleted'
+   // Block Schedules
+  | 'block_schedule.created'
+  | 'block_schedule.updated'
+  | 'block_schedule.deleted'
+  | 'block_schedule.restored'
+  // Facility Holidays
+  | 'facility_holiday.created'
+  | 'facility_holiday.updated'
+  | 'facility_holiday.deleted'
+  | 'facility_holiday.toggled'
+  // Facility Closures
+  | 'facility_closure.created'
+  | 'facility_closure.deleted'
+  // Surgeon Colors
+  | 'surgeon_color.assigned'
+  | 'surgeon_color.changed'
   // Admin Actions
   | 'admin.impersonation_started'
   | 'admin.impersonation_ended'
@@ -137,9 +153,26 @@ export type AuditAction =
   | 'admin.procedure_type_created'
   | 'admin.procedure_type_updated'
   | 'admin.procedure_type_deleted'
+  
 
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
+    // Block Schedules
+  'block_schedule.created': 'created a block schedule',
+  'block_schedule.updated': 'updated a block schedule',
+  'block_schedule.deleted': 'deleted a block schedule',
+  'block_schedule.restored': 'restored a block schedule',
+  // Facility Holidays
+  'facility_holiday.created': 'created a facility holiday',
+  'facility_holiday.updated': 'updated a facility holiday',
+  'facility_holiday.deleted': 'deleted a facility holiday',
+  'facility_holiday.toggled': 'toggled a facility holiday',
+  // Facility Closures
+  'facility_closure.created': 'created a facility closure',
+  'facility_closure.deleted': 'deleted a facility closure',
+  // Surgeon Colors
+  'surgeon_color.assigned': 'assigned surgeon color',
+  'surgeon_color.changed': 'changed surgeon color',
   // Auth
   'auth.login': 'logged in',
   'auth.login_failed': 'failed login attempt',
@@ -482,7 +515,248 @@ newValues: {
     })
   },
 }
+// =====================================================
+// BLOCK SCHEDULES
+// =====================================================
 
+export const blockScheduleAudit = {
+  async created(
+    supabase: SupabaseClient,
+    blockId: string,
+    surgeonName: string,
+    dayOfWeek: string,
+    startTime: string,
+    endTime: string,
+    recurrenceType: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'block_schedule.created', {
+      targetType: 'block_schedule',
+      targetId: blockId,
+      targetLabel: `${surgeonName} - ${dayOfWeek}`,
+      facilityId,
+      newValues: {
+        surgeon: surgeonName,
+        day_of_week: dayOfWeek,
+        start_time: startTime,
+        end_time: endTime,
+        recurrence: recurrenceType,
+      },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    blockId: string,
+    surgeonName: string,
+    oldValues: {
+      day_of_week?: string
+      start_time?: string
+      end_time?: string
+      recurrence?: string
+      effective_end?: string | null
+    },
+    newValues: {
+      day_of_week?: string
+      start_time?: string
+      end_time?: string
+      recurrence?: string
+      effective_end?: string | null
+    },
+    facilityId: string
+  ) {
+    await log(supabase, 'block_schedule.updated', {
+      targetType: 'block_schedule',
+      targetId: blockId,
+      targetLabel: surgeonName,
+      facilityId,
+      oldValues,
+      newValues,
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    blockId: string,
+    surgeonName: string,
+    dayOfWeek: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'block_schedule.deleted', {
+      targetType: 'block_schedule',
+      targetId: blockId,
+      targetLabel: `${surgeonName} - ${dayOfWeek}`,
+      facilityId,
+    })
+  },
+
+  async restored(
+    supabase: SupabaseClient,
+    blockId: string,
+    surgeonName: string,
+    dayOfWeek: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'block_schedule.restored', {
+      targetType: 'block_schedule',
+      targetId: blockId,
+      targetLabel: `${surgeonName} - ${dayOfWeek}`,
+      facilityId,
+    })
+  },
+}
+
+// =====================================================
+// FACILITY HOLIDAYS
+// =====================================================
+
+export const facilityHolidayAudit = {
+  async created(
+    supabase: SupabaseClient,
+    holidayId: string,
+    holidayName: string,
+    dateDescription: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'facility_holiday.created', {
+      targetType: 'facility_holiday',
+      targetId: holidayId,
+      targetLabel: holidayName,
+      facilityId,
+      newValues: {
+        name: holidayName,
+        date_rule: dateDescription,
+      },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    holidayId: string,
+    holidayName: string,
+    oldValues: { name?: string; date_rule?: string },
+    newValues: { name?: string; date_rule?: string },
+    facilityId: string
+  ) {
+    await log(supabase, 'facility_holiday.updated', {
+      targetType: 'facility_holiday',
+      targetId: holidayId,
+      targetLabel: holidayName,
+      facilityId,
+      oldValues,
+      newValues,
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    holidayId: string,
+    holidayName: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'facility_holiday.deleted', {
+      targetType: 'facility_holiday',
+      targetId: holidayId,
+      targetLabel: holidayName,
+      facilityId,
+    })
+  },
+
+  async toggled(
+    supabase: SupabaseClient,
+    holidayId: string,
+    holidayName: string,
+    isActive: boolean,
+    facilityId: string
+  ) {
+    await log(supabase, 'facility_holiday.toggled', {
+      targetType: 'facility_holiday',
+      targetId: holidayId,
+      targetLabel: holidayName,
+      facilityId,
+      newValues: { is_active: isActive },
+    })
+  },
+}
+
+// =====================================================
+// FACILITY CLOSURES
+// =====================================================
+
+export const facilityClosureAudit = {
+  async created(
+    supabase: SupabaseClient,
+    closureId: string,
+    closureDate: string,
+    reason: string | null,
+    facilityId: string
+  ) {
+    await log(supabase, 'facility_closure.created', {
+      targetType: 'facility_closure',
+      targetId: closureId,
+      targetLabel: closureDate,
+      facilityId,
+      newValues: {
+        date: closureDate,
+        reason: reason,
+      },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    closureId: string,
+    closureDate: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'facility_closure.deleted', {
+      targetType: 'facility_closure',
+      targetId: closureId,
+      targetLabel: closureDate,
+      facilityId,
+    })
+  },
+}
+
+// =====================================================
+// SURGEON COLORS
+// =====================================================
+
+export const surgeonColorAudit = {
+  async assigned(
+    supabase: SupabaseClient,
+    surgeonId: string,
+    surgeonName: string,
+    color: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_color.assigned', {
+      targetType: 'surgeon_color',
+      targetId: surgeonId,
+      targetLabel: surgeonName,
+      facilityId,
+      newValues: { color },
+    })
+  },
+
+  async changed(
+    supabase: SupabaseClient,
+    surgeonId: string,
+    surgeonName: string,
+    oldColor: string,
+    newColor: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'surgeon_color.changed', {
+      targetType: 'surgeon_color',
+      targetId: surgeonId,
+      targetLabel: surgeonName,
+      facilityId,
+      oldValues: { color: oldColor },
+      newValues: { color: newColor },
+    })
+  },
+}
 // =====================================================
 // BODY REGIONS
 // =====================================================
