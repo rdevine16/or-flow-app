@@ -12,7 +12,7 @@ import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
 import { BlockPopover } from '@/components/block-schedule/BlockPopover'
-import { ChevronLeft, ChevronRight, Calendar, Plus, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Surgeon {
   id: string
@@ -32,13 +32,16 @@ export default function BlockSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const today = new Date()
     const day = today.getDay()
-    const diff = today.getDate() - day // Start on Sunday
+    const diff = today.getDate() - day
     return new Date(today.setDate(diff))
   })
 
   // Surgeons
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [selectedSurgeonIds, setSelectedSurgeonIds] = useState<Set<string>>(new Set())
+
+  // Show holidays toggle
+  const [showHolidays, setShowHolidays] = useState(true)
 
   // Popover state
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -51,12 +54,9 @@ export default function BlockSchedulePage() {
   const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | undefined>()
 
   // Hooks
-  const { blocks, fetchBlocksForRange, createBlock, updateBlock, deleteBlock } = 
-    useBlockSchedules({ facilityId })
-  const { holidays, closures, fetchHolidays, fetchClosures, isDateClosed } = 
-    useFacilityClosures({ facilityId })
-  const { colors, fetchColors, getColorForSurgeon, getColorMap } = 
-    useSurgeonColors({ facilityId })
+  const { blocks, fetchBlocksForRange, deleteBlock } = useBlockSchedules({ facilityId })
+  const { holidays, closures, fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
+  const { fetchColors, getColorMap } = useSurgeonColors({ facilityId })
 
   // Load user and facility
   useEffect(() => {
@@ -86,22 +86,23 @@ export default function BlockSchedulePage() {
     async function loadSurgeons() {
       if (!facilityId) return
 
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'surgeon')
+        .single()
+
+      if (!roleData) return
+
       const { data } = await supabase
         .from('users')
         .select('id, first_name, last_name')
         .eq('facility_id', facilityId)
-        .eq('role_id', (
-          await supabase
-            .from('user_roles')
-            .select('id')
-            .eq('name', 'surgeon')
-            .single()
-        ).data?.id)
+        .eq('role_id', roleData.id)
         .order('last_name')
 
       if (data) {
         setSurgeons(data)
-        // Select all surgeons by default
         setSelectedSurgeonIds(new Set(data.map(s => s.id)))
       }
     }
@@ -138,14 +139,18 @@ export default function BlockSchedulePage() {
   }
 
   // Filter blocks by selected surgeons
-  const filteredBlocks = blocks.filter(block => 
-    selectedSurgeonIds.has(block.surgeon_id)
-  )
+  const filteredBlocks = blocks.filter(block => selectedSurgeonIds.has(block.surgeon_id))
+
+  // Closure check - only if holidays are shown
+  const checkDateClosed = useCallback((date: Date) => {
+    if (!showHolidays) return false
+    return isDateClosed(date)
+  }, [showHolidays, isDateClosed])
 
   // Handle drag selection from calendar
   const handleDragSelect = (
-    dayOfWeek: number, 
-    startTime: string, 
+    dayOfWeek: number,
+    startTime: string,
     endTime: string,
     position?: { x: number; y: number }
   ) => {
@@ -157,7 +162,6 @@ export default function BlockSchedulePage() {
 
   // Handle block click (edit)
   const handleBlockClick = async (block: ExpandedBlock, position?: { x: number; y: number }) => {
-    // Fetch full block data for editing
     const { data } = await supabase
       .from('block_schedules')
       .select('*')
@@ -172,12 +176,11 @@ export default function BlockSchedulePage() {
     }
   }
 
-  // Handle "Add Block" button (no position, will center)
+  // Handle "Create" button
   const handleAddBlockButton = () => {
     setEditingBlock(null)
     setDragSelection(null)
-    // Position near the button (top right area)
-    setClickPosition({ x: window.innerWidth - 400, y: 200 })
+    setClickPosition({ x: 300, y: 150 })
     setPopoverOpen(true)
   }
 
@@ -188,7 +191,6 @@ export default function BlockSchedulePage() {
     setDragSelection(null)
     setClickPosition(undefined)
 
-    // Refresh blocks
     const startDate = formatDate(currentWeekStart)
     const endDate = formatDate(addDays(currentWeekStart, 6))
     await fetchBlocksForRange(startDate, endDate)
@@ -205,7 +207,6 @@ export default function BlockSchedulePage() {
     const dayOfWeek = new Date(block.block_date).getDay()
     await deleteBlock(blockId, surgeon, dayOfWeek)
 
-    // Refresh
     const startDate = formatDate(currentWeekStart)
     const endDate = formatDate(addDays(currentWeekStart, 6))
     await fetchBlocksForRange(startDate, endDate)
@@ -234,6 +235,19 @@ export default function BlockSchedulePage() {
 
   const colorMap = getColorMap()
 
+  // Format week range for header - Google style
+  const formatWeekHeader = () => {
+    const weekEnd = addDays(currentWeekStart, 6)
+    const startMonth = currentWeekStart.toLocaleDateString('en-US', { month: 'long' })
+    const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'long' })
+    const year = weekEnd.getFullYear()
+
+    if (startMonth === endMonth) {
+      return `${startMonth} ${year}`
+    }
+    return `${startMonth} – ${endMonth} ${year}`
+  }
+
   return (
     <DashboardLayout>
       {loading ? (
@@ -241,87 +255,69 @@ export default function BlockSchedulePage() {
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ height: 'calc(100vh - 160px)' }}>
-          {/* Page Header - inside the card */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex-shrink-0">
-            <div>
-              <h1 className="text-xl font-semibold text-slate-900">Block Schedule</h1>
-              <p className="text-sm text-slate-500">Manage surgeon block time allocations</p>
+        <div 
+          className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex"
+          style={{ height: 'calc(100vh - 140px)' }}
+        >
+          {/* Sidebar */}
+          <BlockSidebar
+            surgeons={surgeons}
+            selectedSurgeonIds={selectedSurgeonIds}
+            colorMap={colorMap}
+            onToggleSurgeon={toggleSurgeon}
+            onSelectAll={selectAllSurgeons}
+            onDeselectAll={deselectAllSurgeons}
+            currentWeekStart={currentWeekStart}
+            onDateSelect={(date) => {
+              const day = date.getDay()
+              const diff = date.getDate() - day
+              setCurrentWeekStart(new Date(new Date(date).setDate(diff)))
+            }}
+            onAddBlock={handleAddBlockButton}
+            showHolidays={showHolidays}
+            onToggleHolidays={() => setShowHolidays(!showHolidays)}
+          />
+
+          {/* Main Calendar Area */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Navigation Header - Google Style */}
+            <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 bg-white flex-shrink-0">
+              <button
+                onClick={goToToday}
+                className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 transition-colors"
+              >
+                Today
+              </button>
+              <div className="flex items-center">
+                <button
+                  onClick={goToPreviousWeek}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <ChevronLeft className="h-5 w-5 text-slate-600" />
+                </button>
+                <button
+                  onClick={goToNextWeek}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <ChevronRight className="h-5 w-5 text-slate-600" />
+                </button>
+              </div>
+              <h1 className="text-xl font-normal text-slate-800">
+                {formatWeekHeader()}
+              </h1>
             </div>
 
-            <button
-              onClick={handleAddBlockButton}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              <Plus className="h-4 w-4" />
-              Add Block
-            </button>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Sidebar */}
-            <BlockSidebar
-              surgeons={surgeons}
-              selectedSurgeonIds={selectedSurgeonIds}
-              colorMap={colorMap}
-              onToggleSurgeon={toggleSurgeon}
-              onSelectAll={selectAllSurgeons}
-              onDeselectAll={deselectAllSurgeons}
-              currentWeekStart={currentWeekStart}
-              onDateSelect={(date) => {
-                const day = date.getDay()
-                const diff = date.getDate() - day
-                setCurrentWeekStart(new Date(new Date(date).setDate(diff)))
-              }}
-            />
-
-            {/* Calendar Section */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Calendar Navigation */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white flex-shrink-0">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={goToPreviousWeek}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    <ChevronLeft className="h-5 w-5 text-slate-600" />
-                  </button>
-                  <button
-                    onClick={goToToday}
-                    className="px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={goToNextWeek}
-                    className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    <ChevronRight className="h-5 w-5 text-slate-600" />
-                  </button>
-                  <span className="ml-2 text-base font-medium text-slate-700">
-                    {formatWeekRange(currentWeekStart)}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Calendar className="h-4 w-4" />
-                  <span>Week View</span>
-                </div>
-              </div>
-
-              {/* Calendar Grid */}
-              <div className="flex-1 overflow-hidden">
-                <WeekCalendar
-                  weekStart={currentWeekStart}
-                  blocks={filteredBlocks}
-                  colorMap={colorMap}
-                  isDateClosed={isDateClosed}
-                  onDragSelect={handleDragSelect}
-                  onBlockClick={handleBlockClick}
-                  activeSelection={popoverOpen && dragSelection ? dragSelection : null}
-                />
-              </div>
+            {/* Calendar Grid */}
+            <div className="flex-1 overflow-hidden">
+              <WeekCalendar
+                weekStart={currentWeekStart}
+                blocks={filteredBlocks}
+                colorMap={colorMap}
+                isDateClosed={checkDateClosed}
+                onDragSelect={handleDragSelect}
+                onBlockClick={handleBlockClick}
+                activeSelection={popoverOpen && dragSelection ? dragSelection : null}
+              />
             </div>
           </div>
 
@@ -360,18 +356,4 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date)
   result.setDate(result.getDate() + days)
   return result
-}
-
-function formatWeekRange(weekStart: Date): string {
-  const weekEnd = addDays(weekStart, 6)
-  const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' })
-  const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short' })
-  const startDay = weekStart.getDate()
-  const endDay = weekEnd.getDate()
-  const year = weekEnd.getFullYear()
-
-  if (startMonth === endMonth) {
-    return `${startMonth} ${startDay} - ${endDay}, ${year}`
-  }
-  return `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${year}`
 }

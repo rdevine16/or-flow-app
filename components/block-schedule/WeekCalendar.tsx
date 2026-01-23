@@ -227,8 +227,8 @@ export function WeekCalendar({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Day Headers - Fixed */}
-      <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0">
+      {/* Day Headers - Google Calendar Style */}
+      <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
         <div className="w-[60px] flex-shrink-0" />
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
@@ -237,27 +237,24 @@ export function WeekCalendar({
           return (
             <div
               key={i}
-              className={`flex-1 py-3 text-center border-l border-gray-200 ${
-                isClosed ? 'bg-gray-100' : ''
-              }`}
+              className="flex-1 py-3 text-center"
             >
-              <div className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-gray-500'}`}>
+              <div className={`text-xs font-medium uppercase tracking-wide ${
+                isToday ? 'text-blue-600' : 'text-slate-500'
+              }`}>
                 {DAY_OF_WEEK_SHORT[i]}
               </div>
               <div
-                className={`text-lg font-semibold mt-0.5 ${
+                className={`text-2xl font-normal mt-0.5 ${
                   isToday
-                    ? 'text-white bg-blue-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto'
+                    ? 'text-white bg-blue-600 rounded-full w-10 h-10 flex items-center justify-center mx-auto'
                     : isClosed
-                    ? 'text-gray-400'
-                    : 'text-gray-900'
+                    ? 'text-slate-300'
+                    : 'text-slate-800'
                 }`}
               >
                 {date.getDate()}
               </div>
-              {isClosed && (
-                <div className="text-xs text-gray-400 mt-1">Closed</div>
-              )}
             </div>
           )
         })}
@@ -284,15 +281,15 @@ export function WeekCalendar({
             }
           }}
         >
-          {/* Time Labels */}
-          <div className="w-[60px] flex-shrink-0 bg-white sticky left-0 z-10">
+          {/* Time Labels - Google style */}
+          <div className="w-[60px] flex-shrink-0 bg-white sticky left-0 z-10 border-r border-slate-100">
             {HOURS.map(hour => (
               <div
                 key={hour}
-                className="h-[60px] pr-2 text-right text-xs text-gray-500 relative"
+                className="h-[60px] pr-3 text-right relative"
               >
-                <span className="absolute -top-2 right-2">
-                  {formatTime12Hour(`${hour.toString().padStart(2, '0')}:00:00`)}
+                <span className="absolute -top-2.5 right-3 text-[11px] text-slate-400 font-medium">
+                  {hour === 0 ? '' : formatTime12Hour(`${hour.toString().padStart(2, '0')}:00:00`).replace(':00', '')}
                 </span>
               </div>
             ))}
@@ -306,26 +303,25 @@ export function WeekCalendar({
             return (
               <div
                 key={dayIndex}
-                className={`flex-1 border-l border-gray-200 relative ${
-                  isClosed ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-crosshair'
+                className={`flex-1 relative ${
+                  isClosed ? 'bg-slate-50 cursor-not-allowed' : 'bg-white cursor-crosshair'
                 }`}
               >
-                {/* Hour lines */}
+                {/* Hour lines - subtle like Google */}
                 {HOURS.map(hour => (
                   <div
                     key={hour}
-                    className={`h-[60px] border-b ${
-                      hour === 12 ? 'border-gray-200' : 'border-gray-100'
-                    }`}
-                  >
-                    {/* Half-hour line */}
-                    <div className="h-1/2 border-b border-dashed border-gray-100" />
-                  </div>
+                    className="h-[60px] border-b border-slate-100"
+                  />
                 ))}
 
                 {/* Closed overlay */}
                 {isClosed && (
-                  <div className="absolute inset-0 bg-gray-100/50 bg-stripes pointer-events-none" />
+                  <div className="absolute inset-0 bg-slate-100/70 pointer-events-none">
+                    <div className="absolute inset-0 opacity-10" style={{
+                      backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',
+                    }} />
+                  </div>
                 )}
 
                 {/* Blocks */}
