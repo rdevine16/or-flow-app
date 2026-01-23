@@ -31,7 +31,20 @@ interface PiPMilestonePanelProps {
   onRefresh: () => void
 }
 
-// Format timestamp to readable time
+// Format elapsed time as MM:SS or HHH:MM
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+// Format timestamp
 function formatTime(timestamp: string): string {
   const date = new Date(timestamp)
   return date.toLocaleTimeString('en-US', {
@@ -39,21 +52,6 @@ function formatTime(timestamp: string): string {
     minute: '2-digit',
     hour12: true,
   })
-}
-
-// Calculate elapsed time between two timestamps
-function getElapsedTime(start: string, end?: string): string {
-  const startTime = new Date(start).getTime()
-  const endTime = end ? new Date(end).getTime() : Date.now()
-  const diffMs = endTime - startTime
-  const diffMins = Math.floor(diffMs / 60000)
-  const hours = Math.floor(diffMins / 60)
-  const mins = diffMins % 60
-  
-  if (hours > 0) {
-    return `${hours}h ${mins}m`
-  }
-  return `${mins}m`
 }
 
 export default function PiPMilestonePanel({
@@ -70,11 +68,12 @@ export default function PiPMilestonePanel({
   onRefresh,
 }: PiPMilestonePanelProps) {
   const [loading, setLoading] = useState<string | null>(null)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState(Date.now())
+  const [activeIndex, setActiveIndex] = useState(0)
 
-  // Update current time every second for elapsed timers
+  // Update time every second
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [])
 
@@ -89,7 +88,62 @@ export default function PiPMilestonePanel({
     return milestones.find(m => m.id === milestone.pair_with_id)
   }, [milestones])
 
-  // Handle recording a milestone
+  // Build display items (only show "start" position for pairs)
+  const displayItems = milestones
+    .filter(m => m.pair_position !== 'end')
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(milestone => {
+      const recorded = getRecorded(milestone.id)
+      const isPaired = milestone.pair_position === 'start'
+      const partner = isPaired ? getPartner(milestone) : null
+      const partnerRecorded = partner ? getRecorded(partner.id) : null
+
+      const isComplete = isPaired ? !!partnerRecorded : !!recorded
+      const isInProgress = isPaired ? (!!recorded && !partnerRecorded) : false
+      const isNotStarted = !recorded
+
+      // Calculate elapsed time for in-progress milestones
+      let elapsedMs = 0
+      if (isInProgress && recorded) {
+        elapsedMs = currentTime - new Date(recorded.recorded_at).getTime()
+      }
+
+      return {
+        milestone,
+        recorded,
+        isPaired,
+        partner,
+        partnerRecorded,
+        isComplete,
+        isInProgress,
+        isNotStarted,
+        elapsedMs,
+        displayName: milestone.display_name.replace(/ Start$/i, ''),
+      }
+    })
+
+  // Find the current active milestone (first not completed, or last if all done)
+  useEffect(() => {
+    const firstIncomplete = displayItems.findIndex(item => !item.isComplete)
+    if (firstIncomplete !== -1) {
+      setActiveIndex(firstIncomplete)
+    } else {
+      setActiveIndex(displayItems.length - 1)
+    }
+  }, [recordedMilestones.length])
+
+  const activeItem = displayItems[activeIndex]
+  const completedCount = displayItems.filter(i => i.isComplete).length
+  const totalCount = displayItems.length
+
+  // Calculate total case time (from patient_in)
+  const patientInMilestone = milestones.find(m => m.name === 'patient_in')
+  const patientInRecorded = patientInMilestone ? getRecorded(patientInMilestone.id) : null
+  const totalCaseMs = patientInRecorded 
+    ? currentTime - new Date(patientInRecorded.recorded_at).getTime()
+    : 0
+
+  // Handle actions
   const handleRecord = async (milestoneId: string) => {
     setLoading(milestoneId)
     try {
@@ -99,9 +153,8 @@ export default function PiPMilestonePanel({
     }
   }
 
-  // Handle undoing a milestone
-  const handleUndo = async (recordedId: string, milestoneId: string) => {
-    setLoading(milestoneId)
+  const handleUndo = async (recordedId: string) => {
+    setLoading('undo')
     try {
       await onUndoMilestone(recordedId)
     } finally {
@@ -109,264 +162,251 @@ export default function PiPMilestonePanel({
     }
   }
 
-  // Calculate progress
-  const recordedCount = recordedMilestones.length
-  const totalCount = milestones.length
-  const progress = totalCount > 0 ? (recordedCount / totalCount) * 100 : 0
+  // Navigate between milestones
+  const goNext = () => setActiveIndex(Math.min(activeIndex + 1, displayItems.length - 1))
+  const goPrev = () => setActiveIndex(Math.max(activeIndex - 1, 0))
 
-  // Get patient_in time for total elapsed
-  const patientInMilestone = milestones.find(m => m.name === 'patient_in')
-  const patientInRecorded = patientInMilestone ? getRecorded(patientInMilestone.id) : null
-  const totalElapsed = patientInRecorded ? getElapsedTime(patientInRecorded.recorded_at) : null
+  if (!activeItem) return null
 
-  // Filter milestones - only show "start" position for pairs, all singles
-  const displayMilestones = milestones.filter(m => 
-    m.pair_position !== 'end'
-  ).sort((a, b) => a.display_order - b.display_order)
+  // Determine colors based on state
+  const getAccentColor = () => {
+    if (activeItem.isComplete) return { ring: '#10b981', text: '#10b981', bg: 'rgba(16, 185, 129, 0.15)' } // green
+    if (activeItem.isInProgress) return { ring: '#f59e0b', text: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' } // amber
+    return { ring: '#3b82f6', text: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' } // blue
+  }
+  const accent = getAccentColor()
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-black flex flex-col text-white select-none">
+      
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-3 py-2 sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* ORbit Logo */}
-            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                <circle cx="12" cy="12" r="3" strokeWidth={2} />
-              </svg>
-            </div>
-            <span className="font-semibold text-slate-800 text-sm">{roomName}</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-slate-100 rounded transition-colors"
-            title="Close"
-          >
-            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="8" strokeWidth={2} />
             </svg>
-          </button>
-        </div>
-        
-        {/* Case Info */}
-        <div className="mt-1">
-          <div className="text-xs text-slate-500">{caseNumber}</div>
-          <div className="text-sm font-medium text-slate-700 truncate">{procedureName}</div>
-          <div className="text-xs text-slate-500">{surgeonName}</div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="mt-2 flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
           </div>
-          <span className="text-xs text-slate-500 tabular-nums">{recordedCount}/{totalCount}</span>
+          <div>
+            <p className="text-xs font-semibold text-white/90">{roomName}</p>
+            <p className="text-[10px] text-white/50">{caseNumber}</p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+        >
+          <svg className="w-4 h-4 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Total Time Card */}
+      {patientInRecorded && (
+        <div className="mx-4 mt-3 px-4 py-3 rounded-xl bg-gradient-to-br from-emerald-600/20 to-emerald-600/5 border border-emerald-500/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-wider">Total Case</span>
+            </div>
+            <span className="text-xs text-white/50">Started {formatTime(patientInRecorded.recorded_at)}</span>
+          </div>
+          <p className="text-2xl font-bold text-white font-mono tabular-nums mt-1">
+            {formatElapsed(totalCaseMs)}
+          </p>
+        </div>
+      )}
+
+      {/* Main Content - Current Milestone */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
+        
+        {/* Circular Progress Indicator */}
+        <div className="relative w-24 h-24 mb-4">
+          <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+            {/* Background circle */}
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke="rgba(255,255,255,0.1)"
+              strokeWidth="6"
+            />
+            {/* Progress circle */}
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              fill="none"
+              stroke={accent.ring}
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray={`${(completedCount / totalCount) * 264} 264`}
+              style={{ transition: 'stroke-dasharray 0.5s ease' }}
+            />
+          </svg>
+          {/* Center icon */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            {activeItem.isComplete ? (
+              <svg className="w-10 h-10" fill="none" stroke={accent.ring} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : activeItem.isInProgress ? (
+              <div className="w-4 h-4 rounded-full animate-pulse" style={{ backgroundColor: accent.ring }} />
+            ) : (
+              <div className="w-4 h-4 rounded-full border-2" style={{ borderColor: accent.ring }} />
+            )}
+          </div>
         </div>
 
-        {/* Total Elapsed */}
-        {totalElapsed && (
-          <div className="mt-1 text-xs text-slate-500">
-            Total: <span className="font-medium text-slate-700">{totalElapsed}</span>
+        {/* Milestone Name */}
+        <h2 className="text-xl font-semibold text-white text-center mb-2">
+          {activeItem.displayName}
+        </h2>
+
+        {/* Timer / Status */}
+        {activeItem.isInProgress && (
+          <p className="text-5xl font-bold font-mono tabular-nums mb-6" style={{ color: accent.text }}>
+            {formatElapsed(activeItem.elapsedMs)}
+          </p>
+        )}
+
+        {activeItem.isComplete && activeItem.recorded && (
+          <p className="text-lg text-white/60 mb-6">
+            {activeItem.isPaired && activeItem.partnerRecorded ? (
+              <>
+                {formatTime(activeItem.recorded.recorded_at)} → {formatTime(activeItem.partnerRecorded.recorded_at)}
+              </>
+            ) : (
+              formatTime(activeItem.recorded.recorded_at)
+            )}
+          </p>
+        )}
+
+        {activeItem.isNotStarted && (
+          <p className="text-lg text-white/40 mb-6">Not started</p>
+        )}
+
+        {/* Action Button */}
+        {activeItem.isNotStarted && (
+          <button
+            onClick={() => handleRecord(activeItem.milestone.id)}
+            disabled={loading === activeItem.milestone.id}
+            className="w-full max-w-xs py-4 px-6 text-lg font-semibold text-white rounded-2xl transition-all active:scale-[0.98]"
+            style={{ 
+              background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+              boxShadow: '0 4px 20px rgba(59, 130, 246, 0.4)'
+            }}
+          >
+            {loading === activeItem.milestone.id ? 'Recording...' : 'Record'}
+          </button>
+        )}
+
+        {activeItem.isInProgress && activeItem.isPaired && activeItem.partner && (
+          <button
+            onClick={() => handleRecord(activeItem.partner!.id)}
+            disabled={loading === activeItem.partner.id}
+            className="w-full max-w-xs py-4 px-6 text-lg font-semibold text-white rounded-2xl transition-all active:scale-[0.98]"
+            style={{ 
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+              boxShadow: '0 4px 20px rgba(239, 68, 68, 0.4)'
+            }}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <span className="w-3 h-3 bg-white rounded-sm" />
+              {loading === activeItem.partner.id ? 'Stopping...' : 'Stop'}
+            </span>
+          </button>
+        )}
+
+        {/* Secondary Actions */}
+        {(activeItem.isInProgress || activeItem.isComplete) && (
+          <div className="flex items-center gap-6 mt-4">
+            {activeItem.isInProgress && activeItem.recorded && (
+              <button
+                onClick={() => handleUndo(activeItem.recorded!.id)}
+                disabled={loading === 'undo'}
+                className="text-sm text-white/50 hover:text-white/80 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                Undo Start
+              </button>
+            )}
+            {activeItem.isComplete && activeItem.isPaired && activeItem.partnerRecorded && (
+              <button
+                onClick={() => handleUndo(activeItem.partnerRecorded!.id)}
+                disabled={loading === 'undo'}
+                className="text-sm text-white/50 hover:text-white/80 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                Undo
+              </button>
+            )}
+            {activeItem.isComplete && !activeItem.isPaired && activeItem.recorded && (
+              <button
+                onClick={() => handleUndo(activeItem.recorded!.id)}
+                disabled={loading === 'undo'}
+                className="text-sm text-white/50 hover:text-white/80 transition-colors flex items-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+                Undo
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Milestones List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-        {displayMilestones.map((milestone) => {
-          const recorded = getRecorded(milestone.id)
-          const isPaired = milestone.pair_position === 'start'
-          const partner = isPaired ? getPartner(milestone) : null
-          const partnerRecorded = partner ? getRecorded(partner.id) : null
-
-          // Paired milestone (Start/Stop)
-          if (isPaired && partner) {
-            const isStarted = !!recorded
-            const isCompleted = isStarted && !!partnerRecorded
-            const isRunning = isStarted && !isCompleted
-
-            return (
-              <div
-                key={milestone.id}
-                className={`
-                  rounded-lg border p-2 transition-colors
-                  ${isCompleted 
-                    ? 'bg-emerald-50 border-emerald-200' 
-                    : isRunning 
-                      ? 'bg-amber-50 border-amber-200' 
-                      : 'bg-white border-slate-200'
-                  }
-                `}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    {isCompleted ? (
-                      <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : isRunning ? (
-                      <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-                    ) : (
-                      <span className="w-4 h-4 border-2 border-slate-300 rounded-full" />
-                    )}
-                    <span className={`text-sm font-medium ${isCompleted ? 'text-emerald-700' : isRunning ? 'text-amber-700' : 'text-slate-700'}`}>
-                      {milestone.display_name.replace(' Start', '').replace(' End', '')}
-                    </span>
-                  </div>
-
-                  {/* Times */}
-                  {isRunning && recorded && (
-                    <span className="text-xs font-medium text-amber-600 tabular-nums">
-                      {getElapsedTime(recorded.recorded_at)}
-                    </span>
-                  )}
-                  {isCompleted && recorded && partnerRecorded && (
-                    <span className="text-xs text-emerald-600 tabular-nums">
-                      {getElapsedTime(recorded.recorded_at, partnerRecorded.recorded_at)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Action Buttons */}
-                <div className="mt-1.5 flex gap-1.5">
-                  {!isStarted ? (
-                    <button
-                      onClick={() => handleRecord(milestone.id)}
-                      disabled={loading === milestone.id}
-                      className="flex-1 py-1.5 px-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white text-xs font-medium rounded transition-colors"
-                    >
-                      {loading === milestone.id ? '...' : '▶ Start'}
-                    </button>
-                  ) : !isCompleted ? (
-                    <>
-                      <button
-                        onClick={() => handleUndo(recorded!.id, milestone.id)}
-                        disabled={loading === milestone.id}
-                        className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs rounded transition-colors"
-                      >
-                        Undo
-                      </button>
-                      <button
-                        onClick={() => handleRecord(partner.id)}
-                        disabled={loading === partner.id}
-                        className="flex-1 py-1.5 px-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-xs font-medium rounded transition-colors"
-                      >
-                        {loading === partner.id ? '...' : '■ Stop'}
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => handleUndo(partnerRecorded!.id, partner.id)}
-                      disabled={loading === partner.id}
-                      className="flex-1 py-1 px-2 text-slate-500 hover:text-slate-700 text-xs transition-colors"
-                    >
-                      Undo Stop
-                    </button>
-                  )}
-                </div>
-
-                {/* Timestamps */}
-                {(recorded || partnerRecorded) && (
-                  <div className="mt-1 flex gap-2 text-[10px] text-slate-500">
-                    {recorded && <span>Start: {formatTime(recorded.recorded_at)}</span>}
-                    {partnerRecorded && <span>Stop: {formatTime(partnerRecorded.recorded_at)}</span>}
-                  </div>
-                )}
-              </div>
-            )
-          }
-
-          // Single milestone
-          const isRecorded = !!recorded
-          const isPatientIn = milestone.name === 'patient_in'
-          const isPatientOut = milestone.name === 'patient_out'
-
-          return (
-            <div
-              key={milestone.id}
-              className={`
-                rounded-lg border p-2 transition-colors
-                ${isRecorded 
-                  ? isPatientOut
-                    ? 'bg-slate-100 border-slate-300'
-                    : 'bg-emerald-50 border-emerald-200' 
-                  : isPatientIn
-                    ? 'bg-blue-50 border-blue-200'
-                    : 'bg-white border-slate-200'
-                }
-              `}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {isRecorded ? (
-                    <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <span className={`w-4 h-4 border-2 rounded-full ${isPatientIn ? 'border-blue-400' : 'border-slate-300'}`} />
-                  )}
-                  <span className={`text-sm font-medium ${isRecorded ? 'text-emerald-700' : isPatientIn ? 'text-blue-700' : 'text-slate-700'}`}>
-                    {milestone.display_name}
-                  </span>
-                </div>
-
-                {isRecorded && recorded && (
-                  <span className="text-xs text-slate-500 tabular-nums">
-                    {formatTime(recorded.recorded_at)}
-                  </span>
-                )}
-              </div>
-
-              {/* Action Button */}
-              <div className="mt-1.5">
-                {!isRecorded ? (
-                  <button
-                    onClick={() => handleRecord(milestone.id)}
-                    disabled={loading === milestone.id}
-                    className={`
-                      w-full py-1.5 px-2 text-white text-xs font-medium rounded transition-colors
-                      ${isPatientIn 
-                        ? 'bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300' 
-                        : 'bg-slate-500 hover:bg-slate-600 disabled:bg-slate-300'
-                      }
-                    `}
-                  >
-                    {loading === milestone.id ? 'Recording...' : 'Record'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleUndo(recorded!.id, milestone.id)}
-                    disabled={loading === milestone.id}
-                    className="w-full py-1 px-2 text-slate-500 hover:text-slate-700 text-xs transition-colors"
-                  >
-                    Undo
-                  </button>
-                )}
-              </div>
-            </div>
-          )
-        })}
+      {/* Navigation Dots */}
+      <div className="flex items-center justify-center gap-2 py-3">
+        {displayItems.map((item, idx) => (
+          <button
+            key={item.milestone.id}
+            onClick={() => setActiveIndex(idx)}
+            className={`w-2 h-2 rounded-full transition-all ${
+              idx === activeIndex 
+                ? 'w-6 bg-white' 
+                : item.isComplete 
+                  ? 'bg-emerald-500' 
+                  : item.isInProgress
+                    ? 'bg-amber-500'
+                    : 'bg-white/30'
+            }`}
+          />
+        ))}
       </div>
 
       {/* Footer */}
-      <div className="bg-white border-t border-slate-200 px-3 py-2 flex items-center justify-between">
+      <div className="px-4 py-3 border-t border-white/10 flex items-center justify-between">
         <button
-          onClick={onRefresh}
-          className="p-1.5 hover:bg-slate-100 rounded transition-colors"
-          title="Refresh"
+          onClick={goPrev}
+          disabled={activeIndex === 0}
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
         >
-          <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="text-[10px] text-slate-400">
-          ORbit • Picture-in-Picture
-        </span>
+        
+        <p className="text-sm text-white/50">
+          {completedCount} of {totalCount} completed
+        </p>
+        
+        <button
+          onClick={goNext}
+          disabled={activeIndex === displayItems.length - 1}
+          className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
+        >
+          <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
     </div>
   )
