@@ -17,6 +17,7 @@ import CallNextPatientModal from '../../../components/CallNextPatientModal'
 import CompletedCaseView from '../../../components/cases/CompletedCaseView'
 import DeviceRepSection from '../../../components/cases/DeviceRepSection'
 import { runDetectionForCase } from '../../../lib/dataQuality'
+import PiPMilestoneWrapper, { PiPButton } from '../../../components/pip/PiPMilestoneWrapper'
 
 
 // ============================================================================
@@ -211,6 +212,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [patientCallTime, setPatientCallTime] = useState<string | null>(null)
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [surgeonLeftAt, setSurgeonLeftAt] = useState<string | null>(null)
+  const [isPiPOpen, setIsPiPOpen] = useState(false)
 
 
   // Live clock
@@ -997,16 +999,20 @@ if (milestoneType?.name === 'patient_in') {
               </div>
               {/* Progress bar */}
               <div className="flex items-center gap-3">
-                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${(completedMilestones / totalMilestoneCount) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-slate-700">
-                  {Math.round((completedMilestones / totalMilestoneCount) * 100)}%
-                </span>
-              </div>
+  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+    <div
+      className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500 ease-out"
+      style={{ width: `${(completedMilestones / totalMilestoneCount) * 100}%` }}
+    />
+  </div>
+  <span className="text-sm font-semibold text-slate-700">
+    {Math.round((completedMilestones / totalMilestoneCount) * 100)}%
+  </span>
+  <PiPButton 
+    onClick={() => setIsPiPOpen(true)}
+    disabled={isPiPOpen}
+  />
+</div>
             </div>
 
             {/* Milestone Grid */}
@@ -1264,6 +1270,44 @@ if (milestoneType?.name === 'patient_in') {
           facilityId={userFacilityId}
           userId={userId}
           userEmail={userEmail}
+        />
+      )}
+      {/* Picture-in-Picture Milestone Panel */}
+      {caseData && (
+        <PiPMilestoneWrapper
+          isOpen={isPiPOpen}
+          onOpenChange={setIsPiPOpen}
+          caseId={caseData.id}
+          caseNumber={caseData.case_number}
+          procedureName={procedure?.name || 'Unknown Procedure'}
+          roomName={room?.name || 'Unknown Room'}
+          surgeonName={surgeon ? `Dr. ${surgeon.last_name}` : 'No Surgeon'}
+          milestones={milestoneTypes.map(mt => ({
+            id: mt.id,
+            name: mt.name,
+            display_name: mt.display_name,
+            display_order: mt.display_order,
+            pair_with_id: mt.pair_with_id,
+            pair_position: mt.pair_position,
+          }))}
+          recordedMilestones={caseMilestones.map(cm => ({
+            id: cm.id,
+            facility_milestone_id: cm.facility_milestone_id || cm.milestone_type_id,
+            recorded_at: cm.recorded_at,
+          }))}
+          onRecordMilestone={recordMilestone}
+          onUndoMilestone={undoMilestone}
+          onRefresh={() => {
+            // Re-fetch milestones
+            const fetchMilestones = async () => {
+              const { data } = await supabase
+                .from('case_milestones')
+                .select('id, milestone_type_id, facility_milestone_id, recorded_at')
+                .eq('case_id', id)
+              if (data) setCaseMilestones(data)
+            }
+            fetchMilestones()
+          }}
         />
       )}
     </DashboardLayout>
