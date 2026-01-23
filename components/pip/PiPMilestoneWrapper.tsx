@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import PiPMilestonePanel from '../pip/PiPMilestonePanel'
+import PiPMilestonePanel from './PiPMilestonePanel'
 
 interface Milestone {
   id: string
@@ -30,22 +30,10 @@ interface PiPMilestoneWrapperProps {
   onRecordMilestone: (milestoneId: string) => Promise<void>
   onUndoMilestone: (recordedId: string) => Promise<void>
   onRefresh: () => void
-  // Trigger to open PiP from parent
   isOpen: boolean
   onOpenChange: (open: boolean) => void
 }
 
-/**
- * PiPMilestoneWrapper
- * 
- * This component manages the Picture-in-Picture window for milestone tracking.
- * It creates a portal to render React content into the PiP window.
- * 
- * Usage:
- * 1. Pass isOpen={true} to open the PiP window
- * 2. The component handles rendering and syncing
- * 3. When the PiP closes, onOpenChange(false) is called
- */
 export default function PiPMilestoneWrapper({
   caseId,
   caseNumber,
@@ -64,89 +52,35 @@ export default function PiPMilestoneWrapper({
   const [pipContainer, setPipContainer] = useState<HTMLElement | null>(null)
   const openingRef = useRef(false)
 
-  // Check if Document PiP is supported
   const isSupported = typeof window !== 'undefined' && 
     'documentPictureInPicture' in window
 
-  // Open PiP window
   const openPiP = useCallback(async () => {
     if (!isSupported || openingRef.current) return
     
     openingRef.current = true
 
     try {
-      // @ts-ignore - TypeScript doesn't know about documentPictureInPicture yet
+      // @ts-ignore
       const pip = await window.documentPictureInPicture.requestWindow({
-        width: 320,
-        height: 520,
+        width: 280,
+        height: 400,
       })
 
-      // Add Tailwind CDN for styling
-      const tailwindScript = pip.document.createElement('script')
-      tailwindScript.src = 'https://cdn.tailwindcss.com'
-      pip.document.head.appendChild(tailwindScript)
-
-      // Add custom styles
+      // Minimal styles for the PiP window
       const customStyles = pip.document.createElement('style')
       customStyles.textContent = `
-        body {
-          margin: 0;
-          padding: 0;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-          background: #f8fafc;
-          overflow-x: hidden;
-        }
-        
-        /* Smooth scrollbar */
-        ::-webkit-scrollbar {
-          width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 3px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
-        }
-        
-        /* Smooth transitions */
-        * {
-          transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-        }
-        
-        /* Button press effect */
-        button:active:not(:disabled) {
-          transform: scale(0.98);
-        }
-        
-        /* Pulse animation for running indicator */
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-        .animate-pulse {
-          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
-        
-        /* Tabular numbers for timestamps */
-        .tabular-nums {
-          font-variant-numeric: tabular-nums;
-        }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; overflow-x: hidden; }
       `
       pip.document.head.appendChild(customStyles)
 
-      // Set page title
       pip.document.title = `${roomName} - ORbit`
 
-      // Create container for React portal
       const container = pip.document.createElement('div')
       container.id = 'pip-root'
       pip.document.body.appendChild(container)
 
-      // Handle window close
       pip.addEventListener('pagehide', () => {
         setPipWindow(null)
         setPipContainer(null)
@@ -163,7 +97,6 @@ export default function PiPMilestoneWrapper({
     }
   }, [isSupported, roomName, onOpenChange])
 
-  // Close PiP window
   const closePiP = useCallback(() => {
     if (pipWindow) {
       pipWindow.close()
@@ -174,7 +107,6 @@ export default function PiPMilestoneWrapper({
     openingRef.current = false
   }, [pipWindow, onOpenChange])
 
-  // Handle isOpen changes from parent
   useEffect(() => {
     if (isOpen && !pipWindow && isSupported) {
       openPiP()
@@ -183,7 +115,6 @@ export default function PiPMilestoneWrapper({
     }
   }, [isOpen, pipWindow, isSupported, openPiP, closePiP])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pipWindow) {
@@ -192,12 +123,10 @@ export default function PiPMilestoneWrapper({
     }
   }, [pipWindow])
 
-  // Don't render anything if not supported or no container
   if (!isSupported) {
     return null
   }
 
-  // Render panel into PiP window via portal
   if (pipContainer) {
     return createPortal(
       <PiPMilestonePanel
@@ -220,10 +149,6 @@ export default function PiPMilestoneWrapper({
   return null
 }
 
-/**
- * Button component to trigger PiP mode
- * Shows a helpful message if PiP is not supported
- */
 export function PiPButton({ 
   onClick, 
   disabled = false,
