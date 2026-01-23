@@ -489,44 +489,70 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     const timestamp = new Date().toISOString()
     const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
 
-    const { data, error } = await supabase
-      .from('case_milestones')
-      .insert({
-        case_id: id,
-        milestone_type_id: milestoneType?.source_milestone_type_id || milestoneTypeId,
-        facility_milestone_id: milestoneTypeId,
-        recorded_at: timestamp
-      })
-      .select()
-      .single()
+    // Find the existing milestone row (pre-created with NULL)
+    const existingMilestone = caseMilestones.find(
+      cm => cm.facility_milestone_id === milestoneTypeId || cm.milestone_type_id === milestoneTypeId
+    )
 
-    if (!error && data) {
-      setCaseMilestones([...caseMilestones, data])
+    let savedMilestone: CaseMilestone | null = null
 
-if (milestoneType?.name === 'patient_in') {
+    if (existingMilestone) {
+      // UPDATE existing row
+      const { data, error } = await supabase
+        .from('case_milestones')
+        .update({ recorded_at: timestamp })
+        .eq('id', existingMilestone.id)
+        .select()
+        .single()
+
+      if (!error && data) {
+        savedMilestone = data
+        // Update local state
+        setCaseMilestones(caseMilestones.map(cm =>
+          cm.id === existingMilestone.id ? { ...cm, recorded_at: timestamp } : cm
+        ))
+      }
+    } else {
+      // INSERT fallback (for old cases without pre-created milestones)
+      const { data, error } = await supabase
+        .from('case_milestones')
+        .insert({
+          case_id: id,
+          milestone_type_id: milestoneType?.source_milestone_type_id || milestoneTypeId,
+          facility_milestone_id: milestoneTypeId,
+          recorded_at: timestamp
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        savedMilestone = data
+        setCaseMilestones([...caseMilestones, data])
+      }
+    }
+
+    if (savedMilestone) {
+      // Auto-update case status
+      if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('in_progress')
       } else if (milestoneType?.name === 'patient_out') {
         await updateCaseStatus('completed')
         
-        // ========================================
-        // AUTO-DETECTION: Run quality checks on completed case
-        // ========================================
+        // Auto-detection: Run quality checks on completed case
         try {
           const issuesFound = await runDetectionForCase(supabase, id)
           
           if (issuesFound === 0) {
-            // No issues - auto-validate for analytics
             await supabase
               .from('cases')
               .update({ 
                 data_validated: true, 
                 validated_at: new Date().toISOString(),
-                validated_by: null  // System auto-validation
+                validated_by: null
               })
               .eq('id', id)
             console.log('✅ Case auto-validated (no issues)')
           } else {
-            // Issues found - mark as NOT validated (needs review)
             await supabase
               .from('cases')
               .update({ 
@@ -539,12 +565,12 @@ if (milestoneType?.name === 'patient_in') {
           }
         } catch (err) {
           console.error('Detection error:', err)
-          // Don't block case completion if detection fails
         }
       }
 
+      // Audit logging
       if (milestoneType && caseData) {
-        await milestoneAudit.recorded(supabase, caseData.case_number, milestoneType.display_name, data.id, timestamp)
+        await milestoneAudit.recorded(supabase, caseData.case_number, milestoneType.display_name, savedMilestone.id, timestamp)
       }
     }
   }
@@ -555,13 +581,17 @@ if (milestoneType?.name === 'patient_in') {
       mt.id === milestone.facility_milestone_id || mt.id === milestone.milestone_type_id
     ) : null
 
+    // UPDATE to NULL instead of DELETE
     const { error } = await supabase
       .from('case_milestones')
-      .delete()
+      .update({ recorded_at: null })
       .eq('id', milestoneId)
 
     if (!error) {
-      setCaseMilestones(caseMilestones.filter(m => m.id !== milestoneId))
+      // Update local state - set recorded_at to null
+      setCaseMilestones(caseMilestones.map(m =>
+        m.id === milestoneId ? { ...m, recorded_at: null } : m
+      ))
 
       if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('scheduled')
