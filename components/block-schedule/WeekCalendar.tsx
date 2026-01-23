@@ -170,12 +170,12 @@ export function WeekCalendar({
           const dayBlocks = blocksByDay[dayIndex] || []
 
           return (
-            <div
-              key={dayIndex}
-              className={`flex-1 border-l border-gray-200 relative ${
-                isClosed ? 'bg-gray-50 cursor-not-allowed' : 'cursor-crosshair'
-              }`}
-            >
+<div
+  key={dayIndex}
+  className={`flex-1 border-l border-gray-200 relative ${
+    isClosed ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-crosshair'
+  }`}
+>
               {/* Hour lines */}
               {HOURS.map(hour => (
                 <div

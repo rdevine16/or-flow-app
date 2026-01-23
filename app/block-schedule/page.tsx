@@ -223,8 +223,8 @@ export default function BlockSchedulePage() {
 
   const colorMap = getColorMap()
 
-  return (
-    <div className="flex h-[calc(100vh-64px)]">
+return (
+    <div className="flex h-full min-h-[600px]">
       {/* Sidebar */}
       <BlockSidebar
         surgeons={surgeons}
