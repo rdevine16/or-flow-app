@@ -11,7 +11,7 @@ import { useSurgeonColors } from '@/hooks/useSurgeonColors'
 import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
-import { BlockPopover } from '@/components/block-schedule/BlockPopover'
+import { BlockPopover } from '../../components/block-schedule/BlockPopover'
 import { ChevronLeft, ChevronRight, Calendar, Plus, Loader2 } from 'lucide-react'
 
 interface Surgeon {
