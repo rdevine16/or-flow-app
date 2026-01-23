@@ -262,7 +262,7 @@ export function BlockSidebar({
                 {colorPickerOpen === surgeon.id && (
                   <div 
                     ref={colorPickerRef}
-                    className="absolute left-full top-0 ml-2 bg-white rounded-lg shadow-xl border border-slate-200 p-3 z-50"
+                    className="absolute left-full top-0 ml-2 bg-white rounded-lg shadow-xl border border-slate-200 p-3 z-[100]"
                     style={{ width: '200px' }}
                   >
                     <div className="text-sm font-medium text-slate-700 mb-2">Display this only</div>
