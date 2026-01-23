@@ -159,9 +159,6 @@ export type AuditAction =
   | 'admin.procedure_type_created'
   | 'admin.procedure_type_updated'
   | 'admin.procedure_type_deleted'
-<<<<<<< HEAD
-
-=======
 // Cost Categories (Facility)
   | 'cost_category.created'
   | 'cost_category.updated'
@@ -181,7 +178,6 @@ export type AuditAction =
   | 'surgeon_cost_item.created'
   | 'surgeon_cost_item.updated'
   | 'surgeon_cost_item.deleted'
->>>>>>> 76ab096da603593b8ddece021ddb1b1524b13448
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
     // Block Schedules
