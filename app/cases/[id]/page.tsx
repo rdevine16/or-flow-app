@@ -881,8 +881,7 @@ const totalMilestoneCount = milestoneTypes.length
 const totalSeconds = Math.floor(elapsedMs / 1000)
 const mins = Math.floor(totalSeconds / 60)
 const secs = totalSeconds % 60
-elapsedDisplay = `${mins}:${secs.toString().padStart(2, '0')}`
-      }
+elapsedDisplay = `${mins}m ${secs}s`       }
 
       return {
         milestone: mt,
