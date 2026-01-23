@@ -1,32 +1,52 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '../../lib/supabase'
 import DashboardLayout from '../../components/layouts/DashboardLayout'
 import SurgeonAvatar from '../../components/ui/SurgeonAvatar'
 import FloatingActionButton from '../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../components/CallNextPatientModal'
+import CasesFilterBar, { FilterState } from '../../components/filters/CaseFilterBar'
 import { getLocalDateString } from '../../lib/date-utils'
 import { getImpersonationState } from '../../lib/impersonation'
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 interface Case {
   id: string
   case_number: string
   scheduled_date: string
   start_time: string | null
-  operative_side: string | null  // ADD THIS
+  operative_side: string | null
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
   surgeon: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
 }
 
-type StatusFilter = 'active' | 'all' | 'completed' | 'cancelled'
-type DateFilter = 'today' | 'week' | 'month' | 'all'
+interface Surgeon {
+  id: string
+  first_name: string
+  last_name: string
+}
 
-const ACTIVE_STATUSES = ['scheduled', 'in_progress', 'delayed']
+interface Room {
+  id: string
+  name: string
+}
+
+interface ProcedureType {
+  id: string
+  name: string
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
 const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
   if (!data) return null
@@ -61,19 +81,16 @@ const formatDate = (dateString: string): string => {
   today.setHours(0, 0, 0, 0)
   const caseDate = new Date(year, month - 1, day)
   
-  // Check if it's today
   if (caseDate.getTime() === today.getTime()) {
     return 'Today'
   }
   
-  // Check if it's yesterday
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
   if (caseDate.getTime() === yesterday.getTime()) {
     return 'Yesterday'
   }
   
-  // Check if it's tomorrow
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   if (caseDate.getTime() === tomorrow.getTime()) {
@@ -138,13 +155,19 @@ const getStatusConfig = (status: string | null) => {
   }
 }
 
-function getDateRange(filter: DateFilter): { start?: string; end?: string } {
+function getDateRange(filter: string): { start?: string; end?: string } {
   const today = getLocalDateString()
   const todayDate = new Date()
   
   switch (filter) {
     case 'today':
       return { start: today, end: today }
+    case 'yesterday': {
+      const yesterday = new Date(todayDate)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const yd = yesterday.toISOString().split('T')[0]
+      return { start: yd, end: yd }
+    }
     case 'week': {
       const weekStart = new Date(todayDate)
       weekStart.setDate(todayDate.getDate() - todayDate.getDay())
@@ -163,22 +186,49 @@ function getDateRange(filter: DateFilter): { start?: string; end?: string } {
         end: monthEnd.toISOString().split('T')[0]
       }
     }
+    case 'quarter': {
+      const quarterStart = new Date(todayDate.getFullYear(), Math.floor(todayDate.getMonth() / 3) * 3, 1)
+      const quarterEnd = new Date(todayDate.getFullYear(), Math.floor(todayDate.getMonth() / 3) * 3 + 3, 0)
+      return {
+        start: quarterStart.toISOString().split('T')[0],
+        end: quarterEnd.toISOString().split('T')[0]
+      }
+    }
     case 'all':
     default:
       return {}
   }
 }
 
-export default function CasesPage() {
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+function CasesPageContent() {
   const router = useRouter()
   const supabase = createClient()
+  
+  // Core state
   const [cases, setCases] = useState<Case[]>([])
   const [loading, setLoading] = useState(true)
-  const [dateFilter, setDateFilter] = useState<DateFilter>('week')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
+  
+  // Filter options (fetched from DB)
+  const [surgeons, setSurgeons] = useState<Surgeon[]>([])
+  const [rooms, setRooms] = useState<Room[]>([])
+  const [procedureTypes, setProcedureTypes] = useState<ProcedureType[]>([])
+  
+  // Current filters (managed by CasesFilterBar)
+  const [currentFilters, setCurrentFilters] = useState<FilterState>({
+    dateRange: 'week',
+    status: [],
+    surgeonIds: [],
+    roomIds: [],
+    procedureIds: [],
+    search: '',
+  })
   
   // User info for FAB/Modal
   const [userId, setUserId] = useState<string | null>(null)
@@ -187,7 +237,10 @@ export default function CasesPage() {
   // Call Next Patient modal
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
 
-  // Get the effective facility ID (handles impersonation for global admins)
+  // ============================================================================
+  // FACILITY INITIALIZATION
+  // ============================================================================
+
   useEffect(() => {
     async function fetchUserFacility() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -232,44 +285,151 @@ export default function CasesPage() {
     fetchUserFacility()
   }, [supabase])
 
-  const fetchCases = async (dateRange: { start?: string; end?: string }) => {
+  // ============================================================================
+  // FETCH FILTER OPTIONS (surgeons, rooms, procedures)
+  // ============================================================================
+
+  useEffect(() => {
+    if (!effectiveFacilityId) return
+
+    async function fetchFilterOptions() {
+      // Get surgeon role ID first
+      const { data: surgeonRole } = await supabase
+        .from('user_roles')
+        .select('id')
+        .eq('name', 'surgeon')
+        .single()
+
+      const [surgeonsRes, roomsRes, proceduresRes] = await Promise.all([
+        // Get surgeons
+        supabase
+          .from('users')
+          .select('id, first_name, last_name, role_id')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('role_id', surgeonRole?.id || ''),
+        
+        // Get rooms
+        supabase
+          .from('or_rooms')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId)
+          .order('name'),
+        
+        // Get procedures
+        supabase
+          .from('procedure_types')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId)
+          .order('name'),
+      ])
+
+      setSurgeons((surgeonsRes.data as Surgeon[]) || [])
+      setRooms((roomsRes.data as Room[]) || [])
+      setProcedureTypes((proceduresRes.data as ProcedureType[]) || [])
+    }
+
+    fetchFilterOptions()
+  }, [effectiveFacilityId, supabase])
+
+  // ============================================================================
+  // FETCH CASES (with filters applied)
+  // ============================================================================
+
+  const fetchCases = useCallback(async (filters: FilterState) => {
     if (!effectiveFacilityId) return
     
     setLoading(true)
 
-let query = supabase
-  .from('cases')
-  .select(`
-    id,
-    case_number,
-    scheduled_date,
-    start_time,
-    operative_side,
-    or_rooms (name),
-    procedure_types (name),
-    case_statuses (name),
-    surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-  `)
+    // Build base query
+    let query = supabase
+      .from('cases')
+      .select(`
+        id,
+        case_number,
+        scheduled_date,
+        start_time,
+        operative_side,
+        or_rooms (name),
+        procedure_types (name),
+        case_statuses (name),
+        surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+      `)
       .eq('facility_id', effectiveFacilityId)
       .order('scheduled_date', { ascending: false })
       .order('start_time', { ascending: true })
 
+    // Apply date range
+    const dateRange = getDateRange(filters.dateRange)
     if (dateRange.start && dateRange.end) {
       query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
     }
 
-    const { data } = await query
-    setCases((data as unknown as Case[]) || [])
-    setLoading(false)
-  }
+    // Apply status filter
+    if (filters.status.length > 0) {
+      const { data: statusData } = await supabase
+        .from('case_statuses')
+        .select('id, name')
+        .in('name', filters.status)
+      
+      if (statusData && statusData.length > 0) {
+        query = query.in('status_id', statusData.map(s => s.id))
+      }
+    }
 
-  // Fetch cases when facility ID or date filter changes
+    // Apply surgeon filter
+    if (filters.surgeonIds.length > 0) {
+      query = query.in('surgeon_id', filters.surgeonIds)
+    }
+
+    // Apply room filter
+    if (filters.roomIds.length > 0) {
+      query = query.in('or_room_id', filters.roomIds)
+    }
+
+    // Apply procedure filter
+    if (filters.procedureIds.length > 0) {
+      query = query.in('procedure_type_id', filters.procedureIds)
+    }
+
+    const { data } = await query
+    let filteredData = (data as unknown as Case[]) || []
+
+    // Apply text search (client-side for flexibility)
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase()
+      filteredData = filteredData.filter(c => {
+        const caseNumber = c.case_number.toLowerCase()
+        const procedure = getValue(c.procedure_types)?.toLowerCase() || ''
+        const surgeon = getSurgeon(c.surgeon).fullName.toLowerCase()
+        const room = getValue(c.or_rooms)?.toLowerCase() || ''
+        
+        return (
+          caseNumber.includes(searchLower) ||
+          procedure.includes(searchLower) ||
+          surgeon.includes(searchLower) ||
+          room.includes(searchLower)
+        )
+      })
+    }
+
+    setCases(filteredData)
+    setLoading(false)
+  }, [effectiveFacilityId, supabase])
+
+  // Fetch cases when facility or filters change
   useEffect(() => {
     if (effectiveFacilityId) {
-      const dateRange = getDateRange(dateFilter)
-      fetchCases(dateRange)
+      fetchCases(currentFilters)
     }
-  }, [effectiveFacilityId, dateFilter])
+  }, [effectiveFacilityId, currentFilters, fetchCases])
+
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+
+  const handleFiltersChange = useCallback((filters: FilterState) => {
+    setCurrentFilters(filters)
+  }, [])
 
   const handleDelete = async (id: string) => {
     await supabase.from('cases').delete().eq('id', id)
@@ -277,28 +437,9 @@ let query = supabase
     setDeleteConfirm(null)
   }
 
-  // Filter cases by status
-  const filteredCases = cases.filter(c => {
-    const status = getValue(c.case_statuses)
-    switch (statusFilter) {
-      case 'active':
-        return ACTIVE_STATUSES.includes(status || '')
-      case 'completed':
-        return status === 'completed'
-      case 'cancelled':
-        return status === 'cancelled'
-      case 'all':
-      default:
-        return true
-    }
-  })
-
-  // Count stats
-  const statusCounts = {
-    active: cases.filter(c => ACTIVE_STATUSES.includes(getValue(c.case_statuses) || '')).length,
-    completed: cases.filter(c => getValue(c.case_statuses) === 'completed').length,
-    cancelled: cases.filter(c => getValue(c.case_statuses) === 'cancelled').length,
-  }
+  // ============================================================================
+  // RENDER - NO FACILITY SELECTED STATE
+  // ============================================================================
 
   if (noFacilitySelected) {
     return (
@@ -327,6 +468,10 @@ let query = supabase
     )
   }
 
+  // ============================================================================
+  // RENDER - MAIN
+  // ============================================================================
+
   return (
     <DashboardLayout>
       {/* Page Header */}
@@ -346,66 +491,16 @@ let query = supabase
         </Link>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          {/* Date Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-500">Date:</span>
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-              {(['today', 'week', 'month', 'all'] as DateFilter[]).map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setDateFilter(filter)}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors
-                    ${dateFilter === filter
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
-                    }
-                    ${filter !== 'all' ? 'border-r border-slate-200' : ''}
-                  `}
-                >
-                  {filter === 'today' ? 'Today' : filter === 'week' ? 'This Week' : filter === 'month' ? 'This Month' : 'All Time'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-500">Status:</span>
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-              {([
-                { key: 'active' as StatusFilter, label: 'Active', count: statusCounts.active },
-                { key: 'completed' as StatusFilter, label: 'Completed', count: statusCounts.completed },
-                { key: 'cancelled' as StatusFilter, label: 'Cancelled', count: statusCounts.cancelled },
-                { key: 'all' as StatusFilter, label: 'All', count: cases.length },
-              ]).map((filter, idx) => (
-                <button
-                  key={filter.key}
-                  onClick={() => setStatusFilter(filter.key)}
-                  className={`px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5
-                    ${statusFilter === filter.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
-                    }
-                    ${idx !== 3 ? 'border-r border-slate-200' : ''}
-                  `}
-                >
-                  {filter.label}
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full
-                    ${statusFilter === filter.key
-                      ? 'bg-blue-500 text-blue-100'
-                      : 'bg-slate-100 text-slate-500'
-                    }
-                  `}>
-                    {filter.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* Professional Filter Bar */}
+      <div className="mb-6">
+        <CasesFilterBar
+          surgeons={surgeons}
+          rooms={rooms}
+          procedureTypes={procedureTypes}
+          totalCount={cases.length}
+          filteredCount={cases.length}
+          onFiltersChange={handleFiltersChange}
+        />
       </div>
 
       {/* Cases Table */}
@@ -414,7 +509,7 @@ let query = supabase
           <div className="flex items-center justify-center py-20">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : filteredCases.length === 0 ? (
+        ) : cases.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -423,14 +518,6 @@ let query = supabase
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-1">No cases found</h3>
             <p className="text-slate-500 text-sm mb-4">Try adjusting your filters or create a new case</p>
-            {statusFilter !== 'all' && (
-              <button
-                onClick={() => setStatusFilter('all')}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Clear filters
-              </button>
-            )}
           </div>
         ) : (
           <>
@@ -448,7 +535,7 @@ let query = supabase
 
             {/* Table Body */}
             <div className="divide-y divide-slate-100">
-              {filteredCases.map((c) => {
+              {cases.map((c) => {
                 const roomName = getValue(c.or_rooms)
                 const procedureName = getValue(c.procedure_types)
                 const statusName = getValue(c.case_statuses)
@@ -516,7 +603,7 @@ let query = supabase
                       </div>
                     </div>
                     
-  {/* Actions */}
+                    {/* Actions */}
                     <div className="col-span-1">
                       <div className="flex items-center justify-end gap-1">
                         {/* View button - ALWAYS visible */}
@@ -531,9 +618,7 @@ let query = supabase
                           </svg>
                         </Link>
                         
-                        {/* ================================================== */}
-                        {/* ONLY SHOW EDIT/DELETE IF NOT COMPLETED OR CANCELLED */}
-                        {/* ================================================== */}
+                        {/* Only show edit/delete if not completed or cancelled */}
                         {statusName !== 'completed' && statusName !== 'cancelled' && (
                           <>
                             {/* Edit button */}
@@ -593,22 +678,8 @@ let query = supabase
             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-200/80">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-slate-500">
-                  Showing <span className="font-semibold text-slate-700">{filteredCases.length}</span> of <span className="font-semibold text-slate-700">{cases.length}</span> cases
+                  Showing <span className="font-semibold text-slate-700">{cases.length}</span> cases
                 </span>
-                <div className="flex items-center gap-4 text-sm text-slate-500">
-                  <span className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                    {statusCounts.active - cases.filter(c => getValue(c.case_statuses) === 'scheduled').length} in progress
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    {cases.filter(c => getValue(c.case_statuses) === 'scheduled').length} scheduled
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                    {statusCounts.completed} completed
-                  </span>
-                </div>
               </div>
             </div>
           </>
@@ -640,5 +711,23 @@ let query = supabase
         />
       )}
     </DashboardLayout>
+  )
+}
+
+// ============================================================================
+// EXPORT WITH SUSPENSE BOUNDARY
+// ============================================================================
+
+export default function CasesPage() {
+  return (
+    <Suspense fallback={
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </DashboardLayout>
+    }>
+      <CasesPageContent />
+    </Suspense>
   )
 }
