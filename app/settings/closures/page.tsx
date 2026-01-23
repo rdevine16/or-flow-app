@@ -12,7 +12,7 @@ import {
   CreateHolidayInput,
   CreateClosureInput,
   getHolidayDateDescription,
-  MONTH_NAMES,
+  MONTH_LABELS,
   DAY_OF_WEEK_LABELS,
 } from '@/types/block-scheduling'
 import {
@@ -704,7 +704,6 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
       day: dateType === 'fixed' ? day : null,
       week_of_month: dateType === 'dynamic' ? weekOfMonth : null,
       day_of_week: dateType === 'dynamic' ? dayOfWeek : null,
-      is_active: editingHoliday?.is_active ?? true,
     }
 
     onSave(input)
@@ -715,8 +714,8 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
 
   // Preview text
   const previewText = dateType === 'fixed'
-    ? `${MONTH_NAMES[month]} ${day}`
-    : `${WEEK_OPTIONS.find(w => w.value === weekOfMonth)?.label} ${DAY_OF_WEEK_LABELS[dayOfWeek]} of ${MONTH_NAMES[month]}`
+    ? `${MONTH_LABELS[month]} ${day}`
+    : `${WEEK_OPTIONS.find(w => w.value === weekOfMonth)?.label} ${DAY_OF_WEEK_LABELS[dayOfWeek]} of ${MONTH_LABELS[month]}`
 
   if (!open) return null
 
@@ -793,7 +792,7 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
                 onChange={e => setMonth(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                {Object.entries(MONTH_NAMES).map(([value, label]) => (
+                {(Object.entries(MONTH_LABELS) as [string, string][]).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
@@ -843,7 +842,7 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
                     onChange={e => setDayOfWeek(Number(e.target.value))}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    {Object.entries(DAY_OF_WEEK_LABELS).map(([value, label]) => (
+                    {(Object.entries(DAY_OF_WEEK_LABELS) as [string, string][]).map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
