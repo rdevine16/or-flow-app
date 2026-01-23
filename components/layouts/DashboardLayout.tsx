@@ -653,7 +653,6 @@ if (!mounted) {   return (
           <p className={`text-xs text-slate-600 mt-2 ${isExpanded ? 'pl-12' : 'text-center'}`}>
             {isExpanded ? 'Version 1.0.0' : 'v1.0'}
           </p>
-          </p>
         </div>
       </aside>
 
