@@ -12,6 +12,7 @@ import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
 import { BlockPopover } from '@/components/block-schedule/BlockPopover'
+import { DeleteBlockModal } from '@/components/block-schedule/DeleteBlockModal'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
 interface Surgeon {
@@ -53,8 +54,12 @@ export default function BlockSchedulePage() {
   } | null>(null)
   const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | undefined>()
 
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [blockToDelete, setBlockToDelete] = useState<ExpandedBlock | null>(null)
+
   // Hooks
-  const { blocks, fetchBlocksForRange, deleteBlock } = useBlockSchedules({ facilityId })
+  const { blocks, fetchBlocksForRange, deleteBlock, addExceptionDate } = useBlockSchedules({ facilityId })
   const { holidays, closures, fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
   const { fetchColors, getColorMap, setColor } = useSurgeonColors({ facilityId })
 
@@ -197,17 +202,54 @@ export default function BlockSchedulePage() {
     await fetchBlocksForRange(startDate, endDate)
   }
 
-  // Handle delete
-  const handleDelete = async (blockId: string) => {
+  // Handle delete request - show modal for recurring, delete directly for single
+  const handleDeleteRequest = (blockId: string) => {
     const block = blocks.find(b => b.block_id === blockId)
     if (!block) return
 
-    const surgeon = surgeons.find(s => s.id === block.surgeon_id)
+    // Check if it's a recurring block (anything other than 'daily' which would be single)
+    const isRecurring = block.recurrence_type && block.recurrence_type !== 'daily'
+
+    if (isRecurring) {
+      // Show delete modal for recurring blocks
+      setBlockToDelete(block)
+      setDeleteModalOpen(true)
+    } else {
+      // Delete single block directly
+      handleDeleteAll(block)
+    }
+  }
+
+  // Delete single occurrence (add exception date)
+  const handleDeleteSingle = async () => {
+    if (!blockToDelete) return
+
+    const surgeon = surgeons.find(s => s.id === blockToDelete.surgeon_id)
     if (!surgeon) return
 
-    const dayOfWeek = new Date(block.block_date).getDay()
-    await deleteBlock(blockId, surgeon, dayOfWeek)
+    // Add the block_date as an exception
+    await addExceptionDate(blockToDelete.block_id, blockToDelete.block_date, surgeon)
 
+    // Close popover and refresh
+    setPopoverOpen(false)
+    const startDate = formatDate(currentWeekStart)
+    const endDate = formatDate(addDays(currentWeekStart, 6))
+    await fetchBlocksForRange(startDate, endDate)
+  }
+
+  // Delete all occurrences (soft delete the block)
+  const handleDeleteAll = async (block?: ExpandedBlock) => {
+    const targetBlock = block || blockToDelete
+    if (!targetBlock) return
+
+    const surgeon = surgeons.find(s => s.id === targetBlock.surgeon_id)
+    if (!surgeon) return
+
+    const dayOfWeek = new Date(targetBlock.block_date).getDay()
+    await deleteBlock(targetBlock.block_id, surgeon, dayOfWeek)
+
+    // Close popover and refresh
+    setPopoverOpen(false)
     const startDate = formatDate(currentWeekStart)
     const endDate = formatDate(addDays(currentWeekStart, 6))
     await fetchBlocksForRange(startDate, endDate)
@@ -340,7 +382,7 @@ export default function BlockSchedulePage() {
               setClickPosition(undefined)
             }}
             onSave={handleSave}
-            onDelete={handleDelete}
+            onDelete={handleDeleteRequest}
             facilityId={facilityId}
             surgeons={surgeons}
             colorMap={colorMap}
@@ -349,6 +391,19 @@ export default function BlockSchedulePage() {
             initialStartTime={dragSelection?.startTime}
             initialEndTime={dragSelection?.endTime}
             clickPosition={clickPosition}
+          />
+
+          {/* Delete Confirmation Modal */}
+          <DeleteBlockModal
+            isOpen={deleteModalOpen}
+            onClose={() => {
+              setDeleteModalOpen(false)
+              setBlockToDelete(null)
+            }}
+            onDeleteSingle={handleDeleteSingle}
+            onDeleteAll={() => handleDeleteAll()}
+            surgeonName={blockToDelete ? `Dr. ${blockToDelete.surgeon_last_name}` : ''}
+            isRecurring={blockToDelete?.recurrence_type !== 'daily'}
           />
         </div>
       )}

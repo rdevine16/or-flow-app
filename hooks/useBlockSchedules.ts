@@ -277,6 +277,63 @@ const supabase = createClient()
     [facilityId, supabase]
   )
 
+  // Add an exception date to a recurring block (skip single occurrence)
+  const addExceptionDate = useCallback(
+    async (blockId: string, exceptionDate: string, surgeon: SurgeonInfo): Promise<boolean> => {
+      if (!facilityId) return false
+
+      setLoading(true)
+      setError(null)
+
+      try {
+        // First fetch current exception dates
+        const { data: currentBlock, error: fetchError } = await supabase
+          .from('block_schedules')
+          .select('exception_dates')
+          .eq('id', blockId)
+          .single()
+
+        if (fetchError) throw fetchError
+
+        // Add new date to exceptions array
+        const currentExceptions = currentBlock?.exception_dates || []
+        const updatedExceptions = [...currentExceptions, exceptionDate]
+
+        // Update the block
+        const { error: updateError } = await supabase
+          .from('block_schedules')
+          .update({
+            exception_dates: updatedExceptions,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', blockId)
+
+        if (updateError) throw updateError
+
+        // Audit log
+        const surgeonName = `Dr. ${surgeon.last_name}`
+        await blockScheduleAudit.updated(
+          supabase,
+          blockId,
+          surgeonName,
+          { exception_dates: currentExceptions.join(', ') || 'none' },
+          { exception_dates: updatedExceptions.join(', ') },
+          facilityId
+        )
+
+        return true
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to add exception date'
+        setError(message)
+        console.error('Error adding exception date:', err)
+        return false
+      } finally {
+        setLoading(false)
+      }
+    },
+    [facilityId, supabase]
+  )
+
   return {
     blocks,
     loading,
@@ -286,6 +343,7 @@ const supabase = createClient()
     createBlock,
     updateBlock,
     deleteBlock,
+    addExceptionDate,
     restoreBlock,
   }
 }
