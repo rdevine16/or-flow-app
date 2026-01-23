@@ -1,21 +1,23 @@
 // components/block-schedule/WeekCalendar.tsx
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { ExpandedBlock, formatTime12Hour, DAY_OF_WEEK_SHORT } from '@/types/block-scheduling'
-import { BlockCard } from '../block-schedule/BlockCard'
+import { BlockCard } from './BlockCard'
 
 interface WeekCalendarProps {
   weekStart: Date
   blocks: ExpandedBlock[]
   colorMap: Record<string, string>
   isDateClosed: (date: Date) => boolean
-  onDragSelect: (dayOfWeek: number, startTime: string, endTime: string) => void
-  onBlockClick: (block: ExpandedBlock) => void
+  onDragSelect: (dayOfWeek: number, startTime: string, endTime: string, clickPosition?: { x: number; y: number }) => void
+  onBlockClick: (block: ExpandedBlock, clickPosition?: { x: number; y: number }) => void
 }
 
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 5) // 5 AM to 6 PM
+// Full 24 hours
+const HOURS = Array.from({ length: 24 }, (_, i) => i) // 0 (12 AM) to 23 (11 PM)
 const HOUR_HEIGHT = 60 // pixels per hour
+const DEFAULT_SCROLL_HOUR = 6 // Scroll to 6 AM on load
 
 export function WeekCalendar({
   weekStart,
@@ -29,6 +31,7 @@ export function WeekCalendar({
   const [dragStart, setDragStart] = useState<{ day: number; hour: number } | null>(null)
   const [dragEnd, setDragEnd] = useState<{ day: number; hour: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Generate week days
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -37,13 +40,20 @@ export function WeekCalendar({
     return date
   })
 
-  // Get time from Y position
+  // Auto-scroll to default hour on mount
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = DEFAULT_SCROLL_HOUR * HOUR_HEIGHT
+    }
+  }, [])
+
+  // Get time from Y position (now supports 0-23)
   const getTimeFromY = (y: number): number => {
     const rect = gridRef.current?.getBoundingClientRect()
-    if (!rect) return 5
+    if (!rect) return DEFAULT_SCROLL_HOUR
     const relativeY = y - rect.top
-    const hour = Math.floor(relativeY / HOUR_HEIGHT) + 5
-    return Math.max(5, Math.min(18, hour))
+    const hour = Math.floor(relativeY / HOUR_HEIGHT)
+    return Math.max(0, Math.min(23, hour))
   }
 
   // Get day from X position
@@ -80,7 +90,7 @@ export function WeekCalendar({
     setDragEnd({ day: dragStart.day, hour: Math.max(dragStart.hour + 1, hour + 1) })
   }
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
     if (isDragging && dragStart && dragEnd) {
       const startHour = Math.min(dragStart.hour, dragEnd.hour - 1)
       const endHour = Math.max(dragStart.hour + 1, dragEnd.hour)
@@ -88,12 +98,19 @@ export function WeekCalendar({
       const startTime = `${startHour.toString().padStart(2, '0')}:00:00`
       const endTime = `${endHour.toString().padStart(2, '0')}:00:00`
 
-      onDragSelect(dragStart.day, startTime, endTime)
+      // Pass click position for popover positioning
+      onDragSelect(dragStart.day, startTime, endTime, { x: e.clientX, y: e.clientY })
     }
 
     setIsDragging(false)
     setDragStart(null)
     setDragEnd(null)
+  }
+
+  // Handle block click with position
+  const handleBlockClick = (block: ExpandedBlock, e: React.MouseEvent) => {
+    e.stopPropagation()
+    onBlockClick(block, { x: e.clientX, y: e.clientY })
   }
 
   // Group blocks by day
@@ -107,8 +124,8 @@ export function WeekCalendar({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Day Headers */}
-      <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+      {/* Day Headers - Fixed */}
+      <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0">
         <div className="w-[60px] flex-shrink-0" /> {/* Time column spacer */}
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
@@ -143,77 +160,93 @@ export function WeekCalendar({
         })}
       </div>
 
-      {/* Time Grid */}
+      {/* Scrollable Time Grid */}
       <div
-        ref={gridRef}
-        className="flex flex-1 relative select-none"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        ref={scrollContainerRef}
+        className="flex-1 overflow-auto"
       >
-        {/* Time Labels */}
-        <div className="w-[60px] flex-shrink-0 bg-white">
-          {HOURS.map(hour => (
-            <div
-              key={hour}
-              className="h-[60px] pr-2 text-right text-xs text-gray-500 -mt-2"
-            >
-              {formatTime12Hour(`${hour.toString().padStart(2, '0')}:00:00`)}
-            </div>
-          ))}
+        <div
+          ref={gridRef}
+          className="flex relative select-none"
+          style={{ height: `${HOURS.length * HOUR_HEIGHT}px` }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={() => {
+            if (isDragging) {
+              setIsDragging(false)
+              setDragStart(null)
+              setDragEnd(null)
+            }
+          }}
+        >
+          {/* Time Labels */}
+          <div className="w-[60px] flex-shrink-0 bg-white sticky left-0 z-10">
+            {HOURS.map(hour => (
+              <div
+                key={hour}
+                className="h-[60px] pr-2 text-right text-xs text-gray-500 relative"
+              >
+                <span className="absolute -top-2 right-2">
+                  {formatTime12Hour(`${hour.toString().padStart(2, '0')}:00:00`)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Day Columns */}
+          {weekDays.map((date, dayIndex) => {
+            const isClosed = isDateClosed(date)
+            const dayBlocks = blocksByDay[dayIndex] || []
+
+            return (
+              <div
+                key={dayIndex}
+                className={`flex-1 border-l border-gray-200 relative ${
+                  isClosed ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-crosshair'
+                }`}
+              >
+                {/* Hour lines */}
+                {HOURS.map(hour => (
+                  <div
+                    key={hour}
+                    className={`h-[60px] border-b border-gray-100 ${
+                      hour === 12 ? 'border-gray-200' : '' // Slightly darker line at noon
+                    }`}
+                  />
+                ))}
+
+                {/* Closed overlay */}
+                {isClosed && (
+                  <div className="absolute inset-0 bg-gray-100/50 bg-stripes pointer-events-none" />
+                )}
+
+                {/* Blocks */}
+                {!isClosed && dayBlocks.map(block => (
+                  <BlockCard
+                    key={block.block_id}
+                    block={block}
+                    color={colorMap[block.surgeon_id] || '#6B7280'}
+                    hourHeight={HOUR_HEIGHT}
+                    startHour={0}
+                    onClick={(e) => handleBlockClick(block, e)}
+                  />
+                ))}
+
+                {/* Drag selection preview */}
+                {isDragging && dragStart?.day === dayIndex && dragEnd && (
+                  <div
+                    className="absolute left-1 right-1 bg-blue-200/50 border-2 border-blue-400 border-dashed rounded-lg pointer-events-none z-20"
+                    style={{
+                      top: `${Math.min(dragStart.hour, dragEnd.hour - 1) * HOUR_HEIGHT}px`,
+                      height: `${Math.abs(dragEnd.hour - dragStart.hour) * HOUR_HEIGHT}px`,
+                    }}
+                  />
+                )}
+              </div>
+            )
+          })}
         </div>
-
-        {/* Day Columns */}
-        {weekDays.map((date, dayIndex) => {
-          const isClosed = isDateClosed(date)
-          const dayBlocks = blocksByDay[dayIndex] || []
-
-          return (
-<div
-  key={dayIndex}
-  className={`flex-1 border-l border-gray-200 relative ${
-    isClosed ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-crosshair'
-  }`}
->
-              {/* Hour lines */}
-              {HOURS.map(hour => (
-                <div
-                  key={hour}
-                  className="h-[60px] border-b border-gray-100"
-                />
-              ))}
-
-              {/* Closed overlay */}
-              {isClosed && (
-                <div className="absolute inset-0 bg-gray-100/50 bg-stripes pointer-events-none" />
-              )}
-
-              {/* Blocks */}
-              {!isClosed && dayBlocks.map(block => (
-                <BlockCard
-                  key={block.block_id}
-                  block={block}
-                  color={colorMap[block.surgeon_id] || '#6B7280'}
-                  hourHeight={HOUR_HEIGHT}
-                  startHour={5}
-                  onClick={() => onBlockClick(block)}
-                />
-              ))}
-
-              {/* Drag selection preview */}
-              {isDragging && dragStart?.day === dayIndex && dragEnd && (
-                <div
-                  className="absolute left-1 right-1 bg-blue-200/50 border-2 border-blue-400 border-dashed rounded-lg pointer-events-none z-20"
-                  style={{
-                    top: `${(Math.min(dragStart.hour, dragEnd.hour - 1) - 5) * HOUR_HEIGHT}px`,
-                    height: `${Math.abs(dragEnd.hour - dragStart.hour) * HOUR_HEIGHT}px`,
-                  }}
-                />
-              )}
-            </div>
-          )
-        })}
       </div>
     </div>
   )

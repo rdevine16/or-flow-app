@@ -8,7 +8,7 @@ interface BlockCardProps {
   color: string
   hourHeight: number
   startHour: number
-  onClick: () => void
+  onClick: (e: React.MouseEvent) => void
 }
 
 export function BlockCard({ block, color, hourHeight, startHour, onClick }: BlockCardProps) {

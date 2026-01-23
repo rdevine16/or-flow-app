@@ -11,7 +11,7 @@ import { useSurgeonColors } from '@/hooks/useSurgeonColors'
 import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
 import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
-import { BlockDialog } from '@/components/block-schedule/BlockDialog'
+import { BlockPopover } from '@/components/block-schedule/BlockPopover'
 import { ChevronLeft, ChevronRight, Calendar, Plus, Loader2 } from 'lucide-react'
 
 interface Surgeon {
@@ -40,14 +40,15 @@ export default function BlockSchedulePage() {
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [selectedSurgeonIds, setSelectedSurgeonIds] = useState<Set<string>>(new Set())
 
-  // Dialog state
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // Popover state
+  const [popoverOpen, setPopoverOpen] = useState(false)
   const [editingBlock, setEditingBlock] = useState<BlockSchedule | null>(null)
   const [dragSelection, setDragSelection] = useState<{
     dayOfWeek: number
     startTime: string
     endTime: string
   } | null>(null)
+  const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | undefined>()
 
   // Hooks
   const { blocks, fetchBlocksForRange, createBlock, updateBlock, deleteBlock } = 
@@ -142,14 +143,20 @@ export default function BlockSchedulePage() {
   )
 
   // Handle drag selection from calendar
-  const handleDragSelect = (dayOfWeek: number, startTime: string, endTime: string) => {
+  const handleDragSelect = (
+    dayOfWeek: number, 
+    startTime: string, 
+    endTime: string,
+    position?: { x: number; y: number }
+  ) => {
     setDragSelection({ dayOfWeek, startTime, endTime })
     setEditingBlock(null)
-    setDialogOpen(true)
+    setClickPosition(position)
+    setPopoverOpen(true)
   }
 
   // Handle block click (edit)
-  const handleBlockClick = async (block: ExpandedBlock) => {
+  const handleBlockClick = async (block: ExpandedBlock, position?: { x: number; y: number }) => {
     // Fetch full block data for editing
     const { data } = await supabase
       .from('block_schedules')
@@ -160,15 +167,26 @@ export default function BlockSchedulePage() {
     if (data) {
       setEditingBlock(data)
       setDragSelection(null)
-      setDialogOpen(true)
+      setClickPosition(position)
+      setPopoverOpen(true)
     }
   }
 
-  // Handle dialog save
-  const handleSave = async () => {
-    setDialogOpen(false)
+  // Handle "Add Block" button (no position, will center)
+  const handleAddBlockButton = () => {
     setEditingBlock(null)
     setDragSelection(null)
+    // Position near the button (top right area)
+    setClickPosition({ x: window.innerWidth - 400, y: 200 })
+    setPopoverOpen(true)
+  }
+
+  // Handle popover save
+  const handleSave = async () => {
+    setPopoverOpen(false)
+    setEditingBlock(null)
+    setDragSelection(null)
+    setClickPosition(undefined)
 
     // Refresh blocks
     const startDate = formatDate(currentWeekStart)
@@ -232,11 +250,7 @@ export default function BlockSchedulePage() {
             </div>
 
             <button
-              onClick={() => {
-                setEditingBlock(null)
-                setDragSelection(null)
-                setDialogOpen(true)
-              }}
+              onClick={handleAddBlockButton}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
             >
               <Plus className="h-4 w-4" />
@@ -297,7 +311,7 @@ export default function BlockSchedulePage() {
               </div>
 
               {/* Calendar Grid */}
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-hidden">
                 <WeekCalendar
                   weekStart={currentWeekStart}
                   blocks={filteredBlocks}
@@ -310,13 +324,14 @@ export default function BlockSchedulePage() {
             </div>
           </div>
 
-          {/* Dialog */}
-          <BlockDialog
-            open={dialogOpen}
+          {/* Popover */}
+          <BlockPopover
+            open={popoverOpen}
             onClose={() => {
-              setDialogOpen(false)
+              setPopoverOpen(false)
               setEditingBlock(null)
               setDragSelection(null)
+              setClickPosition(undefined)
             }}
             onSave={handleSave}
             onDelete={handleDelete}
@@ -326,6 +341,7 @@ export default function BlockSchedulePage() {
             initialDayOfWeek={dragSelection?.dayOfWeek}
             initialStartTime={dragSelection?.startTime}
             initialEndTime={dragSelection?.endTime}
+            clickPosition={clickPosition}
           />
         </div>
       )}
