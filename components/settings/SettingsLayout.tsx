@@ -168,6 +168,14 @@ const settingsGroups: SettingsGroup[] = [
         icon: icons.delays,
         requiredAccess: ['global_admin', 'facility_admin'],
       },
+            {
+        id: 'complexities',
+        label: 'Case Complexities',
+        href: '/settings/complexities',
+        description: 'Complexity factors for cases',
+        icon: icons.delays,  // Reuses the warning triangle icon
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
     ],
   },
   {

@@ -15,6 +15,7 @@ import { getLocalDateString } from '../../lib/date-utils'
 import { caseAudit, caseDeviceAudit } from '../../lib/audit-logger'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
+import CaseComplexitySelector from '../cases/CaseComplexitySelector'
 
 interface CaseFormProps {
   caseId?: string
@@ -39,6 +40,7 @@ interface ProcedureType {
   id: string
   name: string
   requires_rep: boolean
+  procedure_category_id: string | null
 }
 
 // Operative side options
@@ -75,7 +77,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // State for implant companies
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([])
   const [originalCompanyIds, setOriginalCompanyIds] = useState<string[]>([])
-
+  const [selectedComplexityIds, setSelectedComplexityIds] = useState<string[]>([])
+  const [originalComplexityIds, setOriginalComplexityIds] = useState<string[]>([])
   // NEW: Rep required override state
   // null = use procedure default, true = force require, false = force no require
   const [repRequiredOverride, setRepRequiredOverride] = useState<boolean | null>(null)
@@ -138,7 +141,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
         // UPDATED: Fetch requires_rep along with procedure types
-        supabase.from('procedure_types').select('id, name, requires_rep')
+        supabase.from('procedure_types').select('id, name, requires_rep, procedure_category_id') 
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
@@ -248,7 +251,19 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         setSelectedCompanyIds(companyIds)
         setOriginalCompanyIds(companyIds)
       }
+      // Fetch existing complexities for this case
+      const { data: caseComplexities } = await supabase
+        .from('case_complexities')
+        .select('complexity_id')
+        .eq('case_id', caseId)
 
+      if (caseComplexities) {
+        const complexityIds = caseComplexities.map(cc => cc.complexity_id)
+        setSelectedComplexityIds(complexityIds)
+        setOriginalComplexityIds(complexityIds)
+      }
+
+      setInitialLoading(false)
       setInitialLoading(false)
     }
 
@@ -378,7 +393,15 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           case_number: formData.case_number,
           procedure_name: procedure?.name,
         })
-
+        // Save case complexities
+        if (selectedComplexityIds.length > 0) {
+          await supabase.from('case_complexities').insert(
+            selectedComplexityIds.map(complexityId => ({
+              case_id: savedCaseId,
+              complexity_id: complexityId,
+            }))
+          )
+        }
         // ============================================
         // NEW: Initialize milestones for this case
         // This creates case_milestones with recorded_at = NULL
@@ -606,6 +629,25 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
               )
             }
           }
+        }
+         const addedComplexities = selectedComplexityIds.filter(id => !originalComplexityIds.includes(id))
+        const removedComplexities = originalComplexityIds.filter(id => !selectedComplexityIds.includes(id))
+
+        if (removedComplexities.length > 0) {
+          await supabase
+            .from('case_complexities')
+            .delete()
+            .eq('case_id', savedCaseId)
+            .in('complexity_id', removedComplexities)
+        }
+
+        if (addedComplexities.length > 0) {
+          await supabase.from('case_complexities').insert(
+            addedComplexities.map(complexityId => ({
+              case_id: savedCaseId,
+              complexity_id: complexityId,
+            }))
+          )
         }
       }
     }
@@ -882,7 +924,18 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           }))}
         />
       )}
+      {/* Case Complexities */}
+      {userFacilityId && (
+        <CaseComplexitySelector
+          facilityId={userFacilityId}
+          selectedIds={selectedComplexityIds}
+          onChange={setSelectedComplexityIds}
+procedureCategoryId={
+  procedureTypes.find(p => p.id === formData.procedure_type_id)?.procedure_category_id ?? undefined
 
+          }
+        />
+      )}
       {/* Notes */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>

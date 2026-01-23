@@ -159,7 +159,29 @@ export type AuditAction =
   | 'admin.procedure_type_created'
   | 'admin.procedure_type_updated'
   | 'admin.procedure_type_deleted'
+<<<<<<< HEAD
 
+=======
+// Cost Categories (Facility)
+  | 'cost_category.created'
+  | 'cost_category.updated'
+  | 'cost_category.deleted'
+  | 'cost_category.restored'      
+  | 'cost_category.activated'     
+  | 'cost_category.deactivated' 
+  // Cost Categories (Global Admin)
+  | 'admin.cost_category_created'
+  | 'admin.cost_category_updated'
+  | 'admin.cost_category_deleted'
+  // Procedure Cost Items
+  | 'procedure_cost_item.created'
+  | 'procedure_cost_item.updated'
+  | 'procedure_cost_item.deleted'
+  // Surgeon Cost Items (Variance)
+  | 'surgeon_cost_item.created'
+  | 'surgeon_cost_item.updated'
+  | 'surgeon_cost_item.deleted'
+>>>>>>> 76ab096da603593b8ddece021ddb1b1524b13448
 // Human-readable labels for audit log display
 export const auditActionLabels: Record<AuditAction, string> = {
     // Block Schedules
@@ -301,9 +323,12 @@ export const auditActionLabels: Record<AuditAction, string> = {
 'facility.or_rate_updated': 'updated OR hourly rate',
 'procedure_type.costs_updated': 'updated procedure costs',
 // Cost Categories (Facility)
-  'cost_category.created': 'created a cost category',
-  'cost_category.updated': 'updated a cost category',
-  'cost_category.deleted': 'deleted a cost category',
+'cost_category.created': 'created a cost category',
+'cost_category.updated': 'updated a cost category',
+'cost_category.deleted': 'deleted a cost category',
+'cost_category.restored': 'restored a cost category',
+'cost_category.activated': 'activated a cost category',
+'cost_category.deactivated': 'deactivated a cost category', 
   // Cost Categories (Global Admin)
   'admin.cost_category_created': 'created a default cost category',
   'admin.cost_category_updated': 'updated a default cost category',
