@@ -97,6 +97,7 @@ export type AuditAction =
   | 'procedure_type.created'
   | 'procedure_type.updated'
   | 'procedure_type.deleted'
+  | 'procedure_type.restored'
   // Users
   | 'user.created'
   | 'user.invited'
@@ -262,6 +263,7 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'procedure_type.created': 'created a procedure type',
   'procedure_type.updated': 'updated a procedure type',
   'procedure_type.deleted': 'deleted a procedure type',
+  'procedure_type.restored': 'restored a procedure type',
   // Users
   'user.created': 'created a user',
   'user.invited': 'invited a user',
@@ -1203,7 +1205,7 @@ export const costCategoryAudit = {
     categoryType: 'credit' | 'debit'
   ) {
     await log(supabase, 'admin.cost_category_created', {
-      targetType: 'default_cost_category',
+      targetType: 'cost_category_template',
       targetId: categoryId,
       targetLabel: categoryName,
       newValues: { name: categoryName, type: categoryType, scope: 'global' },
@@ -1217,7 +1219,7 @@ export const costCategoryAudit = {
   newValues: { name?: string; type?: string; description?: string; is_active?: boolean }
 ) {
     await log(supabase, 'admin.cost_category_updated', {
-      targetType: 'default_cost_category',
+      targetType: 'cost_category_template',
       targetId: categoryId,
       targetLabel: newValues.name || oldValues.name || 'Cost Category',
       oldValues,
@@ -1231,7 +1233,7 @@ export const costCategoryAudit = {
     categoryId: string
   ) {
     await log(supabase, 'admin.cost_category_deleted', {
-      targetType: 'default_cost_category',
+      targetType: 'cost_category_template',
       targetId: categoryId,
       targetLabel: categoryName,
     })
@@ -1543,30 +1545,56 @@ async deleted(supabase: SupabaseClient, roomName: string, roomId: string) {
 // =====================================================
 
 export const procedureAudit = {
-  async created(supabase: SupabaseClient, procedureName: string, procedureId: string) {
+  async created(
+    supabase: SupabaseClient,
+    name: string,
+    id: string
+  ) {
     await log(supabase, 'procedure_type.created', {
       targetType: 'procedure_type',
-      targetId: procedureId,
-      targetLabel: procedureName,
-      newValues: { name: procedureName },
+      targetId: id,
+      targetLabel: name,
+      newValues: { name },
     })
   },
 
-  async updated(supabase: SupabaseClient, procedureId: string, oldName: string, newName: string) {
+  async updated(
+    supabase: SupabaseClient,
+    id: string,
+    oldName: string,
+    newName: string
+  ) {
     await log(supabase, 'procedure_type.updated', {
       targetType: 'procedure_type',
-      targetId: procedureId,
+      targetId: id,
       targetLabel: newName,
       oldValues: { name: oldName },
       newValues: { name: newName },
     })
   },
 
-  async deleted(supabase: SupabaseClient, procedureName: string, procedureId: string) {
+  async deleted(
+    supabase: SupabaseClient,
+    name: string,
+    id: string
+  ) {
     await log(supabase, 'procedure_type.deleted', {
       targetType: 'procedure_type',
-      targetId: procedureId,
-      targetLabel: procedureName,
+      targetId: id,
+      targetLabel: name,
+    })
+  },
+
+  // NEW: Add this method
+  async restored(
+    supabase: SupabaseClient,
+    name: string,
+    id: string
+  ) {
+    await log(supabase, 'procedure_type.restored', {
+      targetType: 'procedure_type',
+      targetId: id,
+      targetLabel: name,
     })
   },
 }

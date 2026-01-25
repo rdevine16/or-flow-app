@@ -247,7 +247,7 @@ export default function CreateFacilityPage() {
             }
            // 6. Copy default complexities to facility
 const { data: defaultComplexities } = await supabase
-  .from('default_complexities')
+  .from('complexity_templates')
   .select('*')
   .eq('is_active', true)
   .order('display_order')

@@ -65,7 +65,7 @@ export default function DefaultCostCategoriesPage() {
 
     try {
       const { data, error } = await supabase
-        .from('default_cost_categories')
+        .from('cost_category_templates')
         .select('*')
         .order('type')
         .order('display_order')
@@ -113,7 +113,7 @@ export default function DefaultCostCategoriesPage() {
       if (editingCategory) {
         // Update
         const { error } = await supabase
-          .from('default_cost_categories')
+          .from('cost_category_templates')
           .update(data)
           .eq('id', editingCategory.id)
 
@@ -136,7 +136,7 @@ export default function DefaultCostCategoriesPage() {
           .reduce((max, c) => Math.max(max, c.display_order), 0)
 
         const { data: newCategory, error } = await supabase
-          .from('default_cost_categories')
+          .from('cost_category_templates')
           .insert({ ...data, display_order: maxOrder + 1 })
           .select()
           .single()
@@ -169,7 +169,7 @@ export default function DefaultCostCategoriesPage() {
 
     try {
       const { error } = await supabase
-        .from('default_cost_categories')
+        .from('cost_category_templates')
         .delete()
         .eq('id', category.id)
 
@@ -193,7 +193,7 @@ export default function DefaultCostCategoriesPage() {
       const newActiveState = !category.is_active
       
       const { error } = await supabase
-        .from('default_cost_categories')
+        .from('cost_category_templates')
         .update({ is_active: newActiveState })
         .eq('id', category.id)
 

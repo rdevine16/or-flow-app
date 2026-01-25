@@ -8,6 +8,9 @@ import Container from '../../../components/ui/Container'
 import SettingsLayout from '../../../components/settings/SettingsLayout'
 import { procedureAudit } from '../../../lib/audit-logger'
 
+// =====================================================
+// TYPES
+// =====================================================
 
 interface BodyRegion {
   id: string
@@ -35,9 +38,12 @@ interface ProcedureType {
   technique_id: string | null
   procedure_category_id: string | null
   implant_category: string | null
-  body_regions: BodyRegion[] | null
-  procedure_techniques: ProcedureTechnique[] | null
-  procedure_categories: ProcedureCategory[] | null
+  is_active: boolean
+  deleted_at: string | null
+  deleted_by: string | null
+  body_regions: BodyRegion | BodyRegion[] | null
+  procedure_techniques: ProcedureTechnique | ProcedureTechnique[] | null
+  procedure_categories: ProcedureCategory | ProcedureCategory[] | null
 }
 
 interface ModalState {
@@ -46,24 +52,59 @@ interface ModalState {
   procedure: ProcedureType | null
 }
 
+interface DeleteModalState {
+  isOpen: boolean
+  procedure: ProcedureType | null
+  dependencies: {
+    cases: number
+    milestoneConfigs: number
+  }
+  loading: boolean
+}
+
+// =====================================================
+// CONSTANTS
+// =====================================================
+
 const IMPLANT_CATEGORIES = [
   { value: '', label: 'None' },
   { value: 'total_hip', label: 'Total Hip' },
   { value: 'total_knee', label: 'Total Knee' },
 ]
 
+// =====================================================
+// COMPONENT
+// =====================================================
+
 export default function ProceduresSettingsPage() {
   const supabase = createClient()
   
-  // Use the context - this automatically handles impersonation!
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  // User context - handles impersonation automatically
+const { effectiveFacilityId, loading: userLoading } = useUser()
   
+  // Data state
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [techniques, setTechniques] = useState<ProcedureTechnique[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
+  
+  // UI state
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  
+  // Modal state
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', procedure: null })
+  const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
+    isOpen: false,
+    procedure: null,
+    dependencies: { cases: 0, milestoneConfigs: 0 },
+    loading: false
+  })
+  
+  // Form state
   const [formData, setFormData] = useState({ 
     name: '', 
     body_region_id: '', 
@@ -71,49 +112,89 @@ export default function ProceduresSettingsPage() {
     procedure_category_id: '',
     implant_category: '' 
   })
-  const [saving, setSaving] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  // Fetch data when facility changes (including impersonation changes)
+  // Toast notification (you can replace with your toast system)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
+  // =====================================================
+  // DATA FETCHING
+  // =====================================================
+
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchData()
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
-  }, [userLoading, effectiveFacilityId])
+  }, [userLoading, effectiveFacilityId, showArchived])
 
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
 
-    const [proceduresResult, regionsResult, techniquesResult, categoriesResult] = await Promise.all([
-      supabase
-        .from('procedure_types')
-        .select(`
-          id, 
-          name, 
-          body_region_id,
-          technique_id,
-          procedure_category_id,
-          implant_category,
-          body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name),
-          procedure_categories (id, name, display_name, body_region_id)
-        `)
-        .eq('facility_id', effectiveFacilityId)
-        .order('name'),
+    // Build procedure query based on archive toggle
+    let procedureQuery = supabase
+      .from('procedure_types')
+      .select(`
+        id, 
+        name, 
+        body_region_id,
+        technique_id,
+        procedure_category_id,
+        implant_category,
+        is_active,
+        deleted_at,
+        deleted_by,
+        body_regions (id, name, display_name),
+        procedure_techniques (id, name, display_name),
+        procedure_categories (id, name, display_name, body_region_id)
+      `)
+      .eq('facility_id', effectiveFacilityId)
+
+    if (showArchived) {
+      // Show only archived
+      procedureQuery = procedureQuery.not('deleted_at', 'is', null)
+    } else {
+      // Show only active (not deleted)
+      procedureQuery = procedureQuery.is('deleted_at', null)
+    }
+
+    procedureQuery = procedureQuery.order('name')
+
+    // Fetch archived count separately
+    const archivedCountQuery = supabase
+      .from('procedure_types')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', effectiveFacilityId)
+      .not('deleted_at', 'is', null)
+
+    const [proceduresResult, regionsResult, techniquesResult, categoriesResult, archivedResult] = await Promise.all([
+      procedureQuery,
       supabase.from('body_regions').select('id, name, display_name').order('display_name'),
       supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
       supabase.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
+      archivedCountQuery
     ])
 
     setProcedures(proceduresResult.data as ProcedureType[] || [])
     setBodyRegions(regionsResult.data || [])
     setTechniques(techniquesResult.data || [])
     setProcedureCategories(categoriesResult.data || [])
+    setArchivedCount(archivedResult.count || 0)
     setLoading(false)
   }
+
+  // =====================================================
+  // MODAL HANDLERS
+  // =====================================================
 
   const openAddModal = () => {
     setFormData({ name: '', body_region_id: '', technique_id: '', procedure_category_id: '', implant_category: '' })
@@ -136,6 +217,10 @@ export default function ProceduresSettingsPage() {
     setFormData({ name: '', body_region_id: '', technique_id: '', procedure_category_id: '', implant_category: '' })
   }
 
+  // =====================================================
+  // SAVE HANDLER
+  // =====================================================
+
   const handleSave = async () => {
     if (!formData.name.trim() || !effectiveFacilityId) return
     
@@ -151,6 +236,7 @@ export default function ProceduresSettingsPage() {
           technique_id: formData.technique_id || null,
           procedure_category_id: formData.procedure_category_id || null,
           implant_category: formData.implant_category || null,
+          is_active: true,
         })
         .select(`
           id, 
@@ -159,6 +245,9 @@ export default function ProceduresSettingsPage() {
           technique_id,
           procedure_category_id,
           implant_category,
+          is_active,
+          deleted_at,
+          deleted_by,
           body_regions (id, name, display_name),
           procedure_techniques (id, name, display_name),
           procedure_categories (id, name, display_name, body_region_id)
@@ -168,9 +257,12 @@ export default function ProceduresSettingsPage() {
       if (!error && data) {
         setProcedures([...procedures, data as ProcedureType].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
+        showToast('Procedure created successfully', 'success')
         
         // Audit log
         await procedureAudit.created(supabase, formData.name.trim(), data.id)
+      } else {
+        showToast('Failed to create procedure', 'error')
       }
     } else if (modal.mode === 'edit' && modal.procedure) {
       const oldName = modal.procedure.name
@@ -192,6 +284,9 @@ export default function ProceduresSettingsPage() {
           technique_id,
           procedure_category_id,
           implant_category,
+          is_active,
+          deleted_at,
+          deleted_by,
           body_regions (id, name, display_name),
           procedure_techniques (id, name, display_name),
           procedure_categories (id, name, display_name, body_region_id)
@@ -205,39 +300,130 @@ export default function ProceduresSettingsPage() {
             .sort((a, b) => a.name.localeCompare(b.name))
         )
         closeModal()
+        showToast('Procedure updated successfully', 'success')
         
         // Audit log if name changed
         if (oldName !== formData.name.trim()) {
           await procedureAudit.updated(supabase, modal.procedure.id, oldName, formData.name.trim())
         }
+      } else {
+        showToast('Failed to update procedure', 'error')
       }
     }
 
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
-    // Get procedure name for audit log
-    const procedure = procedures.find(p => p.id === id)
-    const procedureName = procedure?.name || ''
+  // =====================================================
+  // DELETE HANDLERS (SOFT DELETE)
+  // =====================================================
+
+  const openDeleteModal = async (procedure: ProcedureType) => {
+    setDeleteModal({
+      isOpen: true,
+      procedure,
+      dependencies: { cases: 0, milestoneConfigs: 0 },
+      loading: true
+    })
+
+    // Check dependencies
+    const [casesResult, configsResult] = await Promise.all([
+      supabase
+        .from('cases')
+        .select('id', { count: 'exact', head: true })
+        .eq('procedure_type_id', procedure.id),
+      supabase
+        .from('procedure_milestone_config')
+        .select('id', { count: 'exact', head: true })
+        .eq('procedure_type_id', procedure.id)
+    ])
+
+    setDeleteModal(prev => ({
+      ...prev,
+      dependencies: {
+        cases: casesResult.count || 0,
+        milestoneConfigs: configsResult.count || 0
+      },
+      loading: false
+    }))
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      procedure: null,
+      dependencies: { cases: 0, milestoneConfigs: 0 },
+      loading: false
+    })
+  }
+
+  const handleDelete = async () => {
+if (!deleteModal.procedure || !currentUserId) return
+    
+    setSaving(true)
+
+    // Soft delete: set deleted_at and deleted_by
+    const { error } = await supabase
+      .from('procedure_types')
+      .update({
+        deleted_at: new Date().toISOString(),
+deleted_by: currentUserId
+      })
+      .eq('id', deleteModal.procedure.id)
+
+    if (!error) {
+      setProcedures(procedures.filter(p => p.id !== deleteModal.procedure!.id))
+      setArchivedCount(prev => prev + 1)
+      showToast(`"${deleteModal.procedure.name}" moved to archive`, 'success')
+      
+      // Audit log
+      await procedureAudit.deleted(supabase, deleteModal.procedure.name, deleteModal.procedure.id)
+    } else {
+      showToast('Failed to archive procedure', 'error')
+    }
+
+    setSaving(false)
+    closeDeleteModal()
+  }
+
+  // =====================================================
+  // RESTORE HANDLER
+  // =====================================================
+
+  const handleRestore = async (procedure: ProcedureType) => {
+    setSaving(true)
 
     const { error } = await supabase
       .from('procedure_types')
-      .delete()
-      .eq('id', id)
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', procedure.id)
 
     if (!error) {
-      setProcedures(procedures.filter(p => p.id !== id))
+      setProcedures(procedures.filter(p => p.id !== procedure.id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${procedure.name}" restored successfully`, 'success')
       
       // Audit log
-      await procedureAudit.deleted(supabase, procedureName, id)
+      await procedureAudit.restored(supabase, procedure.name, procedure.id)
     } else {
-      alert('Cannot delete this procedure type. It may be in use by existing cases.')
+      showToast('Failed to restore procedure', 'error')
     }
-    setDeleteConfirm(null)
+
+    setSaving(false)
   }
 
-  // Helper to safely get nested data
+  // =====================================================
+  // HELPER FUNCTIONS
+  // =====================================================
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
   const getRegionName = (procedure: ProcedureType): string => {
     if (!procedure.body_regions) return '—'
     const region = Array.isArray(procedure.body_regions) ? procedure.body_regions[0] : procedure.body_regions
@@ -262,10 +448,33 @@ export default function ProceduresSettingsPage() {
     return found?.label || '—'
   }
 
-  // Filter categories based on selected body region (optional - shows all if no region selected)
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return 'today'
+    if (diffDays === 1) return 'yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+    return `${Math.floor(diffDays / 365)} years ago`
+  }
+
+  // Filter categories based on selected body region
   const filteredCategories = formData.body_region_id
     ? procedureCategories.filter(c => !c.body_region_id || c.body_region_id === formData.body_region_id)
     : procedureCategories
+
+  // Filter procedures by search query
+  const filteredProcedures = searchQuery
+    ? procedures.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : procedures
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <DashboardLayout>
@@ -288,66 +497,139 @@ export default function ProceduresSettingsPage() {
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               {/* Header */}
-              <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium text-slate-900">Procedures</h3>
-                  <p className="text-sm text-slate-500">{procedures.length} procedure types</p>
+              <div className="px-6 py-4 border-b border-slate-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-medium text-slate-900">
+                      {showArchived ? 'Archived Procedures' : 'Procedures'}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {showArchived 
+                        ? `${procedures.length} archived procedure${procedures.length !== 1 ? 's' : ''}`
+                        : `${procedures.length} active procedure${procedures.length !== 1 ? 's' : ''}`
+                      }
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Archive Toggle */}
+                    <button
+                      onClick={() => setShowArchived(!showArchived)}
+                      className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        showArchived
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+                    </button>
+
+                    {/* Add Button (only when viewing active) */}
+                    {!showArchived && (
+                      <button
+                        onClick={openAddModal}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Procedure
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={openAddModal}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Procedure
-                </button>
+
+                {/* Search (show if more than 5 items) */}
+                {procedures.length > 5 && (
+                  <div className="relative">
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search procedures..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Table */}
-              {procedures.length === 0 ? (
+              {filteredProcedures.length === 0 ? (
                 <div className="px-6 py-12 text-center">
-                  <p className="text-slate-500">No procedures defined yet.</p>
-                  <button
-                    onClick={openAddModal}
-                    className="mt-2 text-blue-600 hover:underline text-sm"
-                  >
-                    Add your first procedure
-                  </button>
+                  {searchQuery ? (
+                    <p className="text-slate-500">No procedures match "{searchQuery}"</p>
+                  ) : showArchived ? (
+                    <p className="text-slate-500">No archived procedures.</p>
+                  ) : (
+                    <>
+                      <p className="text-slate-500">No procedures defined yet.</p>
+                      <button
+                        onClick={openAddModal}
+                        className="mt-2 text-blue-600 hover:underline text-sm"
+                      >
+                        Add your first procedure
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   {/* Table Header */}
-                  <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="col-span-3">Procedure Name</div>
+                  <div className={`grid gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider ${
+                    showArchived ? 'grid-cols-10' : 'grid-cols-12'
+                  }`}>
+                    <div className={showArchived ? 'col-span-3' : 'col-span-3'}>Procedure Name</div>
                     <div className="col-span-2">Body Region</div>
                     <div className="col-span-2">Category</div>
-                    <div className="col-span-2">Technique</div>
-                    <div className="col-span-2">Implant Tracking</div>
+                    {!showArchived && <div className="col-span-2">Technique</div>}
+                    {!showArchived && <div className="col-span-2">Implant Tracking</div>}
+                    {showArchived && <div className="col-span-2">Archived</div>}
                     <div className="col-span-1 text-right">Actions</div>
                   </div>
 
                   {/* Table Body */}
                   <div className="divide-y divide-slate-100">
-                    {procedures.map((procedure) => (
+                    {filteredProcedures.map((procedure) => (
                       <div 
                         key={procedure.id} 
-                        className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                        className={`grid gap-4 px-6 py-4 items-center transition-colors ${
+                          showArchived 
+                            ? 'grid-cols-10 bg-amber-50/50' 
+                            : 'grid-cols-12 hover:bg-slate-50'
+                        }`}
                       >
                         {/* Procedure Name */}
-                        <div className="col-span-3">
-                          <p className="font-medium text-slate-900">{procedure.name}</p>
+                        <div className={showArchived ? 'col-span-3' : 'col-span-3'}>
+                          <p className={`font-medium ${showArchived ? 'text-slate-500' : 'text-slate-900'}`}>
+                            {procedure.name}
+                          </p>
+                          {showArchived && (
+                            <span className="inline-flex items-center mt-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                              Archived
+                            </span>
+                          )}
                         </div>
 
                         {/* Body Region */}
                         <div className="col-span-2">
-                          <span className="text-sm text-slate-600">{getRegionName(procedure)}</span>
+                          <span className={`text-sm ${showArchived ? 'text-slate-400' : 'text-slate-600'}`}>
+                            {getRegionName(procedure)}
+                          </span>
                         </div>
 
                         {/* Category */}
                         <div className="col-span-2">
                           {procedure.procedure_category_id ? (
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                            <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                              showArchived 
+                                ? 'bg-slate-100 text-slate-500' 
+                                : 'bg-emerald-100 text-emerald-700'
+                            }`}>
                               {getCategoryName(procedure)}
                             </span>
                           ) : (
@@ -355,62 +637,75 @@ export default function ProceduresSettingsPage() {
                           )}
                         </div>
 
-                        {/* Technique */}
-                        <div className="col-span-2">
-                          <span className="text-sm text-slate-600">{getTechniqueName(procedure)}</span>
-                        </div>
+                        {/* Technique (active view only) */}
+                        {!showArchived && (
+                          <div className="col-span-2">
+                            <span className="text-sm text-slate-600">{getTechniqueName(procedure)}</span>
+                          </div>
+                        )}
 
-                        {/* Implant Tracking */}
-                        <div className="col-span-2">
-                          {procedure.implant_category ? (
-                            <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
-                              procedure.implant_category === 'total_hip' 
-                                ? 'bg-purple-100 text-purple-700' 
-                                : 'bg-indigo-100 text-indigo-700'
-                            }`}>
-                              {getImplantCategoryLabel(procedure.implant_category)}
+                        {/* Implant Tracking (active view only) */}
+                        {!showArchived && (
+                          <div className="col-span-2">
+                            {procedure.implant_category ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                                procedure.implant_category === 'total_hip' 
+                                  ? 'bg-purple-100 text-purple-700' 
+                                  : 'bg-indigo-100 text-indigo-700'
+                              }`}>
+                                {getImplantCategoryLabel(procedure.implant_category)}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-slate-400">—</span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Archived Date (archived view only) */}
+                        {showArchived && procedure.deleted_at && (
+                          <div className="col-span-2">
+                            <span className="text-sm text-slate-400">
+                              {formatRelativeTime(procedure.deleted_at)}
                             </span>
-                          ) : (
-                            <span className="text-sm text-slate-400">—</span>
-                          )}
-                        </div>
+                          </div>
+                        )}
 
                         {/* Actions */}
                         <div className="col-span-1 flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEditModal(procedure)}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          {deleteConfirm === procedure.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(procedure.id)}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
+                          {showArchived ? (
+                            /* Restore Button */
                             <button
-                              onClick={() => setDeleteConfirm(procedure.id)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
+                              onClick={() => handleRestore(procedure)}
+                              disabled={saving}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                               </svg>
+                              Restore
                             </button>
+                          ) : (
+                            /* Edit & Delete Buttons */
+                            <>
+                              <button
+                                onClick={() => openEditModal(procedure)}
+                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => openDeleteModal(procedure)}
+                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Archive"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                </svg>
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -421,7 +716,9 @@ export default function ProceduresSettingsPage() {
             </div>
           )}
 
-          {/* Modal */}
+          {/* =====================================================
+              ADD/EDIT MODAL
+              ===================================================== */}
           {modal.isOpen && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
@@ -441,6 +738,7 @@ export default function ProceduresSettingsPage() {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       placeholder="e.g., Total Hip Replacement"
+                      autoFocus
                     />
                   </div>
                   <div>
@@ -533,6 +831,103 @@ export default function ProceduresSettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* =====================================================
+              DELETE CONFIRMATION MODAL
+              ===================================================== */}
+          {deleteModal.isOpen && deleteModal.procedure && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Archive Procedure
+                  </h3>
+                </div>
+                <div className="p-6">
+                  {deleteModal.loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-slate-600 mb-4">
+                        Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.procedure.name}"</span>?
+                      </p>
+
+                      {/* Dependency Warning */}
+                      {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.milestoneConfigs > 0) && (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                          <div className="flex gap-3">
+                            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div>
+                              <p className="font-medium text-amber-800">This procedure is in use:</p>
+                              <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
+                                {deleteModal.dependencies.cases > 0 && (
+                                  <li>{deleteModal.dependencies.cases} case{deleteModal.dependencies.cases !== 1 ? 's' : ''}</li>
+                                )}
+                                {deleteModal.dependencies.milestoneConfigs > 0 && (
+                                  <li>{deleteModal.dependencies.milestoneConfigs} milestone configuration{deleteModal.dependencies.milestoneConfigs !== 1 ? 's' : ''}</li>
+                                )}
+                              </ul>
+                              <p className="mt-2 text-sm text-amber-700">
+                                Archiving will hide it from new cases but existing data will be preserved.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-sm text-slate-500">
+                        You can restore archived procedures at any time.
+                      </p>
+                    </>
+                  )}
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button
+                    onClick={closeDeleteModal}
+                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={saving || deleteModal.loading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Archiving...' : 'Archive Procedure'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =====================================================
+              TOAST NOTIFICATION
+              ===================================================== */}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+              toast.type === 'success' 
+                ? 'bg-emerald-500 text-white' 
+                : 'bg-red-500 text-white'
+            }`}>
+              {toast.type === 'success' ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+              {toast.message}
             </div>
           )}
         </SettingsLayout>

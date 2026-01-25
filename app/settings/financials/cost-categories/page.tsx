@@ -82,7 +82,7 @@ export default function CostCategoriesPage() {
     setSaving(true)
 
     try {
-      const { error } = await supabase.rpc('copy_default_cost_categories_to_facility', {
+      const { error } = await supabase.rpc('copy_cost_category_templates_to_facility', {
         p_facility_id: effectiveFacilityId
       })
 
