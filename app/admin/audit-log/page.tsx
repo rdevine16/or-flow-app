@@ -43,7 +43,7 @@ const ACTION_CATEGORIES: Record<string, string[]> = {
   'Users': ['user.created', 'user.invited', 'user.invitation_accepted', 'user.updated', 'user.deleted', 'user.deactivated', 'user.reactivated', 'user.role_changed'],
   'Facilities': ['facility.created', 'facility.updated', 'facility.deleted', 'facility.subscription_changed'],
   'Settings': ['milestone_type.created', 'milestone_type.updated', 'milestone_type.deleted', 'milestone_type.reordered'],
-  'Admin': ['admin.impersonation_started', 'admin.impersonation_ended', 'admin.default_procedure_created', 'admin.default_procedure_updated', 'admin.default_procedure_deleted'],
+  'Admin': ['admin.impersonation_started', 'admin.impersonation_ended', 'admin.procedure_template_created', 'admin.procedure_template_updated', 'admin.procedure_template_deleted'],
 }
 
 const getActionColor = (action: string): string => {

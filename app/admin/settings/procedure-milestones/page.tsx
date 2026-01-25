@@ -34,7 +34,7 @@ interface MilestoneType {
 
 interface DefaultProcedureMilestone {
   id: string
-  default_procedure_id: string
+  procedure_type_template_id: string
   milestone_type_id: string
   display_order: number
 }
@@ -70,7 +70,7 @@ export default function AdminProcedureMilestonesPage() {
 
     const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
       supabase
-        .from('default_procedure_types')
+        .from('procedure_type_templates')
         .select('id, name, body_region_id, implant_category, is_active, display_order, body_regions(name)')
         .eq('is_active', true)
         .order('name'),
@@ -80,8 +80,8 @@ export default function AdminProcedureMilestonesPage() {
         .eq('is_active', true)
         .order('display_order'),
       supabase
-        .from('default_procedure_milestones')
-        .select('id, default_procedure_id, milestone_type_id, display_order')
+        .from('procedure_milestone_templates')
+        .select('id, procedure_type_template_id, milestone_type_id, display_order')
     ])
 
     // Handle the body_regions join - it comes back as an object or array depending on relationship
@@ -99,7 +99,7 @@ export default function AdminProcedureMilestonesPage() {
   // Check if milestone is enabled for procedure
   const isMilestoneEnabled = (procedureId: string, milestoneId: string): boolean => {
     return configs.some(
-      c => c.default_procedure_id === procedureId && c.milestone_type_id === milestoneId
+      c => c.procedure_type_template_id === procedureId && c.milestone_type_id === milestoneId
     )
   }
 
@@ -112,23 +112,23 @@ export default function AdminProcedureMilestonesPage() {
     if (isEnabled) {
       // Remove the config
       const { error } = await supabase
-        .from('default_procedure_milestones')
+        .from('procedure_milestone_templates')
         .delete()
-        .eq('default_procedure_id', procedureId)
+        .eq('procedure_type_template_id', procedureId)
         .eq('milestone_type_id', milestoneId)
 
       if (!error) {
         setConfigs(configs.filter(
-          c => !(c.default_procedure_id === procedureId && c.milestone_type_id === milestoneId)
+          c => !(c.procedure_type_template_id === procedureId && c.milestone_type_id === milestoneId)
         ))
       }
     } else {
       // Add the config
       const milestone = milestones.find(m => m.id === milestoneId)
       const { data, error } = await supabase
-        .from('default_procedure_milestones')
+        .from('procedure_milestone_templates')
         .insert({
-          default_procedure_id: procedureId,
+          procedure_type_template_id: procedureId,
           milestone_type_id: milestoneId,
           display_order: milestone?.display_order || 0
         })
@@ -158,7 +158,7 @@ export default function AdminProcedureMilestonesPage() {
 
   // Get milestone count for a procedure
   const getMilestoneCount = (procedureId: string): number => {
-    return configs.filter(c => c.default_procedure_id === procedureId).length
+    return configs.filter(c => c.procedure_type_template_id === procedureId).length
   }
 
   // Get implant category label
@@ -181,9 +181,9 @@ export default function AdminProcedureMilestonesPage() {
     for (const m of milestones) {
       if (!isMilestoneEnabled(procedureId, m.id)) {
         const { data } = await supabase
-          .from('default_procedure_milestones')
+          .from('procedure_milestone_templates')
           .insert({
-            default_procedure_id: procedureId,
+            procedure_type_template_id: procedureId,
             milestone_type_id: m.id,
             display_order: m.display_order
           })
@@ -204,12 +204,12 @@ export default function AdminProcedureMilestonesPage() {
     setSaving(true)
 
     const { error } = await supabase
-      .from('default_procedure_milestones')
+      .from('procedure_milestone_templates')
       .delete()
-      .eq('default_procedure_id', procedureId)
+      .eq('procedure_type_template_id', procedureId)
 
     if (!error) {
-      setConfigs(configs.filter(c => c.default_procedure_id !== procedureId))
+      setConfigs(configs.filter(c => c.procedure_type_template_id !== procedureId))
     }
 
     setSaving(false)
@@ -221,7 +221,7 @@ export default function AdminProcedureMilestonesPage() {
 
     // Get milestones enabled for the source procedure
     const sourceMilestoneIds = configs
-      .filter(c => c.default_procedure_id === sourceProcedureId)
+      .filter(c => c.procedure_type_template_id === sourceProcedureId)
       .map(c => c.milestone_type_id)
 
     // For each procedure, sync to match source
@@ -230,23 +230,23 @@ export default function AdminProcedureMilestonesPage() {
 
       // First, remove all existing configs for this procedure
       await supabase
-        .from('default_procedure_milestones')
+        .from('procedure_milestone_templates')
         .delete()
-        .eq('default_procedure_id', procedure.id)
+        .eq('procedure_type_template_id', procedure.id)
 
       // Then add the configs from source
       if (sourceMilestoneIds.length > 0) {
         const newConfigs = sourceMilestoneIds.map(milestoneId => {
           const milestone = milestones.find(m => m.id === milestoneId)
           return {
-            default_procedure_id: procedure.id,
+            procedure_type_template_id: procedure.id,
             milestone_type_id: milestoneId,
             display_order: milestone?.display_order || 0
           }
         })
 
         await supabase
-          .from('default_procedure_milestones')
+          .from('procedure_milestone_templates')
           .insert(newConfigs)
       }
     }

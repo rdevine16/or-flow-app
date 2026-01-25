@@ -147,9 +147,9 @@ export type AuditAction =
   // Admin Actions
   | 'admin.impersonation_started'
   | 'admin.impersonation_ended'
-  | 'admin.default_procedure_created'
-  | 'admin.default_procedure_updated'
-  | 'admin.default_procedure_deleted'
+  | 'admin.procedure_template_created'
+  | 'admin.procedure_template_updated'
+  | 'admin.procedure_template_deleted'
   | 'admin.implant_company_created'
   | 'admin.implant_company_updated'
   | 'admin.implant_company_deleted'
@@ -296,9 +296,9 @@ export const auditActionLabels: Record<AuditAction, string> = {
   // Admin Actions
   'admin.impersonation_started': 'started facility impersonation',
   'admin.impersonation_ended': 'ended facility impersonation',
-  'admin.default_procedure_created': 'created a default procedure',
-  'admin.default_procedure_updated': 'updated a default procedure',
-  'admin.default_procedure_deleted': 'deleted a default procedure',
+  'admin.procedure_template_created': 'created a default procedure',
+  'admin.procedure_template_updated': 'updated a default procedure',
+  'admin.procedure_template_deleted': 'deleted a default procedure',
   'admin.implant_company_created': 'created a global implant company',
   'admin.implant_company_updated': 'updated a global implant company',
   'admin.implant_company_deleted': 'deleted a global implant company',
@@ -1988,8 +1988,8 @@ export const adminAudit = {
   },
 
   async defaultProcedureCreated(supabase: SupabaseClient, procedureName: string, procedureId: string) {
-    await log(supabase, 'admin.default_procedure_created', {
-      targetType: 'default_procedure',
+    await log(supabase, 'admin.procedure_template_created', {
+      targetType: 'procedure_template',
       targetId: procedureId,
       targetLabel: procedureName,
       newValues: { name: procedureName },
@@ -2002,8 +2002,8 @@ export const adminAudit = {
     procedureId: string,
     changes?: Record<string, unknown>
   ) {
-    await log(supabase, 'admin.default_procedure_updated', {
-      targetType: 'default_procedure',
+    await log(supabase, 'admin.procedure_template_updated', {
+      targetType: 'procedure_template',
       targetId: procedureId,
       targetLabel: procedureName,
       newValues: changes,
@@ -2011,8 +2011,8 @@ export const adminAudit = {
   },
 
   async defaultProcedureDeleted(supabase: SupabaseClient, procedureName: string, procedureId: string) {
-    await log(supabase, 'admin.default_procedure_deleted', {
-      targetType: 'default_procedure',
+    await log(supabase, 'admin.procedure_template_deleted', {
+      targetType: 'procedure_template',
       targetId: procedureId,
       targetLabel: procedureName,
     })

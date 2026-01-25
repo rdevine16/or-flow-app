@@ -151,7 +151,7 @@ export default function CreateFacilityPage() {
       // 3. Copy default procedure types if selected
       if (setupOptions.createDefaultProcedures) {
         const { data: defaultProcs } = await supabase
-          .from('default_procedure_types')
+          .from('dprocedure_type_templates')
           .select('id, name, body_region_id, implant_category')
           .eq('is_active', true)
 
@@ -223,18 +223,18 @@ export default function CreateFacilityPage() {
             }
 
             const { data: defaultConfigs } = await supabase
-              .from('default_procedure_milestones')
+              .from('procedure_milestone_templates')
               .select('*')
 
             if (defaultConfigs && defaultConfigs.length > 0) {
               const facilityConfigs = defaultConfigs
                 .filter(dc => 
-                  procedureIdMap[dc.default_procedure_id] && 
+                  procedureIdMap[dc.procedure_type_template_id] && 
                   milestoneIdMap[dc.milestone_type_id]
                 )
                 .map(dc => ({
                   facility_id: facility.id,
-                  procedure_type_id: procedureIdMap[dc.default_procedure_id],
+                  procedure_type_id: procedureIdMap[dc.procedure_type_template_id],
                   facility_milestone_id: milestoneIdMap[dc.milestone_type_id],
                   display_order: dc.display_order
                 }))

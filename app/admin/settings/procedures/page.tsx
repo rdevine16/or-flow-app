@@ -47,7 +47,7 @@ interface MilestoneType {
 
 interface DefaultProcedureMilestone {
   id: string
-  default_procedure_id: string
+  procedure_type_template_id: string
   milestone_type_id: string
 }
 
@@ -108,7 +108,7 @@ export default function DefaultProceduresPage() {
     try {
       const [proceduresRes, regionsRes, categoriesRes, milestonesRes, procMilestonesRes] = await Promise.all([
         supabase
-          .from('default_procedure_types')
+          .from('procedure_type_templates')
           .select('*, body_region:body_regions(name, display_name), procedure_category:procedure_categories(name, display_name)')
           .order('name'),
         supabase
@@ -124,7 +124,7 @@ export default function DefaultProceduresPage() {
           .select('id, name, display_name, display_order, pair_position')
           .order('display_order'),
         supabase
-          .from('default_procedure_milestones')
+          .from('procedure_milestone_templates')
           .select('*')
       ])
 
@@ -177,7 +177,7 @@ export default function DefaultProceduresPage() {
 
       if (editingProcedure) {
         const { error } = await supabase
-          .from('default_procedure_types')
+          .from('procedure_type_templates')
           .update(data)
           .eq('id', editingProcedure.id)
 
@@ -207,7 +207,7 @@ export default function DefaultProceduresPage() {
         ))
       } else {
         const { data: newProcedure, error } = await supabase
-          .from('default_procedure_types')
+          .from('procedure_type_templates')
           .insert(data)
           .select('*, body_region:body_regions(name, display_name), procedure_category:procedure_categories(name, display_name)')
           .single()
@@ -236,7 +236,7 @@ export default function DefaultProceduresPage() {
 
     try {
       const { error } = await supabase
-        .from('default_procedure_types')
+        .from('procedure_type_templates')
         .delete()
         .eq('id', procedure.id)
 
@@ -259,7 +259,7 @@ export default function DefaultProceduresPage() {
 
     try {
       const { error } = await supabase
-        .from('default_procedure_types')
+        .from('procedure_type_templates')
         .update({ is_active: !procedure.is_active })
         .eq('id', procedure.id)
 
@@ -278,12 +278,12 @@ export default function DefaultProceduresPage() {
   // Milestone management functions
   const isMilestoneEnabled = (procedureId: string, milestoneId: string) => {
     return procedureMilestones.some(
-      pm => pm.default_procedure_id === procedureId && pm.milestone_type_id === milestoneId
+      pm => pm.procedure_type_template_id === procedureId && pm.milestone_type_id === milestoneId
     )
   }
 
   const getMilestoneCount = (procedureId: string) => {
-    return procedureMilestones.filter(pm => pm.default_procedure_id === procedureId).length
+    return procedureMilestones.filter(pm => pm.procedure_type_template_id === procedureId).length
   }
 
   const toggleMilestone = async (procedureId: string, milestoneId: string) => {
@@ -291,20 +291,20 @@ export default function DefaultProceduresPage() {
 
     try {
       const existing = procedureMilestones.find(
-        pm => pm.default_procedure_id === procedureId && pm.milestone_type_id === milestoneId
+        pm => pm.procedure_type_template_id === procedureId && pm.milestone_type_id === milestoneId
       )
 
       if (existing) {
         await supabase
-          .from('default_procedure_milestones')
+          .from('procedure_milestone_templates')
           .delete()
           .eq('id', existing.id)
         
         setProcedureMilestones(procedureMilestones.filter(pm => pm.id !== existing.id))
       } else {
         const { data, error } = await supabase
-          .from('default_procedure_milestones')
-          .insert({ default_procedure_id: procedureId, milestone_type_id: milestoneId })
+          .from('procedure_milestone_templates')
+          .insert({ procedure_type_template_id: procedureId, milestone_type_id: milestoneId })
           .select()
           .single()
 
@@ -335,12 +335,12 @@ export default function DefaultProceduresPage() {
 
       if (startEnabled) {
         const toDelete = procedureMilestones.filter(
-          pm => pm.default_procedure_id === procedureId && 
+          pm => pm.procedure_type_template_id === procedureId && 
                 (pm.milestone_type_id === startMilestoneId || pm.milestone_type_id === endMilestoneId)
         )
         
         for (const pm of toDelete) {
-          await supabase.from('default_procedure_milestones').delete().eq('id', pm.id)
+          await supabase.from('procedure_milestone_templates').delete().eq('id', pm.id)
         }
         
         setProcedureMilestones(procedureMilestones.filter(
@@ -348,14 +348,14 @@ export default function DefaultProceduresPage() {
         ))
       } else {
         const toInsert = [
-          { default_procedure_id: procedureId, milestone_type_id: startMilestoneId }
+          { procedure_type_template_id: procedureId, milestone_type_id: startMilestoneId }
         ]
         if (endMilestoneId) {
-          toInsert.push({ default_procedure_id: procedureId, milestone_type_id: endMilestoneId })
+          toInsert.push({ procedure_type_template_id: procedureId, milestone_type_id: endMilestoneId })
         }
 
         const { data, error } = await supabase
-          .from('default_procedure_milestones')
+          .from('procedure_milestone_templates')
           .insert(toInsert)
           .select()
 
@@ -375,16 +375,16 @@ export default function DefaultProceduresPage() {
 
     try {
       const currentIds = procedureMilestones
-        .filter(pm => pm.default_procedure_id === procedureId)
+        .filter(pm => pm.procedure_type_template_id === procedureId)
         .map(pm => pm.milestone_type_id)
 
       const toAdd = milestoneTypes
         .filter(m => !currentIds.includes(m.id))
-        .map(m => ({ default_procedure_id: procedureId, milestone_type_id: m.id }))
+        .map(m => ({ procedure_type_template_id: procedureId, milestone_type_id: m.id }))
 
       if (toAdd.length > 0) {
         const { data, error } = await supabase
-          .from('default_procedure_milestones')
+          .from('procedure_milestone_templates')
           .insert(toAdd)
           .select()
 
@@ -403,13 +403,13 @@ export default function DefaultProceduresPage() {
     setSaving(true)
 
     try {
-      const toDelete = procedureMilestones.filter(pm => pm.default_procedure_id === procedureId)
+      const toDelete = procedureMilestones.filter(pm => pm.procedure_type_template_id === procedureId)
 
       for (const pm of toDelete) {
-        await supabase.from('default_procedure_milestones').delete().eq('id', pm.id)
+        await supabase.from('procedure_milestone_templates').delete().eq('id', pm.id)
       }
 
-      setProcedureMilestones(procedureMilestones.filter(pm => pm.default_procedure_id !== procedureId))
+      setProcedureMilestones(procedureMilestones.filter(pm => pm.procedure_type_template_id !== procedureId))
     } catch (error) {
       console.error('Error disabling all milestones:', error)
     } finally {

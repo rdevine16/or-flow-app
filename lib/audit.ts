@@ -58,9 +58,9 @@ export type AuditAction =
   // Admin actions
   | 'admin.impersonation_started'
   | 'admin.impersonation_ended'
-  | 'admin.default_procedure_added'
-  | 'admin.default_procedure_updated'
-  | 'admin.default_procedure_removed'
+  | 'admin.procedure_template_added'
+  | 'admin.procedure_template_updated'
+  | 'admin.procedure_template_removed'
 
 export type TargetType = 
   | 'user' 
@@ -319,9 +319,9 @@ export function formatAuditAction(action: AuditAction | string): string {
     'procedure_type.deleted': 'Procedure type deleted',
     'admin.impersonation_started': 'Started impersonation',
     'admin.impersonation_ended': 'Ended impersonation',
-    'admin.default_procedure_added': 'Default procedure added',
-    'admin.default_procedure_updated': 'Default procedure updated',
-    'admin.default_procedure_removed': 'Default procedure removed',
+    'admin.procedure_template_added': 'Default procedure added',
+    'admin.procedure_template_updated': 'Default procedure updated',
+    'admin.procedure_template_removed': 'Default procedure removed',
   }
 
   return actionMap[action] || action
