@@ -12,6 +12,17 @@ interface ORRoom {
   id: string
   name: string
   deleted_at: string | null
+  deleted_by: string | null
+}
+
+interface DeleteModalState {
+  isOpen: boolean
+  room: ORRoom | null
+  dependencies: {
+    cases: number
+    blockSchedules: number
+  }
+  loading: boolean
 }
 
 interface ModalState {
@@ -33,6 +44,23 @@ export default function RoomsSettingsPage() {
   const [formData, setFormData] = useState({ name: '' })
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
+    isOpen: false,
+    room: null,
+    dependencies: { cases: 0, blockSchedules: 0 },
+    loading: false
+  })
+
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -45,9 +73,9 @@ export default function RoomsSettingsPage() {
   const fetchRooms = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
-    const { data } = await supabase
+const { data } = await supabase
       .from('or_rooms')
-      .select('id, name, deleted_at')
+      .select('id, name, deleted_at, deleted_by')
       .eq('facility_id', effectiveFacilityId)
       .order('name')
     
@@ -79,7 +107,7 @@ export default function RoomsSettingsPage() {
       const { data, error } = await supabase
         .from('or_rooms')
         .insert({ name: formData.name.trim(), facility_id: effectiveFacilityId })
-        .select('id, name, deleted_at')
+        .select('id, name, deleted_at, deleted_by')
         .single()
 
       if (!error && data) {
@@ -115,44 +143,100 @@ export default function RoomsSettingsPage() {
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
-    const room = rooms.find(r => r.id === id)
-    const roomName = room?.name || ''
+const openDeleteModal = async (room: ORRoom) => {
+    setDeleteModal({
+      isOpen: true,
+      room,
+      dependencies: { cases: 0, blockSchedules: 0 },
+      loading: true
+    })
 
-    // Soft delete - set deleted_at timestamp
-    const { error } = await supabase
-      .from('or_rooms')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id)
+    // Check dependencies
+    const [casesResult, blocksResult] = await Promise.all([
+      supabase
+        .from('cases')
+        .select('id', { count: 'exact', head: true })
+        .eq('or_room_id', room.id),
+      supabase
+        .from('block_schedules')
+        .select('id', { count: 'exact', head: true })
+        .eq('or_room_id', room.id)
+    ])
 
-    if (!error) {
-      setRooms(rooms.map(r => 
-        r.id === id ? { ...r, deleted_at: new Date().toISOString() } : r
-      ))
-      setDeleteConfirm(null)
-      
-      // Audit log
-      await roomAudit.deleted(supabase, roomName, id)
-    }
+    setDeleteModal(prev => ({
+      ...prev,
+      dependencies: {
+        cases: casesResult.count || 0,
+        blockSchedules: blocksResult.count || 0
+      },
+      loading: false
+    }))
   }
 
-  const handleRestore = async (id: string) => {
-    const room = rooms.find(r => r.id === id)
-    const roomName = room?.name || ''
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      room: null,
+      dependencies: { cases: 0, blockSchedules: 0 },
+      loading: false
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!deleteModal.room || !currentUserId) return
+
+    setSaving(true)
+    const room = deleteModal.room
 
     const { error } = await supabase
       .from('or_rooms')
-      .update({ deleted_at: null })
+      .update({ 
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId
+      })
+      .eq('id', room.id)
+
+    if (!error) {
+      setRooms(rooms.map(r => 
+        r.id === room.id ? { ...r, deleted_at: new Date().toISOString(), deleted_by: currentUserId } : r
+      ))
+      showToast(`"${room.name}" moved to archive`, 'success')
+      await roomAudit.deleted(supabase, room.name, room.id)
+    } else {
+      showToast('Failed to archive room', 'error')
+    }
+
+    setSaving(false)
+    closeDeleteModal()
+  }
+
+const handleRestore = async (id: string) => {
+    const room = rooms.find(r => r.id === id)
+    if (!room) return
+
+    setSaving(true)
+
+    const { error } = await supabase
+      .from('or_rooms')
+      .update({ deleted_at: null, deleted_by: null })
       .eq('id', id)
 
     if (!error) {
       setRooms(rooms.map(r => 
-        r.id === id ? { ...r, deleted_at: null } : r
+        r.id === id ? { ...r, deleted_at: null, deleted_by: null } : r
       ))
-      
-      // Audit log
-      await roomAudit.restored(supabase, roomName, id)
+      showToast(`"${room.name}" restored successfully`, 'success')
+      await roomAudit.restored(supabase, room.name, id)
+    } else {
+      showToast('Failed to restore room', 'error')
     }
+
+    setSaving(false)
+  }
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
   }
 
   // Filter rooms based on showDeleted toggle
@@ -294,21 +378,6 @@ export default function RoomsSettingsPage() {
                                 >
                                   Restore
                                 </button>
-                              ) : deleteConfirm === room.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDelete(room.id)}
-                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
                               ) : (
                                 <>
                                   <button
@@ -321,7 +390,7 @@ export default function RoomsSettingsPage() {
                                     </svg>
                                   </button>
                                   <button
-                                    onClick={() => setDeleteConfirm(room.id)}
+onClick={() => openDeleteModal(room)}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Delete"
                                   >
@@ -386,6 +455,86 @@ export default function RoomsSettingsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+          {/* Delete Confirmation Modal */}
+          {deleteModal.isOpen && deleteModal.room && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-900">Archive Room</h3>
+                </div>
+                <div className="p-6">
+                  {deleteModal.loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-slate-600 mb-4">
+                        Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.room.name}"</span>?
+                      </p>
+                      {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.blockSchedules > 0) && (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                          <div className="flex gap-3">
+                            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div>
+                              <p className="font-medium text-amber-800">This room is in use:</p>
+                              <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
+                                {deleteModal.dependencies.cases > 0 && (
+                                  <li>{deleteModal.dependencies.cases} case{deleteModal.dependencies.cases !== 1 ? 's' : ''}</li>
+                                )}
+                                {deleteModal.dependencies.blockSchedules > 0 && (
+                                  <li>{deleteModal.dependencies.blockSchedules} block schedule{deleteModal.dependencies.blockSchedules !== 1 ? 's' : ''}</li>
+                                )}
+                              </ul>
+                              <p className="mt-2 text-sm text-amber-700">
+                                Archiving will hide it from new cases but existing data will be preserved.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-sm text-slate-500">You can restore archived rooms at any time.</p>
+                    </>
+                  )}
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={saving || deleteModal.loading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Archiving...' : 'Archive Room'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Toast */}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+              toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+            }`}>
+              {toast.type === 'success' ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              )}
+              {toast.message}
             </div>
           )}
         </SettingsLayout>
