@@ -245,6 +245,27 @@ export default function CreateFacilityPage() {
                   .insert(facilityConfigs)
               }
             }
+           // 6. Copy default complexities to facility
+const { data: defaultComplexities } = await supabase
+  .from('default_complexities')
+  .select('*')
+  .eq('is_active', true)
+  .order('display_order')
+
+if (defaultComplexities && defaultComplexities.length > 0) {
+  await supabase
+    .from('complexities')
+    .insert(defaultComplexities.map(dc => ({
+      facility_id: facility.id,
+      name: dc.name,
+      display_name: dc.display_name,
+      description: dc.description,
+      procedure_category_ids: dc.procedure_category_ids,
+      is_active: true,
+      display_order: dc.display_order,
+      source_template_id: dc.id  // Track the source
+    })))
+} 
           }
         }
       }

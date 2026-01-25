@@ -58,12 +58,11 @@ export default function ComplexitiesAdminPage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [complexitiesRes, categoriesRes] = await Promise.all([
-        supabase
-          .from('complexities')
-          .select('*')
-          .is('facility_id', null)  // Only templates
-          .order('display_order'),
+const [complexitiesRes, categoriesRes] = await Promise.all([
+  supabase
+    .from('default_complexities')
+    .select('*')
+    .order('display_order'), 
         supabase
           .from('procedure_categories')
           .select('id, name, display_name')
@@ -105,7 +104,7 @@ export default function ComplexitiesAdminPage() {
 
       if (editingComplexity) {
         const { error } = await supabase
-          .from('complexities')
+          .from('default_complexities')
           .update({
             display_name: formDisplayName.trim(),
             description: formDescription.trim() || null,
@@ -121,17 +120,16 @@ export default function ComplexitiesAdminPage() {
             : c
         ))
       } else {
-        const { data, error } = await supabase
-          .from('complexities')
-          .insert({
-            facility_id: null,  // Template
-            name,
-            display_name: formDisplayName.trim(),
-            description: formDescription.trim() || null,
-            procedure_category_ids: [],
-            is_active: formIsActive,
-            display_order: complexities.length
-          })
+const { data, error } = await supabase
+  .from('default_complexities') 
+  .insert({
+    name,
+    display_name: formDisplayName.trim(),
+    description: formDescription.trim() || null,
+    procedure_category_ids: [],
+    is_active: formIsActive,
+    display_order: complexities.length
+  })
           .select()
           .single()
 
@@ -151,7 +149,7 @@ export default function ComplexitiesAdminPage() {
   const handleDelete = async (id: string) => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('complexities').delete().eq('id', id)
+      const { error } = await supabase.from('default_complexities').delete().eq('id', id)
       if (error) throw error
       setComplexities(complexities.filter(c => c.id !== id))
       setDeleteConfirm(null)
@@ -175,7 +173,7 @@ export default function ComplexitiesAdminPage() {
         : [...currentIds, categoryId]
 
       const { error } = await supabase
-        .from('complexities')
+        .from('default_complexities')
         .update({ procedure_category_ids: newIds })
         .eq('id', complexityId)
 
@@ -196,7 +194,7 @@ export default function ComplexitiesAdminPage() {
     setSaving(true)
     try {
       const { error } = await supabase
-        .from('complexities')
+        .from('default_complexities')
         .update({ is_active: !complexity.is_active })
         .eq('id', complexity.id)
 
