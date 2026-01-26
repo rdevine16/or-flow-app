@@ -127,6 +127,11 @@ const icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
     </svg>
   ),
+  cancellations: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+    </svg>
+  ),
 }
 
 // =====================================================
@@ -220,6 +225,14 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/delay-types',
         description: 'Categorize surgical delays',
         icon: icons.delays,
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'cancellation-reasons',
+        label: 'Cancellation Reasons',
+        href: '/settings/cancellation-reasons',
+        description: 'Track why cases are cancelled',
+        icon: icons.cancellations,
         requiredAccess: ['global_admin', 'facility_admin'],
       },
       {
