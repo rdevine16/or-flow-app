@@ -106,7 +106,6 @@ const fetchArchivedComplexities = async () => {
     setEditingComplexity(null)
     setFormDisplayName('')
     setFormDescription('')
-    setFormIsActive(true)
     setShowModal(true)
   }
 
@@ -115,9 +114,9 @@ const fetchArchivedComplexities = async () => {
     setEditingComplexity(complexity)
     setFormDisplayName(complexity.display_name)
     setFormDescription(complexity.description || '')
-    setFormIsActive(complexity.is_active)
     setShowModal(true)
   }
+
 
   const handleSave = async () => {
     if (!formDisplayName.trim() || !effectiveFacilityId) return
@@ -132,7 +131,6 @@ const fetchArchivedComplexities = async () => {
           .update({
             display_name: formDisplayName.trim(),
             description: formDescription.trim() || null,
-            is_active: formIsActive,
           })
           .eq('id', editingComplexity.id)
 
@@ -148,12 +146,12 @@ const fetchArchivedComplexities = async () => {
           .from('complexities')
           .insert({
             facility_id: effectiveFacilityId,
-            name,
+            name: formDisplayName.trim().toLowerCase().replace(/\s+/g, '_'),
             display_name: formDisplayName.trim(),
             description: formDescription.trim() || null,
+            is_active: true,
+            display_order: complexities.length,
             procedure_category_ids: [],
-            is_active: formIsActive,
-            display_order: complexities.length
           })
           .select()
           .single()
@@ -241,27 +239,6 @@ const fetchArchivedComplexities = async () => {
     }
   }
 
-  const toggleActive = async (complexity: Complexity, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!canEdit) return
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('complexities')
-        .update({ is_active: !complexity.is_active })
-        .eq('id', complexity.id)
-
-      if (error) throw error
-      setComplexities(complexities.map(c =>
-        c.id === complexity.id ? { ...c, is_active: !c.is_active } : c
-      ))
-    } catch (error) {
-      console.error('Error:', error)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const getCategoryNames = (complexity: Complexity) => {
     const cats = procedureCategories.filter(c => complexity.procedure_category_ids?.includes(c.id))
     return cats
@@ -315,13 +292,12 @@ const fetchArchivedComplexities = async () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  {/* Table Header */}
+{/* Table Header */}
                   <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    <div className="col-span-3">Complexity Name</div>
+                    <div className="col-span-4">Complexity Name</div>
                     <div className="col-span-3">Description</div>
                     <div className="col-span-3">Procedure Categories</div>
-                    <div className="col-span-2">Active</div>
-                    <div className="col-span-1 text-right">Actions</div>
+                    <div className="col-span-2 text-right">Actions</div>
                   </div>
 
                   {/* Table Body */}
@@ -337,14 +313,14 @@ const fetchArchivedComplexities = async () => {
                             onClick={() => setExpandedId(isExpanded ? null : complexity.id)}
                             className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
                           >
-                            {/* Complexity Name */}
-                            <div className="col-span-3 flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${complexity.is_active ? 'bg-orange-100' : 'bg-slate-100'}`}>
-                                <svg className={`w-4 h-4 ${complexity.is_active ? 'text-orange-600' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+ {/* Complexity Name */}
+                            <div className="col-span-4 flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-orange-100">
+                                <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
                               </div>
-                              <p className={`font-medium ${complexity.is_active ? 'text-slate-900' : 'text-slate-400'}`}>
+                              <p className="font-medium text-slate-900">
                                 {complexity.display_name}
                               </p>
                             </div>
@@ -369,22 +345,6 @@ const fetchArchivedComplexities = async () => {
                                 </div>
                               ) : (
                                 <span className="text-sm text-slate-400">All procedures</span>
-                              )}
-                            </div>
-
-                            {/* Active Toggle */}
-                            <div className="col-span-2">
-                              {canEdit ? (
-                                <button
-                                  onClick={(e) => toggleActive(complexity, e)}
-                                  className={`relative w-11 h-6 rounded-full transition-colors ${complexity.is_active ? 'bg-blue-600' : 'bg-slate-200'}`}
-                                >
-                                  <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${complexity.is_active ? 'translate-x-5' : ''}`} />
-                                </button>
-                              ) : (
-                                <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${complexity.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                  {complexity.is_active ? 'Active' : 'Inactive'}
-                                </span>
                               )}
                             </div>
 
