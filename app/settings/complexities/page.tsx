@@ -19,6 +19,7 @@ interface Complexity {
   procedure_category_ids: string[]
   is_active: boolean
   display_order: number
+  deleted_at: string | null
 }
 
 interface ProcedureCategory {
@@ -42,8 +43,9 @@ export default function FacilityComplexitiesPage() {
   const [formDisplayName, setFormDisplayName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formIsActive, setFormIsActive] = useState(true)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-
+  const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedComplexities, setArchivedComplexities] = useState<Complexity[]>([])
   const canEdit = isFacilityAdmin || isGlobalAdmin
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export default function FacilityComplexitiesPage() {
           .from('complexities')
           .select('*')
           .eq('facility_id', effectiveFacilityId)
+          .is('deleted_at', null)
           .order('display_order'),
         supabase
           .from('procedure_categories')
@@ -79,7 +82,26 @@ export default function FacilityComplexitiesPage() {
       setLoading(false)
     }
   }
+const fetchArchivedComplexities = async () => {
+    if (!effectiveFacilityId) return
+    try {
+      const { data } = await supabase
+        .from('complexities')
+        .select('*')
+        .eq('facility_id', effectiveFacilityId)
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false })
+      if (data) setArchivedComplexities(data)
+    } catch (error) {
+      console.error('Error fetching archived:', error)
+    }
+  }
 
+  useEffect(() => {
+    if (showArchived && effectiveFacilityId) {
+      fetchArchivedComplexities()
+    }
+  }, [showArchived, effectiveFacilityId])
   const handleNew = () => {
     setEditingComplexity(null)
     setFormDisplayName('')
@@ -149,20 +171,46 @@ export default function FacilityComplexitiesPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleArchive = async (id: string) => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('complexities').delete().eq('id', id)
+      const { error } = await supabase
+        .from('complexities')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
       if (error) throw error
       setComplexities(complexities.filter(c => c.id !== id))
-      setDeleteConfirm(null)
+      setArchiveConfirm(null)
     } catch (error) {
       console.error('Error:', error)
-      alert('Error deleting')
+      alert('Error archiving')
     } finally {
       setSaving(false)
     }
   }
+
+  const handleRestore = async (id: string) => {
+    setSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('complexities')
+        .update({ deleted_at: null })
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      if (data) {
+        setComplexities([...complexities, data])
+        setArchivedComplexities(archivedComplexities.filter(c => c.id !== id))
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error restoring')
+    } finally {
+      setSaving(false)
+    }
+  }
+
 
   const toggleCategory = async (complexityId: string, categoryId: string) => {
     if (!canEdit) return
@@ -353,23 +401,23 @@ export default function FacilityComplexitiesPage() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                   </button>
-                                  {deleteConfirm === complexity.id ? (
+ {archiveConfirm === complexity.id ? (
                                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                      <button onClick={() => handleDelete(complexity.id)} className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
-                                        Confirm
+                                      <button onClick={() => handleArchive(complexity.id)} className="px-2 py-1 bg-amber-600 text-white text-xs rounded hover:bg-amber-700">
+                                        Archive
                                       </button>
-                                      <button onClick={() => setDeleteConfirm(null)} className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">
+                                      <button onClick={() => setArchiveConfirm(null)} className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">
                                         Cancel
                                       </button>
                                     </div>
                                   ) : (
                                     <button
-                                      onClick={(e) => { e.stopPropagation(); setDeleteConfirm(complexity.id) }}
-                                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                      title="Delete"
+                                      onClick={(e) => { e.stopPropagation(); setArchiveConfirm(complexity.id) }}
+                                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                      title="Archive"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                       </svg>
                                     </button>
                                   )}
@@ -423,7 +471,55 @@ export default function FacilityComplexitiesPage() {
           )}
         </SettingsLayout>
       </Container>
+ {/* Show Archived Toggle */}
+              {canEdit && (
+                <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+                  <span className="text-sm text-slate-600">
+                    {archivedComplexities.length > 0 ? `${archivedComplexities.length} archived` : 'No archived complexities'}
+                  </span>
+                  <button
+                    onClick={() => setShowArchived(!showArchived)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    {showArchived ? 'Hide Archived' : 'Show Archived'}
+                  </button>
+                </div>
+              )}
 
+              {/* Archived Complexities */}
+              {showArchived && archivedComplexities.length > 0 && (
+                <div className="border-t border-slate-200">
+                  <div className="px-6 py-3 bg-amber-50 border-b border-amber-100">
+                    <h4 className="text-sm font-medium text-amber-800">Archived Complexities</h4>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {archivedComplexities.map((complexity) => (
+                      <div key={complexity.id} className="px-6 py-3 flex items-center justify-between bg-slate-50/50">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100">
+                            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-500">{complexity.display_name}</p>
+                            <p className="text-xs text-slate-400">
+                              Archived {new Date(complexity.deleted_at!).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRestore(complexity.id)}
+                          disabled={saving}
+                          className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
