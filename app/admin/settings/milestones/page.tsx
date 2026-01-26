@@ -15,6 +15,8 @@ interface MilestoneType {
   pair_with_id: string | null
   pair_position: 'start' | 'end' | null
   is_active: boolean
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 // Confirmation Modal Component
@@ -105,20 +107,59 @@ export default function AdminMilestonesSettingsPage() {
   const [newDisplayName, setNewDisplayName] = useState('')
   const [editDisplayName, setEditDisplayName] = useState('')
   const [selectedPairId, setSelectedPairId] = useState<string>('')
+// Archive state
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Current user
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Get current user ID on mount
   useEffect(() => {
-    fetchMilestones()
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
   }, [])
 
-  const fetchMilestones = async () => {
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+useEffect(() => {
+    fetchMilestones()
+  }, [showArchived])
+
+const fetchMilestones = async () => {
     setLoading(true)
     
-    const { data } = await supabase
+    let query = supabase
       .from('milestone_types')
-      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active')
-      .order('display_order')
+      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
+
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
+    }
+
+    query = query.order('display_order')
+
+    const { data } = await query
     
     setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('milestone_types')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
     setLoading(false)
   }
 
@@ -357,7 +398,115 @@ export default function AdminMilestonesSettingsPage() {
     setPairingMilestone(null)
     setSaving(false)
   }
+// Archive a milestone (soft delete)
+  const handleArchive = async (milestone: MilestoneType) => {
+    if (!currentUserId) return
 
+    // If paired, need to unlink first
+    if (milestone.pair_with_id) {
+      const partner = milestones.find(m => m.id === milestone.pair_with_id)
+      
+      setConfirmModal({
+        isOpen: true,
+        title: 'Archive Paired Milestone',
+        message: (
+          <div>
+            <p>This milestone is paired with <strong>"{partner?.display_name}"</strong>.</p>
+            <p className="mt-2">Archiving will remove the pairing. The partner milestone will remain active.</p>
+          </div>
+        ),
+        confirmLabel: 'Archive',
+        confirmVariant: 'danger',
+        onConfirm: async () => {
+          setSaving(true)
+
+          // Unlink partner first
+          await supabase
+            .from('milestone_types')
+            .update({ pair_with_id: null, pair_position: null })
+            .eq('id', milestone.pair_with_id)
+
+          // Archive this milestone
+          const { error } = await supabase
+            .from('milestone_types')
+            .update({
+              deleted_at: new Date().toISOString(),
+              deleted_by: currentUserId,
+              pair_with_id: null,
+              pair_position: null
+            })
+            .eq('id', milestone.id)
+
+          if (!error) {
+            await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
+            setMilestones(milestones.filter(m => m.id !== milestone.id))
+            setArchivedCount(prev => prev + 1)
+            showToast(`"${milestone.display_name}" moved to archive`, 'success')
+          }
+
+          closeConfirmModal()
+          setSaving(false)
+        },
+      })
+      return
+    }
+
+    // Not paired - simple archive
+    setConfirmModal({
+      isOpen: true,
+      title: 'Archive Milestone',
+      message: (
+        <p>Archive <strong>"{milestone.display_name}"</strong>? It will be hidden from new facilities. You can restore it later.</p>
+      ),
+      confirmLabel: 'Archive',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setSaving(true)
+
+        const { error } = await supabase
+          .from('milestone_types')
+          .update({
+            deleted_at: new Date().toISOString(),
+            deleted_by: currentUserId
+          })
+          .eq('id', milestone.id)
+
+        if (!error) {
+          await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
+          setMilestones(milestones.filter(m => m.id !== milestone.id))
+          setArchivedCount(prev => prev + 1)
+          showToast(`"${milestone.display_name}" moved to archive`, 'success')
+        }
+
+        closeConfirmModal()
+        setSaving(false)
+      },
+    })
+  }
+
+  // Restore an archived milestone
+  const handleRestore = async (milestone: MilestoneType) => {
+    setSaving(true)
+
+    const { error } = await supabase
+      .from('milestone_types')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', milestone.id)
+
+    if (!error) {
+      await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
+      setMilestones(milestones.filter(m => m.id !== milestone.id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${milestone.display_name}" restored successfully`, 'success')
+    } else {
+      showToast('Failed to restore milestone', 'error')
+    }
+
+    setSaving(false)
+  }
   // Filter based on showInactive
   const visibleMilestones = showInactive 
     ? milestones 
@@ -378,15 +527,35 @@ export default function AdminMilestonesSettingsPage() {
                 Milestone templates for new facilities. Changes here don't affect existing facilities.
               </p>
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Milestone
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Archive Toggle */}
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                  showArchived
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+              </button>
+
+              {/* Add Milestone - hide when viewing archived */}
+              {!showArchived && (
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Milestone
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stats Bar */}
@@ -508,37 +677,59 @@ export default function AdminMilestonesSettingsPage() {
                         )}
                       </td>
 
-                      {/* Actions */}
+                     {/* Actions */}
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {milestone.is_active && (
+                          {showArchived ? (
                             <button
-                              onClick={() => openPairModal(milestone)}
-                              className={`p-1.5 rounded-lg transition-colors ${
-                                milestone.pair_with_id
-                                  ? 'text-blue-600 hover:bg-blue-50'
-                                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                              }`}
-                              title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
+                              onClick={() => handleRestore(milestone)}
+                              disabled={saving}
+                              className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                              </svg>
+                              Restore
                             </button>
+                          ) : (
+                            <>
+                              {milestone.is_active && (
+                                <button
+                                  onClick={() => openPairModal(milestone)}
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    milestone.pair_with_id
+                                      ? 'text-blue-600 hover:bg-blue-50'
+                                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                  }`}
+                                  title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                  </svg>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setEditingMilestone(milestone)
+                                  setEditDisplayName(milestone.display_name)
+                                  setShowEditModal(true)
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleArchive(milestone)}
+                                disabled={saving}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="Archive"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                </svg>
+                              </button>
+                            </>
                           )}
-                          <button
-                            onClick={() => {
-                              setEditingMilestone(milestone)
-                              setEditDisplayName(milestone.display_name)
-                              setShowEditModal(true)
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -795,6 +986,23 @@ export default function AdminMilestonesSettingsPage() {
         onCancel={closeConfirmModal}
         isLoading={saving}
       />
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
     </DashboardLayout>
   )
 }
