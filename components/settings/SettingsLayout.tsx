@@ -299,7 +299,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'surgeon-variance',
         label: 'Surgeon Variance',
-        href: '/settings/surgeon-variance',
+        href: '/settings/financials/surgeon-variance',
         description: 'Surgeon-specific cost overrides',
         icon: icons.surgeonVariance,
         badge: 'new',
@@ -308,7 +308,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'cost-categories',
         label: 'Cost Categories',
-        href: '/settings/cost-categories',
+        href: '/settings/financials/cost-categories',
         description: 'Debit and credit categories',
         icon: icons.costCategories,
         badge: 'new',
