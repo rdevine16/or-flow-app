@@ -42,7 +42,6 @@ export default function FacilityComplexitiesPage() {
   const [editingComplexity, setEditingComplexity] = useState<Complexity | null>(null)
   const [formDisplayName, setFormDisplayName] = useState('')
   const [formDescription, setFormDescription] = useState('')
-  const [formIsActive, setFormIsActive] = useState(true)
   const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [archivedComplexities, setArchivedComplexities] = useState<Complexity[]>([])
@@ -138,7 +137,7 @@ const fetchArchivedComplexities = async () => {
 
         setComplexities(complexities.map(c =>
           c.id === editingComplexity.id
-            ? { ...c, display_name: formDisplayName.trim(), description: formDescription.trim() || null, is_active: formIsActive }
+            ? { ...c, display_name: formDisplayName.trim(), description: formDescription.trim() || null }
             : c
         ))
       } else {
@@ -349,7 +348,7 @@ const fetchArchivedComplexities = async () => {
                             </div>
 
                             {/* Actions */}
-                            <div className="col-span-1 flex items-center justify-end gap-1">
+                            <div className="col-span-2 flex items-center justify-end gap-1">
                               {canEdit && (
                                 <>
                                   <button
@@ -509,15 +508,6 @@ const fetchArchivedComplexities = async () => {
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
                 />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formIsActive}
-                  onChange={(e) => setFormIsActive(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600"
-                />
-                <span className="text-sm text-slate-700">Active (available for case tagging)</span>
-              </label>
             </div>
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
               <button
