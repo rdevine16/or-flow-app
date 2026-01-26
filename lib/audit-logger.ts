@@ -60,6 +60,15 @@ export type AuditAction =
   | 'case.status_changed'
   | 'case.implant_company_added'
   | 'case.implant_company_removed'
+  | 'case.cancelled'
+  | 'case.restored'
+  | 'cancellation_reason.created'
+  | 'cancellation_reason.updated'
+  | 'cancellation_reason.deleted'
+  | 'cancellation_reason.restored'
+  | 'admin.cancellation_reason_template_created'
+  | 'admin.cancellation_reason_template_updated'
+  | 'admin.cancellation_reason_template_deleted'
   // Body Regions
   | 'admin.body_region_created'
   | 'admin.body_region_updated'
@@ -359,6 +368,20 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'data_quality.issue_approved': 'approved a flagged metric',
   'data_quality.detection_run': 'ran data quality detection',
   'data_quality.bulk_resolved': 'bulk resolved data quality issues',
+  // Cases
+  'case.cancelled': 'cancelled a case',
+  'case.restored': 'restored a cancelled case',
+  
+  // Cancellation Reasons (Facility)
+  'cancellation_reason.created': 'created a cancellation reason',
+  'cancellation_reason.updated': 'updated a cancellation reason',
+  'cancellation_reason.deleted': 'deleted a cancellation reason',
+  'cancellation_reason.restored': 'restored a cancellation reason',
+  
+  // Cancellation Reasons (Global Admin Templates)
+  'admin.cancellation_reason_template_created': 'created a cancellation reason template',
+  'admin.cancellation_reason_template_updated': 'updated a cancellation reason template',
+  'admin.cancellation_reason_template_deleted': 'deleted a cancellation reason template',
 }
 // =====================================================
 // CORE LOGGING FUNCTION (single source of truth)
@@ -1033,6 +1056,49 @@ export const caseAudit = {
       targetLabel: `Case #${caseNumber}`,
       facilityId,
       oldValues: { implant_company: companyName, implant_company_id: companyId },
+    })
+  },
+
+  async cancelled(
+    supabase: SupabaseClient,
+    caseData: { id: string; case_number: string },
+    reasonName: string,
+    reasonCategory: string,
+    hadMilestones: boolean,
+    milestoneCount: number,
+    facilityId?: string,
+    notes?: string
+  ) {
+    await log(supabase, 'case.cancelled', {
+      targetType: 'case',
+      targetId: caseData.id,
+      targetLabel: `Case #${caseData.case_number}`,
+      facilityId,
+      newValues: {
+        status: 'cancelled',
+        cancellation_reason: reasonName,
+        cancellation_category: reasonCategory,
+        had_milestones: hadMilestones,
+        milestone_count: milestoneCount,
+        cancellation_notes: notes || null,
+      },
+    })
+  },
+
+  async restored(
+    supabase: SupabaseClient,
+    caseData: { id: string; case_number: string },
+    facilityId?: string
+  ) {
+    await log(supabase, 'case.restored', {
+      targetType: 'case',
+      targetId: caseData.id,
+      targetLabel: `Case #${caseData.case_number}`,
+      facilityId,
+      newValues: {
+        status: 'scheduled',
+        restored: true,
+      },
     })
   },
 }
@@ -2004,6 +2070,115 @@ export const delayTypeAudit = {
       targetType: 'delay_type',
       targetId: delayTypeId,
       targetLabel: delayTypeName,
+    })
+  },
+}
+// =====================================================
+// CANCELLATION REASONS
+// =====================================================
+
+export const cancellationReasonAudit = {
+  async created(
+    supabase: SupabaseClient,
+    reasonName: string,
+    reasonId: string,
+    category: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'cancellation_reason.created', {
+      targetType: 'cancellation_reason',
+      targetId: reasonId,
+      targetLabel: reasonName,
+      facilityId,
+      newValues: { name: reasonName, category },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    reasonId: string,
+    oldName: string,
+    newName: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'cancellation_reason.updated', {
+      targetType: 'cancellation_reason',
+      targetId: reasonId,
+      targetLabel: newName,
+      facilityId,
+      oldValues: { name: oldName },
+      newValues: { name: newName },
+    })
+  },
+
+  async deleted(
+    supabase: SupabaseClient,
+    reasonName: string,
+    reasonId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'cancellation_reason.deleted', {
+      targetType: 'cancellation_reason',
+      targetId: reasonId,
+      targetLabel: reasonName,
+      facilityId,
+    })
+  },
+
+  async restored(
+    supabase: SupabaseClient,
+    reasonName: string,
+    reasonId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'cancellation_reason.restored', {
+      targetType: 'cancellation_reason',
+      targetId: reasonId,
+      targetLabel: reasonName,
+      facilityId,
+    })
+  },
+
+  // Global admin template versions
+  async adminCreated(
+    supabase: SupabaseClient,
+    reasonName: string,
+    reasonId: string,
+    category: string
+  ) {
+    await log(supabase, 'admin.cancellation_reason_template_created', {
+      targetType: 'cancellation_reason_template',
+      targetId: reasonId,
+      targetLabel: reasonName,
+      newValues: { name: reasonName, category, scope: 'global' },
+    })
+  },
+
+  async adminUpdated(
+    supabase: SupabaseClient,
+    reasonId: string,
+    oldName: string,
+    newName: string,
+    category?: string
+  ) {
+    await log(supabase, 'admin.cancellation_reason_template_updated', {
+      targetType: 'cancellation_reason_template',
+      targetId: reasonId,
+      targetLabel: newName,
+      oldValues: { name: oldName },
+      newValues: { name: newName, category, scope: 'global' },
+    })
+  },
+
+  async adminDeleted(
+    supabase: SupabaseClient,
+    reasonName: string,
+    reasonId: string
+  ) {
+    await log(supabase, 'admin.cancellation_reason_template_deleted', {
+      targetType: 'cancellation_reason_template',
+      targetId: reasonId,
+      targetLabel: reasonName,
     })
   },
 }

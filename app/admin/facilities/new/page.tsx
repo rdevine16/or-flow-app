@@ -669,8 +669,54 @@ export default function CreateFacilityPage() {
           )
         }
       }
+// Step 9: Copy cancellation_reason_templates → cancellation_reasons
+const copyCancellationReasonTemplates = async (newFacilityId: string) => {
+  try {
+    // Fetch active templates
+    const { data: templates, error: fetchError } = await supabase
+      .from('cancellation_reason_templates')
+      .select('*')
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('category')
+      .order('display_order')
 
-      // 9. Send invite email if selected
+    if (fetchError) {
+      console.error('Error fetching cancellation reason templates:', fetchError)
+      return
+    }
+
+    if (!templates || templates.length === 0) {
+      console.log('No cancellation reason templates to copy')
+      return
+    }
+
+    // Transform templates into facility-specific reasons
+    const cancellationReasons = templates.map(template => ({
+      facility_id: newFacilityId,
+      source_template_id: template.id,  // Track which template it came from
+      name: template.name,
+      display_name: template.display_name,
+      category: template.category,
+      display_order: template.display_order,
+      is_active: true,
+    }))
+
+    // Insert into cancellation_reasons
+    const { error: insertError } = await supabase
+      .from('cancellation_reasons')
+      .insert(cancellationReasons)
+
+    if (insertError) {
+      console.error('Error copying cancellation reasons:', insertError)
+    } else {
+      console.log(`Copied ${cancellationReasons.length} cancellation reasons to facility`)
+    }
+  } catch (err) {
+    console.error('Error in copyCancellationReasonTemplates:', err)
+  }
+}
+      // 10. Send invite email if selected
       if (sendWelcomeEmail) {
         const { data: session } = await supabase.auth.getSession()
 
@@ -695,7 +741,7 @@ export default function CreateFacilityPage() {
           console.error('Invite failed:', result.error)
         }
       }
-
+ await copyCancellationReasonTemplates(facility.id)
       // 10. Log audit event
       await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
 

@@ -684,13 +684,14 @@ export default function UsersSettingsPage() {
 
                             {/* Role */}
                             <div className="col-span-2">
-                              <Badge 
-                                variant={isDeactivated ? 'default' : getRoleBadgeVariant(roleName)} 
-                                size="sm"
-                                className={isDeactivated ? 'opacity-50' : ''}
-                              >
-                                {roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : 'Unknown'}
-                              </Badge>
+                              <span className={isDeactivated ? 'opacity-50' : ''}>
+                                <Badge 
+                                  variant={isDeactivated ? 'default' : getRoleBadgeVariant(roleName)} 
+                                  size="sm"
+                                >
+                                  {roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : 'Unknown'}
+                                </Badge>
+                              </span>
                             </div>
 
                             {/* Permissions */}
