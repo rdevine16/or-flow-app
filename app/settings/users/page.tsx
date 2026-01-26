@@ -18,6 +18,8 @@ interface User {
   role_id: string
   access_level: string
   facility_id: string | null
+  is_active: boolean
+  deleted_at: string | null
   user_roles: { name: string }[] | { name: string } | null
   facilities?: { name: string } | null
   last_login_at?: string | null
@@ -57,7 +59,7 @@ export default function UsersSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [deactivateConfirm, setDeactivateConfirm] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -65,6 +67,9 @@ export default function UsersSettingsPage() {
   const [sendingInvite, setSendingInvite] = useState<string | null>(null)
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set())
   const [authUserIds, setAuthUserIds] = useState<Set<string>>(new Set())
+  
+  // NEW: Show archived users toggle
+  const [showArchived, setShowArchived] = useState(false)
   
   // Invite prompt state
   const [showInvitePrompt, setShowInvitePrompt] = useState(false)
@@ -85,7 +90,7 @@ export default function UsersSettingsPage() {
       fetchCurrentUserId()
       fetchData()
     }
-  }, [userLoading, effectiveFacilityId, isImpersonating])
+  }, [userLoading, effectiveFacilityId, isImpersonating, showArchived])
 
   const fetchCurrentUserId = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -99,7 +104,7 @@ export default function UsersSettingsPage() {
 
     let usersQuery = supabase
       .from('users')
-      .select('id, first_name, last_name, email, role_id, access_level, facility_id, last_login_at, user_roles(name), facilities(name)')
+      .select('id, first_name, last_name, email, role_id, access_level, facility_id, is_active, deleted_at, last_login_at, user_roles(name), facilities(name)')
       .order('last_name')
 
     const showAllUsers = isGlobalAdmin && !isImpersonating
@@ -108,6 +113,11 @@ export default function UsersSettingsPage() {
       usersQuery = usersQuery
         .eq('facility_id', effectiveFacilityId)
         .in('access_level', ['user', 'facility_admin'])
+    }
+
+    // Filter by active status
+    if (!showArchived) {
+      usersQuery = usersQuery.eq('is_active', true)
     }
 
     const [usersRes, rolesRes, facilitiesRes] = await Promise.all([
@@ -369,21 +379,64 @@ export default function UsersSettingsPage() {
     setTimeout(() => setSuccessMessage(null), 5000)
   }
 
-  const handleDelete = async (id: string) => {
+  // NEW: Deactivate user (soft delete)
+  const handleDeactivate = async (id: string) => {
     if (id === currentUserId) return
 
     const user = users.find(u => u.id === id)
-    const userName = user ? `${user.first_name} ${user.last_name}` : 'Unknown'
-    const userEmail = user?.email || ''
+    if (!user) return
+    
+    const userName = `${user.first_name} ${user.last_name}`
+    const userEmail = user.email || ''
 
-    const { error } = await supabase.from('users').delete().eq('id', id)
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+
+    const { error } = await supabase
+      .from('users')
+      .update({ 
+        is_active: false, 
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUser?.id 
+      })
+      .eq('id', id)
 
     if (!error) {
-      await userAudit.deleted(supabase, userName, userEmail, id)
-      setUsers(users.filter(u => u.id !== id))
-      setDeleteConfirm(null)
-      setSuccessMessage('User deleted successfully!')
+      await userAudit.deactivated(supabase, userName, userEmail, id)
+      setDeactivateConfirm(null)
+      setSuccessMessage(`${userName} has been deactivated`)
       setTimeout(() => setSuccessMessage(null), 5000)
+      fetchData()
+    } else {
+      setErrorMessage('Failed to deactivate user')
+      setTimeout(() => setErrorMessage(null), 5000)
+    }
+  }
+
+  // NEW: Reactivate user (restore from soft delete)
+  const handleReactivate = async (id: string) => {
+    const user = users.find(u => u.id === id)
+    if (!user) return
+    
+    const userName = `${user.first_name} ${user.last_name}`
+    const userEmail = user.email || ''
+
+    const { error } = await supabase
+      .from('users')
+      .update({ 
+        is_active: true, 
+        deleted_at: null,
+        deleted_by: null 
+      })
+      .eq('id', id)
+
+    if (!error) {
+      await userAudit.reactivated(supabase, userName, userEmail, id)
+      setSuccessMessage(`${userName} has been reactivated`)
+      setTimeout(() => setSuccessMessage(null), 5000)
+      fetchData()
+    } else {
+      setErrorMessage('Failed to reactivate user')
+      setTimeout(() => setErrorMessage(null), 5000)
     }
   }
 
@@ -406,7 +459,16 @@ export default function UsersSettingsPage() {
     }
   }
 
-  const getAccountStatusDisplay = (status: AccountStatus) => {
+  const getAccountStatusDisplay = (status: AccountStatus, isDeactivated: boolean) => {
+    // If deactivated, show that instead
+    if (isDeactivated) {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-500">
+          Deactivated
+        </span>
+      )
+    }
+    
     switch (status) {
       case 'active':
         return (
@@ -430,10 +492,12 @@ export default function UsersSettingsPage() {
 
   const showAllUsers = isGlobalAdmin && !isImpersonating
 
-  // Count stats
-  const activeCount = users.filter(u => getAccountStatus(u) === 'active').length
-  const pendingCount = users.filter(u => getAccountStatus(u) === 'pending').length
-  const noAccountCount = users.filter(u => getAccountStatus(u) === 'no_account').length
+  // Count stats - separate active from deactivated
+  const activeUsers = users.filter(u => u.is_active !== false)
+  const deactivatedUsers = users.filter(u => u.is_active === false)
+  const activeCount = activeUsers.filter(u => getAccountStatus(u) === 'active').length
+  const pendingCount = activeUsers.filter(u => getAccountStatus(u) === 'pending').length
+  const noAccountCount = activeUsers.filter(u => getAccountStatus(u) === 'no_account').length
 
   return (
     <DashboardLayout>
@@ -492,21 +556,51 @@ export default function UsersSettingsPage() {
                   <div>
                     <h3 className="font-medium text-slate-900">Staff Members</h3>
                     <p className="text-sm text-slate-500">
-                      {users.length} total
-                      {activeCount > 0 && <span className="text-green-600"> · {activeCount} active</span>}
-                      {pendingCount > 0 && <span className="text-amber-600"> · {pendingCount} pending</span>}
-                      {noAccountCount > 0 && <span> · {noAccountCount} without account</span>}
+                      {showArchived ? (
+                        <>
+                          {deactivatedUsers.length} deactivated
+                          <button 
+                            onClick={() => setShowArchived(false)}
+                            className="text-blue-600 hover:underline ml-2"
+                          >
+                            ← Back to active
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {activeUsers.length} total
+                          {activeCount > 0 && <span className="text-green-600"> · {activeCount} active</span>}
+                          {pendingCount > 0 && <span className="text-amber-600"> · {pendingCount} pending</span>}
+                          {noAccountCount > 0 && <span> · {noAccountCount} without account</span>}
+                        </>
+                      )}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setShowInviteModal(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Staff Member
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Show Archived Toggle */}
+                    {!showArchived && (
+                      <button
+                        onClick={() => setShowArchived(true)}
+                        className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                        </svg>
+                        View Deactivated
+                      </button>
+                    )}
+                    {!showArchived && (
+                      <button
+                        onClick={() => setShowInviteModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Staff Member
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Table */}
@@ -517,13 +611,17 @@ export default function UsersSettingsPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     </div>
-                    <p className="text-slate-500">No staff members yet.</p>
-                    <button
-                      onClick={() => setShowInviteModal(true)}
-                      className="mt-2 text-blue-600 hover:underline text-sm"
-                    >
-                      Add your first staff member
-                    </button>
+                    <p className="text-slate-500">
+                      {showArchived ? 'No deactivated staff members.' : 'No staff members yet.'}
+                    </p>
+                    {!showArchived && (
+                      <button
+                        onClick={() => setShowInviteModal(true)}
+                        className="mt-2 text-blue-600 hover:underline text-sm"
+                      >
+                        Add your first staff member
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -542,17 +640,24 @@ export default function UsersSettingsPage() {
                         const roleName = getRoleName(user.user_roles)
                         const isCurrentUser = user.id === currentUserId
                         const accountStatus = getAccountStatus(user)
+                        const isDeactivated = user.is_active === false
 
                         return (
                           <div 
                             key={user.id} 
-                            className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 transition-colors"
+                            className={`grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors ${
+                              isDeactivated 
+                                ? 'bg-slate-50/50 hover:bg-slate-100/50' 
+                                : 'hover:bg-slate-50'
+                            }`}
                           >
                             {/* Name */}
                             <div className="col-span-4">
                               <div className="flex items-center gap-3">
                                 <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-                                  accountStatus === 'pending' 
+                                  isDeactivated
+                                    ? 'bg-slate-100 text-slate-400'
+                                    : accountStatus === 'pending' 
                                     ? 'bg-amber-100 text-amber-600' 
                                     : accountStatus === 'no_account'
                                     ? 'bg-slate-100 text-slate-400'
@@ -561,7 +666,7 @@ export default function UsersSettingsPage() {
                                   {user.first_name[0]}{user.last_name[0]}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="font-medium text-slate-900 truncate">
+                                  <p className={`font-medium truncate ${isDeactivated ? 'text-slate-400' : 'text-slate-900'}`}>
                                     {roleName === 'surgeon' || roleName === 'anesthesiologist'
                                       ? `Dr. ${user.first_name} ${user.last_name}`
                                       : `${user.first_name} ${user.last_name}`
@@ -570,7 +675,7 @@ export default function UsersSettingsPage() {
                                       <span className="text-xs text-slate-400 font-normal ml-1">(you)</span>
                                     )}
                                   </p>
-                                  <p className="text-sm text-slate-500 truncate">
+                                  <p className={`text-sm truncate ${isDeactivated ? 'text-slate-400' : 'text-slate-500'}`}>
                                     {user.email || <span className="italic text-slate-400">No email</span>}
                                   </p>
                                 </div>
@@ -579,33 +684,50 @@ export default function UsersSettingsPage() {
 
                             {/* Role */}
                             <div className="col-span-2">
-                              <Badge variant={getRoleBadgeVariant(roleName)} size="sm">
+                              <Badge 
+                                variant={isDeactivated ? 'default' : getRoleBadgeVariant(roleName)} 
+                                size="sm"
+                                className={isDeactivated ? 'opacity-50' : ''}
+                              >
                                 {roleName ? roleName.charAt(0).toUpperCase() + roleName.slice(1) : 'Unknown'}
                               </Badge>
                             </div>
 
                             {/* Permissions */}
                             <div className="col-span-2">
-                              <span className="text-sm text-slate-600">{getAccessLevelLabel(user.access_level)}</span>
+                              <span className={`text-sm ${isDeactivated ? 'text-slate-400' : 'text-slate-600'}`}>
+                                {getAccessLevelLabel(user.access_level)}
+                              </span>
                             </div>
 
                             {/* Status */}
                             <div className="col-span-2">
-                              {getAccountStatusDisplay(accountStatus)}
+                              {getAccountStatusDisplay(accountStatus, isDeactivated)}
                             </div>
 
                             {/* Actions */}
                             <div className="col-span-2 flex items-center justify-end gap-1">
-                              {deleteConfirm === user.id ? (
+                              {isDeactivated ? (
+                                // Reactivate button for deactivated users
+                                <button
+                                  onClick={() => handleReactivate(user.id)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                  Reactivate
+                                </button>
+                              ) : deactivateConfirm === user.id ? (
                                 <div className="flex items-center gap-1">
                                   <button
-                                    onClick={() => handleDelete(user.id)}
+                                    onClick={() => handleDeactivate(user.id)}
                                     className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
                                   >
                                     Confirm
                                   </button>
                                   <button
-                                    onClick={() => setDeleteConfirm(null)}
+                                    onClick={() => setDeactivateConfirm(null)}
                                     className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
                                   >
                                     Cancel
@@ -667,12 +789,12 @@ export default function UsersSettingsPage() {
                                   
                                   {!isCurrentUser && (
                                     <button
-                                      onClick={() => setDeleteConfirm(user.id)}
+                                      onClick={() => setDeactivateConfirm(user.id)}
                                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                      title="Delete"
+                                      title="Deactivate"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                                       </svg>
                                     </button>
                                   )}
