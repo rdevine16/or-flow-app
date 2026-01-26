@@ -129,6 +129,7 @@ export type AuditAction =
   | 'delay_type.created'
   | 'delay_type.updated'
   | 'delay_type.deleted'
+  | 'delay_type.restored'
    // Block Schedules
   | 'block_schedule.created'
   | 'block_schedule.updated'
@@ -295,6 +296,7 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'delay_type.created': 'created a delay type',
   'delay_type.updated': 'updated a delay type',
   'delay_type.deleted': 'deleted a delay type',
+  'delay_type.restored': 'restored a delay type',
   // Admin Actions
   'admin.impersonation_started': 'started facility impersonation',
   'admin.impersonation_ended': 'ended facility impersonation',
