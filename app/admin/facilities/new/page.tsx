@@ -1,5 +1,6 @@
 // app/admin/facilities/new/page.tsx
 // Create Facility Wizard - Professional multi-step form for onboarding new facilities
+// v2: Fixed table names, added timezone, structured address, phone, facility type
 
 'use client'
 
@@ -16,7 +17,14 @@ import { facilityAudit } from '../../../../lib/audit-logger'
 
 interface FacilityData {
   name: string
-  address: string
+  facilityType: string
+  phone: string
+  streetAddress: string
+  streetAddress2: string
+  city: string
+  state: string
+  zipCode: string
+  timezone: string
   subscriptionStatus: 'trial' | 'active'
   trialDays: number
 }
@@ -52,6 +60,82 @@ interface UserRole {
   id: string
   name: string
 }
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const US_STATES = [
+  { value: 'AL', label: 'Alabama' },
+  { value: 'AK', label: 'Alaska' },
+  { value: 'AZ', label: 'Arizona' },
+  { value: 'AR', label: 'Arkansas' },
+  { value: 'CA', label: 'California' },
+  { value: 'CO', label: 'Colorado' },
+  { value: 'CT', label: 'Connecticut' },
+  { value: 'DE', label: 'Delaware' },
+  { value: 'FL', label: 'Florida' },
+  { value: 'GA', label: 'Georgia' },
+  { value: 'HI', label: 'Hawaii' },
+  { value: 'ID', label: 'Idaho' },
+  { value: 'IL', label: 'Illinois' },
+  { value: 'IN', label: 'Indiana' },
+  { value: 'IA', label: 'Iowa' },
+  { value: 'KS', label: 'Kansas' },
+  { value: 'KY', label: 'Kentucky' },
+  { value: 'LA', label: 'Louisiana' },
+  { value: 'ME', label: 'Maine' },
+  { value: 'MD', label: 'Maryland' },
+  { value: 'MA', label: 'Massachusetts' },
+  { value: 'MI', label: 'Michigan' },
+  { value: 'MN', label: 'Minnesota' },
+  { value: 'MS', label: 'Mississippi' },
+  { value: 'MO', label: 'Missouri' },
+  { value: 'MT', label: 'Montana' },
+  { value: 'NE', label: 'Nebraska' },
+  { value: 'NV', label: 'Nevada' },
+  { value: 'NH', label: 'New Hampshire' },
+  { value: 'NJ', label: 'New Jersey' },
+  { value: 'NM', label: 'New Mexico' },
+  { value: 'NY', label: 'New York' },
+  { value: 'NC', label: 'North Carolina' },
+  { value: 'ND', label: 'North Dakota' },
+  { value: 'OH', label: 'Ohio' },
+  { value: 'OK', label: 'Oklahoma' },
+  { value: 'OR', label: 'Oregon' },
+  { value: 'PA', label: 'Pennsylvania' },
+  { value: 'RI', label: 'Rhode Island' },
+  { value: 'SC', label: 'South Carolina' },
+  { value: 'SD', label: 'South Dakota' },
+  { value: 'TN', label: 'Tennessee' },
+  { value: 'TX', label: 'Texas' },
+  { value: 'UT', label: 'Utah' },
+  { value: 'VT', label: 'Vermont' },
+  { value: 'VA', label: 'Virginia' },
+  { value: 'WA', label: 'Washington' },
+  { value: 'WV', label: 'West Virginia' },
+  { value: 'WI', label: 'Wisconsin' },
+  { value: 'WY', label: 'Wyoming' },
+  { value: 'DC', label: 'District of Columbia' },
+]
+
+const US_TIMEZONES = [
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Phoenix', label: 'Arizona (no DST)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (HST)' },
+]
+
+const FACILITY_TYPES = [
+  { value: 'asc', label: 'Ambulatory Surgery Center (ASC)' },
+  { value: 'hospital', label: 'Hospital' },
+  { value: 'hospital_outpatient', label: 'Hospital Outpatient Department' },
+  { value: 'clinic', label: 'Surgical Clinic' },
+  { value: 'other', label: 'Other' },
+]
 
 // ============================================================================
 // TEMPLATE CONFIGURATION
@@ -148,7 +232,14 @@ export default function CreateFacilityPage() {
   // Step 1: Facility details
   const [facilityData, setFacilityData] = useState<FacilityData>({
     name: '',
-    address: '',
+    facilityType: 'asc',
+    phone: '',
+    streetAddress: '',
+    streetAddress2: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    timezone: 'America/New_York',
     subscriptionStatus: 'trial',
     trialDays: 30,
   })
@@ -214,7 +305,8 @@ export default function CreateFacilityPage() {
         }
       }
 
-      // Fetch template counts (active + not soft-deleted)
+      // Fetch template counts
+      // Note: Different tables use different patterns
       const [
         { count: procedureCount },
         { count: milestoneCount },
@@ -223,31 +315,38 @@ export default function CreateFacilityPage() {
         { count: implantCompanyCount },
         { count: complexityCount },
       ] = await Promise.all([
+        // procedure_type_templates - separate template table
         supabase
           .from('procedure_type_templates')
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true)
           .is('deleted_at', null),
+        // milestone_types - separate template table
         supabase
           .from('milestone_types')
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true)
           .is('deleted_at', null),
+        // delay_types - HYBRID pattern (facility_id = NULL for templates)
         supabase
-          .from('delay_type_templates')
+          .from('delay_types')
           .select('id', { count: 'exact', head: true })
+          .is('facility_id', null)
           .eq('is_active', true)
           .is('deleted_at', null),
+        // cost_category_templates - separate template table
         supabase
           .from('cost_category_templates')
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true)
           .is('deleted_at', null),
+        // implant_companies - HYBRID pattern (facility_id = NULL for global)
         supabase
           .from('implant_companies')
           .select('id', { count: 'exact', head: true })
           .is('facility_id', null)
           .is('deleted_at', null),
+        // complexity_templates - separate template table
         supabase
           .from('complexity_templates')
           .select('id', { count: 'exact', head: true })
@@ -274,7 +373,7 @@ export default function CreateFacilityPage() {
   }, [supabase, isGlobalAdmin])
 
   // Validation
-  const isStep1Valid = facilityData.name.trim().length > 0
+  const isStep1Valid = facilityData.name.trim().length > 0 && facilityData.timezone.length > 0
   const isStep2Valid =
     adminData.firstName.trim().length > 0 &&
     adminData.lastName.trim().length > 0 &&
@@ -300,6 +399,26 @@ export default function CreateFacilityPage() {
   // Count enabled templates
   const enabledCount = Object.values(templateOptions).filter(Boolean).length
 
+  // Format phone number
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '')
+    if (digits.length <= 3) return digits
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`
+  }
+
+  // Build full address string
+  const getFullAddress = () => {
+    const parts = [
+      facilityData.streetAddress,
+      facilityData.streetAddress2,
+      facilityData.city,
+      facilityData.state,
+      facilityData.zipCode,
+    ].filter(Boolean)
+    return parts.join(', ')
+  }
+
   // ============================================================================
   // HANDLE SUBMIT
   // ============================================================================
@@ -317,12 +436,23 @@ export default function CreateFacilityPage() {
           ? new Date(Date.now() + facilityData.trialDays * 86400000).toISOString()
           : null
 
+      // Build address string for legacy compatibility
+      const fullAddress = getFullAddress()
+
       // 1. Create facility
       const { data: facility, error: facilityError } = await supabase
         .from('facilities')
         .insert({
           name: facilityData.name.trim(),
-          address: facilityData.address.trim() || null,
+          address: fullAddress || null,
+          street_address: facilityData.streetAddress.trim() || null,
+          street_address_2: facilityData.streetAddress2.trim() || null,
+          city: facilityData.city.trim() || null,
+          state: facilityData.state || null,
+          zip_code: facilityData.zipCode.trim() || null,
+          phone: facilityData.phone.replace(/\D/g, '') || null,
+          facility_type: facilityData.facilityType || null,
+          timezone: facilityData.timezone,
           subscription_status: facilityData.subscriptionStatus,
           trial_ends_at: trialEndsAt,
           subscription_started_at: new Date().toISOString(),
@@ -445,26 +575,27 @@ export default function CreateFacilityPage() {
         }
       }
 
-      // 5. Copy delay types if selected
+      // 5. Copy delay types if selected (HYBRID PATTERN)
       if (templateOptions.delayTypes) {
-        const { data: templates } = await supabase
-          .from('delay_type_templates')
+        const { data: globalDelayTypes } = await supabase
+          .from('delay_types')
           .select('*')
+          .is('facility_id', null)
           .eq('is_active', true)
           .is('deleted_at', null)
           .order('display_order')
 
-        if (templates && templates.length > 0) {
+        if (globalDelayTypes && globalDelayTypes.length > 0) {
           await supabase.from('delay_types').insert(
-            templates.map(t => ({
+            globalDelayTypes.map(dt => ({
               facility_id: facility.id,
-              name: t.name,
-              display_name: t.display_name,
-              description: t.description,
-              category: t.category,
-              display_order: t.display_order,
+              name: dt.name,
+              display_name: dt.display_name,
+              description: dt.description,
+              category: dt.category,
+              display_order: dt.display_order,
               is_active: true,
-              source_template_id: t.id,
+              source_template_id: dt.id,
             }))
           )
         }
@@ -494,7 +625,7 @@ export default function CreateFacilityPage() {
         }
       }
 
-      // 7. Copy implant companies if selected (global → facility copies)
+      // 7. Copy implant companies if selected (HYBRID PATTERN)
       if (templateOptions.implantCompanies) {
         const { data: globalCompanies } = await supabase
           .from('implant_companies')
@@ -666,31 +797,134 @@ export default function CreateFacilityPage() {
               <p className="text-sm text-slate-500 mb-6">Basic information about the surgery center</p>
 
               <div className="space-y-5">
+                {/* Name and Type */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Facility Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={facilityData.name}
+                      onChange={e => setFacilityData({ ...facilityData, name: e.target.value })}
+                      placeholder="e.g., Memorial Surgery Center"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Facility Type
+                    </label>
+                    <select
+                      value={facilityData.facilityType}
+                      onChange={e => setFacilityData({ ...facilityData, facilityType: e.target.value })}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-colors"
+                    >
+                      {FACILITY_TYPES.map(ft => (
+                        <option key={ft.value} value={ft.value}>{ft.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Phone */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Facility Name <span className="text-red-500">*</span>
+                    Phone Number
                   </label>
                   <input
-                    type="text"
-                    value={facilityData.name}
-                    onChange={e => setFacilityData({ ...facilityData, name: e.target.value })}
-                    placeholder="e.g., Memorial Surgery Center"
+                    type="tel"
+                    value={facilityData.phone}
+                    onChange={e => setFacilityData({ ...facilityData, phone: formatPhone(e.target.value) })}
+                    placeholder="(555) 123-4567"
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
-                  <input
-                    type="text"
-                    value={facilityData.address}
-                    onChange={e => setFacilityData({ ...facilityData, address: e.target.value })}
-                    placeholder="e.g., 123 Medical Center Drive, Chicago, IL"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                  />
+                {/* Address */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Street Address
+                    </label>
+                    <input
+                      type="text"
+                      value={facilityData.streetAddress}
+                      onChange={e => setFacilityData({ ...facilityData, streetAddress: e.target.value })}
+                      placeholder="123 Medical Center Drive"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Suite / Building <span className="text-slate-400 font-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={facilityData.streetAddress2}
+                      onChange={e => setFacilityData({ ...facilityData, streetAddress2: e.target.value })}
+                      placeholder="Suite 200"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                  <div className="grid grid-cols-6 gap-4">
+                    <div className="col-span-3">
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">City</label>
+                      <input
+                        type="text"
+                        value={facilityData.city}
+                        onChange={e => setFacilityData({ ...facilityData, city: e.target.value })}
+                        placeholder="Chicago"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">State</label>
+                      <select
+                        value={facilityData.state}
+                        onChange={e => setFacilityData({ ...facilityData, state: e.target.value })}
+                        className="w-full px-3 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-colors"
+                      >
+                        <option value="">--</option>
+                        {US_STATES.map(s => (
+                          <option key={s.value} value={s.value}>{s.value}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">ZIP Code</label>
+                      <input
+                        type="text"
+                        value={facilityData.zipCode}
+                        onChange={e => setFacilityData({ ...facilityData, zipCode: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+                        placeholder="60601"
+                        className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                  </div>
                 </div>
 
+                {/* Timezone */}
                 <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Timezone <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={facilityData.timezone}
+                    onChange={e => setFacilityData({ ...facilityData, timezone: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-colors"
+                  >
+                    {US_TIMEZONES.map(tz => (
+                      <option key={tz.value} value={tz.value}>{tz.label}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    Used for scheduling, analytics, and FCOTS calculations
+                  </p>
+                </div>
+
+                {/* Subscription */}
+                <div className="pt-4 border-t border-slate-200">
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     Subscription Status
                   </label>
@@ -1054,9 +1288,18 @@ export default function CreateFacilityPage() {
                     Facility
                   </h3>
                   <p className="text-lg font-semibold text-slate-900">{facilityData.name}</p>
-                  {facilityData.address && (
-                    <p className="text-sm text-slate-600 mt-1">{facilityData.address}</p>
+                  <p className="text-sm text-slate-600 mt-1">
+                    {FACILITY_TYPES.find(ft => ft.value === facilityData.facilityType)?.label}
+                  </p>
+                  {facilityData.phone && (
+                    <p className="text-sm text-slate-600 mt-1">{facilityData.phone}</p>
                   )}
+                  {getFullAddress() && (
+                    <p className="text-sm text-slate-600 mt-1">{getFullAddress()}</p>
+                  )}
+                  <p className="text-sm text-slate-500 mt-2">
+                    {US_TIMEZONES.find(tz => tz.value === facilityData.timezone)?.label}
+                  </p>
                   <div className="mt-3">
                     <span
                       className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
