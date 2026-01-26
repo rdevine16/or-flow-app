@@ -44,7 +44,9 @@ interface TemplateOptions {
   costCategories: boolean
   implantCompanies: boolean
   complexities: boolean
+  cancellationReasons: boolean
 }
+
 
 interface TemplateCounts {
   rooms: number
@@ -54,6 +56,7 @@ interface TemplateCounts {
   costCategories: number
   implantCompanies: number
   complexities: number
+  cancellationReasons: number
 }
 
 interface UserRole {
@@ -203,12 +206,22 @@ const TEMPLATE_CONFIG = [
     ),
   },
   {
-    key: 'complexities' as const,
+ key: 'complexities' as const,
     label: 'Complexities',
     description: 'Case complexity modifiers for scheduling',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+      </svg>
+    ),
+  },
+  {
+    key: 'cancellationReasons' as const,
+    label: 'Cancellation Reasons',
+    description: 'Categories for tracking why cases are cancelled',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
       </svg>
     ),
   },
@@ -261,6 +274,7 @@ export default function CreateFacilityPage() {
     costCategories: true,
     implantCompanies: true,
     complexities: true,
+    cancellationReasons: true,
   })
 
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
@@ -274,6 +288,7 @@ export default function CreateFacilityPage() {
     costCategories: 0,
     implantCompanies: 0,
     complexities: 0,
+    cancellationReasons: 0,
   })
 
   // Available roles
@@ -314,6 +329,7 @@ export default function CreateFacilityPage() {
         { count: costCategoryCount },
         { count: implantCompanyCount },
         { count: complexityCount },
+        { count: cancellationReasonCount },
       ] = await Promise.all([
         // procedure_type_templates - separate template table
         supabase
@@ -352,6 +368,12 @@ export default function CreateFacilityPage() {
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true)
           .is('deleted_at', null),
+        // cancellation_reason_templates - separate template table
+        supabase
+          .from('cancellation_reason_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
       ])
 
       setTemplateCounts({
@@ -362,6 +384,7 @@ export default function CreateFacilityPage() {
         costCategories: costCategoryCount || 0,
         implantCompanies: implantCompanyCount || 0,
         complexities: complexityCount || 0,
+        cancellationReasons: cancellationReasonCount || 0,
       })
 
       setLoadingCounts(false)
@@ -383,7 +406,7 @@ export default function CreateFacilityPage() {
 
   // Toggle all templates
   const allEnabled = Object.values(templateOptions).every(v => v)
-  const toggleAll = () => {
+const toggleAll = () => {
     const newValue = !allEnabled
     setTemplateOptions({
       rooms: newValue,
@@ -393,6 +416,7 @@ export default function CreateFacilityPage() {
       costCategories: newValue,
       implantCompanies: newValue,
       complexities: newValue,
+      cancellationReasons: newValue,
     })
   }
 
@@ -741,8 +765,10 @@ const copyCancellationReasonTemplates = async (newFacilityId: string) => {
           console.error('Invite failed:', result.error)
         }
       }
- await copyCancellationReasonTemplates(facility.id)
-      // 10. Log audit event
+      // 9. Copy cancellation reasons if selected
+      if (templateOptions.cancellationReasons) {
+        await copyCancellationReasonTemplates(facility.id)
+      }      // 10. Log audit event
       await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
 
       // Success! Redirect to facility detail page
