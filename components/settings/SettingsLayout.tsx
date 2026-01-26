@@ -310,7 +310,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'rep-access',
         label: 'Rep Access',
-        href: '/settings/rep-access',
+        href: '/settings/device-reps',
         description: 'Manage implant company rep access',
         icon: icons.deviceReps,
         badge: 'new',
@@ -472,34 +472,6 @@ export default function SettingsLayout({ children, title, description }: Setting
                   <div className="space-y-1">
                     {group.items.map((item) => {
                       const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                      const isComingSoon = item.badge === 'coming'
-                      
-                      // For coming soon items, render as non-clickable div
-                      if (isComingSoon) {
-                        return (
-                          <div
-                            key={item.id}
-                            className="group flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 cursor-not-allowed"
-                            title={sidebarCollapsed ? `${item.label} (Coming Soon)` : undefined}
-                          >
-                            <span className="flex-shrink-0 text-slate-300">
-                              {item.icon}
-                            </span>
-                            
-                            {!sidebarCollapsed && (
-                              <>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm truncate text-slate-400">{item.label}</p>
-                                  <p className="text-xs text-slate-300 truncate mt-0.5">
-                                    {item.description}
-                                  </p>
-                                </div>
-                                {renderBadge(item.badge)}
-                              </>
-                            )}
-                          </div>
-                        )
-                      }
                       
                       return (
                         <Link
