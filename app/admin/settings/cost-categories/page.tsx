@@ -18,7 +18,15 @@ interface DefaultCostCategory {
   description: string | null
   display_order: number
   is_active: boolean
+  deleted_at: string | null
+  deleted_by: string | null
   created_at: string
+}
+
+interface DeleteModalState {
+  isOpen: boolean
+  category: DefaultCostCategory | null
+  loading: boolean
 }
 
 export default function DefaultCostCategoriesPage() {
@@ -45,8 +53,36 @@ export default function DefaultCostCategoriesPage() {
   const [filterActive, setFilterActive] = useState<string>('all')
 
   // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+// Delete modal
+  const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
+    isOpen: false,
+    category: null,
+    loading: false
+  })
 
+  // Archive view toggle
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
+
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Current user
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -55,23 +91,40 @@ export default function DefaultCostCategoriesPage() {
   }, [userLoading, isGlobalAdmin, router])
 
   // Fetch data
-  useEffect(() => {
+useEffect(() => {
     if (!isGlobalAdmin) return
     fetchData()
-  }, [isGlobalAdmin])
+  }, [isGlobalAdmin, showArchived])
 
-  const fetchData = async () => {
+ const fetchData = async () => {
     setLoading(true)
 
     try {
-      const { data, error } = await supabase
+      // Build query based on archive toggle
+      let query = supabase
         .from('cost_category_templates')
         .select('*')
-        .order('type')
-        .order('display_order')
+
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
+
+      query = query.order('type').order('display_order')
+
+      const { data, error } = await query
 
       if (data) setCategories(data)
       if (error) console.error('Error fetching categories:', error)
+
+      // Get archived count
+      const { count } = await supabase
+        .from('cost_category_templates')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
+
+      setArchivedCount(count || 0)
     } catch (error) {
       console.error('Error:', error)
     } finally {
@@ -164,13 +217,35 @@ export default function DefaultCostCategoriesPage() {
     }
   }
 
-  const handleDelete = async (category: DefaultCostCategory) => {
+ const openDeleteModal = (category: DefaultCostCategory) => {
+    setDeleteModal({
+      isOpen: true,
+      category,
+      loading: false
+    })
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      category: null,
+      loading: false
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!deleteModal.category || !currentUserId) return
     setSaving(true)
+
+    const category = deleteModal.category
 
     try {
       const { error } = await supabase
         .from('cost_category_templates')
-        .delete()
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId
+        })
         .eq('id', category.id)
 
       if (error) throw error
@@ -178,9 +253,37 @@ export default function DefaultCostCategoriesPage() {
       await costCategoryAudit.adminDeleted(supabase, category.name, category.id)
 
       setCategories(categories.filter(c => c.id !== category.id))
-      setDeleteConfirm(null)
+      setArchivedCount(prev => prev + 1)
+      showToast(`"${category.name}" moved to archive`, 'success')
+      closeDeleteModal()
     } catch (error) {
-      console.error('Error deleting category:', error)
+      console.error('Error archiving category:', error)
+      showToast('Failed to archive category', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRestore = async (category: DefaultCostCategory) => {
+    setSaving(true)
+
+    try {
+      const { error } = await supabase
+        .from('cost_category_templates')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', category.id)
+
+      if (error) throw error
+
+      setCategories(categories.filter(c => c.id !== category.id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${category.name}" restored successfully`, 'success')
+    } catch (error) {
+      console.error('Error restoring category:', error)
+      showToast('Failed to restore category', 'error')
     } finally {
       setSaving(false)
     }
@@ -251,15 +354,35 @@ export default function DefaultCostCategoriesPage() {
                 Template categories copied to new facilities during onboarding
               </p>
             </div>
-            <button
-              onClick={handleNew}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Category
-            </button>
+           <div className="flex items-center gap-3">
+              {/* Archive Toggle */}
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                  showArchived
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+              </button>
+
+              {/* Add Category - hide when viewing archived */}
+              {!showArchived && (
+                <button
+                  onClick={handleNew}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Category
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Filters */}
@@ -353,30 +476,22 @@ export default function DefaultCostCategoriesPage() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                   </button>
-                                  {deleteConfirm === category.id ? (
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        onClick={() => handleDelete(category)}
-                                        disabled={saving}
-                                        className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
-                                      >
-                                        Confirm
-                                      </button>
-                                      <button
-                                        onClick={() => setDeleteConfirm(null)}
-                                        className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
+                                  {showArchived ? (
+                                    <button
+                                      onClick={() => handleRestore(category)}
+                                      disabled={saving}
+                                      className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                      Restore
+                                    </button>
                                   ) : (
                                     <button
-                                      onClick={() => setDeleteConfirm(category.id)}
+                                      onClick={() => openDeleteModal(category)}
                                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                      title="Delete"
+                                      title="Archive"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                       </svg>
                                     </button>
                                   )}
@@ -448,30 +563,22 @@ export default function DefaultCostCategoriesPage() {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                   </button>
-                                  {deleteConfirm === category.id ? (
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        onClick={() => handleDelete(category)}
-                                        disabled={saving}
-                                        className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
-                                      >
-                                        Confirm
-                                      </button>
-                                      <button
-                                        onClick={() => setDeleteConfirm(null)}
-                                        className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
+                                 {showArchived ? (
+                                    <button
+                                      onClick={() => handleRestore(category)}
+                                      disabled={saving}
+                                      className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                                    >
+                                      Restore
+                                    </button>
                                   ) : (
                                     <button
-                                      onClick={() => setDeleteConfirm(category.id)}
+                                      onClick={() => openDeleteModal(category)}
                                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                      title="Delete"
+                                      title="Archive"
                                     >
                                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                       </svg>
                                     </button>
                                   )}
@@ -602,6 +709,54 @@ export default function DefaultCostCategoriesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Archive Confirmation Modal */}
+      {deleteModal.isOpen && deleteModal.category && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">Archive Cost Category Template</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-slate-600 mb-4">
+                Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.category.name}"</span>?
+              </p>
+              <p className="text-sm text-slate-500">
+                Archived templates won't be copied to new facilities. You can restore it anytime.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={saving}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Archiving...' : 'Archive Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
         </div>
       )}
     </DashboardLayout>
