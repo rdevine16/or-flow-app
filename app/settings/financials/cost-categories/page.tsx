@@ -21,6 +21,17 @@ interface CostCategory {
   display_order: number
   is_active: boolean
   deleted_at?: string | null
+  deleted_by?: string | null
+}
+
+interface DeleteModalState {
+  isOpen: boolean
+  category: CostCategory | null
+  dependencies: {
+    procedureCostItems: number
+    surgeonCostItems: number
+  }
+  loading: boolean
 }
 
 export default function CostCategoriesPage() {
@@ -47,7 +58,28 @@ export default function CostCategoriesPage() {
 
   // Show/hide recently deleted section
   const [showDeleted, setShowDeleted] = useState(false)
+const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [deleteModalState, setDeleteModalState] = useState<DeleteModalState>({
+    isOpen: false,
+    category: null,
+    dependencies: { procedureCostItems: 0, surgeonCostItems: 0 },
+    loading: false
+  })
 
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchCategories()
@@ -230,62 +262,105 @@ export default function CostCategoriesPage() {
   }
 
   // Open delete confirmation modal
-  const openDeleteModal = (category: CostCategory) => {
-    setCategoryToDelete(category)
-    setDeleteModalOpen(true)
+const openDeleteModal = async (category: CostCategory) => {
+    setDeleteModalState({
+      isOpen: true,
+      category,
+      dependencies: { procedureCostItems: 0, surgeonCostItems: 0 },
+      loading: true
+    })
+
+    // Check dependencies
+    const [procResult, surgResult] = await Promise.all([
+      supabase
+        .from('procedure_cost_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cost_category_id', category.id),
+      supabase
+        .from('surgeon_cost_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('cost_category_id', category.id)
+    ])
+
+    setDeleteModalState(prev => ({
+      ...prev,
+      dependencies: {
+        procedureCostItems: procResult.count || 0,
+        surgeonCostItems: surgResult.count || 0
+      },
+      loading: false
+    }))
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteModalState({
+      isOpen: false,
+      category: null,
+      dependencies: { procedureCostItems: 0, surgeonCostItems: 0 },
+      loading: false
+    })
   }
 
   // Soft delete - sets deleted_at timestamp
-  const handleDelete = async () => {
-    if (!categoryToDelete || !effectiveFacilityId) return
+ const handleDelete = async () => {
+    if (!deleteModalState.category || !effectiveFacilityId || !currentUserId) return
     setSaving(true)
+
+    const category = deleteModalState.category
 
     try {
       const { error } = await supabase
         .from('cost_categories')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', categoryToDelete.id)
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId
+        })
+        .eq('id', category.id)
 
       if (error) throw error
 
       setCategories(categories.map(c =>
-        c.id === categoryToDelete.id 
-          ? { ...c, deleted_at: new Date().toISOString() } 
+        c.id === category.id 
+          ? { ...c, deleted_at: new Date().toISOString(), deleted_by: currentUserId } 
           : c
       ))
 
+      showToast(`"${category.name}" moved to archive`, 'success')
+
       await genericAuditLog(supabase, 'cost_category.deleted', {
         targetType: 'cost_category',
-        targetId: categoryToDelete.id,
-        targetLabel: categoryToDelete.name,
+        targetId: category.id,
+        targetLabel: category.name,
         facilityId: effectiveFacilityId,
       })
 
-      setDeleteModalOpen(false)
-      setCategoryToDelete(null)
+      closeDeleteModal()
     } catch (error) {
-      console.error('Error deleting category:', error)
+      console.error('Error archiving category:', error)
+      showToast('Failed to archive category', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   // Restore a soft-deleted category
-  const handleRestore = async (category: CostCategory) => {
+const handleRestore = async (category: CostCategory) => {
     if (!effectiveFacilityId) return
     setSaving(true)
 
     try {
       const { error } = await supabase
         .from('cost_categories')
-        .update({ deleted_at: null })
+        .update({ deleted_at: null, deleted_by: null })
         .eq('id', category.id)
 
       if (error) throw error
 
       setCategories(categories.map(c =>
-        c.id === category.id ? { ...c, deleted_at: null } : c
+        c.id === category.id ? { ...c, deleted_at: null, deleted_by: null } : c
       ))
+
+      showToast(`"${category.name}" restored successfully`, 'success')
 
       await genericAuditLog(supabase, 'cost_category.restored', {
         targetType: 'cost_category',
@@ -295,6 +370,7 @@ export default function CostCategoriesPage() {
       })
     } catch (error) {
       console.error('Error restoring category:', error)
+      showToast('Failed to restore category', 'error')
     } finally {
       setSaving(false)
     }
@@ -440,9 +516,9 @@ export default function CostCategoriesPage() {
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+</svg>
                           </button>
                         </div>
                       </div>
@@ -512,9 +588,9 @@ export default function CostCategoriesPage() {
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+</svg>
                           </button>
                         </div>
                       </div>
