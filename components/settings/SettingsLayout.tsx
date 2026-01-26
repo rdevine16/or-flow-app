@@ -15,7 +15,7 @@ interface SettingsItem {
   href: string
   icon: React.ReactNode
   description: string
-  badge?: 'new' | 'admin'
+  badge?: 'new' | 'admin' | 'coming'
   requiredAccess?: ('global_admin' | 'facility_admin' | 'user')[]
 }
 
@@ -30,6 +30,28 @@ interface SettingsGroup {
 // =====================================================
 
 const icons = {
+  // General section icons
+  overview: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  ),
+  subscription: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+    </svg>
+  ),
+  notifications: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+    </svg>
+  ),
+  integrations: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+    </svg>
+  ),
+  // Existing icons
   facilities: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -112,6 +134,38 @@ const icons = {
 // =====================================================
 
 const settingsGroups: SettingsGroup[] = [
+  // NEW: General section at the top
+  {
+    id: 'general',
+    label: 'General',
+    items: [
+      {
+        id: 'overview',
+        label: 'Overview',
+        href: '/settings/general',
+        description: 'Facility details and account info',
+        icon: icons.overview,
+      },
+      {
+        id: 'notifications',
+        label: 'Notifications',
+        href: '/settings/notifications',
+        description: 'Configure alert preferences',
+        icon: icons.notifications,
+        badge: 'coming',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'subscription',
+        label: 'Subscription',
+        href: '/settings/subscription',
+        description: 'Plan, usage, and billing',
+        icon: icons.subscription,
+        badge: 'coming',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+    ],
+  },
   {
     id: 'organization',
     label: 'Organization',
@@ -168,12 +222,12 @@ const settingsGroups: SettingsGroup[] = [
         icon: icons.delays,
         requiredAccess: ['global_admin', 'facility_admin'],
       },
-            {
+      {
         id: 'complexities',
         label: 'Case Complexities',
         href: '/settings/complexities',
         description: 'Complexity factors for cases',
-        icon: icons.delays,  // Reuses the warning triangle icon
+        icon: icons.delays,
         requiredAccess: ['global_admin', 'facility_admin'],
       },
     ],
@@ -198,6 +252,15 @@ const settingsGroups: SettingsGroup[] = [
         badge: 'new',
         requiredAccess: ['global_admin', 'facility_admin'],
       },
+      {
+        id: 'integrations',
+        label: 'Integrations',
+        href: '/settings/integrations',
+        description: 'Connect external systems',
+        icon: icons.integrations,
+        badge: 'coming',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
     ],
   },
   {
@@ -207,7 +270,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'procedure-pricing',
         label: 'Procedure Pricing',
-        href: '/settings/financials/procedure-pricing',
+        href: '/settings/procedure-pricing',
         description: 'Costs and reimbursements per procedure',
         icon: icons.pricing,
         requiredAccess: ['global_admin', 'facility_admin'],
@@ -215,7 +278,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'payers',
         label: 'Payers',
-        href: '/settings/financials/payers',
+        href: '/settings/payers',
         description: 'Insurance companies and contracts',
         icon: icons.payers,
         requiredAccess: ['global_admin', 'facility_admin'],
@@ -223,7 +286,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'surgeon-variance',
         label: 'Surgeon Variance',
-        href: '/settings/financials/surgeon-variance',
+        href: '/settings/surgeon-variance',
         description: 'Surgeon-specific cost overrides',
         icon: icons.surgeonVariance,
         badge: 'new',
@@ -232,7 +295,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'cost-categories',
         label: 'Cost Categories',
-        href: '/settings/financials/cost-categories',
+        href: '/settings/cost-categories',
         description: 'Debit and credit categories',
         icon: icons.costCategories,
         badge: 'new',
@@ -247,7 +310,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'rep-access',
         label: 'Rep Access',
-        href: '/settings/device-reps',
+        href: '/settings/rep-access',
         description: 'Manage implant company rep access',
         icon: icons.deviceReps,
         badge: 'new',
@@ -256,7 +319,7 @@ const settingsGroups: SettingsGroup[] = [
     ],
   },
   {
-    id: 'compliance',
+    id: 'security',
     label: 'Security & Compliance',
     items: [
       {
@@ -326,7 +389,7 @@ export default function SettingsLayout({ children, title, description }: Setting
   }
 
   // Render badge
-  const renderBadge = (badge?: 'new' | 'admin') => {
+  const renderBadge = (badge?: 'new' | 'admin' | 'coming') => {
     if (!badge) return null
     
     if (badge === 'new') {
@@ -341,6 +404,14 @@ export default function SettingsLayout({ children, title, description }: Setting
       return (
         <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 rounded">
           Admin
+        </span>
+      )
+    }
+
+    if (badge === 'coming') {
+      return (
+        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 rounded">
+          Soon
         </span>
       )
     }
@@ -401,6 +472,34 @@ export default function SettingsLayout({ children, title, description }: Setting
                   <div className="space-y-1">
                     {group.items.map((item) => {
                       const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                      const isComingSoon = item.badge === 'coming'
+                      
+                      // For coming soon items, render as non-clickable div
+                      if (isComingSoon) {
+                        return (
+                          <div
+                            key={item.id}
+                            className="group flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 cursor-not-allowed"
+                            title={sidebarCollapsed ? `${item.label} (Coming Soon)` : undefined}
+                          >
+                            <span className="flex-shrink-0 text-slate-300">
+                              {item.icon}
+                            </span>
+                            
+                            {!sidebarCollapsed && (
+                              <>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate text-slate-400">{item.label}</p>
+                                  <p className="text-xs text-slate-300 truncate mt-0.5">
+                                    {item.description}
+                                  </p>
+                                </div>
+                                {renderBadge(item.badge)}
+                              </>
+                            )}
+                          </div>
+                        )
+                      }
                       
                       return (
                         <Link
