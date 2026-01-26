@@ -13,6 +13,8 @@ interface ImplantCompany {
   name: string
   facility_id: string | null
   created_at: string
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 interface ModalState {
@@ -33,7 +35,20 @@ export default function AdminImplantCompaniesPage() {
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+// Archive toggle
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Current user for deleted_by tracking
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -41,20 +56,39 @@ export default function AdminImplantCompaniesPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  useEffect(() => {
+useEffect(() => {
     if (isGlobalAdmin) {
       fetchData()
     }
-  }, [isGlobalAdmin])
+  }, [isGlobalAdmin, showArchived])
 
-  const fetchData = async () => {
-    const { data } = await supabase
+const fetchData = async () => {
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
+
+    let query = supabase
       .from('implant_companies')
       .select('*')
       .is('facility_id', null)
-      .order('name')
 
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
+    }
+
+    const { data } = await query.order('name')
     setCompanies(data || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('implant_companies')
+      .select('id', { count: 'exact', head: true })
+      .is('facility_id', null)
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
     setLoading(false)
   }
 
@@ -126,19 +160,48 @@ export default function AdminImplantCompaniesPage() {
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
+const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company) return
 
     const { error } = await supabase
       .from('implant_companies')
-      .delete()
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId
+      })
       .eq('id', id)
 
     if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
+      setArchivedCount(prev => prev + 1)
       setDeleteConfirm(null)
+      showToast(`"${company.name}" moved to archive`, 'success')
       await genericAuditLog(supabase, 'admin.implant_company_deleted', {
+        targetType: 'implant_company',
+        targetId: id,
+        targetLabel: company.name,
+      })
+    }
+  }
+
+  const handleRestore = async (id: string) => {
+    const company = companies.find(c => c.id === id)
+    if (!company) return
+
+    const { error } = await supabase
+      .from('implant_companies')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', id)
+
+    if (!error) {
+      setCompanies(companies.filter(c => c.id !== id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${company.name}" restored successfully`, 'success')
+      await genericAuditLog(supabase, 'admin.implant_company_restored', {
         targetType: 'implant_company',
         targetId: id,
         targetLabel: company.name,
@@ -171,22 +234,47 @@ export default function AdminImplantCompaniesPage() {
       <Container className="py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="flex items-start justify-between mb-6">
+ <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Global Implant Companies</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                {showArchived ? 'Archived Implant Companies' : 'Global Implant Companies'}
+              </h1>
               <p className="text-slate-500 mt-1">
-                Standard implant manufacturers available to all facilities.
+                {showArchived 
+                  ? 'Archived global implant manufacturers'
+                  : 'Standard implant manufacturers available to all facilities.'
+                }
               </p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Company
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Archive Toggle */}
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                  showArchived
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+              </button>
+
+              {/* Add Company - hide when viewing archived */}
+              {!showArchived && (
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Company
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stats & Search Bar */}
@@ -249,9 +337,16 @@ export default function AdminImplantCompaniesPage() {
                         <span className="text-sm font-medium text-slate-900">{company.name}</span>
                       </td>
 
-                      {/* Actions */}
+                     {/* Actions */}
                       <td className="px-4 py-3 text-right">
-                        {deleteConfirm === company.id ? (
+                        {showArchived ? (
+                          <button
+                            onClick={() => handleRestore(company.id)}
+                            className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                          >
+                            Restore
+                          </button>
+                        ) : deleteConfirm === company.id ? (
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => handleDelete(company.id)}
@@ -280,10 +375,10 @@ export default function AdminImplantCompaniesPage() {
                             <button
                               onClick={() => setDeleteConfirm(company.id)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
+                              title="Archive"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                               </svg>
                             </button>
                           </div>
@@ -355,6 +450,23 @@ export default function AdminImplantCompaniesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
         </div>
       )}
     </DashboardLayout>
