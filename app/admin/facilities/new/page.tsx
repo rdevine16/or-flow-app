@@ -1,5 +1,5 @@
 // app/admin/facilities/new/page.tsx
-// Create Facility Wizard - Multi-step form for onboarding new facilities
+// Create Facility Wizard - Professional multi-step form for onboarding new facilities
 
 'use client'
 
@@ -10,6 +10,9 @@ import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import { facilityAudit } from '../../../../lib/audit-logger'
 
+// ============================================================================
+// INTERFACES
+// ============================================================================
 
 interface FacilityData {
   name: string
@@ -25,10 +28,24 @@ interface AdminData {
   roleId: string
 }
 
-interface SetupOptions {
-  createDefaultRooms: boolean
-  createDefaultProcedures: boolean
-  sendWelcomeEmail: boolean
+interface TemplateOptions {
+  rooms: boolean
+  procedures: boolean
+  milestones: boolean
+  delayTypes: boolean
+  costCategories: boolean
+  implantCompanies: boolean
+  complexities: boolean
+}
+
+interface TemplateCounts {
+  rooms: number
+  procedures: number
+  milestones: number
+  delayTypes: number
+  costCategories: number
+  implantCompanies: number
+  complexities: number
 }
 
 interface UserRole {
@@ -36,15 +53,97 @@ interface UserRole {
   name: string
 }
 
+// ============================================================================
+// TEMPLATE CONFIGURATION
+// ============================================================================
+
+const TEMPLATE_CONFIG = [
+  {
+    key: 'rooms' as const,
+    label: 'Operating Rooms',
+    description: 'Default OR 1, OR 2, and OR 3',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+    ),
+  },
+  {
+    key: 'procedures' as const,
+    label: 'Procedure Types',
+    description: 'Surgical procedures with body region mapping',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    key: 'milestones' as const,
+    label: 'Milestones',
+    description: 'Case tracking points (Patient In, Incision, etc.)',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'delayTypes' as const,
+    label: 'Delay Types',
+    description: 'Categories for tracking surgical delays',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'costCategories' as const,
+    label: 'Cost Categories',
+    description: 'Financial tracking for analytics and reporting',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'implantCompanies' as const,
+    label: 'Implant Companies',
+    description: 'Standard implant manufacturers and vendors',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'complexities' as const,
+    label: 'Complexities',
+    description: 'Case complexity modifiers for scheduling',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+      </svg>
+    ),
+  },
+]
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
 export default function CreateFacilityPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, isGlobalAdmin, loading: userLoading } = useUser()
+  const { isGlobalAdmin, loading: userLoading } = useUser()
 
   // Form state
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadingCounts, setLoadingCounts] = useState(true)
 
   // Step 1: Facility details
   const [facilityData, setFacilityData] = useState<FacilityData>({
@@ -62,11 +161,28 @@ export default function CreateFacilityPage() {
     roleId: '',
   })
 
-  // Step 3: Setup options
-  const [setupOptions, setSetupOptions] = useState<SetupOptions>({
-    createDefaultRooms: true,
-    createDefaultProcedures: true,
-    sendWelcomeEmail: true,
+  // Step 3: Template options (all enabled by default)
+  const [templateOptions, setTemplateOptions] = useState<TemplateOptions>({
+    rooms: true,
+    procedures: true,
+    milestones: true,
+    delayTypes: true,
+    costCategories: true,
+    implantCompanies: true,
+    complexities: true,
+  })
+
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
+
+  // Template counts from database
+  const [templateCounts, setTemplateCounts] = useState<TemplateCounts>({
+    rooms: 3,
+    procedures: 0,
+    milestones: 0,
+    delayTypes: 0,
+    costCategories: 0,
+    implantCompanies: 0,
+    complexities: 0,
   })
 
   // Available roles
@@ -79,38 +195,116 @@ export default function CreateFacilityPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  // Fetch roles
+  // Fetch roles and template counts
   useEffect(() => {
-    async function fetchRoles() {
-      const { data } = await supabase
+    async function fetchData() {
+      setLoadingCounts(true)
+
+      // Fetch roles
+      const { data: rolesData } = await supabase
         .from('user_roles')
         .select('id, name')
         .order('name')
 
-      if (data) {
-        setRoles(data)
-        // Default to 'admin' role if available
-        const adminRole = data.find(r => r.name === 'admin')
+      if (rolesData) {
+        setRoles(rolesData)
+        const adminRole = rolesData.find(r => r.name === 'admin')
         if (adminRole) {
           setAdminData(prev => ({ ...prev, roleId: adminRole.id }))
         }
       }
+
+      // Fetch template counts (active + not soft-deleted)
+      const [
+        { count: procedureCount },
+        { count: milestoneCount },
+        { count: delayTypeCount },
+        { count: costCategoryCount },
+        { count: implantCompanyCount },
+        { count: complexityCount },
+      ] = await Promise.all([
+        supabase
+          .from('procedure_type_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        supabase
+          .from('milestone_types')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        supabase
+          .from('delay_type_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        supabase
+          .from('cost_category_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        supabase
+          .from('implant_companies')
+          .select('id', { count: 'exact', head: true })
+          .is('facility_id', null)
+          .is('deleted_at', null),
+        supabase
+          .from('complexity_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+      ])
+
+      setTemplateCounts({
+        rooms: 3,
+        procedures: procedureCount || 0,
+        milestones: milestoneCount || 0,
+        delayTypes: delayTypeCount || 0,
+        costCategories: costCategoryCount || 0,
+        implantCompanies: implantCompanyCount || 0,
+        complexities: complexityCount || 0,
+      })
+
+      setLoadingCounts(false)
     }
 
-    fetchRoles()
-  }, [supabase])
+    if (isGlobalAdmin) {
+      fetchData()
+    }
+  }, [supabase, isGlobalAdmin])
 
   // Validation
   const isStep1Valid = facilityData.name.trim().length > 0
-  const isStep2Valid = 
+  const isStep2Valid =
     adminData.firstName.trim().length > 0 &&
     adminData.lastName.trim().length > 0 &&
     adminData.email.trim().length > 0 &&
     adminData.email.includes('@') &&
     adminData.roleId.length > 0
 
-  // Handle form submission
- const handleSubmit = async () => {
+  // Toggle all templates
+  const allEnabled = Object.values(templateOptions).every(v => v)
+  const toggleAll = () => {
+    const newValue = !allEnabled
+    setTemplateOptions({
+      rooms: newValue,
+      procedures: newValue,
+      milestones: newValue,
+      delayTypes: newValue,
+      costCategories: newValue,
+      implantCompanies: newValue,
+      complexities: newValue,
+    })
+  }
+
+  // Count enabled templates
+  const enabledCount = Object.values(templateOptions).filter(Boolean).length
+
+  // ============================================================================
+  // HANDLE SUBMIT
+  // ============================================================================
+
+  const handleSubmit = async () => {
     if (!isStep1Valid || !isStep2Valid) return
 
     setSubmitting(true)
@@ -118,9 +312,10 @@ export default function CreateFacilityPage() {
 
     try {
       // Calculate trial end date
-      const trialEndsAt = facilityData.subscriptionStatus === 'trial'
-        ? new Date(Date.now() + facilityData.trialDays * 86400000).toISOString()
-        : null
+      const trialEndsAt =
+        facilityData.subscriptionStatus === 'trial'
+          ? new Date(Date.now() + facilityData.trialDays * 86400000).toISOString()
+          : null
 
       // 1. Create facility
       const { data: facility, error: facilityError } = await supabase
@@ -137,46 +332,60 @@ export default function CreateFacilityPage() {
 
       if (facilityError) throw new Error('Failed to create facility: ' + facilityError.message)
 
+      // Track IDs for cross-referencing
+      let procedureIdMap: Record<string, string> = {}
+      let milestoneIdMap: Record<string, string> = {}
+
       // 2. Create default OR rooms if selected
-      if (setupOptions.createDefaultRooms) {
+      if (templateOptions.rooms) {
         const defaultRooms = ['OR 1', 'OR 2', 'OR 3']
-        await supabase
-          .from('or_rooms')
-          .insert(defaultRooms.map(name => ({
+        await supabase.from('or_rooms').insert(
+          defaultRooms.map(name => ({
             facility_id: facility.id,
             name,
-          })))
+          }))
+        )
       }
 
-      // 3. Copy default procedure types if selected
-      if (setupOptions.createDefaultProcedures) {
-        const { data: defaultProcs } = await supabase
-          .from('dprocedure_type_templates')
+      // 3. Copy procedure types if selected
+      if (templateOptions.procedures) {
+        const { data: templates } = await supabase
+          .from('procedure_type_templates')
           .select('id, name, body_region_id, implant_category')
           .eq('is_active', true)
+          .is('deleted_at', null)
 
-        if (defaultProcs && defaultProcs.length > 0) {
-          await supabase
-            .from('procedure_types')
-            .upsert(defaultProcs.map(p => ({
-              facility_id: facility.id,
-              name: p.name,
-              body_region_id: p.body_region_id,
-              implant_category: p.implant_category,
-              source_template_id: p.id,  // IMPORTANT: Track the source for milestone mapping
-            })), { onConflict: 'facility_id,name', ignoreDuplicates: true })
+        if (templates && templates.length > 0) {
+          for (const t of templates) {
+            const { data: inserted } = await supabase
+              .from('procedure_types')
+              .insert({
+                facility_id: facility.id,
+                name: t.name,
+                body_region_id: t.body_region_id,
+                implant_category: t.implant_category,
+                source_template_id: t.id,
+              })
+              .select('id')
+              .single()
+
+            if (inserted) {
+              procedureIdMap[t.id] = inserted.id
+            }
+          }
         }
+      }
 
-        // 4. Copy milestone types to facility_milestones
+      // 4. Copy milestones if selected
+      if (templateOptions.milestones) {
         const { data: milestoneTypes } = await supabase
           .from('milestone_types')
           .select('*')
           .eq('is_active', true)
+          .is('deleted_at', null)
           .order('display_order')
 
         if (milestoneTypes && milestoneTypes.length > 0) {
-          const milestoneIdMap: Record<string, string> = {}
-
           // Insert facility milestones
           for (const mt of milestoneTypes) {
             const { data: newMilestone } = await supabase
@@ -188,7 +397,7 @@ export default function CreateFacilityPage() {
                 display_order: mt.display_order,
                 pair_position: mt.pair_position,
                 source_milestone_type_id: mt.id,
-                is_active: true
+                is_active: true,
               })
               .select()
               .single()
@@ -208,77 +417,137 @@ export default function CreateFacilityPage() {
             }
           }
 
-          // 5. Copy procedure-milestone configs
-          const { data: facilityProcedures } = await supabase
-            .from('procedure_types')
-            .select('id, source_template_id')
-            .eq('facility_id', facility.id)
-
-          if (facilityProcedures) {
-            const procedureIdMap: Record<string, string> = {}
-            for (const fp of facilityProcedures) {
-              if (fp.source_template_id) {
-                procedureIdMap[fp.source_template_id] = fp.id
-              }
-            }
-
-            const { data: defaultConfigs } = await supabase
+          // Copy procedure-milestone configs if both procedures and milestones are enabled
+          if (templateOptions.procedures && Object.keys(procedureIdMap).length > 0) {
+            const { data: configs } = await supabase
               .from('procedure_milestone_templates')
               .select('*')
 
-            if (defaultConfigs && defaultConfigs.length > 0) {
-              const facilityConfigs = defaultConfigs
-                .filter(dc => 
-                  procedureIdMap[dc.procedure_type_template_id] && 
-                  milestoneIdMap[dc.milestone_type_id]
+            if (configs && configs.length > 0) {
+              const facilityConfigs = configs
+                .filter(
+                  c =>
+                    procedureIdMap[c.procedure_type_template_id] &&
+                    milestoneIdMap[c.milestone_type_id]
                 )
-                .map(dc => ({
+                .map(c => ({
                   facility_id: facility.id,
-                  procedure_type_id: procedureIdMap[dc.procedure_type_template_id],
-                  facility_milestone_id: milestoneIdMap[dc.milestone_type_id],
-                  display_order: dc.display_order
+                  procedure_type_id: procedureIdMap[c.procedure_type_template_id],
+                  facility_milestone_id: milestoneIdMap[c.milestone_type_id],
+                  display_order: c.display_order,
                 }))
 
               if (facilityConfigs.length > 0) {
-                await supabase
-                  .from('procedure_milestone_config')
-                  .insert(facilityConfigs)
+                await supabase.from('procedure_milestone_config').insert(facilityConfigs)
               }
             }
-           // 6. Copy default complexities to facility
-const { data: defaultComplexities } = await supabase
-  .from('complexity_templates')
-  .select('*')
-  .eq('is_active', true)
-  .order('display_order')
-
-if (defaultComplexities && defaultComplexities.length > 0) {
-  await supabase
-    .from('complexities')
-    .insert(defaultComplexities.map(dc => ({
-      facility_id: facility.id,
-      name: dc.name,
-      display_name: dc.display_name,
-      description: dc.description,
-      procedure_category_ids: dc.procedure_category_ids,
-      is_active: true,
-      display_order: dc.display_order,
-      source_template_id: dc.id  // Track the source
-    })))
-} 
           }
         }
       }
 
-      // 6. Send invite email if selected
-      if (setupOptions.sendWelcomeEmail) {
+      // 5. Copy delay types if selected
+      if (templateOptions.delayTypes) {
+        const { data: templates } = await supabase
+          .from('delay_type_templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order')
+
+        if (templates && templates.length > 0) {
+          await supabase.from('delay_types').insert(
+            templates.map(t => ({
+              facility_id: facility.id,
+              name: t.name,
+              display_name: t.display_name,
+              description: t.description,
+              category: t.category,
+              display_order: t.display_order,
+              is_active: true,
+              source_template_id: t.id,
+            }))
+          )
+        }
+      }
+
+      // 6. Copy cost categories if selected
+      if (templateOptions.costCategories) {
+        const { data: templates } = await supabase
+          .from('cost_category_templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order')
+
+        if (templates && templates.length > 0) {
+          await supabase.from('cost_categories').insert(
+            templates.map(t => ({
+              facility_id: facility.id,
+              name: t.name,
+              display_name: t.display_name,
+              description: t.description,
+              display_order: t.display_order,
+              is_active: true,
+              source_template_id: t.id,
+            }))
+          )
+        }
+      }
+
+      // 7. Copy implant companies if selected (global → facility copies)
+      if (templateOptions.implantCompanies) {
+        const { data: globalCompanies } = await supabase
+          .from('implant_companies')
+          .select('*')
+          .is('facility_id', null)
+          .is('deleted_at', null)
+          .order('name')
+
+        if (globalCompanies && globalCompanies.length > 0) {
+          await supabase.from('implant_companies').insert(
+            globalCompanies.map(c => ({
+              facility_id: facility.id,
+              name: c.name,
+              source_global_id: c.id,
+            }))
+          )
+        }
+      }
+
+      // 8. Copy complexities if selected
+      if (templateOptions.complexities) {
+        const { data: templates } = await supabase
+          .from('complexity_templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order')
+
+        if (templates && templates.length > 0) {
+          await supabase.from('complexities').insert(
+            templates.map(t => ({
+              facility_id: facility.id,
+              name: t.name,
+              display_name: t.display_name,
+              description: t.description,
+              procedure_category_ids: t.procedure_category_ids,
+              is_active: true,
+              display_order: t.display_order,
+              source_template_id: t.id,
+            }))
+          )
+        }
+      }
+
+      // 9. Send invite email if selected
+      if (sendWelcomeEmail) {
         const { data: session } = await supabase.auth.getSession()
-        
+
         const inviteResponse = await fetch('/api/admin/invite', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.session?.access_token}`,
+            Authorization: `Bearer ${session?.session?.access_token}`,
           },
           body: JSON.stringify({
             email: adminData.email.trim(),
@@ -290,14 +559,13 @@ if (defaultComplexities && defaultComplexities.length > 0) {
           }),
         })
 
-        const inviteResult = await inviteResponse.json()
-
         if (!inviteResponse.ok) {
-          console.error('Invite failed:', inviteResult.error)
+          const result = await inviteResponse.json()
+          console.error('Invite failed:', result.error)
         }
       }
 
-      // 7. Log audit events
+      // 10. Log audit event
       await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
 
       // Success! Redirect to facility detail page
@@ -310,12 +578,15 @@ if (defaultComplexities && defaultComplexities.length > 0) {
     }
   }
 
-  // Loading state
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
+
   if (userLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       </DashboardLayout>
     )
@@ -325,9 +596,16 @@ if (defaultComplexities && defaultComplexities.length > 0) {
     return null
   }
 
+  // Step labels
+  const stepLabels = ['Facility', 'Administrator', 'Configuration', 'Review']
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
+
   return (
     <DashboardLayout>
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-3xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-slate-900">Create New Facility</h1>
@@ -335,103 +613,161 @@ if (defaultComplexities && defaultComplexities.length > 0) {
         </div>
 
         {/* Progress Steps */}
-        <div className="flex items-center gap-4 mb-8">
-          {[1, 2, 3, 4].map((s) => (
-            <div key={s} className="flex items-center">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  s < step
-                    ? 'bg-emerald-500 text-white'
-                    : s === step
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-200 text-slate-500'
-                }`}
-              >
-                {s < step ? (
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  s
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            {[1, 2, 3, 4].map(s => (
+              <div key={s} className="flex-1 flex items-center">
+                <div className="flex flex-col items-center flex-1">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
+                      s < step
+                        ? 'bg-emerald-500 text-white'
+                        : s === step
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                        : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {s < step ? (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      s
+                    )}
+                  </div>
+                  <span
+                    className={`mt-2 text-xs font-medium ${
+                      s <= step ? 'text-slate-900' : 'text-slate-400'
+                    }`}
+                  >
+                    {stepLabels[s - 1]}
+                  </span>
+                </div>
+                {s < 4 && (
+                  <div
+                    className={`flex-1 h-1 mx-2 rounded transition-colors ${
+                      s < step ? 'bg-emerald-500' : 'bg-slate-200'
+                    }`}
+                  />
                 )}
               </div>
-              {s < 4 && (
-                <div className={`w-12 h-1 ml-2 rounded ${s < step ? 'bg-emerald-500' : 'bg-slate-200'}`} />
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          {/* Step 1: Facility Details */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* ================================================================ */}
+          {/* STEP 1: FACILITY DETAILS */}
+          {/* ================================================================ */}
           {step === 1 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Details</h2>
-              <div className="space-y-4">
+            <div className="p-6 sm:p-8">
+              <h2 className="text-lg font-semibold text-slate-900 mb-1">Facility Details</h2>
+              <p className="text-sm text-slate-500 mb-6">Basic information about the surgery center</p>
+
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Facility Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={facilityData.name}
-                    onChange={(e) => setFacilityData({ ...facilityData, name: e.target.value })}
-                    placeholder="e.g., Memorial General Hospital"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    onChange={e => setFacilityData({ ...facilityData, name: e.target.value })}
+                    placeholder="e.g., Memorial Surgery Center"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Address
-                  </label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Address</label>
                   <input
                     type="text"
                     value={facilityData.address}
-                    onChange={(e) => setFacilityData({ ...facilityData, address: e.target.value })}
+                    onChange={e => setFacilityData({ ...facilityData, address: e.target.value })}
                     placeholder="e.g., 123 Medical Center Drive, Chicago, IL"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
                     Subscription Status
                   </label>
-                  <div className="flex gap-4 mt-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label
+                      className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                        facilityData.subscriptionStatus === 'trial'
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/20'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="status"
                         checked={facilityData.subscriptionStatus === 'trial'}
                         onChange={() => setFacilityData({ ...facilityData, subscriptionStatus: 'trial' })}
-                        className="w-4 h-4 text-blue-600"
+                        className="sr-only"
                       />
-                      <span className="text-sm text-slate-700">Trial</span>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          facilityData.subscriptionStatus === 'trial'
+                            ? 'border-blue-500'
+                            : 'border-slate-300'
+                        }`}
+                      >
+                        {facilityData.subscriptionStatus === 'trial' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900">Trial</p>
+                        <p className="text-xs text-slate-500">Free evaluation period</p>
+                      </div>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
+
+                    <label
+                      className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
+                        facilityData.subscriptionStatus === 'active'
+                          ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
                       <input
                         type="radio"
                         name="status"
                         checked={facilityData.subscriptionStatus === 'active'}
                         onChange={() => setFacilityData({ ...facilityData, subscriptionStatus: 'active' })}
-                        className="w-4 h-4 text-blue-600"
+                        className="sr-only"
                       />
-                      <span className="text-sm text-slate-700">Active (Paid)</span>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          facilityData.subscriptionStatus === 'active'
+                            ? 'border-emerald-500'
+                            : 'border-slate-300'
+                        }`}
+                      >
+                        {facilityData.subscriptionStatus === 'active' && (
+                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-900">Active</p>
+                        <p className="text-xs text-slate-500">Paid subscription</p>
+                      </div>
                     </label>
                   </div>
                 </div>
 
                 {facilityData.subscriptionStatus === 'trial' && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
                       Trial Length
                     </label>
                     <select
                       value={facilityData.trialDays}
-                      onChange={(e) => setFacilityData({ ...facilityData, trialDays: parseInt(e.target.value) })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      onChange={e => setFacilityData({ ...facilityData, trialDays: parseInt(e.target.value) })}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-colors"
                     >
                       <option value={14}>14 days</option>
                       <option value={30}>30 days</option>
@@ -444,63 +780,66 @@ if (defaultComplexities && defaultComplexities.length > 0) {
             </div>
           )}
 
-          {/* Step 2: Admin User */}
+          {/* ================================================================ */}
+          {/* STEP 2: ADMIN USER */}
+          {/* ================================================================ */}
           {step === 2 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">First Administrator</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                This person will be the facility admin and can invite other staff.
+            <div className="p-6 sm:p-8">
+              <h2 className="text-lg font-semibold text-slate-900 mb-1">First Administrator</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                This person will manage the facility and can invite other staff
               </p>
-              <div className="space-y-4">
+
+              <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
                       First Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={adminData.firstName}
-                      onChange={(e) => setAdminData({ ...adminData, firstName: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      onChange={e => setAdminData({ ...adminData, firstName: e.target.value })}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
                       Last Name <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={adminData.lastName}
-                      onChange={(e) => setAdminData({ ...adminData, lastName: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      onChange={e => setAdminData({ ...adminData, lastName: e.target.value })}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
                     value={adminData.email}
-                    onChange={(e) => setAdminData({ ...adminData, email: e.target.value })}
+                    onChange={e => setAdminData({ ...adminData, email: e.target.value })}
                     placeholder="admin@hospital.com"
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Role <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={adminData.roleId}
-                    onChange={(e) => setAdminData({ ...adminData, roleId: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    onChange={e => setAdminData({ ...adminData, roleId: e.target.value })}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-colors"
                   >
                     <option value="">Select role...</option>
-                    {roles.map((role) => (
+                    {roles.map(role => (
                       <option key={role.id} value={role.id}>
                         {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
                       </option>
@@ -508,142 +847,301 @@ if (defaultComplexities && defaultComplexities.length > 0) {
                   </select>
                 </div>
 
-                <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
-                  <div className="flex gap-2">
-                    <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-<p>They'll receive an email with a link to create their password.</p>
-                  </div>
+                <div className="bg-blue-50 rounded-xl p-4 flex gap-3">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm text-blue-800">
+                    They'll receive an email with a link to create their password and access the facility.
+                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Step 3: Setup Options */}
+          {/* ================================================================ */}
+          {/* STEP 3: CONFIGURATION */}
+          {/* ================================================================ */}
           {step === 3 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Default Setup</h2>
-              <p className="text-sm text-slate-500 mb-4">
-                Choose what to set up automatically for this facility.
-              </p>
-              <div className="space-y-4">
-                <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={setupOptions.createDefaultRooms}
-                    onChange={(e) => setSetupOptions({ ...setupOptions, createDefaultRooms: e.target.checked })}
-                    className="w-5 h-5 mt-0.5 rounded text-blue-600"
-                  />
-                  <div>
-                    <p className="font-medium text-slate-900">Create default OR rooms</p>
-                    <p className="text-sm text-slate-500 mt-0.5">Adds OR 1, OR 2, and OR 3</p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={setupOptions.createDefaultProcedures}
-                    onChange={(e) => setSetupOptions({ ...setupOptions, createDefaultProcedures: e.target.checked })}
-                    className="w-5 h-5 mt-0.5 rounded text-blue-600"
-                  />
-                  <div>
-                    <p className="font-medium text-slate-900">Create default procedure types</p>
-                    <p className="text-sm text-slate-500 mt-0.5">Copies standard procedures from template</p>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={setupOptions.sendWelcomeEmail}
-                    onChange={(e) => setSetupOptions({ ...setupOptions, sendWelcomeEmail: e.target.checked })}
-                    className="w-5 h-5 mt-0.5 rounded text-blue-600"
-                  />
-                  <div>
-                    <p className="font-medium text-slate-900">Send welcome email</p>
-                    <p className="text-sm text-slate-500 mt-0.5">Emails login credentials to the administrator</p>
-                  </div>
-                </label>
+            <div className="p-6 sm:p-8">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-lg font-semibold text-slate-900">Default Configuration</h2>
+                <button
+                  onClick={toggleAll}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {allEnabled ? 'Deselect All' : 'Select All'}
+                </button>
               </div>
+              <p className="text-sm text-slate-500 mb-6">
+                Choose which templates to copy to this facility ({enabledCount} of {TEMPLATE_CONFIG.length} selected)
+              </p>
+
+              {loadingCounts ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {TEMPLATE_CONFIG.map(config => {
+                    const count = templateCounts[config.key]
+                    const enabled = templateOptions[config.key]
+                    const noTemplates = count === 0 && config.key !== 'rooms'
+
+                    return (
+                      <label
+                        key={config.key}
+                        className={`flex items-start gap-4 p-4 border rounded-xl cursor-pointer transition-all ${
+                          noTemplates
+                            ? 'border-slate-100 bg-slate-50 cursor-not-allowed opacity-60'
+                            : enabled
+                            ? 'border-blue-200 bg-blue-50/50 hover:bg-blue-50'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        {/* Checkbox */}
+                        <div className="relative flex items-center pt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={enabled && !noTemplates}
+                            disabled={noTemplates}
+                            onChange={e =>
+                              setTemplateOptions({
+                                ...templateOptions,
+                                [config.key]: e.target.checked,
+                              })
+                            }
+                            className="sr-only"
+                          />
+                          <div
+                            className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
+                              noTemplates
+                                ? 'border-2 border-slate-200 bg-slate-100'
+                                : enabled
+                                ? 'bg-blue-600 text-white'
+                                : 'border-2 border-slate-300 bg-white'
+                            }`}
+                          >
+                            {enabled && !noTemplates && (
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Icon */}
+                        <div
+                          className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                            noTemplates
+                              ? 'bg-slate-100 text-slate-400'
+                              : enabled
+                              ? 'bg-blue-100 text-blue-600'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          {config.icon}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className={`font-medium ${enabled && !noTemplates ? 'text-slate-900' : 'text-slate-600'}`}>
+                              {config.label}
+                            </p>
+                            <span
+                              className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${
+                                noTemplates
+                                  ? 'bg-slate-100 text-slate-400'
+                                  : enabled
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {count}
+                            </span>
+                          </div>
+                          <p className="text-sm text-slate-500 mt-0.5">{config.description}</p>
+                          {noTemplates && (
+                            <p className="text-xs text-amber-600 mt-1">No templates configured</p>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
+
+                  {/* Welcome Email Option */}
+                  <div className="pt-4 mt-4 border-t border-slate-200">
+                    <label
+                      className={`flex items-start gap-4 p-4 border rounded-xl cursor-pointer transition-all ${
+                        sendWelcomeEmail
+                          ? 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50'
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="relative flex items-center pt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={sendWelcomeEmail}
+                          onChange={e => setSendWelcomeEmail(e.target.checked)}
+                          className="sr-only"
+                        />
+                        <div
+                          className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
+                            sendWelcomeEmail
+                              ? 'bg-emerald-600 text-white'
+                              : 'border-2 border-slate-300 bg-white'
+                          }`}
+                        >
+                          {sendWelcomeEmail && (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                          sendWelcomeEmail
+                            ? 'bg-emerald-100 text-emerald-600'
+                            : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+
+                      <div className="flex-1">
+                        <p className={`font-medium ${sendWelcomeEmail ? 'text-slate-900' : 'text-slate-600'}`}>
+                          Send Welcome Email
+                        </p>
+                        <p className="text-sm text-slate-500 mt-0.5">
+                          Email login credentials to {adminData.email || 'the administrator'}
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Step 4: Review */}
+          {/* ================================================================ */}
+          {/* STEP 4: REVIEW */}
+          {/* ================================================================ */}
           {step === 4 && (
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Review & Create</h2>
-              
+            <div className="p-6 sm:p-8">
+              <h2 className="text-lg font-semibold text-slate-900 mb-1">Review & Create</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                Confirm the details before creating the facility
+              </p>
+
               {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm">
-                  {error}
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm flex items-start gap-3">
+                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>{error}</span>
                 </div>
               )}
 
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Facility</h3>
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="font-semibold text-slate-900">{facilityData.name}</p>
-                    {facilityData.address && (
-                      <p className="text-sm text-slate-600 mt-1">{facilityData.address}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                {/* Facility Summary */}
+                <div className="bg-slate-50 rounded-xl p-5">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Facility
+                  </h3>
+                  <p className="text-lg font-semibold text-slate-900">{facilityData.name}</p>
+                  {facilityData.address && (
+                    <p className="text-sm text-slate-600 mt-1">{facilityData.address}</p>
+                  )}
+                  <div className="mt-3">
+                    <span
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                         facilityData.subscriptionStatus === 'active'
                           ? 'bg-emerald-100 text-emerald-800'
                           : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {facilityData.subscriptionStatus === 'active' ? 'Active' : `${facilityData.trialDays}-day Trial`}
+                      }`}
+                    >
+                      {facilityData.subscriptionStatus === 'active'
+                        ? '● Active Subscription'
+                        : `● ${facilityData.trialDays}-Day Trial`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Administrator Summary */}
+                <div className="bg-slate-50 rounded-xl p-5">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Administrator
+                  </h3>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {adminData.firstName} {adminData.lastName}
+                  </p>
+                  <p className="text-sm text-slate-600 mt-1">{adminData.email}</p>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Role: {roles.find(r => r.id === adminData.roleId)?.name || 'Unknown'}
+                  </p>
+                </div>
+
+                {/* Configuration Summary */}
+                <div className="bg-slate-50 rounded-xl p-5">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                    Configuration
+                  </h3>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {TEMPLATE_CONFIG.map(config => {
+                      const enabled = templateOptions[config.key]
+                      const count = templateCounts[config.key]
+                      return (
+                        <div
+                          key={config.key}
+                          className={`flex items-center gap-2 text-sm ${
+                            enabled ? 'text-slate-900' : 'text-slate-400'
+                          }`}
+                        >
+                          <span className={enabled ? 'text-emerald-500' : 'text-slate-300'}>
+                            {enabled ? '✓' : '○'}
+                          </span>
+                          {config.label}
+                          {enabled && <span className="text-slate-400">({count})</span>}
+                        </div>
+                      )
+                    })}
+                    <div
+                      className={`flex items-center gap-2 text-sm ${
+                        sendWelcomeEmail ? 'text-slate-900' : 'text-slate-400'
+                      }`}
+                    >
+                      <span className={sendWelcomeEmail ? 'text-emerald-500' : 'text-slate-300'}>
+                        {sendWelcomeEmail ? '✓' : '○'}
                       </span>
+                      Welcome Email
                     </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Administrator</h3>
-                  <div className="bg-slate-50 rounded-xl p-4">
-                    <p className="font-semibold text-slate-900">{adminData.firstName} {adminData.lastName}</p>
-                    <p className="text-sm text-slate-600 mt-1">{adminData.email}</p>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Role: {roles.find(r => r.id === adminData.roleId)?.name || 'Unknown'}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Setup</h3>
-                  <div className="bg-slate-50 rounded-xl p-4 space-y-1">
-                    <p className="text-sm text-slate-700 flex items-center gap-2">
-                      {setupOptions.createDefaultRooms ? '✓' : '✗'} Default OR rooms
-                    </p>
-                    <p className="text-sm text-slate-700 flex items-center gap-2">
-                      {setupOptions.createDefaultProcedures ? '✓' : '✗'} Default procedures
-                    </p>
-                    <p className="text-sm text-slate-700 flex items-center gap-2">
-                      {setupOptions.sendWelcomeEmail ? '✓' : '✗'} Welcome email
-                    </p>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 flex justify-between">
+          {/* ================================================================ */}
+          {/* FOOTER */}
+          {/* ================================================================ */}
+          <div className="px-6 sm:px-8 py-4 border-t border-slate-200 bg-slate-50 flex justify-between">
             {step > 1 ? (
               <button
                 onClick={() => setStep(step - 1)}
                 disabled={submitting}
-                className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium transition-colors disabled:opacity-50"
+                className="px-5 py-2.5 text-slate-600 hover:text-slate-900 font-medium transition-colors disabled:opacity-50"
               >
-                Back
+                ← Back
               </button>
             ) : (
               <button
                 onClick={() => router.push('/admin/facilities')}
-                className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium transition-colors"
+                className="px-5 py-2.5 text-slate-600 hover:text-slate-900 font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -653,19 +1151,19 @@ if (defaultComplexities && defaultComplexities.length > 0) {
               <button
                 onClick={() => setStep(step + 1)}
                 disabled={(step === 1 && !isStep1Valid) || (step === 2 && !isStep2Valid)}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-medium transition-colors"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors"
               >
-                Continue
+                Continue →
               </button>
             ) : (
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl font-medium transition-colors flex items-center gap-2"
               >
                 {submitting ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Creating...
                   </>
                 ) : (
