@@ -19,6 +19,8 @@ interface ProcedureCategory {
   display_order: number
   body_region_id: string | null
   is_active: boolean
+  deleted_at: string | null
+  deleted_by: string | null
   body_regions?: BodyRegion | BodyRegion[] | null
 }
 
@@ -116,16 +118,33 @@ export default function AdminProcedureCategoriesPage() {
     confirmVariant: 'danger',
     onConfirm: () => {},
   })
+// Archive toggle
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
-  useEffect(() => {
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Current user for deleted_by tracking
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+useEffect(() => {
     fetchData()
-  }, [])
+  }, [showArchived])
 
-  const fetchData = async () => {
+const fetchData = async () => {
     setLoading(true)
 
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
+
     // Fetch categories with body region
-    const { data: categoriesData } = await supabase
+    let query = supabase
       .from('procedure_categories')
       .select(`
         id,
@@ -134,18 +153,36 @@ export default function AdminProcedureCategoriesPage() {
         display_order,
         body_region_id,
         is_active,
+        deleted_at,
+        deleted_by,
         body_regions (id, name, display_name)
       `)
-      .order('display_order')
 
-    // Fetch body regions for dropdown
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
+    }
+
+    const { data: categoriesData } = await query.order('display_order')
+
+    // Fetch body regions for dropdown (only active ones)
     const { data: regionsData } = await supabase
       .from('body_regions')
       .select('id, name, display_name')
+      .is('deleted_at', null)
       .order('display_name')
 
     setCategories((categoriesData || []) as ProcedureCategory[])
     setBodyRegions(regionsData || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('procedure_categories')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
     setLoading(false)
   }
 
@@ -257,33 +294,61 @@ await procedureCategoryAudit.updated(
     setSaving(false)
   }
 
-  const handleDelete = (category: ProcedureCategory) => {
+ const handleDelete = (category: ProcedureCategory) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Delete Category',
+      title: 'Archive Category',
       message: (
         <p>
-          Are you sure you want to delete <strong>"{category.display_name}"</strong>?
-          This action cannot be undone.
+          Are you sure you want to archive <strong>"{category.display_name}"</strong>?
+          <br /><br />
+          <span className="text-slate-500">This category will be hidden but can be restored later.</span>
         </p>
       ),
-      confirmLabel: 'Delete',
+      confirmLabel: 'Archive',
       confirmVariant: 'danger',
       onConfirm: async () => {
         setSaving(true)
         const { error } = await supabase
           .from('procedure_categories')
-          .delete()
+          .update({
+            deleted_at: new Date().toISOString(),
+            deleted_by: currentUserId
+          })
           .eq('id', category.id)
 
         if (!error) {
           await procedureCategoryAudit.deleted(supabase, category.display_name, category.id)
           setCategories(categories.filter(c => c.id !== category.id))
+          setArchivedCount(prev => prev + 1)
+          showToast(`"${category.display_name}" moved to archive`, 'success')
+        } else {
+          showToast('Failed to archive category', 'error')
         }
         setSaving(false)
         closeConfirmModal()
       },
     })
+  }
+
+  const handleRestore = async (category: ProcedureCategory) => {
+    setSaving(true)
+    const { error } = await supabase
+      .from('procedure_categories')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', category.id)
+
+    if (!error) {
+      setCategories(categories.filter(c => c.id !== category.id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${category.display_name}" restored successfully`, 'success')
+    } else {
+      showToast('Failed to restore category', 'error')
+    }
+    setSaving(false)
   }
 
   const openEditModal = (category: ProcedureCategory) => {
@@ -322,22 +387,47 @@ await procedureCategoryAudit.updated(
       <Container className="py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="flex items-start justify-between mb-6">
+ <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Procedure Categories</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">
+                {showArchived ? 'Archived Procedure Categories' : 'Procedure Categories'}
+              </h1>
               <p className="text-slate-500 mt-1">
-                Clinical groupings for analytics comparisons across procedure types.
+                {showArchived 
+                  ? 'Archived clinical groupings'
+                  : 'Clinical groupings for analytics comparisons across procedure types.'
+                }
               </p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Category
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Archive Toggle */}
+              <button
+                onClick={() => setShowArchived(!showArchived)}
+                className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                  showArchived
+                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+              </button>
+
+              {/* Add Category - hide when viewing archived */}
+              {!showArchived && (
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Category
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stats Bar */}
@@ -405,26 +495,36 @@ await procedureCategoryAudit.updated(
                             </code>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {showArchived ? (
                               <button
-                                onClick={() => openEditModal(category)}
-                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Edit"
+                                onClick={() => handleRestore(category)}
+                                disabled={saving}
+                                className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
+                                Restore
                               </button>
-                              <button
-                                onClick={() => handleDelete(category)}
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => openEditModal(category)}
+                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(category)}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Archive"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -598,7 +698,23 @@ await procedureCategoryAudit.updated(
           </div>
         </div>
       )}
-
+{/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
