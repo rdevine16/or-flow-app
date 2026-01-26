@@ -12,6 +12,8 @@ interface ImplantCompany {
   name: string
   facility_id: string | null
   created_at: string
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 interface ModalState {
@@ -30,14 +32,29 @@ export default function ImplantCompaniesPage() {
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+// Archive toggle
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Current user for deleted_by tracking
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [showArchived])
 
-  const fetchData = async () => {
+const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
+    setCurrentUserId(user.id)
 
     const { data: userData } = await supabase
       .from('users')
@@ -49,14 +66,34 @@ export default function ImplantCompaniesPage() {
       setFacilityId(userData.facility_id)
     }
 
-    // Fetch all implant companies (global + facility-specific)
-    const { data } = await supabase
+    // Fetch implant companies based on archive toggle
+    let query = supabase
       .from('implant_companies')
       .select('*')
-      .or(`facility_id.is.null,facility_id.eq.${userData?.facility_id}`)
-      .order('name')
 
+    if (showArchived) {
+      // Show only archived custom companies (facility-specific)
+      query = query
+        .eq('facility_id', userData?.facility_id)
+        .not('deleted_at', 'is', null)
+    } else {
+      // Show active: global (always) + facility-specific (not deleted)
+      query = query
+        .or(`facility_id.is.null,facility_id.eq.${userData?.facility_id}`)
+        .is('deleted_at', null)
+    }
+
+    const { data } = await query.order('name')
     setCompanies(data || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('implant_companies')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', userData?.facility_id)
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
     setLoading(false)
   }
 
@@ -127,21 +164,48 @@ export default function ImplantCompaniesPage() {
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
+const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company || !facilityId) return
 
     const { error } = await supabase
       .from('implant_companies')
-      .delete()
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId
+      })
       .eq('id', id)
 
     if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
+      setArchivedCount(prev => prev + 1)
       setDeleteConfirm(null)
+      showToast(`"${company.name}" moved to archive`, 'success')
       
       // Audit log
       await implantCompanyAudit.deleted(supabase, company.name, id, facilityId)
+    }
+  }
+
+  const handleRestore = async (id: string) => {
+    const company = companies.find(c => c.id === id)
+    if (!company || !facilityId) return
+
+    const { error } = await supabase
+      .from('implant_companies')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', id)
+
+    if (!error) {
+      setCompanies(companies.filter(c => c.id !== id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${company.name}" restored successfully`, 'success')
+      
+      // Audit log (you may want to add a restored method)
+      await implantCompanyAudit.deleted(supabase, `${company.name} (restored)`, id, facilityId)
     }
   }
 
@@ -164,22 +228,47 @@ export default function ImplantCompaniesPage() {
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+<div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                   <div>
-                    <h3 className="font-medium text-slate-900">Implant Companies</h3>
+                    <h3 className="font-medium text-slate-900">
+                      {showArchived ? 'Archived Companies' : 'Implant Companies'}
+                    </h3>
                     <p className="text-sm text-slate-500">
-                      {globalCount} global · {customCount} custom
+                      {showArchived 
+                        ? `${companies.length} archived`
+                        : `${globalCount} global · ${customCount} custom`
+                      }
                     </p>
                   </div>
-                  <button
-                    onClick={openAddModal}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Company
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {/* Archive Toggle */}
+                    <button
+                      onClick={() => setShowArchived(!showArchived)}
+                      className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                        showArchived
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+                    </button>
+
+                    {/* Add Company - hide when viewing archived */}
+                    {!showArchived && (
+                      <button
+                        onClick={openAddModal}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Company
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Search */}
@@ -267,8 +356,16 @@ export default function ImplantCompaniesPage() {
                             </div>
 
                             {/* Actions */}
+{/* Actions */}
                             <div className="col-span-3 flex items-center justify-end gap-1">
-                              {isGlobal ? (
+                              {showArchived ? (
+                                <button
+                                  onClick={() => handleRestore(company.id)}
+                                  className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                >
+                                  Restore
+                                </button>
+                              ) : isGlobal ? (
                                 <span className="text-xs text-slate-400">Read-only</span>
                               ) : deleteConfirm === company.id ? (
                                 <div className="flex items-center gap-1">
@@ -299,10 +396,10 @@ export default function ImplantCompaniesPage() {
                                   <button
                                     onClick={() => setDeleteConfirm(company.id)}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Delete"
+                                    title="Archive"
                                   >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                     </svg>
                                   </button>
                                 </>
@@ -370,6 +467,23 @@ export default function ImplantCompaniesPage() {
           )}
         </SettingsLayout>
       </Container>
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
     </DashboardLayout>
   )
 }
