@@ -17,6 +17,8 @@ interface BodyRegion {
   display_name: string
   display_order: number
   created_at: string
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 // Confirmation Modal Component
@@ -106,7 +108,20 @@ export default function AdminBodyRegionsPage() {
     confirmVariant: 'danger',
     onConfirm: () => {},
   })
+// Archive toggle
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Current user for deleted_by tracking
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -114,23 +129,42 @@ export default function AdminBodyRegionsPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  useEffect(() => {
+useEffect(() => {
     if (isGlobalAdmin) {
       fetchData()
     }
-  }, [isGlobalAdmin])
+  }, [isGlobalAdmin, showArchived])
 
-  const fetchData = async () => {
+const fetchData = async () => {
     setLoading(true)
 
-    const { data, error } = await supabase
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
+
+    let query = supabase
       .from('body_regions')
       .select('*')
-      .order('display_order')
+
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
+    }
+
+    const { data, error } = await query.order('display_order')
 
     if (!error && data) {
       setBodyRegions(data)
     }
+
+    // Get archived count
+    const { count } = await supabase
+      .from('body_regions')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
     setLoading(false)
   }
 
@@ -234,39 +268,64 @@ export default function AdminBodyRegionsPage() {
     setSaving(false)
   }
 
-  const handleDelete = (region: BodyRegion) => {
+const handleDelete = (region: BodyRegion) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Delete Body Region',
+      title: 'Archive Body Region',
       message: (
         <>
-          Are you sure you want to delete <strong>{region.display_name}</strong>?
+          Are you sure you want to archive <strong>{region.display_name}</strong>?
           <br /><br />
-          <span className="text-amber-600">
-            Warning: This may fail if the body region is being used by procedures or categories.
+          <span className="text-slate-500">
+            This body region will be hidden but can be restored later.
           </span>
         </>
       ),
-      confirmLabel: 'Delete',
+      confirmLabel: 'Archive',
       confirmVariant: 'danger',
       onConfirm: async () => {
         setSaving(true)
         const { error } = await supabase
           .from('body_regions')
-          .delete()
+          .update({
+            deleted_at: new Date().toISOString(),
+            deleted_by: currentUserId
+          })
           .eq('id', region.id)
 
         if (!error) {
           await adminAudit.bodyRegionDeleted(supabase, region.display_name, region.id)
           setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
+          setArchivedCount(prev => prev + 1)
           closeConfirmModal()
+          showToast(`"${region.display_name}" moved to archive`, 'success')
         } else {
-          console.error('Error deleting body region:', error)
-          alert('Cannot delete this body region. It may be in use by procedures or categories.')
+          console.error('Error archiving body region:', error)
+          showToast('Failed to archive body region', 'error')
         }
         setSaving(false)
       },
     })
+  }
+
+  const handleRestore = async (region: BodyRegion) => {
+    setSaving(true)
+    const { error } = await supabase
+      .from('body_regions')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', region.id)
+
+    if (!error) {
+      setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
+      setArchivedCount(prev => prev - 1)
+      showToast(`"${region.display_name}" restored successfully`, 'success')
+    } else {
+      showToast('Failed to restore body region', 'error')
+    }
+    setSaving(false)
   }
 
   if (userLoading || !isGlobalAdmin) {
@@ -296,20 +355,42 @@ export default function AdminBodyRegionsPage() {
           {/* Content Card */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             {/* Card Header */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+<div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="font-medium text-slate-900">All Body Regions</h3>
-                <p className="text-sm text-slate-500">{bodyRegions.length} regions defined</p>
+                <h3 className="font-medium text-slate-900">
+                  {showArchived ? 'Archived Body Regions' : 'All Body Regions'}
+                </h3>
+                <p className="text-sm text-slate-500">{bodyRegions.length} regions {showArchived ? 'archived' : 'defined'}</p>
               </div>
-              <button
-                onClick={openAddModal}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add Region
-              </button>
+              <div className="flex items-center gap-3">
+                {/* Archive Toggle */}
+                <button
+                  onClick={() => setShowArchived(!showArchived)}
+                  className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${
+                    showArchived
+                      ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                  {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+                </button>
+
+                {/* Add Region - hide when viewing archived */}
+                {!showArchived && (
+                  <button
+                    onClick={openAddModal}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Region
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Table */}
@@ -368,26 +449,36 @@ export default function AdminBodyRegionsPage() {
                           </code>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {showArchived ? (
                             <button
-                              onClick={() => openEditModal(region)}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Edit"
+                              onClick={() => handleRestore(region)}
+                              disabled={saving}
+                              className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
+                              Restore
                             </button>
-                            <button
-                              onClick={() => handleDelete(region)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
+                          ) : (
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => openEditModal(region)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDelete(region)}
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Archive"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -560,7 +651,23 @@ export default function AdminBodyRegionsPage() {
           </div>
         </div>
       )}
-
+{/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
       {/* Confirmation Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
