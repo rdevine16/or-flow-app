@@ -26,6 +26,12 @@ export type AuditAction =
 | 'payer.updated'
 | 'payer.deleted'
 | 'payer.restored'
+  // Notification Settings
+  | 'notification_settings.updated'
+  | 'notification_settings.category_enabled'
+  | 'notification_settings.category_disabled'
+  | 'notification_settings.quiet_hours_updated'
+  | 'notification_settings.recipients_updated'
 | 'procedure_reimbursement.created'
 | 'procedure_reimbursement.updated'
 | 'procedure_reimbursement.deleted'
@@ -192,6 +198,12 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'facility_holiday.updated': 'updated a facility holiday',
   'facility_holiday.deleted': 'deleted a facility holiday',
   'facility_holiday.toggled': 'toggled a facility holiday',
+    // Notification Settings
+  'notification_settings.updated': 'updated notification settings',
+  'notification_settings.category_enabled': 'enabled notification category',
+  'notification_settings.category_disabled': 'disabled notification category',
+  'notification_settings.quiet_hours_updated': 'updated quiet hours',
+  'notification_settings.recipients_updated': 'updated notification recipients',
   // Facility Closures
   'facility_closure.created': 'created a facility closure',
   'facility_closure.deleted': 'deleted a facility closure',
@@ -2089,7 +2101,92 @@ export const adminAudit = {
     })
   },
 }
+// =====================================================
+// NOTIFICATION SETTINGS
+// =====================================================
 
+export const notificationSettingsAudit = {
+  async updated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    settingName: string,
+    oldValue: unknown,
+    newValue: unknown
+  ) {
+    await log(supabase, 'notification_settings.updated', {
+      targetType: 'notification_setting',
+      targetLabel: settingName,
+      facilityId,
+      oldValues: { value: oldValue },
+      newValues: { value: newValue },
+    })
+  },
+
+  async categoryEnabled(
+    supabase: SupabaseClient,
+    facilityId: string,
+    categoryName: string
+  ) {
+    await log(supabase, 'notification_settings.category_enabled', {
+      targetType: 'notification_category',
+      targetLabel: categoryName,
+      facilityId,
+      newValues: { enabled: true },
+    })
+  },
+
+  async categoryDisabled(
+    supabase: SupabaseClient,
+    facilityId: string,
+    categoryName: string
+  ) {
+    await log(supabase, 'notification_settings.category_disabled', {
+      targetType: 'notification_category',
+      targetLabel: categoryName,
+      facilityId,
+      newValues: { enabled: false },
+    })
+  },
+
+  async quietHoursUpdated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    oldHours: { start: string; end: string; enabled: boolean } | null,
+    newHours: { start: string; end: string; enabled: boolean }
+  ) {
+    await log(supabase, 'notification_settings.quiet_hours_updated', {
+      targetType: 'quiet_hours',
+      targetLabel: 'Quiet Hours',
+      facilityId,
+      oldValues: oldHours ? { 
+        start: oldHours.start, 
+        end: oldHours.end, 
+        enabled: oldHours.enabled 
+      } : undefined,
+      newValues: { 
+        start: newHours.start, 
+        end: newHours.end, 
+        enabled: newHours.enabled 
+      },
+    })
+  },
+
+  async recipientsUpdated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    notificationType: string,
+    oldRoles: string[],
+    newRoles: string[]
+  ) {
+    await log(supabase, 'notification_settings.recipients_updated', {
+      targetType: 'notification_recipients',
+      targetLabel: notificationType,
+      facilityId,
+      oldValues: { roles: oldRoles },
+      newValues: { roles: newRoles },
+    })
+  },
+}
 // =====================================================
 // GENERIC LOG (for custom actions)
 // =====================================================
