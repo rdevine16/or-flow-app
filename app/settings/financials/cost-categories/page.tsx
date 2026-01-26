@@ -735,66 +735,83 @@ const handleRestore = async (category: CostCategory) => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteModalOpen && categoryToDelete && (
+{/* Archive Confirmation Modal */}
+      {deleteModalState.isOpen && deleteModalState.category && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Delete Cost Category</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Archive Cost Category</h3>
             </div>
             <div className="p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              {deleteModalState.loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                 </div>
-                <div>
-                  <p className="text-slate-700 mb-3">
-                    Are you sure you want to delete <strong>"{categoryToDelete.name}"</strong>?
+              ) : (
+                <>
+                  <p className="text-slate-600 mb-4">
+                    Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModalState.category.name}"</span>?
                   </p>
-                  <ul className="text-sm text-slate-500 space-y-1">
-                    <li className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      It will be hidden from new cases
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Historical case data will not be affected
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      You can restore it within 30 days
-                    </li>
-                  </ul>
-                </div>
-              </div>
+                  {(deleteModalState.dependencies.procedureCostItems > 0 || deleteModalState.dependencies.surgeonCostItems > 0) && (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                      <div className="flex gap-3">
+                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <p className="font-medium text-amber-800">This category is in use:</p>
+                          <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
+                            {deleteModalState.dependencies.procedureCostItems > 0 && (
+                              <li>{deleteModalState.dependencies.procedureCostItems} procedure cost item{deleteModalState.dependencies.procedureCostItems !== 1 ? 's' : ''}</li>
+                            )}
+                            {deleteModalState.dependencies.surgeonCostItems > 0 && (
+                              <li>{deleteModalState.dependencies.surgeonCostItems} surgeon variance item{deleteModalState.dependencies.surgeonCostItems !== 1 ? 's' : ''}</li>
+                            )}
+                          </ul>
+                          <p className="mt-2 text-sm text-amber-700">
+                            Archiving will hide it from new procedures but existing data will be preserved.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-sm text-slate-500">You can restore archived categories within 30 days.</p>
+                </>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setDeleteModalOpen(false)
-                  setCategoryToDelete(null)
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+              <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                disabled={saving}
+                disabled={saving || deleteModalState.loading}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
               >
-                {saving ? 'Deleting...' : 'Delete Category'}
+                {saving ? 'Archiving...' : 'Archive Category'}
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
         </div>
       )}
     </DashboardLayout>
