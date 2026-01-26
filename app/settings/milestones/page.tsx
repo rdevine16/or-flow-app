@@ -20,6 +20,7 @@ interface FacilityMilestone {
   source_milestone_type_id: string | null
   is_active: boolean
   deleted_at: string | null
+    deleted_by: string | null
   // Phase 2: Validation fields
   min_minutes: number | null
   max_minutes: number | null
@@ -126,7 +127,23 @@ export default function MilestonesSettingsPage() {
 
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
+// Toast and user ID
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
+  // Get current user ID on mount
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
+    }
+    getCurrentUser()
+  }, [])
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchMilestones()
@@ -142,7 +159,7 @@ export default function MilestonesSettingsPage() {
     setLoading(true)
     const { data } = await supabase
       .from('facility_milestones')
-      .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, min_minutes, max_minutes, validation_type')
+      .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, deleted_by, min_minutes, max_minutes, validation_type')
       .eq('facility_id', effectiveFacilityId)
       .order('display_order')
 
@@ -368,12 +385,12 @@ export default function MilestonesSettingsPage() {
             partner?.display_name || 'Unknown'
           )
         }
-        
-        // Soft delete - set deleted_at timestamp
+// Soft delete - set deleted_at and deleted_by
         const { error } = await supabase
           .from('facility_milestones')
           .update({ 
             deleted_at: new Date().toISOString(),
+            deleted_by: currentUserId,
             is_active: false,
             pair_with_id: null,
             pair_position: null,
@@ -383,15 +400,16 @@ export default function MilestonesSettingsPage() {
         if (!error) {
           await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
           
-          setMilestones(milestones.map(m => {
+setMilestones(milestones.map(m => {
             if (m.id === milestone.id) {
-              return { ...m, deleted_at: new Date().toISOString(), is_active: false, pair_with_id: null, pair_position: null }
+              return { ...m, deleted_at: new Date().toISOString(), deleted_by: currentUserId, is_active: false, pair_with_id: null, pair_position: null }
             }
             if (m.id === milestone.pair_with_id) {
               return { ...m, pair_with_id: null, pair_position: null }
             }
             return m
           }))
+          showToast(`"${milestone.display_name}" moved to archive`, 'success')
         }
 
         closeConfirmModal()
@@ -410,6 +428,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     .from('facility_milestones')
     .update({ 
       deleted_at: null,
+      deleted_by: null,
       is_active: true,
     })
     .eq('id', milestone.id)
@@ -419,9 +438,12 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     
     setMilestones(milestones.map(m => 
       m.id === milestone.id 
-        ? { ...m, deleted_at: null, is_active: true } 
+        ? { ...m, deleted_at: null, deleted_by: null, is_active: true } 
         : m
     ))
+    showToast(`"${milestone.display_name}" restored successfully`, 'success')
+  } else {
+    showToast('Failed to restore milestone', 'error')
   }
   setSaving(false)
 }
@@ -642,15 +664,15 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-4">
                   {inactiveMilestones.length > 0 && (
-                    <label className="flex items-center gap-2 cursor-pointer">
+<label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={showInactive}
-                        onChange={(e) => setShowInactive(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300"
+                        checked={showDeleted}
+                        onChange={(e) => setShowDeleted(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 rounded border-slate-300"
                       />
                       <span className="text-sm text-slate-600">
-                        Show inactive ({inactiveMilestones.length})
+                        Show archived ({deletedMilestones.length})
                       </span>
                     </label>
                   )}
@@ -806,14 +828,14 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             </svg>
                           </button>
 
-                          <button
+<button
                             onClick={() => handleDelete(milestone)}
                             disabled={saving}
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="Delete"
+                            title="Archive"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                             </svg>
                           </button>
                         </div>
@@ -835,20 +857,20 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               {/* Recently Deleted Section */}
               {showDeleted && deletedMilestones.length > 0 && (
                 <div className="mt-8">
-                  <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+ <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                     </svg>
-                    Recently Deleted
+                    Archived Milestones
                   </h3>
                   <div className="space-y-2">
                     {deletedMilestones.map(milestone => {
                       const isGlobal = !!milestone.source_milestone_type_id
                       
                       return (
-                        <div
+                      <div
                           key={milestone.id}
-                          className="bg-red-50 border border-red-200 rounded-xl p-4 opacity-75"
+                          className="bg-amber-50 border border-amber-200 rounded-xl p-4"
                         >
                           <div className="flex items-center gap-4">
                             <div className="flex-1 min-w-0">
@@ -866,8 +888,8 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-red-600 mt-0.5">
-                                Deleted {milestone.deleted_at ? formatDeletedDate(milestone.deleted_at) : ''}
+                             <p className="text-xs text-amber-600 mt-0.5">
+                                Archived {milestone.deleted_at ? formatDeletedDate(milestone.deleted_at) : ''}
                               </p>
                             </div>
 
@@ -1185,6 +1207,23 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         onCancel={closeConfirmModal}
         isLoading={saving}
       />
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
     </DashboardLayout>
   )
 }
