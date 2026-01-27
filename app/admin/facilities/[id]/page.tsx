@@ -1,9 +1,10 @@
 // app/admin/facilities/[id]/page.tsx
-// Facility Detail Page - View and manage individual facility
+// Enterprise Facility Detail Page - View and manage individual facility
+// Professional SaaS dashboard with usage metrics and status indicators
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '../../../../lib/supabase'
@@ -18,6 +19,10 @@ import { formatLastLogin } from '../../../../lib/auth-helpers'
 import FacilityLogoUpload from '../../../../components/FacilityLogoUpload'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
+
+// =====================================================
+// TYPES
+// =====================================================
 
 interface Facility {
   id: string
@@ -64,12 +69,176 @@ interface AuditEntry {
   action: string
   created_at: string
   success: boolean
+  target_label?: string
 }
 
 interface UserRole {
   id: string
   name: string
 }
+
+interface FacilityStats {
+  casesThisMonth: number
+  casesLastMonth: number
+  casesAllTime: number
+  activeUsers: number
+  totalUsers: number
+  completedCases: number
+  avgCasesPerDay: number
+  lastActivity: string | null
+  dataQualityScore: number
+  openIssues: number
+}
+
+// =====================================================
+// PLAN DATA
+// =====================================================
+
+const plans = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 750,
+    limits: { casesPerMonth: 100, users: 5 },
+  },
+  {
+    id: 'professional',
+    name: 'Professional',
+    price: 1500,
+    limits: { casesPerMonth: 300, users: 20 },
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    price: 2500,
+    limits: { casesPerMonth: Infinity, users: Infinity },
+  },
+]
+
+// =====================================================
+// SKELETON COMPONENTS
+// =====================================================
+
+function StatCardSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+      <div className="h-4 bg-slate-200 rounded w-24 mb-3" />
+      <div className="h-8 bg-slate-200 rounded w-16 mb-2" />
+      <div className="h-3 bg-slate-100 rounded w-32" />
+    </div>
+  )
+}
+
+function OverviewSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      {/* Hero Card Skeleton */}
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 animate-pulse">
+        <div className="flex justify-between items-start">
+          <div className="space-y-3">
+            <div className="h-4 bg-slate-700 rounded w-20" />
+            <div className="h-8 bg-slate-700 rounded w-40" />
+            <div className="h-4 bg-slate-700 rounded w-32" />
+          </div>
+          <div className="h-12 w-24 bg-slate-700 rounded-lg" />
+        </div>
+      </div>
+      {/* Stats Grid Skeleton */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => <StatCardSkeleton key={i} />)}
+      </div>
+    </div>
+  )
+}
+
+// =====================================================
+// STAT CARD COMPONENT
+// =====================================================
+
+interface StatCardProps {
+  label: string
+  value: string | number
+  subtext?: string
+  icon: React.ReactNode
+  trend?: { value: number; isPositive: boolean }
+  color?: 'blue' | 'emerald' | 'amber' | 'purple' | 'slate'
+}
+
+function StatCard({ label, value, subtext, icon, trend, color = 'blue' }: StatCardProps) {
+  const colorClasses = {
+    blue: 'bg-blue-50 text-blue-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    amber: 'bg-amber-50 text-amber-600',
+    purple: 'bg-purple-50 text-purple-600',
+    slate: 'bg-slate-100 text-slate-600',
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between mb-3">
+        <span className="text-sm font-medium text-slate-500">{label}</span>
+        <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
+          {icon}
+        </div>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-2xl font-bold text-slate-900">{value}</span>
+        {trend && (
+          <span className={`text-xs font-medium ${trend.isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+            {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
+          </span>
+        )}
+      </div>
+      {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+    </div>
+  )
+}
+
+// =====================================================
+// PROGRESS BAR COMPONENT
+// =====================================================
+
+interface UsageBarProps {
+  label: string
+  used: number
+  limit: number
+  subtext?: string
+  formatValue?: (val: number) => string
+}
+
+function UsageBar({ label, used, limit, subtext, formatValue }: UsageBarProps) {
+  const percentage = limit === Infinity ? 0 : Math.min((used / limit) * 100, 100)
+  const displayLimit = limit === Infinity ? '∞' : formatValue ? formatValue(limit) : limit.toLocaleString()
+  const displayUsed = formatValue ? formatValue(used) : used.toLocaleString()
+
+  const getBarColor = () => {
+    if (percentage > 90) return 'bg-red-500'
+    if (percentage > 75) return 'bg-amber-500'
+    return 'bg-blue-500'
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-slate-600">{label}</span>
+        <span className="text-sm font-medium text-slate-900">
+          {displayUsed} / {displayLimit}
+        </span>
+      </div>
+      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${getBarColor()}`}
+          style={{ width: `${Math.max(percentage, 2)}%` }}
+        />
+      </div>
+      {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+    </div>
+  )
+}
+
+// =====================================================
+// MAIN COMPONENT
+// =====================================================
 
 export default function FacilityDetailPage() {
   const router = useRouter()
@@ -81,6 +250,7 @@ export default function FacilityDetailPage() {
   // State
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [loading, setLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [facility, setFacility] = useState<Facility | null>(null)
   const [users, setUsers] = useState<User[]>([])
@@ -88,6 +258,7 @@ export default function FacilityDetailPage() {
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
   const [roles, setRoles] = useState<UserRole[]>([])
+  const [stats, setStats] = useState<FacilityStats | null>(null)
 
   // Edit states
   const [editName, setEditName] = useState('')
@@ -109,12 +280,118 @@ export default function FacilityDetailPage() {
   const [newRoomName, setNewRoomName] = useState('')
   const [newProcedureName, setNewProcedureName] = useState('')
 
+  // Determine current plan (would come from database in production)
+  const currentPlan = plans[1] // Professional
+
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
       router.push('/dashboard')
     }
   }, [userLoading, isGlobalAdmin, router])
+
+  // Fetch facility stats
+  const fetchStats = useCallback(async () => {
+    if (!facilityId) return
+    setStatsLoading(true)
+
+    try {
+      const now = new Date()
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const firstOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const lastOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+      const [
+        thisMonthRes,
+        lastMonthRes,
+        allTimeRes,
+        activeUsersRes,
+        totalUsersRes,
+        completedRes,
+        recentActivityRes,
+        openIssuesRes,
+      ] = await Promise.all([
+        // Cases this month
+        supabase
+          .from('cases')
+          .select('id', { count: 'exact', head: true })
+          .eq('facility_id', facilityId)
+          .gte('scheduled_date', firstOfMonth.toISOString().split('T')[0]),
+        // Cases last month
+        supabase
+          .from('cases')
+          .select('id', { count: 'exact', head: true })
+          .eq('facility_id', facilityId)
+          .gte('scheduled_date', firstOfLastMonth.toISOString().split('T')[0])
+          .lte('scheduled_date', lastOfLastMonth.toISOString().split('T')[0]),
+        // All time cases
+        supabase
+          .from('cases')
+          .select('id', { count: 'exact', head: true })
+          .eq('facility_id', facilityId),
+        // Active users
+        supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .eq('facility_id', facilityId)
+          .eq('is_active', true),
+        // Total users
+        supabase
+          .from('users')
+          .select('id', { count: 'exact', head: true })
+          .eq('facility_id', facilityId),
+        // Completed cases (last 30 days)
+        supabase
+          .from('cases')
+          .select('id, case_statuses!inner(name)', { count: 'exact', head: true })
+          .eq('facility_id', facilityId)
+          .eq('case_statuses.name', 'completed')
+          .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0]),
+        // Last activity
+        supabase
+          .from('audit_log')
+          .select('created_at')
+          .eq('facility_id', facilityId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        // Open data quality issues
+        supabase
+          .from('metric_issues')
+          .select('id', { count: 'exact', head: true })
+          .eq('facility_id', facilityId)
+          .is('resolved_at', null),
+      ])
+
+      const casesThisMonth = thisMonthRes.count || 0
+      const casesLastMonth = lastMonthRes.count || 0
+      const dayOfMonth = now.getDate()
+      const avgCasesPerDay = dayOfMonth > 0 ? Math.round((casesThisMonth / dayOfMonth) * 10) / 10 : 0
+
+      // Calculate data quality score (simplified)
+      const totalCases = allTimeRes.count || 1
+      const issues = openIssuesRes.count || 0
+      const dataQualityScore = Math.max(0, Math.min(100, Math.round(100 - (issues / totalCases) * 100)))
+
+      setStats({
+        casesThisMonth,
+        casesLastMonth,
+        casesAllTime: allTimeRes.count || 0,
+        activeUsers: activeUsersRes.count || 0,
+        totalUsers: totalUsersRes.count || 0,
+        completedCases: completedRes.count || 0,
+        avgCasesPerDay,
+        lastActivity: recentActivityRes.data?.created_at || null,
+        dataQualityScore,
+        openIssues: issues,
+      })
+    } catch (error) {
+      console.error('Error fetching facility stats:', error)
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [facilityId, supabase])
 
   // Fetch facility data
   useEffect(() => {
@@ -152,6 +429,7 @@ export default function FacilityDetailPage() {
           .from('or_rooms')
           .select('*')
           .eq('facility_id', facilityId)
+          .is('deleted_at', null)
           .order('name')
 
         if (roomsData) setRooms(roomsData)
@@ -161,6 +439,7 @@ export default function FacilityDetailPage() {
           .from('procedure_types')
           .select('*')
           .eq('facility_id', facilityId)
+          .is('deleted_at', null)
           .order('name')
 
         if (proceduresData) setProcedures(proceduresData)
@@ -168,7 +447,7 @@ export default function FacilityDetailPage() {
         // Fetch audit log
         const { data: auditData } = await supabase
           .from('audit_log')
-          .select('id, user_email, action, created_at, success')
+          .select('id, user_email, action, created_at, success, target_label')
           .eq('facility_id', facilityId)
           .order('created_at', { ascending: false })
           .limit(50)
@@ -195,7 +474,8 @@ export default function FacilityDetailPage() {
     }
 
     fetchData()
-  }, [isGlobalAdmin, facilityId, supabase])
+    fetchStats()
+  }, [isGlobalAdmin, facilityId, supabase, fetchStats])
 
   // Save facility changes
   const handleSaveFacility = async () => {
@@ -269,7 +549,7 @@ export default function FacilityDetailPage() {
       if (error) throw error
 
       // Send invitation email
-      const inviterName = currentUser?.user_metadata?.first_name 
+      const inviterName = currentUser?.user_metadata?.first_name
         ? `${currentUser.user_metadata.first_name} ${currentUser.user_metadata.last_name}`
         : 'Your administrator'
 
@@ -339,7 +619,7 @@ export default function FacilityDetailPage() {
     try {
       const { error } = await supabase
         .from('or_rooms')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', roomId)
 
       if (error) throw error
@@ -387,7 +667,7 @@ export default function FacilityDetailPage() {
     try {
       const { error } = await supabase
         .from('procedure_types')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', procedureId)
 
       if (error) throw error
@@ -402,8 +682,7 @@ export default function FacilityDetailPage() {
   // Toggle user active status
   const handleToggleUserActive = async (user: User) => {
     const newStatus = !user.is_active
-    const action = newStatus ? 'reactivate' : 'deactivate'
-    
+
     if (!confirm(`${newStatus ? 'Reactivate' : 'Deactivate'} ${user.first_name} ${user.last_name}?${!newStatus ? ' They will not be able to log in.' : ''}`)) {
       return
     }
@@ -417,7 +696,7 @@ export default function FacilityDetailPage() {
       if (error) throw error
 
       // Update local state
-      setUsers(users.map(u => 
+      setUsers(users.map(u =>
         u.id === user.id ? { ...u, is_active: newStatus } : u
       ))
 
@@ -464,11 +743,46 @@ export default function FacilityDetailPage() {
     })
   }
 
+  // Format relative time
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return formatDate(dateString)
+  }
+
   // Get days until trial ends
   const getDaysRemaining = () => {
     if (!facility?.trial_ends_at) return null
     const diff = new Date(facility.trial_ends_at).getTime() - Date.now()
     return Math.ceil(diff / 86400000)
+  }
+
+  // Get usage trend
+  const getUsageTrend = () => {
+    if (!stats || stats.casesLastMonth === 0) return null
+    const change = ((stats.casesThisMonth - stats.casesLastMonth) / stats.casesLastMonth) * 100
+    return { value: Math.round(Math.abs(change)), isPositive: change >= 0 }
+  }
+
+  // Get status badge config
+  const getStatusConfig = (status: string) => {
+    const configs: Record<string, { bg: string; text: string; dot: string; label: string }> = {
+      active: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Active' },
+      trial: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500', label: 'Trial' },
+      past_due: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', label: 'Past Due' },
+      cancelled: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Cancelled' },
+      disabled: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Disabled' },
+    }
+    return configs[status] || configs.disabled
   }
 
   // Loading
@@ -487,12 +801,14 @@ export default function FacilityDetailPage() {
   }
 
   const daysRemaining = getDaysRemaining()
+  const statusConfig = getStatusConfig(facility.subscription_status)
+  const usageTrend = getUsageTrend()
 
   return (
     <DashboardLayout>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-4">
           <Link
             href="/admin/facilities"
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -501,124 +817,352 @@ export default function FacilityDetailPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{facility.name}</h1>
-            <p className="text-slate-500">{facility.address || 'No address'}</p>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-slate-900">{facility.name}</h1>
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${statusConfig.bg}`}>
+                <span className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
+                <span className={`text-sm font-medium ${statusConfig.text}`}>
+                  {statusConfig.label}
+                  {facility.subscription_status === 'trial' && daysRemaining !== null && ` • ${daysRemaining}d left`}
+                </span>
+              </div>
+              {facility.is_demo && (
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                  Demo
+                </span>
+              )}
+            </div>
+            <p className="text-slate-500 mt-1">{facility.address || 'No address on file'}</p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            facility.subscription_status === 'active' ? 'bg-emerald-100 text-emerald-800' :
-            facility.subscription_status === 'trial' ? 'bg-blue-100 text-blue-800' :
-            facility.subscription_status === 'past_due' ? 'bg-red-100 text-red-800' :
-            'bg-slate-100 text-slate-800'
-          }`}>
-            {facility.subscription_status === 'active' ? 'Active' :
-             facility.subscription_status === 'trial' ? `Trial (${daysRemaining}d left)` :
-             facility.subscription_status === 'past_due' ? 'Past Due' :
-             facility.subscription_status}
-          </span>
+          <button
+            onClick={handleImpersonate}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium transition-all shadow-sm hover:shadow-md"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            View as Facility
+          </button>
         </div>
-        <button
-          onClick={handleImpersonate}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          View as Facility
-        </button>
       </div>
 
       {/* Tabs */}
       <div className="border-b border-slate-200 mb-6">
-        <nav className="flex gap-6">
+        <nav className="flex gap-1">
           {(['overview', 'users', 'rooms', 'procedures', 'subscription', 'audit'] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
+                  ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
               }`}
             >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
-              {tab === 'users' && ` (${users.length})`}
-              {tab === 'rooms' && ` (${rooms.length})`}
-              {tab === 'procedures' && ` (${procedures.length})`}
+              {tab === 'users' && <span className="ml-1.5 px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{users.length}</span>}
+              {tab === 'rooms' && <span className="ml-1.5 px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{rooms.length}</span>}
+              {tab === 'procedures' && <span className="ml-1.5 px-1.5 py-0.5 bg-slate-100 text-slate-600 text-xs rounded">{procedures.length}</span>}
             </button>
           ))}
         </nav>
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        {/* Overview Tab */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* ===== OVERVIEW TAB ===== */}
         {activeTab === 'overview' && (
-          <div className="p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Left Column - Facility Details */}
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Details</h2>
-                <div className="space-y-4">
+          statsLoading ? <OverviewSkeleton /> : (
+            <div className="p-6 space-y-6">
+              {/* Hero Status Card */}
+              <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-xl p-6 text-white relative overflow-hidden">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-10">
+                  <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                      <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+                        <path d="M 10 0 L 0 0 0 10" fill="none" stroke="currentColor" strokeWidth="0.5"/>
+                      </pattern>
+                    </defs>
+                    <rect width="100" height="100" fill="url(#grid)" />
+                  </svg>
+                </div>
+
+                <div className="relative flex items-start justify-between">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                    <input
-                      type="text"
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
+                    <p className="text-slate-400 text-sm mb-1">Current Plan</p>
+                    <h2 className="text-3xl font-bold mb-1">{currentPlan.name}</h2>
+                    <p className="text-slate-400">
+                      Member since {formatDate(facility.created_at)}
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                    <input
-                      type="text"
-                      value={editAddress}
-                      onChange={(e) => setEditAddress(e.target.value)}
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
+                  <div className="text-right">
+                    <p className="text-4xl font-bold">${currentPlan.price}</p>
+                    <p className="text-slate-400 text-sm">/month</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Created</label>
-                    <p className="text-slate-600">{formatDate(facility.created_at)}</p>
+                </div>
+
+                <div className="relative flex items-center gap-6 pt-5 mt-5 border-t border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${
+                      facility.subscription_status === 'active' ? 'bg-emerald-400' :
+                      facility.subscription_status === 'trial' ? 'bg-blue-400' :
+                      'bg-red-400'
+                    }`} />
+                    <span className="text-sm text-slate-300">{statusConfig.label}</span>
                   </div>
-                  <button
-                    onClick={handleSaveFacility}
-                    disabled={saving}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
-                  >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </button>
+                  {stats?.lastActivity && (
+                    <>
+                      <span className="text-slate-600">•</span>
+                      <span className="text-sm text-slate-400">
+                        Last activity: {formatRelativeTime(stats.lastActivity)}
+                      </span>
+                    </>
+                  )}
+                  {facility.subscription_status === 'trial' && daysRemaining !== null && (
+                    <>
+                      <span className="text-slate-600">•</span>
+                      <span className={`text-sm ${daysRemaining <= 7 ? 'text-amber-400' : 'text-slate-400'}`}>
+                        Trial ends in {daysRemaining} days
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Right Column - Logo Upload */}
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">Facility Logo</h2>
-                <p className="text-sm text-slate-500 mb-4">
-                  Upload a logo to display in the header when viewing this facility.
-                </p>
-                <FacilityLogoUpload
-                  facilityId={facility.id}
-                  currentLogoUrl={facility.logo_url}
-                  onLogoChange={(newUrl) => {
-                    setFacility({ ...facility, logo_url: newUrl })
-                  }}
+              {/* Quick Stats Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard
+                  label="Cases This Month"
+                  value={stats?.casesThisMonth || 0}
+                  subtext={`${stats?.casesLastMonth || 0} last month`}
+                  trend={usageTrend || undefined}
+                  color="blue"
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                  }
+                />
+                <StatCard
+                  label="Active Users"
+                  value={stats?.activeUsers || 0}
+                  subtext={`of ${stats?.totalUsers || 0} total`}
+                  color="emerald"
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                    </svg>
+                  }
+                />
+                <StatCard
+                  label="Data Quality"
+                  value={`${stats?.dataQualityScore || 100}%`}
+                  subtext={`${stats?.openIssues || 0} open issues`}
+                  color={stats?.dataQualityScore && stats.dataQualityScore < 80 ? 'amber' : 'purple'}
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  }
+                />
+                <StatCard
+                  label="All Time Cases"
+                  value={stats?.casesAllTime?.toLocaleString() || 0}
+                  subtext={`~${stats?.avgCasesPerDay || 0} per day avg`}
+                  color="slate"
+                  icon={
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                  }
                 />
               </div>
+
+              {/* Usage Metrics */}
+              <div className="bg-slate-50 rounded-xl p-6 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900">Plan Usage</h3>
+                  <span className="text-xs text-slate-500">Resets monthly</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <UsageBar
+                    label="Cases This Month"
+                    used={stats?.casesThisMonth || 0}
+                    limit={currentPlan.limits.casesPerMonth}
+                    subtext={currentPlan.limits.casesPerMonth === Infinity ? 'Unlimited plan' : `${currentPlan.limits.casesPerMonth - (stats?.casesThisMonth || 0)} remaining`}
+                  />
+                  <UsageBar
+                    label="Active Users"
+                    used={stats?.activeUsers || 0}
+                    limit={currentPlan.limits.users}
+                    subtext={currentPlan.limits.users === Infinity ? 'Unlimited plan' : `${currentPlan.limits.users - (stats?.activeUsers || 0)} seats available`}
+                  />
+                </div>
+              </div>
+
+              {/* Quick Actions & Recent Activity */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Quick Actions */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-slate-900">Quick Actions</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setActiveTab('users')}
+                      className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
+                    >
+                      <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                      </div>
+                      <p className="font-medium text-slate-900">Invite User</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Add team members</p>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('rooms')}
+                      className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
+                    >
+                      <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <p className="font-medium text-slate-900">Manage Rooms</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{rooms.length} configured</p>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('procedures')}
+                      className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
+                    >
+                      <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                      </div>
+                      <p className="font-medium text-slate-900">Procedures</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{procedures.length} types</p>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('audit')}
+                      className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
+                    >
+                      <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                        </svg>
+                      </div>
+                      <p className="font-medium text-slate-900">Audit Log</p>
+                      <p className="text-xs text-slate-500 mt-0.5">View activity</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Recent Activity */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-slate-900">Recent Activity</h3>
+                    <button
+                      onClick={() => setActiveTab('audit')}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      View all →
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {auditEntries.slice(0, 5).map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
+                      >
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          entry.success ? 'bg-emerald-500' : 'bg-red-500'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-700 truncate">
+                            <span className="font-medium">{entry.user_email.split('@')[0]}</span>
+                            {' '}
+                            <span className="text-slate-500">{formatAuditAction(entry.action as any)}</span>
+                          </p>
+                        </div>
+                        <span className="text-xs text-slate-400 flex-shrink-0">
+                          {formatRelativeTime(entry.created_at)}
+                        </span>
+                      </div>
+                    ))}
+                    {auditEntries.length === 0 && (
+                      <div className="p-6 text-center text-slate-400 text-sm">
+                        No activity recorded yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Facility Details Form */}
+              <div className="border-t border-slate-200 pt-6">
+                <h3 className="font-semibold text-slate-900 mb-4">Facility Details</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Facility Name</label>
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
+                      <input
+                        type="text"
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                        placeholder="123 Medical Center Drive"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSaveFacility}
+                      disabled={saving}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
+                    >
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Facility Logo</label>
+                    <p className="text-sm text-slate-500 mb-3">
+                      Displayed in the header when viewing this facility
+                    </p>
+                    <FacilityLogoUpload
+                      facilityId={facility.id}
+                      currentLogoUrl={facility.logo_url}
+                      onLogoChange={(newUrl) => {
+                        setFacility({ ...facility, logo_url: newUrl })
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )
         )}
 
-        {/* Users Tab */}
+        {/* ===== USERS TAB ===== */}
         {activeTab === 'users' && (
           <div>
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="font-semibold text-slate-900">Users ({users.length})</h2>
+              <div>
+                <h2 className="font-semibold text-slate-900">Users</h2>
+                <p className="text-sm text-slate-500">{users.filter(u => u.is_active).length} active of {users.length} total</p>
+              </div>
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -626,91 +1170,111 @@ export default function FacilityDetailPage() {
                 Invite User
               </button>
             </div>
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Name</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Access</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Last Login</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.map((user) => (
-                  <tr 
-                    key={user.id} 
-                    className={`hover:bg-slate-50 ${!user.is_active ? 'opacity-50' : ''}`}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">
-                          {user.first_name} {user.last_name}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Access</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Last Login</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {users.map((user) => (
+                    <tr
+                      key={user.id}
+                      className={`hover:bg-slate-50 transition-colors ${!user.is_active ? 'opacity-60' : ''}`}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                            {user.first_name[0]}{user.last_name[0]}
+                          </div>
+                          <div>
+                            <p className="font-medium text-slate-900">{user.first_name} {user.last_name}</p>
+                            <p className="text-sm text-slate-500">{user.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-700">{user.user_roles?.name || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                          user.access_level === 'facility_admin'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {user.access_level === 'facility_admin' ? 'Admin' : 'User'}
                         </span>
-                        {!user.is_active && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700">
+                      </td>
+                      <td className="px-4 py-3">
+                        {user.invitation_token ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Pending
+                          </span>
+                        ) : user.is_active ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
                             Deactivated
                           </span>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">{user.email}</td>
-                    <td className="px-4 py-3 text-slate-600 capitalize">
-                      {(user.user_roles as any)?.name || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        user.access_level === 'facility_admin' ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {user.access_level === 'facility_admin' ? 'Admin' : 'User'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {!user.is_active ? (
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">Inactive</span>
-                      ) : user.invitation_token ? (
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">Pending</span>
-                      ) : (
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Active</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 text-sm">
-                      {formatLastLogin(user.last_login_at)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => handleToggleUserActive(user)}
-                        className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                          user.is_active
-                            ? 'text-red-600 hover:bg-red-50'
-                            : 'text-emerald-600 hover:bg-emerald-50'
-                        }`}
-                      >
-                        {user.is_active ? 'Deactivate' : 'Reactivate'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-500">
+                        {user.last_login_at ? formatLastLogin(user.last_login_at) : 'Never'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleToggleUserActive(user)}
+                          className={`text-sm font-medium transition-colors ${
+                            user.is_active
+                              ? 'text-slate-500 hover:text-red-600'
+                              : 'text-emerald-600 hover:text-emerald-700'
+                          }`}
+                        >
+                          {user.is_active ? 'Deactivate' : 'Reactivate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {users.length === 0 && (
-              <div className="p-8 text-center text-slate-500">
-                No users yet. Invite someone to get started.
+              <div className="p-12 text-center">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                  </svg>
+                </div>
+                <p className="text-slate-600 font-medium">No users yet</p>
+                <p className="text-sm text-slate-400 mt-1">Invite someone to get started</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Rooms Tab */}
+        {/* ===== ROOMS TAB ===== */}
         {activeTab === 'rooms' && (
           <div>
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="font-semibold text-slate-900">Operating Rooms</h2>
+              <div>
+                <h2 className="font-semibold text-slate-900">Operating Rooms</h2>
+                <p className="text-sm text-slate-500">{rooms.length} rooms configured</p>
+              </div>
               <button
                 onClick={() => setShowRoomModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -720,11 +1284,18 @@ export default function FacilityDetailPage() {
             </div>
             <div className="divide-y divide-slate-100">
               {rooms.map((room) => (
-                <div key={room.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50">
-                  <span className="font-medium text-slate-900">{room.name}</span>
+                <div key={room.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                    <span className="font-medium text-slate-900">{room.name}</span>
+                  </div>
                   <button
                     onClick={() => handleDeleteRoom(room.id, room.name)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -733,20 +1304,31 @@ export default function FacilityDetailPage() {
                 </div>
               ))}
               {rooms.length === 0 && (
-                <div className="px-4 py-8 text-center text-slate-500">No rooms yet</div>
+                <div className="p-12 text-center">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600 font-medium">No rooms configured</p>
+                  <p className="text-sm text-slate-400 mt-1">Add operating rooms to get started</p>
+                </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Procedures Tab */}
+        {/* ===== PROCEDURES TAB ===== */}
         {activeTab === 'procedures' && (
           <div>
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="font-semibold text-slate-900">Procedure Types</h2>
+              <div>
+                <h2 className="font-semibold text-slate-900">Procedure Types</h2>
+                <p className="text-sm text-slate-500">{procedures.length} procedures configured</p>
+              </div>
               <button
                 onClick={() => setShowProcedureModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -756,11 +1338,18 @@ export default function FacilityDetailPage() {
             </div>
             <div className="divide-y divide-slate-100">
               {procedures.map((proc) => (
-                <div key={proc.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50">
-                  <span className="font-medium text-slate-900">{proc.name}</span>
+                <div key={proc.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+                      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                      </svg>
+                    </div>
+                    <span className="font-medium text-slate-900">{proc.name}</span>
+                  </div>
                   <button
                     onClick={() => handleDeleteProcedure(proc.id, proc.name)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -769,109 +1358,157 @@ export default function FacilityDetailPage() {
                 </div>
               ))}
               {procedures.length === 0 && (
-                <div className="px-4 py-8 text-center text-slate-500">No procedures yet</div>
+                <div className="p-12 text-center">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600 font-medium">No procedures configured</p>
+                  <p className="text-sm text-slate-400 mt-1">Add procedure types to get started</p>
+                </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Subscription Tab */}
+        {/* ===== SUBSCRIPTION TAB ===== */}
         {activeTab === 'subscription' && (
-          <div className="p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Subscription</h2>
-            <div className="space-y-4 max-w-lg">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                <select
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                >
-                  <option value="trial">Trial</option>
-                  <option value="active">Active</option>
-                  <option value="past_due">Past Due</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="disabled">Disabled</option>
-                </select>
-              </div>
-
-              {editStatus === 'trial' && (
+          <div className="p-6 space-y-6">
+            {/* Plan Overview Card */}
+            <div className="bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 rounded-xl p-6 text-white">
+              <div className="flex items-start justify-between mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Trial Length (days)</label>
+                  <p className="text-slate-400 text-sm mb-1">Current Plan</p>
+                  <h2 className="text-2xl font-bold">{currentPlan.name}</h2>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold">${currentPlan.price}</p>
+                  <p className="text-slate-400 text-sm">per month</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 pt-4 border-t border-slate-700">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    facility.subscription_status === 'active' ? 'bg-emerald-400' :
+                    facility.subscription_status === 'trial' ? 'bg-blue-400' : 'bg-red-400'
+                  }`} />
+                  <span className="text-sm text-slate-300">{statusConfig.label}</span>
+                </div>
+                {facility.subscription_started_at && (
+                  <>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-sm text-slate-400">
+                      Started {formatDate(facility.subscription_started_at)}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Status Management */}
+            <div className="bg-white rounded-xl border border-slate-200 p-6">
+              <h3 className="font-semibold text-slate-900 mb-4">Subscription Status</h3>
+              <div className="space-y-4 max-w-md">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
                   <select
-                    value={editTrialDays}
-                    onChange={(e) => setEditTrialDays(parseInt(e.target.value))}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   >
-                    <option value={7}>7 days</option>
-                    <option value={14}>14 days</option>
-                    <option value={30}>30 days</option>
-                    <option value={60}>60 days</option>
-                    <option value={90}>90 days</option>
+                    <option value="trial">Trial</option>
+                    <option value="active">Active</option>
+                    <option value="past_due">Past Due</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="disabled">Disabled</option>
                   </select>
                 </div>
-              )}
 
-              {facility.trial_ends_at && (
-                <div className="p-4 bg-slate-50 rounded-lg">
-                  <p className="text-sm text-slate-600">
-                    Trial ends: <strong>{formatDate(facility.trial_ends_at)}</strong>
-                    {daysRemaining !== null && (
-                      <span className={`ml-2 ${daysRemaining <= 3 ? 'text-red-600' : ''}`}>
-                        ({daysRemaining} days remaining)
-                      </span>
-                    )}
-                  </p>
+                {editStatus === 'trial' && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Trial Length</label>
+                    <select
+                      value={editTrialDays}
+                      onChange={(e) => setEditTrialDays(parseInt(e.target.value))}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    >
+                      <option value={7}>7 days</option>
+                      <option value={14}>14 days</option>
+                      <option value={30}>30 days</option>
+                      <option value={60}>60 days</option>
+                      <option value={90}>90 days</option>
+                    </select>
+                  </div>
+                )}
+
+                {facility.trial_ends_at && (
+                  <div className={`p-4 rounded-lg ${
+                    daysRemaining !== null && daysRemaining <= 7
+                      ? 'bg-red-50 border border-red-200'
+                      : 'bg-slate-50 border border-slate-200'
+                  }`}>
+                    <p className={`text-sm ${
+                      daysRemaining !== null && daysRemaining <= 7 ? 'text-red-700' : 'text-slate-600'
+                    }`}>
+                      Trial ends: <strong>{formatDate(facility.trial_ends_at)}</strong>
+                      {daysRemaining !== null && (
+                        <span className="ml-2">({daysRemaining} days remaining)</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isDemo"
+                    checked={facility.is_demo}
+                    disabled
+                    className="w-4 h-4 rounded border-slate-300"
+                  />
+                  <label htmlFor="isDemo" className="text-sm text-slate-600">Demo account</label>
                 </div>
-              )}
 
-              {facility.subscription_started_at && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Started</label>
-                  <p className="text-slate-600">{formatDate(facility.subscription_started_at)}</p>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isDemo"
-                  checked={facility.is_demo}
-                  disabled
-                  className="w-4 h-4"
-                />
-                <label htmlFor="isDemo" className="text-sm text-slate-600">Demo account</label>
+                <button
+                  onClick={handleSaveFacility}
+                  disabled={saving}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
-
-              <button
-                onClick={handleSaveFacility}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
             </div>
           </div>
         )}
 
-        {/* Audit Tab */}
+        {/* ===== AUDIT TAB ===== */}
         {activeTab === 'audit' && (
           <div>
             <div className="p-4 border-b border-slate-200">
               <h2 className="font-semibold text-slate-900">Activity Log</h2>
+              <p className="text-sm text-slate-500">Recent actions performed at this facility</p>
             </div>
             <div className="divide-y divide-slate-100">
               {auditEntries.map((entry) => (
-                <div key={entry.id} className="px-4 py-3 flex justify-between items-center">
-                  <div>
-                    <p className="text-sm text-slate-900">
-                      <span className="font-medium">{entry.user_email}</span>
-                      {' '}
-                      <span className="text-slate-600">{formatAuditAction(entry.action as any)}</span>
-                    </p>
-                    <p className="text-xs text-slate-500">{formatDate(entry.created_at)}</p>
+                <div key={entry.id} className="px-4 py-3 flex items-start justify-between hover:bg-slate-50 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                      entry.success ? 'bg-emerald-500' : 'bg-red-500'
+                    }`} />
+                    <div>
+                      <p className="text-sm text-slate-900">
+                        <span className="font-medium">{entry.user_email}</span>
+                        {' '}
+                        <span className="text-slate-600">{formatAuditAction(entry.action as any)}</span>
+                        {entry.target_label && (
+                          <span className="text-slate-400 ml-1">• {entry.target_label}</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">{formatDate(entry.created_at)}</p>
+                    </div>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                  <span className={`px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
                     entry.success ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
                   }`}>
                     {entry.success ? 'Success' : 'Failed'}
@@ -879,20 +1516,30 @@ export default function FacilityDetailPage() {
                 </div>
               ))}
               {auditEntries.length === 0 && (
-                <div className="px-4 py-8 text-center text-slate-500">No activity yet</div>
+                <div className="p-12 text-center">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600 font-medium">No activity yet</p>
+                  <p className="text-sm text-slate-400 mt-1">Actions will appear here as they happen</p>
+                </div>
               )}
             </div>
           </div>
         )}
       </div>
 
+      {/* ===== MODALS ===== */}
+
       {/* Invite User Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="font-semibold text-slate-900">Invite User</h3>
-              <button onClick={() => setShowInviteModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowInviteModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -955,7 +1602,7 @@ export default function FacilityDetailPage() {
             <div className="p-4 border-t border-slate-200 flex justify-end gap-3">
               <button
                 onClick={() => setShowInviteModal(false)}
-                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium"
+                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
               >
                 Cancel
               </button>
@@ -973,11 +1620,11 @@ export default function FacilityDetailPage() {
 
       {/* Add Room Modal */}
       {showRoomModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="font-semibold text-slate-900">Add Room</h3>
-              <button onClick={() => setShowRoomModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowRoomModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1011,11 +1658,11 @@ export default function FacilityDetailPage() {
 
       {/* Add Procedure Modal */}
       {showProcedureModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
               <h3 className="font-semibold text-slate-900">Add Procedure</h3>
-              <button onClick={() => setShowProcedureModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowProcedureModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
