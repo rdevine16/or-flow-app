@@ -16,6 +16,7 @@ import FloatingActionButton from '../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../components/CallNextPatientModal'
 import { getLocalDateString, formatDateWithWeekday } from '../../lib/date-utils'
 import { getImpersonationState } from '../../lib/impersonation'
+import RoomOrderModal from '../../components/dashboard/RoomOrderModal'
 import { 
   RoomWithCase, 
   EnhancedCase, 
@@ -83,6 +84,9 @@ export default function DashboardPage() {
   
   // NEW: Hide completed cases toggle (default: checked = hide completed)
   const [hideCompleted, setHideCompleted] = useState(true)
+  
+  // Room reorder modal state
+  const [showRoomOrderModal, setShowRoomOrderModal] = useState(false)
   
   const supabase = createClient()
 
@@ -326,9 +330,10 @@ export default function DashboardPage() {
 
         const { data: roomsData } = await supabase
           .from('or_rooms')
-          .select('id, name')
+          .select('id, name, display_order')
           .eq('facility_id', userFacilityId)
-          .order('name')
+          .is('deleted_at', null)
+          .order('display_order', { ascending: true })
 
         const fetchedCases = (casesData as unknown as EnhancedCase[]) || []
         const rooms = (roomsData as unknown as Room[]) || []
@@ -614,11 +619,11 @@ export default function DashboardPage() {
         <div className="space-y-6">
           {/* Room Grid Section */}
           <div>
-            <div 
-              className="flex items-center justify-between mb-4 cursor-pointer group"
-              onClick={() => setRoomsCollapsed(!roomsCollapsed)}
-            >
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between mb-4">
+              <div 
+                className="flex items-center gap-3 cursor-pointer"
+                onClick={() => setRoomsCollapsed(!roomsCollapsed)}
+              >
                 <h2 className="text-lg font-semibold text-slate-900">OR Rooms</h2>
                 {activeCount > 0 && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
@@ -626,20 +631,34 @@ export default function DashboardPage() {
                     {activeCount} Active
                   </span>
                 )}
-              </div>
-              <button 
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                title={roomsCollapsed ? 'Expand rooms' : 'Collapse rooms'}
-              >
-                <svg 
-                  className={`w-5 h-5 transition-transform ${roomsCollapsed ? '' : 'rotate-180'}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
+                <button 
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  title={roomsCollapsed ? 'Expand rooms' : 'Collapse rooms'}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+                  <svg 
+                    className={`w-5 h-5 transition-transform ${roomsCollapsed ? '' : 'rotate-180'}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Reorder Button - Admin Only */}
+              {isAdmin && !roomsCollapsed && (
+                <button
+                  onClick={() => setShowRoomOrderModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Reorder rooms"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  Reorder
+                </button>
+              )}
             </div>
             
             {!roomsCollapsed && (
@@ -689,7 +708,7 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Call Next Patient Modal */}
+{/* Call Next Patient Modal */}
       {userFacilityId && userId && userEmail && (
         <CallNextPatientModal
           isOpen={showCallNextPatient}
@@ -699,6 +718,14 @@ export default function DashboardPage() {
           userEmail={userEmail}
         />
       )}
+
+      {/* Room Order Modal */}
+      <RoomOrderModal
+        isOpen={showRoomOrderModal}
+        onClose={() => setShowRoomOrderModal(false)}
+        facilityId={userFacilityId}
+        onSaved={() => window.location.reload()}
+      />
     </DashboardLayout>
   )
 }
