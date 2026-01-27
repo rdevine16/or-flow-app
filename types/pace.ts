@@ -85,7 +85,7 @@ export interface CasePaceData {
 export interface MilestoneWithType {
   case_id: string
   recorded_at: string
-  milestone_types: JoinedData<{ name: string }>
+  facility_milestones: JoinedData<{ name: string; source_milestone_type_id: string | null }>
 }
 
 export type CasePhase = 

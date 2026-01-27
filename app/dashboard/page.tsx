@@ -259,23 +259,25 @@ export default function DashboardPage() {
         }
       }
       
-      // For all other milestones, get the milestone stats
-      // Get the milestone type ID
-      const { data: milestoneType } = await supabase
-        .from('milestone_types')
-        .select('id, name')
+// For all other milestones, get the milestone stats
+      // Get the milestone type ID via facility_milestones
+      const { data: facilityMilestone } = await supabase
+        .from('facility_milestones')
+        .select('id, name, source_milestone_type_id')
+        .eq('facility_id', facilityId)
         .eq('name', currentMilestoneName)
         .single()
       
-      if (!milestoneType) return null
+      // If no source_milestone_type_id, this is a custom milestone without stats
+      if (!facilityMilestone?.source_milestone_type_id) return null
       
-      // Query median-based milestone stats
+      // Query median-based milestone stats using the source milestone type
       const { data: msStats } = await supabase
         .from('surgeon_milestone_stats')
         .select('median_minutes_from_start, p25_minutes_from_start, p75_minutes_from_start, sample_size')
         .eq('surgeon_id', surgeonId)
         .eq('procedure_type_id', procedureTypeId)
-        .eq('milestone_type_id', milestoneType.id)
+        .eq('milestone_type_id', facilityMilestone.source_milestone_type_id)
         .eq('facility_id', facilityId)
         .single()
       
@@ -350,7 +352,7 @@ export default function DashboardPage() {
         if (allCaseIds.length > 0) {
           const { data: milestones } = await supabase
             .from('case_milestones')
-            .select('case_id, recorded_at, milestone_types(name)')
+            .select('case_id, recorded_at, facility_milestones(name, source_milestone_type_id)')
             .in('case_id', allCaseIds)
             .order('recorded_at', { ascending: true })
 
@@ -365,9 +367,9 @@ export default function DashboardPage() {
                 }
               }
               
-              const milestoneType = getJoinedValue(milestone.milestone_types)
-              if (milestoneType?.name) {
-                const name = milestoneType.name.toLowerCase()
+const facilityMilestone = getJoinedValue(milestone.facility_milestones)
+              if (facilityMilestone?.name) {
+                const name = facilityMilestone.name.toLowerCase()
                 if (!caseMilestoneNames[caseId]) {
                   caseMilestoneNames[caseId] = []
                 }
