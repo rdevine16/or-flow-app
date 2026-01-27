@@ -108,6 +108,7 @@ export type AuditAction =
   | 'room.updated'
   | 'room.deleted'
   | 'room.restored'
+  | 'room.reordered'
   // Procedure Types
   | 'procedure_type.created'
   | 'procedure_type.updated'
@@ -280,6 +281,8 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'room.updated': 'updated an OR room',
   'room.deleted': 'deleted an OR room',
   'room.restored': 'restored an OR room',
+  'room.reordered': 'reordered OR rooms',
+
 
   // Procedure Types
   'procedure_type.created': 'created a procedure type',
