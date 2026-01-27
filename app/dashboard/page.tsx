@@ -349,16 +349,30 @@ export default function DashboardPage() {
         const caseMilestoneNames: Record<string, string[]> = {}
         const caseCurrentMilestone: Record<string, string> = {}
 
-        if (allCaseIds.length > 0) {
+if (allCaseIds.length > 0) {
+          // Fetch case milestones
           const { data: milestones } = await supabase
             .from('case_milestones')
-            .select('case_id, recorded_at, facility_milestones(name, source_milestone_type_id)')
+            .select('case_id, recorded_at, facility_milestone_id')
             .in('case_id', allCaseIds)
             .order('recorded_at', { ascending: true })
-console.log('Milestones query result:', milestones)
+
+          // Fetch facility milestones for name lookup
+          const { data: facilityMilestones } = await supabase
+            .from('facility_milestones')
+            .select('id, name, source_milestone_type_id')
+            .eq('facility_id', userFacilityId)
+
+          // Build lookup map
+          const milestoneMap = new Map<string, { name: string; source_milestone_type_id: string | null }>()
+          if (facilityMilestones) {
+            for (const fm of facilityMilestones) {
+              milestoneMap.set(fm.id, { name: fm.name, source_milestone_type_id: fm.source_milestone_type_id })
+            }
+          }
 
           if (milestones) {
-            for (const milestone of milestones as unknown as MilestoneWithType[]) {
+            for (const milestone of milestones) {
               const caseId = milestone.case_id
               
               if (!caseStartTimes[caseId]) {
@@ -368,7 +382,9 @@ console.log('Milestones query result:', milestones)
                 }
               }
               
-const facilityMilestone = getJoinedValue(milestone.facility_milestones)
+              const facilityMilestone = milestone.facility_milestone_id 
+                ? milestoneMap.get(milestone.facility_milestone_id) 
+                : null
               if (facilityMilestone?.name) {
                 const name = facilityMilestone.name.toLowerCase()
                 if (!caseMilestoneNames[caseId]) {
