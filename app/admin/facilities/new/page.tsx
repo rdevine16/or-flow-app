@@ -520,7 +520,8 @@ const toggleAll = () => {
                 facility_id: facility.id,
                 name: t.name,
                 body_region_id: t.body_region_id,
-                procedure_category_id: t.procedure_category_id,  // ✅ FIXED: This was missing!
+                procedure_category_id: t.procedure_category_id,
+                technique_id: t.technique_id,
                 implant_category: t.implant_category,
                 source_template_id: t.id,
                 is_active: true,
