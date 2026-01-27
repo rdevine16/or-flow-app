@@ -1,6 +1,6 @@
 // app/admin/facilities/new/page.tsx
 // Create Facility Wizard - Professional multi-step form for onboarding new facilities
-// v2: Fixed table names, added timezone, structured address, phone, facility type
+// v3: Fixed to copy ALL fields from procedure_type_templates including procedure_category_id
 
 'use client'
 
@@ -501,11 +501,14 @@ const toggleAll = () => {
         )
       }
 
-      // 3. Copy procedure types if selected
+      // =====================================================================
+      // 3. Copy procedure types if selected - FIXED: Now includes ALL fields
+      // =====================================================================
       if (templateOptions.procedures) {
+        // Select ALL fields from the template table (using * to future-proof)
         const { data: templates } = await supabase
           .from('procedure_type_templates')
-          .select('id, name, body_region_id, implant_category')
+          .select('*')
           .eq('is_active', true)
           .is('deleted_at', null)
 
@@ -517,8 +520,10 @@ const toggleAll = () => {
                 facility_id: facility.id,
                 name: t.name,
                 body_region_id: t.body_region_id,
+                procedure_category_id: t.procedure_category_id,  // ✅ FIXED: This was missing!
                 implant_category: t.implant_category,
                 source_template_id: t.id,
+                is_active: true,
               })
               .select('id')
               .single()
@@ -693,53 +698,38 @@ const toggleAll = () => {
           )
         }
       }
-// Step 9: Copy cancellation_reason_templates → cancellation_reasons
-const copyCancellationReasonTemplates = async (newFacilityId: string) => {
-  try {
-    // Fetch active templates
-    const { data: templates, error: fetchError } = await supabase
-      .from('cancellation_reason_templates')
-      .select('*')
-      .eq('is_active', true)
-      .is('deleted_at', null)
-      .order('category')
-      .order('display_order')
 
-    if (fetchError) {
-      console.error('Error fetching cancellation reason templates:', fetchError)
-      return
-    }
+      // 9. Copy cancellation reasons if selected
+      if (templateOptions.cancellationReasons) {
+        const { data: templates, error: fetchError } = await supabase
+          .from('cancellation_reason_templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('category')
+          .order('display_order')
 
-    if (!templates || templates.length === 0) {
-      console.log('No cancellation reason templates to copy')
-      return
-    }
+        if (!fetchError && templates && templates.length > 0) {
+          const cancellationReasons = templates.map(template => ({
+            facility_id: facility.id,
+            source_template_id: template.id,
+            name: template.name,
+            display_name: template.display_name,
+            category: template.category,
+            display_order: template.display_order,
+            is_active: true,
+          }))
 
-    // Transform templates into facility-specific reasons
-    const cancellationReasons = templates.map(template => ({
-      facility_id: newFacilityId,
-      source_template_id: template.id,  // Track which template it came from
-      name: template.name,
-      display_name: template.display_name,
-      category: template.category,
-      display_order: template.display_order,
-      is_active: true,
-    }))
+          const { error: insertError } = await supabase
+            .from('cancellation_reasons')
+            .insert(cancellationReasons)
 
-    // Insert into cancellation_reasons
-    const { error: insertError } = await supabase
-      .from('cancellation_reasons')
-      .insert(cancellationReasons)
+          if (insertError) {
+            console.error('Error copying cancellation reasons:', insertError)
+          }
+        }
+      }
 
-    if (insertError) {
-      console.error('Error copying cancellation reasons:', insertError)
-    } else {
-      console.log(`Copied ${cancellationReasons.length} cancellation reasons to facility`)
-    }
-  } catch (err) {
-    console.error('Error in copyCancellationReasonTemplates:', err)
-  }
-}
       // 10. Send invite email if selected
       if (sendWelcomeEmail) {
         const { data: session } = await supabase.auth.getSession()
@@ -765,10 +755,8 @@ const copyCancellationReasonTemplates = async (newFacilityId: string) => {
           console.error('Invite failed:', result.error)
         }
       }
-      // 9. Copy cancellation reasons if selected
-      if (templateOptions.cancellationReasons) {
-        await copyCancellationReasonTemplates(facility.id)
-      }      // 10. Log audit event
+
+      // 11. Log audit event
       await facilityAudit.created(supabase, facilityData.name.trim(), facility.id)
 
       // Success! Redirect to facility detail page
