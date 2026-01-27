@@ -2,6 +2,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from './supabase'
 import { getImpersonationState } from './impersonation'
 
@@ -51,6 +52,7 @@ const UserContext = createContext<UserContextType>({
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const supabase = createClient()
+  const router = useRouter()
   const [userData, setUserData] = useState<UserData>(defaultUserData)
   const [loading, setLoading] = useState(true)
   const [impersonatedFacilityId, setImpersonatedFacilityId] = useState<string | null>(null)
@@ -146,6 +148,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setImpersonatedFacilityId(null)
           setImpersonatedFacilityName(null)
           setLoading(false)
+          router.push('/login')
         } else if (event === 'SIGNED_IN' && session?.user) {
           setLoading(true)
           fetchUser()
@@ -166,7 +169,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe()
       window.removeEventListener('storage', handleStorageChange)
     }
-  }, [supabase])
+  }, [supabase, router])
 
   const isGlobalAdmin = userData.accessLevel === 'global_admin'
   const isFacilityAdmin = userData.accessLevel === 'facility_admin'

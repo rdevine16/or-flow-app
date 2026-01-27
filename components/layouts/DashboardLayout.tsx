@@ -572,6 +572,20 @@ if (!mounted) {   return (
     )
   }
 
+  // Redirect if no user data (logged out)
+  if (!loading && !userData.firstName && !userData.lastName) {
+    router.push('/login')
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-slate-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-slate-500 font-medium">Redirecting...</p>
+        </div>
+      </div>
+    )
+  }
+
+
   if (mustChangePassword) {
     router.push('/auth/change-password')
     return null
