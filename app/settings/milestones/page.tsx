@@ -1094,13 +1094,13 @@ const handleRestore = async (milestone: FacilityMilestone) => {
 
 <div className="mt-6 flex justify-between">
               {/* Delete button - only for custom milestones */}
-              {!editingMilestone.source_milestone_type_id ? (
+{!editingMilestone.source_milestone_type_id ? (
                 <button
                   onClick={() => handleDelete(editingMilestone)}
                   disabled={saving}
                   className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  Delete
+                  Archive
                 </button>
               ) : (
                 <div />
