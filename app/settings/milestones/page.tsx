@@ -828,16 +828,19 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             </svg>
                           </button>
 
-<button
-                            onClick={() => handleDelete(milestone)}
-                            disabled={saving}
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="Archive"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                            </svg>
-                          </button>
+                          {/* Archive button - only for custom milestones */}
+                          {!isGlobal && (
+                            <button
+                              onClick={() => handleDelete(milestone)}
+                              disabled={saving}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              title="Archive"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                              </svg>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1023,6 +1026,31 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               )}
 
               {/* Phase 2: Validation Range Section */}
+             {/* Info banner for global milestones */}
+              {editingMilestone.source_milestone_type_id && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                  <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs text-blue-700">
+                    This is a global milestone. You can edit the name and validation range, but it cannot be deleted or unlinked.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="e.g., Patient In Room"
+                />
+              </div>
+
               <div className="pt-2 border-t border-slate-200">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Expected Duration Range
@@ -1064,14 +1092,19 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-between">
-              <button
-                onClick={() => handleDelete(editingMilestone)}
-                disabled={saving}
-                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-              >
-                Delete
-              </button>
+<div className="mt-6 flex justify-between">
+              {/* Delete button - only for custom milestones */}
+              {!editingMilestone.source_milestone_type_id ? (
+                <button
+                  onClick={() => handleDelete(editingMilestone)}
+                  disabled={saving}
+                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Delete
+                </button>
+              ) : (
+                <div />
+              )}
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1109,16 +1142,19 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               }
             </p>
             
-            {pairingMilestone.pair_with_id && (
+{pairingMilestone.pair_with_id && (
               <div className="mb-4 p-4 bg-slate-50 rounded-xl">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-slate-700">Current Pairing</span>
-                  <button
-                    onClick={() => handleUnlink(pairingMilestone)}
-                    className="text-sm font-medium text-red-600 hover:text-red-700"
-                  >
-                    Unlink
-                  </button>
+                  {/* Unlink button - only for custom milestones */}
+                  {!pairingMilestone.source_milestone_type_id && (
+                    <button
+                      onClick={() => handleUnlink(pairingMilestone)}
+                      className="text-sm font-medium text-red-600 hover:text-red-700"
+                    >
+                      Unlink
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
