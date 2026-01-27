@@ -355,6 +355,7 @@ export default function DashboardPage() {
             .select('case_id, recorded_at, facility_milestones(name, source_milestone_type_id)')
             .in('case_id', allCaseIds)
             .order('recorded_at', { ascending: true })
+console.log('Milestones query result:', milestones)
 
           if (milestones) {
             for (const milestone of milestones as unknown as MilestoneWithType[]) {
