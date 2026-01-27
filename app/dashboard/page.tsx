@@ -233,13 +233,14 @@ export default function DashboardPage() {
   ): Promise<CasePaceData | null> => {
     try {
       // Query median-based procedure stats (always needed for total duration)
-      const { data: procStats } = await supabase
-        .from('surgeon_procedure_stats')
-        .select('median_duration, p25_duration, p75_duration, sample_size')
-        .eq('surgeon_id', surgeonId)
-        .eq('procedure_type_id', procedureTypeId)
-        .eq('facility_id', facilityId)
-        .single()
+const { data: procStats } = await supabase
+  .from('surgeon_procedure_stats')
+  .select('median_duration, p25_duration, p75_duration, sample_size')
+  .eq('surgeon_id', surgeonId)
+  .eq('procedure_type_id', procedureTypeId)
+  .eq('facility_id', facilityId)
+  .maybeSingle()
+
       
       if (!procStats) return null
       
@@ -266,7 +267,8 @@ export default function DashboardPage() {
         .select('id, name, source_milestone_type_id')
         .eq('facility_id', facilityId)
         .eq('name', currentMilestoneName)
-        .single()
+        .maybeSingle()
+
       
       // If no source_milestone_type_id, this is a custom milestone without stats
       if (!facilityMilestone?.source_milestone_type_id) return null
@@ -350,12 +352,13 @@ export default function DashboardPage() {
         const caseCurrentMilestone: Record<string, string> = {}
 
 if (allCaseIds.length > 0) {
-          // Fetch case milestones
-          const { data: milestones } = await supabase
-            .from('case_milestones')
-            .select('case_id, recorded_at, facility_milestone_id')
-            .in('case_id', allCaseIds)
-            .order('recorded_at', { ascending: true })
+// Fetch case milestones (only ones with actual timestamps)
+const { data: milestones } = await supabase
+  .from('case_milestones')
+  .select('case_id, recorded_at, facility_milestone_id')
+  .in('case_id', allCaseIds)
+  .not('recorded_at', 'is', null)
+  .order('recorded_at', { ascending: true })
 
           // Fetch facility milestones for name lookup
           const { data: facilityMilestones } = await supabase
