@@ -349,68 +349,125 @@ export default function FinancialsOverviewPage() {
             </div>
           ) : (
             <div className="space-y-8">
-              {/* OR Hourly Rate Card */}
-              <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-sm font-medium mb-1">OR Hourly Rate</p>
-                    {editingRate ? (
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">$</span>
-                          <input
-                            type="number"
-                            value={rateInput}
-                            onChange={(e) => setRateInput(e.target.value)}
-                            className="w-32 pl-8 pr-3 py-2 text-xl font-bold text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-300"
-                            placeholder="0.00"
-                            step="0.01"
-                            min="0"
-                            autoFocus
-                          />
+              {/* OR Hourly Rate + Quick Actions */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* OR Hourly Rate Card */}
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-blue-100 text-sm font-medium mb-1">OR Hourly Rate</p>
+                      {editingRate ? (
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">$</span>
+                            <input
+                              type="number"
+                              value={rateInput}
+                              onChange={(e) => setRateInput(e.target.value)}
+                              className="w-32 pl-8 pr-3 py-2 text-xl font-bold text-slate-900 rounded-lg focus:ring-2 focus:ring-blue-300"
+                              placeholder="0.00"
+                              step="0.01"
+                              min="0"
+                              autoFocus
+                            />
+                          </div>
+                          <span className="text-blue-100">/hr</span>
                         </div>
-                        <span className="text-blue-100">/hr</span>
-                      </div>
-                    ) : (
-                      <p className="text-4xl font-bold">
-                        {stats.orHourlyRate !== null ? `$${stats.orHourlyRate.toFixed(2)}` : 'Not set'}
-                        <span className="text-xl text-blue-200 font-normal">/hr</span>
-                      </p>
-                    )}
-                    <p className="text-blue-200 text-sm mt-2">Used to calculate time-based OR costs</p>
+                      ) : (
+                        <p className="text-4xl font-bold">
+                          {stats.orHourlyRate !== null ? `$${stats.orHourlyRate.toFixed(2)}` : 'Not set'}
+                          <span className="text-xl text-blue-200 font-normal">/hr</span>
+                        </p>
+                      )}
+                      <p className="text-blue-200 text-sm mt-2">Used to calculate time-based OR costs</p>
+                    </div>
+                    <div>
+                      {editingRate ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingRate(false)
+                              setRateInput(stats.orHourlyRate?.toString() || '')
+                            }}
+                            className="px-4 py-2 text-sm font-medium text-blue-100 hover:text-white transition-colors"
+                            disabled={savingRate}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleSaveRate}
+                            disabled={savingRate}
+                            className="px-4 py-2 bg-white text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors disabled:opacity-50"
+                          >
+                            {savingRate ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setEditingRate(true)}
+                          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                          title="Edit rate"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    {editingRate ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditingRate(false)
-                            setRateInput(stats.orHourlyRate?.toString() || '')
-                          }}
-                          className="px-4 py-2 text-sm font-medium text-blue-100 hover:text-white transition-colors"
-                          disabled={savingRate}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSaveRate}
-                          disabled={savingRate}
-                          className="px-4 py-2 bg-white text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 transition-colors disabled:opacity-50"
-                        >
-                          {savingRate ? 'Saving...' : 'Save'}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setEditingRate(true)}
-                        className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                        title="Edit rate"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </div>
+
+                {/* Quick Actions */}
+                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-slate-900">Quick Actions</h3>
+                    <span className="text-xs text-slate-400 uppercase tracking-wide">Jump to</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Link
+                      href="/settings/financials/cost-categories"
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-purple-200 hover:shadow-lg hover:shadow-purple-500/5 transition-all"
+                    >
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-500 group-hover:scale-110 transition-all">
+                        <svg className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                      </button>
-                    )}
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Cost Category</span>
+                    </Link>
+                    <Link
+                      href="/settings/financials/payers"
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-green-200 hover:shadow-lg hover:shadow-green-500/5 transition-all"
+                    >
+                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-500 group-hover:scale-110 transition-all">
+                        <svg className="w-5 h-5 text-green-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Payer</span>
+                    </Link>
+                    <Link
+                      href="/settings/financials/procedure-pricing"
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5 transition-all"
+                    >
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-500 group-hover:scale-110 transition-all">
+                        <svg className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Procedure</span>
+                    </Link>
+                    <Link
+                      href="/settings/financials/surgeon-variance"
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-orange-200 hover:shadow-lg hover:shadow-orange-500/5 transition-all"
+                    >
+                      <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-500 group-hover:scale-110 transition-all">
+                        <svg className="w-5 h-5 text-orange-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Surgeon Override</span>
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -619,48 +676,6 @@ export default function FinancialsOverviewPage() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
-                <h3 className="font-semibold text-slate-900 mb-4">Quick Actions</h3>
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href="/settings/financials/cost-categories"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Cost Category
-                  </Link>
-                  <Link
-                    href="/settings/financials/payers"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Payer
-                  </Link>
-                  <Link
-                    href="/settings/financials/procedure-pricing"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Configure Procedure
-                  </Link>
-                  <Link
-                    href="/settings/financials/surgeon-variance"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:border-blue-300 hover:text-blue-600 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Surgeon Override
-                  </Link>
-                </div>
-              </div>
             </div>
           )}
         </SettingsLayout>
