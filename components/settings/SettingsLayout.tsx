@@ -31,6 +31,11 @@ interface SettingsGroup {
 
 const icons = {
   // General section icons
+    checkin: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  ),
   overview: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -167,6 +172,28 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Plan, usage, and billing',
         icon: icons.subscription,
         badge: 'coming',
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+    ],
+  },
+  {
+    id: 'checkin',
+    label: 'Patient Check-In',
+    items: [
+      {
+        id: 'checkin-settings',
+        label: 'Arrival Settings',
+        href: '/settings/checkin',
+        description: 'Configure arrival times',
+        icon: icons.checkin,
+        requiredAccess: ['global_admin', 'facility_admin'],
+      },
+      {
+        id: 'checklist-builder',
+        label: 'Checklist Builder',
+        href: '/settings/checklist-builder',
+        description: 'Customize pre-op checklist',
+        icon: icons.checkin,
         requiredAccess: ['global_admin', 'facility_admin'],
       },
     ],

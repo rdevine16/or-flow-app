@@ -46,7 +46,17 @@ interface TemplateOptions {
   complexities: boolean
   cancellationReasons: boolean
 }
-
+interface TemplateOptions {
+  rooms: boolean
+  procedures: boolean
+  milestones: boolean
+  delayTypes: boolean
+  costCategories: boolean
+  implantCompanies: boolean
+  complexities: boolean
+  cancellationReasons: boolean
+  checklistFields: boolean  // <-- ADD THIS
+}
 
 interface TemplateCounts {
   rooms: number
@@ -57,6 +67,7 @@ interface TemplateCounts {
   implantCompanies: number
   complexities: number
   cancellationReasons: number
+  checklistFields: number
 }
 
 interface UserRole {
@@ -176,6 +187,16 @@ const TEMPLATE_CONFIG = [
     ),
   },
   {
+  key: 'checklistFields' as const,
+  label: 'Pre-Op Checklist Fields',
+  description: 'Default checklist items for patient check-in',
+  icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    </svg>
+  ),
+},
+  {
     key: 'delayTypes' as const,
     label: 'Delay Types',
     description: 'Categories for tracking surgical delays',
@@ -215,13 +236,23 @@ const TEMPLATE_CONFIG = [
       </svg>
     ),
   },
-  {
+ {
     key: 'cancellationReasons' as const,
     label: 'Cancellation Reasons',
     description: 'Categories for tracking why cases are cancelled',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+      </svg>
+    ),
+  },
+  {
+    key: 'checklistFields' as const,
+    label: 'Pre-Op Checklist Fields',
+    description: 'Default checklist items for patient check-in',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
       </svg>
     ),
   },
@@ -275,6 +306,7 @@ export default function CreateFacilityPage() {
     implantCompanies: true,
     complexities: true,
     cancellationReasons: true,
+    checklistFields: true,
   })
 
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(true)
@@ -289,6 +321,7 @@ export default function CreateFacilityPage() {
     implantCompanies: 0,
     complexities: 0,
     cancellationReasons: 0,
+    checklistFields: 0,
   })
 
   // Available roles
@@ -330,6 +363,7 @@ export default function CreateFacilityPage() {
         { count: implantCompanyCount },
         { count: complexityCount },
         { count: cancellationReasonCount },
+        { count: checklistFieldCount },
       ] = await Promise.all([
         // procedure_type_templates - separate template table
         supabase
@@ -374,6 +408,12 @@ export default function CreateFacilityPage() {
           .select('id', { count: 'exact', head: true })
           .eq('is_active', true)
           .is('deleted_at', null),
+        // preop_checklist_field_templates
+        supabase
+          .from('preop_checklist_field_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
       ])
 
       setTemplateCounts({
@@ -385,7 +425,9 @@ export default function CreateFacilityPage() {
         implantCompanies: implantCompanyCount || 0,
         complexities: complexityCount || 0,
         cancellationReasons: cancellationReasonCount || 0,
+        checklistFields: checklistFieldCount || 0,
       })
+
 
       setLoadingCounts(false)
     }
@@ -417,6 +459,7 @@ const toggleAll = () => {
       implantCompanies: newValue,
       complexities: newValue,
       cancellationReasons: newValue,
+      checklistFields: newValue,
     })
   }
 
@@ -730,8 +773,42 @@ const toggleAll = () => {
           }
         }
       }
+            // 10. Copy checklist fields if selected
+      if (templateOptions.checklistFields) {
+        const { data: templates, error: fetchError } = await supabase
+          .from('preop_checklist_field_templates')
+          .select('*')
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('display_order')
 
-      // 10. Send invite email if selected
+        if (!fetchError && templates && templates.length > 0) {
+          const checklistFields = templates.map(template => ({
+            facility_id: facility.id,
+            source_template_id: template.id,
+            field_key: template.field_key,
+            display_label: template.display_label,
+            field_type: template.field_type,
+            options: template.options,
+            default_value: template.default_value,
+            placeholder: template.placeholder,
+            is_required: template.is_required,
+            show_on_escort_page: template.show_on_escort_page,
+            display_order: template.display_order,
+            is_active: true,
+          }))
+
+          const { error: insertError } = await supabase
+            .from('preop_checklist_fields')
+            .insert(checklistFields)
+
+          if (insertError) {
+            console.error('Error copying checklist fields:', insertError)
+          }
+        }
+      }
+
+      // 11. Send invite email if selected
       if (sendWelcomeEmail) {
         const { data: session } = await supabase.auth.getSession()
 
