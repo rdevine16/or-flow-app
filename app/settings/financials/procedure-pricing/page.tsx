@@ -578,15 +578,41 @@ export default function ProcedurePricingPage() {
                 )}
               </div>
 
-              {/* Legend */}
-              <div className="flex items-center gap-6 text-sm text-slate-500">
-                <div className="flex items-center gap-2">
-                  <span className="text-red-600 font-medium">Debits</span>
-                  <span>= Costs (supplies, implants)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-medium">Credits</span>
-                  <span>= Offsets (rebates, discounts)</span>
+{/* Info Box with Cross-Links */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div className="flex gap-3">
+                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">How procedure pricing works</p>
+                    <p className="mb-3">
+                      Set default reimbursements and costs for each procedure. 
+                      <strong> Debits</strong> (red) are costs that reduce margin. 
+                      <strong> Credits</strong> (green) are offsets that increase margin.
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-blue-700">
+                      <span className="font-medium text-blue-800">Related:</span>
+                      <a href="/settings/financials/cost-categories" className="underline hover:no-underline inline-flex items-center gap-1">
+                        Cost Categories
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                      <a href="/settings/financials/payers" className="underline hover:no-underline inline-flex items-center gap-1">
+                        Payers
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                      <a href="/settings/financials/surgeon-variance" className="underline hover:no-underline inline-flex items-center gap-1">
+                        Surgeon Variance
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -661,7 +687,7 @@ export default function ProcedurePricingPage() {
               </div>
 
               {/* Cost Items */}
-              {costCategories.length > 0 && (
+              {costCategories.length > 0 ? (
                 <>
                   {/* Debits */}
                   <div>
@@ -719,13 +745,22 @@ export default function ProcedurePricingPage() {
                     </div>
                   )}
                 </>
+              ) : (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    No cost categories defined.{' '}
+                    <a href="/settings/financials/cost-categories" className="underline hover:no-underline font-medium">
+                      Add cost categories →
+                    </a>
+                  </p>
+                </div>
               )}
 
               {/* Payer-Specific Reimbursements */}
-              {payers.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-900 mb-1">Payer-Specific Reimbursements</h4>
-                  <p className="text-xs text-slate-500 mb-3">Override the default reimbursement for specific payers</p>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">Payer-Specific Reimbursements</h4>
+                <p className="text-xs text-slate-500 mb-3">Override the default reimbursement for specific payers</p>
+                {payers.length > 0 ? (
                   <div className="space-y-3">
                     {payers.map((payer) => (
                       <div key={payer.id} className="flex items-center gap-4">
@@ -744,8 +779,15 @@ export default function ProcedurePricingPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No payers defined.{' '}
+                    <a href="/settings/financials/payers" className="text-blue-600 underline hover:no-underline">
+                      Add payers →
+                    </a>
+                  </p>
+                )}
+              </div>
             </div>
 
             {/* Footer */}

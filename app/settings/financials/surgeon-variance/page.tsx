@@ -536,16 +536,31 @@ export default function SurgeonVariancePage() {
                 </div>
               )}
 
-              {/* Info box */}
-              <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                <svg className="w-5 h-5 text-slate-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="text-sm text-slate-600">
-                  <p className="font-medium text-slate-700 mb-1">How Surgeon Variances Work</p>
-                  <p>When a case is completed, the system checks for surgeon-specific cost overrides first. If none exist, the default procedure costs are used. Changes to overrides only affect future cases — historical case costs are preserved.</p>
-                </div>
-              </div>
+{/* Info Box with Cross-Links */}
+<div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+  <div className="text-sm text-blue-800">
+    <p className="font-medium mb-1">How surgeon variance works</p>
+    <p className="mb-3">Override default procedure costs for specific surgeons. When a case is completed, the system checks for surgeon-specific overrides first. If none exist, the default procedure costs from Procedure Pricing are used. Changes only affect future cases — historical costs are preserved.</p>
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-blue-700">
+      <span className="font-medium text-blue-800">Defaults from:</span>
+      <a href="/settings/financials/procedure-pricing" className="underline hover:no-underline inline-flex items-center gap-1">
+        Procedure Pricing
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </a>
+      <a href="/settings/financials/cost-categories" className="underline hover:no-underline inline-flex items-center gap-1">
+        Cost Categories
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </a>
+    </div>
+  </div>
+</div>
             </div>
           )}
         </SettingsLayout>
