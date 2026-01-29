@@ -80,8 +80,7 @@ interface AuditEntry {
   action: string
   target_label: string | null
   user_email: string
-  user_first_name: string | null
-  user_last_name: string | null
+  user_name: string | null
   created_at: string
 }
 
@@ -179,8 +178,8 @@ export default function FinancialsOverviewPage() {
         
         // Recent financial activity
         supabase
-          .from('audit_log')
-          .select('id, action, target_label, user_email, user_first_name, user_last_name, created_at')
+          .from('audit_log_with_users')
+          .select('id, action, target_label, user_email, user_name, created_at')
           .eq('facility_id', effectiveFacilityId)
           .in('action', FINANCIAL_AUDIT_ACTIONS)
           .order('created_at', { ascending: false })
@@ -650,16 +649,14 @@ export default function FinancialsOverviewPage() {
                   ) : (
                     <div className="space-y-3">
                       {recentActivity.map((entry) => {
-                        // Build display name: prefer full name, fallback to email
-                        const displayName = entry.user_first_name && entry.user_last_name
-                          ? `${entry.user_first_name} ${entry.user_last_name}`
-                          : entry.user_first_name || entry.user_last_name || entry.user_email?.split('@')[0] || 'Someone'
-                        
-                        // Get initials for avatar
-                        const initials = entry.user_first_name && entry.user_last_name
-                          ? `${entry.user_first_name.charAt(0)}${entry.user_last_name.charAt(0)}`
-                          : entry.user_first_name?.charAt(0) || entry.user_email?.charAt(0).toUpperCase() || '?'
-
+  // Build display name: prefer full name, fallback to email
+  const displayName = entry.user_name || entry.user_email?.split('@')[0] || 'Someone'
+  
+  // Get initials for avatar
+  const nameParts = entry.user_name?.split(' ') || []
+  const initials = nameParts.length >= 2
+    ? `${nameParts[0].charAt(0)}${nameParts[1].charAt(0)}`
+    : entry.user_name?.charAt(0) || entry.user_email?.charAt(0).toUpperCase() || '?'
                         return (
                           <div key={entry.id} className="flex items-start gap-3 py-2">
                             <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
