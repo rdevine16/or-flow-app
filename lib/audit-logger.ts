@@ -26,6 +26,22 @@ export type AuditAction =
 | 'payer.updated'
 | 'payer.deleted'
 | 'payer.restored'
+  // Patient Check-In
+  | 'checkin.patient_checked_in'
+  | 'checkin.status_updated'
+  | 'checkin.checklist_completed'
+  | 'checkin.escort_link_generated'
+  | 'checkin.escort_link_viewed'
+  | 'checkin.escort_info_updated'
+  | 'checkin.arrival_settings_updated'
+  | 'checkin.checklist_field_created'
+  | 'checkin.checklist_field_updated'
+  | 'checkin.checklist_field_deleted'
+  | 'checkin.checklist_field_reordered'
+  // Features
+  | 'feature.enabled'
+  | 'feature.disabled'
+  | 'feature.trial_started'
   // Notification Settings
   | 'notification_settings.updated'
   | 'notification_settings.category_enabled'
@@ -203,6 +219,22 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'block_schedule.updated': 'updated a block schedule',
   'block_schedule.deleted': 'deleted a block schedule',
   'block_schedule.restored': 'restored a block schedule',
+    // Patient Check-In
+  'checkin.patient_checked_in': 'checked in a patient',
+  'checkin.status_updated': 'updated patient status',
+  'checkin.checklist_completed': 'completed pre-op checklist',
+  'checkin.escort_link_generated': 'generated escort status link',
+  'checkin.escort_link_viewed': 'escort viewed status link',
+  'checkin.escort_info_updated': 'updated escort information',
+  'checkin.arrival_settings_updated': 'updated arrival time settings',
+  'checkin.checklist_field_created': 'created checklist field',
+  'checkin.checklist_field_updated': 'updated checklist field',
+  'checkin.checklist_field_deleted': 'deleted checklist field',
+  'checkin.checklist_field_reordered': 'reordered checklist fields',
+  // Features
+  'feature.enabled': 'enabled a feature',
+  'feature.disabled': 'disabled a feature',
+  'feature.trial_started': 'started feature trial',
   // Facility Holidays
   'facility_holiday.created': 'created a facility holiday',
   'facility_holiday.updated': 'updated a facility holiday',
@@ -2362,6 +2394,209 @@ export const notificationSettingsAudit = {
       facilityId,
       oldValues: { roles: oldRoles },
       newValues: { roles: newRoles },
+    })
+  },
+}
+// =====================================================
+// PATIENT CHECK-IN AUDIT
+// =====================================================
+
+export const checkinAudit = {
+  async patientCheckedIn(
+    supabase: SupabaseClient,
+    caseNumber: string,
+    checkinId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'checkin.patient_checked_in', {
+      targetType: 'patient_checkin',
+      targetId: checkinId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+    })
+  },
+
+  async statusUpdated(
+    supabase: SupabaseClient,
+    caseNumber: string,
+    checkinId: string,
+    oldStatus: string,
+    newStatus: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'checkin.status_updated', {
+      targetType: 'patient_checkin',
+      targetId: checkinId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      oldValues: { status: oldStatus },
+      newValues: { status: newStatus },
+    })
+  },
+
+  async checklistCompleted(
+    supabase: SupabaseClient,
+    caseNumber: string,
+    checkinId: string,
+    facilityId: string,
+    fieldCount: number
+  ) {
+    await log(supabase, 'checkin.checklist_completed', {
+      targetType: 'patient_checkin',
+      targetId: checkinId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      metadata: { fields_completed: fieldCount },
+    })
+  },
+
+  async escortLinkGenerated(
+    supabase: SupabaseClient,
+    caseNumber: string,
+    checkinId: string,
+    linkId: string,
+    facilityId: string,
+    expiresHours: number
+  ) {
+    await log(supabase, 'checkin.escort_link_generated', {
+      targetType: 'escort_status_link',
+      targetId: linkId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      metadata: { expires_hours: expiresHours },
+    })
+  },
+
+  async escortInfoUpdated(
+    supabase: SupabaseClient,
+    caseNumber: string,
+    checkinId: string,
+    facilityId: string,
+    escortName: string
+  ) {
+    await log(supabase, 'checkin.escort_info_updated', {
+      targetType: 'patient_checkin',
+      targetId: checkinId,
+      targetLabel: `Case #${caseNumber}`,
+      facilityId,
+      newValues: { escort_name: escortName },
+    })
+  },
+
+  async arrivalSettingsUpdated(
+    supabase: SupabaseClient,
+    facilityId: string,
+    oldLeadTime: number | null,
+    newLeadTime: number
+  ) {
+    await log(supabase, 'checkin.arrival_settings_updated', {
+      targetType: 'facility',
+      targetId: facilityId,
+      targetLabel: 'Arrival time settings',
+      facilityId,
+      oldValues: oldLeadTime ? { lead_time_minutes: oldLeadTime } : undefined,
+      newValues: { lead_time_minutes: newLeadTime },
+    })
+  },
+
+  async checklistFieldCreated(
+    supabase: SupabaseClient,
+    fieldLabel: string,
+    fieldId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'checkin.checklist_field_created', {
+      targetType: 'preop_checklist_field',
+      targetId: fieldId,
+      targetLabel: fieldLabel,
+      facilityId,
+    })
+  },
+
+  async checklistFieldUpdated(
+    supabase: SupabaseClient,
+    fieldId: string,
+    oldLabel: string,
+    newLabel: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'checkin.checklist_field_updated', {
+      targetType: 'preop_checklist_field',
+      targetId: fieldId,
+      targetLabel: newLabel,
+      facilityId,
+      oldValues: { label: oldLabel },
+      newValues: { label: newLabel },
+    })
+  },
+
+  async checklistFieldDeleted(
+    supabase: SupabaseClient,
+    fieldLabel: string,
+    fieldId: string,
+    facilityId: string
+  ) {
+    await log(supabase, 'checkin.checklist_field_deleted', {
+      targetType: 'preop_checklist_field',
+      targetId: fieldId,
+      targetLabel: fieldLabel,
+      facilityId,
+    })
+  },
+
+  async checklistFieldsReordered(
+    supabase: SupabaseClient,
+    facilityId: string,
+    fieldCount: number
+  ) {
+    await log(supabase, 'checkin.checklist_field_reordered', {
+      targetType: 'preop_checklist_field',
+      targetLabel: `${fieldCount} fields`,
+      facilityId,
+    })
+  },
+}
+
+// =====================================================
+// FEATURE AUDIT
+// =====================================================
+
+export const featureAudit = {
+  async enabled(
+    supabase: SupabaseClient,
+    featureName: string,
+    featureDisplayName: string,
+    facilityId: string,
+    facilityName: string,
+    trialDays?: number
+  ) {
+    await log(supabase, trialDays ? 'feature.trial_started' : 'feature.enabled', {
+      targetType: 'facility_feature',
+      targetLabel: `${featureDisplayName} for ${facilityName}`,
+      facilityId,
+      newValues: {
+        feature: featureName,
+        facility: facilityName,
+        ...(trialDays && { trial_days: trialDays }),
+      },
+    })
+  },
+
+  async disabled(
+    supabase: SupabaseClient,
+    featureName: string,
+    featureDisplayName: string,
+    facilityId: string,
+    facilityName: string
+  ) {
+    await log(supabase, 'feature.disabled', {
+      targetType: 'facility_feature',
+      targetLabel: `${featureDisplayName} for ${facilityName}`,
+      facilityId,
+      oldValues: {
+        feature: featureName,
+        facility: facilityName,
+      },
     })
   },
 }
