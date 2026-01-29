@@ -283,7 +283,7 @@ const settingsGroups: SettingsGroup[] = [
       {
         id: 'procedure-pricing',
         label: 'Procedure Pricing',
-        href: '/settings/financialsprocedure-pricing',
+        href: '/settings/financials/procedure-pricing',
         description: 'Costs and reimbursements per procedure',
         icon: icons.pricing,
         requiredAccess: ['global_admin', 'facility_admin'],
