@@ -80,6 +80,8 @@ interface AuditEntry {
   action: string
   target_label: string | null
   user_email: string
+  user_first_name: string | null
+  user_last_name: string | null
   created_at: string
 }
 
@@ -178,7 +180,7 @@ export default function FinancialsOverviewPage() {
         // Recent financial activity
         supabase
           .from('audit_log')
-          .select('id, action, target_label, user_email, created_at')
+          .select('id, action, target_label, user_email, user_first_name, user_last_name, created_at')
           .eq('facility_id', effectiveFacilityId)
           .in('action', FINANCIAL_AUDIT_ACTIONS)
           .order('created_at', { ascending: false })
@@ -647,30 +649,40 @@ export default function FinancialsOverviewPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {recentActivity.map((entry) => (
-                        <div key={entry.id} className="flex items-start gap-3 py-2">
-                          <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs font-medium text-slate-600">
-                              {entry.user_email?.charAt(0).toUpperCase() || '?'}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-700">
-                              <span className="font-medium">
-                                {entry.user_email?.split('@')[0] || 'Someone'}
+                      {recentActivity.map((entry) => {
+                        // Build display name: prefer full name, fallback to email
+                        const displayName = entry.user_first_name && entry.user_last_name
+                          ? `${entry.user_first_name} ${entry.user_last_name}`
+                          : entry.user_first_name || entry.user_last_name || entry.user_email?.split('@')[0] || 'Someone'
+                        
+                        // Get initials for avatar
+                        const initials = entry.user_first_name && entry.user_last_name
+                          ? `${entry.user_first_name.charAt(0)}${entry.user_last_name.charAt(0)}`
+                          : entry.user_first_name?.charAt(0) || entry.user_email?.charAt(0).toUpperCase() || '?'
+
+                        return (
+                          <div key={entry.id} className="flex items-start gap-3 py-2">
+                            <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs font-medium text-slate-600">
+                                {initials}
                               </span>
-                              {' '}
-                              {AUDIT_ACTION_LABELS[entry.action] || entry.action}
-                              {entry.target_label && (
-                                <span className="text-slate-500"> • {entry.target_label}</span>
-                              )}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              {formatTimeAgo(entry.created_at)}
-                            </p>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-slate-700">
+                                <span className="font-medium">{displayName}</span>
+                                {' '}
+                                {AUDIT_ACTION_LABELS[entry.action] || entry.action}
+                                {entry.target_label && (
+                                  <span className="text-slate-500"> • {entry.target_label}</span>
+                                )}
+                              </p>
+                              <p className="text-xs text-slate-400 mt-0.5">
+                                {formatTimeAgo(entry.created_at)}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
