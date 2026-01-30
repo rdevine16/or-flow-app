@@ -45,8 +45,10 @@ interface CheckinRecord {
     or_room: { name: string } | null
     procedure_type: { name: string } | null
     surgeon: { first_name: string; last_name: string } | null
+    patient: { id: string; identifier: string | null; first_name: string | null; last_name: string | null } | null
   }
 }
+
 
 interface ChecklistField {
   id: string
@@ -142,7 +144,7 @@ function CheckInRow({ checkin, statuses, onStatusChange, onOpenDetail }: CheckIn
   const statusColor = getStatusColor(checkin.patient_status.name)
 
   return (
-    <div 
+    <div
       className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-all cursor-pointer"
       onClick={() => onOpenDetail(checkin)}
     >
@@ -161,13 +163,22 @@ function CheckInRow({ checkin, statuses, onStatusChange, onOpenDetail }: CheckIn
 
           {/* Case Info */}
           <div className="border-l border-slate-200 pl-4">
+            {/* Add patient identifier */}
+            {checkin.case.patient?.identifier && (
+              <div className="text-sm font-medium text-blue-600 mb-0.5">
+                {checkin.case.patient.first_name && checkin.case.patient.last_name
+                  ? `${checkin.case.patient.first_name} ${checkin.case.patient.last_name}`
+                  : checkin.case.patient.identifier
+                }
+              </div>
+            )}
             <div className="font-medium text-slate-900">
               {checkin.case.procedure_type?.name || 'Unknown Procedure'}
             </div>
             <div className="text-sm text-slate-500 flex items-center gap-2">
               <span>
-                {checkin.case.surgeon 
-                  ? `Dr. ${checkin.case.surgeon.last_name}` 
+                {checkin.case.surgeon
+                  ? `Dr. ${checkin.case.surgeon.last_name}`
                   : 'No Surgeon'}
               </span>
               <span className="text-slate-300">•</span>
@@ -301,7 +312,7 @@ function CheckInDetailModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div 
+      <div
         className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -320,7 +331,7 @@ function CheckInDetailModal({
                 {checkin.case.or_room?.name || 'No Room'}
               </p>
             </div>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
             >
@@ -368,7 +379,7 @@ function CheckInDetailModal({
             <div className="p-4 bg-slate-50 rounded-xl">
               <div className="text-sm text-slate-500 mb-1">Expected Arrival</div>
               <div className="text-lg font-semibold text-slate-900">
-                {checkin.expected_arrival_time 
+                {checkin.expected_arrival_time
                   ? formatDateTime(checkin.expected_arrival_time)
                   : '--:--'}
               </div>
@@ -385,11 +396,10 @@ function CheckInDetailModal({
                     {field.field_type === 'toggle' && (
                       <button
                         onClick={() => handleFieldChange(field.field_key, !localResponses[field.field_key])}
-                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                          Boolean(localResponses[field.field_key])
+                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${Boolean(localResponses[field.field_key])
                             ? 'bg-emerald-500 text-white'
                             : 'bg-white border-2 border-slate-300'
-                        }`}
+                          }`}
                       >
                         {Boolean(localResponses[field.field_key]) ? (
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -551,6 +561,13 @@ export default function CheckInPage() {
 
       setChecklistFields(fieldData || [])
 
+      // IMPORTANT: Ensure checkin records exist for today's cases
+      // This creates records for any cases that don't have one yet
+      await supabase.rpc('ensure_checkin_records', {
+        p_facility_id: userData.facilityId,
+        p_date: selectedDate
+      })
+
       // Fetch checkins for the selected date
       const { data: checkinData, error } = await supabase
         .from('patient_checkins')
@@ -564,7 +581,8 @@ export default function CheckInPage() {
             start_time,
             or_room:or_rooms(name),
             procedure_type:procedure_types(name),
-            surgeon:users!cases_surgeon_id_fkey(first_name, last_name)
+            surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
+            patient:patients(id, identifier, first_name, last_name)
           )
         `)
         .eq('facility_id', userData.facilityId)
@@ -602,8 +620,8 @@ export default function CheckInPage() {
     if (!newStatus) return
 
     // Optimistic update
-    setCheckins(prev => prev.map(c => 
-      c.id === checkinId 
+    setCheckins(prev => prev.map(c =>
+      c.id === checkinId
         ? { ...c, patient_status_id: newStatusId, patient_status: newStatus }
         : c
     ))
@@ -619,7 +637,7 @@ export default function CheckInPage() {
       .update({
         patient_status_id: newStatusId,
         status_updated_at: new Date().toISOString(),
-        ...(newStatus.name === 'checked_in' && !checkin.actual_arrival_time 
+        ...(newStatus.name === 'checked_in' && !checkin.actual_arrival_time
           ? { actual_arrival_time: new Date().toISOString(), checked_in_at: new Date().toISOString() }
           : {}
         ),
@@ -629,7 +647,7 @@ export default function CheckInPage() {
     if (error) {
       console.error('Error updating status:', error)
       // Revert on error
-      setCheckins(prev => prev.map(c => 
+      setCheckins(prev => prev.map(c =>
         c.id === checkinId ? checkin : c
       ))
     } else {
@@ -848,11 +866,10 @@ export default function CheckInPage() {
             <button
               key={tab.key}
               onClick={() => setFilterStatus(tab.key as FilterStatus)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                filterStatus === tab.key
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${filterStatus === tab.key
                   ? 'bg-slate-900 text-white'
                   : 'text-slate-600 hover:bg-slate-100'
-              }`}
+                }`}
             >
               {tab.label}
               {tab.key === 'all' && (
@@ -876,7 +893,7 @@ export default function CheckInPage() {
             </div>
             <h3 className="text-lg font-medium text-slate-900 mb-1">No patients found</h3>
             <p className="text-slate-500">
-              {filterStatus === 'all' 
+              {filterStatus === 'all'
                 ? 'No cases scheduled for this date'
                 : `No patients with "${filterStatus.replace('_', ' ')}" status`
               }
