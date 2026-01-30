@@ -168,6 +168,11 @@ const adminIcons = {
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
   </svg>
 ),
+checklist: (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+  </svg>
+),
   cancellations: (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -241,7 +246,7 @@ const adminNavGroups: NavGroup[] = [
         icon: adminIcons.cancellations,
         allowedRoles: ['global_admin'],
       },
-            {
+      {
         name: 'Complexities',
         href: '/admin/complexities',
         icon: adminIcons.delays,
@@ -260,6 +265,12 @@ const adminNavGroups: NavGroup[] = [
         allowedRoles: ['global_admin'],
       },
       {
+  name: 'Checklist Templates',
+  href: '/admin/checklist-templates',
+  icon: adminIcons.checklist,
+  allowedRoles: ['global_admin'],
+},
+      {
   name: 'Cost Categories',
   href: '/admin/settings/cost-categories',
   icon: adminIcons.costCategories,
@@ -267,6 +278,7 @@ const adminNavGroups: NavGroup[] = [
 },
     ],
   },
+  
   {
     id: 'compliance',
     label: 'Compliance',
