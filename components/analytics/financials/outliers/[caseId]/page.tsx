@@ -20,6 +20,10 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   InformationCircleIcon,
+  ChatBubbleLeftIcon,
+  PaperAirplaneIcon,
+  XMarkIcon,
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -106,6 +110,35 @@ interface OutlierDetail {
   totalDelayMinutes: number
 }
 
+// Review status types
+type ReviewStatus = 'needs_review' | 'reviewed' | 'excluded'
+
+interface OutlierReview {
+  id: string
+  case_id: string
+  facility_id: string
+  status: ReviewStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  excluded_reason: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface OutlierReviewNote {
+  id: string
+  outlier_review_id: string
+  note: string
+  created_by: string | null
+  created_at: string
+  is_system_note: boolean
+  // Joined data
+  user?: {
+    first_name: string
+    last_name: string
+  } | null
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -160,6 +193,15 @@ export default function OutlierDetailPage() {
   const [detail, setDetail] = useState<OutlierDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Review state
+  const [review, setReview] = useState<OutlierReview | null>(null)
+  const [notes, setNotes] = useState<OutlierReviewNote[]>([])
+  const [newNote, setNewNote] = useState('')
+  const [savingNote, setSavingNote] = useState(false)
+  const [savingStatus, setSavingStatus] = useState(false)
+  const [excludeReason, setExcludeReason] = useState('')
+  const [showExcludeModal, setShowExcludeModal] = useState(false)
 
   // Fetch case data with delays
   useEffect(() => {
@@ -319,6 +361,232 @@ export default function OutlierDetailPage() {
 
     fetchOutlierDetail()
   }, [caseId, userLoading, userData.facilityId, userData.accessLevel, supabase])
+
+  // Fetch review data
+  useEffect(() => {
+    if (!caseId || !detail) return
+    
+    // Capture detail in local const for TypeScript narrowing
+    const currentDetail = detail
+    
+    async function fetchReviewData() {
+      // Get effective facility ID
+      let facilityId = userData.facilityId
+      if (userData.accessLevel === 'global_admin') {
+        const impersonation = getImpersonationState()
+        facilityId = impersonation?.facilityId || null
+      }
+      
+      if (!facilityId) return
+
+      // Fetch or create review record
+      let { data: reviewData, error: reviewError } = await supabase
+        .from('outlier_reviews')
+        .select('*')
+        .eq('case_id', caseId)
+        .single()
+
+      // If no review exists, create one
+      if (reviewError?.code === 'PGRST116') { // Not found
+        const { data: newReview, error: createError } = await supabase
+          .from('outlier_reviews')
+          .insert({
+            case_id: caseId,
+            facility_id: facilityId,
+            status: 'needs_review'
+          })
+          .select()
+          .single()
+
+        if (createError) {
+          console.error('Error creating review:', createError)
+          return
+        }
+        reviewData = newReview
+
+        // Add system note for initial flagging
+        const issues: string[] = []
+        if (currentDetail.isDurationPersonalOutlier) issues.push(`Duration +${Math.round(currentDetail.actualDuration - (currentDetail.personalDurationThreshold || 0))} min over personal threshold`)
+        if (currentDetail.isDurationFacilityOutlier) issues.push(`Duration +${Math.round(currentDetail.actualDuration - (currentDetail.facilityDurationThreshold || 0))} min over facility threshold`)
+        if (currentDetail.isProfitPersonalOutlier) issues.push(`Profit ${formatCurrency(currentDetail.actualProfit - (currentDetail.personalProfitThreshold || 0))} below personal threshold`)
+        if (currentDetail.isProfitFacilityOutlier) issues.push(`Profit ${formatCurrency(currentDetail.actualProfit - (currentDetail.facilityProfitThreshold || 0))} below facility threshold`)
+
+        await supabase
+          .from('outlier_review_notes')
+          .insert({
+            outlier_review_id: newReview.id,
+            note: `Case flagged as outlier: ${issues.join(', ')}`,
+            is_system_note: true,
+            created_by: null
+          })
+      } else if (reviewError) {
+        console.error('Error fetching review:', reviewError)
+        return
+      }
+
+      setReview(reviewData)
+
+      // Fetch notes with user info
+      if (reviewData) {
+        const { data: notesData, error: notesError } = await supabase
+          .from('outlier_review_notes')
+          .select(`
+            *,
+            user:users!outlier_review_notes_created_by_fkey(first_name, last_name)
+          `)
+          .eq('outlier_review_id', reviewData.id)
+          .order('created_at', { ascending: false })
+
+        if (notesError) {
+          console.error('Error fetching notes:', notesError)
+        } else {
+          // Normalize joined user data
+          const normalizedNotes = (notesData || []).map(note => ({
+            ...note,
+            user: normalizeJoin(note.user)
+          }))
+          setNotes(normalizedNotes)
+        }
+      }
+    }
+
+    fetchReviewData()
+  }, [caseId, detail, userData.facilityId, userData.accessLevel, supabase])
+
+  // Handle status change
+  async function handleStatusChange(newStatus: ReviewStatus) {
+    if (!review || savingStatus) return
+    
+    // If changing to excluded, show modal for reason
+    if (newStatus === 'excluded') {
+      setShowExcludeModal(true)
+      return
+    }
+
+    setSavingStatus(true)
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const updates: Partial<OutlierReview> = {
+      status: newStatus,
+      reviewed_by: newStatus === 'reviewed' ? user?.id : null,
+      reviewed_at: newStatus === 'reviewed' ? new Date().toISOString() : null,
+      excluded_reason: null
+    }
+
+    const { error } = await supabase
+      .from('outlier_reviews')
+      .update(updates)
+      .eq('id', review.id)
+
+    if (error) {
+      console.error('Error updating status:', error)
+    } else {
+      setReview({ ...review, ...updates } as OutlierReview)
+      
+      // Add system note
+      await addSystemNote(`Status changed to "${newStatus === 'needs_review' ? 'Needs Review' : 'Reviewed'}"`)
+    }
+    
+    setSavingStatus(false)
+  }
+
+  // Handle exclude with reason
+  async function handleExclude() {
+    if (!review || !excludeReason.trim()) return
+    
+    setSavingStatus(true)
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const updates: Partial<OutlierReview> = {
+      status: 'excluded',
+      reviewed_by: user?.id,
+      reviewed_at: new Date().toISOString(),
+      excluded_reason: excludeReason.trim()
+    }
+
+    const { error } = await supabase
+      .from('outlier_reviews')
+      .update(updates)
+      .eq('id', review.id)
+
+    if (error) {
+      console.error('Error excluding:', error)
+    } else {
+      setReview({ ...review, ...updates } as OutlierReview)
+      await addSystemNote(`Excluded from analytics: "${excludeReason.trim()}"`)
+      setShowExcludeModal(false)
+      setExcludeReason('')
+    }
+    
+    setSavingStatus(false)
+  }
+
+  // Add system note helper
+  async function addSystemNote(message: string) {
+    if (!review) return
+    
+    const { data: noteData, error } = await supabase
+      .from('outlier_review_notes')
+      .insert({
+        outlier_review_id: review.id,
+        note: message,
+        is_system_note: true,
+        created_by: null
+      })
+      .select('*')
+      .single()
+
+    if (!error && noteData) {
+      setNotes([{ ...noteData, user: null }, ...notes])
+    }
+  }
+
+  // Add user note
+  async function handleAddNote() {
+    if (!review || !newNote.trim() || savingNote) return
+    
+    setSavingNote(true)
+    
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const { data: noteData, error } = await supabase
+      .from('outlier_review_notes')
+      .insert({
+        outlier_review_id: review.id,
+        note: newNote.trim(),
+        is_system_note: false,
+        created_by: user?.id
+      })
+      .select(`
+        *,
+        user:users!outlier_review_notes_created_by_fkey(first_name, last_name)
+      `)
+      .single()
+
+    if (error) {
+      console.error('Error adding note:', error)
+    } else if (noteData) {
+      setNotes([{ ...noteData, user: normalizeJoin(noteData.user) }, ...notes])
+      setNewNote('')
+    }
+    
+    setSavingNote(false)
+  }
+
+  // Format timestamp for notes
+  function formatNoteTime(timestamp: string): string {
+    const date = new Date(timestamp)
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
 
   // Loading state
   if (loading || userLoading) {
@@ -765,14 +1033,169 @@ export default function OutlierDetailPage() {
           </div>
         </div>
 
-        {/* Notes & Actions (placeholder for future) */}
+        {/* Notes & Actions */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Notes & Actions</h2>
-          <div className="bg-slate-50 rounded-lg p-4 text-center text-slate-500">
-            <p>Notes and action buttons coming soon...</p>
-            <p className="text-sm mt-1">(Flag for Review, Mark as Reviewed, Exclude from Analytics)</p>
+          
+          {/* Review Status */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-700 mb-3">Review Status</label>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => handleStatusChange('needs_review')}
+                disabled={savingStatus}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
+                  review?.status === 'needs_review'
+                    ? 'border-amber-500 bg-amber-50 text-amber-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <ExclamationTriangleIcon className="w-5 h-5" />
+                Needs Review
+              </button>
+              
+              <button
+                onClick={() => handleStatusChange('reviewed')}
+                disabled={savingStatus}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
+                  review?.status === 'reviewed'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <CheckCircleIcon className="w-5 h-5" />
+                Reviewed
+              </button>
+              
+              <button
+                onClick={() => handleStatusChange('excluded')}
+                disabled={savingStatus}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
+                  review?.status === 'excluded'
+                    ? 'border-slate-500 bg-slate-100 text-slate-700'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <EyeSlashIcon className="w-5 h-5" />
+                Excluded
+              </button>
+            </div>
+            
+            {/* Show excluded reason if applicable */}
+            {review?.status === 'excluded' && review.excluded_reason && (
+              <div className="mt-3 bg-slate-50 rounded-lg p-3 text-sm">
+                <span className="font-medium text-slate-700">Exclusion reason:</span>{' '}
+                <span className="text-slate-600">{review.excluded_reason}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Notes Section */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-3">Review Notes</label>
+            
+            {/* Add Note Input */}
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddNote()}
+                placeholder="Add a note..."
+                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+              <button
+                onClick={handleAddNote}
+                disabled={savingNote || !newNote.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                <PaperAirplaneIcon className="w-4 h-4" />
+                Add Note
+              </button>
+            </div>
+            
+            {/* Notes List */}
+            {notes.length > 0 ? (
+              <div className="border border-slate-200 rounded-lg divide-y divide-slate-200 max-h-80 overflow-y-auto">
+                {notes.map((note) => (
+                  <div key={note.id} className={`p-4 ${note.is_system_note ? 'bg-slate-50' : ''}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {note.is_system_note ? (
+                            <span className="text-xs font-medium text-slate-500 bg-slate-200 px-2 py-0.5 rounded">System</span>
+                          ) : (
+                            <span className="text-sm font-medium text-slate-900">
+                              {note.user ? `${note.user.first_name} ${note.user.last_name}` : 'Unknown User'}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-400">{formatNoteTime(note.created_at)}</span>
+                        </div>
+                        <p className="text-sm text-slate-600">{note.note}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="border border-dashed border-slate-200 rounded-lg p-6 text-center">
+                <ChatBubbleLeftIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500">No notes yet. Add a note to document your review.</p>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Exclude Modal */}
+        {showExcludeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">Exclude from Analytics</h3>
+                <button
+                  onClick={() => {
+                    setShowExcludeModal(false)
+                    setExcludeReason('')
+                  }}
+                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <p className="text-sm text-slate-600 mb-4">
+                Excluding this case will remove it from financial analytics calculations. Please provide a reason for exclusion.
+              </p>
+              
+              <textarea
+                value={excludeReason}
+                onChange={(e) => setExcludeReason(e.target.value)}
+                placeholder="e.g., Training case, data entry error, unusual circumstances..."
+                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
+                rows={3}
+              />
+              
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setShowExcludeModal(false)
+                    setExcludeReason('')
+                  }}
+                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExclude}
+                  disabled={!excludeReason.trim() || savingStatus}
+                  className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Exclude Case
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Container>
     </DashboardLayout>
   )
