@@ -1,30 +1,26 @@
+// components/analytics/financials/OutliersTab.tsx
+// Updated to navigate to full detail page instead of drawer
+
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { FinancialsMetrics, OutlierCase, OutlierFilter } from './types'
 import { formatCurrency } from './utils'
 import MetricCard from './MetricCard'
-import IssuesBadge from './IssuesBadge'
-import OutlierDetailDrawer from './OutlierDetailDrawer'
-import { InformationCircleIcon, FunnelIcon } from '@heroicons/react/24/outline'
+import { InformationCircleIcon, FunnelIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 
 interface OutliersTabProps {
   metrics: FinancialsMetrics
 }
 
 export default function OutliersTab({ metrics }: OutliersTabProps) {
-  const [selectedOutlier, setSelectedOutlier] = useState<OutlierCase | null>(null)
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const router = useRouter()
   const [filter, setFilter] = useState<OutlierFilter>('all')
 
+  // Navigate to detail page instead of opening drawer
   const handleRowClick = (outlier: OutlierCase) => {
-    setSelectedOutlier(outlier)
-    setIsDrawerOpen(true)
-  }
-
-  const handleCloseDrawer = () => {
-    setIsDrawerOpen(false)
-    setTimeout(() => setSelectedOutlier(null), 300)
+    router.push(`/analytics/financials/outliers/${outlier.caseId}`)
   }
 
   // Filter outliers based on selection
@@ -53,7 +49,7 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards - Updated with dual classification */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <MetricCard 
           title="Total Outliers" 
@@ -130,7 +126,7 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
               <h3 className="text-lg font-semibold text-slate-900">
                 {filter === 'all' ? 'All Outlier Cases' : `Filtered: ${filter.charAt(0).toUpperCase() + filter.slice(1)}`}
               </h3>
-              <p className="text-sm text-slate-500">Click a row to view details and thresholds</p>
+              <p className="text-sm text-slate-500">Click a row to view full analysis with delay information</p>
             </div>
             <div className="text-right">
               <p className="text-sm text-slate-500">Total Gap</p>
@@ -151,6 +147,7 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Actual Profit</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Expected</th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Gap</th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -200,6 +197,9 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
                       </td>
                       <td className="px-6 py-4 text-right text-sm font-semibold text-red-600">
                         {formatCurrency(outlier.profitGap)}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <ArrowTopRightOnSquareIcon className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors inline-block" />
                       </td>
                     </tr>
                   )
@@ -255,14 +255,6 @@ export default function OutliersTab({ metrics }: OutliersTabProps) {
           </div>
         </div>
       </div>
-
-      {/* Drawer */}
-      <OutlierDetailDrawer
-        outlier={selectedOutlier}
-        financials={selectedOutlier?.financialBreakdown || null}
-        isOpen={isDrawerOpen}
-        onClose={handleCloseDrawer}
-      />
     </div>
   )
 }
