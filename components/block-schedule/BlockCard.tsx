@@ -1,6 +1,8 @@
 // components/block-schedule/BlockCard.tsx
+// OPTIMIZED: Wrapped with React.memo to prevent unnecessary re-renders
 'use client'
 
+import { memo } from 'react'
 import { ExpandedBlock, formatTime12Hour, RECURRENCE_LABELS } from '@/types/block-scheduling'
 
 interface BlockCardProps {
@@ -15,7 +17,7 @@ interface BlockCardProps {
   isSameStart?: boolean // true = side by side, false = cascading
 }
 
-export function BlockCard({ 
+function BlockCard({ 
   block, 
   color, 
   hourHeight, 
@@ -123,3 +125,8 @@ function formatTimeShort(time: string): string {
   }
   return `${hour12}:${minutes.toString().padStart(2, '0')}${period}`
 }
+
+// Export memoized component and named export for flexibility
+const MemoizedBlockCard = memo(BlockCard)
+export { MemoizedBlockCard as BlockCard }
+export default MemoizedBlockCard

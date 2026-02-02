@@ -1,10 +1,11 @@
 // components/dashboard/DroppableCaseRow.tsx
 // Simple wrapper component that makes a case row a valid drop target
 // Avatars are displayed inline in the case row content, not here
+// OPTIMIZED: Wrapped with React.memo to prevent unnecessary re-renders
 
 'use client'
 
-import { ReactNode } from 'react'
+import { memo, ReactNode } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { DropData } from '@/types/staff-assignment'
 
@@ -16,7 +17,7 @@ interface DroppableCaseRowProps {
   children: ReactNode
 }
 
-export default function DroppableCaseRow({
+function DroppableCaseRow({
   caseId,
   caseNumber,
   isActive,
@@ -73,3 +74,8 @@ export default function DroppableCaseRow({
     </div>
   )
 }
+
+// Export memoized component
+// Note: The useDroppable hook handles drag state internally,
+// so memo will prevent re-renders when case data doesn't change
+export default memo(DroppableCaseRow)

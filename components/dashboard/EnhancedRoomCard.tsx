@@ -1,9 +1,11 @@
 // components/dashboard/EnhancedRoomCard.tsx
 // Enhanced room card showing all scheduled cases for the room
 // WITH drag-and-drop staff assignment support
+// OPTIMIZED: Wrapped with React.memo to prevent unnecessary re-renders
 
 'use client'
 
+import { memo } from 'react'
 import Link from 'next/link'
 import { RoomWithCase, CasePhase, EnhancedCase, getJoinedValue } from '@/types/pace'
 import { CaseStaffAssignment } from '@/types/staff-assignment'
@@ -256,13 +258,13 @@ function InlineAssignedStaffGrouped({
   )
 }
 
-// Case row for the schedule list - uses GROUPED tooltip
+// Compact case row for the upcoming list - uses GROUPED tooltip
 function CompactCaseRow({ 
-  caseItem,
+  caseItem, 
   assignments,
   onRemoveStaff,
-  canManageStaff,
-  dropZonesEnabled
+  canManageStaff = false,
+  dropZonesEnabled = false
 }: { 
   caseItem: EnhancedCase
   assignments: CaseStaffAssignment[]
@@ -277,29 +279,24 @@ function CompactCaseRow({
   const content = (
     <Link 
       href={`/cases/${caseItem.id}`}
-      className={`flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-50 transition-colors group ${
-        isCompleted ? 'opacity-60' : ''
+      className={`flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors group ${
+        isCompleted ? 'opacity-50' : ''
       }`}
     >
-      {/* Surgeon Avatar */}
       <SurgeonAvatar name={getSurgeonFullName(caseItem.surgeon)} size="sm" />
-      
-      {/* Case Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-slate-900 truncate">
+          <p className="text-sm font-medium text-slate-700 truncate">
             {getProcedureName(caseItem.procedure_types)}
-          </span>
+          </p>
           <OperativeSideBadge side={(caseItem as any).operative_side} />
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          <span className="font-medium truncate">{getSurgeonName(caseItem.surgeon)}</span>
-          <span className="text-slate-300">•</span>
-          <span className="text-slate-400 truncate">{caseItem.case_number}</span>
-        </div>
+        <p className="text-xs text-slate-400 truncate">
+          {getSurgeonName(caseItem.surgeon)} • {caseItem.case_number}
+        </p>
       </div>
       
-      {/* Assigned Staff with GROUPED tooltip */}
+      {/* Assigned Staff Avatars - Grouped tooltip for scheduled cases */}
       {assignments.length > 0 && (
         <InlineAssignedStaffGrouped 
           assignments={assignments}
@@ -312,26 +309,19 @@ function CompactCaseRow({
         />
       )}
       
-      {/* Time */}
-      <div className="flex-shrink-0 text-right">
-        <div className={`text-sm font-semibold font-mono ${isCompleted ? 'text-slate-400' : 'text-blue-600'}`}>
-          {formatTime(caseItem.start_time)}
-        </div>
-        {isCompleted ? (
-          <div className="flex items-center justify-end gap-1 text-[10px] text-emerald-500 font-medium">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
-            Done
-          </div>
-        ) : (
-          <div className="text-[10px] text-slate-400 uppercase tracking-wide font-medium">Scheduled</div>
-        )}
-      </div>
+      <span className="text-xs font-medium text-slate-400 whitespace-nowrap">
+        {formatTime(caseItem.start_time)}
+      </span>
       
-      {/* Chevron */}
+      {/* Status indicator for completed */}
+      {isCompleted && (
+        <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+        </svg>
+      )}
+      
       <svg 
-        className="w-4 h-4 text-slate-300 group-hover:text-slate-400 flex-shrink-0 transition-colors" 
+        className="w-4 h-4 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" 
         fill="none" 
         stroke="currentColor" 
         viewBox="0 0 24 24"
@@ -358,7 +348,8 @@ function CompactCaseRow({
   return content
 }
 
-export default function EnhancedRoomCard({ 
+// Main component - wrapped with memo
+function EnhancedRoomCard({ 
   roomWithCase,
   assignmentsByCaseId = {},
   onRemoveStaff,
@@ -552,3 +543,7 @@ export default function EnhancedRoomCard({
     </div>
   )
 }
+
+// Export memoized component
+// This prevents re-renders when parent updates but props haven't changed
+export default memo(EnhancedRoomCard)
