@@ -11,6 +11,7 @@ import CallNextPatientModal from '../../components/CallNextPatientModal'
 import CasesFilterBar, { FilterState } from '../../components/filters/CaseFilterBar'
 import { getLocalDateString } from '../../lib/date-utils'
 import { getImpersonationState } from '../../lib/impersonation'
+import { extractName } from '../../lib/formatters'
 
 // ============================================================================
 // TYPES
@@ -47,12 +48,6 @@ interface ProcedureType {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0]?.name || null
-  return data.name
-}
 
 const getSurgeon = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): { name: string; fullName: string } => {
   if (!data) return { name: 'Unassigned', fullName: 'Unassigned' }
@@ -399,9 +394,9 @@ function CasesPageContent() {
       const searchLower = filters.search.toLowerCase()
       filteredData = filteredData.filter(c => {
         const caseNumber = c.case_number.toLowerCase()
-        const procedure = getValue(c.procedure_types)?.toLowerCase() || ''
+        const procedure = extractName(c.procedure_types)?.toLowerCase() || ''
         const surgeon = getSurgeon(c.surgeon).fullName.toLowerCase()
-        const room = getValue(c.or_rooms)?.toLowerCase() || ''
+        const room = extractName(c.or_rooms)?.toLowerCase() || ''
         
         return (
           caseNumber.includes(searchLower) ||
@@ -500,9 +495,9 @@ function CasesPageContent() {
           cases={cases.map(c => ({
             id: c.id,
             case_number: c.case_number,
-            procedure_name: getValue(c.procedure_types) || undefined,
+            procedure_name: extractName(c.procedure_types) || undefined,
             surgeon_name: getSurgeon(c.surgeon).name,
-            room_name: getValue(c.or_rooms) || undefined,
+            room_name: extractName(c.or_rooms) || undefined,
           }))}
           totalCount={cases.length}
           filteredCount={cases.length}
@@ -544,9 +539,9 @@ function CasesPageContent() {
             {/* Table Body */}
             <div className="divide-y divide-slate-100">
               {cases.map((c) => {
-                const roomName = getValue(c.or_rooms)
-                const procedureName = getValue(c.procedure_types)
-                const statusName = getValue(c.case_statuses)
+                const roomName = extractName(c.or_rooms)
+                const procedureName = extractName(c.procedure_types)
+                const statusName = extractName(c.case_statuses)
                 const surgeon = getSurgeon(c.surgeon)
                 const statusConfig = getStatusConfig(statusName)
 

@@ -8,6 +8,7 @@ import { useUser } from '../../../../lib/UserContext'
 import DashboardLayout from '../../../../components/layouts/DashboardLayout'
 import Container from '../../../../components/ui/Container'
 import { caseAudit } from '../../../../lib/audit-logger'
+import { extractName } from '../../../../lib/formatters'
 
 // ============================================================================
 // TYPES
@@ -48,12 +49,6 @@ interface Metrics {
 // ============================================================================
 // HELPERS (same pattern as cases page)
 // ============================================================================
-
-const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0]?.name || null
-  return data.name
-}
 
 const getSurgeon = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): { name: string; fullName: string } => {
   if (!data) return { name: 'Unassigned', fullName: 'Unassigned' }
@@ -138,7 +133,7 @@ export default function CancelCasePage() {
       setCaseData(caseResult as CaseData)
       
       // Check if cancellable
-      const statusName = getValue(caseResult.case_statuses as CaseData['case_statuses'])
+      const statusName = extractName(caseResult.case_statuses as CaseData['case_statuses'])
       if (statusName === 'completed' || statusName === 'cancelled') {
         setError(`This case is already ${statusName}.`)
         setLoading(false)
@@ -301,11 +296,11 @@ export default function CancelCasePage() {
   }, {} as Record<string, CancellationReason[]>)
 
   // Computed from caseData
-  const statusName = caseData ? getValue(caseData.case_statuses) : null
+  const statusName = caseData ? extractName(caseData.case_statuses) : null
   const isInProgress = statusName === 'in_progress'
   const hasMilestones = milestones.length > 0
-  const procedureName = caseData ? getValue(caseData.procedure_types) : null
-  const roomName = caseData ? getValue(caseData.or_rooms) : null
+  const procedureName = caseData ? extractName(caseData.procedure_types) : null
+  const roomName = caseData ? extractName(caseData.or_rooms) : null
   const surgeon = caseData ? getSurgeon(caseData.surgeon) : { name: 'Unassigned', fullName: 'Unassigned' }
 
   // ============================================================================

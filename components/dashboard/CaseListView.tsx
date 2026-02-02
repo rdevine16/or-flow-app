@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
+import { extractName } from '../../lib/formatters'
 
 interface Case {
   id: string
@@ -26,12 +27,6 @@ interface CaseListViewProps {
 }
 
 type FilterType = 'all' | 'in_progress' | 'scheduled' | 'completed' | 'delayed'
-
-const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0]?.name || null
-  return data.name
-}
 
 const getSurgeon = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): { name: string; fullName: string } => {
   if (!data) return { name: 'Unassigned', fullName: 'Unassigned' }
@@ -122,7 +117,7 @@ function filterVisibleCases(cases: Case[], selectedDate?: string): Case[] {
   const today = new Date().toISOString().split('T')[0]
   
   return cases.filter(caseItem => {
-    const status = getValue(caseItem.case_statuses)
+    const status = extractName(caseItem.case_statuses)
     const caseDate = caseItem.scheduled_date
     
     // Always show non-completed cases
@@ -149,16 +144,16 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
   // Apply status filter
   const filteredCases = visibleCases.filter(c => {
     if (filter === 'all') return true
-    return getValue(c.case_statuses) === filter
+    return extractName(c.case_statuses) === filter
   })
   
   // Count by status for filter badges
   const statusCounts = {
     all: visibleCases.length,
-    in_progress: visibleCases.filter(c => getValue(c.case_statuses) === 'in_progress').length,
-    scheduled: visibleCases.filter(c => getValue(c.case_statuses) === 'scheduled').length,
-    completed: visibleCases.filter(c => getValue(c.case_statuses) === 'completed').length,
-    delayed: visibleCases.filter(c => getValue(c.case_statuses) === 'delayed').length,
+    in_progress: visibleCases.filter(c => extractName(c.case_statuses) === 'in_progress').length,
+    scheduled: visibleCases.filter(c => extractName(c.case_statuses) === 'scheduled').length,
+    completed: visibleCases.filter(c => extractName(c.case_statuses) === 'completed').length,
+    delayed: visibleCases.filter(c => extractName(c.case_statuses) === 'delayed').length,
   }
 
   const filters: { key: FilterType; label: string }[] = [
@@ -233,9 +228,9 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
         {/* Case Rows */}
         <div className="divide-y divide-slate-100">
           {filteredCases.map((caseItem) => {
-            const roomName = getValue(caseItem.or_rooms)
-            const procedureName = getValue(caseItem.procedure_types)
-            const statusName = getValue(caseItem.case_statuses)
+            const roomName = extractName(caseItem.or_rooms)
+            const procedureName = extractName(caseItem.procedure_types)
+            const statusName = extractName(caseItem.case_statuses)
             const surgeon = getSurgeon(caseItem.surgeon)
             const statusConfig = getStatusConfig(statusName)
             const sideConfig = formatSide(caseItem.operative_side)  // NEW

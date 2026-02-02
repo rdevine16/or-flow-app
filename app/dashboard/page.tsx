@@ -16,6 +16,7 @@ import FloatingActionButton from '../../components/ui/FloatingActionButton'
 import CallNextPatientModal from '../../components/CallNextPatientModal'
 import { getLocalDateString, formatDateWithWeekday } from '../../lib/date-utils'
 import { getImpersonationState } from '../../lib/impersonation'
+import { extractName } from '../../lib/formatters'
 import RoomOrderModal from '../../components/dashboard/RoomOrderModal'
 import { 
   RoomWithCase, 
@@ -48,12 +49,6 @@ import { DragData, DropData } from '../../types/staff-assignment'
 interface Room {
   id: string
   name: string
-}
-
-// Helper to get name from joined data
-const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  const joined = getJoinedValue(data)
-  return joined?.name || null
 }
 
 export default function DashboardPage() {
@@ -414,8 +409,8 @@ const { data: milestones } = await supabase
             return a.start_time.localeCompare(b.start_time)
           })
 
-          const currentCase = roomCases.find(c => getValue(c.case_statuses) === 'in_progress') || null
-          const nextCase = roomCases.find(c => getValue(c.case_statuses) === 'scheduled') || null
+          const currentCase = roomCases.find(c => extractName(c.case_statuses) === 'in_progress') || null
+          const nextCase = roomCases.find(c => extractName(c.case_statuses) === 'scheduled') || null
           const upcomingCases = roomCases.filter(c => c.id !== currentCase?.id)
 
           const startTime = currentCase ? caseStartTimes[currentCase.id] || null : null

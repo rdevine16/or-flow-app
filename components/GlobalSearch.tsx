@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../lib/supabase'
+import { extractName } from '../lib/formatters'
 
 // ============================================================================
 // TYPES
@@ -67,12 +68,6 @@ const STATIC_ACTIONS: SearchResult[] = [
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-
-const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0]?.name || null
-  return data.name
-}
 
 const getSurgeonName = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null): string => {
   if (!data) return 'Unassigned'
@@ -283,9 +278,9 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
     // Search cases
     cases.forEach(c => {
       const caseNumber = c.case_number.toLowerCase()
-      const procedure = getValue(c.procedure_types)?.toLowerCase() || ''
+      const procedure = extractName(c.procedure_types)?.toLowerCase() || ''
       const surgeon = getSurgeonName(c.surgeon).toLowerCase()
-      const room = getValue(c.or_rooms)?.toLowerCase() || ''
+      const room = extractName(c.or_rooms)?.toLowerCase() || ''
       
       if (
         caseNumber.includes(q) ||
@@ -297,12 +292,12 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
           type: 'case',
           id: c.id,
           title: c.case_number,
-          subtitle: `${getValue(c.procedure_types) || 'No procedure'} • ${getSurgeonName(c.surgeon)}`,
+          subtitle: `${extractName(c.procedure_types) || 'No procedure'} • ${getSurgeonName(c.surgeon)}`,
           href: `/cases/${c.id}`,
           meta: {
-            status: getValue(c.case_statuses) || 'scheduled',
+            status: extractName(c.case_statuses) || 'scheduled',
             date: formatDate(c.scheduled_date),
-            room: getValue(c.or_rooms) || undefined,
+            room: extractName(c.or_rooms) || undefined,
           }
         })
       }

@@ -1,5 +1,7 @@
 'use client'
 
+import { extractName } from '../../lib/formatters'
+
 interface Case {
   id: string
   case_number: string
@@ -19,12 +21,6 @@ interface Room {
 interface RoomGridViewProps {
   rooms: Room[]
   cases: Case[]
-}
-
-const getValue = (data: { name: string }[] | { name: string } | null): string | null => {
-  if (!data) return null
-  if (Array.isArray(data)) return data[0]?.name || null
-  return data.name
 }
 
 const getSurgeonName = (data: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null | undefined): string | null => {
@@ -78,7 +74,7 @@ const getStatusBgColor = (status: string | null): string => {
 export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
   const getCasesForRoom = (roomName: string) => {
     return cases
-      .filter(c => getValue(c.or_rooms) === roomName)
+      .filter(c => extractName(c.or_rooms) === roomName)
       .sort((a, b) => {
         if (!a.start_time) return 1
         if (!b.start_time) return -1
@@ -87,15 +83,15 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
   }
 
   const getActiveCase = (roomCases: Case[]) => {
-    return roomCases.find(c => getValue(c.case_statuses) === 'in_progress')
+    return roomCases.find(c => extractName(c.case_statuses) === 'in_progress')
   }
 
   const getUpNextCases = (roomCases: Case[]) => {
-    return roomCases.filter(c => getValue(c.case_statuses) === 'scheduled').slice(0, 3)
+    return roomCases.filter(c => extractName(c.case_statuses) === 'scheduled').slice(0, 3)
   }
 
   const getCompletedCount = (roomCases: Case[]) => {
-    return roomCases.filter(c => getValue(c.case_statuses) === 'completed').length
+    return roomCases.filter(c => extractName(c.case_statuses) === 'completed').length
   }
 
   return (
@@ -124,10 +120,10 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
             <div className="p-4 space-y-4">
               {/* Active Case */}
               {activeCase ? (
-                <div className={`rounded-lg border p-3 ${getStatusBgColor(getValue(activeCase.case_statuses))}`}>
+                <div className={`rounded-lg border p-3 ${getStatusBgColor(extractName(activeCase.case_statuses))}`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">Active</span>
-                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(getValue(activeCase.case_statuses))}`} title="In Progress" />
+                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(extractName(activeCase.case_statuses))}`} title="In Progress" />
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -140,7 +136,7 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
                       <span className="text-xs text-slate-500">{formatTime(activeCase.start_time)}</span>
                     </div>
                     <p className="text-sm text-slate-700 truncate">
-                      {getValue(activeCase.procedure_types) || 'No procedure'}
+                      {extractName(activeCase.procedure_types) || 'No procedure'}
                     </p>
                     <p className="text-sm text-slate-500">
                       {getSurgeonName(activeCase.surgeon) || 'No surgeon'}
@@ -159,7 +155,7 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Up Next</p>
                   <div className="space-y-2">
                     {upNextCases.map((c) => {
-                      const status = getValue(c.case_statuses)
+                      const status = extractName(c.case_statuses)
                       return (
                         <div
                           key={c.id}
@@ -179,7 +175,7 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
                               </span>
                             </div>
                             <p className="text-xs text-slate-600 truncate">
-                              {getValue(c.procedure_types) || 'No procedure'}
+                              {extractName(c.procedure_types) || 'No procedure'}
                             </p>
                             <p className="text-xs text-slate-400 truncate">
                               {getSurgeonName(c.surgeon) || 'No surgeon'}
