@@ -10,6 +10,8 @@ import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 import { UserIcon } from '@heroicons/react/24/outline'
+import { useSurgeons, useProcedureTypes } from '@/hooks'
+
 
 // Tremor components
 import {

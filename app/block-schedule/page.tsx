@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useBlockSchedules } from '@/hooks/useBlockSchedules'
+import { useSurgeons } from '@/hooks'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import { useSurgeonColors } from '@/hooks/useSurgeonColors'
 import { ExpandedBlock, BlockSchedule } from '@/types/block-scheduling'
@@ -15,11 +16,6 @@ import { BlockPopover } from '@/components/block-schedule/BlockPopover'
 import { DeleteBlockModal } from '@/components/block-schedule/DeleteBlockModal'
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
-interface Surgeon {
-  id: string
-  first_name: string
-  last_name: string
-}
 
 export default function BlockSchedulePage() {
   const router = useRouter()
@@ -38,7 +34,6 @@ export default function BlockSchedulePage() {
   })
 
   // Surgeons
-  const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [selectedSurgeonIds, setSelectedSurgeonIds] = useState<Set<string>>(new Set())
 
   // Show holidays toggle
@@ -62,6 +57,7 @@ export default function BlockSchedulePage() {
   const { blocks, fetchBlocksForRange, deleteBlock, addExceptionDate } = useBlockSchedules({ facilityId })
   const { holidays, closures, fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
   const { fetchColors, getColorMap, setColor } = useSurgeonColors({ facilityId })
+  const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
 
   // Load user and facility
   useEffect(() => {
@@ -86,35 +82,13 @@ export default function BlockSchedulePage() {
     loadUser()
   }, [supabase, router])
 
-  // Load surgeons
-  useEffect(() => {
-    async function loadSurgeons() {
-      if (!facilityId) return
-
-      const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('name', 'surgeon')
-        .single()
-
-      if (!roleData) return
-
-      const { data } = await supabase
-        .from('users')
-        .select('id, first_name, last_name')
-        .eq('facility_id', facilityId)
-        .eq('role_id', roleData.id)
-        .order('last_name')
-
-      if (data) {
-        setSurgeons(data)
-        setSelectedSurgeonIds(new Set(data.map(s => s.id)))
-        // Fetch colors after we have surgeon IDs
-        fetchColors(data.map(s => s.id))
-      }
-    }
-    loadSurgeons()
-  }, [facilityId, supabase, fetchColors])
+  // Initialize selected surgeons and colors when surgeons load
+useEffect(() => {
+  if (surgeons.length > 0) {
+    setSelectedSurgeonIds(new Set(surgeons.map(s => s.id)))
+    fetchColors(surgeons.map(s => s.id))
+  }
+}, [surgeons, fetchColors])
 
   // Load data when facility or week changes
   useEffect(() => {

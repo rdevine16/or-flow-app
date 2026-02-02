@@ -6,23 +6,9 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
+import { useSurgeons, useProcedureTypes, useImplantCompanies } from '@/hooks'
 
-interface Surgeon {
-  id: string
-  first_name: string
-  last_name: string
-}
 
-interface ProcedureType {
-  id: string
-  name: string
-}
-
-interface ImplantCompany {
-  id: string
-  name: string
-  facility_id: string | null
-}
 
 interface SurgeonPreference {
   id: string
@@ -49,13 +35,14 @@ export default function SurgeonPreferencesPage() {
   // Use the context - this automatically handles impersonation!
   const { effectiveFacilityId, loading: userLoading } = useUser()
   
-  const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [preferences, setPreferences] = useState<SurgeonPreference[]>([])
-  const [procedureTypes, setProcedureTypes] = useState<ProcedureType[]>([])
-  const [implantCompanies, setImplantCompanies] = useState<ImplantCompany[]>([])
-  const [loading, setLoading] = useState(true)
   const [prefsLoading, setPrefsLoading] = useState(false)
+  const { data: surgeons, loading: surgeonsLoading } = useSurgeons(effectiveFacilityId)
+  const { data: procedureTypes, loading: proceduresLoading } = useProcedureTypes(effectiveFacilityId)
+  const { data: implantCompanies, loading: companiesLoading } = useImplantCompanies(effectiveFacilityId)
+  const loading = userLoading || surgeonsLoading || proceduresLoading || companiesLoading
+
   
   // Modal state
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add' })
@@ -72,61 +59,7 @@ export default function SurgeonPreferencesPage() {
   const [workflowSaving, setWorkflowSaving] = useState(false)
   const [workflowSaved, setWorkflowSaved] = useState(false)
 
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchInitialData()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId])
-
-  useEffect(() => {
-    if (selectedSurgeon) {
-      fetchPreferences(selectedSurgeon)
-    }
-  }, [selectedSurgeon])
-
-  const fetchInitialData = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-
-    // Fetch surgeons
-    const { data: surgeonRole } = await supabase
-      .from('user_roles')
-      .select('id')
-      .eq('name', 'surgeon')
-      .single()
-
-    if (surgeonRole) {
-      const { data: surgeonsData } = await supabase
-        .from('users')
-        .select('id, first_name, last_name')
-        .eq('facility_id', effectiveFacilityId)
-        .eq('role_id', surgeonRole.id)
-        .order('last_name')
-
-      setSurgeons(surgeonsData || [])
-    }
-
-    // Fetch procedure types (global + facility)
-    const { data: proceduresData } = await supabase
-      .from('procedure_types')
-      .select('id, name')
-      .or(`facility_id.is.null,facility_id.eq.${effectiveFacilityId}`)
-      .order('name')
-
-    setProcedureTypes(proceduresData || [])
-
-    // Fetch implant companies (global + facility)
-    const { data: companiesData } = await supabase
-      .from('implant_companies')
-      .select('id, name, facility_id')
-      .or(`facility_id.is.null,facility_id.eq.${effectiveFacilityId}`)
-      .order('name')
-
-    setImplantCompanies(companiesData || [])
-    setLoading(false)
-  }
+  
 
   // UPDATED: fetchPreferences now also fetches workflow settings
   const fetchPreferences = async (surgeonId: string) => {

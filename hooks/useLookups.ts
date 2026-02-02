@@ -144,13 +144,14 @@ export function useDelayTypes(facilityId: string | null | undefined) {
 export interface ImplantCompany {
   id: string
   name: string
+  facility_id: string | null
 }
 
 export function useImplantCompanies(facilityId: string | null | undefined) {
   return useLookup<ImplantCompany>(
     'implant_companies',
     { facilityId, includeGlobal: true },
-    'id, name'
+    'id, name, facility_id'
   )
 }
 

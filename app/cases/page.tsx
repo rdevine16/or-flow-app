@@ -12,6 +12,8 @@ import CasesFilterBar, { FilterState } from '@/components/filters/CaseFilterBar'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
 import { extractName } from '@/lib/formatters'
+import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
+
 
 // ============================================================================
 // TYPES
@@ -211,10 +213,10 @@ function CasesPageContent() {
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   
   // Filter options (fetched from DB)
-  const [surgeons, setSurgeons] = useState<Surgeon[]>([])
-  const [rooms, setRooms] = useState<Room[]>([])
-  const [procedureTypes, setProcedureTypes] = useState<ProcedureType[]>([])
-  
+  const { data: surgeons } = useSurgeons(effectiveFacilityId)
+  const { data: rooms } = useRooms(effectiveFacilityId)
+  const { data: procedureTypes } = useProcedureTypes(effectiveFacilityId)
+
   // Current filters (managed by CasesFilterBar)
   const [currentFilters, setCurrentFilters] = useState<FilterState>({
     dateRange: 'week',
@@ -279,52 +281,6 @@ function CasesPageContent() {
 
     fetchUserFacility()
   }, [supabase])
-
-  // ============================================================================
-  // FETCH FILTER OPTIONS (surgeons, rooms, procedures)
-  // ============================================================================
-
-  useEffect(() => {
-    if (!effectiveFacilityId) return
-
-    async function fetchFilterOptions() {
-      // Get surgeon role ID first
-      const { data: surgeonRole } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('name', 'surgeon')
-        .single()
-
-      const [surgeonsRes, roomsRes, proceduresRes] = await Promise.all([
-        // Get surgeons
-        supabase
-          .from('users')
-          .select('id, first_name, last_name, role_id')
-          .eq('facility_id', effectiveFacilityId)
-          .eq('role_id', surgeonRole?.id || ''),
-        
-        // Get rooms
-        supabase
-          .from('or_rooms')
-          .select('id, name')
-          .eq('facility_id', effectiveFacilityId)
-          .order('name'),
-        
-        // Get procedures
-        supabase
-          .from('procedure_types')
-          .select('id, name')
-          .eq('facility_id', effectiveFacilityId)
-          .order('name'),
-      ])
-
-      setSurgeons((surgeonsRes.data as Surgeon[]) || [])
-      setRooms((roomsRes.data as Room[]) || [])
-      setProcedureTypes((proceduresRes.data as ProcedureType[]) || [])
-    }
-
-    fetchFilterOptions()
-  }, [effectiveFacilityId, supabase])
 
   // ============================================================================
   // FETCH CASES (with filters applied)
