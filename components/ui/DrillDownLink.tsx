@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { buildFromParam } from '../../lib/breadcrumbs'
+import { buildFromParam } from '@/lib/breadcrumbs'
 import { ReactNode } from 'react'
 
 interface DrillDownLinkProps {

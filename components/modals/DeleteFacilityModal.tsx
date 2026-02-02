@@ -4,8 +4,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '../../lib/supabase'
-import { adminAudit } from '../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { adminAudit } from '@/lib/audit-logger'
 
 interface DeleteFacilityModalProps {
   facility: {

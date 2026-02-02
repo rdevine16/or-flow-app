@@ -1,10 +1,10 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import Card from '../../../components/ui/Card'
-import CaseForm from '../../../components/cases/CaseForm'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import Card from '@/components/ui/Card'
+import CaseForm from '@/components/cases/CaseForm'
 
 export default function NewCasePage() {
   const router = useRouter()

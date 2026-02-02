@@ -7,17 +7,17 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../lib/supabase'
-import { useUser } from '../../lib/UserContext'
-import DashboardLayout from '../../components/layouts/DashboardLayout'
-import CaseListView from '../../components/dashboard/CaseListView'
-import EnhancedRoomGridView from '../../components/dashboard/EnhancedRoomGridView'
-import FloatingActionButton from '../../components/ui/FloatingActionButton'
-import CallNextPatientModal from '../../components/CallNextPatientModal'
-import { getLocalDateString, formatDateWithWeekday } from '../../lib/date-utils'
-import { getImpersonationState } from '../../lib/impersonation'
-import { extractName } from '../../lib/formatters'
-import RoomOrderModal from '../../components/dashboard/RoomOrderModal'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import CaseListView from '@/components/dashboard/CaseListView'
+import EnhancedRoomGridView from '@/components/dashboard/EnhancedRoomGridView'
+import FloatingActionButton from '@/components/ui/FloatingActionButton'
+import CallNextPatientModal from '@/components/CallNextPatientModal'
+import { getLocalDateString, formatDateWithWeekday } from '@/lib/date-utils'
+import { getImpersonationState } from '@/lib/impersonation'
+import { extractName } from '@/lib/formatters'
+import RoomOrderModal from '@/components/dashboard/RoomOrderModal'
 import { 
   RoomWithCase, 
   EnhancedCase, 
@@ -25,8 +25,8 @@ import {
   CasePhase,
   MilestoneWithType,
   getJoinedValue
-} from '../../types/pace'
-import { determinePhase, parseISODate, parseScheduledStartTime } from '../../lib/pace-utils'
+} from '@/types/pace'
+import { determinePhase, parseISODate, parseScheduledStartTime } from '@/lib/pace-utils'
 
 // DnD Kit imports for drag-and-drop staff assignment
 import { 
@@ -41,10 +41,10 @@ import {
 } from '@dnd-kit/core'
 
 // Staff assignment imports
-import StaffAssignmentPanel from '../../components/dashboard/StaffAssignmentPanel'
-import StaffDragOverlay from '../../components/dashboard/StaffDragOverlay'
-import { useStaffAssignment } from '../../hooks/useStaffAssignment'
-import { DragData, DropData } from '../../types/staff-assignment'
+import StaffAssignmentPanel from '@/components/dashboard/StaffAssignmentPanel'
+import StaffDragOverlay from '@/components/dashboard/StaffDragOverlay'
+import { useStaffAssignment } from '@/hooks/useStaffAssignment'
+import { DragData, DropData } from '@/types/staff-assignment'
 
 interface Room {
   id: string

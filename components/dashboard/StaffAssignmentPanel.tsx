@@ -7,7 +7,7 @@
 import { useState, useMemo } from 'react'
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { StaffMember, StaffRoleFilter, DragData } from '../../types/staff-assignment'
+import { StaffMember, StaffRoleFilter, DragData } from '@/types/staff-assignment'
 import { DraggableStaffAvatarDisplay } from '../ui/StaffAvatar'
 
 interface StaffAssignmentPanelProps {

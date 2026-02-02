@@ -6,10 +6,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '../../lib/supabase'
-import { useUser } from '../../lib/UserContext'
-import DashboardLayout from '../../components/layouts/DashboardLayout'
-import { formatAuditAction } from '../../lib/audit'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { formatAuditAction } from '@/lib/audit'
 
 interface FacilityMetrics {
   total: number

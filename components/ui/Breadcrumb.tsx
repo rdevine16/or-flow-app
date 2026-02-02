@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { getBreadcrumbsFromParam, BreadcrumbItem } from '../../lib/breadcrumbs'
+import { getBreadcrumbsFromParam, BreadcrumbItem } from '@/lib/breadcrumbs'
 
 interface BreadcrumbProps {
   // Optional: override breadcrumbs instead of reading from URL

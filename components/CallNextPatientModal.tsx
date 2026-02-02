@@ -5,8 +5,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '../lib/supabase'
-import { getLocalDateString } from '../lib/date-utils'
+import { createClient } from '@/lib/supabase'
+import { getLocalDateString } from '@/lib/date-utils'
 
 
 interface Room {

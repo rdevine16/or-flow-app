@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '../../../lib/supabase'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import SettingsLayout from '../../../components/settings/SettingsLayout'
+import { createClient } from '@/lib/supabase'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import SettingsLayout from '@/components/settings/SettingsLayout'
 
 interface AuditLogEntry {
   id: string

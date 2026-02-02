@@ -2,7 +2,7 @@
 // Custom hook for live elapsed time display - updates every second
 
 import { useState, useEffect, useCallback } from 'react'
-import { formatElapsedTime } from '../lib/pace-utils'
+import { formatElapsedTime } from '@/lib/pace-utils'
 
 interface UseElapsedTimeResult {
   elapsedSeconds: number

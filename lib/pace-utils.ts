@@ -1,7 +1,7 @@
 // lib/pace-utils.ts
 // Pace calculation utilities - UPDATED for median-based statistics
 
-import { CasePaceData, PaceStatus, CasePhase } from '../types/pace'
+import { CasePaceData, PaceStatus, CasePhase } from '@/types/pace'
 
 // Minimum sample size required to show pace data
 export const MIN_SAMPLE_SIZE = 10

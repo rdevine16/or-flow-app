@@ -6,11 +6,11 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '../../lib/supabase'
-import { useUser } from '../../lib/UserContext'
-import { useSubNav } from '../../lib/SubNavContext'
-import { getImpersonationState, endImpersonation } from '../../lib/impersonation'
-import { authAudit, adminAudit } from '../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import { useSubNav } from '@/lib/SubNavContext'
+import { getImpersonationState, endImpersonation } from '@/lib/impersonation'
+import { authAudit, adminAudit } from '@/lib/audit-logger'
 import ErrorBoundary from '../ErrorBoundary'
 
 // Layout components

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '../../lib/supabase'
+import { createClient } from '@/lib/supabase'
 
 interface NavItem {
   label: string

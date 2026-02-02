@@ -5,12 +5,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../lib/supabase'
-import { useUser } from '../../lib/UserContext'
-import DashboardLayout from '../../components/layouts/DashboardLayout'
-import { useFeature, FEATURES } from '../../lib/features/useFeature'
-import { TrialBanner } from '../../components/FeatureGate'
-import { checkinAudit } from '../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { useFeature, FEATURES } from '@/lib/features/useFeature'
+import { TrialBanner } from '@/components/FeatureGate'
+import { checkinAudit } from '@/lib/audit-logger'
 
 // =====================================================
 // TYPES

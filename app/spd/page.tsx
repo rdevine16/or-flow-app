@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '../../lib/supabase'
-import DashboardLayout from '../../components/layouts/DashboardLayout'
-import SurgeonAvatar from '../../components/ui/SurgeonAvatar'
-import { getLocalDateString } from '../../lib/date-utils'
-import { getImpersonationState } from '../../lib/impersonation'
+import { createClient } from '@/lib/supabase'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import SurgeonAvatar from '@/components/ui/SurgeonAvatar'
+import { getLocalDateString } from '@/lib/date-utils'
+import { getImpersonationState } from '@/lib/impersonation'
 
 // =====================================================
 // TYPES

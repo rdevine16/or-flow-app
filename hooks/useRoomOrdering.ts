@@ -2,7 +2,7 @@
 // Hook for managing room display order with optimistic updates
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '../lib/supabase'
+import { createClient } from '@/lib/supabase'
 
 export interface OrderableRoom {
   id: string

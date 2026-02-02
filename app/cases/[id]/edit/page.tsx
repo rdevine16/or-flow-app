@@ -2,10 +2,10 @@
 
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import Container from '../../../../components/ui/Container'
-import Card from '../../../../components/ui/Card'
-import CaseForm from '../../../../components/cases/CaseForm'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import Card from '@/components/ui/Card'
+import CaseForm from '@/components/cases/CaseForm'
 
 export default function EditCasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)

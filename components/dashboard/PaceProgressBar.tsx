@@ -5,8 +5,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { CasePaceData } from '../../types/pace'
-import { useCurrentTime } from '../../hooks/useElapsedTime'
+import { CasePaceData } from '@/types/pace'
+import { useCurrentTime } from '@/hooks/useElapsedTime'
 import {
   calculateProgress,
   calculatePaceMinutes,
@@ -15,7 +15,7 @@ import {
   formatDuration,
   formatDurationRange,
   getPaceStatusColors
-} from '../../lib/pace-utils'
+} from '@/lib/pace-utils'
 
 interface PaceProgressBarProps {
   paceData: CasePaceData | null

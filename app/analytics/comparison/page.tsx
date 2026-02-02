@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '../../../lib/supabase'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import DateFilter from '../../../components/ui/DateFilter'
-import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
+import { createClient } from '@/lib/supabase'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import DateFilter from '@/components/ui/DateFilter'
+import AnalyticsLayout from '@/components/analytics/AnalyticsLayout'
 import { getMilestoneMap, getTotalCaseTime, getSurgicalTime, getPreOpTime, getClosingTime, calculateAverage, formatMinutes, type CaseWithMilestones } from '@/lib/analyticsV2';
 
 import {

@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '../../../../lib/supabase'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import Container from '../../../../components/ui/Container'
-import { milestoneTypeAudit } from '../../../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import { milestoneTypeAudit } from '@/lib/audit-logger'
 
 
 interface MilestoneType {

@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useFeature, FeatureName, FEATURES } from '../lib/features/useFeature'
+import { useFeature, FeatureName, FEATURES } from '@/lib/features/useFeature'
 import Link from 'next/link'
 
 interface FeatureGateProps {

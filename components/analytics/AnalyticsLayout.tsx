@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { useSubNav } from '../../lib/SubNavContext'
+import { useSubNav } from '@/lib/SubNavContext'
 
 interface AnalyticsLayoutProps {
   children: React.ReactNode

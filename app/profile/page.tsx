@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../lib/supabase'
-import DashboardLayout from '../../components/layouts/DashboardLayout'
-import { checkPasswordStrength } from '../../lib/passwords'
-import { authAudit } from '../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { checkPasswordStrength } from '@/lib/passwords'
+import { authAudit } from '@/lib/audit-logger'
 
 interface UserProfile {
   id: string

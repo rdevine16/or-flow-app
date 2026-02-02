@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '../../../lib/supabase'
+import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { checkPasswordStrength } from '../../../lib/passwords'
-import { authAudit } from '../../../lib/audit-logger'
+import { checkPasswordStrength } from '@/lib/passwords'
+import { authAudit } from '@/lib/audit-logger'
 
 // ORbit Logo - For light backgrounds
 const LogoFullDark = () => (

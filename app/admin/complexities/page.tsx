@@ -5,10 +5,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
 
 interface Complexity {
   id: string

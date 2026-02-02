@@ -4,8 +4,8 @@
 
 'use client'
 
-import { RoomWithCase } from '../../types/pace'
-import { CaseStaffAssignment } from '../../types/staff-assignment'
+import { RoomWithCase } from '@/types/pace'
+import { CaseStaffAssignment } from '@/types/staff-assignment'
 import EnhancedRoomCard from './EnhancedRoomCard'
 
 interface EnhancedRoomGridViewProps {

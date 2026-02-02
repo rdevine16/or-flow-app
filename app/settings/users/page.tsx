@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import SettingsLayout from '../../../components/settings/SettingsLayout'
-import Badge from '../../../components/ui/Badge'
-import InviteUserModal from '../../../components/InviteUserModal'
-import { userAudit } from '../../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import SettingsLayout from '@/components/settings/SettingsLayout'
+import Badge from '@/components/ui/Badge'
+import InviteUserModal from '@/components/InviteUserModal'
+import { userAudit } from '@/lib/audit-logger'
 
 interface User {
   id: string

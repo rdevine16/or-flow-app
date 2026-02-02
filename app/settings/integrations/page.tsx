@@ -3,9 +3,9 @@
 
 'use client'
 
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import SettingsLayout from '../../../components/settings/SettingsLayout'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import SettingsLayout from '@/components/settings/SettingsLayout'
 
 // =====================================================
 // TYPES

@@ -5,12 +5,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '../../../../lib/supabase'
-import { useUser } from '../../../../lib/UserContext'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import Container from '../../../../components/ui/Container'
-import SettingsLayout from '../../../../components/settings/SettingsLayout'
-import { genericAuditLog } from '../../../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import SettingsLayout from '@/components/settings/SettingsLayout'
+import { genericAuditLog } from '@/lib/audit-logger'
 
 interface CostCategory {
   id: string

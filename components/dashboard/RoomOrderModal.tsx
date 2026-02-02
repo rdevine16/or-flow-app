@@ -21,7 +21,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useRoomOrdering, OrderableRoom } from '../../hooks/useRoomOrdering'
+import { useRoomOrdering, OrderableRoom } from '@/hooks/useRoomOrdering'
 
 interface RoomOrderModalProps {
   isOpen: boolean

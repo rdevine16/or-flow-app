@@ -5,11 +5,11 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../../../lib/supabase'
-import { useUser } from '../../../../lib/UserContext'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import Container from '../../../../components/ui/Container'
-import { costCategoryAudit } from '../../../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import { costCategoryAudit } from '@/lib/audit-logger'
 
 interface DefaultCostCategory {
   id: string

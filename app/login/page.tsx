@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '../../lib/supabase'
+import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { updateLastLogin, checkUserActive } from '../../lib/auth-helpers'
-import { authAudit } from '../../lib/audit-logger'
+import { updateLastLogin, checkUserActive } from '@/lib/auth-helpers'
+import { authAudit } from '@/lib/audit-logger'
 
 // ORbit Logo - Full with text
 const LogoFull = () => (

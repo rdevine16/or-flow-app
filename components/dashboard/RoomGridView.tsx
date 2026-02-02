@@ -1,6 +1,6 @@
 'use client'
 
-import { extractName } from '../../lib/formatters'
+import { extractName } from '@/lib/formatters'
 
 interface Case {
   id: string

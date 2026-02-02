@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '../../../lib/supabase'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import SettingsLayout from '../../../components/settings/SettingsLayout'
-import { facilityAudit, procedureAudit, genericAuditLog } from '../../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import SettingsLayout from '@/components/settings/SettingsLayout'
+import { facilityAudit, procedureAudit, genericAuditLog } from '@/lib/audit-logger'
 
 // =====================================================
 // TYPES

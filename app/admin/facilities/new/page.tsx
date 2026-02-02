@@ -6,10 +6,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../../../lib/supabase'
-import { useUser } from '../../../../lib/UserContext'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import { facilityAudit } from '../../../../lib/audit-logger'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { facilityAudit } from '@/lib/audit-logger'
 
 // ============================================================================
 // INTERFACES

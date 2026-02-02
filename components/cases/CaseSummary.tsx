@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import SurgeonAvatar from '../../components/ui/SurgeonAvatar'
+import SurgeonAvatar from '@/components/ui/SurgeonAvatar'
 
 // ============================================================================
 // TYPES

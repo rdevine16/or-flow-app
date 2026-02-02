@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '../../../../lib/supabase'
-import { useUser } from '../../../../lib/UserContext'
-import DashboardLayout from '../../../../components/layouts/DashboardLayout'
-import Container from '../../../../components/ui/Container'
-import { caseAudit } from '../../../../lib/audit-logger'
-import { extractName } from '../../../../lib/formatters'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import { caseAudit } from '@/lib/audit-logger'
+import { extractName } from '@/lib/formatters'
 
 // ============================================================================
 // TYPES

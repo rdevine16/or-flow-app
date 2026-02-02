@@ -3,12 +3,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import { getImpersonationState } from '../../../lib/impersonation'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import { getImpersonationState } from '@/lib/impersonation'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import AnalyticsLayout from '@/components/analytics/AnalyticsLayout'
 import { formatSecondsToHHMMSS } from '@/lib/analyticsV2'
 
 // ============================================

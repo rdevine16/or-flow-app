@@ -3,7 +3,7 @@
 
 'use client'
 
-import { CasePhase } from '../../types/pace'
+import { CasePhase } from '@/types/pace'
 
 interface PhaseBadgeProps {
   phase: CasePhase

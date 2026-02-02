@@ -6,7 +6,7 @@
 
 import { ReactNode } from 'react'
 import { useDroppable } from '@dnd-kit/core'
-import { DropData } from '../../types/staff-assignment'
+import { DropData } from '@/types/staff-assignment'
 
 interface DroppableCaseRowProps {
   caseId: string

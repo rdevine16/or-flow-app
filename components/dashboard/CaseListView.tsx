@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
-import { extractName } from '../../lib/formatters'
+import { extractName } from '@/lib/formatters'
 
 interface Case {
   id: string

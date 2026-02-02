@@ -9,10 +9,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../../lib/supabase'
+import { createClient } from '@/lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
-import { getLocalDateString } from '../../lib/date-utils'
-import { caseAudit, caseDeviceAudit } from '../../lib/audit-logger'
+import { getLocalDateString } from '@/lib/date-utils'
+import { caseAudit, caseDeviceAudit } from '@/lib/audit-logger'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 import CaseComplexitySelector from '../cases/CaseComplexitySelector'

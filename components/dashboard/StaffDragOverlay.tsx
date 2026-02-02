@@ -4,7 +4,7 @@
 'use client'
 
 import { DragOverlay } from '@dnd-kit/core'
-import { DragData } from '../../types/staff-assignment'
+import { DragData } from '@/types/staff-assignment'
 import { DraggableStaffAvatarDisplay } from '../ui/StaffAvatar'
 
 interface StaffDragOverlayProps {

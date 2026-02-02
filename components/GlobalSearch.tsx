@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '../lib/supabase'
-import { extractName } from '../lib/formatters'
+import { createClient } from '@/lib/supabase'
+import { extractName } from '@/lib/formatters'
 
 // ============================================================================
 // TYPES

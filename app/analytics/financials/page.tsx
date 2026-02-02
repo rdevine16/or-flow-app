@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import { getImpersonationState } from '../../../lib/impersonation'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import { AnalyticsPageHeader } from '../../../components/analytics/AnalyticsBreadcrumb'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import { getImpersonationState } from '@/lib/impersonation'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
 
 // Local components
@@ -17,13 +17,13 @@ import {
   FacilityProcedureStats,
   FacilitySettings, 
   SubTab 
-} from '../../../components/analytics/financials/types'
-import { useFinancialsMetrics } from '../../../components/analytics/financials/useFinancialsMetrics'
-import DateRangeSelector from '../../../components/analytics/financials/DateRangeSelector'
-import OverviewTab from '../../../components/analytics/financials/OverviewTab'
-import ProcedureTab from '../../../components/analytics/financials/ProcedureTab'
-import SurgeonTab from '../../../components/analytics/financials/SurgeonTab'
-import OutliersTab from '../../../components/analytics/financials/OutliersTab'
+} from '@/components/analytics/financials/types'
+import { useFinancialsMetrics } from '@/components/analytics/financials/useFinancialsMetrics'
+import DateRangeSelector from '@/components/analytics/financials/DateRangeSelector'
+import OverviewTab from '@/components/analytics/financials/OverviewTab'
+import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
+import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
+import OutliersTab from '@/components/analytics/financials/OutliersTab'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()

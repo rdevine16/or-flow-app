@@ -4,8 +4,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '../lib/supabase'
-import { StaffMember, CaseStaffAssignment } from '../types/staff-assignment'
+import { createClient } from '@/lib/supabase'
+import { StaffMember, CaseStaffAssignment } from '@/types/staff-assignment'
 
 interface UseStaffAssignmentProps {
   facilityId: string | null

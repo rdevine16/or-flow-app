@@ -1,8 +1,8 @@
 'use client'
 
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import Container from '../../../components/ui/Container'
-import AnalyticsLayout from '../../../components/analytics/AnalyticsLayout'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
+import AnalyticsLayout from '@/components/analytics/AnalyticsLayout'
 
 export default function ProcedureAnalyticsPage() {
   return (

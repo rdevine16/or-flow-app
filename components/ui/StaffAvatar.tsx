@@ -5,7 +5,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getInitials, getRoleColor, getFullName } from '../../types/staff-assignment'
+import { getInitials, getRoleColor, getFullName } from '@/types/staff-assignment'
 
 interface StaffAvatarProps {
   firstName: string

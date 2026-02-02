@@ -6,12 +6,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '../../../lib/supabase'
-import { useUser } from '../../../lib/UserContext'
-import DashboardLayout from '../../../components/layouts/DashboardLayout'
-import { startImpersonation } from '../../../lib/impersonation'
-import { adminAudit } from '../../../lib/audit-logger'
-import DeleteFacilityModal from '../../../components/modals/DeleteFacilityModal'
+import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { startImpersonation } from '@/lib/impersonation'
+import { adminAudit } from '@/lib/audit-logger'
+import DeleteFacilityModal from '@/components/modals/DeleteFacilityModal'
 
 
 interface Facility {
