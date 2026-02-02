@@ -1,3 +1,6 @@
+// components/analytics/financials/useFinancialsMetrics.ts
+// Fixed: surgeon name lookup, normalizeJoin for Supabase, procedure breakdown
+
 import { useMemo } from 'react'
 import {
   CaseCompletionStats,
@@ -15,7 +18,17 @@ import {
   IssueStats,
   ProfitTrendPoint,
   FacilitySettings,
+  SurgeonProcedureBreakdown,
 } from './types'
+
+// ============================================
+// HELPER: Normalize Supabase join (array or single object)
+// Supabase sometimes returns joined data as arrays even for single relations
+// ============================================
+function normalizeJoin<T>(data: T | T[] | null): T | null {
+  if (Array.isArray(data)) return data[0] || null
+  return data
+}
 
 // ============================================
 // HELPER: Determine outlier type from two booleans
@@ -53,6 +66,42 @@ export function useFinancialsMetrics(
 
     // Filter to cases with valid profit data
     const validCases = caseStats.filter(c => c.profit !== null && c.total_duration_minutes !== null)
+
+    // ============================================
+    // BUILD LOOKUP MAPS FOR NAMES
+    // Use ALL caseStats, not just validCases, to ensure we get names
+    // for surgeons/procedures that might not be in the current date filter
+    // ============================================
+    
+    const surgeonNameMap = new Map<string, string>()
+    const procedureNameMap = new Map<string, string>()
+    
+    caseStats.forEach(c => {
+      // Build surgeon name lookup
+      if (c.surgeon_id && !surgeonNameMap.has(c.surgeon_id)) {
+        const surgeon = normalizeJoin(c.surgeon)
+        if (surgeon?.first_name && surgeon?.last_name) {
+          surgeonNameMap.set(c.surgeon_id, `Dr. ${surgeon.last_name}`)
+        }
+      }
+      
+      // Build procedure name lookup
+      if (c.procedure_type_id && !procedureNameMap.has(c.procedure_type_id)) {
+        const procedureType = normalizeJoin(c.procedure_types)
+        if (procedureType?.name) {
+          procedureNameMap.set(c.procedure_type_id, procedureType.name)
+        }
+      }
+    })
+
+    // Helper functions
+    const getSurgeonName = (surgeonId: string): string => {
+      return surgeonNameMap.get(surgeonId) || 'Unknown Surgeon'
+    }
+    
+    const getProcedureName = (procedureId: string): string => {
+      return procedureNameMap.get(procedureId) || 'Unknown Procedure'
+    }
 
     // ============================================
     // BUILD LOOKUP MAPS FOR STATS
@@ -152,20 +201,20 @@ export function useFinancialsMetrics(
 
       // Get thresholds
       const personalDurationThreshold = surgeonStats?.median_duration != null && surgeonStats?.stddev_duration != null
-  ? (surgeonStats.median_duration ?? 0) + (surgeonStats.stddev_duration ?? 0)
-  : null
+        ? (surgeonStats.median_duration ?? 0) + (surgeonStats.stddev_duration ?? 0)
+        : null
 
-const facilityDurationThreshold = facilityStats?.median_duration != null && facilityStats?.stddev_duration != null
-  ? (facilityStats.median_duration ?? 0) + (facilityStats.stddev_duration ?? 0)
-  : null
+      const facilityDurationThreshold = facilityStats?.median_duration != null && facilityStats?.stddev_duration != null
+        ? (facilityStats.median_duration ?? 0) + (facilityStats.stddev_duration ?? 0)
+        : null
 
-const personalProfitThreshold = surgeonStats?.median_profit != null && surgeonStats?.stddev_profit != null
-  ? (surgeonStats.median_profit ?? 0) - (surgeonStats.stddev_profit ?? 0)
-  : null
+      const personalProfitThreshold = surgeonStats?.median_profit != null && surgeonStats?.stddev_profit != null
+        ? (surgeonStats.median_profit ?? 0) - (surgeonStats.stddev_profit ?? 0)
+        : null
 
-const facilityProfitThreshold = facilityStats?.median_profit != null && facilityStats?.stddev_profit != null
-  ? (facilityStats.median_profit ?? 0) - (facilityStats.stddev_profit ?? 0)
-  : null
+      const facilityProfitThreshold = facilityStats?.median_profit != null && facilityStats?.stddev_profit != null
+        ? (facilityStats.median_profit ?? 0) - (facilityStats.stddev_profit ?? 0)
+        : null
 
       // Check outliers
       const actualDuration = c.total_duration_minutes || 0
@@ -196,12 +245,45 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
       const isBoth = (isDurationPersonalOutlier || isProfitPersonalOutlier) && 
                      (isDurationFacilityOutlier || isProfitFacilityOutlier)
 
+      if (isOnlyPersonal) personalOnlyCount++
+      if (isOnlyFacility) facilityOnlyCount++
       if (isBoth) bothCount++
-      else if (isOnlyPersonal) personalOnlyCount++
-      else if (isOnlyFacility) facilityOnlyCount++
-
       if (isDurationPersonalOutlier || isDurationFacilityOutlier) durationOutlierCount++
       if (isProfitPersonalOutlier || isProfitFacilityOutlier) profitOutlierCount++
+
+      // Build issues list
+      const issues: CaseIssue[] = []
+
+      if (isDurationPersonalOutlier || isDurationFacilityOutlier) {
+        const expectedDuration = surgeonStats?.median_duration || facilityStats?.median_duration || 0
+        const thresholdDuration = personalDurationThreshold || facilityDurationThreshold || 0
+        issues.push({
+          type: 'overTime',
+          actualMinutes: actualDuration,
+          expectedMinutes: expectedDuration,
+          thresholdMinutes: thresholdDuration,
+          minutesOver: actualDuration - thresholdDuration,
+        })
+        issueStats.overTime++
+      }
+
+      if (isProfitPersonalOutlier || isProfitFacilityOutlier) {
+        const expectedProfit = surgeonStats?.median_profit || facilityStats?.median_profit || 0
+        const thresholdProfit = personalProfitThreshold || facilityProfitThreshold || 0
+        issues.push({
+          type: 'lowProfit',
+          actualProfit,
+          expectedProfit,
+          thresholdProfit,
+          amountBelow: thresholdProfit - actualProfit,
+        })
+        issueStats.lowProfit++
+      }
+
+      if (issues.length === 0) {
+        issues.push({ type: 'unknown' })
+        issueStats.unknown++
+      }
 
       // Build outlier flags
       const outlierFlags: OutlierFlags = {
@@ -217,43 +299,6 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         facilityProfitThreshold,
       }
 
-      // Detect issues
-      const issues: CaseIssue[] = []
-
-      // Over time (duration outlier)
-      if (isDurationPersonalOutlier || isDurationFacilityOutlier) {
-        const expectedMinutes = surgeonStats?.median_duration || facilityStats?.median_duration || actualDuration
-        const thresholdMinutes = personalDurationThreshold || facilityDurationThreshold || expectedMinutes
-        issues.push({
-          type: 'overTime',
-          actualMinutes: actualDuration,
-          expectedMinutes,
-          thresholdMinutes,
-          minutesOver: actualDuration - thresholdMinutes,
-        })
-        issueStats.overTime++
-      }
-
-      // Low profit (profit outlier)
-      if (isProfitPersonalOutlier || isProfitFacilityOutlier) {
-        const expectedProfit = surgeonStats?.median_profit || facilityStats?.median_profit || actualProfit
-        const thresholdProfit = personalProfitThreshold || facilityProfitThreshold || expectedProfit
-        issues.push({
-          type: 'lowProfit',
-          actualProfit,
-          expectedProfit,
-          thresholdProfit,
-          amountBelow: thresholdProfit - actualProfit,
-        })
-        issueStats.lowProfit++
-      }
-
-      // If no specific issues found, mark as unknown
-      if (issues.length === 0) {
-        issues.push({ type: 'unknown' })
-        issueStats.unknown++
-      }
-
       // Build financial breakdown
       const financialBreakdown: FinancialBreakdown = {
         reimbursement: c.reimbursement || 0,
@@ -261,33 +306,34 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         hardGoodsCost: c.hard_goods_cost || 0,
         orCost: c.or_cost || 0,
         orRate: c.or_hourly_rate || orRate,
-        payerName: c.payers?.name || null,
+        payerName: normalizeJoin(c.payers)?.name || null,
         expectedProfit: surgeonStats?.median_profit || null,
         facilityExpectedProfit: facilityStats?.median_profit || null,
         expectedDuration: surgeonStats?.median_duration || null,
         facilityExpectedDuration: facilityStats?.median_duration || null,
       }
 
-      // Build outlier case
+      // Get names using lookup maps
+      const surgeonName = c.surgeon_id ? getSurgeonName(c.surgeon_id) : 'Unassigned'
+      const procedureName = c.procedure_type_id ? getProcedureName(c.procedure_type_id) : 'Unknown'
+
       outlierDetails.push({
         caseId: c.case_id,
         caseNumber: c.case_number,
         date: c.case_date,
         surgeonId: c.surgeon_id,
-        surgeonName: c.surgeon 
-          ? `Dr. ${c.surgeon.first_name} ${c.surgeon.last_name}`
-          : 'Unknown',
+        surgeonName,
         procedureId: c.procedure_type_id,
-        procedureName: c.procedure_types?.name || 'Unknown',
-        roomName: c.or_rooms?.name || null,
+        procedureName,
+        roomName: normalizeJoin(c.or_rooms)?.name || null,
         actualProfit,
         actualDuration,
-        expectedProfit: surgeonStats?.median_profit || facilityStats?.median_profit || null,
-        expectedDuration: surgeonStats?.median_duration || facilityStats?.median_duration || null,
+        expectedProfit: surgeonStats?.median_profit || null,
+        expectedDuration: surgeonStats?.median_duration || null,
         facilityExpectedProfit: facilityStats?.median_profit || null,
         facilityExpectedDuration: facilityStats?.median_duration || null,
-        profitGap: actualProfit - (surgeonStats?.median_profit || facilityStats?.median_profit || 0),
-        durationGap: actualDuration - (surgeonStats?.median_duration || facilityStats?.median_duration || 0),
+        profitGap: actualProfit - (surgeonStats?.median_profit || facilityStats?.median_profit || actualProfit),
+        durationGap: actualDuration - (surgeonStats?.median_duration || facilityStats?.median_duration || actualDuration),
         outlierFlags,
         issues,
         financialBreakdown,
@@ -307,21 +353,17 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
     }
 
     // ============================================
-    // BUILD PROCEDURE STATS
+    // BUILD PROCEDURE STATS WITH SURGEON BREAKDOWN
     // ============================================
     
     const procedureStats: ProcedureStats[] = facilityProcedureStats.map(fps => {
-      // Get surgeon breakdown from surgeon_procedure_stats
+      // Get all surgeon stats for this procedure
       const surgeonBreakdown: SurgeonStats[] = surgeonProcedureStats
         .filter(sps => sps.procedure_type_id === fps.procedure_type_id)
         .map(sps => {
-          // Find surgeon name from cases
-          const surgeonCase = validCases.find(c => c.surgeon_id === sps.surgeon_id)
-          const surgeonName = surgeonCase?.surgeon 
-            ? `Dr. ${surgeonCase.surgeon.first_name} ${surgeonCase.surgeon.last_name}`
-            : 'Unknown'
-
-          // Duration comparison to facility
+          const surgeonName = getSurgeonName(sps.surgeon_id)
+          
+          // Calculate vs facility for this procedure
           const durationVsFacility = (sps.median_duration || 0) - (fps.median_duration || 0)
           const profitVsFacility = (sps.median_profit || 0) - (fps.median_profit || 0)
           const profitImpact = -durationVsFacility * costPerMinute
@@ -347,9 +389,7 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         })
         .sort((a, b) => (b.medianProfit || 0) - (a.medianProfit || 0))
 
-      // Find procedure name from cases
-      const procCase = validCases.find(c => c.procedure_type_id === fps.procedure_type_id)
-      const procedureName = procCase?.procedure_types?.name || 'Unknown'
+      const procedureName = getProcedureName(fps.procedure_type_id)
 
       return {
         procedureId: fps.procedure_type_id,
@@ -373,7 +413,7 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
     }).sort((a, b) => (b.totalProfit || 0) - (a.totalProfit || 0))
 
     // ============================================
-    // BUILD OVERALL SURGEON STATS
+    // BUILD OVERALL SURGEON STATS WITH PROCEDURE BREAKDOWN
     // ============================================
     
     // Aggregate surgeon stats across all procedures
@@ -382,40 +422,79 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
       surgeonName: string
       totalProfit: number
       totalCases: number
+      procedureBreakdown: SurgeonProcedureBreakdown[]
       profitValues: number[]
       durationValues: number[]
       surgicalTurnovers: number[]
+      // For procedure-adjusted efficiency
+      weightedDurationDiff: number
+      weightedProfitDiff: number
+      weightedCases: number
     }>()
 
     surgeonProcedureStats.forEach(sps => {
+      const surgeonName = getSurgeonName(sps.surgeon_id)
+      const procedureName = getProcedureName(sps.procedure_type_id)
+      const facilityStats = facilityProcStatsMap.get(sps.procedure_type_id)
+      
+      // Calculate vs facility for this procedure
+      const durationVsFacility = (sps.median_duration || 0) - (facilityStats?.median_duration || 0)
+      const profitVsFacility = (sps.median_profit || 0) - (facilityStats?.median_profit || 0)
+      
+      // Calculate percentage differences
+      const durationVsFacilityPct = facilityStats?.median_duration 
+        ? (durationVsFacility / facilityStats.median_duration) * 100 
+        : null
+      const profitVsFacilityPct = facilityStats?.median_profit 
+        ? (profitVsFacility / facilityStats.median_profit) * 100 
+        : null
+
+      const procedureData: SurgeonProcedureBreakdown = {
+        procedureId: sps.procedure_type_id,
+        procedureName,
+        caseCount: sps.sample_size,
+        medianDuration: sps.median_duration,
+        medianProfit: sps.median_profit,
+        totalProfit: sps.total_profit || 0,
+        facilityMedianDuration: facilityStats?.median_duration || null,
+        facilityMedianProfit: facilityStats?.median_profit || null,
+        durationVsFacility,
+        profitVsFacility,
+        durationVsFacilityPct,
+        profitVsFacilityPct,
+      }
+
       const existing = surgeonAggregates.get(sps.surgeon_id)
-      const surgeonCase = validCases.find(c => c.surgeon_id === sps.surgeon_id)
-      const surgeonName = surgeonCase?.surgeon 
-        ? `Dr. ${surgeonCase.surgeon.first_name} ${surgeonCase.surgeon.last_name}`
-        : 'Unknown'
 
       if (existing) {
         existing.totalProfit += sps.total_profit || 0
         existing.totalCases += sps.sample_size
+        existing.procedureBreakdown.push(procedureData)
         if (sps.median_profit !== null) existing.profitValues.push(sps.median_profit)
         if (sps.median_duration !== null) existing.durationValues.push(sps.median_duration)
         if (sps.median_surgical_turnover !== null) existing.surgicalTurnovers.push(sps.median_surgical_turnover)
+        // Weighted efficiency (weight by case count)
+        if (facilityStats?.median_duration) {
+          existing.weightedDurationDiff += durationVsFacility * sps.sample_size
+          existing.weightedProfitDiff += profitVsFacility * sps.sample_size
+          existing.weightedCases += sps.sample_size
+        }
       } else {
         surgeonAggregates.set(sps.surgeon_id, {
           surgeonId: sps.surgeon_id,
           surgeonName,
           totalProfit: sps.total_profit || 0,
           totalCases: sps.sample_size,
+          procedureBreakdown: [procedureData],
           profitValues: sps.median_profit !== null ? [sps.median_profit] : [],
           durationValues: sps.median_duration !== null ? [sps.median_duration] : [],
           surgicalTurnovers: sps.median_surgical_turnover !== null ? [sps.median_surgical_turnover] : [],
+          weightedDurationDiff: facilityStats?.median_duration ? durationVsFacility * sps.sample_size : 0,
+          weightedProfitDiff: facilityStats?.median_profit ? profitVsFacility * sps.sample_size : 0,
+          weightedCases: facilityStats?.median_duration ? sps.sample_size : 0,
         })
       }
     })
-
-    // Calculate overall facility medians for comparison
-    const facilityMedianDuration = medianDuration
-    const facilityMedianProfit = medianProfit
 
     const surgeonStats: SurgeonStats[] = Array.from(surgeonAggregates.values()).map(agg => {
       const avgProfit = agg.totalCases > 0 ? agg.totalProfit / agg.totalCases : 0
@@ -423,7 +502,7 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         ? agg.durationValues.reduce((a, b) => a + b, 0) / agg.durationValues.length
         : 0
       
-      // Weighted median (approximate)
+      // Average of medians (approximate)
       const medianProfitValue = agg.profitValues.length > 0
         ? agg.profitValues.reduce((a, b) => a + b, 0) / agg.profitValues.length
         : null
@@ -434,9 +513,19 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         ? agg.surgicalTurnovers.reduce((a, b) => a + b, 0) / agg.surgicalTurnovers.length
         : null
 
-      const durationVsFacility = (medianDurationValue || 0) - (facilityMedianDuration || 0)
-      const profitVsFacility = (medianProfitValue || 0) - (facilityMedianProfit || 0)
-      const profitImpact = -durationVsFacility * costPerMinute
+      // PROCEDURE-ADJUSTED efficiency: weighted average of duration vs facility PER PROCEDURE
+      // This is the KEY metric for fair comparison
+      const procedureAdjustedDuration = agg.weightedCases > 0 
+        ? agg.weightedDurationDiff / agg.weightedCases 
+        : 0
+      const procedureAdjustedProfit = agg.weightedCases > 0 
+        ? agg.weightedProfitDiff / agg.weightedCases 
+        : 0
+
+      const profitImpact = -procedureAdjustedDuration * costPerMinute
+
+      // Sort procedure breakdown by case count
+      agg.procedureBreakdown.sort((a, b) => b.caseCount - a.caseCount)
 
       return {
         surgeonId: agg.surgeonId,
@@ -445,16 +534,19 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         totalProfit: agg.totalProfit,
         avgProfit,
         medianProfit: medianProfitValue,
-        stddevProfit: null, // Would need raw data to calculate
+        stddevProfit: null,
         profitRange: { p25: null, p75: null },
         avgDurationMinutes: avgDuration,
         medianDurationMinutes: medianDurationValue,
         stddevDurationMinutes: null,
-        durationVsFacilityMinutes: durationVsFacility,
-        profitVsFacility,
+        // Use PROCEDURE-ADJUSTED values for fair comparison
+        durationVsFacilityMinutes: procedureAdjustedDuration,
+        profitVsFacility: procedureAdjustedProfit,
         profitImpact,
         consistencyRating: null,
         medianSurgicalTurnover: medianTurnover,
+        // Include procedure breakdown for drill-down
+        procedureBreakdown: agg.procedureBreakdown,
       }
     }).sort((a, b) => b.totalProfit - a.totalProfit)
 
@@ -491,7 +583,7 @@ const facilityProfitThreshold = facilityStats?.median_profit != null && facility
         date,
         profit: data.profit,
         caseCount: data.count,
-        medianProfit: null, // Would need per-day median calculation
+        medianProfit: null,
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 

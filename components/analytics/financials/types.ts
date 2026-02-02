@@ -1,3 +1,6 @@
+// components/analytics/financials/types.ts
+// Updated with SurgeonProcedureBreakdown for drill-down view
+
 // ============================================
 // CASE STATS FROM MATERIALIZED VIEWS
 // ============================================
@@ -48,22 +51,33 @@ export interface CaseCompletionStats {
   profit: number | null
   or_hourly_rate: number | null
   
-  // Joined data (from query)
+  // Joined data (from query) - may be array or single object from Supabase
   surgeon?: {
     first_name: string
     last_name: string
-  } | null
+  } | {
+    first_name: string
+    last_name: string
+  }[] | null
   procedure_types?: {
     id: string
     name: string
-  } | null
+  } | {
+    id: string
+    name: string
+  }[] | null
   payers?: {
     id: string
     name: string
-  } | null
+  } | {
+    id: string
+    name: string
+  }[] | null
   or_rooms?: {
     name: string
-  } | null
+  } | {
+    name: string
+  }[] | null
 }
 
 /**
@@ -394,7 +408,35 @@ export interface OutlierCase {
 }
 
 // ============================================
-// STATS TYPES (UPDATED WITH MEDIAN)
+// SURGEON PROCEDURE BREAKDOWN (NEW)
+// For drill-down view showing how surgeon compares per procedure
+// ============================================
+
+export interface SurgeonProcedureBreakdown {
+  procedureId: string
+  procedureName: string
+  caseCount: number
+  
+  // Surgeon's stats for this procedure
+  medianDuration: number | null
+  medianProfit: number | null
+  totalProfit: number
+  
+  // Facility baseline for this procedure
+  facilityMedianDuration: number | null
+  facilityMedianProfit: number | null
+  
+  // Comparison (surgeon - facility)
+  durationVsFacility: number  // negative = faster
+  profitVsFacility: number    // positive = more profitable
+  
+  // Percentage difference
+  durationVsFacilityPct: number | null
+  profitVsFacilityPct: number | null
+}
+
+// ============================================
+// STATS TYPES (UPDATED WITH PROCEDURE BREAKDOWN)
 // ============================================
 
 export interface SurgeonStats {
@@ -414,9 +456,9 @@ export interface SurgeonStats {
   medianDurationMinutes: number | null
   stddevDurationMinutes: number | null
   
-  // Comparison to facility baseline
-  durationVsFacilityMinutes: number  // surgeon median - facility median
-  profitVsFacility: number           // surgeon median - facility median
+  // Comparison to facility baseline (procedure-adjusted)
+  durationVsFacilityMinutes: number  // weighted avg of (surgeon - facility) per procedure
+  profitVsFacility: number           // weighted avg of (surgeon - facility) per procedure
   
   // Profit impact from duration difference
   profitImpact: number
@@ -426,6 +468,9 @@ export interface SurgeonStats {
   
   // Turnover stats
   medianSurgicalTurnover: number | null
+  
+  // Procedure breakdown for drill-down (NEW)
+  procedureBreakdown?: SurgeonProcedureBreakdown[]
 }
 
 export interface ProcedureStats {
