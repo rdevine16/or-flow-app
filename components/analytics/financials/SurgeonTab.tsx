@@ -1,5 +1,5 @@
 // components/analytics/financials/SurgeonTab.tsx
-// REDESIGNED: Focus on profit (fair comparison), drill-down for procedure details
+// UPDATED: Restored SurgeonDetail with efficiency metrics + clean visual design
 
 'use client'
 
@@ -13,6 +13,9 @@ import {
   ChevronDownIcon,
   ArrowLeftIcon,
   TrophyIcon,
+  ClockIcon,
+  BoltIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 
 interface SurgeonTabProps {
@@ -87,7 +90,7 @@ function AllSurgeonsOverview({
   const [expandedSurgeon, setExpandedSurgeon] = useState<string | null>(null)
   const surgeonStats = metrics.surgeonStats
 
-  // Calculate totals from surgeon stats (should match metrics.totalProfit)
+  // Calculate totals from surgeon stats
   const totalCases = surgeonStats.reduce((sum, s) => sum + s.caseCount, 0)
   const totalProfit = surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0)
 
@@ -124,7 +127,7 @@ function AllSurgeonsOverview({
             <h3 className="text-lg font-semibold text-slate-900">Surgeon Profit Rankings</h3>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Click a row to see procedure breakdown
+            Click a row to see procedure breakdown, or select from dropdown for full detail
           </p>
         </div>
         
@@ -208,20 +211,30 @@ function SurgeonRow({
             {surgeon.caseCount < 10 && (
               <span className="text-xs text-amber-600">*</span>
             )}
+            {surgeon.consistencyRating && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                surgeon.consistencyRating === 'high' 
+                  ? 'bg-emerald-100 text-emerald-700' 
+                  : surgeon.consistencyRating === 'medium'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-red-100 text-red-700'
+              }`}>
+                {surgeon.consistencyRating === 'high' ? '⚡ Consistent' :
+                 surgeon.consistencyRating === 'medium' ? '◐ Variable' : '◯ Inconsistent'}
+              </span>
+            )}
           </div>
-          <div className="text-sm text-slate-500 mt-0.5">
-            {procedures.length} procedure{procedures.length !== 1 ? 's' : ''}
+          <div className="text-xs text-slate-500 mt-0.5">
+            {procedures.length} procedure type{procedures.length !== 1 ? 's' : ''}
           </div>
         </div>
 
         {/* Cases */}
-        <div className="col-span-2 text-center text-slate-600">
-          {surgeon.caseCount}
-        </div>
+        <div className="col-span-2 text-center text-slate-600">{surgeon.caseCount}</div>
 
         {/* Total Profit */}
-        <div className="col-span-2 text-right">
-          <span className="font-semibold text-emerald-600">{formatCurrency(surgeon.totalProfit)}</span>
+        <div className="col-span-2 text-right font-semibold text-emerald-600">
+          {formatCurrency(surgeon.totalProfit)}
         </div>
 
         {/* Avg per Case */}
@@ -229,7 +242,7 @@ function SurgeonRow({
           {formatCurrency(surgeon.avgProfit)}
         </div>
 
-        {/* Expand Chevron */}
+        {/* Chevron */}
         <div className="col-span-1 flex justify-end">
           {isExpanded ? (
             <ChevronDownIcon className="w-5 h-5 text-slate-400" />
@@ -242,14 +255,13 @@ function SurgeonRow({
       {/* Expanded Procedure Breakdown */}
       {isExpanded && procedures.length > 0 && (
         <div className="px-6 pb-4">
-          <div className="ml-12 bg-white rounded-lg border border-slate-200 overflow-hidden">
-            <div className="px-4 py-2 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-600 uppercase">Procedure Breakdown</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onViewDetail()
-                }}
+          <div className="ml-10 bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 bg-slate-100 border-b border-slate-200">
+              <span className="text-xs font-medium text-slate-600">
+                Top {Math.min(5, procedures.length)} Procedures
+              </span>
+              <button 
+                onClick={(e) => { e.stopPropagation(); onViewDetail(); }}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
                 View Full Detail →
@@ -292,7 +304,7 @@ function SurgeonRow({
 }
 
 // ============================================
-// SINGLE SURGEON DETAIL
+// SINGLE SURGEON DETAIL - RESTORED WITH EFFICIENCY METRICS
 // ============================================
 
 function SurgeonDetail({ 
@@ -308,6 +320,10 @@ function SurgeonDetail({
   if (!surgeon) return null
 
   const procedures = surgeon.procedureBreakdown || []
+  
+  // Calculate efficiency metrics
+  const isFasterThanFacility = surgeon.durationVsFacilityMinutes < 0
+  const timeDiffMinutes = Math.abs(Math.round(surgeon.durationVsFacilityMinutes))
 
   return (
     <>
@@ -334,30 +350,170 @@ function SurgeonDetail({
           </div>
         </div>
         
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Primary Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white/10 rounded-xl p-4">
             <p className="text-sm text-slate-300">Total Profit</p>
             <p className="text-2xl font-bold text-emerald-400">{formatCurrency(surgeon.totalProfit)}</p>
           </div>
           <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-slate-300">Avg / Case</p>
-            <p className="text-2xl font-bold">{formatCurrency(surgeon.avgProfit)}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm text-slate-300">Typical / Case</p>
+              <div className="group relative">
+                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                  Median profit per case
+                </div>
+              </div>
+            </div>
+            <p className="text-2xl font-bold">
+              {surgeon.medianProfit !== null ? formatCurrency(surgeon.medianProfit) : formatCurrency(surgeon.avgProfit)}
+            </p>
+            {surgeon.profitVsFacility !== 0 && (
+              <p className={`text-xs mt-1 ${surgeon.profitVsFacility >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {surgeon.profitVsFacility >= 0 ? '+' : ''}{formatCurrency(surgeon.profitVsFacility)} vs facility
+              </p>
+            )}
           </div>
           <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-slate-300">Median / Case</p>
-            <p className="text-2xl font-bold">
-              {surgeon.medianProfit !== null ? formatCurrency(surgeon.medianProfit) : '—'}
-            </p>
+            <p className="text-sm text-slate-300">Cases</p>
+            <p className="text-2xl font-bold">{surgeon.caseCount}</p>
           </div>
+          {surgeon.medianDurationMinutes !== null && (
+            <div className="bg-white/10 rounded-xl p-4">
+              <p className="text-sm text-slate-300">Typical Duration</p>
+              <p className="text-2xl font-bold">{Math.round(surgeon.medianDurationMinutes)} min</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Performance by Procedure */}
+      {/* Efficiency Metrics Cards - RESTORED */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Time vs Facility */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <ClockIcon className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center gap-1">
+              <p className="text-sm font-medium text-slate-500">Time vs Facility</p>
+              <div className="group relative">
+                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
+                  <strong>Weighted average</strong> across all procedures this surgeon performs. 
+                  Accounts for different procedure types.
+                  <br /><br />
+                  Negative = faster than typical
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className={`text-2xl font-bold ${
+            isFasterThanFacility ? 'text-emerald-600' : 
+            timeDiffMinutes > 10 ? 'text-red-500' : 
+            'text-slate-900'
+          }`}>
+            {isFasterThanFacility ? '−' : '+'}{timeDiffMinutes} min
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            {isFasterThanFacility ? 'Faster' : 'Slower'} than facility average
+          </p>
+        </div>
+
+        {/* Profit Impact */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <ChartBarIcon className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center gap-1">
+              <p className="text-sm font-medium text-slate-500">Profit Impact</p>
+              <div className="group relative">
+                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
+                  Estimated profit impact per case based on time difference.
+                  <br /><br />
+                  Calculated as: time difference × OR rate / 60
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className={`text-2xl font-bold ${
+            surgeon.profitImpact >= 0 ? 'text-emerald-600' : 'text-red-500'
+          }`}>
+            {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            From {isFasterThanFacility ? 'faster' : 'slower'} case times
+          </p>
+        </div>
+
+        {/* Surgical Turnover */}
+        {surgeon.medianSurgicalTurnover !== null && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <BoltIcon className="w-5 h-5 text-slate-400" />
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-medium text-slate-500">Surgical Turnover</p>
+                <div className="group relative">
+                  <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
+                    Median time from closing of one case to incision of the next.
+                    Excludes first cases of the day.
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-slate-900">
+              {Math.round(surgeon.medianSurgicalTurnover)} min
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Typical between-case time</p>
+          </div>
+        )}
+
+        {/* Consistency Rating */}
+        {surgeon.consistencyRating && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-5 h-5 flex items-center justify-center">
+                {surgeon.consistencyRating === 'high' ? '⚡' : 
+                 surgeon.consistencyRating === 'medium' ? '◐' : '◯'}
+              </div>
+              <div className="flex items-center gap-1">
+                <p className="text-sm font-medium text-slate-500">Consistency</p>
+                <div className="group relative">
+                  <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+                  <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
+                    Based on standard deviation of case durations.
+                    <br /><br />
+                    <strong>High:</strong> Predictable case times<br />
+                    <strong>Medium:</strong> Some variability<br />
+                    <strong>Low:</strong> High variability
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-lg font-medium ${
+              surgeon.consistencyRating === 'high' 
+                ? 'bg-emerald-100 text-emerald-700' 
+                : surgeon.consistencyRating === 'medium'
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-red-100 text-red-700'
+            }`}>
+              {surgeon.consistencyRating === 'high' ? 'High' :
+               surgeon.consistencyRating === 'medium' ? 'Medium' : 'Low'}
+            </span>
+            <p className="text-xs text-slate-500 mt-2">
+              {surgeon.consistencyRating === 'high' ? 'Predictable case times' :
+               surgeon.consistencyRating === 'medium' ? 'Some case time variability' : 'Highly variable case times'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Performance by Procedure - UPDATED with Consistency */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">
           <h3 className="text-lg font-semibold text-slate-900">Performance by Procedure</h3>
           <p className="text-sm text-slate-500 mt-1">
-            Efficiency comparison vs facility average for each procedure type
+            Efficiency comparison vs facility median for each procedure type
           </p>
         </div>
         
@@ -376,7 +532,7 @@ function SurgeonDetail({
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
                   <div className="flex items-center justify-end gap-1">
-                    Facility Avg
+                    Facility
                     <span className="text-slate-400 font-normal">(median)</span>
                   </div>
                 </th>
@@ -433,6 +589,12 @@ function SurgeonDetail({
             </tbody>
           </table>
         </div>
+        
+        {procedures.some(p => p.caseCount < 5) && (
+          <div className="px-6 py-3 bg-amber-50 border-t border-amber-200 text-xs text-amber-700">
+            ⚠️ Procedures with fewer than 5 cases may have less reliable statistics
+          </div>
+        )}
       </div>
 
       {/* Explanation Card */}
@@ -441,12 +603,16 @@ function SurgeonDetail({
           <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-blue-800 space-y-2">
             <p>
-              <strong>Why per-procedure?</strong> Comparing surgeon efficiency only makes sense within 
+              <strong>Why per-procedure comparison?</strong> Comparing surgeon efficiency only makes sense within 
               the same procedure type. A hip replacement naturally takes longer than a knee scope.
             </p>
             <p>
-              <strong>Difference column:</strong> Shows how this surgeon's median time compares to 
-              the facility median for that specific procedure. Negative (green) = faster than average.
+              <strong>Time vs Facility (summary):</strong> The weighted average of time differences across all 
+              procedures this surgeon performs, accounting for how often they do each procedure.
+            </p>
+            <p>
+              <strong>Profit Impact:</strong> Estimated dollar impact per case based on time difference. 
+              Faster surgeons use less OR time, which costs {formatCurrency(metrics.orRate)}/hour at this facility.
             </p>
           </div>
         </div>
