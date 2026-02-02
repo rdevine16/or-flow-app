@@ -22,8 +22,6 @@ import {
   InformationCircleIcon,
   ChatBubbleLeftIcon,
   PaperAirplaneIcon,
-  XMarkIcon,
-  EyeSlashIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -111,7 +109,7 @@ interface OutlierDetail {
 }
 
 // Review status types
-type ReviewStatus = 'needs_review' | 'reviewed' | 'excluded'
+type ReviewStatus = 'needs_review' | 'reviewed'
 
 interface OutlierReview {
   id: string
@@ -200,8 +198,6 @@ export default function OutlierDetailPage() {
   const [newNote, setNewNote] = useState('')
   const [savingNote, setSavingNote] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
-  const [excludeReason, setExcludeReason] = useState('')
-  const [showExcludeModal, setShowExcludeModal] = useState(false)
 
   // Fetch case data with delays
   useEffect(() => {
@@ -456,12 +452,6 @@ export default function OutlierDetailPage() {
   // Handle status change
   async function handleStatusChange(newStatus: ReviewStatus) {
     if (!review || savingStatus) return
-    
-    // If changing to excluded, show modal for reason
-    if (newStatus === 'excluded') {
-      setShowExcludeModal(true)
-      return
-    }
 
     setSavingStatus(true)
     
@@ -471,7 +461,6 @@ export default function OutlierDetailPage() {
       status: newStatus,
       reviewed_by: newStatus === 'reviewed' ? user?.id : null,
       reviewed_at: newStatus === 'reviewed' ? new Date().toISOString() : null,
-      excluded_reason: null
     }
 
     const { error } = await supabase
@@ -486,38 +475,6 @@ export default function OutlierDetailPage() {
       
       // Add system note
       await addSystemNote(`Status changed to "${newStatus === 'needs_review' ? 'Needs Review' : 'Reviewed'}"`)
-    }
-    
-    setSavingStatus(false)
-  }
-
-  // Handle exclude with reason
-  async function handleExclude() {
-    if (!review || !excludeReason.trim()) return
-    
-    setSavingStatus(true)
-    
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    const updates: Partial<OutlierReview> = {
-      status: 'excluded',
-      reviewed_by: user?.id,
-      reviewed_at: new Date().toISOString(),
-      excluded_reason: excludeReason.trim()
-    }
-
-    const { error } = await supabase
-      .from('outlier_reviews')
-      .update(updates)
-      .eq('id', review.id)
-
-    if (error) {
-      console.error('Error excluding:', error)
-    } else {
-      setReview({ ...review, ...updates } as OutlierReview)
-      await addSystemNote(`Excluded from analytics: "${excludeReason.trim()}"`)
-      setShowExcludeModal(false)
-      setExcludeReason('')
     }
     
     setSavingStatus(false)
@@ -1066,28 +1023,7 @@ export default function OutlierDetailPage() {
                 <CheckCircleIcon className="w-5 h-5" />
                 Reviewed
               </button>
-              
-              <button
-                onClick={() => handleStatusChange('excluded')}
-                disabled={savingStatus}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
-                  review?.status === 'excluded'
-                    ? 'border-slate-500 bg-slate-100 text-slate-700'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                }`}
-              >
-                <EyeSlashIcon className="w-5 h-5" />
-                Excluded
-              </button>
             </div>
-            
-            {/* Show excluded reason if applicable */}
-            {review?.status === 'excluded' && review.excluded_reason && (
-              <div className="mt-3 bg-slate-50 rounded-lg p-3 text-sm">
-                <span className="font-medium text-slate-700">Exclusion reason:</span>{' '}
-                <span className="text-slate-600">{review.excluded_reason}</span>
-              </div>
-            )}
           </div>
 
           {/* Notes Section */}
@@ -1145,57 +1081,6 @@ export default function OutlierDetailPage() {
             )}
           </div>
         </div>
-
-        {/* Exclude Modal */}
-        {showExcludeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">Exclude from Analytics</h3>
-                <button
-                  onClick={() => {
-                    setShowExcludeModal(false)
-                    setExcludeReason('')
-                  }}
-                  className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  <XMarkIcon className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <p className="text-sm text-slate-600 mb-4">
-                Excluding this case will remove it from financial analytics calculations. Please provide a reason for exclusion.
-              </p>
-              
-              <textarea
-                value={excludeReason}
-                onChange={(e) => setExcludeReason(e.target.value)}
-                placeholder="e.g., Training case, data entry error, unusual circumstances..."
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
-                rows={3}
-              />
-              
-              <div className="flex justify-end gap-3 mt-4">
-                <button
-                  onClick={() => {
-                    setShowExcludeModal(false)
-                    setExcludeReason('')
-                  }}
-                  className="px-4 py-2 text-slate-600 hover:text-slate-800 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleExclude}
-                  disabled={!excludeReason.trim() || savingStatus}
-                  className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Exclude Case
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </Container>
     </DashboardLayout>
   )
