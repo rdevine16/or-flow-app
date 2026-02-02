@@ -31,22 +31,6 @@ interface Case {
   surgeon: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
 }
 
-interface Surgeon {
-  id: string
-  first_name: string
-  last_name: string
-}
-
-interface Room {
-  id: string
-  name: string
-}
-
-interface ProcedureType {
-  id: string
-  name: string
-}
-
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
