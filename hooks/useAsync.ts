@@ -169,7 +169,7 @@ export function useDebounce<T>(value: T, delay: number): T {
 // ============================================
 
 export function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T>()
+  const ref = useRef<T>(undefined)
 
   useEffect(() => {
     ref.current = value
