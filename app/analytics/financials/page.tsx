@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
@@ -28,6 +29,7 @@ import OutliersTab from '@/components/analytics/financials/OutliersTab'
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
   const { userData, loading: userLoading, isGlobalAdmin } = useUser()
+  const searchParams = useSearchParams()
   
   // Facility handling
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
@@ -41,8 +43,9 @@ export default function FinancialsAnalyticsPage() {
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
   const [loading, setLoading] = useState(true)
   
-  // UI state
-  const [activeTab, setActiveTab] = useState<SubTab>('overview')
+  // UI state - Read initial tab from URL query param
+  const initialTab = (searchParams.get('tab') as SubTab) || 'overview'
+  const [activeTab, setActiveTab] = useState<SubTab>(initialTab)
   const [dateRange, setDateRange] = useState('mtd')
   const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)

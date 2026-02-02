@@ -836,106 +836,270 @@ export default function OutlierDetailPage() {
           )}
         </div>
 
-        {/* Two Column Layout: Baseline Comparison + Financial Breakdown */}
+        {/* Baseline Analysis Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Baseline Comparison Table */}
+          
+          {/* Duration Analysis */}
           <div className="bg-white rounded-xl border border-slate-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">Baseline Comparison</h2>
-              <div className="group relative">
-                <InformationCircleIcon className="w-5 h-5 text-slate-400 cursor-help" />
-                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-64">
-                  <strong>Thresholds:</strong><br />
-                  Duration = median + 1σ (above is bad)<br />
-                  Profit = median - 1σ (below is bad)
-                </div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <ClockIcon className="w-5 h-5 text-slate-400" />
+                <h2 className="text-lg font-semibold text-slate-900">Duration Analysis</h2>
               </div>
+              <span className="text-2xl font-bold text-slate-900">{formatMinutes(detail.actualDuration)}</span>
             </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-2 font-medium text-slate-500"></th>
-                    <th className="text-right py-2 font-medium text-slate-500">This Case</th>
-                    <th className="text-right py-2 font-medium text-slate-500">
-                      <div>Personal</div>
-                      <div className="font-normal text-xs">({detail.personalSampleSize} cases)</div>
-                    </th>
-                    <th className="text-right py-2 font-medium text-slate-500">
-                      <div>Facility</div>
-                      <div className="font-normal text-xs">({detail.facilitySampleSize} cases)</div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  <tr>
-                    <td className="py-3 text-slate-600">Duration</td>
-                    <td className="py-3 text-right font-semibold text-slate-900">{formatMinutes(detail.actualDuration)}</td>
-                    <td className="py-3 text-right text-slate-600">{formatMinutes(detail.personalMedianDuration)}</td>
-                    <td className="py-3 text-right text-slate-600">{formatMinutes(detail.facilityMedianDuration)}</td>
-                  </tr>
-                  <tr className="bg-slate-50">
-                    <td className="py-3 text-slate-500 text-xs">Threshold</td>
-                    <td className="py-3 text-right text-slate-400">—</td>
-                    <td className="py-3 text-right text-slate-500 text-xs">{formatMinutes(detail.personalDurationThreshold)}</td>
-                    <td className="py-3 text-right text-slate-500 text-xs">{formatMinutes(detail.facilityDurationThreshold)}</td>
-                  </tr>
-                  <tr className="bg-slate-50">
-                    <td className="py-3 text-slate-500 text-xs">Status</td>
-                    <td className="py-3 text-right">—</td>
-                    <td className="py-3 text-right">
+
+            {/* Personal Baseline */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-600">vs Personal Baseline</span>
+                <span className="text-xs text-slate-400">({detail.personalSampleSize} cases)</span>
+              </div>
+              
+              {detail.personalMedianDuration !== null && detail.personalDurationThreshold !== null ? (
+                <div className={`rounded-lg p-4 ${detail.isDurationPersonalOutlier ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
                       {detail.isDurationPersonalOutlier ? (
-                        <span className="text-red-600 text-xs font-medium">⚠ OVER</span>
+                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
                       ) : (
-                        <span className="text-emerald-600 text-xs font-medium">✓ OK</span>
+                        <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
                       )}
-                    </td>
-                    <td className="py-3 text-right">
+                      <span className={`font-semibold ${detail.isDurationPersonalOutlier ? 'text-red-700' : 'text-emerald-700'}`}>
+                        {detail.isDurationPersonalOutlier 
+                          ? `+${Math.round(detail.actualDuration - detail.personalDurationThreshold)} min over threshold`
+                          : 'Within normal range'
+                        }
+                      </span>
+                    </div>
+                    {detail.isDurationPersonalOutlier && (
+                      <span className="text-sm font-medium text-red-600">
+                        +{Math.round(((detail.actualDuration - detail.personalMedianDuration) / detail.personalMedianDuration) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Visual Bar */}
+                  <div className="relative h-2 bg-slate-200 rounded-full mb-2">
+                    {/* Threshold marker */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-slate-400 z-10"
+                      style={{ 
+                        left: `${Math.min(95, (detail.personalDurationThreshold / Math.max(detail.actualDuration, detail.personalDurationThreshold * 1.2)) * 100)}%` 
+                      }}
+                    />
+                    {/* Actual value bar */}
+                    <div 
+                      className={`h-full rounded-full ${detail.isDurationPersonalOutlier ? 'bg-red-400' : 'bg-emerald-400'}`}
+                      style={{ 
+                        width: `${Math.min(100, (detail.actualDuration / Math.max(detail.actualDuration, detail.personalDurationThreshold * 1.2)) * 100)}%` 
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>Median: {formatMinutes(detail.personalMedianDuration)}</span>
+                    <span>Threshold: {formatMinutes(detail.personalDurationThreshold)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-lg p-4 text-center text-slate-500 text-sm">
+                  Not enough data for personal baseline
+                </div>
+              )}
+            </div>
+
+            {/* Facility Baseline */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-600">vs Facility Baseline</span>
+                <span className="text-xs text-slate-400">({detail.facilitySampleSize} cases)</span>
+              </div>
+              
+              {detail.facilityMedianDuration !== null && detail.facilityDurationThreshold !== null ? (
+                <div className={`rounded-lg p-4 ${detail.isDurationFacilityOutlier ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
                       {detail.isDurationFacilityOutlier ? (
-                        <span className="text-red-600 text-xs font-medium">⚠ OVER</span>
+                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
                       ) : (
-                        <span className="text-emerald-600 text-xs font-medium">✓ OK</span>
+                        <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
                       )}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-3 text-slate-600">Profit</td>
-                    <td className="py-3 text-right font-semibold text-slate-900">{formatCurrency(detail.actualProfit)}</td>
-                    <td className="py-3 text-right text-slate-600">{formatCurrency(detail.personalMedianProfit)}</td>
-                    <td className="py-3 text-right text-slate-600">{formatCurrency(detail.facilityMedianProfit)}</td>
-                  </tr>
-                  <tr className="bg-slate-50">
-                    <td className="py-3 text-slate-500 text-xs">Threshold</td>
-                    <td className="py-3 text-right text-slate-400">—</td>
-                    <td className="py-3 text-right text-slate-500 text-xs">{formatCurrency(detail.personalProfitThreshold)}</td>
-                    <td className="py-3 text-right text-slate-500 text-xs">{formatCurrency(detail.facilityProfitThreshold)}</td>
-                  </tr>
-                  <tr className="bg-slate-50">
-                    <td className="py-3 text-slate-500 text-xs">Status</td>
-                    <td className="py-3 text-right">—</td>
-                    <td className="py-3 text-right">
-                      {detail.isProfitPersonalOutlier ? (
-                        <span className="text-red-600 text-xs font-medium">⚠ BELOW</span>
-                      ) : (
-                        <span className="text-emerald-600 text-xs font-medium">✓ OK</span>
-                      )}
-                    </td>
-                    <td className="py-3 text-right">
-                      {detail.isProfitFacilityOutlier ? (
-                        <span className="text-red-600 text-xs font-medium">⚠ BELOW</span>
-                      ) : (
-                        <span className="text-emerald-600 text-xs font-medium">✓ OK</span>
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                      <span className={`font-semibold ${detail.isDurationFacilityOutlier ? 'text-red-700' : 'text-emerald-700'}`}>
+                        {detail.isDurationFacilityOutlier 
+                          ? `+${Math.round(detail.actualDuration - detail.facilityDurationThreshold)} min over threshold`
+                          : 'Within normal range'
+                        }
+                      </span>
+                    </div>
+                    {detail.isDurationFacilityOutlier && (
+                      <span className="text-sm font-medium text-red-600">
+                        +{Math.round(((detail.actualDuration - detail.facilityMedianDuration) / detail.facilityMedianDuration) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Visual Bar */}
+                  <div className="relative h-2 bg-slate-200 rounded-full mb-2">
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-slate-400 z-10"
+                      style={{ 
+                        left: `${Math.min(95, (detail.facilityDurationThreshold / Math.max(detail.actualDuration, detail.facilityDurationThreshold * 1.2)) * 100)}%` 
+                      }}
+                    />
+                    <div 
+                      className={`h-full rounded-full ${detail.isDurationFacilityOutlier ? 'bg-red-400' : 'bg-emerald-400'}`}
+                      style={{ 
+                        width: `${Math.min(100, (detail.actualDuration / Math.max(detail.actualDuration, detail.facilityDurationThreshold * 1.2)) * 100)}%` 
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>Median: {formatMinutes(detail.facilityMedianDuration)}</span>
+                    <span>Threshold: {formatMinutes(detail.facilityDurationThreshold)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-lg p-4 text-center text-slate-500 text-sm">
+                  Not enough data for facility baseline
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Financial Breakdown */}
+          {/* Profit Analysis */}
           <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <CurrencyDollarIcon className="w-5 h-5 text-slate-400" />
+                <h2 className="text-lg font-semibold text-slate-900">Profit Analysis</h2>
+              </div>
+              <span className={`text-2xl font-bold ${detail.actualProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatCurrency(detail.actualProfit)}
+              </span>
+            </div>
+
+            {/* Personal Baseline */}
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-600">vs Personal Baseline</span>
+                <span className="text-xs text-slate-400">({detail.personalSampleSize} cases)</span>
+              </div>
+              
+              {detail.personalMedianProfit !== null && detail.personalProfitThreshold !== null ? (
+                <div className={`rounded-lg p-4 ${detail.isProfitPersonalOutlier ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {detail.isProfitPersonalOutlier ? (
+                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                      ) : (
+                        <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
+                      )}
+                      <span className={`font-semibold ${detail.isProfitPersonalOutlier ? 'text-red-700' : 'text-emerald-700'}`}>
+                        {detail.isProfitPersonalOutlier 
+                          ? `${formatCurrency(detail.actualProfit - detail.personalProfitThreshold)} below threshold`
+                          : 'Within normal range'
+                        }
+                      </span>
+                    </div>
+                    {detail.isProfitPersonalOutlier && detail.personalMedianProfit > 0 && (
+                      <span className="text-sm font-medium text-red-600">
+                        {Math.round(((detail.personalMedianProfit - detail.actualProfit) / detail.personalMedianProfit) * 100)}% lower
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Visual Bar - inverted for profit (more = better) */}
+                  <div className="relative h-2 bg-slate-200 rounded-full mb-2">
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-slate-400 z-10"
+                      style={{ 
+                        left: `${Math.min(95, Math.max(5, (detail.personalProfitThreshold / detail.personalMedianProfit) * 50))}%` 
+                      }}
+                    />
+                    <div 
+                      className={`h-full rounded-full ${detail.isProfitPersonalOutlier ? 'bg-red-400' : 'bg-emerald-400'}`}
+                      style={{ 
+                        width: `${Math.min(100, Math.max(5, (detail.actualProfit / detail.personalMedianProfit) * 50))}%` 
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>Threshold: {formatCurrency(detail.personalProfitThreshold)}</span>
+                    <span>Median: {formatCurrency(detail.personalMedianProfit)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-lg p-4 text-center text-slate-500 text-sm">
+                  Not enough data for personal baseline
+                </div>
+              )}
+            </div>
+
+            {/* Facility Baseline */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-600">vs Facility Baseline</span>
+                <span className="text-xs text-slate-400">({detail.facilitySampleSize} cases)</span>
+              </div>
+              
+              {detail.facilityMedianProfit !== null && detail.facilityProfitThreshold !== null ? (
+                <div className={`rounded-lg p-4 ${detail.isProfitFacilityOutlier ? 'bg-red-50 border border-red-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {detail.isProfitFacilityOutlier ? (
+                        <ExclamationTriangleIcon className="w-5 h-5 text-red-500" />
+                      ) : (
+                        <CheckCircleIcon className="w-5 h-5 text-emerald-500" />
+                      )}
+                      <span className={`font-semibold ${detail.isProfitFacilityOutlier ? 'text-red-700' : 'text-emerald-700'}`}>
+                        {detail.isProfitFacilityOutlier 
+                          ? `${formatCurrency(detail.actualProfit - detail.facilityProfitThreshold)} below threshold`
+                          : 'Within normal range'
+                        }
+                      </span>
+                    </div>
+                    {detail.isProfitFacilityOutlier && detail.facilityMedianProfit > 0 && (
+                      <span className="text-sm font-medium text-red-600">
+                        {Math.round(((detail.facilityMedianProfit - detail.actualProfit) / detail.facilityMedianProfit) * 100)}% lower
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Visual Bar */}
+                  <div className="relative h-2 bg-slate-200 rounded-full mb-2">
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 bg-slate-400 z-10"
+                      style={{ 
+                        left: `${Math.min(95, Math.max(5, (detail.facilityProfitThreshold / detail.facilityMedianProfit) * 50))}%` 
+                      }}
+                    />
+                    <div 
+                      className={`h-full rounded-full ${detail.isProfitFacilityOutlier ? 'bg-red-400' : 'bg-emerald-400'}`}
+                      style={{ 
+                        width: `${Math.min(100, Math.max(5, (detail.actualProfit / detail.facilityMedianProfit) * 50))}%` 
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>Threshold: {formatCurrency(detail.facilityProfitThreshold)}</span>
+                    <span>Median: {formatCurrency(detail.facilityMedianProfit)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 rounded-lg p-4 text-center text-slate-500 text-sm">
+                  Not enough data for facility baseline
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Financial Breakdown */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
             <h2 className="text-lg font-semibold text-slate-900 mb-4">Financial Breakdown</h2>
             
             <div className="space-y-3">
@@ -988,7 +1152,6 @@ export default function OutlierDetailPage() {
               </div>
             </div>
           </div>
-        </div>
 
         {/* Notes & Actions */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
