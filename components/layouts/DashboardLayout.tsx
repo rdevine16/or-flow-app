@@ -16,6 +16,7 @@ import { getImpersonationState, endImpersonation } from '../../lib/impersonation
 import { authAudit, adminAudit } from '../../lib/audit-logger'
 import GlobalSearch from '../GlobalSearch'
 import { OrbitLogo, OrbitLogoFull } from '../icons/OrbitLogo'
+import ErrorBoundary from '../ErrorBoundary'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -839,7 +840,11 @@ if (!mounted) {   return (
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6">
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
+        </main>
       </div>
     </div>
   )
