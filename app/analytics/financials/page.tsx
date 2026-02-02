@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -26,7 +26,31 @@ import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
 import OutliersTab from '@/components/analytics/financials/OutliersTab'
 
+// Loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <DashboardLayout>
+      <div className="flex items-center justify-center py-24">
+        <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+        </svg>
+      </div>
+    </DashboardLayout>
+  )
+}
+
+// Main page export - wraps content in Suspense for useSearchParams
 export default function FinancialsAnalyticsPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <FinancialsPageContent />
+    </Suspense>
+  )
+}
+
+// Inner component that uses useSearchParams
+function FinancialsPageContent() {
   const supabase = createClient()
   const { userData, loading: userLoading, isGlobalAdmin } = useUser()
   const searchParams = useSearchParams()
@@ -43,8 +67,11 @@ export default function FinancialsAnalyticsPage() {
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
   const [loading, setLoading] = useState(true)
   
-  // UI state - Read initial tab from URL query param
-  const initialTab = (searchParams.get('tab') as SubTab) || 'overview'
+  // UI state - Read initial tab from URL (safe now with Suspense wrapper)
+  const tabFromUrl = searchParams.get('tab') as SubTab
+  const initialTab = tabFromUrl && ['overview', 'procedure', 'surgeon', 'outliers'].includes(tabFromUrl) 
+    ? tabFromUrl 
+    : 'overview'
   const [activeTab, setActiveTab] = useState<SubTab>(initialTab)
   const [dateRange, setDateRange] = useState('mtd')
   const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
