@@ -1,5 +1,5 @@
 // components/analytics/financials/SurgeonTab.tsx
-// Redesigned with profit leaderboard and procedure-aware drill-down
+// REDESIGNED: Focus on profit (fair comparison), drill-down for procedure details
 
 'use client'
 
@@ -11,9 +11,8 @@ import {
   InformationCircleIcon, 
   ChevronRightIcon,
   ChevronDownIcon,
-  ClockIcon,
-  CurrencyDollarIcon,
   ArrowLeftIcon,
+  TrophyIcon,
 } from '@heroicons/react/24/outline'
 
 interface SurgeonTabProps {
@@ -27,6 +26,18 @@ export default function SurgeonTab({
   selectedSurgeon, 
   onSurgeonSelect 
 }: SurgeonTabProps) {
+  const surgeonStats = metrics.surgeonStats
+
+  // If no data
+  if (surgeonStats.length === 0) {
+    return (
+      <div className="bg-slate-50 rounded-xl p-12 text-center">
+        <div className="text-slate-400 text-lg mb-2">No surgeon data for selected period</div>
+        <div className="text-slate-500 text-sm">Try selecting a longer date range</div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Surgeon Selector */}
@@ -38,7 +49,7 @@ export default function SurgeonTab({
           className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="">All Surgeons Overview</option>
-          {metrics.surgeonStats.map(surgeon => (
+          {surgeonStats.map(surgeon => (
             <option key={surgeon.surgeonId} value={surgeon.surgeonId}>
               {surgeon.surgeonName} ({surgeon.caseCount} cases)
             </option>
@@ -63,7 +74,7 @@ export default function SurgeonTab({
 }
 
 // ============================================
-// ALL SURGEONS OVERVIEW
+// ALL SURGEONS OVERVIEW - Profit Focus
 // ============================================
 
 function AllSurgeonsOverview({ 
@@ -76,41 +87,55 @@ function AllSurgeonsOverview({
   const [expandedSurgeon, setExpandedSurgeon] = useState<string | null>(null)
   const surgeonStats = metrics.surgeonStats
 
+  // Calculate totals from surgeon stats (should match metrics.totalProfit)
+  const totalCases = surgeonStats.reduce((sum, s) => sum + s.caseCount, 0)
+  const totalProfit = surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0)
+
   return (
     <>
       {/* Summary Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard 
-          title="Total Surgeons" 
+          title="Surgeons" 
           value={surgeonStats.length}
           subtitle="Active in period"
         />
         <MetricCard 
           title="Total Cases" 
-          value={metrics.totalCases}
-          subtitle="All surgeons"
+          value={totalCases.toLocaleString()}
+          subtitle="Completed"
         />
         <MetricCard 
           title="Total Profit" 
-          value={formatCurrency(metrics.totalProfit)}
+          value={formatCurrency(totalProfit)}
           variant="success"
         />
         <MetricCard 
           title="Avg per Case" 
-          value={formatCurrency(metrics.avgProfit)}
+          value={totalCases > 0 ? formatCurrency(totalProfit / totalCases) : '$0'}
         />
       </div>
 
-      {/* Profit Leaderboard with Inline Expansion */}
+      {/* Profit Leaderboard */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-2">
-            <CurrencyDollarIcon className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-lg font-semibold text-slate-900">Surgeon Performance</h3>
+            <TrophyIcon className="w-5 h-5 text-amber-500" />
+            <h3 className="text-lg font-semibold text-slate-900">Surgeon Profit Rankings</h3>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Click a row to see procedure breakdown • Efficiency is adjusted for procedure mix
+            Click a row to see procedure breakdown
           </p>
+        </div>
+        
+        {/* Table Header */}
+        <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+          <div className="col-span-1">Rank</div>
+          <div className="col-span-4">Surgeon</div>
+          <div className="col-span-2 text-center">Cases</div>
+          <div className="col-span-2 text-right">Total Profit</div>
+          <div className="col-span-2 text-right">Avg / Case</div>
+          <div className="col-span-1"></div>
         </div>
         
         <div className="divide-y divide-slate-100">
@@ -124,7 +149,6 @@ function AllSurgeonsOverview({
                 expandedSurgeon === surgeon.surgeonId ? null : surgeon.surgeonId
               )}
               onViewDetail={() => onSurgeonSelect(surgeon.surgeonId)}
-              costPerMinute={metrics.costPerMinute}
             />
           ))}
         </div>
@@ -149,71 +173,64 @@ function SurgeonRow({
   isExpanded,
   onToggle,
   onViewDetail,
-  costPerMinute,
 }: {
   surgeon: SurgeonStats
   rank: number
   isExpanded: boolean
   onToggle: () => void
   onViewDetail: () => void
-  costPerMinute: number
 }) {
   const procedures = surgeon.procedureBreakdown || []
-  const isFaster = surgeon.durationVsFacilityMinutes < 0
-  const minutes = Math.abs(Math.round(surgeon.durationVsFacilityMinutes))
 
   return (
     <div className={`${isExpanded ? 'bg-slate-50' : ''}`}>
       {/* Main Row */}
       <div 
-        className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50 cursor-pointer transition-colors"
+        className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
         onClick={onToggle}
       >
         {/* Rank */}
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-          rank === 1 ? 'bg-amber-100 text-amber-700' : 
-          rank === 2 ? 'bg-slate-200 text-slate-600' : 
-          rank === 3 ? 'bg-orange-100 text-orange-700' : 
-          'bg-slate-100 text-slate-500'
-        }`}>
-          {rank}
+        <div className="col-span-1">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+            rank === 1 ? 'bg-amber-100 text-amber-700' : 
+            rank === 2 ? 'bg-slate-200 text-slate-600' : 
+            rank === 3 ? 'bg-orange-100 text-orange-700' : 
+            'bg-slate-100 text-slate-500'
+          }`}>
+            {rank}
+          </div>
         </div>
 
         {/* Name & Procedures */}
-        <div className="flex-1 min-w-0">
+        <div className="col-span-4">
           <div className="flex items-center gap-2">
             <span className="font-medium text-slate-900">{surgeon.surgeonName}</span>
             {surgeon.caseCount < 10 && (
               <span className="text-xs text-amber-600">*</span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-sm text-slate-500">{surgeon.caseCount} cases</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-sm text-slate-500">{procedures.length} procedure{procedures.length !== 1 ? 's' : ''}</span>
+          <div className="text-sm text-slate-500 mt-0.5">
+            {procedures.length} procedure{procedures.length !== 1 ? 's' : ''}
           </div>
+        </div>
+
+        {/* Cases */}
+        <div className="col-span-2 text-center text-slate-600">
+          {surgeon.caseCount}
         </div>
 
         {/* Total Profit */}
-        <div className="text-right flex-shrink-0">
-          <div className="font-semibold text-emerald-600">{formatCurrency(surgeon.totalProfit)}</div>
-          <div className="text-xs text-slate-500">{formatCurrency(surgeon.avgProfit)}/case</div>
+        <div className="col-span-2 text-right">
+          <span className="font-semibold text-emerald-600">{formatCurrency(surgeon.totalProfit)}</span>
         </div>
 
-        {/* Efficiency */}
-        <div className="text-right w-24 flex-shrink-0">
-          <div className={`font-medium ${
-            isFaster ? 'text-emerald-600' : 
-            minutes > 10 ? 'text-red-500' : 
-            'text-slate-600'
-          }`}>
-            {isFaster ? '-' : '+'}{minutes} min
-          </div>
-          <div className="text-xs text-slate-500">vs expected</div>
+        {/* Avg per Case */}
+        <div className="col-span-2 text-right text-slate-600">
+          {formatCurrency(surgeon.avgProfit)}
         </div>
 
         {/* Expand Chevron */}
-        <div className="flex-shrink-0">
+        <div className="col-span-1 flex justify-end">
           {isExpanded ? (
             <ChevronDownIcon className="w-5 h-5 text-slate-400" />
           ) : (
@@ -243,34 +260,23 @@ function SurgeonRow({
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Procedure</th>
                   <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Cases</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Profit</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">vs Facility</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Total Profit</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Avg / Case</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {procedures.slice(0, 5).map(proc => {
-                  const procIsFaster = proc.durationVsFacility < 0
-                  const procMinutes = Math.abs(Math.round(proc.durationVsFacility))
-                  
-                  return (
-                    <tr key={proc.procedureId} className="hover:bg-slate-50">
-                      <td className="px-4 py-2 text-slate-700">{proc.procedureName}</td>
-                      <td className="px-4 py-2 text-center text-slate-600">{proc.caseCount}</td>
-                      <td className="px-4 py-2 text-right text-slate-600">
-                        {proc.medianProfit !== null ? formatCurrency(proc.medianProfit) : '—'}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <span className={`${
-                          procIsFaster ? 'text-emerald-600' : 
-                          procMinutes > 10 ? 'text-red-500' : 
-                          'text-slate-600'
-                        }`}>
-                          {procIsFaster ? '-' : '+'}{procMinutes} min
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {procedures.slice(0, 5).map(proc => (
+                  <tr key={proc.procedureId} className="hover:bg-slate-50">
+                    <td className="px-4 py-2 text-slate-700">{proc.procedureName}</td>
+                    <td className="px-4 py-2 text-center text-slate-600">{proc.caseCount}</td>
+                    <td className="px-4 py-2 text-right text-emerald-600 font-medium">
+                      {formatCurrency(proc.totalProfit)}
+                    </td>
+                    <td className="px-4 py-2 text-right text-slate-600">
+                      {proc.medianProfit !== null ? formatCurrency(proc.medianProfit) : '—'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             {procedures.length > 5 && (
@@ -302,7 +308,6 @@ function SurgeonDetail({
   if (!surgeon) return null
 
   const procedures = surgeon.procedureBreakdown || []
-  const isFaster = surgeon.durationVsFacilityMinutes < 0
 
   return (
     <>
@@ -323,11 +328,13 @@ function SurgeonDetail({
           </div>
           <div>
             <h2 className="text-2xl font-bold">{surgeon.surgeonName}</h2>
-            <p className="text-slate-300">{surgeon.caseCount} cases • {procedures.length} procedure type{procedures.length !== 1 ? 's' : ''}</p>
+            <p className="text-slate-300">
+              {surgeon.caseCount} cases • {procedures.length} procedure type{procedures.length !== 1 ? 's' : ''}
+            </p>
           </div>
         </div>
         
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="bg-white/10 rounded-xl p-4">
             <p className="text-sm text-slate-300">Total Profit</p>
             <p className="text-2xl font-bold text-emerald-400">{formatCurrency(surgeon.totalProfit)}</p>
@@ -337,25 +344,10 @@ function SurgeonDetail({
             <p className="text-2xl font-bold">{formatCurrency(surgeon.avgProfit)}</p>
           </div>
           <div className="bg-white/10 rounded-xl p-4">
-            <div className="flex items-center gap-1">
-              <p className="text-sm text-slate-300">Efficiency</p>
-              <div className="group relative">
-                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-black text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-64">
-                  Procedure-adjusted: compares to facility median for each procedure, weighted by case volume
-                </div>
-              </div>
-            </div>
-            <p className={`text-2xl font-bold ${isFaster ? 'text-emerald-400' : surgeon.durationVsFacilityMinutes > 10 ? 'text-red-400' : 'text-white'}`}>
-              {isFaster ? '' : '+'}{Math.round(surgeon.durationVsFacilityMinutes)} min
+            <p className="text-sm text-slate-300">Median / Case</p>
+            <p className="text-2xl font-bold">
+              {surgeon.medianProfit !== null ? formatCurrency(surgeon.medianProfit) : '—'}
             </p>
-          </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-slate-300">Time Impact</p>
-            <p className={`text-2xl font-bold ${surgeon.profitImpact > 0 ? 'text-emerald-400' : surgeon.profitImpact < -100 ? 'text-red-400' : 'text-white'}`}>
-              {surgeon.profitImpact > 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}
-            </p>
-            <p className="text-xs text-slate-400">per case</p>
           </div>
         </div>
       </div>
@@ -365,7 +357,7 @@ function SurgeonDetail({
         <div className="px-6 py-4 border-b border-slate-200">
           <h3 className="text-lg font-semibold text-slate-900">Performance by Procedure</h3>
           <p className="text-sm text-slate-500 mt-1">
-            How {surgeon.surgeonName} compares to facility median for each procedure type
+            Efficiency comparison vs facility average for each procedure type
           </p>
         </div>
         
@@ -376,16 +368,26 @@ function SurgeonDetail({
                 <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Total Profit</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Duration</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">vs Facility</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Profit / Case</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">vs Facility</th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
+                  <div className="flex items-center justify-end gap-1">
+                    Surgeon Time
+                    <span className="text-slate-400 font-normal">(median)</span>
+                  </div>
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
+                  <div className="flex items-center justify-end gap-1">
+                    Facility Avg
+                    <span className="text-slate-400 font-normal">(median)</span>
+                  </div>
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Difference</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {procedures.map(proc => {
-                const procIsFaster = proc.durationVsFacility < 0
-                const procMoreProfit = proc.profitVsFacility > 0
+                const hasFacilityBaseline = proc.facilityMedianDuration !== null
+                const isFaster = proc.durationVsFacility < 0
+                const diffMinutes = Math.abs(Math.round(proc.durationVsFacility))
                 
                 return (
                   <tr key={proc.procedureId} className="hover:bg-slate-50">
@@ -404,35 +406,25 @@ function SurgeonDetail({
                     <td className="px-6 py-4 text-right text-slate-600">
                       {proc.medianDuration !== null ? `${Math.round(proc.medianDuration)} min` : '—'}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <span className={`font-medium ${
-                        procIsFaster ? 'text-emerald-600' : 
-                        Math.abs(proc.durationVsFacility) > 10 ? 'text-red-500' : 
-                        'text-slate-600'
-                      }`}>
-                        {procIsFaster ? '' : '+'}{Math.round(proc.durationVsFacility)} min
-                      </span>
-                      {proc.durationVsFacilityPct !== null && (
-                        <span className="text-xs text-slate-400 ml-1">
-                          ({proc.durationVsFacilityPct > 0 ? '+' : ''}{proc.durationVsFacilityPct.toFixed(0)}%)
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right text-slate-600">
-                      {proc.medianProfit !== null ? formatCurrency(proc.medianProfit) : '—'}
+                    <td className="px-6 py-4 text-right text-slate-500">
+                      {proc.facilityMedianDuration !== null ? `${Math.round(proc.facilityMedianDuration)} min` : '—'}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className={`font-medium ${
-                        procMoreProfit ? 'text-emerald-600' : 
-                        Math.abs(proc.profitVsFacility) > 500 ? 'text-red-500' : 
-                        'text-slate-600'
-                      }`}>
-                        {procMoreProfit ? '+' : ''}{formatCurrency(proc.profitVsFacility)}
-                      </span>
-                      {proc.profitVsFacilityPct !== null && (
-                        <span className="text-xs text-slate-400 ml-1">
-                          ({proc.profitVsFacilityPct > 0 ? '+' : ''}{proc.profitVsFacilityPct.toFixed(0)}%)
+                      {hasFacilityBaseline ? (
+                        <span className={`font-medium ${
+                          isFaster ? 'text-emerald-600' : 
+                          diffMinutes > 10 ? 'text-red-500' : 
+                          'text-slate-600'
+                        }`}>
+                          {isFaster ? '−' : '+'}{diffMinutes} min
+                          {proc.durationVsFacilityPct !== null && (
+                            <span className="text-xs text-slate-400 ml-1">
+                              ({proc.durationVsFacilityPct > 0 ? '+' : ''}{Math.round(proc.durationVsFacilityPct)}%)
+                            </span>
+                          )}
                         </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                   </tr>
@@ -449,17 +441,12 @@ function SurgeonDetail({
           <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-blue-800 space-y-2">
             <p>
-              <strong>Fair Comparison:</strong> The "vs Facility" columns compare this surgeon's performance 
-              to the facility median <em>for that specific procedure</em>. This accounts for differences in 
-              procedure complexity.
+              <strong>Why per-procedure?</strong> Comparing surgeon efficiency only makes sense within 
+              the same procedure type. A hip replacement naturally takes longer than a knee scope.
             </p>
             <p>
-              <strong>Efficiency Index:</strong> The overall efficiency (-/+ minutes) is a weighted average 
-              across all procedures this surgeon performs, weighted by their case volume for each procedure.
-            </p>
-            <p>
-              <strong>Time Impact:</strong> Estimated profit impact per case based on efficiency and 
-              your OR hourly rate of {formatCurrency(metrics.orRate)}/hr.
+              <strong>Difference column:</strong> Shows how this surgeon's median time compares to 
+              the facility median for that specific procedure. Negative (green) = faster than average.
             </p>
           </div>
         </div>
