@@ -1,36 +1,87 @@
-// components/analytics/financials/SurgeonTab.tsx
-// UPDATED: Added Daily Activity view in SurgeonDetail
-
 'use client'
 
 import { useState, useMemo } from 'react'
-import { FinancialsMetrics, SurgeonStats, SurgeonProcedureBreakdown, CaseCompletionStats } from './types'
+import { 
+  FinancialsMetrics, 
+  SurgeonStats, 
+  CaseCompletionStats,
+  ProcedureBreakdown 
+} from './types'
 import { formatCurrency } from './utils'
-import MetricCard from './MetricCard'
 import { 
   InformationCircleIcon, 
   ChevronRightIcon,
   ChevronDownIcon,
-  ArrowLeftIcon,
-  TrophyIcon,
-  ClockIcon,
-  BoltIcon,
-  ChartBarIcon,
   CalendarDaysIcon,
+  ClockIcon,
+  CurrencyDollarIcon,
+  ChartBarIcon,
+  UserIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline'
-
-// Helper to normalize Supabase joins
-function normalizeJoin<T>(data: T | T[] | null): T | null {
-  if (Array.isArray(data)) return data[0] || null
-  return data
-}
+import { CheckCircleIcon } from '@heroicons/react/24/solid'
 
 interface SurgeonTabProps {
   metrics: FinancialsMetrics
-  caseStats: CaseCompletionStats[]  // Raw case data for daily view
+  caseStats: CaseCompletionStats[]
   selectedSurgeon: string | null
   onSurgeonSelect: (surgeonId: string | null) => void
 }
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function formatDuration(minutes: number | null): string {
+  if (minutes === null || minutes === undefined) return '—'
+  const hrs = Math.floor(minutes / 60)
+  const mins = Math.round(minutes % 60)
+  if (hrs > 0) return `${hrs}h ${mins}m`
+  return `${mins}m`
+}
+
+function formatTime(timeStr: string | null): string {
+  if (!timeStr) return '—'
+  const [hours, minutes] = timeStr.split(':').map(Number)
+  const suffix = hours >= 12 ? 'PM' : 'AM'
+  const displayHour = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)
+  return `${displayHour}:${String(minutes).padStart(2, '0')} ${suffix}`
+}
+
+function formatDateDisplay(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { 
+    weekday: 'long',
+    month: 'long', 
+    day: 'numeric', 
+    year: 'numeric' 
+  })
+}
+
+function formatShortDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function getDayOfWeek(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.toLocaleDateString('en-US', { weekday: 'short' })
+}
+
+function calculateMedian(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 
 export default function SurgeonTab({ 
   metrics, 
@@ -38,48 +89,58 @@ export default function SurgeonTab({
   selectedSurgeon, 
   onSurgeonSelect 
 }: SurgeonTabProps) {
-  const surgeonStats = metrics.surgeonStats
-
-  // If no data
-  if (surgeonStats.length === 0) {
-    return (
-      <div className="bg-slate-50 rounded-xl p-12 text-center">
-        <div className="text-slate-400 text-lg mb-2">No surgeon data for selected period</div>
-        <div className="text-slate-500 text-sm">Try selecting a longer date range</div>
-      </div>
-    )
-  }
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  
+  // Navigation state for breadcrumb
+  const currentView = selectedDate ? 'day' : selectedSurgeon ? 'detail' : 'list'
+  
+  const selectedSurgeonData = metrics.surgeonStats.find(s => s.surgeonId === selectedSurgeon)
+  
+  // Get surgeon's cases from caseStats
+  const surgeonCases = useMemo(() => {
+    if (!selectedSurgeon) return []
+    return caseStats.filter(c => c.surgeon_id === selectedSurgeon)
+  }, [caseStats, selectedSurgeon])
 
   return (
     <div className="space-y-6">
-      {/* Surgeon Selector */}
-      <div className="flex items-center gap-4">
-        <label className="text-sm font-medium text-slate-700">Surgeon:</label>
-        <select
-          value={selectedSurgeon || ''}
-          onChange={(e) => onSurgeonSelect(e.target.value || null)}
-          className="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">All Surgeons Overview</option>
-          {surgeonStats.map(surgeon => (
-            <option key={surgeon.surgeonId} value={surgeon.surgeonId}>
-              {surgeon.surgeonName} ({surgeon.caseCount} cases)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {selectedSurgeon ? (
-        <SurgeonDetail 
-          metrics={metrics}
-          caseStats={caseStats}
-          surgeonId={selectedSurgeon}
-          onBack={() => onSurgeonSelect(null)}
-        />
-      ) : (
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb 
+        surgeonName={selectedSurgeonData?.surgeonName}
+        selectedDate={selectedDate}
+        onNavigate={(view) => {
+          if (view === 'list') {
+            onSurgeonSelect(null)
+            setSelectedDate(null)
+          } else if (view === 'detail') {
+            setSelectedDate(null)
+          }
+        }}
+      />
+      
+      {/* View Router */}
+      {currentView === 'list' && (
         <AllSurgeonsOverview 
           metrics={metrics} 
           onSurgeonSelect={onSurgeonSelect} 
+        />
+      )}
+      
+      {currentView === 'detail' && selectedSurgeonData && (
+        <SurgeonDetail 
+          surgeon={selectedSurgeonData}
+          surgeonCases={surgeonCases}
+          metrics={metrics}
+          onDateSelect={setSelectedDate}
+        />
+      )}
+      
+      {currentView === 'day' && selectedSurgeonData && selectedDate && (
+        <SurgeonDayView
+          surgeon={selectedSurgeonData}
+          surgeonCases={surgeonCases}
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
         />
       )}
     </div>
@@ -87,7 +148,61 @@ export default function SurgeonTab({
 }
 
 // ============================================
-// ALL SURGEONS OVERVIEW - Profit Focus
+// BREADCRUMB COMPONENT
+// ============================================
+
+function Breadcrumb({ 
+  surgeonName, 
+  selectedDate,
+  onNavigate 
+}: { 
+  surgeonName?: string
+  selectedDate: string | null
+  onNavigate: (view: 'list' | 'detail' | 'day') => void
+}) {
+  return (
+    <nav className="flex items-center gap-2 text-sm">
+      <button 
+        onClick={() => onNavigate('list')}
+        className={`font-medium transition-colors ${
+          !surgeonName 
+            ? 'text-slate-900' 
+            : 'text-slate-500 hover:text-blue-600'
+        }`}
+      >
+        All Surgeons
+      </button>
+      
+      {surgeonName && (
+        <>
+          <ChevronRightIcon className="w-4 h-4 text-slate-400" />
+          <button 
+            onClick={() => onNavigate('detail')}
+            className={`font-medium transition-colors ${
+              !selectedDate 
+                ? 'text-slate-900' 
+                : 'text-slate-500 hover:text-blue-600'
+            }`}
+          >
+            {surgeonName}
+          </button>
+        </>
+      )}
+      
+      {selectedDate && (
+        <>
+          <ChevronRightIcon className="w-4 h-4 text-slate-400" />
+          <span className="font-medium text-slate-900">
+            {formatShortDate(selectedDate)}
+          </span>
+        </>
+      )}
+    </nav>
+  )
+}
+
+// ============================================
+// ALL SURGEONS OVERVIEW (Profit Leaderboard)
 // ============================================
 
 function AllSurgeonsOverview({ 
@@ -98,549 +213,373 @@ function AllSurgeonsOverview({
   onSurgeonSelect: (surgeonId: string) => void 
 }) {
   const [expandedSurgeon, setExpandedSurgeon] = useState<string | null>(null)
-  const surgeonStats = metrics.surgeonStats
-
-  // Calculate totals from surgeon stats
-  const totalCases = surgeonStats.reduce((sum, s) => sum + s.caseCount, 0)
-  const totalProfit = surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0)
-
+  
+  // Sort by total profit
+  const sortedSurgeons = [...metrics.surgeonStats].sort((a, b) => b.totalProfit - a.totalProfit)
+  
   return (
     <>
-      {/* Summary Row */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard 
-          title="Surgeons" 
-          value={surgeonStats.length}
-          subtitle="Active in period"
+        <SummaryCard 
+          title="Total Surgeons"
+          value={metrics.surgeonStats.length}
+          icon={UserIcon}
         />
-        <MetricCard 
-          title="Total Cases" 
-          value={totalCases.toLocaleString()}
-          subtitle="Completed"
-        />
-        <MetricCard 
-          title="Total Profit" 
-          value={formatCurrency(totalProfit)}
+        <SummaryCard 
+          title="Total Profit"
+          value={formatCurrency(metrics.surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0))}
+          icon={CurrencyDollarIcon}
           variant="success"
         />
-        <MetricCard 
-          title="Avg per Case" 
-          value={totalCases > 0 ? formatCurrency(totalProfit / totalCases) : '$0'}
+        <SummaryCard 
+          title="Total Cases"
+          value={metrics.surgeonStats.reduce((sum, s) => sum + s.caseCount, 0)}
+          icon={ChartBarIcon}
+        />
+        <SummaryCard 
+          title="Avg Profit/Surgeon"
+          value={formatCurrency(
+            metrics.surgeonStats.length > 0 
+              ? metrics.surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0) / metrics.surgeonStats.length
+              : 0
+          )}
+          icon={ArrowTrendingUpIcon}
         />
       </div>
 
       {/* Profit Leaderboard */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <div className="flex items-center gap-2">
-            <TrophyIcon className="w-5 h-5 text-amber-500" />
-            <h3 className="text-lg font-semibold text-slate-900">Surgeon Profit Rankings</h3>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Profit Leaderboard</h3>
+              <p className="text-sm text-slate-500 mt-0.5">Click a surgeon to view detailed performance</p>
+            </div>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Click a row to see procedure breakdown, or select from dropdown for full detail
-          </p>
-        </div>
-        
-        {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
-          <div className="col-span-1">Rank</div>
-          <div className="col-span-4">Surgeon</div>
-          <div className="col-span-2 text-center">Cases</div>
-          <div className="col-span-2 text-right">Total Profit</div>
-          <div className="col-span-2 text-right">Avg / Case</div>
-          <div className="col-span-1"></div>
         </div>
         
         <div className="divide-y divide-slate-100">
-          {surgeonStats.map((surgeon, idx) => (
-            <SurgeonRow
-              key={surgeon.surgeonId}
-              surgeon={surgeon}
-              rank={idx + 1}
-              isExpanded={expandedSurgeon === surgeon.surgeonId}
-              onToggle={() => setExpandedSurgeon(
-                expandedSurgeon === surgeon.surgeonId ? null : surgeon.surgeonId
+          {sortedSurgeons.map((surgeon, idx) => (
+            <div key={surgeon.surgeonId}>
+              {/* Surgeon Row */}
+              <div 
+                className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/80 cursor-pointer transition-colors"
+                onClick={() => onSurgeonSelect(surgeon.surgeonId)}
+              >
+                {/* Rank Badge */}
+                <div className={`
+                  w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm
+                  ${idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white' : ''}
+                  ${idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : ''}
+                  ${idx === 2 ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white' : ''}
+                  ${idx > 2 ? 'bg-slate-100 text-slate-600' : ''}
+                `}>
+                  {idx + 1}
+                </div>
+                
+                {/* Surgeon Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-900">{surgeon.surgeonName}</span>
+                    {surgeon.caseCount < 10 && (
+                      <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 rounded">
+                        Low volume
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500">
+                    <span>{surgeon.caseCount} cases</span>
+                    <span className="text-slate-300">•</span>
+                    <span>{surgeon.procedureBreakdown?.length || 0} procedures</span>
+                  </div>
+                </div>
+                
+                {/* Metrics */}
+                <div className="flex items-center gap-8">
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Total Profit</div>
+                    <div className="text-lg font-bold text-emerald-600">{formatCurrency(surgeon.totalProfit)}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Avg/Case</div>
+                    <div className="text-lg font-semibold text-slate-900">
+                      {formatCurrency(surgeon.medianProfit || surgeon.avgProfit)}
+                    </div>
+                  </div>
+                  <ChevronRightIcon className="w-5 h-5 text-slate-400" />
+                </div>
+              </div>
+              
+              {/* Expandable Procedure Breakdown */}
+              {expandedSurgeon === surgeon.surgeonId && surgeon.procedureBreakdown && (
+                <div className="px-6 pb-4 bg-slate-50/50">
+                  <div className="ml-14 grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {surgeon.procedureBreakdown.slice(0, 4).map(proc => (
+                      <div key={proc.procedureId} className="bg-white rounded-lg border border-slate-200 p-3">
+                        <div className="text-xs text-slate-500 truncate">{proc.procedureName}</div>
+                        <div className="text-sm font-semibold text-slate-900 mt-1">
+                          {proc.caseCount} cases
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-              onViewDetail={() => onSurgeonSelect(surgeon.surgeonId)}
-            />
+            </div>
           ))}
         </div>
-        
-        {surgeonStats.some(s => s.caseCount < 10) && (
-          <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500">
-            * Surgeons with fewer than 10 cases may have less reliable statistics
-          </div>
-        )}
       </div>
     </>
   )
 }
 
 // ============================================
-// SURGEON ROW (Expandable)
+// SURGEON DETAIL VIEW
 // ============================================
 
-function SurgeonRow({
+function SurgeonDetail({ 
   surgeon,
-  rank,
-  isExpanded,
-  onToggle,
-  onViewDetail,
-}: {
+  surgeonCases,
+  metrics,
+  onDateSelect
+}: { 
   surgeon: SurgeonStats
-  rank: number
-  isExpanded: boolean
-  onToggle: () => void
-  onViewDetail: () => void
+  surgeonCases: CaseCompletionStats[]
+  metrics: FinancialsMetrics
+  onDateSelect: (date: string) => void
 }) {
-  const procedures = surgeon.procedureBreakdown || []
+  const [activeTab, setActiveTab] = useState<'overview' | 'daily' | 'procedures'>('overview')
+  
+  // Group cases by date for daily activity
+  const dailyStats = useMemo(() => {
+    const byDate: Record<string, CaseCompletionStats[]> = {}
+    surgeonCases.forEach(c => {
+      const date = c.case_date
+      if (!byDate[date]) byDate[date] = []
+      byDate[date].push(c)
+    })
+    
+    return Object.entries(byDate)
+      .map(([date, cases]) => ({
+        date,
+        dayOfWeek: getDayOfWeek(date),
+        cases,
+        caseCount: cases.length,
+        totalProfit: cases.reduce((sum, c) => sum + (c.profit || 0), 0),
+        totalDuration: cases.reduce((sum, c) => sum + (c.duration_minutes || 0), 0),
+        avgProfit: cases.length > 0 
+          ? cases.reduce((sum, c) => sum + (c.profit || 0), 0) / cases.length 
+          : 0,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [surgeonCases])
+
+  // Calculate efficiency metrics
+  const efficiencyMetrics = useMemo(() => {
+    const durations = surgeonCases
+      .map(c => c.duration_minutes)
+      .filter((d): d is number => d !== null && d > 0)
+    
+    const profits = surgeonCases
+      .map(c => c.profit)
+      .filter((p): p is number => p !== null)
+    
+    const surgicalTimes = surgeonCases
+      .map(c => c.surgical_time_minutes)
+      .filter((t): t is number => t !== null && t > 0)
+    
+    const medianDuration = calculateMedian(durations)
+    const medianProfit = calculateMedian(profits)
+    
+    // Calculate consistency (coefficient of variation)
+    const avgDuration = durations.length > 0 
+      ? durations.reduce((a, b) => a + b, 0) / durations.length 
+      : null
+    const stdDev = avgDuration && durations.length > 1
+      ? Math.sqrt(durations.reduce((sum, d) => sum + Math.pow(d - avgDuration, 2), 0) / durations.length)
+      : null
+    const cv = avgDuration && stdDev ? (stdDev / avgDuration) * 100 : null
+    
+    let consistencyRating: 'high' | 'medium' | 'low' = 'medium'
+    if (cv !== null) {
+      if (cv < 15) consistencyRating = 'high'
+      else if (cv > 30) consistencyRating = 'low'
+    }
+    
+    return {
+      medianDuration,
+      medianProfit,
+      consistencyRating,
+      avgSurgicalTime: surgicalTimes.length > 0 
+        ? surgicalTimes.reduce((a, b) => a + b, 0) / surgicalTimes.length 
+        : null,
+    }
+  }, [surgeonCases])
 
   return (
-    <div className={`${isExpanded ? 'bg-slate-50' : ''}`}>
-      {/* Main Row */}
-      <div 
-        className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
-        onClick={onToggle}
-      >
-        {/* Rank */}
-        <div className="col-span-1">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-            rank === 1 ? 'bg-amber-100 text-amber-700' : 
-            rank === 2 ? 'bg-slate-200 text-slate-600' : 
-            rank === 3 ? 'bg-orange-100 text-orange-700' : 
-            'bg-slate-100 text-slate-500'
-          }`}>
-            {rank}
-          </div>
-        </div>
-
-        {/* Name & Procedures */}
-        <div className="col-span-4">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-900">{surgeon.surgeonName}</span>
-            {surgeon.caseCount < 10 && (
-              <span className="text-xs text-amber-600">*</span>
-            )}
-            {surgeon.consistencyRating && (
-              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                surgeon.consistencyRating === 'high' 
-                  ? 'bg-emerald-100 text-emerald-700' 
-                  : surgeon.consistencyRating === 'medium'
-                  ? 'bg-amber-100 text-amber-700'
-                  : 'bg-red-100 text-red-700'
-              }`}>
-                {surgeon.consistencyRating === 'high' ? '⚡ Consistent' :
-                 surgeon.consistencyRating === 'medium' ? '◐ Variable' : '◯ Inconsistent'}
+    <div className="space-y-6">
+      {/* Header Card */}
+      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center">
+              <span className="text-xl font-bold">
+                {surgeon.surgeonName.split(' ').map(n => n[0]).join('').slice(0, 2)}
               </span>
-            )}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">{surgeon.surgeonName}</h2>
+              <p className="text-slate-400 mt-0.5">{surgeon.caseCount} cases in period</p>
+            </div>
           </div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            {procedures.length} procedure type{procedures.length !== 1 ? 's' : ''}
+        </div>
+        
+        {/* Quick Stats */}
+        <div className="grid grid-cols-4 gap-6 mt-6 pt-6 border-t border-white/10">
+          <div>
+            <div className="text-slate-400 text-sm">Total Profit</div>
+            <div className="text-2xl font-bold mt-1">{formatCurrency(surgeon.totalProfit)}</div>
           </div>
-        </div>
-
-        {/* Cases */}
-        <div className="col-span-2 text-center text-slate-600">{surgeon.caseCount}</div>
-
-        {/* Total Profit */}
-        <div className="col-span-2 text-right font-semibold text-emerald-600">
-          {formatCurrency(surgeon.totalProfit)}
-        </div>
-
-        {/* Avg per Case */}
-        <div className="col-span-2 text-right text-slate-600">
-          {formatCurrency(surgeon.avgProfit)}
-        </div>
-
-        {/* Chevron */}
-        <div className="col-span-1 flex justify-end">
-          {isExpanded ? (
-            <ChevronDownIcon className="w-5 h-5 text-slate-400" />
-          ) : (
-            <ChevronRightIcon className="w-5 h-5 text-slate-400" />
-          )}
+          <div>
+            <div className="text-slate-400 text-sm">Typical/Case</div>
+            <div className="text-2xl font-bold mt-1">
+              {formatCurrency(efficiencyMetrics.medianProfit || surgeon.avgProfit)}
+            </div>
+          </div>
+          <div>
+            <div className="text-slate-400 text-sm">Cases</div>
+            <div className="text-2xl font-bold mt-1">{surgeon.caseCount}</div>
+          </div>
+          <div>
+            <div className="text-slate-400 text-sm">Typical Duration</div>
+            <div className="text-2xl font-bold mt-1">
+              {formatDuration(efficiencyMetrics.medianDuration)}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Expanded Procedure Breakdown */}
-      {isExpanded && procedures.length > 0 && (
-        <div className="px-6 pb-4">
-          <div className="ml-10 bg-white rounded-lg border border-slate-200 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2 bg-slate-100 border-b border-slate-200">
-              <span className="text-xs font-medium text-slate-600">
-                Top {Math.min(5, procedures.length)} Procedures
-              </span>
-              <button 
-                onClick={(e) => { e.stopPropagation(); onViewDetail(); }}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-              >
-                View Full Detail →
-              </button>
-            </div>
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Procedure</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Cases</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Total Profit</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Avg / Case</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {procedures.slice(0, 5).map(proc => (
-                  <tr key={proc.procedureId} className="hover:bg-slate-50">
-                    <td className="px-4 py-2 text-slate-700">{proc.procedureName}</td>
-                    <td className="px-4 py-2 text-center text-slate-600">{proc.caseCount}</td>
-                    <td className="px-4 py-2 text-right text-emerald-600 font-medium">
-                      {formatCurrency(proc.totalProfit)}
-                    </td>
-                    <td className="px-4 py-2 text-right text-slate-600">
-                      {proc.medianProfit !== null ? formatCurrency(proc.medianProfit) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {procedures.length > 5 && (
-              <div className="px-4 py-2 text-center text-xs text-slate-500 bg-slate-50 border-t border-slate-200">
-                +{procedures.length - 5} more procedure{procedures.length - 5 !== 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl w-fit">
+        {[
+          { id: 'overview', label: 'Overview' },
+          { id: 'daily', label: 'Daily Activity' },
+          { id: 'procedures', label: 'By Procedure' },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as typeof activeTab)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+              activeTab === tab.id
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <OverviewTab surgeon={surgeon} efficiencyMetrics={efficiencyMetrics} metrics={metrics} />
+      )}
+      
+      {activeTab === 'daily' && (
+        <DailyActivityTab dailyStats={dailyStats} onDateSelect={onDateSelect} />
+      )}
+      
+      {activeTab === 'procedures' && (
+        <ProceduresTab surgeon={surgeon} metrics={metrics} />
       )}
     </div>
   )
 }
 
 // ============================================
-// SINGLE SURGEON DETAIL - WITH DAILY VIEW
+// OVERVIEW TAB
 // ============================================
 
-type DetailView = 'overview' | 'daily' | 'procedures'
-
-function SurgeonDetail({ 
-  metrics, 
-  caseStats,
-  surgeonId,
-  onBack
-}: { 
-  metrics: FinancialsMetrics
-  caseStats: CaseCompletionStats[]
-  surgeonId: string
-  onBack: () => void
-}) {
-  const [activeView, setActiveView] = useState<DetailView>('overview')
-  
-  const surgeon = metrics.surgeonStats.find(s => s.surgeonId === surgeonId)
-  if (!surgeon) return null
-
-  const procedures = surgeon.procedureBreakdown || []
-  
-  // Filter cases for this surgeon
-  const surgeonCases = useMemo(() => {
-    return caseStats.filter(c => c.surgeon_id === surgeonId)
-  }, [caseStats, surgeonId])
-  
-  // Calculate efficiency metrics
-  const isFasterThanFacility = surgeon.durationVsFacilityMinutes < 0
-  const timeDiffMinutes = Math.abs(Math.round(surgeon.durationVsFacilityMinutes))
-
-  return (
-    <>
-      {/* Back Link */}
-      <button 
-        onClick={onBack}
-        className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-      >
-        <ArrowLeftIcon className="w-4 h-4" />
-        Back to all surgeons
-      </button>
-
-      {/* Surgeon Header */}
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-2xl font-bold">
-            {surgeon.surgeonName.split(' ').slice(-1)[0]?.charAt(0) || '?'}
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold">{surgeon.surgeonName}</h2>
-            <p className="text-slate-300">
-              {surgeon.caseCount} cases • {procedures.length} procedure type{procedures.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-        </div>
-        
-        {/* Primary Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-slate-300">Total Profit</p>
-            <p className="text-2xl font-bold text-emerald-400">{formatCurrency(surgeon.totalProfit)}</p>
-          </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm text-slate-300">Typical / Case</p>
-              <div className="group relative">
-                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                  Median profit per case
-                </div>
-              </div>
-            </div>
-            <p className="text-2xl font-bold">
-              {surgeon.medianProfit !== null ? formatCurrency(surgeon.medianProfit) : formatCurrency(surgeon.avgProfit)}
-            </p>
-            {surgeon.profitVsFacility !== 0 && (
-              <p className={`text-xs mt-1 ${surgeon.profitVsFacility >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {surgeon.profitVsFacility >= 0 ? '+' : ''}{formatCurrency(surgeon.profitVsFacility)} vs facility
-              </p>
-            )}
-          </div>
-          <div className="bg-white/10 rounded-xl p-4">
-            <p className="text-sm text-slate-300">Cases</p>
-            <p className="text-2xl font-bold">{surgeon.caseCount}</p>
-          </div>
-          {surgeon.medianDurationMinutes !== null && (
-            <div className="bg-white/10 rounded-xl p-4">
-              <p className="text-sm text-slate-300">Typical Duration</p>
-              <p className="text-2xl font-bold">{Math.round(surgeon.medianDurationMinutes)} min</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* View Tabs */}
-      <div className="flex gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setActiveView('overview')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeView === 'overview'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <ChartBarIcon className="w-4 h-4" />
-            Overview
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveView('daily')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeView === 'daily'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <CalendarDaysIcon className="w-4 h-4" />
-            Daily Activity
-          </div>
-        </button>
-        <button
-          onClick={() => setActiveView('procedures')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            activeView === 'procedures'
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <ClockIcon className="w-4 h-4" />
-            By Procedure
-          </div>
-        </button>
-      </div>
-
-      {/* View Content */}
-      {activeView === 'overview' && (
-        <SurgeonOverviewView 
-          surgeon={surgeon} 
-          metrics={metrics}
-          isFasterThanFacility={isFasterThanFacility}
-          timeDiffMinutes={timeDiffMinutes}
-        />
-      )}
-      
-      {activeView === 'daily' && (
-        <SurgeonDailyView 
-          surgeonCases={surgeonCases}
-          surgeonName={surgeon.surgeonName}
-        />
-      )}
-      
-      {activeView === 'procedures' && (
-        <SurgeonProceduresView 
-          procedures={procedures}
-          metrics={metrics}
-        />
-      )}
-    </>
-  )
-}
-
-// ============================================
-// OVERVIEW VIEW
-// ============================================
-
-function SurgeonOverviewView({
+function OverviewTab({ 
   surgeon,
-  metrics,
-  isFasterThanFacility,
-  timeDiffMinutes,
-}: {
+  efficiencyMetrics,
+  metrics 
+}: { 
   surgeon: SurgeonStats
+  efficiencyMetrics: {
+    medianDuration: number | null
+    medianProfit: number | null
+    consistencyRating: 'high' | 'medium' | 'low'
+    avgSurgicalTime: number | null
+  }
   metrics: FinancialsMetrics
-  isFasterThanFacility: boolean
-  timeDiffMinutes: number
 }) {
   return (
-    <>
-      {/* Efficiency Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Time vs Facility */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ClockIcon className="w-5 h-5 text-slate-400" />
-            <div className="flex items-center gap-1">
-              <p className="text-sm font-medium text-slate-500">Time vs Facility</p>
-              <div className="group relative">
-                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
-                  <strong>Weighted average</strong> across all procedures this surgeon performs. 
-                  Accounts for different procedure types.
-                  <br /><br />
-                  Negative = faster than typical
-                </div>
-              </div>
-            </div>
-          </div>
-          <p className={`text-2xl font-bold ${
-            isFasterThanFacility ? 'text-emerald-600' : 
-            timeDiffMinutes > 10 ? 'text-red-500' : 
-            'text-slate-900'
-          }`}>
-            {isFasterThanFacility ? '−' : '+'}{timeDiffMinutes} min
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            {isFasterThanFacility ? 'Faster' : 'Slower'} than facility average
-          </p>
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Time vs Facility */}
+      <MetricCard
+        title="Time vs Facility"
+        tooltip="Weighted average comparing this surgeon's duration to facility median for each procedure type"
+      >
+        <div className={`text-2xl font-bold ${
+          surgeon.durationVsFacilityMinutes < 0 ? 'text-emerald-600' : 
+          surgeon.durationVsFacilityMinutes > 10 ? 'text-red-500' : 'text-slate-900'
+        }`}>
+          {surgeon.durationVsFacilityMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsFacilityMinutes)} min
         </div>
-
-        {/* Profit Impact */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ChartBarIcon className="w-5 h-5 text-slate-400" />
-            <div className="flex items-center gap-1">
-              <p className="text-sm font-medium text-slate-500">Profit Impact</p>
-              <div className="group relative">
-                <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
-                  Estimated profit impact per case based on time difference.
-                  <br /><br />
-                  Calculated as: time difference × OR rate / 60
-                </div>
-              </div>
-            </div>
-          </div>
-          <p className={`text-2xl font-bold ${
-            surgeon.profitImpact >= 0 ? 'text-emerald-600' : 'text-red-500'
-          }`}>
-            {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            From {isFasterThanFacility ? 'faster' : 'slower'} case times
-          </p>
+        <div className="text-sm text-slate-500 mt-1">
+          {surgeon.durationVsFacilityMinutes < 0 ? 'Faster' : 'Slower'} than facility typical
         </div>
+      </MetricCard>
 
-        {/* Surgical Turnover */}
-        {surgeon.medianSurgicalTurnover !== null && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <BoltIcon className="w-5 h-5 text-slate-400" />
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-medium text-slate-500">Surgical Turnover</p>
-                <div className="group relative">
-                  <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
-                    Median time from closing of one case to incision of the next.
-                    Excludes first cases of the day.
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-slate-900">
-              {Math.round(surgeon.medianSurgicalTurnover)} min
-            </p>
-            <p className="text-xs text-slate-500 mt-1">Typical between-case time</p>
-          </div>
-        )}
-
-        {/* Consistency Rating */}
-        {surgeon.consistencyRating && (
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-5 h-5 flex items-center justify-center">
-                {surgeon.consistencyRating === 'high' ? '⚡' : 
-                 surgeon.consistencyRating === 'medium' ? '◐' : '◯'}
-              </div>
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-medium text-slate-500">Consistency</p>
-                <div className="group relative">
-                  <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
-                  <div className="absolute bottom-full right-0 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 w-56">
-                    Based on standard deviation of case durations.
-                    <br /><br />
-                    <strong>High:</strong> Predictable case times<br />
-                    <strong>Medium:</strong> Some variability<br />
-                    <strong>Low:</strong> High variability
-                  </div>
-                </div>
-              </div>
-            </div>
-            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-lg font-medium ${
-              surgeon.consistencyRating === 'high' 
-                ? 'bg-emerald-100 text-emerald-700' 
-                : surgeon.consistencyRating === 'medium'
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              {surgeon.consistencyRating === 'high' ? 'High' :
-               surgeon.consistencyRating === 'medium' ? 'Medium' : 'Low'}
-            </span>
-            <p className="text-xs text-slate-500 mt-2">
-              {surgeon.consistencyRating === 'high' ? 'Predictable case times' :
-               surgeon.consistencyRating === 'medium' ? 'Some case time variability' : 'Highly variable case times'}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Explanation Card */}
-      <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-        <div className="flex items-start gap-3">
-          <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-blue-800 space-y-2">
-            <p>
-              <strong>Time vs Facility:</strong> The weighted average of time differences across all 
-              procedures this surgeon performs, accounting for how often they do each procedure.
-            </p>
-            <p>
-              <strong>Profit Impact:</strong> Estimated dollar impact per case based on time difference. 
-              Faster surgeons use less OR time, which costs {formatCurrency(metrics.orRate)}/hour at this facility.
-            </p>
-          </div>
+      {/* Profit Impact */}
+      <MetricCard
+        title="Profit Impact"
+        tooltip="Estimated profit impact per case based on time efficiency"
+      >
+        <div className={`text-2xl font-bold ${
+          surgeon.profitImpact >= 0 ? 'text-emerald-600' : 'text-red-500'
+        }`}>
+          {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
         </div>
-      </div>
-    </>
+        <div className="text-sm text-slate-500 mt-1">
+          From time efficiency
+        </div>
+      </MetricCard>
+
+      {/* Surgical Time */}
+      <MetricCard
+        title="Typical Surgical Time"
+        tooltip="Median incision-to-closing time across all cases"
+      >
+        <div className="text-2xl font-bold text-slate-900">
+          {formatDuration(efficiencyMetrics.avgSurgicalTime)}
+        </div>
+        <div className="text-sm text-slate-500 mt-1">
+          Incision to closing
+        </div>
+      </MetricCard>
+
+      {/* Consistency */}
+      <MetricCard
+        title="Consistency"
+        tooltip="Based on variation in case durations (lower variation = higher consistency)"
+      >
+        <ConsistencyBadge rating={efficiencyMetrics.consistencyRating} size="large" />
+        <div className="text-sm text-slate-500 mt-2">
+          Case duration variance
+        </div>
+      </MetricCard>
+    </div>
   )
 }
 
 // ============================================
-// DAILY ACTIVITY VIEW - NEW!
+// DAILY ACTIVITY TAB
 // ============================================
 
-interface DailyStats {
+interface DailyStatsRow {
   date: string
   dayOfWeek: string
   cases: CaseCompletionStats[]
@@ -650,220 +589,159 @@ interface DailyStats {
   avgProfit: number
 }
 
-function SurgeonDailyView({
-  surgeonCases,
-  surgeonName,
-}: {
-  surgeonCases: CaseCompletionStats[]
-  surgeonName: string
+function DailyActivityTab({ 
+  dailyStats,
+  onDateSelect
+}: { 
+  dailyStats: DailyStatsRow[]
+  onDateSelect: (date: string) => void
 }) {
-  const [expandedDate, setExpandedDate] = useState<string | null>(null)
-  
-  // Group cases by date
-  const dailyStats = useMemo(() => {
-    const byDate = new Map<string, CaseCompletionStats[]>()
-    
-    surgeonCases.forEach(c => {
-      const date = c.case_date
-      if (!byDate.has(date)) {
-        byDate.set(date, [])
-      }
-      byDate.get(date)!.push(c)
-    })
-    
-    // Convert to array and compute stats
-    const stats: DailyStats[] = []
-    byDate.forEach((cases, date) => {
-      const totalProfit = cases.reduce((sum, c) => sum + (c.profit || 0), 0)
-      const totalDuration = cases.reduce((sum, c) => sum + (c.total_duration_minutes || 0), 0)
-      
-      // Parse date to get day of week
-      const dateObj = new Date(date + 'T00:00:00')
-      const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long' })
-      
-      stats.push({
-        date,
-        dayOfWeek,
-        cases: cases.sort((a, b) => {
-          // Sort by start time if available
-          const aTime = a.actual_start_time || a.scheduled_start_time || ''
-          const bTime = b.actual_start_time || b.scheduled_start_time || ''
-          return aTime.localeCompare(bTime)
-        }),
-        caseCount: cases.length,
-        totalProfit,
-        totalDuration,
-        avgProfit: cases.length > 0 ? totalProfit / cases.length : 0,
-      })
-    })
-    
-    // Sort by date descending (most recent first)
-    return stats.sort((a, b) => b.date.localeCompare(a.date))
-  }, [surgeonCases])
-
   if (dailyStats.length === 0) {
     return (
-      <div className="bg-slate-50 rounded-xl p-8 text-center">
+      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
         <CalendarDaysIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-        <p className="text-slate-500">No case data available for {surgeonName}</p>
+        <h3 className="text-lg font-semibold text-slate-900">No activity in this period</h3>
+        <p className="text-slate-500 mt-1">Try selecting a different date range</p>
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <CalendarDaysIcon className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold text-slate-900">Daily Activity</h3>
-        </div>
-        <p className="text-sm text-slate-500 mt-1">
-          {dailyStats.length} day{dailyStats.length !== 1 ? 's' : ''} with cases • Click to expand
-        </p>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+        <h3 className="text-lg font-semibold text-slate-900">Daily Activity</h3>
+        <p className="text-sm text-slate-500 mt-0.5">Click a day to view detailed breakdown</p>
       </div>
       
       <div className="divide-y divide-slate-100">
         {dailyStats.map(day => (
-          <DayRow
+          <div 
             key={day.date}
-            day={day}
-            isExpanded={expandedDate === day.date}
-            onToggle={() => setExpandedDate(expandedDate === day.date ? null : day.date)}
-          />
+            onClick={() => onDateSelect(day.date)}
+            className="flex items-center gap-4 px-6 py-4 hover:bg-blue-50/50 cursor-pointer transition-all group"
+          >
+            {/* Date */}
+            <div className="w-20">
+              <div className="text-lg font-bold text-slate-900">{formatShortDate(day.date)}</div>
+              <div className="text-sm text-slate-500">{day.dayOfWeek}</div>
+            </div>
+            
+            {/* Case Count Badge */}
+            <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold">
+              {day.caseCount} {day.caseCount === 1 ? 'case' : 'cases'}
+            </div>
+            
+            {/* Metrics */}
+            <div className="flex-1 flex items-center gap-8 justify-end">
+              <div className="text-right">
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Duration</div>
+                <div className="text-sm font-semibold text-slate-900">{formatDuration(day.totalDuration)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Total Profit</div>
+                <div className="text-sm font-bold text-emerald-600">{formatCurrency(day.totalProfit)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Avg/Case</div>
+                <div className="text-sm font-semibold text-slate-900">{formatCurrency(day.avgProfit)}</div>
+              </div>
+              
+              <ChevronRightIcon className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+            </div>
+          </div>
         ))}
       </div>
     </div>
   )
 }
 
-function DayRow({
-  day,
-  isExpanded,
-  onToggle,
-}: {
-  day: DailyStats
-  isExpanded: boolean
-  onToggle: () => void
+// ============================================
+// PROCEDURES TAB
+// ============================================
+
+function ProceduresTab({ 
+  surgeon,
+  metrics 
+}: { 
+  surgeon: SurgeonStats
+  metrics: FinancialsMetrics
 }) {
-  // Format date nicely
-  const dateObj = new Date(day.date + 'T00:00:00')
-  const formattedDate = dateObj.toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric',
-    year: 'numeric'
-  })
-  
+  if (!surgeon.procedureBreakdown || surgeon.procedureBreakdown.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+        <ChartBarIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <h3 className="text-lg font-semibold text-slate-900">No procedure data</h3>
+        <p className="text-slate-500 mt-1">Complete cases to see procedure breakdown</p>
+      </div>
+    )
+  }
+
   return (
-    <div className={isExpanded ? 'bg-slate-50' : ''}>
-      {/* Day Summary Row */}
-      <div 
-        className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
-        onClick={onToggle}
-      >
-        {/* Date */}
-        <div className="col-span-3">
-          <div className="font-medium text-slate-900">{formattedDate}</div>
-          <div className="text-xs text-slate-500">{day.dayOfWeek}</div>
-        </div>
-        
-        {/* Case Count */}
-        <div className="col-span-2 text-center">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
-            {day.caseCount} case{day.caseCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-        
-        {/* Total Duration */}
-        <div className="col-span-2 text-center text-slate-600">
-          {Math.round(day.totalDuration)} min
-        </div>
-        
-        {/* Total Profit */}
-        <div className="col-span-2 text-right font-semibold text-emerald-600">
-          {formatCurrency(day.totalProfit)}
-        </div>
-        
-        {/* Avg Profit */}
-        <div className="col-span-2 text-right text-slate-600">
-          {formatCurrency(day.avgProfit)}/case
-        </div>
-        
-        {/* Chevron */}
-        <div className="col-span-1 flex justify-end">
-          {isExpanded ? (
-            <ChevronDownIcon className="w-5 h-5 text-slate-400" />
-          ) : (
-            <ChevronRightIcon className="w-5 h-5 text-slate-400" />
-          )}
-        </div>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+        <h3 className="text-lg font-semibold text-slate-900">Performance by Procedure</h3>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Comparing surgeon median to facility median for each procedure
+        </p>
       </div>
       
-      {/* Expanded Case List */}
-      {isExpanded && (
-        <div className="px-6 pb-4">
-          <div className="ml-4 bg-white rounded-lg border border-slate-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Case</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Procedure</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Room</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Start</th>
-                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Duration</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Profit</th>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-slate-50/80">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Procedure</th>
+              <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">Cases</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Profit</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Surgeon Median</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Facility Median</th>
+              <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wide">Difference</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {surgeon.procedureBreakdown.map(proc => {
+              const facilityProc = metrics.procedureStats.find(p => p.procedureId === proc.procedureId)
+              const facilityMedian = facilityProc?.medianDurationMinutes || null
+              const diff = proc.medianDuration !== null && facilityMedian !== null
+                ? proc.medianDuration - facilityMedian
+                : null
+              
+              return (
+                <tr key={proc.procedureId} className="hover:bg-slate-50/50">
+                  <td className="px-6 py-4">
+                    <span className="font-medium text-slate-900">{proc.procedureName}</span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="text-slate-600">{proc.caseCount}</span>
+                    {proc.caseCount < 5 && (
+                      <span className="ml-1.5 text-amber-500 text-xs">*</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right font-semibold text-emerald-600">
+                    {formatCurrency(proc.totalProfit)}
+                  </td>
+                  <td className="px-6 py-4 text-right text-slate-900">
+                    {formatDuration(proc.medianDuration)}
+                  </td>
+                  <td className="px-6 py-4 text-right text-slate-500">
+                    {formatDuration(facilityMedian)}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {diff !== null ? (
+                      <ComparisonPill value={diff} unit="min" invertColors />
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {day.cases.map((c, idx) => {
-                  const procedureType = normalizeJoin(c.procedure_types)
-                  const room = normalizeJoin(c.or_rooms)
-                  
-                  // Format start time
-                  let startTime = '—'
-                  if (c.actual_start_time) {
-                    const timeParts = c.actual_start_time.split(':')
-                    if (timeParts.length >= 2) {
-                      const hours = parseInt(timeParts[0])
-                      const minutes = timeParts[1]
-                      const ampm = hours >= 12 ? 'PM' : 'AM'
-                      const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
-                      startTime = `${displayHour}:${minutes} ${ampm}`
-                    }
-                  }
-                  
-                  return (
-                    <tr key={c.case_id || idx} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-xs text-slate-600">{c.case_number}</span>
-                        {c.is_first_case_of_day_surgeon && (
-                          <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
-                            First
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {procedureType?.name || 'Unknown'}
-                      </td>
-                      <td className="px-4 py-3 text-center text-slate-600">
-                        {room?.name || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-center text-slate-600">
-                        {startTime}
-                      </td>
-                      <td className="px-4 py-3 text-center text-slate-600">
-                        {c.total_duration_minutes ? `${Math.round(c.total_duration_minutes)} min` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={c.profit && c.profit > 0 ? 'text-emerald-600 font-medium' : 'text-red-500'}>
-                          {c.profit !== null ? formatCurrency(c.profit) : '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      
+      {surgeon.procedureBreakdown.some(p => p.caseCount < 5) && (
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-200">
+          <p className="text-xs text-slate-500">* Low sample size — interpret with caution</p>
         </div>
       )}
     </div>
@@ -871,122 +749,449 @@ function DayRow({
 }
 
 // ============================================
-// PROCEDURES VIEW
+// SURGEON DAY VIEW
 // ============================================
 
-function SurgeonProceduresView({
-  procedures,
-  metrics,
+function SurgeonDayView({
+  surgeon,
+  surgeonCases,
+  selectedDate,
+  onDateChange
 }: {
-  procedures: SurgeonProcedureBreakdown[]
-  metrics: FinancialsMetrics
+  surgeon: SurgeonStats
+  surgeonCases: CaseCompletionStats[]
+  selectedDate: string
+  onDateChange: (date: string) => void
 }) {
+  // Filter cases for selected date
+  const dayCases = useMemo(() => {
+    return surgeonCases
+      .filter(c => c.case_date === selectedDate)
+      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+  }, [surgeonCases, selectedDate])
+
+  // Calculate surgeon's medians for comparison
+  const surgeonMedians = useMemo(() => {
+    const byProcedure: Record<string, { durations: number[], profits: number[] }> = {}
+    
+    surgeonCases.forEach(c => {
+      if (!c.procedure_type_id) return
+      if (!byProcedure[c.procedure_type_id]) {
+        byProcedure[c.procedure_type_id] = { durations: [], profits: [] }
+      }
+      if (c.duration_minutes) byProcedure[c.procedure_type_id].durations.push(c.duration_minutes)
+      if (c.profit) byProcedure[c.procedure_type_id].profits.push(c.profit)
+    })
+    
+    const result: Record<string, { medianDuration: number | null, medianProfit: number | null }> = {}
+    Object.entries(byProcedure).forEach(([procId, data]) => {
+      result[procId] = {
+        medianDuration: calculateMedian(data.durations),
+        medianProfit: calculateMedian(data.profits),
+      }
+    })
+    return result
+  }, [surgeonCases])
+
+  // Day metrics
+  const dayMetrics = useMemo(() => {
+    const totalProfit = dayCases.reduce((sum, c) => sum + (c.profit || 0), 0)
+    const totalDuration = dayCases.reduce((sum, c) => sum + (c.duration_minutes || 0), 0)
+    const totalSurgicalTime = dayCases.reduce((sum, c) => sum + (c.surgical_time_minutes || 0), 0)
+    const firstCase = dayCases[0]
+    
+    return {
+      caseCount: dayCases.length,
+      totalProfit,
+      totalDuration,
+      totalSurgicalTime,
+      avgProfit: dayCases.length > 0 ? totalProfit / dayCases.length : 0,
+      avgDuration: dayCases.length > 0 ? totalDuration / dayCases.length : 0,
+      firstCaseTime: firstCase?.start_time || null,
+      uptimePercent: totalDuration > 0 ? Math.round((totalSurgicalTime / totalDuration) * 100) : 0,
+    }
+  }, [dayCases])
+
   return (
-    <>
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-900">Performance by Procedure</h3>
-          <p className="text-sm text-slate-500 mt-1">
-            Efficiency comparison vs facility median for each procedure type
-          </p>
+    <div className="space-y-6">
+      {/* Date Picker Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">{formatDateDisplay(selectedDate)}</h2>
+          <p className="text-slate-500 mt-0.5">Daily performance breakdown for {surgeon.surgeonName}</p>
         </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Procedure</th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Cases</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Total Profit</th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
-                  <div className="flex items-center justify-end gap-1">
-                    Surgeon Time
-                    <span className="text-slate-400 font-normal">(median)</span>
-                  </div>
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">
-                  <div className="flex items-center justify-end gap-1">
-                    Facility
-                    <span className="text-slate-400 font-normal">(median)</span>
-                  </div>
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Difference</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {procedures.map(proc => {
-                const hasFacilityBaseline = proc.facilityMedianDuration !== null
-                const isFaster = proc.durationVsFacility < 0
-                const diffMinutes = Math.abs(Math.round(proc.durationVsFacility))
-                
-                return (
-                  <tr key={proc.procedureId} className="hover:bg-slate-50">
-                    <td className="px-6 py-4">
-                      <span className="font-medium text-slate-900">{proc.procedureName}</span>
-                      {proc.caseCount < 5 && (
-                        <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                          Low sample
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-center text-slate-600">{proc.caseCount}</td>
-                    <td className="px-6 py-4 text-right font-medium text-emerald-600">
-                      {formatCurrency(proc.totalProfit)}
-                    </td>
-                    <td className="px-6 py-4 text-right text-slate-600">
-                      {proc.medianDuration !== null ? `${Math.round(proc.medianDuration)} min` : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-right text-slate-500">
-                      {proc.facilityMedianDuration !== null ? `${Math.round(proc.facilityMedianDuration)} min` : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      {hasFacilityBaseline ? (
-                        <span className={`font-medium ${
-                          isFaster ? 'text-emerald-600' : 
-                          diffMinutes > 10 ? 'text-red-500' : 
-                          'text-slate-600'
-                        }`}>
-                          {isFaster ? '−' : '+'}{diffMinutes} min
-                          {proc.durationVsFacilityPct !== null && (
-                            <span className="text-xs text-slate-400 ml-1">
-                              ({proc.durationVsFacilityPct > 0 ? '+' : ''}{Math.round(proc.durationVsFacilityPct)}%)
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">—</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => onDateChange(e.target.value)}
+          className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+        />
+      </div>
+
+      {/* Day Overview Metrics */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
+            <CalendarDaysIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Day Overview</h3>
+            <p className="text-sm text-slate-500">Key metrics at a glance</p>
+          </div>
         </div>
-        
-        {procedures.some(p => p.caseCount < 5) && (
-          <div className="px-6 py-3 bg-amber-50 border-t border-amber-200 text-xs text-amber-700">
-            ⚠️ Procedures with fewer than 5 cases may have less reliable statistics
+
+        {/* Top Metrics Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <DayMetricCard 
+            icon={ClockIcon}
+            label="First Case Start"
+            value={formatTime(dayMetrics.firstCaseTime)}
+          />
+          <DayMetricCard 
+            icon={ChartBarIcon}
+            label="Total Cases"
+            value={dayMetrics.caseCount.toString()}
+          />
+          <DayMetricCard 
+            icon={ClockIcon}
+            label="Total OR Time"
+            value={formatDuration(dayMetrics.totalDuration)}
+          />
+          <DayMetricCard 
+            icon={CurrencyDollarIcon}
+            label="Total Profit"
+            value={formatCurrency(dayMetrics.totalProfit)}
+            highlight
+          />
+        </div>
+
+        {/* Uptime Bar */}
+        {dayMetrics.totalDuration > 0 && (
+          <div className="mt-6 pt-6 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">Surgical Uptime</span>
+              <span className="text-sm font-bold text-slate-900">{dayMetrics.uptimePercent}%</span>
+            </div>
+            <div className="h-3 w-full rounded-full overflow-hidden bg-slate-100 flex">
+              <div 
+                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all" 
+                style={{ width: `${dayMetrics.uptimePercent}%` }} 
+              />
+            </div>
+            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span>Surgical Time ({formatDuration(dayMetrics.totalSurgicalTime)})</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
+                <span>Non-Surgical ({formatDuration(dayMetrics.totalDuration - dayMetrics.totalSurgicalTime)})</span>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Explanation Card */}
-      <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-        <div className="flex items-start gap-3">
-          <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-blue-800 space-y-2">
-            <p>
-              <strong>Why per-procedure?</strong> Comparing surgeon efficiency only makes sense within 
-              the same procedure type. A hip replacement naturally takes longer than a knee scope.
-            </p>
-            <p>
-              <strong>Difference column:</strong> Shows how this surgeon's median time compares to 
-              the facility median for that specific procedure. Negative (green) = faster than average.
-            </p>
+      {/* Cases List */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+          <h3 className="text-lg font-semibold text-slate-900">Cases</h3>
+          <p className="text-sm text-slate-500 mt-0.5">{dayCases.length} cases completed</p>
+        </div>
+
+        {dayCases.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900">No cases on this day</h3>
+            <p className="text-slate-500 mt-1">Select a different date to view cases</p>
           </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {dayCases.map((caseData, idx) => {
+              const procMedians = caseData.procedure_type_id 
+                ? surgeonMedians[caseData.procedure_type_id] 
+                : null
+              
+              const durationDiff = caseData.duration_minutes && procMedians?.medianDuration
+                ? caseData.duration_minutes - procMedians.medianDuration
+                : null
+              
+              const profitDiff = caseData.profit && procMedians?.medianProfit
+                ? caseData.profit - procMedians.medianProfit
+                : null
+
+              return (
+                <div key={caseData.case_id} className="px-6 py-5 hover:bg-slate-50/50 transition-colors">
+                  <div className="flex items-start gap-4">
+                    {/* Case Number Badge */}
+                    <div className="flex flex-col items-center gap-1">
+                      <div className={`
+                        w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold
+                        ${idx === 0 
+                          ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-lg shadow-amber-500/20' 
+                          : 'bg-slate-100 text-slate-600'
+                        }
+                      `}>
+                        {idx + 1}
+                      </div>
+                      {idx === 0 && (
+                        <span className="text-xs font-medium text-amber-600">First</span>
+                      )}
+                    </div>
+
+                    {/* Case Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-900">
+                          {caseData.procedure_name || 'Unknown Procedure'}
+                        </span>
+                        <span className="text-slate-400">•</span>
+                        <span className="text-sm text-slate-500">{caseData.room_name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+                        <span className="font-mono">{caseData.case_number}</span>
+                        <span className="text-slate-300">•</span>
+                        <span>{formatTime(caseData.start_time)}</span>
+                      </div>
+                    </div>
+
+                    {/* Metrics with Comparison Pills */}
+                    <div className="flex items-center gap-6">
+                      {/* Duration */}
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Duration</div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-sm font-semibold text-slate-900">
+                            {formatDuration(caseData.duration_minutes)}
+                          </span>
+                          {durationDiff !== null && (
+                            <ComparisonPill value={durationDiff} unit="min" invertColors />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Profit */}
+                      <div className="text-right min-w-[140px]">
+                        <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Profit</div>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-sm font-bold text-emerald-600">
+                            {formatCurrency(caseData.profit || 0)}
+                          </span>
+                          {profitDiff !== null && (
+                            <ComparisonPill value={profitDiff} format="currency" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// REUSABLE COMPONENTS
+// ============================================
+
+function SummaryCard({ 
+  title, 
+  value, 
+  icon: Icon,
+  variant 
+}: { 
+  title: string
+  value: string | number
+  icon: React.ComponentType<{ className?: string }>
+  variant?: 'success' | 'warning' | 'danger'
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={`
+          w-10 h-10 rounded-lg flex items-center justify-center
+          ${variant === 'success' ? 'bg-emerald-50' : 'bg-slate-50'}
+        `}>
+          <Icon className={`w-5 h-5 ${variant === 'success' ? 'text-emerald-600' : 'text-slate-600'}`} />
+        </div>
+        <div>
+          <p className="text-sm text-slate-500">{title}</p>
+          <p className={`text-xl font-bold ${variant === 'success' ? 'text-emerald-600' : 'text-slate-900'}`}>
+            {value}
+          </p>
         </div>
       </div>
-    </>
+    </div>
+  )
+}
+
+function MetricCard({ 
+  title, 
+  tooltip, 
+  children 
+}: { 
+  title: string
+  tooltip?: string
+  children: React.ReactNode 
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+      <div className="flex items-center gap-1.5 mb-3">
+        <p className="text-sm font-medium text-slate-500">{title}</p>
+        {tooltip && (
+          <div className="group relative">
+            <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 max-w-xs">
+              {tooltip}
+            </div>
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function DayMetricCard({ 
+  icon: Icon, 
+  label, 
+  value,
+  highlight 
+}: { 
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+  highlight?: boolean
+}) {
+  return (
+    <div className={`
+      rounded-xl p-4 
+      ${highlight ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200' : 'bg-slate-50'}
+    `}>
+      <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
+        <Icon className="w-4 h-4" />
+        {label}
+      </div>
+      <div className={`text-2xl font-bold ${highlight ? 'text-emerald-600' : 'text-slate-900'}`}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// ENTERPRISE-LEVEL COMPARISON PILL
+// ============================================
+
+function ComparisonPill({ 
+  value, 
+  unit,
+  format,
+  invertColors = false
+}: { 
+  value: number
+  unit?: string
+  format?: 'currency' | 'percent'
+  invertColors?: boolean  // For duration, negative is good
+}) {
+  const isPositive = value > 0
+  const isNeutral = Math.abs(value) < 0.5
+  
+  // For duration: negative = faster = good (green)
+  // For profit: positive = more money = good (green)
+  const isGood = invertColors ? !isPositive : isPositive
+  
+  let displayValue: string
+  if (format === 'currency') {
+    displayValue = `${isPositive ? '+' : ''}${formatCurrency(value)}`
+  } else if (format === 'percent') {
+    displayValue = `${isPositive ? '+' : ''}${Math.round(value)}%`
+  } else {
+    displayValue = `${isPositive ? '+' : ''}${Math.round(value)}${unit ? ` ${unit}` : ''}`
+  }
+
+  if (isNeutral) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-600">
+        {displayValue}
+      </span>
+    )
+  }
+
+  return (
+    <span className={`
+      inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold
+      transition-all duration-200
+      ${isGood 
+        ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 ring-1 ring-emerald-200/50' 
+        : 'bg-gradient-to-r from-red-50 to-red-100 text-red-700 ring-1 ring-red-200/50'
+      }
+    `}>
+      {isGood ? (
+        <ArrowTrendingUpIcon className="w-3 h-3" />
+      ) : (
+        <ArrowTrendingDownIcon className="w-3 h-3" />
+      )}
+      {displayValue}
+    </span>
+  )
+}
+
+// ============================================
+// CONSISTENCY BADGE
+// ============================================
+
+function ConsistencyBadge({ 
+  rating, 
+  size = 'medium' 
+}: { 
+  rating: 'high' | 'medium' | 'low'
+  size?: 'small' | 'medium' | 'large'
+}) {
+  const config = {
+    high: {
+      label: 'High Consistency',
+      icon: '⚡',
+      bg: 'bg-gradient-to-r from-emerald-50 to-emerald-100',
+      text: 'text-emerald-700',
+      ring: 'ring-emerald-200/50',
+    },
+    medium: {
+      label: 'Moderate',
+      icon: '◐',
+      bg: 'bg-gradient-to-r from-amber-50 to-amber-100',
+      text: 'text-amber-700',
+      ring: 'ring-amber-200/50',
+    },
+    low: {
+      label: 'Variable',
+      icon: '◯',
+      bg: 'bg-gradient-to-r from-red-50 to-red-100',
+      text: 'text-red-700',
+      ring: 'ring-red-200/50',
+    },
+  }
+
+  const c = config[rating]
+  const sizeClasses = {
+    small: 'px-2 py-0.5 text-xs',
+    medium: 'px-2.5 py-1 text-sm',
+    large: 'px-3 py-1.5 text-base',
+  }
+
+  return (
+    <span className={`
+      inline-flex items-center gap-1.5 font-semibold rounded-lg ring-1
+      ${c.bg} ${c.text} ${c.ring} ${sizeClasses[size]}
+    `}>
+      <span>{c.icon}</span>
+      {c.label}
+    </span>
   )
 }
