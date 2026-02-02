@@ -1,10 +1,10 @@
 // components/analytics/financials/SurgeonTab.tsx
-// UPDATED: Restored SurgeonDetail with efficiency metrics + clean visual design
+// UPDATED: Added Daily Activity view in SurgeonDetail
 
 'use client'
 
-import { useState } from 'react'
-import { FinancialsMetrics, SurgeonStats, SurgeonProcedureBreakdown } from './types'
+import { useState, useMemo } from 'react'
+import { FinancialsMetrics, SurgeonStats, SurgeonProcedureBreakdown, CaseCompletionStats } from './types'
 import { formatCurrency } from './utils'
 import MetricCard from './MetricCard'
 import { 
@@ -16,16 +16,25 @@ import {
   ClockIcon,
   BoltIcon,
   ChartBarIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline'
+
+// Helper to normalize Supabase joins
+function normalizeJoin<T>(data: T | T[] | null): T | null {
+  if (Array.isArray(data)) return data[0] || null
+  return data
+}
 
 interface SurgeonTabProps {
   metrics: FinancialsMetrics
+  caseStats: CaseCompletionStats[]  // Raw case data for daily view
   selectedSurgeon: string | null
   onSurgeonSelect: (surgeonId: string | null) => void
 }
 
 export default function SurgeonTab({ 
   metrics, 
+  caseStats,
   selectedSurgeon, 
   onSurgeonSelect 
 }: SurgeonTabProps) {
@@ -62,7 +71,8 @@ export default function SurgeonTab({
 
       {selectedSurgeon ? (
         <SurgeonDetail 
-          metrics={metrics} 
+          metrics={metrics}
+          caseStats={caseStats}
           surgeonId={selectedSurgeon}
           onBack={() => onSurgeonSelect(null)}
         />
@@ -304,22 +314,33 @@ function SurgeonRow({
 }
 
 // ============================================
-// SINGLE SURGEON DETAIL - RESTORED WITH EFFICIENCY METRICS
+// SINGLE SURGEON DETAIL - WITH DAILY VIEW
 // ============================================
+
+type DetailView = 'overview' | 'daily' | 'procedures'
 
 function SurgeonDetail({ 
   metrics, 
+  caseStats,
   surgeonId,
   onBack
 }: { 
   metrics: FinancialsMetrics
+  caseStats: CaseCompletionStats[]
   surgeonId: string
   onBack: () => void
 }) {
+  const [activeView, setActiveView] = useState<DetailView>('overview')
+  
   const surgeon = metrics.surgeonStats.find(s => s.surgeonId === surgeonId)
   if (!surgeon) return null
 
   const procedures = surgeon.procedureBreakdown || []
+  
+  // Filter cases for this surgeon
+  const surgeonCases = useMemo(() => {
+    return caseStats.filter(c => c.surgeon_id === surgeonId)
+  }, [caseStats, surgeonId])
   
   // Calculate efficiency metrics
   const isFasterThanFacility = surgeon.durationVsFacilityMinutes < 0
@@ -388,7 +409,94 @@ function SurgeonDetail({
         </div>
       </div>
 
-      {/* Efficiency Metrics Cards - RESTORED */}
+      {/* View Tabs */}
+      <div className="flex gap-2 border-b border-slate-200">
+        <button
+          onClick={() => setActiveView('overview')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeView === 'overview'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <ChartBarIcon className="w-4 h-4" />
+            Overview
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveView('daily')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeView === 'daily'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CalendarDaysIcon className="w-4 h-4" />
+            Daily Activity
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveView('procedures')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeView === 'procedures'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <ClockIcon className="w-4 h-4" />
+            By Procedure
+          </div>
+        </button>
+      </div>
+
+      {/* View Content */}
+      {activeView === 'overview' && (
+        <SurgeonOverviewView 
+          surgeon={surgeon} 
+          metrics={metrics}
+          isFasterThanFacility={isFasterThanFacility}
+          timeDiffMinutes={timeDiffMinutes}
+        />
+      )}
+      
+      {activeView === 'daily' && (
+        <SurgeonDailyView 
+          surgeonCases={surgeonCases}
+          surgeonName={surgeon.surgeonName}
+        />
+      )}
+      
+      {activeView === 'procedures' && (
+        <SurgeonProceduresView 
+          procedures={procedures}
+          metrics={metrics}
+        />
+      )}
+    </>
+  )
+}
+
+// ============================================
+// OVERVIEW VIEW
+// ============================================
+
+function SurgeonOverviewView({
+  surgeon,
+  metrics,
+  isFasterThanFacility,
+  timeDiffMinutes,
+}: {
+  surgeon: SurgeonStats
+  metrics: FinancialsMetrics
+  isFasterThanFacility: boolean
+  timeDiffMinutes: number
+}) {
+  return (
+    <>
+      {/* Efficiency Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Time vs Facility */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -508,7 +616,273 @@ function SurgeonDetail({
         )}
       </div>
 
-      {/* Performance by Procedure - UPDATED with Consistency */}
+      {/* Explanation Card */}
+      <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
+        <div className="flex items-start gap-3">
+          <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-blue-800 space-y-2">
+            <p>
+              <strong>Time vs Facility:</strong> The weighted average of time differences across all 
+              procedures this surgeon performs, accounting for how often they do each procedure.
+            </p>
+            <p>
+              <strong>Profit Impact:</strong> Estimated dollar impact per case based on time difference. 
+              Faster surgeons use less OR time, which costs {formatCurrency(metrics.orRate)}/hour at this facility.
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ============================================
+// DAILY ACTIVITY VIEW - NEW!
+// ============================================
+
+interface DailyStats {
+  date: string
+  dayOfWeek: string
+  cases: CaseCompletionStats[]
+  caseCount: number
+  totalProfit: number
+  totalDuration: number
+  avgProfit: number
+}
+
+function SurgeonDailyView({
+  surgeonCases,
+  surgeonName,
+}: {
+  surgeonCases: CaseCompletionStats[]
+  surgeonName: string
+}) {
+  const [expandedDate, setExpandedDate] = useState<string | null>(null)
+  
+  // Group cases by date
+  const dailyStats = useMemo(() => {
+    const byDate = new Map<string, CaseCompletionStats[]>()
+    
+    surgeonCases.forEach(c => {
+      const date = c.case_date
+      if (!byDate.has(date)) {
+        byDate.set(date, [])
+      }
+      byDate.get(date)!.push(c)
+    })
+    
+    // Convert to array and compute stats
+    const stats: DailyStats[] = []
+    byDate.forEach((cases, date) => {
+      const totalProfit = cases.reduce((sum, c) => sum + (c.profit || 0), 0)
+      const totalDuration = cases.reduce((sum, c) => sum + (c.total_duration_minutes || 0), 0)
+      
+      // Parse date to get day of week
+      const dateObj = new Date(date + 'T00:00:00')
+      const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long' })
+      
+      stats.push({
+        date,
+        dayOfWeek,
+        cases: cases.sort((a, b) => {
+          // Sort by start time if available
+          const aTime = a.actual_start_time || a.scheduled_start_time || ''
+          const bTime = b.actual_start_time || b.scheduled_start_time || ''
+          return aTime.localeCompare(bTime)
+        }),
+        caseCount: cases.length,
+        totalProfit,
+        totalDuration,
+        avgProfit: cases.length > 0 ? totalProfit / cases.length : 0,
+      })
+    })
+    
+    // Sort by date descending (most recent first)
+    return stats.sort((a, b) => b.date.localeCompare(a.date))
+  }, [surgeonCases])
+
+  if (dailyStats.length === 0) {
+    return (
+      <div className="bg-slate-50 rounded-xl p-8 text-center">
+        <CalendarDaysIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <p className="text-slate-500">No case data available for {surgeonName}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          <CalendarDaysIcon className="w-5 h-5 text-blue-600" />
+          <h3 className="text-lg font-semibold text-slate-900">Daily Activity</h3>
+        </div>
+        <p className="text-sm text-slate-500 mt-1">
+          {dailyStats.length} day{dailyStats.length !== 1 ? 's' : ''} with cases • Click to expand
+        </p>
+      </div>
+      
+      <div className="divide-y divide-slate-100">
+        {dailyStats.map(day => (
+          <DayRow
+            key={day.date}
+            day={day}
+            isExpanded={expandedDate === day.date}
+            onToggle={() => setExpandedDate(expandedDate === day.date ? null : day.date)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DayRow({
+  day,
+  isExpanded,
+  onToggle,
+}: {
+  day: DailyStats
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  // Format date nicely
+  const dateObj = new Date(day.date + 'T00:00:00')
+  const formattedDate = dateObj.toLocaleDateString('en-US', { 
+    month: 'short', 
+    day: 'numeric',
+    year: 'numeric'
+  })
+  
+  return (
+    <div className={isExpanded ? 'bg-slate-50' : ''}>
+      {/* Day Summary Row */}
+      <div 
+        className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50 cursor-pointer transition-colors"
+        onClick={onToggle}
+      >
+        {/* Date */}
+        <div className="col-span-3">
+          <div className="font-medium text-slate-900">{formattedDate}</div>
+          <div className="text-xs text-slate-500">{day.dayOfWeek}</div>
+        </div>
+        
+        {/* Case Count */}
+        <div className="col-span-2 text-center">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
+            {day.caseCount} case{day.caseCount !== 1 ? 's' : ''}
+          </span>
+        </div>
+        
+        {/* Total Duration */}
+        <div className="col-span-2 text-center text-slate-600">
+          {Math.round(day.totalDuration)} min
+        </div>
+        
+        {/* Total Profit */}
+        <div className="col-span-2 text-right font-semibold text-emerald-600">
+          {formatCurrency(day.totalProfit)}
+        </div>
+        
+        {/* Avg Profit */}
+        <div className="col-span-2 text-right text-slate-600">
+          {formatCurrency(day.avgProfit)}/case
+        </div>
+        
+        {/* Chevron */}
+        <div className="col-span-1 flex justify-end">
+          {isExpanded ? (
+            <ChevronDownIcon className="w-5 h-5 text-slate-400" />
+          ) : (
+            <ChevronRightIcon className="w-5 h-5 text-slate-400" />
+          )}
+        </div>
+      </div>
+      
+      {/* Expanded Case List */}
+      {isExpanded && (
+        <div className="px-6 pb-4">
+          <div className="ml-4 bg-white rounded-lg border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Case</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Procedure</th>
+                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Room</th>
+                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Start</th>
+                  <th className="px-4 py-2 text-center text-xs font-medium text-slate-500">Duration</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-slate-500">Profit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {day.cases.map((c, idx) => {
+                  const procedureType = normalizeJoin(c.procedure_types)
+                  const room = normalizeJoin(c.or_rooms)
+                  
+                  // Format start time
+                  let startTime = '—'
+                  if (c.actual_start_time) {
+                    const timeParts = c.actual_start_time.split(':')
+                    if (timeParts.length >= 2) {
+                      const hours = parseInt(timeParts[0])
+                      const minutes = timeParts[1]
+                      const ampm = hours >= 12 ? 'PM' : 'AM'
+                      const displayHour = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+                      startTime = `${displayHour}:${minutes} ${ampm}`
+                    }
+                  }
+                  
+                  return (
+                    <tr key={c.case_id || idx} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs text-slate-600">{c.case_number}</span>
+                        {c.is_first_case_of_day_surgeon && (
+                          <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                            First
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {procedureType?.name || 'Unknown'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-600">
+                        {room?.name || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-600">
+                        {startTime}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-600">
+                        {c.total_duration_minutes ? `${Math.round(c.total_duration_minutes)} min` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={c.profit && c.profit > 0 ? 'text-emerald-600 font-medium' : 'text-red-500'}>
+                          {c.profit !== null ? formatCurrency(c.profit) : '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// PROCEDURES VIEW
+// ============================================
+
+function SurgeonProceduresView({
+  procedures,
+  metrics,
+}: {
+  procedures: SurgeonProcedureBreakdown[]
+  metrics: FinancialsMetrics
+}) {
+  return (
+    <>
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">
           <h3 className="text-lg font-semibold text-slate-900">Performance by Procedure</h3>
@@ -603,16 +977,12 @@ function SurgeonDetail({
           <InformationCircleIcon className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-blue-800 space-y-2">
             <p>
-              <strong>Why per-procedure comparison?</strong> Comparing surgeon efficiency only makes sense within 
+              <strong>Why per-procedure?</strong> Comparing surgeon efficiency only makes sense within 
               the same procedure type. A hip replacement naturally takes longer than a knee scope.
             </p>
             <p>
-              <strong>Time vs Facility (summary):</strong> The weighted average of time differences across all 
-              procedures this surgeon performs, accounting for how often they do each procedure.
-            </p>
-            <p>
-              <strong>Profit Impact:</strong> Estimated dollar impact per case based on time difference. 
-              Faster surgeons use less OR time, which costs {formatCurrency(metrics.orRate)}/hour at this facility.
+              <strong>Difference column:</strong> Shows how this surgeon's median time compares to 
+              the facility median for that specific procedure. Negative (green) = faster than average.
             </p>
           </div>
         </div>

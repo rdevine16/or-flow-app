@@ -342,13 +342,14 @@ function FinancialsPageContent() {
               />
             )}
 
-            {activeTab === 'surgeon' && (
-              <SurgeonTab 
-                metrics={metrics}
-                selectedSurgeon={selectedSurgeon}
-                onSurgeonSelect={setSelectedSurgeon}
-              />
-            )}
+{activeTab === 'surgeon' && (
+  <SurgeonTab 
+    metrics={metrics}
+    caseStats={caseStats}
+    selectedSurgeon={selectedSurgeon}
+    onSurgeonSelect={setSelectedSurgeon}
+  />
+)}
 
             {activeTab === 'outliers' && (
               <OutliersTab metrics={metrics} />
