@@ -4,8 +4,7 @@ import { useState, useMemo } from 'react'
 import { 
   FinancialsMetrics, 
   SurgeonStats, 
-  CaseCompletionStats,
-  ProcedureBreakdown 
+  CaseCompletionStats
 } from './types'
 import { formatCurrency } from './utils'
 import { 
