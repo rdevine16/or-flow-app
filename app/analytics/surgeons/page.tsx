@@ -53,6 +53,8 @@ import {
   PhaseLegend,
   InsightCard,
   EmptyState,
+  ProcedureComparisonChart,
+  type ProcedureComparisonData,
   SkeletonMetricCards,
   SkeletonTable,
   SkeletonChart,
@@ -336,7 +338,7 @@ export default function SurgeonPerformancePage() {
   const [dayCases, setDayCases] = useState<CaseWithMilestones[]>([])
   const [last30DaysCases, setLast30DaysCases] = useState<CaseWithMilestones[]>([])
   const [allTimeCases, setAllTimeCases] = useState<CaseWithMilestones[]>([])
-  const [selectedProcedureFilter, setSelectedProcedureFilter] = useState<string>('all')
+
   
   const [loading, setLoading] = useState(true)
   const [initialLoading, setInitialLoading] = useState(true)
@@ -799,38 +801,48 @@ export default function SurgeonPerformancePage() {
   const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
 
   // Procedure performance for day analysis
-  const getProcedurePerformance = () => {
+  const getProcedurePerformance = (): ProcedureComparisonData[] => {
     const completedCases = getCompletedCases(dayCases)
     const completed30DayCases = getCompletedCases(last30DaysCases)
     
-    const filteredCases = selectedProcedureFilter === 'all' 
-      ? completedCases 
-      : completedCases.filter(c => {
-          const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-          return proc?.id === selectedProcedureFilter
-        })
+    // Group today's cases by procedure type
+    const byProcedure = new Map<string, { name: string; cases: CaseWithMilestones[] }>()
+    
+    completedCases.forEach(c => {
+      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!proc?.id) return
+      if (!byProcedure.has(proc.id)) {
+        byProcedure.set(proc.id, { name: proc.name, cases: [] })
+      }
+      byProcedure.get(proc.id)!.cases.push(c)
+    })
 
-    const filteredOrTimes = filteredCases.map(c => getTotalORTime(getMilestoneMap(c)))
-    const filteredSurgicalTimes = filteredCases.map(c => getSurgicalTime(getMilestoneMap(c)))
+    return Array.from(byProcedure.entries()).map(([procId, { name, cases }]) => {
+      // Today's averages for this procedure
+      const todayOrTimes = cases.map(c => getTotalORTime(getMilestoneMap(c)))
+      const todaySurgTimes = cases.map(c => getSurgicalTime(getMilestoneMap(c)))
 
-    const baselineCases = selectedProcedureFilter === 'all' ? completed30DayCases : completedCases
-    const baselineOrTimes = baselineCases.map(c => getTotalORTime(getMilestoneMap(c)))
-    const baselineSurgicalTimes = baselineCases.map(c => getSurgicalTime(getMilestoneMap(c)))
+      // 30-day averages for this procedure (exclude today's cases)
+      const baseline30Day = completed30DayCases.filter(c => {
+        const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+        return proc?.id === procId
+      })
+      const baselineOrTimes = baseline30Day.map(c => getTotalORTime(getMilestoneMap(c)))
+      const baselineSurgTimes = baseline30Day.map(c => getSurgicalTime(getMilestoneMap(c)))
 
-    return {
-      procedure: {
-        avgORTime: calculateAverage(filteredOrTimes),
-        avgSurgicalTime: calculateAverage(filteredSurgicalTimes),
-      },
-      baseline: {
-        avgORTime: calculateAverage(baselineOrTimes),
-        avgSurgicalTime: calculateAverage(baselineSurgicalTimes),
-      },
-      baselineLabel: selectedProcedureFilter === 'all' ? '30-Day Avg' : 'Day Average'
-    }
+      return {
+        procedureName: name,
+        procedureId: procId,
+        caseCount: cases.length,
+        todayORTime: calculateAverage(todayOrTimes) || 0,
+        avgORTime: calculateAverage(baselineOrTimes) || 0,
+        todaySurgicalTime: calculateAverage(todaySurgTimes) || 0,
+        avgSurgicalTime: calculateAverage(baselineSurgTimes) || 0,
+      }
+    })
   }
 
-  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases, selectedProcedureFilter])
+  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases])
 
   // Daily trend data for overview chart
   const dailyTrendData = useMemo(() => {
@@ -1422,14 +1434,15 @@ export default function SurgeonPerformancePage() {
                                 key={c.id}
                                 caseNumber={c.caseNumber}
                                 procedureName={c.procedureName}
-                                totalMinutes={c.totalORTime}
-                                maxMinutes={maxCaseTime}
+                                totalValue={c.totalORTime}
+                                maxValue={maxCaseTime}
                                 caseId={c.id}
+                                formatValue={formatSecondsToHHMMSS}
                                 phases={[
-                                  { label: 'Pre-Op', minutes: c.wheelsInToIncision, color: PHASE_COLORS.preOp },
-                                  { label: 'Surgical', minutes: c.incisionToClosing, color: PHASE_COLORS.surgical },
-                                  { label: 'Closing', minutes: c.closingTime, color: PHASE_COLORS.closing },
-                                  { label: 'Emergence', minutes: c.closedToWheelsOut, color: PHASE_COLORS.emergence },
+                                  { label: 'Pre-Op', value: c.wheelsInToIncision, color: PHASE_COLORS.preOp },
+                                  { label: 'Surgical', value: c.incisionToClosing, color: PHASE_COLORS.surgical },
+                                  { label: 'Closing', value: c.closingTime, color: PHASE_COLORS.closing },
+                                  { label: 'Emergence', value: c.closedToWheelsOut, color: PHASE_COLORS.emergence },
                                 ]}
                               />
                             ))}
@@ -1442,80 +1455,20 @@ export default function SurgeonPerformancePage() {
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                       <SectionHeader
                         title="Procedure Performance"
-                        subtitle="Compare today vs baseline averages"
+                        subtitle="Today vs 30-day average by procedure"
                         accentColor="emerald"
                         icon={
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                           </svg>
                         }
-                        action={
-                          <select
-                            value={selectedProcedureFilter}
-                            onChange={(e) => setSelectedProcedureFilter(e.target.value)}
-                            className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow bg-white"
-                          >
-                            <option value="all">All Procedures</option>
-                            {procedures.map(p => (
-                              <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                          </select>
-                        }
                       />
 
-                      <div className="space-y-5 mt-5">
-                        {/* OR Time */}
-                        <div>
-                          <div className="text-sm font-medium text-slate-600 mb-2">OR Time</div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <div className="w-16 text-xs font-medium text-blue-600">Today</div>
-                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
-                                <div className="h-full bg-blue-600 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }} />
-                              </div>
-                              <span className="text-sm font-semibold text-slate-900 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgORTime)}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="w-16 text-xs font-medium text-slate-400">{procedurePerformance.baselineLabel}</div>
-                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
-                                <div className="h-full bg-slate-300 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }} />
-                              </div>
-                              <span className="text-sm font-medium text-slate-500 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgORTime)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Surgical Time */}
-                        <div>
-                          <div className="text-sm font-medium text-slate-600 mb-2">Surgical Time</div>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3">
-                              <div className="w-16 text-xs font-medium text-blue-600">Today</div>
-                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
-                                <div className="h-full bg-blue-600 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }} />
-                              </div>
-                              <span className="text-sm font-semibold text-slate-900 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgSurgicalTime)}</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="w-16 text-xs font-medium text-slate-400">{procedurePerformance.baselineLabel}</div>
-                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
-                                <div className="h-full bg-slate-300 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }} />
-                              </div>
-                              <span className="text-sm font-medium text-slate-500 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgSurgicalTime)}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 bg-blue-600 rounded" />
-                            <span className="text-slate-600 font-medium">{selectedProcedureFilter === 'all' ? 'Today' : 'Procedure'}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-3 h-3 bg-slate-300 rounded" />
-                            <span className="text-slate-600 font-medium">{procedurePerformance.baselineLabel}</span>
-                          </div>
-                        </div>
+                      <div className="mt-5">
+                        <ProcedureComparisonChart 
+                          data={procedurePerformance} 
+                          formatValue={formatSecondsToHHMMSS}
+                        />
                       </div>
                     </div>
                   </div>

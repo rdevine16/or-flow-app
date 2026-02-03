@@ -771,23 +771,25 @@ interface CasePhaseBarProps {
   procedureName: string
   phases: {
     label: string
-    minutes: number
+    value: number
     color: string
   }[]
-  totalMinutes: number
-  maxMinutes: number
+  totalValue: number
+  maxValue: number
   caseId: string
   onCaseClick?: (caseId: string) => void
+  formatValue?: (val: number) => string
 }
 
-export function CasePhaseBar({ caseNumber, procedureName, phases, totalMinutes, maxMinutes, caseId, onCaseClick }: CasePhaseBarProps) {
-  const barWidthPct = maxMinutes > 0 ? (totalMinutes / maxMinutes) * 100 : 0
+export function CasePhaseBar({ caseNumber, procedureName, phases, totalValue, maxValue, caseId, onCaseClick, formatValue }: CasePhaseBarProps) {
+  const barWidthPct = maxValue > 0 ? (totalValue / maxValue) * 100 : 0
   
-  const formatTime = (min: number) => {
-    const m = Math.floor(min)
-    const s = Math.round((min - m) * 60)
+  // Default formatter: treat as seconds → mm:ss
+  const fmt = formatValue || ((sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = Math.round(sec % 60)
     return `${m}:${s.toString().padStart(2, '0')}`
-  }
+  })
 
   return (
     <div 
@@ -801,26 +803,26 @@ export function CasePhaseBar({ caseNumber, procedureName, phases, totalMinutes, 
           <span className="text-xs text-slate-400">·</span>
           <span className="text-xs text-slate-600 truncate max-w-[200px]">{procedureName}</span>
         </div>
-        <span className="text-xs font-mono text-slate-900 font-semibold tabular-nums">{formatTime(totalMinutes)}</span>
+        <span className="text-xs font-mono text-slate-900 font-semibold tabular-nums">{fmt(totalValue)}</span>
       </div>
       
       {/* Stacked bar */}
       <div className="relative" style={{ width: `${Math.max(barWidthPct, 8)}%` }}>
         <div className="h-7 rounded-md overflow-hidden flex">
           {phases.map((phase, idx) => {
-            const phasePct = totalMinutes > 0 ? (phase.minutes / totalMinutes) * 100 : 0
+            const phasePct = totalValue > 0 ? (phase.value / totalValue) * 100 : 0
             if (phasePct < 1) return null
             return (
               <div
                 key={idx}
                 className="h-full relative group/phase"
                 style={{ width: `${phasePct}%`, backgroundColor: phase.color }}
-                title={`${phase.label}: ${formatTime(phase.minutes)}`}
+                title={`${phase.label}: ${fmt(phase.value)}`}
               >
                 {/* Show label if wide enough */}
                 {phasePct > 18 && (
                   <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white/90 truncate px-1">
-                    {formatTime(phase.minutes)}
+                    {fmt(phase.value)}
                   </span>
                 )}
               </div>
@@ -878,6 +880,184 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       <h3 className="text-base font-semibold text-slate-900 mb-1">{title}</h3>
       {description && <p className="text-sm text-slate-500 text-center max-w-sm">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
+    </div>
+  )
+}
+
+
+// =====================================================
+// PROCEDURE COMPARISON CHART (Bullet/Overlay Pattern)
+// =====================================================
+
+export interface ProcedureComparisonData {
+  procedureName: string
+  procedureId: string
+  caseCount: number
+  todayORTime: number          // seconds
+  avgORTime: number            // seconds (30-day avg)
+  todaySurgicalTime: number    // seconds  
+  avgSurgicalTime: number      // seconds (30-day avg)
+}
+
+interface ProcedureComparisonChartProps {
+  data: ProcedureComparisonData[]
+  formatValue?: (seconds: number) => string
+}
+
+function BulletBar({ 
+  label, 
+  todayValue, 
+  avgValue, 
+  maxValue, 
+  color, 
+  formatValue 
+}: { 
+  label: string
+  todayValue: number
+  avgValue: number
+  maxValue: number
+  color: 'blue' | 'violet'
+  formatValue: (v: number) => string
+}) {
+  const todayPct = maxValue > 0 ? Math.min((todayValue / maxValue) * 100, 100) : 0
+  const avgPct = maxValue > 0 ? Math.min((avgValue / maxValue) * 100, 100) : 0
+  
+  const delta = avgValue > 0 ? ((todayValue - avgValue) / avgValue) * 100 : 0
+  const isFaster = delta < 0
+  const deltaAbs = Math.abs(Math.round(delta))
+
+  const colorMap = {
+    blue: {
+      today: 'bg-blue-600',
+      avg: 'bg-blue-200',
+    },
+    violet: {
+      today: 'bg-violet-600',
+      avg: 'bg-violet-200',
+    },
+  }
+
+  const c = colorMap[color]
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-slate-900 tabular-nums">{formatValue(todayValue)}</span>
+          {avgValue > 0 && deltaAbs > 0 && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+              isFaster 
+                ? 'text-emerald-700 bg-emerald-50' 
+                : 'text-red-700 bg-red-50'
+            }`}>
+              {isFaster ? '↓' : '↑'} {deltaAbs}%
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="relative h-5 bg-slate-100 rounded-md overflow-hidden">
+        {/* 30-day average bar (background, lighter) */}
+        {avgValue > 0 && (
+          <div 
+            className={`absolute inset-y-0 left-0 ${c.avg} rounded-md transition-all duration-500`}
+            style={{ width: `${avgPct}%` }}
+          />
+        )}
+        {/* Today's actual bar (foreground, solid) */}
+        <div 
+          className={`absolute inset-y-0 left-0 ${c.today} rounded-md transition-all duration-500`}
+          style={{ width: `${todayPct}%`, opacity: 0.9 }}
+        />
+        {/* Average marker line */}
+        {avgValue > 0 && avgPct > 2 && (
+          <div 
+            className="absolute top-0 bottom-0 w-0.5 bg-slate-900/40 z-10"
+            style={{ left: `${avgPct}%` }}
+            title={`30-day avg: ${formatValue(avgValue)}`}
+          >
+            <div className="absolute -top-1 -translate-x-[3px] w-0 h-0 border-l-[3px] border-r-[3px] border-t-[4px] border-l-transparent border-r-transparent border-t-slate-900/40" />
+          </div>
+        )}
+      </div>
+      {avgValue > 0 && (
+        <div className="flex justify-end">
+          <span className="text-[10px] text-slate-400">avg: {formatValue(avgValue)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function ProcedureComparisonChart({ data, formatValue: formatValueProp }: ProcedureComparisonChartProps) {
+  const fmt = formatValueProp || ((sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = Math.round(sec % 60)
+    return `${m}:${s.toString().padStart(2, '0')}`
+  })
+
+  const maxValue = Math.max(
+    ...data.flatMap(d => [d.todayORTime, d.avgORTime, d.todaySurgicalTime, d.avgSurgicalTime]),
+    1
+  )
+
+  if (data.length === 0) {
+    return (
+      <div className="py-8 text-center text-sm text-slate-400">
+        No procedures performed today
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-0 divide-y divide-slate-100">
+      {data.map((proc, idx) => (
+        <div key={proc.procedureId} className={`${idx > 0 ? 'pt-5' : ''} pb-5`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+              <span className="text-sm font-semibold text-slate-900">{proc.procedureName}</span>
+            </div>
+            <span className="text-xs text-slate-400 font-medium">
+              {proc.caseCount} case{proc.caseCount !== 1 ? 's' : ''} today
+            </span>
+          </div>
+          
+          <div className="space-y-3 pl-3.5">
+            <BulletBar
+              label="OR Time"
+              todayValue={proc.todayORTime}
+              avgValue={proc.avgORTime}
+              maxValue={maxValue}
+              color="blue"
+              formatValue={fmt}
+            />
+            <BulletBar
+              label="Surgical Time"
+              todayValue={proc.todaySurgicalTime}
+              avgValue={proc.avgSurgicalTime}
+              maxValue={maxValue}
+              color="violet"
+              formatValue={fmt}
+            />
+          </div>
+        </div>
+      ))}
+
+      <div className="pt-4 flex items-center gap-5 text-[11px]">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-2.5 bg-blue-600 rounded-sm opacity-90" />
+          <span className="text-slate-600 font-medium">Today</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-2.5 bg-blue-200 rounded-sm" />
+          <span className="text-slate-600 font-medium">30-Day Avg</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-0.5 h-3 bg-slate-900/40" />
+          <span className="text-slate-600 font-medium">Avg Marker</span>
+        </div>
+      </div>
     </div>
   )
 }
