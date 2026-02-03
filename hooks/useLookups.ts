@@ -109,7 +109,7 @@ export function useProcedureTypes(facilityId: string | null | undefined) {
   return useLookup<ProcedureType>(
     'procedure_types',
     { facilityId, includeGlobal: true },
-    'id, name, body_region_id, procedure_category_id, expected_duration'
+    'id, name, body_region_id, procedure_category_id'
   )
 }
 
