@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { 
   FinancialsMetrics, 
   SurgeonStats, 
   CaseCompletionStats
 } from './types'
 import { formatCurrency } from './utils'
+import { createClient } from '@/lib/supabase'
 import { 
   InformationCircleIcon, 
   ChevronRightIcon,
@@ -40,12 +41,45 @@ function formatDuration(minutes: number | null): string {
   return `${mins}m`
 }
 
-function formatTime(timeStr: string | null): string {
+function formatTime(timeStr: string | null, dateStr?: string | null): string {
   if (!timeStr) return '—'
+  
+  // If we have a date, combine and convert from UTC to local
+  if (dateStr) {
+    try {
+      const utcDate = new Date(`${dateStr}T${timeStr}Z`)
+      if (!isNaN(utcDate.getTime())) {
+        return utcDate.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        })
+      }
+    } catch {
+      // Fall through to basic parsing
+    }
+  }
+  
+  // Fallback: parse time string directly (already local or no date context)
   const [hours, minutes] = timeStr.split(':').map(Number)
+  if (isNaN(hours) || isNaN(minutes)) return '—'
   const suffix = hours >= 12 ? 'PM' : 'AM'
   const displayHour = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)
   return `${displayHour}:${String(minutes).padStart(2, '0')} ${suffix}`
+}
+
+function formatTimestampLocal(isoString: string): string {
+  try {
+    const date = new Date(isoString)
+    if (isNaN(date.getTime())) return '—'
+    return date.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    })
+  } catch {
+    return '—'
+  }
 }
 
 function formatDateDisplay(dateStr: string): string {
@@ -751,6 +785,14 @@ function ProceduresTab({
 // SURGEON DAY VIEW
 // ============================================
 
+// Phase type for duration pills
+interface CasePhases {
+  preOp: number | null      // patient_in → incision
+  surgical: number | null   // incision → closing
+  closing: number | null    // closing → closing_complete
+  emergence: number | null  // closing_complete → patient_out
+}
+
 function SurgeonDayView({
   surgeon,
   surgeonCases,
@@ -762,12 +804,94 @@ function SurgeonDayView({
   selectedDate: string
   onDateChange: (date: string) => void
 }) {
+  const [milestoneMap, setMilestoneMap] = useState<Record<string, CasePhases>>({})
+  const [loadingMilestones, setLoadingMilestones] = useState(false)
+
   // Filter cases for selected date
   const dayCases = useMemo(() => {
     return surgeonCases
       .filter(c => c.case_date === selectedDate)
       .sort((a, b) => (a.actual_start_time || '').localeCompare(b.actual_start_time || ''))
   }, [surgeonCases, selectedDate])
+
+  // Fetch milestones for the day's cases
+  const fetchMilestones = useCallback(async (caseIds: string[]) => {
+    if (caseIds.length === 0) {
+      setMilestoneMap({})
+      return
+    }
+
+    setLoadingMilestones(true)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('case_milestones')
+        .select(`
+          case_id,
+          recorded_at,
+          facility_milestone_id,
+          facility_milestones (name)
+        `)
+        .in('case_id', caseIds)
+        .order('recorded_at', { ascending: true })
+
+      if (error) {
+        console.error('Error fetching milestones:', error)
+        setMilestoneMap({})
+        return
+      }
+
+      // Build phase map per case
+      const phaseMap: Record<string, CasePhases> = {}
+      
+      // Group milestones by case
+      const byCaseId: Record<string, Array<{ name: string; recorded_at: string }>> = {}
+      for (const m of data || []) {
+        const fm = Array.isArray(m.facility_milestones) 
+          ? m.facility_milestones[0] 
+          : m.facility_milestones
+        if (!fm?.name || !m.recorded_at) continue
+        
+        if (!byCaseId[m.case_id]) byCaseId[m.case_id] = []
+        byCaseId[m.case_id].push({ name: fm.name, recorded_at: m.recorded_at })
+      }
+
+      // Calculate phases for each case
+      for (const [caseId, milestones] of Object.entries(byCaseId)) {
+        const timeMap: Record<string, number> = {}
+        for (const m of milestones) {
+          timeMap[m.name] = new Date(m.recorded_at).getTime()
+        }
+
+        const diffMin = (endKey: string, startKey: string): number | null => {
+          const s = timeMap[startKey]
+          const e = timeMap[endKey]
+          if (!s || !e) return null
+          const minutes = (e - s) / 60000
+          return minutes >= 0 ? Math.round(minutes) : null
+        }
+
+        phaseMap[caseId] = {
+          preOp: diffMin('incision', 'patient_in'),
+          surgical: diffMin('closing', 'incision'),
+          closing: diffMin('closing_complete', 'closing'),
+          emergence: diffMin('patient_out', 'closing_complete'),
+        }
+      }
+
+      setMilestoneMap(phaseMap)
+    } catch (err) {
+      console.error('Error fetching milestones:', err)
+    } finally {
+      setLoadingMilestones(false)
+    }
+  }, [])
+
+  // Fetch milestones when day cases change
+  useEffect(() => {
+    const caseIds = dayCases.map(c => c.case_id)
+    fetchMilestones(caseIds)
+  }, [dayCases, fetchMilestones])
 
   // Calculate surgeon's medians for comparison
   const surgeonMedians = useMemo(() => {
@@ -844,7 +968,7 @@ function SurgeonDayView({
           <DayMetricCard 
             icon={ClockIcon}
             label="First Case Start"
-            value={formatTime(dayMetrics.firstCaseTime)}
+            value={formatTime(dayMetrics.firstCaseTime, selectedDate)}
           />
           <DayMetricCard 
             icon={ChartBarIcon}
@@ -894,8 +1018,21 @@ function SurgeonDayView({
       {/* Cases List */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
-          <h3 className="text-lg font-semibold text-slate-900">Cases</h3>
-          <p className="text-sm text-slate-500 mt-0.5">{dayCases.length} cases completed</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Cases</h3>
+              <p className="text-sm text-slate-500 mt-0.5">{dayCases.length} cases completed</p>
+            </div>
+            {/* Phase Legend */}
+            {dayCases.length > 0 && !loadingMilestones && Object.keys(milestoneMap).length > 0 && (
+              <div className="flex items-center gap-3 text-xs text-slate-500">
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Pre-Op</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Surgical</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" /> Closing</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-violet-500" /> Emergence</div>
+              </div>
+            )}
+          </div>
         </div>
 
         {dayCases.length === 0 ? (
@@ -920,6 +1057,8 @@ function SurgeonDayView({
               const profitDiff = caseData.profit && procMedians?.medianProfit
                 ? caseData.profit - procMedians.medianProfit
                 : null
+              
+              const phases = milestoneMap[caseData.case_id]
 
               return (
                 <div key={caseData.case_id} className="px-6 py-5 hover:bg-slate-50/50 transition-colors">
@@ -952,12 +1091,29 @@ function SurgeonDayView({
                       <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                         <span className="font-mono">{caseData.case_number}</span>
                         <span className="text-slate-300">•</span>
-                        <span>{formatTime(caseData.actual_start_time)}</span>
+                        <span>{formatTime(caseData.actual_start_time, caseData.case_date)}</span>
                       </div>
+
+                      {/* Phase Duration Pills */}
+                      {phases && (
+                        <div className="flex items-center gap-1.5 mt-2.5">
+                          <PhasePill label="Pre-Op" minutes={phases.preOp} color="blue" />
+                          <PhasePill label="Surgical" minutes={phases.surgical} color="emerald" />
+                          <PhasePill label="Closing" minutes={phases.closing} color="amber" />
+                          <PhasePill label="Emergence" minutes={phases.emergence} color="violet" />
+                        </div>
+                      )}
+                      {loadingMilestones && !phases && (
+                        <div className="flex items-center gap-1.5 mt-2.5">
+                          {[1,2,3,4].map(i => (
+                            <div key={i} className="h-6 w-16 bg-slate-100 rounded-md animate-pulse" />
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Metrics with Comparison Pills */}
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-6 flex-shrink-0">
                       {/* Duration */}
                       <div className="text-right">
                         <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Duration</div>
@@ -1191,6 +1347,61 @@ function ConsistencyBadge({
     `}>
       <span>{c.icon}</span>
       {c.label}
+    </span>
+  )
+}
+
+// ============================================
+// PHASE DURATION PILL
+// ============================================
+
+const phaseColorMap = {
+  blue: {
+    bg: 'bg-blue-50',
+    dot: 'bg-blue-500',
+    text: 'text-blue-700',
+    ring: 'ring-blue-200/60',
+  },
+  emerald: {
+    bg: 'bg-emerald-50',
+    dot: 'bg-emerald-500',
+    text: 'text-emerald-700',
+    ring: 'ring-emerald-200/60',
+  },
+  amber: {
+    bg: 'bg-amber-50',
+    dot: 'bg-amber-500',
+    text: 'text-amber-700',
+    ring: 'ring-amber-200/60',
+  },
+  violet: {
+    bg: 'bg-violet-50',
+    dot: 'bg-violet-500',
+    text: 'text-violet-700',
+    ring: 'ring-violet-200/60',
+  },
+} as const
+
+function PhasePill({ 
+  label, 
+  minutes, 
+  color 
+}: { 
+  label: string
+  minutes: number | null
+  color: keyof typeof phaseColorMap
+}) {
+  if (minutes === null) return null
+  
+  const c = phaseColorMap[color]
+  
+  return (
+    <span className={`
+      inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
+      ${c.bg} ${c.text} ring-1 ${c.ring}
+    `}>
+      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+      {label} {minutes}m
     </span>
   )
 }

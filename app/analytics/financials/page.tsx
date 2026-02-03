@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
@@ -26,34 +25,9 @@ import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
 import OutliersTab from '@/components/analytics/financials/OutliersTab'
 
-// Loading fallback for Suspense
-function LoadingFallback() {
-  return (
-    <DashboardLayout>
-      <div className="flex items-center justify-center py-24">
-        <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
-      </div>
-    </DashboardLayout>
-  )
-}
-
-// Main page export - wraps content in Suspense for useSearchParams
 export default function FinancialsAnalyticsPage() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      <FinancialsPageContent />
-    </Suspense>
-  )
-}
-
-// Inner component that uses useSearchParams
-function FinancialsPageContent() {
   const supabase = createClient()
   const { userData, loading: userLoading, isGlobalAdmin } = useUser()
-  const searchParams = useSearchParams()
   
   // Facility handling
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
@@ -67,12 +41,8 @@ function FinancialsPageContent() {
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
   const [loading, setLoading] = useState(true)
   
-  // UI state - Read initial tab from URL (safe now with Suspense wrapper)
-  const tabFromUrl = searchParams.get('tab') as SubTab
-  const initialTab = tabFromUrl && ['overview', 'procedure', 'surgeon', 'outliers'].includes(tabFromUrl) 
-    ? tabFromUrl 
-    : 'overview'
-  const [activeTab, setActiveTab] = useState<SubTab>(initialTab)
+  // UI state
+  const [activeTab, setActiveTab] = useState<SubTab>('overview')
   const [dateRange, setDateRange] = useState('mtd')
   const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
@@ -116,40 +86,73 @@ function FinancialsPageContent() {
     const end = endDate || today.toISOString().split('T')[0]
 
     try {
-      const [caseStatsRes, surgeonStatsRes, facilityStatsRes, facilityRes] = await Promise.all([
-        // Fetch case-level stats with joins
+      // -------------------------------------------------------
+      // FIX: Don't use PostgREST joins on materialized views.
+      // case_completion_stats is a materialized view — PostgREST 
+      // can't auto-detect foreign keys on views, causing 400 errors.
+      // Instead, fetch lookup tables separately and merge client-side.
+      // -------------------------------------------------------
+      const [
+        caseStatsRes, 
+        surgeonStatsRes, 
+        facilityStatsRes, 
+        facilityRes,
+        procedureTypesRes,
+        payersRes,
+        orRoomsRes,
+        surgeonsRes,
+      ] = await Promise.all([
+        // 1. Fetch case-level stats (NO joins — just the flat view data)
         supabase
           .from('case_completion_stats')
-          .select(`
-            *,
-            surgeon:users!case_completion_stats_surgeon_id_fkey (first_name, last_name),
-            procedure_types (id, name),
-            payers (id, name),
-            or_rooms (name)
-          `)
+          .select('*')
           .eq('facility_id', effectiveFacilityId)
           .gte('case_date', start)
           .lte('case_date', end)
           .order('case_date', { ascending: false }),
         
-        // Fetch surgeon+procedure stats (pre-computed)
+        // 2. Fetch surgeon+procedure stats (pre-computed)
         supabase
           .from('surgeon_procedure_stats')
           .select('*')
           .eq('facility_id', effectiveFacilityId),
         
-        // Fetch facility+procedure stats (pre-computed)
+        // 3. Fetch facility+procedure stats (pre-computed)
         supabase
           .from('facility_procedure_stats')
           .select('*')
           .eq('facility_id', effectiveFacilityId),
         
-        // Fetch facility settings
+        // 4. Fetch facility settings
         supabase
           .from('facilities')
           .select('or_hourly_rate')
           .eq('id', effectiveFacilityId)
           .single(),
+
+        // 5. Lookup: procedure types for this facility
+        supabase
+          .from('procedure_types')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId),
+
+        // 6. Lookup: payers for this facility
+        supabase
+          .from('payers')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId),
+
+        // 7. Lookup: OR rooms for this facility
+        supabase
+          .from('or_rooms')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId),
+
+        // 8. Lookup: surgeons (users) for this facility
+        supabase
+          .from('users')
+          .select('id, first_name, last_name')
+          .eq('facility_id', effectiveFacilityId),
       ])
 
       // Handle errors
@@ -163,7 +166,38 @@ function FinancialsPageContent() {
         console.error('Error fetching facility stats:', facilityStatsRes.error)
       }
 
-      setCaseStats((caseStatsRes.data as unknown as CaseCompletionStats[]) || [])
+      // Build lookup maps from separately-fetched reference tables
+      const procedureMap = new Map<string, { id: string; name: string }>()
+      for (const p of procedureTypesRes.data || []) {
+        procedureMap.set(p.id, { id: p.id, name: p.name })
+      }
+
+      const payerMap = new Map<string, { id: string; name: string }>()
+      for (const p of payersRes.data || []) {
+        payerMap.set(p.id, { id: p.id, name: p.name })
+      }
+
+      const roomMap = new Map<string, { name: string }>()
+      for (const r of orRoomsRes.data || []) {
+        roomMap.set(r.id, { name: r.name })
+      }
+
+      const surgeonMap = new Map<string, { first_name: string; last_name: string }>()
+      for (const u of surgeonsRes.data || []) {
+        surgeonMap.set(u.id, { first_name: u.first_name, last_name: u.last_name })
+      }
+
+      // Merge lookup data onto each case stat row
+      // This replicates the nested objects that PostgREST joins would have produced
+      const enrichedCaseStats = (caseStatsRes.data || []).map((row: any) => ({
+        ...row,
+        procedure_types: row.procedure_type_id ? procedureMap.get(row.procedure_type_id) || null : null,
+        payers: row.payer_id ? payerMap.get(row.payer_id) || null : null,
+        or_rooms: row.or_room_id ? roomMap.get(row.or_room_id) || null : null,
+        surgeon: row.surgeon_id ? surgeonMap.get(row.surgeon_id) || null : null,
+      }))
+
+      setCaseStats(enrichedCaseStats as CaseCompletionStats[])
       setSurgeonProcedureStats((surgeonStatsRes.data as SurgeonProcedureStats[]) || [])
       setFacilityProcedureStats((facilityStatsRes.data as FacilityProcedureStats[]) || [])
       setFacilitySettings(facilityRes.data as FacilitySettings)
@@ -342,14 +376,14 @@ function FinancialsPageContent() {
               />
             )}
 
-{activeTab === 'surgeon' && (
-  <SurgeonTab 
-    metrics={metrics}
-    caseStats={caseStats}
-    selectedSurgeon={selectedSurgeon}
-    onSurgeonSelect={setSelectedSurgeon}
-  />
-)}
+            {activeTab === 'surgeon' && (
+              <SurgeonTab 
+                metrics={metrics}
+                caseStats={caseStats}
+                selectedSurgeon={selectedSurgeon}
+                onSurgeonSelect={setSelectedSurgeon}
+              />
+            )}
 
             {activeTab === 'outliers' && (
               <OutliersTab metrics={metrics} />
