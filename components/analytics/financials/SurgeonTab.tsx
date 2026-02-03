@@ -366,7 +366,7 @@ function SurgeonDetail({
         cases,
         caseCount: cases.length,
         totalProfit: cases.reduce((sum, c) => sum + (c.profit || 0), 0),
-        totalDuration: cases.reduce((sum, c) => sum + (c.duration_minutes || 0), 0),
+        totalDuration: cases.reduce((sum, c) => sum + (c.total_duration_minutes || 0), 0),
         avgProfit: cases.length > 0 
           ? cases.reduce((sum, c) => sum + (c.profit || 0), 0) / cases.length 
           : 0,
@@ -377,7 +377,7 @@ function SurgeonDetail({
   // Calculate efficiency metrics
   const efficiencyMetrics = useMemo(() => {
     const durations = surgeonCases
-      .map(c => c.duration_minutes)
+      .map(c => c.total_duration_minutes)
       .filter((d): d is number => d !== null && d > 0)
     
     const profits = surgeonCases
@@ -385,7 +385,7 @@ function SurgeonDetail({
       .filter((p): p is number => p !== null)
     
     const surgicalTimes = surgeonCases
-      .map(c => c.surgical_time_minutes)
+      .map(c => c.surgical_duration_minutes)
       .filter((t): t is number => t !== null && t > 0)
     
     const medianDuration = calculateMedian(durations)
@@ -766,7 +766,7 @@ function SurgeonDayView({
   const dayCases = useMemo(() => {
     return surgeonCases
       .filter(c => c.case_date === selectedDate)
-      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+      .sort((a, b) => (a.actual_start_time || '').localeCompare(b.actual_start_time || ''))
   }, [surgeonCases, selectedDate])
 
   // Calculate surgeon's medians for comparison
@@ -778,7 +778,7 @@ function SurgeonDayView({
       if (!byProcedure[c.procedure_type_id]) {
         byProcedure[c.procedure_type_id] = { durations: [], profits: [] }
       }
-      if (c.duration_minutes) byProcedure[c.procedure_type_id].durations.push(c.duration_minutes)
+      if (c.total_duration_minutes) byProcedure[c.procedure_type_id].durations.push(c.total_duration_minutes)
       if (c.profit) byProcedure[c.procedure_type_id].profits.push(c.profit)
     })
     
@@ -795,8 +795,8 @@ function SurgeonDayView({
   // Day metrics
   const dayMetrics = useMemo(() => {
     const totalProfit = dayCases.reduce((sum, c) => sum + (c.profit || 0), 0)
-    const totalDuration = dayCases.reduce((sum, c) => sum + (c.duration_minutes || 0), 0)
-    const totalSurgicalTime = dayCases.reduce((sum, c) => sum + (c.surgical_time_minutes || 0), 0)
+    const totalDuration = dayCases.reduce((sum, c) => sum + (c.total_duration_minutes || 0), 0)
+    const totalSurgicalTime = dayCases.reduce((sum, c) => sum + (c.surgical_duration_minutes || 0), 0)
     const firstCase = dayCases[0]
     
     return {
@@ -806,7 +806,7 @@ function SurgeonDayView({
       totalSurgicalTime,
       avgProfit: dayCases.length > 0 ? totalProfit / dayCases.length : 0,
       avgDuration: dayCases.length > 0 ? totalDuration / dayCases.length : 0,
-      firstCaseTime: firstCase?.start_time || null,
+      firstCaseTime: firstCase?.actual_start_time || null,
       uptimePercent: totalDuration > 0 ? Math.round((totalSurgicalTime / totalDuration) * 100) : 0,
     }
   }, [dayCases])
@@ -913,8 +913,8 @@ function SurgeonDayView({
                 ? surgeonMedians[caseData.procedure_type_id] 
                 : null
               
-              const durationDiff = caseData.duration_minutes && procMedians?.medianDuration
-                ? caseData.duration_minutes - procMedians.medianDuration
+              const durationDiff = caseData.total_duration_minutes && procMedians?.medianDuration
+                ? caseData.total_duration_minutes - procMedians.medianDuration
                 : null
               
               const profitDiff = caseData.profit && procMedians?.medianProfit
@@ -944,15 +944,15 @@ function SurgeonDayView({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-slate-900">
-                          {caseData.procedure_name || 'Unknown Procedure'}
+                          {(Array.isArray(caseData.procedure_types) ? caseData.procedure_types[0]?.name : caseData.procedure_types?.name) || 'Unknown Procedure'}
                         </span>
                         <span className="text-slate-400">•</span>
-                        <span className="text-sm text-slate-500">{caseData.room_name}</span>
+                        <span className="text-sm text-slate-500">{(Array.isArray(caseData.or_rooms) ? caseData.or_rooms[0]?.name : caseData.or_rooms?.name) || 'No Room'}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
                         <span className="font-mono">{caseData.case_number}</span>
                         <span className="text-slate-300">•</span>
-                        <span>{formatTime(caseData.start_time)}</span>
+                        <span>{formatTime(caseData.actual_start_time)}</span>
                       </div>
                     </div>
 
@@ -963,7 +963,7 @@ function SurgeonDayView({
                         <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Duration</div>
                         <div className="flex items-center justify-end gap-2">
                           <span className="text-sm font-semibold text-slate-900">
-                            {formatDuration(caseData.duration_minutes)}
+                            {formatDuration(caseData.total_duration_minutes)}
                           </span>
                           {durationDiff !== null && (
                             <ComparisonPill value={durationDiff} unit="min" invertColors />
