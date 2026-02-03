@@ -10,6 +10,22 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import AnalyticsLayout from '@/components/analytics/AnalyticsLayout'
 import { formatSecondsToHHMMSS } from '@/lib/analyticsV2'
+import {
+  SectionHeader,
+  EnhancedMetricCard,
+  PeriodSelector,
+  SurgeonSelector,
+  ConsistencyBadge,
+  InlineBar,
+  CallTimingTimeline,
+  DelayDonut,
+  InsightCard,
+  SlideOutPanel,
+  SkeletonMetricCards,
+  SkeletonTable,
+  SkeletonChart,
+  EmptyState,
+} from '@/components/analytics/AnalyticsComponents'
 
 // ============================================
 // TYPES
@@ -103,7 +119,7 @@ function getDateRange(period: string): { startDate: string; endDate: string; pre
       prevEndDate.setDate(prevEndDate.getDate() - 1)
       prevStartDate = new Date(prevEndDate.getFullYear(), 0, 1)
       break
-    default: // month
+    default:
       startDate = new Date(today.getFullYear(), today.getMonth(), 1)
       prevEndDate = new Date(startDate)
       prevEndDate.setDate(prevEndDate.getDate() - 1)
@@ -118,228 +134,29 @@ function getDateRange(period: string): { startDate: string; endDate: string; pre
   }
 }
 
-function getConsistencyLabel(avgSeconds: number | null, stddevSeconds: number | null): { label: string; color: string } {
-  if (!avgSeconds || !stddevSeconds || avgSeconds === 0) {
-    return { label: 'N/A', color: 'text-slate-400' }
-  }
-  
-  const cv = (stddevSeconds / avgSeconds) * 100 // Coefficient of variation
-  
-  if (cv < 10) {
-    return { label: 'Very Consistent', color: 'text-emerald-600' }
-  } else if (cv < 20) {
-    return { label: 'Consistent', color: 'text-blue-600' }
-  } else {
-    return { label: 'Variable', color: 'text-amber-600' }
-  }
+function getConsistencyLevel(avgSeconds: number | null, stddevSeconds: number | null): 'very_consistent' | 'consistent' | 'variable' | 'na' {
+  if (!avgSeconds || !stddevSeconds || avgSeconds === 0) return 'na'
+  const cv = (stddevSeconds / avgSeconds) * 100
+  if (cv < 10) return 'very_consistent'
+  if (cv < 20) return 'consistent'
+  return 'variable'
 }
 
-function formatMinutes(minutes: number | null): string {
-  if (minutes === null || isNaN(minutes)) return '--'
-  const absMinutes = Math.abs(minutes)
-  const mins = Math.floor(absMinutes)
-  const secs = Math.round((absMinutes - mins) * 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
+function getConsistencyLabel(level: 'very_consistent' | 'consistent' | 'variable' | 'na'): string {
+  const labels = { very_consistent: 'Very Consistent', consistent: 'Consistent', variable: 'Variable', na: 'N/A' }
+  return labels[level]
 }
 
-// Get timezone offset in milliseconds for a given date and IANA timezone
-// This handles DST automatically
 function getTimezoneOffsetMs(date: Date, timezone: string): number {
   try {
-    // Format the date in both UTC and the target timezone
-    const utcString = date.toLocaleString('en-US', { timeZone: 'UTC' })
-    const tzString = date.toLocaleString('en-US', { timeZone: timezone })
-    
-    // Parse both back to dates and find the difference
-    const utcDate = new Date(utcString)
-    const tzDate = new Date(tzString)
-    
+    const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' })
+    const tzStr = date.toLocaleString('en-US', { timeZone: timezone })
+    const utcDate = new Date(utcStr)
+    const tzDate = new Date(tzStr)
     return utcDate.getTime() - tzDate.getTime()
   } catch {
-    // Fallback to EST (UTC-5) if timezone is invalid
     return 5 * 60 * 60 * 1000
   }
-}
-
-// Get timezone offset in hours for a specific date (handles DST)
-function getTimezoneOffsetHours(timezone: string, date: Date): number {
-  try {
-    // Use Intl API to get accurate offset including DST
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      timeZoneName: 'longOffset' // This gives "GMT-05:00" format
-    })
-    
-    const parts = formatter.formatToParts(date)
-    const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT'
-    
-    // Parse "GMT-05:00" or "GMT+05:30" format
-    const match = offsetPart.match(/GMT([+-])(\d{2}):(\d{2})/)
-    if (match) {
-      const sign = match[1] === '+' ? 1 : -1
-      const hours = parseInt(match[2], 10)
-      const minutes = parseInt(match[3], 10)
-      return sign * (hours + minutes / 60)
-    }
-    
-    return 0 // Default to UTC if parsing fails
-  } catch (e) {
-    console.error('Error parsing timezone:', e)
-    return -5 // Fallback to EST
-  }
-}
-
-// Convert local time to UTC using facility timezone
-function localTimeToUTC(dateStr: string, timeStr: string, timezone: string): Date {
-  // Create a date object from the local datetime
-  const localDateTime = new Date(`${dateStr}T${timeStr}`)
-  
-  // Get the offset for this specific date (handles DST)
-  const offsetHours = getTimezoneOffsetHours(timezone, localDateTime)
-  
-  // Subtract the offset to convert local to UTC
-  // e.g., 7:00 AM EST (UTC-5) -> offset is -5 -> 7:00 - (-5) = 12:00 UTC
-  return new Date(localDateTime.getTime() - (offsetHours * 60 * 60 * 1000))
-}
-
-// ============================================
-// SLIDE-OUT PANEL COMPONENT
-// ============================================
-
-interface SlideOutPanelProps {
-  isOpen: boolean
-  onClose: () => void
-  title: string
-  subtitle?: string
-  children: React.ReactNode
-}
-
-function SlideOutPanel({ isOpen, onClose, title, subtitle, children }: SlideOutPanelProps) {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/30 transition-opacity"
-        onClick={onClose}
-      />
-      
-      {/* Panel */}
-      <div className="absolute inset-y-0 right-0 max-w-xl w-full">
-        <div className="h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-              {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// METRIC CARD COMPONENT
-// ============================================
-
-interface MetricCardProps {
-  title: string
-  value: string | number
-  subtitle?: string
-  trend?: {
-    value: number
-    improved: boolean
-  }
-  icon?: React.ReactNode
-  highlighted?: boolean
-}
-
-function MetricCard({ title, value, subtitle, trend, icon, highlighted = false }: MetricCardProps) {
-  return (
-    <div className={`rounded-xl border p-5 ${highlighted ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
-      <div className="flex items-start justify-between mb-2">
-        <p className="text-sm font-medium text-slate-600">{title}</p>
-        {icon && <div className="text-slate-400">{icon}</div>}
-      </div>
-      
-      <div className="flex items-end gap-3">
-        <p className={`text-2xl font-bold ${highlighted ? 'text-blue-600' : 'text-slate-900'}`}>
-          {value}
-        </p>
-        
-        {trend && (
-          <div className={`flex items-center gap-1 text-sm font-medium ${trend.improved ? 'text-emerald-600' : 'text-red-500'}`}>
-            {trend.improved ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
-            )}
-            {Math.abs(trend.value)}%
-          </div>
-        )}
-      </div>
-      
-      {subtitle && (
-        <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
-      )}
-    </div>
-  )
-}
-
-// ============================================
-// INSIGHT CARD COMPONENT
-// ============================================
-
-interface InsightCardProps {
-  icon: React.ReactNode
-  title: string
-  children: React.ReactNode
-  type?: 'info' | 'success' | 'warning'
-}
-
-function InsightCard({ icon, title, children, type = 'info' }: InsightCardProps) {
-  const bgColor = type === 'success' ? 'bg-emerald-50 border-emerald-200' :
-                  type === 'warning' ? 'bg-amber-50 border-amber-200' :
-                  'bg-blue-50 border-blue-200'
-  const iconColor = type === 'success' ? 'text-emerald-600' :
-                    type === 'warning' ? 'text-amber-600' :
-                    'text-blue-600'
-
-  return (
-    <div className={`rounded-xl border p-4 ${bgColor}`}>
-      <div className="flex gap-3">
-        <div className={`flex-shrink-0 ${iconColor}`}>
-          {icon}
-        </div>
-        <div>
-          <p className="font-medium text-slate-900 mb-1">{title}</p>
-          <div className="text-sm text-slate-600">
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ============================================
@@ -443,7 +260,6 @@ export default function SurgeonOverviewPage() {
       setLoading(true)
       const { startDate, endDate, prevStartDate, prevEndDate } = getDateRange(timePeriod)
 
-      // Fetch all data in parallel
       await Promise.all([
         fetchCaseVolume(startDate, endDate, prevStartDate, prevEndDate),
         fetchProcedures(startDate, endDate),
@@ -458,7 +274,10 @@ export default function SurgeonOverviewPage() {
     fetchAllData()
   }, [effectiveFacilityId, selectedSurgeonId, timePeriod, facilityTimezone])
 
-  // Data fetching functions
+  // ============================================
+  // DATA FETCHING FUNCTIONS
+  // ============================================
+
   const fetchCaseVolume = async (startDate: string, endDate: string, prevStartDate: string, prevEndDate: string) => {
     const { data: currentData } = await supabase
       .from('cases')
@@ -480,7 +299,7 @@ export default function SurgeonOverviewPage() {
 
     const currentCount = currentData?.length || 0
     const previousCount = prevData?.length || 0
-    const percentChange = previousCount > 0 
+    const percentChange = previousCount > 0
       ? Math.round(((currentCount - previousCount) / previousCount) * 100)
       : null
 
@@ -488,7 +307,6 @@ export default function SurgeonOverviewPage() {
   }
 
   const fetchProcedures = async (startDate: string, endDate: string) => {
-    // Get completed status ID
     const { data: statusData } = await supabase
       .from('case_statuses')
       .select('id')
@@ -497,7 +315,6 @@ export default function SurgeonOverviewPage() {
 
     if (!statusData) return
 
-    // Fetch cases with milestones for this surgeon
     const { data: casesData } = await supabase
       .from('cases')
       .select(`
@@ -517,7 +334,6 @@ export default function SurgeonOverviewPage() {
 
     if (!casesData) return
 
-    // Group by procedure and calculate times
     const procedureMap = new Map<string, {
       procedure_id: string
       procedure_name: string
@@ -528,7 +344,7 @@ export default function SurgeonOverviewPage() {
     casesData.forEach((c: any) => {
       const procId = c.procedure_type_id
       const procName = c.procedure_types?.name || 'Unknown'
-      
+
       if (!procId) return
 
       if (!procedureMap.has(procId)) {
@@ -541,8 +357,7 @@ export default function SurgeonOverviewPage() {
       }
 
       const proc = procedureMap.get(procId)!
-      
-      // Build milestone map
+
       const milestones: { [key: string]: Date } = {}
       c.case_milestones?.forEach((m: any) => {
         const name = m.milestone_types?.name
@@ -551,15 +366,13 @@ export default function SurgeonOverviewPage() {
         }
       })
 
-      // Calculate surgical time (incision → closing)
       if (milestones.incision && milestones.closing) {
         const surgicalSeconds = (milestones.closing.getTime() - milestones.incision.getTime()) / 1000
-        if (surgicalSeconds > 0 && surgicalSeconds < 36000) { // Sanity check: < 10 hours
+        if (surgicalSeconds > 0 && surgicalSeconds < 36000) {
           proc.surgical_times.push(surgicalSeconds)
         }
       }
 
-      // Calculate total time (patient_in → patient_out)
       if (milestones.patient_in && milestones.patient_out) {
         const totalSeconds = (milestones.patient_out.getTime() - milestones.patient_in.getTime()) / 1000
         if (totalSeconds > 0 && totalSeconds < 36000) {
@@ -568,7 +381,6 @@ export default function SurgeonOverviewPage() {
       }
     })
 
-    // Convert to array and calculate stats
     const proceduresArray: ProcedureBreakdown[] = Array.from(procedureMap.values())
       .map(proc => {
         const avgSurgical = proc.surgical_times.length > 0
@@ -577,8 +389,7 @@ export default function SurgeonOverviewPage() {
         const avgTotal = proc.total_times.length > 0
           ? proc.total_times.reduce((a, b) => a + b, 0) / proc.total_times.length
           : null
-        
-        // Calculate standard deviation for surgical times
+
         let stddevSurgical: number | null = null
         if (proc.surgical_times.length > 1 && avgSurgical) {
           const squaredDiffs = proc.surgical_times.map(t => Math.pow(t - avgSurgical, 2))
@@ -609,7 +420,6 @@ export default function SurgeonOverviewPage() {
 
     if (!statusData) return
 
-// Fetch cases with called_back_at and milestones
     const { data: casesData } = await supabase
       .from('cases')
       .select(`
@@ -653,13 +463,11 @@ export default function SurgeonOverviewPage() {
 
       const callTime = new Date(c.called_back_at)
 
-      // Minutes before incision (negative = before)
       if (milestones.incision) {
         const minBeforeIncision = (callTime.getTime() - milestones.incision.getTime()) / 1000 / 60
         timings.minutesBeforeIncision.push(minBeforeIncision)
       }
 
-      // Prep duration (patient_in → prepped)
       if (milestones.patient_in && milestones.prepped) {
         const prepMin = (milestones.prepped.getTime() - milestones.patient_in.getTime()) / 1000 / 60
         if (prepMin > 0 && prepMin < 120) {
@@ -667,7 +475,6 @@ export default function SurgeonOverviewPage() {
         }
       }
 
-      // Wait for surgeon (prepped → incision)
       if (milestones.prepped && milestones.incision) {
         const waitMin = (milestones.incision.getTime() - milestones.prepped.getTime()) / 1000 / 60
         if (waitMin >= 0 && waitMin < 60) {
@@ -709,7 +516,6 @@ export default function SurgeonOverviewPage() {
       return
     }
 
-    // Group by delay type
     const delayMap = new Map<string, DelayData>()
 
     data.forEach((d: any) => {
@@ -748,7 +554,6 @@ export default function SurgeonOverviewPage() {
 
     if (!statusData) return
 
-    // Fetch all cases for this surgeon with start_time and patient_in milestone
     const { data: casesData } = await supabase
       .from('cases')
       .select(`
@@ -774,7 +579,6 @@ export default function SurgeonOverviewPage() {
       return
     }
 
-    // Group by date to find first case of each day
     const casesByDate = new Map<string, any>()
     casesData.forEach((c: any) => {
       if (!casesByDate.has(c.scheduled_date)) {
@@ -786,7 +590,6 @@ export default function SurgeonOverviewPage() {
     let onTimeCount = 0
 
     casesByDate.forEach((c) => {
-      // Find patient_in milestone
       const patientInMilestone = c.case_milestones?.find(
         (m: any) => m.milestone_types?.name === 'patient_in'
       )
@@ -795,9 +598,6 @@ export default function SurgeonOverviewPage() {
 
       totalFirstCases++
 
-      // Calculate variance with timezone adjustment
-      // Scheduled time is local, milestone is UTC
-      // Use facility timezone to convert scheduled local time to UTC
       const scheduledDateTime = new Date(`${c.scheduled_date}T${c.start_time}`)
       const offsetMs = getTimezoneOffsetMs(scheduledDateTime, facilityTimezone)
       const scheduledUTC = new Date(scheduledDateTime.getTime() + offsetMs)
@@ -805,7 +605,6 @@ export default function SurgeonOverviewPage() {
 
       const varianceMinutes = (actualUTC.getTime() - scheduledUTC.getTime()) / 1000 / 60
 
-      // On-time if within ±10 minutes
       if (varianceMinutes >= -10 && varianceMinutes <= 10) {
         onTimeCount++
       }
@@ -890,14 +689,16 @@ export default function SurgeonOverviewPage() {
       }
     }).filter((c: ProcedureCaseDetail) => c.surgical_seconds !== null)
 
-    // Sort by surgical time for outlier display
     const sorted = [...cases].sort((a, b) => (a.surgical_seconds || 0) - (b.surgical_seconds || 0))
 
     setProcedureCases(sorted)
     setLoadingProcedureCases(false)
   }
 
-  // Computed values for call timing insight
+  // ============================================
+  // COMPUTED VALUES
+  // ============================================
+
   const callTimingInsight = useMemo(() => {
     if (!callTiming) return null
 
@@ -907,10 +708,7 @@ export default function SurgeonOverviewPage() {
 
     if (minBeforeIncision === null || prepDuration === null) return null
 
-    // How early they call (absolute value since it's negative)
     const callEarliness = Math.abs(minBeforeIncision)
-    
-    // How much earlier they could call: callEarliness - prepDuration - small buffer
     const potentialOptimization = Math.max(0, callEarliness - prepDuration - 5)
 
     return {
@@ -922,11 +720,9 @@ export default function SurgeonOverviewPage() {
     }
   }, [callTiming])
 
-  // Get selected surgeon name
   const selectedSurgeon = surgeons.find(s => s.id === selectedSurgeonId)
   const surgeonName = selectedSurgeon ? `Dr. ${selectedSurgeon.last_name}` : 'Select Surgeon'
 
-  // Period labels
   const periodLabels: { [key: string]: string } = {
     week: 'This Week',
     month: 'This Month',
@@ -934,25 +730,32 @@ export default function SurgeonOverviewPage() {
     year: 'This Year',
   }
 
-  // Total delays
   const totalDelays = delays.reduce((sum, d) => sum + d.count, 0)
   const totalDelayMinutes = delays.reduce((sum, d) => sum + (d.total_minutes || 0), 0)
 
-  // Loading state
+  // Max values for InlineBar comparison
+  const maxSurgicalSeconds = Math.max(...procedures.map(p => p.avg_surgical_seconds || 0), 1)
+  const maxTotalSeconds = Math.max(...procedures.map(p => p.avg_total_seconds || 0), 1)
+
+  // Delay colors for donut
+  const delayColors = ['#EF4444', '#F59E0B', '#6366F1', '#8B5CF6', '#94A3B8']
+
+  // ============================================
+  // LOADING / NO FACILITY STATES
+  // ============================================
+
   if (userLoading || !facilityCheckComplete) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center py-24">
-          <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-        </div>
+        <Container>
+          <AnalyticsLayout title="Surgeon Overview" description="Performance insights and efficiency metrics">
+            <SkeletonMetricCards count={4} />
+          </AnalyticsLayout>
+        </Container>
       </DashboardLayout>
     )
   }
 
-  // No facility selected
   if (noFacilitySelected) {
     return (
       <DashboardLayout>
@@ -961,14 +764,24 @@ export default function SurgeonOverviewPage() {
             title="Surgeon Overview"
             description="Select a facility to view surgeon analytics"
           >
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-              <p className="text-amber-800">Please select a facility from the header to view analytics.</p>
-            </div>
+            <EmptyState
+              icon={
+                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              }
+              title="No Facility Selected"
+              description="Please select a facility from the header to view surgeon analytics."
+            />
           </AnalyticsLayout>
         </Container>
       </DashboardLayout>
     )
   }
+
+  // ============================================
+  // MAIN RENDER
+  // ============================================
 
   return (
     <DashboardLayout>
@@ -978,72 +791,103 @@ export default function SurgeonOverviewPage() {
           description="Performance insights and efficiency metrics"
           actions={
             <div className="flex items-center gap-3">
-              {/* Surgeon Selector */}
-              <select
-                value={selectedSurgeonId || ''}
-                onChange={(e) => setSelectedSurgeonId(e.target.value)}
-                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {surgeons.map((surgeon) => (
-                  <option key={surgeon.id} value={surgeon.id}>
-                    Dr. {surgeon.last_name}, {surgeon.first_name}
-                  </option>
-                ))}
-              </select>
+              {/* Surgeon Selector — custom dropdown with avatar */}
+              <SurgeonSelector
+                surgeons={surgeons.map(s => ({
+                  id: s.id,
+                  first_name: s.first_name,
+                  last_name: s.last_name,
+                }))}
+                selectedId={selectedSurgeonId}
+                onChange={setSelectedSurgeonId}
+              />
 
-              {/* Time Period Selector */}
-              <select
-                value={timePeriod}
-                onChange={(e) => setTimePeriod(e.target.value)}
-                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="quarter">This Quarter</option>
-                <option value="year">This Year</option>
-              </select>
+              {/* Period Selector — segmented pill buttons */}
+              <PeriodSelector
+                options={[
+                  { value: 'week', label: '1W' },
+                  { value: 'month', label: '1M' },
+                  { value: 'quarter', label: '3M' },
+                  { value: 'year', label: '1Y' },
+                ]}
+                selected={timePeriod}
+                onChange={setTimePeriod}
+              />
             </div>
           }
         >
           {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
+            <div className="space-y-8">
+              <SkeletonMetricCards count={4} />
+              <SkeletonTable rows={4} />
+              <SkeletonChart height={200} />
             </div>
           ) : (
-            <div className="space-y-8">
+            <div className="space-y-10">
               {/* ============================================ */}
               {/* SECTION 1: KEY METRICS */}
               {/* ============================================ */}
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">Key Metrics</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <MetricCard
+                <SectionHeader
+                  title="Key Metrics"
+                  subtitle={periodLabels[timePeriod]}
+                  accentColor="blue"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  }
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+                  <EnhancedMetricCard
                     title="Completed Cases"
                     value={caseVolume?.current_count || 0}
                     subtitle={`vs ${caseVolume?.previous_count || 0} prev period`}
-                    trend={caseVolume?.percent_change !== null ? {
-                      value: caseVolume?.percent_change || 0,
-                      improved: (caseVolume?.percent_change || 0) > 0,
+                    accentColor="blue"
+                    trend={caseVolume?.percent_change !== null && caseVolume?.percent_change !== undefined ? {
+                      value: caseVolume.percent_change,
+                      improved: caseVolume.percent_change > 0,
+                      label: 'vs prev period',
                     } : undefined}
-                    highlighted
+                    icon={
+                      <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    }
                   />
-                  <MetricCard
+                  <EnhancedMetricCard
                     title="First Case On-Time"
                     value={`${firstCaseData?.on_time_percentage || 0}%`}
                     subtitle={`${firstCaseData?.on_time_count || 0} of ${firstCaseData?.total_first_cases || 0} first cases`}
+                    accentColor="emerald"
+                    progress={firstCaseData?.on_time_percentage || 0}
+                    icon={
+                      <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    }
                   />
-                  <MetricCard
+                  <EnhancedMetricCard
                     title="Total Delays"
                     value={totalDelays}
                     subtitle={totalDelayMinutes > 0 ? `${totalDelayMinutes} min total` : 'No duration recorded'}
+                    accentColor={totalDelays > 5 ? 'red' : totalDelays > 0 ? 'amber' : 'emerald'}
+                    icon={
+                      <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    }
                   />
-                  <MetricCard
+                  <EnhancedMetricCard
                     title="Procedures"
                     value={procedures.length}
                     subtitle="Different procedure types"
+                    accentColor="violet"
+                    icon={
+                      <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                      </svg>
+                    }
                   />
                 </div>
               </div>
@@ -1052,50 +896,82 @@ export default function SurgeonOverviewPage() {
               {/* SECTION 2: PROCEDURE BREAKDOWN */}
               {/* ============================================ */}
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 mb-4">Procedure Breakdown</h2>
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <SectionHeader
+                  title="Procedure Breakdown"
+                  subtitle={`${procedures.reduce((sum, p) => sum + p.case_count, 0)} completed cases`}
+                  accentColor="violet"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                    </svg>
+                  }
+                />
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-4">
                   <table className="w-full">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-slate-50/80">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Surgical</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Total</th>
-                        <th className="px-6 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Consistency</th>
-                        <th className="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider"></th>
+                        <th className="px-6 py-3.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Procedure</th>
+                        <th className="px-6 py-3.5 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
+                        <th className="px-6 py-3.5 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Avg Surgical</th>
+                        <th className="px-6 py-3.5 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Avg Total</th>
+                        <th className="px-6 py-3.5 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Consistency</th>
+                        <th className="px-6 py-3.5 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {procedures.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                            No completed cases found for this period
+                          <td colSpan={6} className="px-6 py-12 text-center">
+                            <EmptyState
+                              icon={
+                                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              }
+                              title="No completed cases"
+                              description="No completed cases found for this period."
+                            />
                           </td>
                         </tr>
                       ) : (
                         procedures.map((proc) => {
-                          const consistency = getConsistencyLabel(proc.avg_surgical_seconds, proc.stddev_surgical_seconds)
+                          const level = getConsistencyLevel(proc.avg_surgical_seconds, proc.stddev_surgical_seconds)
                           return (
-                            <tr key={proc.procedure_id} className="hover:bg-slate-50">
-                              <td className="px-6 py-4 text-sm font-medium text-slate-900">{proc.procedure_name}</td>
-                              <td className="px-6 py-4 text-sm text-slate-600 text-center">{proc.case_count}</td>
-                              <td className="px-6 py-4 text-sm text-slate-600 text-center font-mono">
-                                {proc.avg_surgical_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_surgical_seconds)) : '--'}
-                              </td>
-                              <td className="px-6 py-4 text-sm text-slate-600 text-center font-mono">
-                                {proc.avg_total_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_total_seconds)) : '--'}
+                            <tr key={proc.procedure_id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4">
+                                <span className="text-sm font-medium text-slate-900">{proc.procedure_name}</span>
                               </td>
                               <td className="px-6 py-4 text-center">
-                                <span className={`text-sm font-medium ${consistency.color}`}>
-                                  {consistency.label}
-                                </span>
+                                <span className="text-sm font-semibold text-slate-900 tabular-nums">{proc.case_count}</span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <InlineBar
+                                  value={proc.avg_surgical_seconds || 0}
+                                  max={maxSurgicalSeconds}
+                                  color="blue"
+                                  label={proc.avg_surgical_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_surgical_seconds)) : '--'}
+                                />
+                              </td>
+                              <td className="px-6 py-4">
+                                <InlineBar
+                                  value={proc.avg_total_seconds || 0}
+                                  max={maxTotalSeconds}
+                                  color="slate"
+                                  label={proc.avg_total_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_total_seconds)) : '--'}
+                                />
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <ConsistencyBadge
+                                  label={getConsistencyLabel(level)}
+                                  level={level}
+                                />
                               </td>
                               <td className="px-6 py-4 text-right">
                                 <button
                                   onClick={() => fetchProcedureCases(proc)}
-                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                                 >
-                                  View Details →
+                                  Details →
                                 </button>
                               </td>
                             </tr>
@@ -1108,59 +984,46 @@ export default function SurgeonOverviewPage() {
               </div>
 
               {/* ============================================ */}
-              {/* SECTION 3: CALL TIMING INSIGHT */}
+              {/* SECTION 3: CALL TIMING — Visual Timeline */}
               {/* ============================================ */}
               {callTimingInsight && (
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900 mb-4">Call Timing Analysis</h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <SectionHeader
+                    title="Call Timing Analysis"
+                    subtitle={`Based on ${callTimingInsight.casesAnalyzed} cases`}
+                    accentColor="blue"
+                    icon={
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    }
+                  />
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
                     <div className="lg:col-span-2">
-                      <div className="bg-white rounded-xl border border-slate-200 p-6">
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                            <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-slate-900 mb-3">Patient Call Timing</h3>
-                            <div className="space-y-2 text-sm text-slate-600">
-                              <p>
-                                You call for your next patient <span className="font-semibold text-slate-900">{callTimingInsight.callEarliness} minutes</span> before your incision.
-                              </p>
-                              <p>
-                                Your team takes <span className="font-semibold text-slate-900">{callTimingInsight.prepDuration} minutes</span> to prep the next patient.
-                              </p>
-                              {callTimingInsight.waitForSurgeon !== null && (
-                                <p>
-                                  Your rooms are ready <span className="font-semibold text-slate-900">{callTimingInsight.waitForSurgeon} minutes</span> before you cut.
-                                </p>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-400 mt-3">
-                              Based on {callTimingInsight.casesAnalyzed} cases with call data
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                      <CallTimingTimeline
+                        callEarliness={callTimingInsight.callEarliness}
+                        prepDuration={callTimingInsight.prepDuration}
+                        waitForSurgeon={callTimingInsight.waitForSurgeon}
+                        casesAnalyzed={callTimingInsight.casesAnalyzed}
+                      />
                     </div>
-                    
+
                     {callTimingInsight.potentialOptimization > 5 && (
                       <div className="lg:col-span-1">
                         <InsightCard
                           type="info"
                           icon={
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                           }
                           title="Optimization Opportunity"
                         >
                           <p>
-                            You could call <span className="font-semibold">{callTimingInsight.potentialOptimization} minutes later</span> and still have the room ready when you arrive.
+                            You could call <span className="font-semibold text-blue-700">{callTimingInsight.potentialOptimization} min later</span> and still have the room ready when you arrive.
                           </p>
                           <p className="mt-2 text-slate-500">
-                            This could reduce patient wait time while maintaining your efficient flow.
+                            This reduces patient wait time while maintaining your efficient flow.
                           </p>
                         </InsightCard>
                       </div>
@@ -1170,42 +1033,64 @@ export default function SurgeonOverviewPage() {
               )}
 
               {/* ============================================ */}
-              {/* SECTION 4: DELAYS SUMMARY */}
+              {/* SECTION 4: DELAYS — Bar Chart + Donut */}
               {/* ============================================ */}
               {delays.length > 0 && (
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900 mb-4">
-                    Delays
-                    <span className="ml-2 text-sm font-normal text-slate-500">
-                      {totalDelays} total {periodLabels[timePeriod].toLowerCase()}
-                    </span>
-                  </h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <div className="lg:col-span-2">
-                      <div className="bg-white rounded-xl border border-slate-200 p-6">
+                  <SectionHeader
+                    title="Delays"
+                    subtitle={`${totalDelays} total ${periodLabels[timePeriod].toLowerCase()}`}
+                    accentColor="red"
+                    icon={
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    }
+                  />
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-4">
+                    {/* Delay Donut */}
+                    <div className="lg:col-span-3">
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center justify-center">
+                        <DelayDonut
+                          delays={delays.map((d, i) => ({
+                            name: d.display_name,
+                            count: d.count,
+                            color: delayColors[i] || '#94A3B8',
+                          }))}
+                          totalDelays={totalDelays}
+                          totalMinutes={totalDelayMinutes}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bar chart */}
+                    <div className="lg:col-span-5">
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                         <div className="space-y-4">
                           {delays.map((delay, idx) => {
                             const maxCount = delays[0].count
                             const barWidth = (delay.count / maxCount) * 100
                             return (
                               <div key={delay.delay_type}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-sm font-medium text-slate-700">{delay.display_name}</span>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: delayColors[idx] || '#94A3B8' }} />
+                                    <span className="text-sm font-medium text-slate-700">{delay.display_name}</span>
+                                  </div>
                                   <div className="flex items-center gap-3">
-                                    <span className="text-sm font-semibold text-slate-900">{delay.count}</span>
+                                    <span className="text-sm font-semibold text-slate-900 tabular-nums">{delay.count}</span>
                                     {delay.total_minutes && delay.total_minutes > 0 && (
-                                      <span className="text-xs text-slate-500">({delay.total_minutes} min)</span>
+                                      <span className="text-xs text-slate-400 tabular-nums">({delay.total_minutes} min)</span>
                                     )}
                                   </div>
                                 </div>
                                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                                   <div
-                                    className={`h-full rounded-full ${
-                                      idx === 0 ? 'bg-red-500' :
-                                      idx === 1 ? 'bg-amber-500' :
-                                      'bg-slate-400'
-                                    }`}
-                                    style={{ width: `${barWidth}%` }}
+                                    className="h-full rounded-full transition-all duration-700 ease-out"
+                                    style={{
+                                      width: `${barWidth}%`,
+                                      backgroundColor: delayColors[idx] || '#94A3B8',
+                                    }}
                                   />
                                 </div>
                               </div>
@@ -1214,9 +1099,10 @@ export default function SurgeonOverviewPage() {
                         </div>
                       </div>
                     </div>
-                    
+
+                    {/* Insight */}
                     {delays[0] && delays[0].count >= 3 && (
-                      <div className="lg:col-span-1">
+                      <div className="lg:col-span-4">
                         <InsightCard
                           type="warning"
                           icon={
@@ -1253,7 +1139,7 @@ export default function SurgeonOverviewPage() {
               <div className="pt-4 border-t border-slate-200">
                 <Link
                   href="/analytics/surgeons"
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors"
                 >
                   View full case history for {surgeonName}
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1274,27 +1160,29 @@ export default function SurgeonOverviewPage() {
             subtitle={`${selectedProcedure?.case_count || 0} cases ${periodLabels[timePeriod].toLowerCase()}`}
           >
             {loadingProcedureCases ? (
-              <div className="flex items-center justify-center py-12">
-                <svg className="animate-spin h-6 w-6 text-blue-600" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="h-24 bg-slate-100 rounded-lg animate-pulse" />
+                  <div className="h-24 bg-slate-100 rounded-lg animate-pulse" />
+                </div>
+                <div className="h-16 bg-slate-100 rounded-lg animate-pulse" />
+                <div className="h-48 bg-slate-100 rounded-lg animate-pulse" />
               </div>
             ) : (
               <div className="space-y-6">
                 {/* Summary Stats */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <p className="text-sm text-slate-500">Avg Surgical Time</p>
-                    <p className="text-xl font-bold text-slate-900 font-mono">
-                      {selectedProcedure?.avg_surgical_seconds 
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Surgical Time</p>
+                    <p className="text-2xl font-bold text-slate-900 font-mono mt-1">
+                      {selectedProcedure?.avg_surgical_seconds
                         ? formatSecondsToHHMMSS(Math.round(selectedProcedure.avg_surgical_seconds))
                         : '--'}
                     </p>
                   </div>
-                  <div className="bg-slate-50 rounded-lg p-4">
-                    <p className="text-sm text-slate-500">Avg Total Time</p>
-                    <p className="text-xl font-bold text-slate-900 font-mono">
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Avg Total Time</p>
+                    <p className="text-2xl font-bold text-slate-900 font-mono mt-1">
                       {selectedProcedure?.avg_total_seconds
                         ? formatSecondsToHHMMSS(Math.round(selectedProcedure.avg_total_seconds))
                         : '--'}
@@ -1304,9 +1192,9 @@ export default function SurgeonOverviewPage() {
 
                 {/* Range */}
                 {procedureCases.length > 0 && (
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <p className="text-sm font-medium text-blue-800 mb-1">Surgical Time Range</p>
-                    <p className="text-sm text-blue-700">
+                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                    <p className="text-xs font-medium text-blue-700 uppercase tracking-wider mb-1">Surgical Time Range</p>
+                    <p className="text-sm font-semibold text-blue-900 font-mono">
                       {formatSecondsToHHMMSS(Math.round(procedureCases[0].surgical_seconds || 0))} — {formatSecondsToHHMMSS(Math.round(procedureCases[procedureCases.length - 1].surgical_seconds || 0))}
                     </p>
                   </div>
@@ -1315,36 +1203,34 @@ export default function SurgeonOverviewPage() {
                 {/* Outliers */}
                 {procedureCases.length >= 3 && (
                   <div>
-                    <h4 className="font-medium text-slate-900 mb-3">Notable Cases</h4>
+                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Notable Cases</h4>
                     <div className="space-y-2">
-                      {/* Fastest */}
-                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
+                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-100">
                         <div>
-                          <span className="text-xs font-medium text-emerald-600 uppercase">Fastest</span>
-                          <p className="text-sm font-medium text-slate-900">
-                            <Link href={`/cases/${procedureCases[0].id}`} className="hover:text-blue-600">
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Fastest</span>
+                          <p className="text-sm font-medium text-slate-900 mt-0.5">
+                            <Link href={`/cases/${procedureCases[0].id}`} className="hover:text-blue-600 transition-colors">
                               {procedureCases[0].case_number}
                             </Link>
                           </p>
                           <p className="text-xs text-slate-500">{procedureCases[0].scheduled_date}</p>
                         </div>
-                        <span className="font-mono text-emerald-700 font-semibold">
+                        <span className="font-mono text-emerald-700 font-bold text-lg">
                           {formatSecondsToHHMMSS(Math.round(procedureCases[0].surgical_seconds || 0))}
                         </span>
                       </div>
-                      
-                      {/* Slowest */}
-                      <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
+
+                      <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100">
                         <div>
-                          <span className="text-xs font-medium text-amber-600 uppercase">Slowest</span>
-                          <p className="text-sm font-medium text-slate-900">
-                            <Link href={`/cases/${procedureCases[procedureCases.length - 1].id}`} className="hover:text-blue-600">
+                          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Slowest</span>
+                          <p className="text-sm font-medium text-slate-900 mt-0.5">
+                            <Link href={`/cases/${procedureCases[procedureCases.length - 1].id}`} className="hover:text-blue-600 transition-colors">
                               {procedureCases[procedureCases.length - 1].case_number}
                             </Link>
                           </p>
                           <p className="text-xs text-slate-500">{procedureCases[procedureCases.length - 1].scheduled_date}</p>
                         </div>
-                        <span className="font-mono text-amber-700 font-semibold">
+                        <span className="font-mono text-amber-700 font-bold text-lg">
                           {formatSecondsToHHMMSS(Math.round(procedureCases[procedureCases.length - 1].surgical_seconds || 0))}
                         </span>
                       </div>
@@ -1354,26 +1240,26 @@ export default function SurgeonOverviewPage() {
 
                 {/* All Cases Table */}
                 <div>
-                  <h4 className="font-medium text-slate-900 mb-3">All Cases</h4>
-                  <div className="bg-white rounded-lg border border-slate-200 overflow-hidden max-h-64 overflow-y-auto">
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">All Cases</h4>
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden max-h-64 overflow-y-auto">
                     <table className="w-full">
-                      <thead className="bg-slate-50 sticky top-0">
+                      <thead className="bg-slate-50/80 sticky top-0">
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Case #</th>
-                          <th className="px-4 py-2 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-slate-500 uppercase">Surgical</th>
+                          <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Case #</th>
+                          <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-2.5 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgical</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {procedureCases.map((c) => (
-                          <tr key={c.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-2 text-sm">
-                              <Link href={`/cases/${c.id}`} className="text-blue-600 hover:text-blue-800 font-medium">
+                          <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-2.5 text-sm">
+                              <Link href={`/cases/${c.id}`} className="text-blue-600 hover:text-blue-800 font-medium transition-colors">
                                 {c.case_number}
                               </Link>
                             </td>
-                            <td className="px-4 py-2 text-sm text-slate-600">{c.scheduled_date}</td>
-                            <td className="px-4 py-2 text-sm text-right font-mono text-slate-900">
+                            <td className="px-4 py-2.5 text-sm text-slate-600">{c.scheduled_date}</td>
+                            <td className="px-4 py-2.5 text-sm text-right font-mono font-semibold text-slate-900 tabular-nums">
                               {c.surgical_seconds ? formatSecondsToHHMMSS(Math.round(c.surgical_seconds)) : '--'}
                             </td>
                           </tr>
@@ -1383,11 +1269,11 @@ export default function SurgeonOverviewPage() {
                   </div>
                 </div>
 
-                {/* Link to filtered case history */}
+                {/* Link to filtered analysis */}
                 <div className="pt-4 border-t border-slate-200">
                   <Link
                     href={`/analytics/surgeons?procedure=${selectedProcedure?.procedure_id}`}
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium text-sm"
+                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
                   >
                     View in full case analysis
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -12,7 +12,6 @@ import { formatTimeInTimezone } from '@/lib/date-utils'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { useSurgeons, useProcedureTypes } from '@/hooks'
 
-
 // Tremor components
 import {
   AreaChart,
@@ -39,6 +38,26 @@ import {
   getAllSurgicalTurnovers,
   type CaseWithMilestones,
 } from '@/lib/analyticsV2'
+
+// Enterprise analytics components
+import {
+  SectionHeader,
+  EnhancedMetricCard,
+  TrendPill,
+  RadialProgress,
+  PeriodSelector,
+  SurgeonSelector,
+  ConsistencyBadge,
+  InlineBar,
+  CasePhaseBar,
+  PhaseLegend,
+  InsightCard,
+  EmptyState,
+  SkeletonMetricCards,
+  SkeletonTable,
+  SkeletonChart,
+  SkeletonDayAnalysis,
+} from '@/components/analytics/AnalyticsComponents'
 
 // ============================================
 // TYPES
@@ -153,6 +172,14 @@ function getConsistencyLabel(avgSeconds: number | null, stddevSeconds: number | 
   return { label: 'Variable', color: 'text-amber-600' }
 }
 
+function getConsistencyLevel(avgSeconds: number | null, stddevSeconds: number | null): 'very_consistent' | 'consistent' | 'variable' | 'na' {
+  if (!avgSeconds || !stddevSeconds || avgSeconds === 0) return 'na'
+  const cv = (stddevSeconds / avgSeconds) * 100
+  if (cv < 10) return 'very_consistent'
+  if (cv < 20) return 'consistent'
+  return 'variable'
+}
+
 // ============================================
 // TAB BUTTON COMPONENT
 // ============================================
@@ -161,10 +188,10 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
         active
-          ? 'bg-blue-600 text-white shadow-sm'
-          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          ? 'bg-white text-slate-900 shadow-sm'
+          : 'text-slate-500 hover:text-slate-700'
       }`}
     >
       {children}
@@ -173,7 +200,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 // ============================================
-// DATE FILTER WITH CUSTOM OPTION
+// ENHANCED PERIOD SELECTOR WITH CUSTOM OPTION
 // ============================================
 
 interface DateFilterProps {
@@ -195,13 +222,16 @@ function PeriodSelectorWithCustom({
   const [localStart, setLocalStart] = useState(customStartDate || '')
   const [localEnd, setLocalEnd] = useState(customEndDate || '')
 
+  const presetOptions = [
+    { value: 'week', label: '1W' },
+    { value: 'month', label: '1M' },
+    { value: 'quarter', label: '3M' },
+    { value: 'year', label: '1Y' },
+  ]
+
   const handlePresetChange = (value: string) => {
-    if (value === 'custom') {
-      setShowCustom(true)
-    } else {
-      setShowCustom(false)
-      onPeriodChange(value)
-    }
+    setShowCustom(false)
+    onPeriodChange(value)
   }
 
   const handleApplyCustom = () => {
@@ -212,37 +242,43 @@ function PeriodSelectorWithCustom({
 
   return (
     <div className="flex items-center gap-3">
-      <select
-        value={showCustom ? 'custom' : selectedPeriod}
-        onChange={(e) => handlePresetChange(e.target.value)}
-        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-      >
-        <option value="week">Last 7 Days</option>
-        <option value="month">This Month</option>
-        <option value="quarter">This Quarter</option>
-        <option value="year">This Year</option>
-        <option value="custom">Custom Range</option>
-      </select>
+      <div className="flex items-center gap-1">
+        <PeriodSelector
+          options={presetOptions}
+          selected={showCustom ? '' : selectedPeriod}
+          onChange={handlePresetChange}
+        />
+        <button
+          onClick={() => setShowCustom(!showCustom)}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+            showCustom
+              ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+          }`}
+        >
+          Custom
+        </button>
+      </div>
 
       {showCustom && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-2">
           <input
             type="date"
             value={localStart}
             onChange={(e) => setLocalStart(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow"
           />
           <span className="text-slate-400 text-sm">to</span>
           <input
             type="date"
             value={localEnd}
             onChange={(e) => setLocalEnd(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow"
           />
           <button
             onClick={handleApplyCustom}
             disabled={!localStart || !localEnd}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Apply
           </button>
@@ -251,6 +287,24 @@ function PeriodSelectorWithCustom({
     </div>
   )
 }
+
+// ============================================
+// PHASE COLORS (shared constants)
+// ============================================
+
+const PHASE_COLORS = {
+  preOp: '#2563EB',     // blue-600
+  surgical: '#60A5FA',  // blue-400
+  closing: '#10B981',   // emerald-500
+  emergence: '#FBBF24', // amber-400
+}
+
+const PHASE_LEGEND_ITEMS = [
+  { label: 'Pre-Op', color: PHASE_COLORS.preOp },
+  { label: 'Surgical', color: PHASE_COLORS.surgical },
+  { label: 'Closing', color: PHASE_COLORS.closing },
+  { label: 'Emergence', color: PHASE_COLORS.emergence },
+]
 
 // ============================================
 // MAIN PAGE COMPONENT
@@ -381,7 +435,6 @@ export default function SurgeonPerformancePage() {
       setLoading(true)
       const { startDate, endDate, prevStartDate, prevEndDate } = getEffectiveDateRange()
 
-      // Current period cases - include technique info
       const { data: currentData } = await supabase
         .from('cases')
         .select(`
@@ -396,7 +449,6 @@ export default function SurgeonPerformancePage() {
         .lte('scheduled_date', endDate)
         .order('scheduled_date', { ascending: true })
 
-      // Previous period cases
       const { data: prevData } = await supabase
         .from('cases')
         .select(`
@@ -412,7 +464,6 @@ export default function SurgeonPerformancePage() {
       setPeriodCases((currentData as unknown as CaseWithMilestones[]) || [])
       setPrevPeriodCases((prevData as unknown as CaseWithMilestones[]) || [])
       
-      // Calculate procedure breakdown
       calculateProcedureBreakdown((currentData as unknown as CaseWithMilestones[]) || [])
       
       setLoading(false)
@@ -561,11 +612,9 @@ export default function SurgeonPerformancePage() {
   // ROBOTIC VS TRADITIONAL COMPARISON DATA
   // ============================================
 
-  // Get robotic technique ID
   const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
   const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
 
-  // TKA Comparison Data (Robotic vs Traditional) - for this surgeon
   const tkaComparisonData = useMemo(() => {
     if (!roboticTechniqueId || !manualTechniqueId) return []
 
@@ -575,7 +624,6 @@ export default function SurgeonPerformancePage() {
       const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
       if (!procType) return
 
-      // Check if this is a TKA (name contains TKA)
       const procName = procType.name?.toUpperCase() || ''
       if (!procName.includes('TKA')) return
 
@@ -609,7 +657,6 @@ export default function SurgeonPerformancePage() {
       .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
   }, [periodCases, roboticTechniqueId, manualTechniqueId])
 
-  // THA Comparison Data (Robotic vs Traditional) - for this surgeon
   const thaComparisonData = useMemo(() => {
     if (!roboticTechniqueId || !manualTechniqueId) return []
 
@@ -619,7 +666,6 @@ export default function SurgeonPerformancePage() {
       const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
       if (!procType) return
 
-      // Check if this is a THA (name contains THA)
       const procName = procType.name?.toUpperCase() || ''
       if (!procName.includes('THA')) return
 
@@ -653,7 +699,6 @@ export default function SurgeonPerformancePage() {
       .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
   }, [periodCases, roboticTechniqueId, manualTechniqueId])
 
-  // Check if we have comparison data to show
   const hasComparisonData = tkaComparisonData.length > 0 || thaComparisonData.length > 0
 
   // Calculate metrics for day analysis
@@ -667,9 +712,9 @@ export default function SurgeonPerformancePage() {
     const closingTimes = completed.map(c => getClosingTime(getMilestoneMap(c)))
     const closedToWheelsOutTimes = completed.map(c => getClosedToWheelsOut(getMilestoneMap(c)))
     
-const firstCase = completed.length > 0 ? completed[0] : null
-const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
-const firstCaseScheduledTime = firstCase?.start_time || null
+    const firstCase = completed.length > 0 ? completed[0] : null
+    const firstCaseTime = firstCase ? getMilestoneMap(firstCase).patient_in : null
+    const firstCaseScheduledTime = firstCase?.start_time || null
 
     const roomTurnovers = getAllTurnovers(completed)
     const surgicalTurnovers = getAllSurgicalTurnovers(completed)
@@ -812,14 +857,19 @@ const firstCaseScheduledTime = firstCase?.start_time || null
   const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
   const { label: periodLabel } = getEffectiveDateRange()
 
+  // ============================================
+  // RENDER
+  // ============================================
+
   // Loading states
   if (userLoading || initialLoading) {
     return (
       <DashboardLayout>
         <div className="min-h-screen bg-slate-50/50">
           <Container className="py-8">
-            <div className="flex items-center justify-center py-24">
-              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <SkeletonMetricCards count={4} />
+            <div className="mt-6">
+              <SkeletonChart height={200} />
             </div>
           </Container>
         </div>
@@ -833,9 +883,15 @@ const firstCaseScheduledTime = firstCase?.start_time || null
         <div className="min-h-screen bg-slate-50/50">
           <Container className="py-8">
             <AnalyticsPageHeader title="Surgeon Performance" icon={UserIcon} />
-            <div className="text-center py-24 text-slate-500">
-              {isGlobalAdmin ? 'Select a facility to view surgeon analytics.' : 'No facility assigned.'}
-            </div>
+            <EmptyState
+              icon={
+                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              }
+              title={isGlobalAdmin ? 'Select a Facility' : 'No Facility Assigned'}
+              description={isGlobalAdmin ? 'Choose a facility from the top bar to view surgeon analytics.' : 'Contact your administrator to be assigned to a facility.'}
+            />
           </Container>
         </div>
       </DashboardLayout>
@@ -851,27 +907,23 @@ const firstCaseScheduledTime = firstCase?.start_time || null
             description="Track individual surgeon metrics and trends"
             icon={UserIcon}
             actions={
-              <select
-                value={selectedSurgeon || ''}
-                onChange={(e) => setSelectedSurgeon(e.target.value || null)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              >
-                <option value="">Choose surgeon...</option>
-                {surgeons.map(s => (
-                  <option key={s.id} value={s.id}>Dr. {s.first_name} {s.last_name}</option>
-                ))}
-              </select>
+              <SurgeonSelector
+                surgeons={surgeons}
+                selectedId={selectedSurgeon}
+                onChange={setSelectedSurgeon}
+                placeholder="Choose surgeon..."
+              />
             }
           />
 
           {!selectedSurgeon ? (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
-              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <EmptyState
+              icon={
                 <UserIcon className="w-8 h-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Surgeon</h3>
-              <p className="text-slate-500">Choose a surgeon to view their performance</p>
-            </div>
+              }
+              title="Select a Surgeon"
+              description="Choose a surgeon above to view their performance metrics and trends."
+            />
           ) : (
             <div className="space-y-6">
               {/* Surgeon Header + Tabs */}
@@ -894,7 +946,7 @@ const firstCaseScheduledTime = firstCase?.start_time || null
                   </div>
                   
                   {/* Tabs */}
-                  <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                     <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
                       Overview
                     </TabButton>
@@ -906,15 +958,21 @@ const firstCaseScheduledTime = firstCase?.start_time || null
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-24">
-                  <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                </div>
+                activeTab === 'overview' ? (
+                  <div className="space-y-6">
+                    <SkeletonMetricCards count={4} />
+                    <SkeletonChart height={200} />
+                    <SkeletonTable rows={4} />
+                  </div>
+                ) : (
+                  <SkeletonDayAnalysis />
+                )
               ) : activeTab === 'overview' ? (
                 /* ============================================ */
                 /* OVERVIEW TAB */
                 /* ============================================ */
                 <div className="space-y-6">
-                  {/* Period Selector with Custom Date Option */}
+                  {/* Period Selector */}
                   <div className="flex justify-end">
                     <PeriodSelectorWithCustom
                       selectedPeriod={timePeriod}
@@ -927,45 +985,75 @@ const firstCaseScheduledTime = firstCase?.start_time || null
 
                   {/* KPI Cards */}
                   <div className="grid grid-cols-4 gap-4">
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                      <p className="text-sm text-slate-500">Total Cases</p>
-                      <p className="text-3xl font-bold text-slate-900 mt-1">{overviewMetrics.totalCases}</p>
-                      {overviewMetrics.prevCases > 0 && (
-                        <p className={`text-sm mt-2 ${overviewMetrics.totalCases >= overviewMetrics.prevCases ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {overviewMetrics.totalCases >= overviewMetrics.prevCases ? '↑' : '↓'} {Math.abs(Math.round(((overviewMetrics.totalCases - overviewMetrics.prevCases) / overviewMetrics.prevCases) * 100))}% vs prev period
-                        </p>
-                      )}
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                      <p className="text-sm text-slate-500">Avg OR Time</p>
-                      <p className="text-3xl font-bold text-slate-900 mt-1">{formatMinutesToHHMMSS(overviewMetrics.avgORTime)}</p>
-                      <p className="text-sm text-slate-400 mt-2">per case</p>
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                      <p className="text-sm text-slate-500">Avg Turnover</p>
-                      <p className="text-3xl font-bold text-slate-900 mt-1">
-                        {overviewMetrics.avgTurnover ? formatMinutesToHHMMSS(overviewMetrics.avgTurnover) : 'N/A'}
-                      </p>
-                      {overviewMetrics.prevAvgTurnover && overviewMetrics.avgTurnover && (
-                        <p className={`text-sm mt-2 ${overviewMetrics.avgTurnover <= overviewMetrics.prevAvgTurnover ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {overviewMetrics.avgTurnover <= overviewMetrics.prevAvgTurnover ? '↓' : '↑'} vs prev period
-                        </p>
-                      )}
-                    </div>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                      <p className="text-sm text-slate-500">Total OR Time</p>
-                      <p className="text-3xl font-bold text-slate-900 mt-1">{formatMinutesToHHMMSS(overviewMetrics.totalORTime)}</p>
-                      <p className="text-sm text-slate-400 mt-2">cumulative</p>
-                    </div>
+                    <EnhancedMetricCard
+                      title="Total Cases"
+                      value={overviewMetrics.totalCases.toString()}
+                      accentColor="blue"
+                      icon={
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      }
+                      trend={overviewMetrics.prevCases > 0 ? {
+                        value: Math.abs(Math.round(((overviewMetrics.totalCases - overviewMetrics.prevCases) / overviewMetrics.prevCases) * 100)),
+                        improved: overviewMetrics.totalCases >= overviewMetrics.prevCases,
+                        label: 'vs prev period',
+                      } : undefined}
+                    />
+                    <EnhancedMetricCard
+                      title="Avg OR Time"
+                      value={formatMinutesToHHMMSS(overviewMetrics.avgORTime)}
+                      accentColor="emerald"
+                      subtitle="per case"
+                      icon={
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      }
+                    />
+                    <EnhancedMetricCard
+                      title="Avg Turnover"
+                      value={overviewMetrics.avgTurnover ? formatMinutesToHHMMSS(overviewMetrics.avgTurnover) : 'N/A'}
+                      accentColor="amber"
+                      icon={
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      }
+                      trend={overviewMetrics.prevAvgTurnover && overviewMetrics.avgTurnover ? {
+                        value: Math.abs(Math.round(((overviewMetrics.avgTurnover - overviewMetrics.prevAvgTurnover) / overviewMetrics.prevAvgTurnover) * 100)),
+                        improved: overviewMetrics.avgTurnover <= overviewMetrics.prevAvgTurnover,
+                        label: 'vs prev period',
+                      } : undefined}
+                    />
+                    <EnhancedMetricCard
+                      title="Total OR Time"
+                      value={formatMinutesToHHMMSS(overviewMetrics.totalORTime)}
+                      accentColor="violet"
+                      subtitle="cumulative"
+                      icon={
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      }
+                    />
                   </div>
 
                   {/* Trend Chart */}
                   {dailyTrendData.length > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                      <h3 className="text-base font-semibold text-slate-900 mb-1">Daily Case Volume</h3>
-                      <p className="text-sm text-slate-500 mb-4">Cases per day over the selected period</p>
+                      <SectionHeader
+                        title="Daily Case Volume"
+                        subtitle="Cases per day over the selected period"
+                        accentColor="blue"
+                        icon={
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                        }
+                      />
                       <BarChart
-                        className="h-48"
+                        className="h-48 mt-4"
                         data={dailyTrendData}
                         index="date"
                         categories={['Cases']}
@@ -978,50 +1066,77 @@ const firstCaseScheduledTime = firstCase?.start_time || null
                     </div>
                   )}
 
-                  {/* Procedure Breakdown + Comparison Charts Row */}
+                  {/* Procedure Breakdown + Comparison Charts */}
                   <div className={`grid gap-6 ${hasComparisonData ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
-                    {/* Procedure Breakdown - narrower when comparison charts exist */}
+                    {/* Procedure Breakdown */}
                     <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 ${hasComparisonData ? '' : 'lg:col-span-3'}`}>
-                      <h3 className="text-base font-semibold text-slate-900 mb-1">Procedure Breakdown</h3>
-                      <p className="text-sm text-slate-500 mb-4">Performance by procedure type</p>
+                      <SectionHeader
+                        title="Procedure Breakdown"
+                        subtitle="Performance by procedure type"
+                        accentColor="emerald"
+                        icon={
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                          </svg>
+                        }
+                      />
                       
                       {procedureBreakdown.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-3 mt-4">
                           {procedureBreakdown.map(proc => {
+                            const consistencyLevel = getConsistencyLevel(proc.avg_surgical_seconds, proc.stddev_surgical_seconds)
                             const consistency = getConsistencyLabel(proc.avg_surgical_seconds, proc.stddev_surgical_seconds)
                             return (
-                              <div key={proc.procedure_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                                <div>
-                                  <p className="font-medium text-slate-900">{proc.procedure_name}</p>
-                                  <p className="text-sm text-slate-500">{proc.case_count} cases</p>
+                              <div key={proc.procedure_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100/80 transition-colors">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-slate-900 truncate">{proc.procedure_name}</p>
+                                  <p className="text-sm text-slate-500">{proc.case_count} case{proc.case_count !== 1 ? 's' : ''}</p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-mono font-semibold text-slate-900">
+                                <div className="flex items-center gap-4 ml-4">
+                                  <ConsistencyBadge label={consistency.label} level={consistencyLevel} />
+                                  <span className="font-mono font-semibold text-slate-900 tabular-nums text-right min-w-[80px]">
                                     {proc.avg_surgical_seconds ? formatSecondsToHHMMSS(Math.round(proc.avg_surgical_seconds)) : '--'}
-                                  </p>
-                                  <p className={`text-sm ${consistency.color}`}>{consistency.label}</p>
+                                  </span>
                                 </div>
                               </div>
                             )
                           })}
                         </div>
                       ) : (
-                        <div className="text-center py-8 text-slate-400">No procedure data available</div>
+                        <div className="mt-4">
+                          <EmptyState
+                            icon={
+                              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                              </svg>
+                            }
+                            title="No Procedure Data"
+                            description="No completed procedures found for the selected period."
+                          />
+                        </div>
                       )}
                     </div>
 
                     {/* TKA Comparison Chart */}
                     {tkaComparisonData.length > 0 && (
                       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                        <h3 className="text-base font-semibold text-slate-900 mb-1">TKA Surgical Time</h3>
-                        <p className="text-sm text-slate-500 mb-4">Robotic vs Traditional (minutes)</p>
+                        <SectionHeader
+                          title="TKA Surgical Time"
+                          subtitle="Robotic vs Traditional (minutes)"
+                          accentColor="blue"
+                          icon={
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                          }
+                        />
                         <AreaChart
-                          className="h-52"
+                          className="h-52 mt-4"
                           data={tkaComparisonData}
                           index="date"
                           categories={['Robotic (Mako)', 'Traditional']}
                           colors={['cyan', 'rose']}
-valueFormatter={(v) => v.toString()}
+                          valueFormatter={(v) => v.toString()}
                           yAxisWidth={40}
                           showAnimation={true}
                           connectNulls={true}
@@ -1033,15 +1148,23 @@ valueFormatter={(v) => v.toString()}
                     {/* THA Comparison Chart */}
                     {thaComparisonData.length > 0 && (
                       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                        <h3 className="text-base font-semibold text-slate-900 mb-1">THA Surgical Time</h3>
-                        <p className="text-sm text-slate-500 mb-4">Robotic vs Traditional (minutes)</p>
+                        <SectionHeader
+                          title="THA Surgical Time"
+                          subtitle="Robotic vs Traditional (minutes)"
+                          accentColor="blue"
+                          icon={
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                          }
+                        />
                         <AreaChart
-                          className="h-52"
+                          className="h-52 mt-4"
                           data={thaComparisonData}
                           index="date"
                           categories={['Robotic (Mako)', 'Traditional']}
                           colors={['cyan', 'rose']}
-valueFormatter={(v) => v.toString()}
+                          valueFormatter={(v) => v.toString()}
                           yAxisWidth={40}
                           showAnimation={true}
                           connectNulls={true}
@@ -1058,42 +1181,73 @@ valueFormatter={(v) => v.toString()}
                 <div className="space-y-6">
                   {/* Date Picker */}
                   <div className="flex justify-end">
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const d = new Date(selectedDate)
+                          d.setDate(d.getDate() - 1)
+                          setSelectedDate(getLocalDateString(d))
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow"
+                      />
+                      <button
+                        onClick={() => {
+                          const d = new Date(selectedDate)
+                          d.setDate(d.getDate() + 1)
+                          setSelectedDate(getLocalDateString(d))
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setSelectedDate(getLocalDateString())}
+                        className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        Today
+                      </button>
+                    </div>
                   </div>
 
                   {/* Day Overview Section */}
-                  <div className="bg-white rounded-xl border border-slate-200 p-6">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                    <SectionHeader
+                      title="Day Overview"
+                      subtitle="Track efficiency by measuring key time metrics"
+                      accentColor="blue"
+                      icon={
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                      </div>
-                      <div>
-                        <h3 className="text-xl font-semibold text-slate-900">Day Overview</h3>
-                        <p className="text-sm text-slate-500">Track efficiency by measuring key time metrics</p>
-                      </div>
-                    </div>
+                      }
+                    />
 
                     {/* Top Metrics Row */}
                     <div className="grid grid-cols-4 gap-4 mt-6">
-                      <div>
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          First Case Start Time
+                          First Case Start
                         </div>
-<div className="text-3xl font-bold text-slate-900">
-  {formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone)}
-</div>
+                        <div className="text-2xl font-bold text-slate-900 tabular-nums">
+                          {formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone)}
+                        </div>
                         {dayMetrics.firstCaseScheduledTime && (
-                          <div className="text-sm text-slate-500 mt-1">
+                          <div className="text-xs text-slate-500 mt-1">
                             Scheduled: {(() => {
                               const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
                               const h = parseInt(hours)
@@ -1104,97 +1258,93 @@ valueFormatter={(v) => v.toString()}
                           </div>
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                           </svg>
-                          Total Case Count
+                          Cases
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">{dayMetrics.totalCases}</div>
+                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.totalCases}</div>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           Total OR Time
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">{formatMinutesToHHMMSS(dayMetrics.totalORTime)}</div>
+                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalORTime)}</div>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           Total Surgical Time
                         </div>
-                        <div className="text-3xl font-bold text-slate-900">{formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}</div>
+                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}</div>
                       </div>
                     </div>
 
                     {/* Second Row - Turnovers and Uptime */}
-                    <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+                    <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100">
                       {/* Surgical Turnover */}
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
-                          Avg. Surgical Turnover
+                          Surgical Turnover
                         </div>
                         {dayMetrics.surgicalTurnoverCount > 0 ? (
                           <>
-                            <div className="text-3xl font-bold text-slate-900">{formatMinutesToHHMMSS(dayMetrics.avgSurgicalTurnover)}</div>
-                            <div className="flex items-center gap-4 mt-2 text-sm">
+                            <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.avgSurgicalTurnover)}</div>
+                            <div className="flex items-center gap-3 mt-2 text-sm">
                               {surgicalTurnoverVs30Day !== null && (
-                                <span className={`flex items-center gap-1 ${surgicalTurnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {surgicalTurnoverVs30Day >= 0 ? '↑' : '↓'} {Math.abs(surgicalTurnoverVs30Day)}%
-                                </span>
+                                <TrendPill value={Math.abs(surgicalTurnoverVs30Day)} improved={surgicalTurnoverVs30Day >= 0} />
                               )}
-                              <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgSurgicalTurnover)}</span>
+                              <span className="text-slate-400 text-xs">avg. {formatMinutesToHHMMSS(last30Metrics.avgSurgicalTurnover)}</span>
                             </div>
                           </>
                         ) : (
                           <>
-                            <div className="text-2xl font-bold text-slate-400">N/A</div>
+                            <div className="text-xl font-bold text-slate-400 tabular-nums">N/A</div>
                             <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
                           </>
                         )}
                       </div>
 
                       {/* Room Turnover */}
-                      <div className="bg-slate-50 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
-                          Avg. Room Turnover
+                          Room Turnover
                         </div>
                         {dayMetrics.roomTurnoverCount > 0 ? (
                           <>
-                            <div className="text-3xl font-bold text-slate-900">{formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}</div>
-                            <div className="flex items-center gap-4 mt-2 text-sm">
+                            <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}</div>
+                            <div className="flex items-center gap-3 mt-2 text-sm">
                               {turnoverVs30Day !== null && (
-                                <span className={`flex items-center gap-1 ${turnoverVs30Day >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {turnoverVs30Day >= 0 ? '↑' : '↓'} {Math.abs(turnoverVs30Day)}%
-                                </span>
+                                <TrendPill value={Math.abs(turnoverVs30Day)} improved={turnoverVs30Day >= 0} />
                               )}
-                              <span className="text-slate-400">vs. avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
+                              <span className="text-slate-400 text-xs">avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
                             </div>
                           </>
                         ) : (
                           <>
-                            <div className="text-2xl font-bold text-slate-400">N/A</div>
+                            <div className="text-xl font-bold text-slate-400 tabular-nums">N/A</div>
                             <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
                           </>
                         )}
                       </div>
                       
                       {/* Uptime vs Downtime */}
-                      <div className="bg-slate-50 rounded-lg p-4 col-span-2">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-slate-50/80 rounded-lg p-4 col-span-2">
+                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
+                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                           </svg>
                           Uptime vs Downtime
@@ -1202,34 +1352,33 @@ valueFormatter={(v) => v.toString()}
                         
                         {dayMetrics.totalORTime > 0 ? (
                           <>
-                            <div className="flex items-baseline gap-2 mb-2">
-                              <span className="text-2xl font-bold text-slate-900">{dayMetrics.uptimePercent}%</span>
-                              <span className="text-slate-400">vs.</span>
-                              <span className="text-xl font-semibold text-slate-600">{100 - dayMetrics.uptimePercent}%</span>
+                            <div className="flex items-baseline gap-2 mb-3">
+                              <span className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.uptimePercent}%</span>
+                              <span className="text-slate-300">·</span>
+                              <span className="text-lg font-semibold text-slate-500 tabular-nums">{100 - dayMetrics.uptimePercent}%</span>
                               {uptimeImprovement !== null && (
-                                <span className={`flex items-center gap-1 text-sm ml-2 ${uptimeImprovement >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {uptimeImprovement >= 0 ? '↑' : '↓'} {Math.abs(uptimeImprovement).toFixed(1)}%
-                                  <span className="text-slate-400 ml-1">improvement</span>
-                                </span>
+                                <div className="ml-2">
+                                  <TrendPill value={Math.abs(parseFloat(uptimeImprovement.toFixed(1)))} improved={uptimeImprovement >= 0} />
+                                </div>
                               )}
                             </div>
-                            <div className="h-3 w-full rounded-full overflow-hidden flex">
-                              <div className="h-full bg-blue-600 transition-all" style={{ width: `${dayMetrics.uptimePercent}%` }} />
-                              <div className="h-full bg-red-500 transition-all" style={{ width: `${100 - dayMetrics.uptimePercent}%` }} />
+                            <div className="h-3 w-full rounded-full overflow-hidden flex bg-slate-100">
+                              <div className="h-full bg-blue-600 rounded-l-full transition-all duration-500" style={{ width: `${dayMetrics.uptimePercent}%` }} />
+                              <div className="h-full bg-red-400 rounded-r-full transition-all duration-500" style={{ width: `${100 - dayMetrics.uptimePercent}%` }} />
                             </div>
                             <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 rounded-full bg-blue-600" />
-                                <span>Surgical</span>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                                <span>Surgical ({formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)})</span>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <div className="w-2 h-2 rounded-full bg-red-500" />
-                                <span>Other</span>
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                                <span>Other ({formatMinutesToHHMMSS(dayMetrics.totalORTime - dayMetrics.totalSurgicalTime)})</span>
                               </div>
                             </div>
                           </>
                         ) : (
-                          <div className="text-2xl font-bold text-slate-400">--</div>
+                          <div className="text-xl font-bold text-slate-400 tabular-nums">--</div>
                         )}
                       </div>
                     </div>
@@ -1237,123 +1386,135 @@ valueFormatter={(v) => v.toString()}
 
                   {/* Cases and Procedure Performance */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Cases List with Stacked Bars */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        <div>
-                          <h3 className="font-semibold text-slate-900">Cases</h3>
-                          <p className="text-sm text-slate-500">{dayMetrics.totalCases} cases completed</p>
-                        </div>
-                      </div>
+                    {/* Cases List with Enhanced Stacked Bars */}
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                      <SectionHeader
+                        title="Case Breakdown"
+                        subtitle={`${dayMetrics.totalCases} case${dayMetrics.totalCases !== 1 ? 's' : ''} completed`}
+                        accentColor="blue"
+                        icon={
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                        }
+                      />
 
                       {caseBreakdown.length === 0 ? (
-                        <div className="text-center py-8 text-slate-400">No completed cases for this date</div>
-                      ) : (
-<div className="space-y-3">
-                          {caseBreakdown.map((c, idx) => (
-                            <div key={c.id} className="flex items-center gap-3">
-                              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600">
-                                {idx + 1}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-sm font-medium text-slate-900 truncate">{c.procedureName}</span>
-                                  <span className="text-sm text-slate-500">{formatMinutesToHHMMSS(c.totalORTime)}</span>
-                                </div>
-                                <div className="h-4 bg-slate-100 rounded-full overflow-hidden flex">
-                                  {c.wheelsInToIncision > 0 && (
-                                    <div className="h-full bg-blue-600" style={{ width: `${(c.wheelsInToIncision / maxCaseTime) * 100}%` }} title={`Wheels-in to Incision: ${formatMinutesToHHMMSS(c.wheelsInToIncision)}`} />
-                                  )}
-                                  {c.incisionToClosing > 0 && (
-                                    <div className="h-full bg-blue-400" style={{ width: `${(c.incisionToClosing / maxCaseTime) * 100}%` }} title={`Incision to Closing: ${formatMinutesToHHMMSS(c.incisionToClosing)}`} />
-                                  )}
-                                  {c.closingTime > 0 && (
-                                    <div className="h-full bg-emerald-500" style={{ width: `${(c.closingTime / maxCaseTime) * 100}%` }} title={`Closing: ${formatMinutesToHHMMSS(c.closingTime)}`} />
-                                  )}
-                                  {c.closedToWheelsOut > 0 && (
-                                    <div className="h-full bg-amber-400" style={{ width: `${(c.closedToWheelsOut / maxCaseTime) * 100}%` }} title={`Wheels-Out: ${formatMinutesToHHMMSS(c.closedToWheelsOut)}`} />
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                        <div className="mt-4">
+                          <EmptyState
+                            icon={
+                              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                              </svg>
+                            }
+                            title="No Cases"
+                            description="No completed cases for this date."
+                          />
                         </div>
+                      ) : (
+                        <>
+                          <div className="mt-3 mb-3">
+                            <PhaseLegend items={PHASE_LEGEND_ITEMS} />
+                          </div>
+                          <div className="space-y-2">
+                            {caseBreakdown.map(c => (
+                              <CasePhaseBar
+                                key={c.id}
+                                caseNumber={c.caseNumber}
+                                procedureName={c.procedureName}
+                                totalMinutes={c.totalORTime}
+                                maxMinutes={maxCaseTime}
+                                caseId={c.id}
+                                phases={[
+                                  { label: 'Pre-Op', minutes: c.wheelsInToIncision, color: PHASE_COLORS.preOp },
+                                  { label: 'Surgical', minutes: c.incisionToClosing, color: PHASE_COLORS.surgical },
+                                  { label: 'Closing', minutes: c.closingTime, color: PHASE_COLORS.closing },
+                                  { label: 'Emergence', minutes: c.closedToWheelsOut, color: PHASE_COLORS.emergence },
+                                ]}
+                              />
+                            ))}
+                          </div>
+                        </>
                       )}
-
-                      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100 text-xs">
-                        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-600 rounded" /><span className="text-slate-500">Pre-Op</span></div>
-                        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-400 rounded" /><span className="text-slate-500">Surgical</span></div>
-                        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded" /><span className="text-slate-500">Closing</span></div>
-                        <div className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-400 rounded" /><span className="text-slate-500">Emergence</span></div>
-                      </div>
                     </div>
 
                     {/* Procedure Performance */}
-                    <div className="bg-white rounded-xl border border-slate-200 p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                      <SectionHeader
+                        title="Procedure Performance"
+                        subtitle="Compare today vs baseline averages"
+                        accentColor="emerald"
+                        icon={
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                           </svg>
-                          <h3 className="font-semibold text-slate-900">Procedure Performance</h3>
-                        </div>
-                        <select
-                          value={selectedProcedureFilter}
-                          onChange={(e) => setSelectedProcedureFilter(e.target.value)}
-                          className="px-2 py-1 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        >
-                          <option value="all">All Procedures</option>
-                          {procedures.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                        }
+                        action={
+                          <select
+                            value={selectedProcedureFilter}
+                            onChange={(e) => setSelectedProcedureFilter(e.target.value)}
+                            className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow bg-white"
+                          >
+                            <option value="all">All Procedures</option>
+                            {procedures.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        }
+                      />
 
-                      <div className="space-y-4">
+                      <div className="space-y-5 mt-5">
                         {/* OR Time */}
                         <div>
-                          <div className="text-sm text-slate-500 mb-1">OR Time</div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                                <div className="h-full bg-blue-600 rounded" style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }} />
+                          <div className="text-sm font-medium text-slate-600 mb-2">OR Time</div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 text-xs font-medium text-blue-600">Today</div>
+                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
+                                <div className="h-full bg-blue-600 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }} />
                               </div>
-                              <span className="text-sm font-semibold text-slate-900 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgORTime)}</span>
+                              <span className="text-sm font-semibold text-slate-900 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgORTime)}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                                <div className="h-full bg-slate-400 rounded" style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }} />
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 text-xs font-medium text-slate-400">{procedurePerformance.baselineLabel}</div>
+                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
+                                <div className="h-full bg-slate-300 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgORTime || 0) / Math.max(procedurePerformance.baseline.avgORTime || 1, procedurePerformance.procedure.avgORTime || 1)) * 100)}%` }} />
                               </div>
-                              <span className="text-sm font-medium text-slate-700 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgORTime)}</span>
+                              <span className="text-sm font-medium text-slate-500 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgORTime)}</span>
                             </div>
                           </div>
                         </div>
 
                         {/* Surgical Time */}
                         <div>
-                          <div className="text-sm text-slate-500 mb-1">Surgical Time</div>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                                <div className="h-full bg-blue-600 rounded" style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }} />
+                          <div className="text-sm font-medium text-slate-600 mb-2">Surgical Time</div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 text-xs font-medium text-blue-600">Today</div>
+                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
+                                <div className="h-full bg-blue-600 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.procedure.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }} />
                               </div>
-                              <span className="text-sm font-semibold text-slate-900 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgSurgicalTime)}</span>
+                              <span className="text-sm font-semibold text-slate-900 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.procedure.avgSurgicalTime)}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-                                <div className="h-full bg-slate-400 rounded" style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }} />
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 text-xs font-medium text-slate-400">{procedurePerformance.baselineLabel}</div>
+                              <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden">
+                                <div className="h-full bg-slate-300 rounded-lg transition-all duration-500" style={{ width: `${Math.min(100, ((procedurePerformance.baseline.avgSurgicalTime || 0) / Math.max(procedurePerformance.baseline.avgSurgicalTime || 1, procedurePerformance.procedure.avgSurgicalTime || 1)) * 100)}%` }} />
                               </div>
-                              <span className="text-sm font-medium text-slate-700 w-20 text-right">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgSurgicalTime)}</span>
+                              <span className="text-sm font-medium text-slate-500 w-20 text-right tabular-nums">{formatMinutesToHHMMSS(procedurePerformance.baseline.avgSurgicalTime)}</span>
                             </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-6 mt-4 pt-4 border-t border-slate-100 text-xs">
-                          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-600 rounded" /><span className="text-slate-600">{selectedProcedureFilter === 'all' ? 'Today' : 'Procedure'}</span></div>
-                          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-400 rounded" /><span className="text-slate-600">{procedurePerformance.baselineLabel}</span></div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 bg-blue-600 rounded" />
+                            <span className="text-slate-600 font-medium">{selectedProcedureFilter === 'all' ? 'Today' : 'Procedure'}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 bg-slate-300 rounded" />
+                            <span className="text-slate-600 font-medium">{procedurePerformance.baselineLabel}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
