@@ -918,6 +918,13 @@ export default function AnalyticsHubPage() {
       icon: ClipboardDocumentListIcon,
       accentColor: 'cyan',
     },
+    {
+      title: 'Block Utilization',
+      description: 'Block time usage by surgeon, capacity gaps, and case-fitting opportunities',
+      href: '/analytics/block-utilization',
+      icon: CalendarDaysIcon,
+      accentColor: 'blue',
+},
   ]
 
   // Loading state
