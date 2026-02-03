@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -218,6 +218,54 @@ function CasesPageContent() {
   // Call Next Patient modal
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [perPage, setPerPage] = useState(25)
+  const perPageOptions = [10, 25, 50, 100]
+
+  // ============================================================================
+  // PAGINATION
+  // ============================================================================
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(cases.length / perPage)), [cases.length, perPage])
+
+  // Clamp currentPage if it exceeds totalPages (e.g. after filter change reduces results)
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
+
+  const paginatedCases = useMemo(() => {
+    const start = (currentPage - 1) * perPage
+    return cases.slice(start, start + perPage)
+  }, [cases, currentPage, perPage])
+
+  // Generate page numbers to display (smart windowing)
+  const pageNumbers = useMemo(() => {
+    const pages: (number | 'ellipsis')[] = []
+    if (totalPages <= 7) {
+      // Show all pages if 7 or fewer
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      // Always show first page
+      pages.push(1)
+      
+      if (currentPage > 3) pages.push('ellipsis')
+      
+      // Show pages around current
+      const start = Math.max(2, currentPage - 1)
+      const end = Math.min(totalPages - 1, currentPage + 1)
+      for (let i = start; i <= end; i++) pages.push(i)
+      
+      if (currentPage < totalPages - 2) pages.push('ellipsis')
+      
+      // Always show last page
+      pages.push(totalPages)
+    }
+    return pages
+  }, [currentPage, totalPages])
+
   // ============================================================================
   // FACILITY INITIALIZATION
   // ============================================================================
@@ -364,6 +412,7 @@ function CasesPageContent() {
 
   const handleFiltersChange = useCallback((filters: FilterState) => {
     setCurrentFilters(filters)
+    setCurrentPage(1) // Reset to first page on filter change
   }, [])
 
   const handleDelete = async (id: string) => {
@@ -478,7 +527,7 @@ function CasesPageContent() {
 
             {/* Table Body */}
             <div className="divide-y divide-slate-100">
-              {cases.map((c) => {
+              {paginatedCases.map((c) => {
                 const roomName = extractName(c.or_rooms)
                 const procedureName = extractName(c.procedure_types)
                 const statusName = extractName(c.case_statuses)
@@ -617,12 +666,98 @@ function CasesPageContent() {
               })}
             </div>
 
-            {/* Table Footer */}
-            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-200/80">
+            {/* Table Footer - Pagination */}
+            <div className="px-6 py-3 bg-slate-50/50 border-t border-slate-200/80">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-500">
-                  Showing <span className="font-semibold text-slate-700">{cases.length}</span> cases
-                </span>
+                {/* Left: Per-page selector + result count */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">Show</span>
+                    <select
+                      value={perPage}
+                      onChange={(e) => {
+                        setPerPage(Number(e.target.value))
+                        setCurrentPage(1)
+                      }}
+                      className="px-2.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors cursor-pointer appearance-none pr-7"
+                      style={{ 
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 6px center'
+                      }}
+                    >
+                      {perPageOptions.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-slate-500">per page</span>
+                  </div>
+                  
+                  <div className="h-4 w-px bg-slate-200" />
+                  
+                  <span className="text-sm text-slate-500">
+                    Showing{' '}
+                    <span className="font-semibold text-slate-700">
+                      {Math.min((currentPage - 1) * perPage + 1, cases.length)}
+                    </span>
+                    –
+                    <span className="font-semibold text-slate-700">
+                      {Math.min(currentPage * perPage, cases.length)}
+                    </span>
+                    {' '}of{' '}
+                    <span className="font-semibold text-slate-700">{cases.length}</span> cases
+                  </span>
+                </div>
+
+                {/* Right: Page navigation */}
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    {/* Previous button */}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                      title="Previous page"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+
+                    {/* Page numbers */}
+                    {pageNumbers.map((page, idx) =>
+                      page === 'ellipsis' ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-sm text-slate-400">
+                          ···
+                        </span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`min-w-[32px] h-8 px-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                            page === currentPage
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    )}
+
+                    {/* Next button */}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                      title="Next page"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </>
