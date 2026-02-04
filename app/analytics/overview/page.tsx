@@ -31,8 +31,12 @@ import {
 import {
   calculateAnalyticsOverview,
   formatMinutes,
+  filterActiveCases,
   type CaseWithMilestones,
+  type CaseWithMilestonesAndSurgeon,
   type FlipRoomAnalysis,
+  type FCOTSConfig,
+  type RoomHoursMap,
 } from '@/lib/analyticsV2'
 
 // Icons
@@ -541,12 +545,33 @@ export default function AnalyticsOverviewPage() {
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
   
-  const [cases, setCases] = useState<CaseWithMilestones[]>([])
-  const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
+  const [cases, setCases] = useState<CaseWithMilestonesAndSurgeon[]>([])
+  const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestonesAndSurgeon[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
+  const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
+
+  // Fetch room available hours when facility changes
+  useEffect(() => {
+    if (!effectiveFacilityId) return
+    const fetchRoomHours = async () => {
+      const { data } = await supabase
+        .from('or_rooms')
+        .select('id, available_hours')
+        .eq('facility_id', effectiveFacilityId)
+        .is('deleted_at', null)
+      if (data) {
+        const map: RoomHoursMap = {}
+        data.forEach((r: any) => {
+          if (r.available_hours) map[r.id] = r.available_hours
+        })
+        setRoomHoursMap(map)
+      }
+    }
+    fetchRoomHours()
+  }, [effectiveFacilityId])
 
   // Determine effective facility ID
   useEffect(() => {
@@ -583,7 +608,16 @@ export default function AnalyticsOverviewPage() {
         surgeon_id,
         or_room_id,
         status_id,
-        surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+        surgeon_left_at,
+        cancelled_at,
+        is_excluded_from_metrics,
+        surgeon:users!cases_surgeon_id_fkey (
+          id,
+          first_name,
+          last_name,
+          closing_workflow,
+          closing_handoff_minutes
+        ),
         procedure_types (id, name),
         or_rooms (id, name),
         case_statuses (name),
@@ -601,7 +635,17 @@ export default function AnalyticsOverviewPage() {
     }
 
     const { data: casesData } = await query
-    setCases((casesData as unknown as CaseWithMilestones[]) || [])
+    
+    // Transform: Extract surgeon_profile from the joined surgeon data
+    const transformedCases = ((casesData || []) as any[]).map(c => ({
+      ...c,
+      surgeon_profile: c.surgeon ? {
+        id: c.surgeon.id,
+        closing_workflow: c.surgeon.closing_workflow || 'surgeon_closes',
+        closing_handoff_minutes: c.surgeon.closing_handoff_minutes || 0,
+      } : null,
+    }))
+    setCases(transformedCases as unknown as CaseWithMilestonesAndSurgeon[])
     
     // Fetch previous period for comparison
     if (startDate && endDate) {
@@ -625,7 +669,16 @@ export default function AnalyticsOverviewPage() {
           surgeon_id,
           or_room_id,
           status_id,
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
+          surgeon_left_at,
+          cancelled_at,
+          is_excluded_from_metrics,
+          surgeon:users!cases_surgeon_id_fkey (
+            id,
+            first_name,
+            last_name,
+            closing_workflow,
+            closing_handoff_minutes
+          ),
           procedure_types (id, name),
           or_rooms (id, name),
           case_statuses (name),
@@ -639,7 +692,15 @@ export default function AnalyticsOverviewPage() {
         .gte('scheduled_date', prevStart.toISOString().split('T')[0])
         .lte('scheduled_date', prevEnd.toISOString().split('T')[0])
       
-      setPreviousPeriodCases((prevData as unknown as CaseWithMilestones[]) || [])
+      const transformedPrev = ((prevData || []) as any[]).map(c => ({
+        ...c,
+        surgeon_profile: c.surgeon ? {
+          id: c.surgeon.id,
+          closing_workflow: c.surgeon.closing_workflow || 'surgeon_closes',
+          closing_handoff_minutes: c.surgeon.closing_handoff_minutes || 0,
+        } : null,
+      }))
+      setPreviousPeriodCases(transformedPrev as unknown as CaseWithMilestonesAndSurgeon[])
     }
     
     setLoading(false)
@@ -659,8 +720,10 @@ export default function AnalyticsOverviewPage() {
 
   // Calculate all analytics
   const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases)
-  }, [cases, previousPeriodCases])
+    // TODO: Load FCOTS config from facility_analytics_settings table
+    const fcotsConfig: FCOTSConfig = { milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 }
+    return calculateAnalyticsOverview(cases, previousPeriodCases, fcotsConfig, roomHoursMap)
+  }, [cases, previousPeriodCases, roomHoursMap])
 
   // Chart data
   const phaseChartData = [

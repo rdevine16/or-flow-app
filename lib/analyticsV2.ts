@@ -20,6 +20,10 @@ export interface CaseWithMilestones {
   surgeon_id: string | null
   or_room_id: string | null
   status_id: string
+  // Columns fetched directly from cases table
+  surgeon_left_at?: string | null       // FIX: Source of truth for surgeon departure
+  cancelled_at?: string | null          // FIX: Timestamp for same-day cancellation detection
+  is_excluded_from_metrics?: boolean    // FIX: Exclusion flag for test/invalid cases
   surgeon?: { first_name: string; last_name: string } | null
   procedure_types?: { id: string; name: string } | null
   or_rooms?: { id: string; name: string } | null
@@ -41,7 +45,7 @@ export interface MilestoneMap {
   patient_in?: Date
   anes_start?: Date
   anes_end?: Date
-  prepped?: Date
+  prep_drape_complete?: Date  // RENAMED from 'prepped'
   incision?: Date
   closing?: Date
   closing_complete?: Date
@@ -100,6 +104,25 @@ export interface CaseWithMilestonesAndSurgeon extends CaseWithMilestones {
   surgeon_profile?: SurgeonProfile | null
 }
 
+// NEW: FCOTS configuration
+export interface FCOTSConfig {
+  milestone: 'patient_in' | 'incision'  // Which milestone defines "start"
+  graceMinutes: number                   // Allowed buffer (default 2)
+  targetPercent: number                  // Target on-time % (default 85)
+}
+
+// NEW: Room available hours map
+export interface RoomHoursMap {
+  [roomId: string]: number  // room_id → available_hours
+}
+
+// NEW: Same-day cancellation result
+export interface CancellationResult extends KPIResult {
+  sameDayCount: number
+  sameDayRate: number
+  totalCancelledCount: number
+}
+
 
 export interface AnalyticsOverview {
   // Volume
@@ -112,7 +135,7 @@ export interface AnalyticsOverview {
   turnoverTime: KPIResult
   orUtilization: KPIResult
   caseVolume: KPIResult
-  cancellationRate: KPIResult
+  cancellationRate: CancellationResult
   cumulativeTardiness: KPIResult
   nonOperativeTime: KPIResult
   surgeonIdleTime: KPIResult
@@ -148,7 +171,8 @@ export function getMilestoneMap(caseData: CaseWithMilestones): MilestoneMap {
         case 'patient_in': map.patient_in = date; break
         case 'anes_start': map.anes_start = date; break
         case 'anes_end': map.anes_end = date; break
-        case 'prepped': map.prepped = date; break
+        // FIX: Updated from 'prepped' to 'prep_drape_complete'
+        case 'prep_drape_complete': map.prep_drape_complete = date; break
         case 'incision': map.incision = date; break
         case 'closing': map.closing = date; break
         case 'closing_complete': map.closing_complete = date; break
@@ -158,6 +182,13 @@ export function getMilestoneMap(caseData: CaseWithMilestones): MilestoneMap {
       }
     }
   })
+  
+  // FIX: Inject surgeon_left_at from cases table column.
+  // The "Surgeon Left" button writes to cases.surgeon_left_at, NOT case_milestones.
+  // This is the primary source of truth for when the surgeon left the room.
+  if (caseData.surgeon_left_at && !map.surgeon_left) {
+    map.surgeon_left = new Date(caseData.surgeon_left_at)
+  }
   
   return map
 }
@@ -475,6 +506,31 @@ function calculateDelta(
   return { delta, deltaType }
 }
 // ============================================
+// CASE FILTERING
+// ============================================
+
+/**
+ * Filter out cases that should not be included in metrics.
+ * Removes: excluded cases, test cases flagged by admins.
+ */
+export function filterActiveCases(cases: CaseWithMilestones[]): CaseWithMilestones[] {
+  return cases.filter(c => !c.is_excluded_from_metrics)
+}
+
+/**
+ * Check if a cancellation was same-day (cancelled_at date matches scheduled_date).
+ * Uses cancelled_at timestamp if available, falls back to status check.
+ */
+function isSameDayCancellation(c: CaseWithMilestones): boolean {
+  if (c.cancelled_at) {
+    const cancelDate = new Date(c.cancelled_at).toISOString().split('T')[0]
+    return cancelDate === c.scheduled_date
+  }
+  // Fallback: if no cancelled_at, treat any cancelled case as potentially same-day
+  return c.case_statuses?.name === 'cancelled'
+}
+
+// ============================================
 // NEW: Calculate Both Turnover Types
 // ============================================
 
@@ -706,18 +762,27 @@ export function calculateSurgicalTurnovers(
 
 /**
  * 1. FCOTS - First Case On-Time Start
- * Measures if the first case of each OR room starts within 2 minutes of scheduled time
+ * 
+ * Configurable:
+ * - milestone: Which milestone defines "start" (patient_in or incision)
+ * - graceMinutes: Allowed buffer before counted as late (default 2)
+ * - targetPercent: Target on-time % (default 85)
  */
 export function calculateFCOTS(
   cases: CaseWithMilestones[],
-  previousPeriodCases?: CaseWithMilestones[]
+  previousPeriodCases?: CaseWithMilestones[],
+  config?: FCOTSConfig
 ): KPIResult {
+  const milestone = config?.milestone || 'patient_in'
+  const grace = config?.graceMinutes ?? 2
+  const targetPercent = config?.targetPercent ?? 85
+  
   const casesByDateRoom = new Map<string, CaseWithMilestones>()
   
   // Find first case per room per day
   cases.forEach(c => {
     if (!c.or_room_id || !c.start_time) return
-    const key = `${c.scheduled_date}-${c.or_room_id}`
+    const key = `${c.scheduled_date}|${c.or_room_id}`
     const existing = casesByDateRoom.get(key)
     
     if (!existing || (c.start_time < (existing.start_time || ''))) {
@@ -733,12 +798,13 @@ export function calculateFCOTS(
   firstCases.forEach(c => {
     const milestones = getMilestoneMap(c)
     const scheduled = parseScheduledDateTime(c.scheduled_date, c.start_time)
-    const actual = milestones.patient_in
+    // Use configured milestone for "actual start"
+    const actual = milestone === 'incision' ? milestones.incision : milestones.patient_in
     
     if (!scheduled || !actual) return
     
     const delayMinutes = getTimeDiffMinutes(scheduled, actual) || 0
-    const isOnTime = delayMinutes <= 2 // Within 2 minutes is considered on-time
+    const isOnTime = delayMinutes <= grace
     
     if (isOnTime) {
       onTimeCount++
@@ -762,7 +828,7 @@ export function calculateFCOTS(
     const prevByDateRoom = new Map<string, CaseWithMilestones>()
     previousPeriodCases.forEach(c => {
       if (!c.or_room_id || !c.start_time) return
-      const key = `${c.scheduled_date}-${c.or_room_id}`
+      const key = `${c.scheduled_date}|${c.or_room_id}`
       const existing = prevByDateRoom.get(key)
       if (!existing || (c.start_time < (existing.start_time || ''))) {
         prevByDateRoom.set(key, c)
@@ -774,11 +840,11 @@ export function calculateFCOTS(
     Array.from(prevByDateRoom.values()).forEach(c => {
       const milestones = getMilestoneMap(c)
       const scheduled = parseScheduledDateTime(c.scheduled_date, c.start_time)
-      const actual = milestones.patient_in
+      const actual = milestone === 'incision' ? milestones.incision : milestones.patient_in
       if (!scheduled || !actual) return
       prevTotal++
       const delayMinutes = getTimeDiffMinutes(scheduled, actual) || 0
-      if (delayMinutes <= 2) prevOnTime++
+      if (delayMinutes <= grace) prevOnTime++
     })
     
     if (prevTotal > 0) {
@@ -803,12 +869,14 @@ export function calculateFCOTS(
       }
     })
   
+  const milestoneLabel = milestone === 'incision' ? 'incision' : 'wheels-in'
+  
   return {
     value: rate,
     displayValue: `${rate}%`,
-    subtitle: `${lateCount} late of ${total} first cases`,
-    target: 85,
-    targetMet: rate >= 85,
+    subtitle: `${lateCount} late of ${total} first cases (${milestoneLabel}, ${grace} min grace)`,
+    target: targetPercent,
+    targetMet: rate >= targetPercent,
     delta,
     deltaType,
     dailyData
@@ -830,7 +898,7 @@ export function calculateTurnoverTime(
   const byRoomDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
     if (!c.or_room_id) return
-    const key = `${c.scheduled_date}-${c.or_room_id}`
+    const key = `${c.scheduled_date}|${c.or_room_id}`
     const existing = byRoomDate.get(key) || []
     existing.push(c)
     byRoomDate.set(key, existing)
@@ -838,7 +906,7 @@ export function calculateTurnoverTime(
   
   // Calculate turnovers between consecutive cases
   byRoomDate.forEach((roomCases, key) => {
-    const date = key.split('-')[0]
+    const date = key.split('|')[0]
     const sorted = roomCases.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
     
     for (let i = 0; i < sorted.length - 1; i++) {
@@ -869,7 +937,7 @@ export function calculateTurnoverTime(
     const prevByRoomDate = new Map<string, CaseWithMilestones[]>()
     previousPeriodCases.forEach(c => {
       if (!c.or_room_id) return
-      const key = `${c.scheduled_date}-${c.or_room_id}`
+      const key = `${c.scheduled_date}|${c.or_room_id}`
       const existing = prevByRoomDate.get(key) || []
       existing.push(c)
       prevByRoomDate.set(key, existing)
@@ -935,7 +1003,7 @@ export function calculateSurgicalTurnover(
   const bySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
   cases.forEach(c => {
     if (!c.surgeon_id) return
-    const key = `${c.surgeon_id}-${c.scheduled_date}`
+    const key = `${c.surgeon_id}|${c.scheduled_date}`
     const existing = bySurgeonDate.get(key) || []
     existing.push(c)
     bySurgeonDate.set(key, existing)
@@ -943,7 +1011,7 @@ export function calculateSurgicalTurnover(
 
   // Calculate transitions for flip room surgeons
   bySurgeonDate.forEach((surgeonCases, key) => {
-    const date = key.split('-').slice(1).join('-') // Handle date with dashes
+    const date = key.split('|')[1] // Surgeon ID | Date
     
     // Only analyze if surgeon used multiple rooms (flip room scenario)
     const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
@@ -1007,7 +1075,7 @@ export function calculateSurgicalTurnover(
     const prevBySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
     previousPeriodCases.forEach(c => {
       if (!c.surgeon_id) return
-      const key = `${c.surgeon_id}-${c.scheduled_date}`
+      const key = `${c.surgeon_id}|${c.scheduled_date}`
       const existing = prevBySurgeonDate.get(key) || []
       existing.push(c)
       prevBySurgeonDate.set(key, existing)
@@ -1088,14 +1156,16 @@ export function calculateSurgicalTurnover(
 
 /**
  * 3. OR Utilization
- * Patient-in-room time as percentage of available OR hours (assumed 10 hours/day)
+ * Patient-in-room time as percentage of available OR hours.
+ * NEW: Accepts per-room available hours map for room-specific calculations.
  */
 export function calculateORUtilization(
   cases: CaseWithMilestones[], 
-  availableHoursPerRoom: number = 10,
-  previousPeriodCases?: CaseWithMilestones[]
+  defaultHours: number = 10,
+  previousPeriodCases?: CaseWithMilestones[],
+  roomHoursMap?: RoomHoursMap
 ): KPIResult {
-  const roomDays = new Map<string, number>() // Total minutes used per room-day
+  const roomDays = new Map<string, { minutes: number; roomId: string }>()
   const uniqueRoomDays = new Set<string>()
   
   cases.forEach(c => {
@@ -1104,10 +1174,11 @@ export function calculateORUtilization(
     const caseMinutes = getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
     
     if (caseMinutes !== null && caseMinutes > 0) {
-      const key = `${c.scheduled_date}-${c.or_room_id}`
+      const key = `${c.scheduled_date}|${c.or_room_id}`
       uniqueRoomDays.add(key)
-      const existing = roomDays.get(key) || 0
-      roomDays.set(key, existing + caseMinutes)
+      const existing = roomDays.get(key) || { minutes: 0, roomId: c.or_room_id }
+      existing.minutes += caseMinutes
+      roomDays.set(key, existing)
     }
   })
   
@@ -1115,9 +1186,10 @@ export function calculateORUtilization(
   const utilizations: number[] = []
   const dailyResults = new Map<string, number[]>()
   
-  roomDays.forEach((minutes, key) => {
-    const [date] = key.split('-')
-    const utilization = (minutes / (availableHoursPerRoom * 60)) * 100
+  roomDays.forEach(({ minutes, roomId }, key) => {
+    const date = key.split('|')[0]
+    const availableHours = roomHoursMap?.[roomId] ?? defaultHours
+    const utilization = (minutes / (availableHours * 60)) * 100
     utilizations.push(utilization)
     
     const dayUtils = dailyResults.get(date) || []
@@ -1130,21 +1202,23 @@ export function calculateORUtilization(
   // Calculate previous period utilization for delta
   let previousAvg: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
-    const prevRoomDays = new Map<string, number>()
+    const prevRoomDays = new Map<string, { minutes: number; roomId: string }>()
     previousPeriodCases.forEach(c => {
       if (!c.or_room_id) return
       const milestones = getMilestoneMap(c)
       const caseMinutes = getTimeDiffMinutes(milestones.patient_in, milestones.patient_out)
       if (caseMinutes !== null && caseMinutes > 0) {
-        const key = `${c.scheduled_date}-${c.or_room_id}`
-        const existing = prevRoomDays.get(key) || 0
-        prevRoomDays.set(key, existing + caseMinutes)
+        const key = `${c.scheduled_date}|${c.or_room_id}`
+        const existing = prevRoomDays.get(key) || { minutes: 0, roomId: c.or_room_id }
+        existing.minutes += caseMinutes
+        prevRoomDays.set(key, existing)
       }
     })
     
     const prevUtilizations: number[] = []
-    prevRoomDays.forEach((minutes) => {
-      const utilization = (minutes / (availableHoursPerRoom * 60)) * 100
+    prevRoomDays.forEach(({ minutes, roomId }) => {
+      const availableHours = roomHoursMap?.[roomId] ?? defaultHours
+      const utilization = (minutes / (availableHours * 60)) * 100
       prevUtilizations.push(utilization)
     })
     
@@ -1220,33 +1294,42 @@ export function calculateCaseVolume(
 }
 
 /**
- * 5. Cancellation Rate
- * Percentage of cases that were cancelled
+ * 5. Cancellation Rate (Enhanced)
+ * 
+ * NEW: Differentiates same-day cancellations from advance cancellations.
+ * Same-day = cancelled_at date matches scheduled_date.
+ * Uses cancelled_at column when available, falls back to case_statuses check.
  */
 export function calculateCancellationRate(
   cases: CaseWithMilestones[],
   previousPeriodCases?: CaseWithMilestones[]
-): KPIResult {
-  const cancelled = cases.filter(c => c.case_statuses?.name === 'cancelled')
+): CancellationResult {
+  const allCancelled = cases.filter(c => c.case_statuses?.name === 'cancelled')
+  const sameDayCancelled = allCancelled.filter(c => isSameDayCancellation(c))
+  
   const total = cases.length
-  const rate = total > 0 ? (cancelled.length / total) * 100 : 0
+  const sameDayRate = total > 0 ? (sameDayCancelled.length / total) * 100 : 0
   
   // Calculate previous period rate for delta
   let previousRate: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
     const prevCancelled = previousPeriodCases.filter(c => c.case_statuses?.name === 'cancelled')
-    previousRate = (prevCancelled.length / previousPeriodCases.length) * 100
+    const prevSameDay = prevCancelled.filter(c => isSameDayCancellation(c))
+    previousRate = (prevSameDay.length / previousPeriodCases.length) * 100
   }
   
   // For cancellation rate, lower is better
-  const { delta, deltaType } = calculateDelta(rate, previousRate, true)
+  const { delta, deltaType } = calculateDelta(sameDayRate, previousRate, true)
   
   // Daily tracker for zero-cancellation days
-  const dailyResults = new Map<string, { total: number; cancelled: number }>()
+  const dailyResults = new Map<string, { total: number; cancelled: number; sameDay: number }>()
   cases.forEach(c => {
-    const data = dailyResults.get(c.scheduled_date) || { total: 0, cancelled: 0 }
+    const data = dailyResults.get(c.scheduled_date) || { total: 0, cancelled: 0, sameDay: 0 }
     data.total++
-    if (c.case_statuses?.name === 'cancelled') data.cancelled++
+    if (c.case_statuses?.name === 'cancelled') {
+      data.cancelled++
+      if (isSameDayCancellation(c)) data.sameDay++
+    }
     dailyResults.set(c.scheduled_date, data)
   })
   
@@ -1255,21 +1338,25 @@ export function calculateCancellationRate(
     .slice(-30)
     .map(([date, data]) => ({
       date,
-      color: data.cancelled === 0 ? 'emerald' : 'red' as Color,
-      tooltip: data.cancelled === 0 
-        ? `${date}: No cancellations` 
-        : `${date}: ${data.cancelled} cancelled`
+      color: data.sameDay === 0 ? 'emerald' : data.sameDay === 1 ? 'yellow' : 'red' as Color,
+      tooltip: data.sameDay === 0 
+        ? `${date}: No same-day cancellations` 
+        : `${date}: ${data.sameDay} same-day, ${data.cancelled} total cancelled`
     }))
   
   return {
-    value: Math.round(rate * 10) / 10,
-    displayValue: `${(Math.round(rate * 10) / 10).toFixed(1)}%`,
-    subtitle: `${cancelled.length} of ${total} cases`,
+    value: Math.round(sameDayRate * 10) / 10,
+    displayValue: `${(Math.round(sameDayRate * 10) / 10).toFixed(1)}%`,
+    subtitle: `${sameDayCancelled.length} same-day of ${allCancelled.length} total cancellations`,
     target: 5,
-    targetMet: rate <= 5,
+    targetMet: sameDayRate <= 5,
     delta,
     deltaType,
-    dailyData
+    dailyData,
+    // Extra cancellation fields
+    sameDayCount: sameDayCancelled.length,
+    sameDayRate: Math.round(sameDayRate * 10) / 10,
+    totalCancelledCount: allCancelled.length,
   }
 }
 
@@ -1373,7 +1460,7 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestones[]): {
   const bySurgeonDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
     if (!c.surgeon_id) return
-    const key = `${c.surgeon_id}-${c.scheduled_date}`
+    const key = `${c.surgeon_id}|${c.scheduled_date}`
     const existing = bySurgeonDate.get(key) || []
     existing.push(c)
     bySurgeonDate.set(key, existing)
@@ -1381,7 +1468,7 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestones[]): {
   
   // Find flip room patterns (surgeon with 2+ rooms on same day)
   bySurgeonDate.forEach((surgeonCases, key) => {
-    const [surgeonId, date] = key.split('-')
+    const [surgeonId, date] = key.split('|')
     const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
     
     if (rooms.size < 2) return // Not a flip room day
@@ -1584,39 +1671,51 @@ export function calculateAvgCaseTime(
 // ============================================
 
 /**
- * Calculate all analytics for the overview dashboard
+ * Calculate all analytics for the overview dashboard.
+ *
+ * NEW parameters:
+ * - fcotsConfig: Configurable FCOTS milestone and grace period
+ * - roomHoursMap: Per-room available hours for utilization
  */
 export function calculateAnalyticsOverview(
   cases: CaseWithMilestonesAndSurgeon[],
-  previousPeriodCases?: CaseWithMilestonesAndSurgeon[]
+  previousPeriodCases?: CaseWithMilestonesAndSurgeon[],
+  fcotsConfig?: FCOTSConfig,
+  roomHoursMap?: RoomHoursMap
 ): AnalyticsOverview {
-  const completedCases = cases.filter(c => {
+  // FIX: Filter out excluded cases before any calculations
+  const activeCases = filterActiveCases(cases) as CaseWithMilestonesAndSurgeon[]
+  const activePrevCases = previousPeriodCases 
+    ? filterActiveCases(previousPeriodCases) as CaseWithMilestonesAndSurgeon[]
+    : undefined
+
+  const completedCases = activeCases.filter(c => {
     const m = getMilestoneMap(c)
     return m.patient_in && m.patient_out
   })
   
-  const cancelledCases = cases.filter(c => c.case_statuses?.name === 'cancelled')
+  const cancelledCases = activeCases.filter(c => c.case_statuses?.name === 'cancelled')
   
-  const surgeonIdleResult = calculateSurgeonIdleTime(cases)
-  const timeBreakdown = calculateTimeBreakdown(cases)
+  const surgeonIdleResult = calculateSurgeonIdleTime(activeCases)
+  const timeBreakdown = calculateTimeBreakdown(activeCases)
   
-  // NEW: Calculate the split turnovers (same room vs flip room)
-  const turnoverBreakdown = calculateSurgicalTurnovers(cases, previousPeriodCases)
+  // Calculate the split turnovers (same room vs flip room)
+  const turnoverBreakdown = calculateSurgicalTurnovers(activeCases, activePrevCases)
   
  return {
     // Volume
-    totalCases: cases.length,
+    totalCases: activeCases.length,
     completedCases: completedCases.length,
     cancelledCases: cancelledCases.length,
     
-    // KPIs - now with deltas
-    fcots: calculateFCOTS(cases, previousPeriodCases),
-    turnoverTime: calculateTurnoverTime(cases, previousPeriodCases),
-    orUtilization: calculateORUtilization(cases, 10, previousPeriodCases),
-    caseVolume: calculateCaseVolume(cases, previousPeriodCases),
-    cancellationRate: calculateCancellationRate(cases, previousPeriodCases),
-    cumulativeTardiness: calculateCumulativeTardiness(cases),
-    nonOperativeTime: calculateNonOperativeTime(cases),
+    // KPIs
+    fcots: calculateFCOTS(activeCases, activePrevCases, fcotsConfig),
+    turnoverTime: calculateTurnoverTime(activeCases, activePrevCases),
+    orUtilization: calculateORUtilization(activeCases, 10, activePrevCases, roomHoursMap),
+    caseVolume: calculateCaseVolume(activeCases, activePrevCases),
+    cancellationRate: calculateCancellationRate(activeCases, activePrevCases),
+    cumulativeTardiness: calculateCumulativeTardiness(activeCases),
+    nonOperativeTime: calculateNonOperativeTime(activeCases),
     surgeonIdleTime: surgeonIdleResult.kpi,
     
     // Split surgical turnovers
@@ -1651,7 +1750,7 @@ export function getAllTurnovers(cases: CaseWithMilestones[]): number[] {
   const byRoomDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
     if (!c.or_room_id) return
-    const key = `${c.scheduled_date}-${c.or_room_id}`
+    const key = `${c.scheduled_date}|${c.or_room_id}`
     const existing = byRoomDate.get(key) || []
     existing.push(c)
     byRoomDate.set(key, existing)
@@ -1699,7 +1798,7 @@ export function getAllSurgicalTurnovers(cases: CaseWithMilestones[]): number[] {
   const byRoomDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
     if (!c.or_room_id) return
-    const key = `${c.scheduled_date}-${c.or_room_id}`
+    const key = `${c.scheduled_date}|${c.or_room_id}`
     const existing = byRoomDate.get(key) || []
     existing.push(c)
     byRoomDate.set(key, existing)
