@@ -864,20 +864,13 @@ export default function AnalyticsOverviewPage() {
     title="Efficiency Indicators"
     subtitle="Secondary metrics that drive performance"
   />
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
     <KPICard 
       title="Same-Day Cancellation" 
       kpi={analytics.cancellationRate}
       icon={ExclamationTriangleIcon}
       accentColor="rose"
       invertDelta
-    />
-    <KPICard 
-      title="Cumulative Tardiness" 
-      kpi={analytics.cumulativeTardiness}
-      icon={ClockIcon}
-      accentColor="amber"
-      showTracker={false}
     />
     <KPICard 
       title="Non-Operative Time" 
