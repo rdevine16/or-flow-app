@@ -552,10 +552,13 @@ export default function AnalyticsOverviewPage() {
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
+  const [fcotsConfig, setFcotsConfig] = useState<FCOTSConfig>({ milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 })
 
-  // Fetch room available hours when facility changes
+  // Fetch room available hours and analytics settings when facility changes
   useEffect(() => {
     if (!effectiveFacilityId) return
+    
+    // Room hours
     const fetchRoomHours = async () => {
       const { data } = await supabase
         .from('or_rooms')
@@ -570,7 +573,25 @@ export default function AnalyticsOverviewPage() {
         setRoomHoursMap(map)
       }
     }
+    
+    // Facility analytics settings (FCOTS config, targets)
+    const fetchAnalyticsSettings = async () => {
+      const { data } = await supabase
+        .from('facility_analytics_settings')
+        .select('fcots_milestone, fcots_grace_minutes, fcots_target_percent')
+        .eq('facility_id', effectiveFacilityId)
+        .single()
+      if (data) {
+        setFcotsConfig({
+          milestone: (data.fcots_milestone as 'patient_in' | 'incision') || 'patient_in',
+          graceMinutes: data.fcots_grace_minutes ?? 2,
+          targetPercent: data.fcots_target_percent ?? 85,
+        })
+      }
+    }
+    
     fetchRoomHours()
+    fetchAnalyticsSettings()
   }, [effectiveFacilityId])
 
   // Determine effective facility ID
@@ -720,10 +741,8 @@ export default function AnalyticsOverviewPage() {
 
   // Calculate all analytics
   const analytics = useMemo(() => {
-    // TODO: Load FCOTS config from facility_analytics_settings table
-    const fcotsConfig: FCOTSConfig = { milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 }
     return calculateAnalyticsOverview(cases, previousPeriodCases, fcotsConfig, roomHoursMap)
-  }, [cases, previousPeriodCases, roomHoursMap])
+  }, [cases, previousPeriodCases, fcotsConfig, roomHoursMap])
 
   // Chart data
   const phaseChartData = [

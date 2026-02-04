@@ -1449,7 +1449,7 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
  * 8. Surgeon Idle Time (Flip Room Analysis)
  * For surgeons running multiple rooms, time they wait between cases
  */
-export function calculateSurgeonIdleTime(cases: CaseWithMilestones[]): {
+export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]): {
   kpi: KPIResult
   details: FlipRoomAnalysis[]
 } {
@@ -1457,7 +1457,7 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestones[]): {
   const allIdleTimes: number[] = []
   
   // Group by surgeon and date
-  const bySurgeonDate = new Map<string, CaseWithMilestones[]>()
+  const bySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
   cases.forEach(c => {
     if (!c.surgeon_id) return
     const key = `${c.surgeon_id}|${c.scheduled_date}`
@@ -1494,8 +1494,12 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestones[]): {
       const currentMilestones = getMilestoneMap(current)
       const nextMilestones = getMilestoneMap(next)
       
-      if (currentMilestones.patient_out && nextMilestones.patient_in) {
-        const idleMinutes = getTimeDiffMinutes(currentMilestones.patient_out, nextMilestones.patient_in)
+      // FIX: Use getSurgeonDoneTime instead of patient_out
+      // This accounts for closing_workflow (pa_closes → surgeon leaves earlier)
+      const surgeonDone = getSurgeonDoneTime(currentMilestones, current.surgeon_profile)
+      
+      if (surgeonDone && nextMilestones.patient_in) {
+        const idleMinutes = getTimeDiffMinutes(surgeonDone, nextMilestones.patient_in)
         
         if (idleMinutes !== null && idleMinutes > 0) {
           allIdleTimes.push(idleMinutes)

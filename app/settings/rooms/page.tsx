@@ -11,6 +11,7 @@ import { useUser } from '@/lib/UserContext'
 interface ORRoom {
   id: string
   name: string
+  available_hours: number | null
   deleted_at: string | null
   deleted_by: string | null
 }
@@ -41,7 +42,7 @@ export default function RoomsSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [showDeleted, setShowDeleted] = useState(false)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', room: null })
-  const [formData, setFormData] = useState({ name: '' })
+  const [formData, setFormData] = useState({ name: '', available_hours: '10' })
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
@@ -75,7 +76,7 @@ export default function RoomsSettingsPage() {
     setLoading(true)
 const { data } = await supabase
       .from('or_rooms')
-      .select('id, name, deleted_at, deleted_by')
+      .select('id, name, available_hours, deleted_at, deleted_by')
       .eq('facility_id', effectiveFacilityId)
       .order('name')
     
@@ -84,18 +85,18 @@ const { data } = await supabase
   }
 
   const openAddModal = () => {
-    setFormData({ name: '' })
+    setFormData({ name: '', available_hours: '10' })
     setModal({ isOpen: true, mode: 'add', room: null })
   }
 
   const openEditModal = (room: ORRoom) => {
-    setFormData({ name: room.name })
+    setFormData({ name: room.name, available_hours: String(room.available_hours ?? 10) })
     setModal({ isOpen: true, mode: 'edit', room })
   }
 
   const closeModal = () => {
     setModal({ isOpen: false, mode: 'add', room: null })
-    setFormData({ name: '' })
+    setFormData({ name: '', available_hours: '10' })
   }
 
   const handleSave = async () => {
@@ -106,8 +107,8 @@ const { data } = await supabase
     if (modal.mode === 'add') {
       const { data, error } = await supabase
         .from('or_rooms')
-        .insert({ name: formData.name.trim(), facility_id: effectiveFacilityId })
-        .select('id, name, deleted_at, deleted_by')
+        .insert({ name: formData.name.trim(), facility_id: effectiveFacilityId, available_hours: parseFloat(formData.available_hours) || 10 })
+        .select('id, name, available_hours, deleted_at, deleted_by')
         .single()
 
       if (!error && data) {
@@ -122,13 +123,13 @@ const { data } = await supabase
 
       const { error } = await supabase
         .from('or_rooms')
-        .update({ name: formData.name.trim() })
+        .update({ name: formData.name.trim(), available_hours: parseFloat(formData.available_hours) || 10 })
         .eq('id', modal.room.id)
 
       if (!error) {
         setRooms(
           rooms
-            .map(r => r.id === modal.room!.id ? { ...r, name: formData.name.trim() } : r)
+            .map(r => r.id === modal.room!.id ? { ...r, name: formData.name.trim(), available_hours: parseFloat(formData.available_hours) || 10 } : r)
             .sort((a, b) => a.name.localeCompare(b.name))
         )
         closeModal()
@@ -324,7 +325,8 @@ const handleRestore = async (id: string) => {
                     {/* Table Header */}
                     <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       <div className="col-span-1">#</div>
-                      <div className="col-span-7">Room Name</div>
+                      <div className="col-span-5">Room Name</div>
+                      <div className="col-span-2">Hours/Day</div>
                       <div className="col-span-2">Status</div>
                       <div className="col-span-2 text-right">Actions</div>
                     </div>
@@ -347,10 +349,17 @@ const handleRestore = async (id: string) => {
                             </div>
 
                             {/* Room Name */}
-                            <div className="col-span-7">
+                            <div className="col-span-5">
                               <p className={`font-medium ${isDeleted ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                                 {room.name}
                               </p>
+                            </div>
+
+                            {/* Available Hours */}
+                            <div className="col-span-2">
+                              <span className={`text-sm ${isDeleted ? 'text-slate-400' : 'text-slate-600'}`}>
+                                {room.available_hours ?? 10}h
+                              </span>
                             </div>
 
                             {/* Status */}
@@ -436,6 +445,24 @@ onClick={() => openDeleteModal(room)}
                     />
                     <p className="mt-1.5 text-xs text-slate-500">
                       Use a short, recognizable name for your OR staff
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Available Hours per Day
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.available_hours}
+                      onChange={(e) => setFormData({ ...formData, available_hours: e.target.value })}
+                      min="1"
+                      max="24"
+                      step="0.5"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      placeholder="10"
+                    />
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      Scheduled OR hours per day — used for utilization calculations
                     </p>
                   </div>
                 </div>
