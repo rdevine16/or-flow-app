@@ -196,7 +196,9 @@ function KPICard({
               ) : (
                 <ExclamationTriangleIcon className="w-3.5 h-3.5" />
               )}
-              Target: {title.includes('Cancellation') ? `<${kpi.target}%` : `${kpi.target}%`}
+              Target: {title.includes('Cancellation') ? `<${kpi.target}%` : 
+                       title.includes('Same-Room') || title.includes('Flip Room') ? `≤${kpi.target} min` :
+                       `${kpi.target}%`}
             </div>
           </div>
         )}
@@ -837,12 +839,6 @@ export default function AnalyticsOverviewPage() {
                     accentColor="blue"
                   />
                   <KPICard 
-                    title="Avg Turnover Time" 
-                    kpi={analytics.turnoverTime}
-                    icon={ClockIcon}
-                    accentColor="emerald"
-                  />
-                  <KPICard 
                     title="OR Utilization" 
                     kpi={analytics.orUtilization}
                     icon={ChartBarIcon}
@@ -855,44 +851,65 @@ export default function AnalyticsOverviewPage() {
                     accentColor="amber"
                     showTracker={false}
                   />
+                  <KPICard 
+                    title="Same-Day Cancellation" 
+                    kpi={analytics.cancellationRate}
+                    icon={ExclamationTriangleIcon}
+                    accentColor="rose"
+                  />
                 </div>
               </section>
 
-             {/* ROW 2: EFFICIENCY INDICATORS */}
-<section>
-  <SectionHeader
-    title="Efficiency Indicators"
-    subtitle="Secondary metrics that drive performance"
-  />
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    <KPICard 
-      title="Same-Day Cancellation" 
-      kpi={analytics.cancellationRate}
-      icon={ExclamationTriangleIcon}
-      accentColor="rose"
-      invertDelta
-    />
-    <KPICard 
-      title="Non-Operative Time" 
-      kpi={analytics.nonOperativeTime}
-      icon={ClockIcon}
-      accentColor="blue"
-      showTracker={false}
-    />
-    <KPICard 
-      title="Flip Room Time" 
-      kpi={analytics.flipRoomTime}
-      icon={ArrowRightIcon}
-      accentColor="violet"
-    />
-    <SurgeonIdleTimeCard 
-      kpi={analytics.surgeonIdleTime}
-      onClick={() => setShowFlipRoomModal(true)}
-    />
-  </div>
-</section>
+              {/* ROW 2: TURNOVER METRICS (3 distinct cards) */}
+              <section>
+                <SectionHeader
+                  title="Turnover Metrics"
+                  subtitle="Room and surgeon transition efficiency"
+                />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <KPICard 
+                    title="Room Turnover" 
+                    kpi={analytics.turnoverTime}
+                    icon={ClockIcon}
+                    accentColor="emerald"
+                  />
+                  <KPICard 
+                    title="Same-Room Surgical" 
+                    kpi={analytics.standardSurgicalTurnover}
+                    icon={ClockIcon}
+                    accentColor="blue"
+                  />
+                  <KPICard 
+                    title="Flip Room Time" 
+                    kpi={analytics.flipRoomTime}
+                    icon={ArrowRightIcon}
+                    accentColor="violet"
+                  />
+                </div>
+              </section>
 
-              {/* ROW 3: TIME BREAKDOWN */}
+              {/* ROW 3: EFFICIENCY INSIGHTS */}
+              <section>
+                <SectionHeader
+                  title="Efficiency Insights"
+                  subtitle="Non-operative analysis and surgeon optimization"
+                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <KPICard 
+                    title="Non-Operative Time" 
+                    kpi={analytics.nonOperativeTime}
+                    icon={ClockIcon}
+                    accentColor="blue"
+                    showTracker={false}
+                  />
+                  <SurgeonIdleTimeCard 
+                    kpi={analytics.surgeonIdleTime}
+                    onClick={() => setShowFlipRoomModal(true)}
+                  />
+                </div>
+              </section>
+
+              {/* ROW 4: TIME BREAKDOWN */}
               <section>
                 <SectionHeader
                   title="Time Breakdown"
@@ -938,7 +955,7 @@ export default function AnalyticsOverviewPage() {
                 </div>
               </section>
 
-              {/* ROW 4: CHARTS */}
+              {/* ROW 5: CHARTS */}
               <section>
                 <SectionHeader
                   title="Visual Analytics"

@@ -518,12 +518,16 @@ export function filterActiveCases(cases: CaseWithMilestones[]): CaseWithMileston
 }
 
 /**
- * Check if a cancellation was same-day (cancelled_at date matches scheduled_date).
+ * Check if a cancellation was same-day (cancelled_at local date matches scheduled_date).
  * Uses cancelled_at timestamp if available, falls back to status check.
+ * 
+ * FIXED: Uses local date components instead of toISOString() (which converts to UTC
+ * and can shift the date at timezone boundaries, e.g. 11pm EST → next day UTC).
  */
 function isSameDayCancellation(c: CaseWithMilestones): boolean {
   if (c.cancelled_at) {
-    const cancelDate = new Date(c.cancelled_at).toISOString().split('T')[0]
+    const d = new Date(c.cancelled_at)
+    const cancelDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     return cancelDate === c.scheduled_date
   }
   // Fallback: if no cancelled_at, treat any cancelled case as potentially same-day
@@ -992,167 +996,6 @@ export function calculateTurnoverTime(
   }
 }
 
-export function calculateSurgicalTurnover(
-  cases: CaseWithMilestonesAndSurgeon[],
-  previousPeriodCases?: CaseWithMilestonesAndSurgeon[]
-): KPIResult {
-  const transitions: number[] = []
-  const dailyResults = new Map<string, number[]>()
-
-  // Group by surgeon and date
-  const bySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
-  cases.forEach(c => {
-    if (!c.surgeon_id) return
-    const key = `${c.surgeon_id}|${c.scheduled_date}`
-    const existing = bySurgeonDate.get(key) || []
-    existing.push(c)
-    bySurgeonDate.set(key, existing)
-  })
-
-  // Calculate transitions for flip room surgeons
-  bySurgeonDate.forEach((surgeonCases, key) => {
-    const date = key.split('|')[1] // Surgeon ID | Date
-    
-    // Only analyze if surgeon used multiple rooms (flip room scenario)
-    const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
-    if (rooms.size < 2) return
-
-    // Sort by scheduled time
-    const sorted = surgeonCases
-      .filter(c => c.start_time)
-      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
-
-    // Calculate transitions between consecutive cases in different rooms
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const currentCase = sorted[i]
-      const nextCase = sorted[i + 1]
-
-      // Only count room switches
-      if (currentCase.or_room_id === nextCase.or_room_id) continue
-
-      const currentMilestones = getMilestoneMap(currentCase)
-      const nextMilestones = getMilestoneMap(nextCase)
-
-      // Get when surgeon was done with current case (uses priority logic)
-      const surgeonDone = getSurgeonDoneTime(
-        currentMilestones,
-        currentCase.surgeon_profile
-      )
-
-      // Get when surgeon made incision in next case
-      const nextIncision = nextMilestones.incision
-
-      if (surgeonDone && nextIncision) {
-        const transitionMinutes = getTimeDiffMinutes(surgeonDone, nextIncision)
-
-        // Only count reasonable transitions
-        // Can be negative if surgeon started before "done" (overlapping - very efficient!)
-        if (transitionMinutes !== null && transitionMinutes > -30 && transitionMinutes < 120) {
-          // Treat negative as 0 (surgeon was already operating - perfect efficiency)
-          const effectiveTransition = Math.max(0, transitionMinutes)
-          transitions.push(effectiveTransition)
-
-          // Track daily
-          const dayTransitions = dailyResults.get(date) || []
-          dayTransitions.push(effectiveTransition)
-          dailyResults.set(date, dayTransitions)
-        }
-      }
-    }
-  })
-
-  const avgTransition = transitions.length > 0 ? calculateAverage(transitions) : 0
-  const seamlessCount = transitions.filter(t => t <= 5).length
-  const seamlessRate = transitions.length > 0
-    ? Math.round((seamlessCount / transitions.length) * 100)
-    : 0
-
-  // Calculate previous period for delta
-  let previousAvg: number | undefined
-  if (previousPeriodCases && previousPeriodCases.length > 0) {
-    const prevTransitions: number[] = []
-    
-    const prevBySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
-    previousPeriodCases.forEach(c => {
-      if (!c.surgeon_id) return
-      const key = `${c.surgeon_id}|${c.scheduled_date}`
-      const existing = prevBySurgeonDate.get(key) || []
-      existing.push(c)
-      prevBySurgeonDate.set(key, existing)
-    })
-
-    prevBySurgeonDate.forEach((surgeonCases) => {
-      const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
-      if (rooms.size < 2) return
-
-      const sorted = surgeonCases
-        .filter(c => c.start_time)
-        .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
-
-      for (let i = 0; i < sorted.length - 1; i++) {
-        const currentCase = sorted[i]
-        const nextCase = sorted[i + 1]
-        if (currentCase.or_room_id === nextCase.or_room_id) continue
-
-        const currentMilestones = getMilestoneMap(currentCase)
-        const nextMilestones = getMilestoneMap(nextCase)
-        const surgeonDone = getSurgeonDoneTime(currentMilestones, currentCase.surgeon_profile)
-        const nextIncision = nextMilestones.incision
-
-        if (surgeonDone && nextIncision) {
-          const transitionMinutes = getTimeDiffMinutes(surgeonDone, nextIncision)
-          if (transitionMinutes !== null && transitionMinutes > -30 && transitionMinutes < 120) {
-            prevTransitions.push(Math.max(0, transitionMinutes))
-          }
-        }
-      }
-    })
-
-    if (prevTransitions.length > 0) {
-      previousAvg = calculateAverage(prevTransitions)
-    }
-  }
-
-  // Lower is better for surgical turnover
-  const { delta, deltaType } = calculateDelta(avgTransition, previousAvg, true)
-
-  // Build daily tracker
-  const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .slice(-30)
-    .map(([date, dayTransitions]) => {
-      const dayAvg = calculateAverage(dayTransitions)
-      return {
-        date,
-        color: (dayAvg <= 3 ? 'emerald' : dayAvg <= 8 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayAvg)} min avg transition`
-      }
-    })
-
-  return {
-    value: Math.round(avgTransition),
-    displayValue: avgTransition === 0 && transitions.length === 0 
-      ? '--' 
-      : `${Math.round(avgTransition)} min`,
-    subtitle: transitions.length > 0
-      ? `${seamlessRate}% seamless (≤5 min) · ${transitions.length} transitions`
-      : 'No flip room data',
-    target: 5,
-    targetMet: avgTransition <= 5,
-    delta,
-    deltaType,
-    dailyData
-  }
-}
-
-
-
-
-
-
-
-
-
 
 /**
  * 3. OR Utilization
@@ -1408,7 +1251,11 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
 /**
  * 7. Non-Operative Time
  * Time patient is in room but not being operated on
- * (patient_in → incision) + (closing_complete → patient_out)
+ * Pre-op: patient_in → incision
+ * Post-op: closing_complete → patient_out (NO fallback to closing — that includes active work)
+ * 
+ * Only includes cases with patient_in + incision at minimum.
+ * Post-op segment only counted when closing_complete is recorded.
  */
 export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResult {
   const notTimes: number[] = []
@@ -1417,19 +1264,29 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
   cases.forEach(c => {
     const m = getMilestoneMap(c)
     
-    // Pre-op time: patient_in to incision
-    const preOp = getTimeDiffMinutes(m.patient_in, m.incision)
+    // Must have at least patient_in and incision to calculate any non-operative time
+    if (!m.patient_in || !m.incision) return
     
-    // Post-closing time: closing_complete (or closing) to patient_out
-    const postClose = getTimeDiffMinutes(m.closing_complete || m.closing, m.patient_out)
+    // Pre-op time: patient_in to incision (always available if we get here)
+    const preOp = getTimeDiffMinutes(m.patient_in, m.incision)
+    if (preOp === null || preOp < 0) return // Skip invalid data
+    
+    // Post-closing time: ONLY use closing_complete → patient_out
+    // Do NOT fall back to closing — that segment includes active surgical closing work
+    let postClose: number | null = null
+    if (m.closing_complete && m.patient_out) {
+      postClose = getTimeDiffMinutes(m.closing_complete, m.patient_out)
+      if (postClose !== null && postClose < 0) postClose = null // Skip invalid
+    }
     
     // Total case time
     const total = getTimeDiffMinutes(m.patient_in, m.patient_out)
     
-    if (preOp !== null && postClose !== null) {
-      notTimes.push(preOp + postClose)
-    }
-    if (total !== null) {
+    // Sum non-operative segments (pre-op always, post-op when available)
+    const nonOpTime = preOp + (postClose ?? 0)
+    notTimes.push(nonOpTime)
+    
+    if (total !== null && total > 0) {
       totalTimes.push(total)
     }
   })
@@ -1441,7 +1298,7 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
   return {
     value: Math.round(avgNOT),
     displayValue: formatMinutes(avgNOT),
-    subtitle: `${notPercent}% of total case time`
+    subtitle: `${notPercent}% of total case time · ${notTimes.length} cases`
   }
 }
 
