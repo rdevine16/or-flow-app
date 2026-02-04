@@ -89,9 +89,32 @@ export interface FlipRoomAnalysis {
     toCase: string
     idleMinutes: number
     optimalCallDelta: number // How much earlier to call next patient
+    gapType: 'flip' | 'same_room'  // Whether surgeon changed rooms
+    fromRoom?: string               // Room name for context
+    toRoom?: string
   }>
   avgIdleTime: number
   totalIdleTime: number
+  isFlipRoom: boolean  // Whether this surgeon-day involved multiple rooms
+}
+
+// Per-room utilization breakdown
+export interface RoomUtilizationDetail {
+  roomId: string
+  roomName: string
+  utilization: number       // Percentage
+  usedMinutes: number       // Total patient-in-room minutes
+  availableHours: number    // Configured or default hours
+  caseCount: number         // Cases in this room for the period
+  daysActive: number        // Number of days this room was used
+  usingRealHours: boolean   // true = from or_rooms.available_hours, false = default
+}
+
+// Extended OR Utilization result with room breakdown
+export interface ORUtilizationResult extends KPIResult {
+  roomBreakdown: RoomUtilizationDetail[]
+  roomsWithRealHours: number
+  roomsWithDefaultHours: number
 }
 
 export interface SurgeonProfile {
@@ -133,17 +156,19 @@ export interface AnalyticsOverview {
   // KPIs
   fcots: KPIResult
   turnoverTime: KPIResult
-  orUtilization: KPIResult
+  orUtilization: ORUtilizationResult
   caseVolume: KPIResult
   cancellationRate: CancellationResult
   cumulativeTardiness: KPIResult
   nonOperativeTime: KPIResult
-  surgeonIdleTime: KPIResult
+  surgeonIdleTime: KPIResult       // Combined idle time
+  surgeonIdleFlip: KPIResult       // Flip room idle only
+  surgeonIdleSameRoom: KPIResult   // Same room idle only
   
   // Flip room details
   standardSurgicalTurnover: KPIResult   // Same room turnover
   flipRoomTime: KPIResult               // Different room turnover
-  flipRoomAnalysis: FlipRoomAnalysis[]  // Detailed flip room data for modal
+  flipRoomAnalysis: FlipRoomAnalysis[]  // Detailed idle data for modal
 
   // Time breakdown
   avgTotalCaseTime: number
@@ -1000,16 +1025,20 @@ export function calculateTurnoverTime(
 /**
  * 3. OR Utilization
  * Patient-in-room time as percentage of available OR hours.
- * NEW: Accepts per-room available hours map for room-specific calculations.
+ * 
+ * Returns per-room breakdown with:
+ * - Individual room utilization %
+ * - Whether each room uses real configured hours or the default
+ * - Case count and active days per room
  */
 export function calculateORUtilization(
   cases: CaseWithMilestones[], 
   defaultHours: number = 10,
   previousPeriodCases?: CaseWithMilestones[],
   roomHoursMap?: RoomHoursMap
-): KPIResult {
-  const roomDays = new Map<string, { minutes: number; roomId: string }>()
-  const uniqueRoomDays = new Set<string>()
+): ORUtilizationResult {
+  // Track per room-day: minutes used, room metadata
+  const roomDays = new Map<string, { minutes: number; roomId: string; roomName: string; caseCount: number }>()
   
   cases.forEach(c => {
     if (!c.or_room_id) return
@@ -1018,31 +1047,84 @@ export function calculateORUtilization(
     
     if (caseMinutes !== null && caseMinutes > 0) {
       const key = `${c.scheduled_date}|${c.or_room_id}`
-      uniqueRoomDays.add(key)
-      const existing = roomDays.get(key) || { minutes: 0, roomId: c.or_room_id }
+      const existing = roomDays.get(key) || {
+        minutes: 0,
+        roomId: c.or_room_id,
+        roomName: c.or_rooms?.name || 'Unknown',
+        caseCount: 0
+      }
       existing.minutes += caseMinutes
+      existing.caseCount++
       roomDays.set(key, existing)
     }
   })
   
-  // Calculate utilization per room-day
-  const utilizations: number[] = []
+  // Aggregate per-room across all days
+  const roomAgg = new Map<string, {
+    roomId: string
+    roomName: string
+    totalMinutes: number
+    totalCases: number
+    daysActive: number
+    dailyUtils: number[]
+  }>()
+  
   const dailyResults = new Map<string, number[]>()
   
-  roomDays.forEach(({ minutes, roomId }, key) => {
+  roomDays.forEach(({ minutes, roomId, roomName, caseCount }, key) => {
     const date = key.split('|')[0]
     const availableHours = roomHoursMap?.[roomId] ?? defaultHours
-    const utilization = (minutes / (availableHours * 60)) * 100
-    utilizations.push(utilization)
+    const utilization = Math.min((minutes / (availableHours * 60)) * 100, 150) // Cap at 150% for sanity
     
+    // Aggregate by room
+    const agg = roomAgg.get(roomId) || {
+      roomId,
+      roomName,
+      totalMinutes: 0,
+      totalCases: 0,
+      daysActive: 0,
+      dailyUtils: []
+    }
+    agg.totalMinutes += minutes
+    agg.totalCases += caseCount
+    agg.daysActive++
+    agg.dailyUtils.push(utilization)
+    roomAgg.set(roomId, agg)
+    
+    // Daily tracker
     const dayUtils = dailyResults.get(date) || []
     dayUtils.push(utilization)
     dailyResults.set(date, dayUtils)
   })
   
-  const avgUtilization = calculateAverage(utilizations)
+  // Build per-room breakdown
+  const roomBreakdown: RoomUtilizationDetail[] = Array.from(roomAgg.values()).map(agg => {
+    const usingRealHours = roomHoursMap?.[agg.roomId] !== undefined
+    const availableHours = roomHoursMap?.[agg.roomId] ?? defaultHours
+    const avgUtilization = calculateAverage(agg.dailyUtils)
+    
+    return {
+      roomId: agg.roomId,
+      roomName: agg.roomName,
+      utilization: Math.round(avgUtilization),
+      usedMinutes: Math.round(agg.totalMinutes),
+      availableHours,
+      caseCount: agg.totalCases,
+      daysActive: agg.daysActive,
+      usingRealHours
+    }
+  }).sort((a, b) => a.utilization - b.utilization) // Lowest first = action items
   
-  // Calculate previous period utilization for delta
+  // Overall average utilization
+  const allDailyUtils = Array.from(roomAgg.values()).flatMap(a => a.dailyUtils)
+  const avgUtilization = calculateAverage(allDailyUtils)
+  
+  const roomsWithRealHours = roomBreakdown.filter(r => r.usingRealHours).length
+  const roomsWithDefaultHours = roomBreakdown.filter(r => !r.usingRealHours).length
+  const totalRooms = roomBreakdown.length
+  const roomsAboveTarget = roomBreakdown.filter(r => r.utilization >= 75).length
+  
+  // Previous period delta
   let previousAvg: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
     const prevRoomDays = new Map<string, { minutes: number; roomId: string }>()
@@ -1061,7 +1143,7 @@ export function calculateORUtilization(
     const prevUtilizations: number[] = []
     prevRoomDays.forEach(({ minutes, roomId }) => {
       const availableHours = roomHoursMap?.[roomId] ?? defaultHours
-      const utilization = (minutes / (availableHours * 60)) * 100
+      const utilization = Math.min((minutes / (availableHours * 60)) * 100, 150)
       prevUtilizations.push(utilization)
     })
     
@@ -1072,7 +1154,7 @@ export function calculateORUtilization(
   
   const { delta, deltaType } = calculateDelta(avgUtilization, previousAvg)
   
-  // Build daily tracker
+  // Daily tracker
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
@@ -1085,15 +1167,26 @@ export function calculateORUtilization(
       }
     })
   
+  // Build subtitle
+  const hoursNote = roomsWithDefaultHours > 0 && roomsWithRealHours > 0
+    ? ` · ${roomsWithDefaultHours} using default hours`
+    : roomsWithDefaultHours === totalRooms && totalRooms > 0
+    ? ' · All rooms using default hours'
+    : ''
+  
   return {
     value: Math.round(avgUtilization),
     displayValue: `${Math.round(avgUtilization)}%`,
-    subtitle: `Across ${new Set(cases.map(c => c.or_room_id).filter(Boolean)).size} rooms`,
+    subtitle: `${roomsAboveTarget}/${totalRooms} rooms above 75% target${hoursNote}`,
     target: 75,
     targetMet: avgUtilization >= 75,
     delta,
     deltaType,
-    dailyData
+    dailyData,
+    // Extended fields
+    roomBreakdown,
+    roomsWithRealHours,
+    roomsWithDefaultHours
   }
 }
 
@@ -1303,15 +1396,25 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
 }
 
 /**
- * 8. Surgeon Idle Time (Flip Room Analysis)
- * For surgeons running multiple rooms, time they wait between cases
+ * 8. Surgeon Idle Time (Comprehensive Analysis)
+ * 
+ * Tracks ALL idle gaps between a surgeon's consecutive cases:
+ * - Flip room gaps: Surgeon switches rooms (surgeonDone → next patient_in, different room)
+ * - Same-room gaps: Surgeon stays in same room (surgeonDone → next patient_in, same room)
+ * 
+ * Returns split KPIs for combined, flip-only, and same-room-only idle time,
+ * plus detailed per-surgeon-day analysis for the modal.
  */
 export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]): {
-  kpi: KPIResult
+  kpi: KPIResult           // Combined idle
+  flipKpi: KPIResult       // Flip room idle only
+  sameRoomKpi: KPIResult   // Same room idle only
   details: FlipRoomAnalysis[]
 } {
-  const flipAnalysis: FlipRoomAnalysis[] = []
+  const allAnalysis: FlipRoomAnalysis[] = []
   const allIdleTimes: number[] = []
+  const flipIdleTimes: number[] = []
+  const sameRoomIdleTimes: number[] = []
   
   // Group by surgeon and date
   const bySurgeonDate = new Map<string, CaseWithMilestonesAndSurgeon[]>()
@@ -1323,16 +1426,19 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
     bySurgeonDate.set(key, existing)
   })
   
-  // Find flip room patterns (surgeon with 2+ rooms on same day)
+  // Process ALL surgeon-days with 2+ cases (not just flip room days)
   bySurgeonDate.forEach((surgeonCases, key) => {
+    if (surgeonCases.length < 2) return // Need at least 2 cases for a gap
+    
     const [surgeonId, date] = key.split('|')
     const rooms = new Set(surgeonCases.map(c => c.or_room_id).filter(Boolean))
-    
-    if (rooms.size < 2) return // Not a flip room day
+    const isFlipRoom = rooms.size >= 2
     
     const sorted = surgeonCases
       .filter(c => c.start_time)
       .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+    
+    if (sorted.length < 2) return
     
     const surgeonName = sorted[0]?.surgeon 
       ? `Dr. ${sorted[0].surgeon.last_name}` 
@@ -1340,47 +1446,60 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
     
     const idleGaps: FlipRoomAnalysis['idleGaps'] = []
     
-    // Calculate gaps between consecutive cases in different rooms
+    // Calculate gaps between ALL consecutive cases
     for (let i = 0; i < sorted.length - 1; i++) {
       const current = sorted[i]
       const next = sorted[i + 1]
       
-      // Only count if switching rooms
-      if (current.or_room_id === next.or_room_id) continue
-      
       const currentMilestones = getMilestoneMap(current)
       const nextMilestones = getMilestoneMap(next)
       
-      // FIX: Use getSurgeonDoneTime instead of patient_out
-      // This accounts for closing_workflow (pa_closes → surgeon leaves earlier)
+      // Use getSurgeonDoneTime (accounts for pa_closes workflow)
       const surgeonDone = getSurgeonDoneTime(currentMilestones, current.surgeon_profile)
       
-      if (surgeonDone && nextMilestones.patient_in) {
-        const idleMinutes = getTimeDiffMinutes(surgeonDone, nextMilestones.patient_in)
+      // For same-room: surgeonDone → next incision (surgeon perspective)
+      // For flip: surgeonDone → next patient_in (travel + setup time)
+      const isRoomSwitch = current.or_room_id !== next.or_room_id
+      const nextStart = isRoomSwitch ? nextMilestones.patient_in : (nextMilestones.incision || nextMilestones.patient_in)
+      
+      if (surgeonDone && nextStart) {
+        const idleMinutes = getTimeDiffMinutes(surgeonDone, nextStart)
         
         if (idleMinutes !== null && idleMinutes > 0) {
-          allIdleTimes.push(idleMinutes)
+          const gapType: 'flip' | 'same_room' = isRoomSwitch ? 'flip' : 'same_room'
           
-          // Calculate optimal call delta
-          // If next room had patient_in before current room's patient_out, we're good
-          // Otherwise, that's how much earlier we should have called
-          const optimalCallDelta = Math.max(0, idleMinutes - 5) // Allow 5 min buffer
+          allIdleTimes.push(idleMinutes)
+          if (gapType === 'flip') {
+            flipIdleTimes.push(idleMinutes)
+          } else {
+            sameRoomIdleTimes.push(idleMinutes)
+          }
+          
+          // Optimal call delta differs by gap type
+          // Flip: How much earlier to call next patient to the other room
+          // Same-room: How much turnover time could be reduced  
+          const buffer = gapType === 'flip' ? 5 : 3 // Tighter buffer for same-room
+          const optimalCallDelta = Math.max(0, idleMinutes - buffer)
           
           idleGaps.push({
             fromCase: current.case_number,
             toCase: next.case_number,
             idleMinutes,
-            optimalCallDelta
+            optimalCallDelta,
+            gapType,
+            fromRoom: current.or_rooms?.name || 'Unknown',
+            toRoom: next.or_rooms?.name || 'Unknown'
           })
         }
       }
     }
     
     if (idleGaps.length > 0) {
-      flipAnalysis.push({
+      allAnalysis.push({
         surgeonId,
         surgeonName,
         date,
+        isFlipRoom,
         cases: sorted.map(c => ({
           caseId: c.id,
           caseNumber: c.case_number,
@@ -1397,22 +1516,58 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
     }
   })
   
+  // Combined KPI
   const avgIdleTime = calculateAverage(allIdleTimes)
-  const avgOptimalDelta = calculateAverage(
-    flipAnalysis.flatMap(f => f.idleGaps.map(g => g.optimalCallDelta))
+  const flipDays = allAnalysis.filter(a => a.isFlipRoom).length
+  const sameRoomDays = allAnalysis.filter(a => !a.isFlipRoom).length
+  const totalSurgeonDays = allAnalysis.length
+  
+  // Flip KPI
+  const avgFlipIdle = calculateAverage(flipIdleTimes)
+  const avgFlipDelta = calculateAverage(
+    allAnalysis
+      .flatMap(f => f.idleGaps.filter(g => g.gapType === 'flip').map(g => g.optimalCallDelta))
   )
+  
+  // Same-room KPI
+  const avgSameRoomIdle = calculateAverage(sameRoomIdleTimes)
+  const surgeonsWithHighSameRoom = new Set(
+    allAnalysis
+      .filter(a => a.idleGaps.some(g => g.gapType === 'same_room' && g.idleMinutes > 15))
+      .map(a => a.surgeonId)
+  ).size
   
   return {
     kpi: {
       value: Math.round(avgIdleTime),
       displayValue: `${Math.round(avgIdleTime)} min`,
-      subtitle: avgOptimalDelta > 0 
-        ? `Call patients ${Math.round(avgOptimalDelta)} min earlier`
-        : 'No optimization needed',
-      target: 5,
-      targetMet: avgIdleTime <= 5
+      subtitle: `${totalSurgeonDays} surgeon-days · ${allIdleTimes.length} gaps analyzed`,
+      target: 10,
+      targetMet: avgIdleTime <= 10
     },
-    details: flipAnalysis
+    flipKpi: {
+      value: Math.round(avgFlipIdle),
+      displayValue: flipIdleTimes.length > 0 ? `${Math.round(avgFlipIdle)} min` : '—',
+      subtitle: avgFlipDelta > 0 && flipIdleTimes.length > 0
+        ? `Call patients ${Math.round(avgFlipDelta)} min earlier · ${flipIdleTimes.length} transitions`
+        : flipIdleTimes.length > 0 
+        ? `${flipIdleTimes.length} transitions · ${flipDays} surgeon-days`
+        : 'No flip room transitions found',
+      target: 5,
+      targetMet: avgFlipIdle <= 5 || flipIdleTimes.length === 0
+    },
+    sameRoomKpi: {
+      value: Math.round(avgSameRoomIdle),
+      displayValue: sameRoomIdleTimes.length > 0 ? `${Math.round(avgSameRoomIdle)} min` : '—',
+      subtitle: surgeonsWithHighSameRoom > 0
+        ? `${surgeonsWithHighSameRoom} surgeon${surgeonsWithHighSameRoom > 1 ? 's' : ''} with >15 min gaps · ${sameRoomIdleTimes.length} gaps`
+        : sameRoomIdleTimes.length > 0
+        ? `${sameRoomIdleTimes.length} same-room gaps analyzed`
+        : 'No same-room gaps found',
+      target: 10,
+      targetMet: avgSameRoomIdle <= 10 || sameRoomIdleTimes.length === 0
+    },
+    details: allAnalysis.sort((a, b) => b.totalIdleTime - a.totalIdleTime) // Worst offenders first
   }
 }
 
@@ -1578,11 +1733,13 @@ export function calculateAnalyticsOverview(
     cumulativeTardiness: calculateCumulativeTardiness(activeCases),
     nonOperativeTime: calculateNonOperativeTime(activeCases),
     surgeonIdleTime: surgeonIdleResult.kpi,
+    surgeonIdleFlip: surgeonIdleResult.flipKpi,
+    surgeonIdleSameRoom: surgeonIdleResult.sameRoomKpi,
     
     // Split surgical turnovers
     standardSurgicalTurnover: turnoverBreakdown.standardTurnover,
     flipRoomTime: turnoverBreakdown.flipRoomTime,
-    flipRoomAnalysis: surgeonIdleResult.details,  // Keep for modal compatibility
+    flipRoomAnalysis: surgeonIdleResult.details,
     
     // Time breakdown
     avgTotalCaseTime: timeBreakdown.avgTotalTime,

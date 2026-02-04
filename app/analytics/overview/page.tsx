@@ -37,6 +37,8 @@ import {
   type FlipRoomAnalysis,
   type FCOTSConfig,
   type RoomHoursMap,
+  type ORUtilizationResult,
+  type RoomUtilizationDetail,
 } from '@/lib/analyticsV2'
 
 // Icons
@@ -240,15 +242,19 @@ function KPICard({
 // ============================================
 
 function SurgeonIdleTimeCard({ 
-  kpi, 
+  combined, 
+  flipKpi,
+  sameRoomKpi,
   onClick 
 }: { 
-  kpi: KPIData
+  combined: KPIData
+  flipKpi: KPIData
+  sameRoomKpi: KPIData
   onClick?: () => void 
 }) {
   return (
     <div 
-      className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden"
+      className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden col-span-1 md:col-span-2"
       onClick={onClick}
     >
       {/* Decorative elements */}
@@ -264,6 +270,7 @@ function SurgeonIdleTimeCard({
             </div>
             <div>
               <Text className="font-medium text-slate-700">Surgeon Idle Time</Text>
+              <Text className="text-xs text-slate-500">Between consecutive cases</Text>
             </div>
           </div>
           <span className="px-2.5 py-1 text-xs font-semibold bg-blue-600 text-white rounded-full shadow-sm">
@@ -271,37 +278,61 @@ function SurgeonIdleTimeCard({
           </span>
         </div>
 
-        {/* Metric */}
-        <div className="mb-2">
+        {/* Combined metric */}
+        <div className="mb-4">
           <span className="text-3xl font-semibold tracking-tight text-blue-900">
-            {kpi.displayValue}
+            {combined.displayValue}
           </span>
+          <Text className="text-blue-700/60 text-sm ml-2">avg across all gaps</Text>
         </div>
 
-        <Text className="text-blue-700/70 text-sm mb-4">Avg wait between rooms</Text>
+        {/* Split metrics */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* Flip room idle */}
+          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+            <div className="flex items-center gap-2 mb-1">
+              <ArrowRightIcon className="w-3.5 h-3.5 text-violet-500" />
+              <Text className="text-xs font-medium text-slate-600 uppercase tracking-wide">Flip Room</Text>
+            </div>
+            <div className="text-xl font-semibold text-violet-700">{flipKpi.displayValue}</div>
+            <Text className="text-xs text-slate-500 mt-0.5 line-clamp-2">{flipKpi.subtitle}</Text>
+          </div>
+          
+          {/* Same room idle */}
+          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+            <div className="flex items-center gap-2 mb-1">
+              <ClockIcon className="w-3.5 h-3.5 text-amber-500" />
+              <Text className="text-xs font-medium text-slate-600 uppercase tracking-wide">Same Room</Text>
+            </div>
+            <div className="text-xl font-semibold text-amber-700">{sameRoomKpi.displayValue}</div>
+            <Text className="text-xs text-slate-500 mt-0.5 line-clamp-2">{sameRoomKpi.subtitle}</Text>
+          </div>
+        </div>
 
         {/* Insight box */}
-        {kpi.subtitle && kpi.subtitle !== 'No optimization needed' && kpi.value > 0 ? (
-          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+        {combined.value > 0 && (combined.value > 10) ? (
+          <div className="p-3 bg-amber-50/80 backdrop-blur-sm rounded-lg border border-amber-200/40">
             <div className="flex items-start gap-2">
-              <div className="p-1 rounded bg-blue-100 mt-0.5">
-                <SparklesIcon className="w-3 h-3 text-blue-600" />
-              </div>
-              <Text className="text-blue-800 text-sm font-medium">{kpi.subtitle}</Text>
+              <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <Text className="text-amber-800 text-sm font-medium">
+                {Number(flipKpi.value) > Number(sameRoomKpi.value)
+                  ? 'Flip room transitions are the primary idle driver — consider calling next patients earlier'
+                  : 'Same-room gaps are the primary idle driver — focus on turnover speed between cases'}
+              </Text>
             </div>
           </div>
-        ) : (kpi.targetMet || kpi.value <= 5) && (
+        ) : combined.targetMet ? (
           <div className="p-3 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/40">
             <div className="flex items-start gap-2">
               <CheckCircleIcon className="w-4 h-4 text-emerald-600 mt-0.5" />
               <Text className="text-emerald-800 text-sm font-medium">Excellent! Minimal surgeon wait time</Text>
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Click indicator */}
         <div className="mt-4 pt-3 border-t border-blue-200/40 flex items-center text-xs font-medium text-blue-700 hover:text-blue-800">
-          View flip room analysis
+          View detailed idle time analysis
           <ArrowRightIcon className="w-3 h-3 ml-1" />
         </div>
       </div>
@@ -414,7 +445,18 @@ function FlipRoomModal({
   onClose: () => void
   data: FlipRoomAnalysis[]
 }) {
+  const [filter, setFilter] = useState<'all' | 'flip' | 'same_room'>('all')
+  
   if (!isOpen) return null
+  
+  const filteredData = filter === 'all' 
+    ? data 
+    : filter === 'flip'
+    ? data.filter(d => d.idleGaps.some(g => g.gapType === 'flip'))
+    : data.filter(d => d.idleGaps.some(g => g.gapType === 'same_room'))
+  
+  const totalFlipGaps = data.reduce((sum, d) => sum + d.idleGaps.filter(g => g.gapType === 'flip').length, 0)
+  const totalSameGaps = data.reduce((sum, d) => sum + d.idleGaps.filter(g => g.gapType === 'same_room').length, 0)
   
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -429,8 +471,218 @@ function FlipRoomModal({
                 <SparklesIcon className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">Flip Room Analysis</h2>
-                <p className="text-sm text-slate-500">Surgeon idle time between room transitions</p>
+                <h2 className="text-lg font-semibold text-slate-900">Surgeon Idle Time Analysis</h2>
+                <p className="text-sm text-slate-500">All idle gaps between consecutive surgeon cases</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+          
+          {/* Filter tabs */}
+          <div className="px-6 pt-4 pb-2 flex items-center gap-2">
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                filter === 'all' 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              All Gaps ({totalFlipGaps + totalSameGaps})
+            </button>
+            <button
+              onClick={() => setFilter('flip')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                filter === 'flip' 
+                  ? 'bg-violet-100 text-violet-700' 
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              Flip Room ({totalFlipGaps})
+            </button>
+            <button
+              onClick={() => setFilter('same_room')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                filter === 'same_room' 
+                  ? 'bg-amber-100 text-amber-700' 
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              Same Room ({totalSameGaps})
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
+            {filteredData.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
+                </div>
+                <h3 className="text-base font-semibold text-slate-900 mb-1">No idle gaps found</h3>
+                <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                  {filter === 'flip'
+                    ? 'No flip room transitions detected in this period.'
+                    : filter === 'same_room'
+                    ? 'No same-room idle gaps detected in this period.'
+                    : 'Surgeon idle gaps occur when a surgeon waits between consecutive cases.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredData.map((analysis, idx) => {
+                  const visibleGaps = filter === 'all' 
+                    ? analysis.idleGaps 
+                    : analysis.idleGaps.filter(g => g.gapType === filter)
+                  
+                  if (visibleGaps.length === 0) return null
+                  
+                  return (
+                    <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-5">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
+                            {analysis.surgeonName.replace('Dr. ', '').charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-sm text-slate-500">{analysis.date}</p>
+                              {analysis.isFlipRoom && (
+                                <span className="px-1.5 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 rounded">
+                                  Multi-room
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
+                          <p className="text-2xl font-semibold text-amber-600">{Math.round(analysis.totalIdleTime)} min</p>
+                        </div>
+                      </div>
+                      
+                      {/* Room sequence */}
+                      <div className="mb-4">
+                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Case Sequence</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {analysis.cases.map((c, i) => (
+                            <div key={c.caseId} className="flex items-center">
+                              <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm">
+                                <span className="font-semibold text-slate-900">{c.roomName}</span>
+                                <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
+                              </div>
+                              {i < analysis.cases.length - 1 && (
+                                <ArrowRightIcon className="w-4 h-4 mx-2 text-slate-300" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Gaps */}
+                      <div>
+                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Idle Gaps</p>
+                        <div className="space-y-2">
+                          {visibleGaps.map((gap, i) => (
+                            <div key={i} className={`flex items-center justify-between p-3 bg-white rounded-lg border ${
+                              gap.gapType === 'flip' ? 'border-violet-200' : 'border-amber-200'
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
+                                  gap.gapType === 'flip' 
+                                    ? 'bg-violet-100 text-violet-700' 
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {gap.gapType === 'flip' ? 'Flip' : 'Same'}
+                                </span>
+                                <span className="font-medium text-slate-700">{gap.fromCase}</span>
+                                {gap.fromRoom && gap.toRoom && gap.fromRoom !== gap.toRoom && (
+                                  <span className="text-xs text-slate-400">({gap.fromRoom})</span>
+                                )}
+                                <ArrowRightIcon className="w-4 h-4 text-slate-300" />
+                                <span className="font-medium text-slate-700">{gap.toCase}</span>
+                                {gap.fromRoom && gap.toRoom && gap.fromRoom !== gap.toRoom && (
+                                  <span className="text-xs text-slate-400">({gap.toRoom})</span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <p className="text-xs text-slate-400">Idle</p>
+                                  <p className={`font-semibold ${gap.idleMinutes > 15 ? 'text-rose-600' : gap.idleMinutes > 10 ? 'text-amber-600' : 'text-slate-700'}`}>
+                                    {Math.round(gap.idleMinutes)} min
+                                  </p>
+                                </div>
+                                {gap.optimalCallDelta > 0 && (
+                                  <div className="text-right pl-4 border-l border-slate-200">
+                                    <p className="text-xs text-blue-600">
+                                      {gap.gapType === 'flip' ? 'Call earlier' : 'Speed up'}
+                                    </p>
+                                    <p className="font-semibold text-blue-600">
+                                      {Math.round(gap.optimalCallDelta)} min
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================
+// OR UTILIZATION MODAL (Room Breakdown)
+// ============================================
+
+function ORUtilizationModal({ 
+  isOpen, 
+  onClose, 
+  data 
+}: { 
+  isOpen: boolean
+  onClose: () => void
+  data: ORUtilizationResult
+}) {
+  if (!isOpen) return null
+  
+  const { roomBreakdown, roomsWithRealHours, roomsWithDefaultHours } = data
+  
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+        
+        <div className="relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-violet-100">
+                <ChartBarIcon className="w-5 h-5 text-violet-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">OR Utilization by Room</h2>
+                <p className="text-sm text-slate-500">
+                  {roomsWithRealHours > 0 && roomsWithDefaultHours > 0
+                    ? `${roomsWithRealHours} rooms configured · ${roomsWithDefaultHours} using default (10h)`
+                    : roomsWithDefaultHours === roomBreakdown.length
+                    ? 'All rooms using default 10h availability — configure in Settings'
+                    : `All ${roomsWithRealHours} rooms have configured hours`}
+                </p>
               </div>
             </div>
             <button
@@ -443,89 +695,86 @@ function FlipRoomModal({
           
           {/* Content */}
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
-            {data.length === 0 ? (
+            {roomBreakdown.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
+                  <ChartBarIcon className="w-8 h-8 text-slate-400" />
                 </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-1">No flip room patterns detected</h3>
-                <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  Flip rooms occur when a surgeon operates in multiple rooms on the same day.
-                </p>
+                <h3 className="text-base font-semibold text-slate-900 mb-1">No utilization data</h3>
+                <p className="text-sm text-slate-500">No rooms with case data found in this period.</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {data.map((analysis, idx) => (
-                  <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
-                          {analysis.surgeonName.replace('Dr. ', '').charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
-                          <p className="text-sm text-slate-500">{analysis.date}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
-                        <p className="text-2xl font-semibold text-amber-600">{Math.round(analysis.totalIdleTime)} min</p>
-                      </div>
+              <div className="space-y-3">
+                {/* Summary bar */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200/60 text-center">
+                    <div className="text-2xl font-semibold text-emerald-700">
+                      {roomBreakdown.filter(r => r.utilization >= 75).length}
                     </div>
-                    
-                    {/* Room sequence */}
-                    <div className="mb-4">
-                      <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Room Sequence</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {analysis.cases.map((c, i) => (
-                          <div key={c.caseId} className="flex items-center">
-                            <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                              <span className="font-semibold text-slate-900">{c.roomName}</span>
-                              <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
-                            </div>
-                            {i < analysis.cases.length - 1 && (
-                              <ArrowRightIcon className="w-4 h-4 mx-2 text-slate-300" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {/* Gaps */}
-                    {analysis.idleGaps.length > 0 && (
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Transition Gaps</p>
-                        <div className="space-y-2">
-                          {analysis.idleGaps.map((gap, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-700">{gap.fromCase}</span>
-                                <ArrowRightIcon className="w-4 h-4 text-slate-300" />
-                                <span className="font-medium text-slate-700">{gap.toCase}</span>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className="text-xs text-slate-400">Idle</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-rose-600' : 'text-amber-600'}`}>
-                                    {Math.round(gap.idleMinutes)} min
-                                  </p>
-                                </div>
-                                {gap.optimalCallDelta > 0 && (
-                                  <div className="text-right pl-4 border-l border-slate-200">
-                                    <p className="text-xs text-blue-600">Call earlier</p>
-                                    <p className="font-semibold text-blue-600">
-                                      {Math.round(gap.optimalCallDelta)} min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <div className="text-xs text-emerald-600 font-medium">Above Target</div>
                   </div>
-                ))}
+                  <div className="p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
+                    <div className="text-2xl font-semibold text-amber-700">
+                      {roomBreakdown.filter(r => r.utilization >= 60 && r.utilization < 75).length}
+                    </div>
+                    <div className="text-xs text-amber-600 font-medium">Near Target</div>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
+                    <div className="text-2xl font-semibold text-slate-600">
+                      {roomBreakdown.filter(r => r.utilization < 60).length}
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium">Below 60%</div>
+                  </div>
+                </div>
+                
+                {/* Room rows */}
+                {roomBreakdown.map((room) => {
+                  const barColor = room.utilization >= 75 
+                    ? 'bg-emerald-500' 
+                    : room.utilization >= 60 
+                    ? 'bg-amber-500' 
+                    : 'bg-slate-400'
+                  const textColor = room.utilization >= 75 
+                    ? 'text-emerald-700' 
+                    : room.utilization >= 60 
+                    ? 'text-amber-700' 
+                    : 'text-slate-600'
+                  
+                  return (
+                    <div key={room.roomId} className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-900">{room.roomName}</span>
+                          {!room.usingRealHours && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded">
+                              Default hours
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-xl font-semibold ${textColor}`}>
+                          {room.utilization}%
+                        </span>
+                      </div>
+                      
+                      {/* Utilization bar */}
+                      <div className="w-full bg-slate-200 rounded-full h-2 mb-3">
+                        <div 
+                          className={`${barColor} h-2 rounded-full transition-all duration-500`}
+                          style={{ width: `${Math.min(room.utilization, 100)}%` }}
+                        />
+                      </div>
+                      
+                      {/* Stats row */}
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <span>{room.caseCount} cases</span>
+                        <span className="text-slate-300">·</span>
+                        <span>{room.daysActive} days active</span>
+                        <span className="text-slate-300">·</span>
+                        <span>~{Math.round(room.usedMinutes / room.daysActive / 60 * 10) / 10}h avg/day of {room.availableHours}h</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -553,6 +802,7 @@ export default function AnalyticsOverviewPage() {
   const [dateFilter, setDateFilter] = useState('month')
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
+  const [showORUtilModal, setShowORUtilModal] = useState(false)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
   const [fcotsConfig, setFcotsConfig] = useState<FCOTSConfig>({ milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 })
 
@@ -843,6 +1093,7 @@ export default function AnalyticsOverviewPage() {
                     kpi={analytics.orUtilization}
                     icon={ChartBarIcon}
                     accentColor="violet"
+                    onClick={() => setShowORUtilModal(true)}
                   />
                   <KPICard 
                     title="Case Volume" 
@@ -894,7 +1145,7 @@ export default function AnalyticsOverviewPage() {
                   title="Efficiency Insights"
                   subtitle="Non-operative analysis and surgeon optimization"
                 />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <KPICard 
                     title="Non-Operative Time" 
                     kpi={analytics.nonOperativeTime}
@@ -903,7 +1154,9 @@ export default function AnalyticsOverviewPage() {
                     showTracker={false}
                   />
                   <SurgeonIdleTimeCard 
-                    kpi={analytics.surgeonIdleTime}
+                    combined={analytics.surgeonIdleTime}
+                    flipKpi={analytics.surgeonIdleFlip}
+                    sameRoomKpi={analytics.surgeonIdleSameRoom}
                     onClick={() => setShowFlipRoomModal(true)}
                   />
                 </div>
@@ -1031,6 +1284,13 @@ export default function AnalyticsOverviewPage() {
                 isOpen={showFlipRoomModal}
                 onClose={() => setShowFlipRoomModal(false)}
                 data={analytics.flipRoomAnalysis}
+              />
+
+              {/* OR UTILIZATION MODAL */}
+              <ORUtilizationModal
+                isOpen={showORUtilModal}
+                onClose={() => setShowORUtilModal(false)}
+                data={analytics.orUtilization}
               />
             </div>
           )}
