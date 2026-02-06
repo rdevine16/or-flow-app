@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -87,57 +87,123 @@ export default function ProcedureMilestonesSettingsPage() {
     )
   }
 
-  // Toggle milestone for procedure
+  // Toggle a single (non-paired) milestone
   const toggleMilestone = async (procedureId: string, milestoneId: string) => {
     if (!effectiveFacilityId) return
     setSaving(true)
-    
+
     const isEnabled = isMilestoneEnabled(procedureId, milestoneId)
 
     if (isEnabled) {
-      // Remove
-      await supabase
+      const { error } = await supabase
         .from('procedure_milestone_config')
         .delete()
         .eq('procedure_type_id', procedureId)
         .eq('facility_milestone_id', milestoneId)
 
-      setConfigs(configs.filter(
-        c => !(c.procedure_type_id === procedureId && c.facility_milestone_id === milestoneId)
-      ))
+      if (!error) {
+        setConfigs(prev => prev.filter(
+          c => !(c.procedure_type_id === procedureId && c.facility_milestone_id === milestoneId)
+        ))
+      }
     } else {
-      // Add
       const milestone = milestones.find(m => m.id === milestoneId)
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('procedure_milestone_config')
-        .insert({
-          facility_id: effectiveFacilityId,
-          procedure_type_id: procedureId,
-          facility_milestone_id: milestoneId,
-          display_order: milestone?.display_order || 0
-        })
+        .upsert(
+          {
+            facility_id: effectiveFacilityId,
+            procedure_type_id: procedureId,
+            facility_milestone_id: milestoneId,
+            display_order: milestone?.display_order || 0
+          },
+          { onConflict: 'facility_id,procedure_type_id,facility_milestone_id' }
+        )
         .select()
         .single()
 
       if (data) {
-        setConfigs([...configs, data])
+        setConfigs(prev => {
+          // Avoid duplicates in local state
+          const exists = prev.some(
+            c => c.procedure_type_id === procedureId && c.facility_milestone_id === milestoneId
+          )
+          return exists ? prev : [...prev, data]
+        })
       }
     }
     setSaving(false)
   }
 
-  // Toggle paired milestones together
+  // Toggle paired milestones together — handles both in a single batch
   const togglePairedMilestone = async (procedureId: string, startMilestoneId: string) => {
+    if (!effectiveFacilityId) return
+
     const startMilestone = milestones.find(m => m.id === startMilestoneId)
     if (!startMilestone) return
 
-    // Toggle start
-    await toggleMilestone(procedureId, startMilestoneId)
+    const endMilestoneId = startMilestone.pair_with_id
+    const milestoneIds = endMilestoneId
+      ? [startMilestoneId, endMilestoneId]
+      : [startMilestoneId]
 
-    // Also toggle the paired "end" milestone if exists
-    if (startMilestone.pair_with_id) {
-      await toggleMilestone(procedureId, startMilestone.pair_with_id)
+    const isEnabled = isMilestoneEnabled(procedureId, startMilestoneId)
+
+    setSaving(true)
+
+    if (isEnabled) {
+      // Delete both in parallel
+      const deletePromises = milestoneIds.map(mid =>
+        supabase
+          .from('procedure_milestone_config')
+          .delete()
+          .eq('procedure_type_id', procedureId)
+          .eq('facility_milestone_id', mid)
+      )
+
+      const results = await Promise.all(deletePromises)
+      const hasError = results.some(r => r.error)
+
+      if (!hasError) {
+        setConfigs(prev => prev.filter(
+          c => !(c.procedure_type_id === procedureId && milestoneIds.includes(c.facility_milestone_id))
+        ))
+      }
+    } else {
+      // Upsert both in a single call — no 409 possible
+      const rows = milestoneIds.map(mid => {
+        const m = milestones.find(ms => ms.id === mid)
+        return {
+          facility_id: effectiveFacilityId,
+          procedure_type_id: procedureId,
+          facility_milestone_id: mid,
+          display_order: m?.display_order || 0
+        }
+      })
+
+      const { data, error } = await supabase
+        .from('procedure_milestone_config')
+        .upsert(rows, { onConflict: 'facility_id,procedure_type_id,facility_milestone_id' })
+        .select()
+
+      if (data && !error) {
+        setConfigs(prev => {
+          const newConfigs = [...prev]
+          for (const row of data) {
+            const exists = newConfigs.some(
+              c => c.procedure_type_id === row.procedure_type_id
+                && c.facility_milestone_id === row.facility_milestone_id
+            )
+            if (!exists) {
+              newConfigs.push(row)
+            }
+          }
+          return newConfigs
+        })
+      }
     }
+
+    setSaving(false)
   }
 
   // Get milestone count for procedure
@@ -163,64 +229,84 @@ export default function ProcedureMilestonesSettingsPage() {
     if (!effectiveFacilityId) return
     setSaving(true)
 
-    for (const m of milestones) {
-      if (!isMilestoneEnabled(procedureId, m.id)) {
-        await supabase
-          .from('procedure_milestone_config')
-          .insert({
-            facility_id: effectiveFacilityId,
-            procedure_type_id: procedureId,
-            facility_milestone_id: m.id,
-            display_order: m.display_order
-          })
+    // Build rows for all milestones that aren't already enabled
+    const rows = milestones
+      .filter(m => !isMilestoneEnabled(procedureId, m.id))
+      .map(m => ({
+        facility_id: effectiveFacilityId,
+        procedure_type_id: procedureId,
+        facility_milestone_id: m.id,
+        display_order: m.display_order
+      }))
+
+    if (rows.length > 0) {
+      const { data, error } = await supabase
+        .from('procedure_milestone_config')
+        .upsert(rows, { onConflict: 'facility_id,procedure_type_id,facility_milestone_id' })
+        .select()
+
+      if (data && !error) {
+        setConfigs(prev => {
+          const newConfigs = [...prev]
+          for (const row of data) {
+            const exists = newConfigs.some(
+              c => c.procedure_type_id === row.procedure_type_id
+                && c.facility_milestone_id === row.facility_milestone_id
+            )
+            if (!exists) {
+              newConfigs.push(row)
+            }
+          }
+          return newConfigs
+        })
       }
     }
-    await fetchData()
+
     setSaving(false)
   }
 
   // Disable all milestones for a procedure
   const disableAllMilestones = async (procedureId: string) => {
+    if (!effectiveFacilityId) return
     setSaving(true)
-    await supabase
+
+    const { error } = await supabase
       .from('procedure_milestone_config')
       .delete()
+      .eq('facility_id', effectiveFacilityId)
       .eq('procedure_type_id', procedureId)
-    await fetchData()
+
+    if (!error) {
+      setConfigs(prev => prev.filter(c => c.procedure_type_id !== procedureId))
+    }
+
     setSaving(false)
+  }
+
+  if (userLoading || loading) {
+    return (
+      <DashboardLayout>
+        <Container>
+          <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          </SettingsLayout>
+        </Container>
+      </DashboardLayout>
+    )
   }
 
   return (
     <DashboardLayout>
-      <Container className="py-8">
-        <SettingsLayout
-          title="Procedure Milestones"
-          description="Configure which milestones appear for each procedure type. Click a procedure to customize its milestones."
-        >
-          {loading || userLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : !effectiveFacilityId ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500">No facility selected</p>
+      <Container>
+        <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
+          {!effectiveFacilityId ? (
+            <div className="text-center py-12 text-slate-500">
+              No facility found. Please contact support.
             </div>
           ) : (
             <>
-              {/* Info Banner */}
-              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
-                <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-blue-800">Procedure-Specific Milestones</p>
-                  <p className="text-sm text-blue-700 mt-0.5">
-                    Customize which milestones staff see when tracking each procedure. For example, "Array Placement" can be shown only for Mako procedures.
-                  </p>
-                </div>
-              </div>
-
-              {/* Procedure List */}
               <div className="space-y-3">
                 {procedures.map(procedure => {
                   const isExpanded = expandedProcedure === procedure.id
@@ -301,7 +387,6 @@ export default function ProcedureMilestonesSettingsPage() {
                                 const isEnabled = isMilestoneEnabled(procedure.id, milestone.id)
                                 // Also check if the paired end milestone is enabled
                                 const isPaired = milestone.pair_position === 'start' && milestone.pair_with_id
-                                const pairedEndEnabled = isPaired && isMilestoneEnabled(procedure.id, milestone.pair_with_id!)
 
                                 return (
                                   <label
