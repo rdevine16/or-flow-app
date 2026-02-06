@@ -515,9 +515,16 @@ export async function generateDemoData(
     }
 
     onProgress?.({ phase: 'inserting', current: 70, total: 100, message: `Inserting ${allMilestones.length} milestones...` })
+    console.log(`[DEMO-GEN] Total milestones to insert: ${allMilestones.length}`)
+    if (allMilestones.length > 0) {
+      console.log('[DEMO-GEN] Sample milestone:', JSON.stringify(allMilestones[0]))
+      console.log('[DEMO-GEN] fmToMtMap size:', fmToMtMap.size, 'entries:', [...fmToMtMap.entries()].map(([k,v]) => `${k}->${v}`).join(', '))
+    }
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
-      const { error } = await supabase.from('case_milestones').insert(allMilestones.slice(i, i + BATCH_SIZE))
-      if (error) { console.error(`Milestone batch ${i} err:`, error.message, 'Sample:', JSON.stringify(allMilestones[i])); }
+      const batch = allMilestones.slice(i, i + BATCH_SIZE)
+      const { error, data, count } = await supabase.from('case_milestones').insert(batch).select('id')
+      if (error) { console.error(`Milestone batch ${i} err:`, error.message, 'Code:', error.code, 'Details:', error.details, 'Sample:', JSON.stringify(batch[0])); }
+      else { console.log(`[DEMO-GEN] Milestone batch ${i}: inserted ${data?.length ?? 'unknown'} rows`) }
     }
 
     // ── Build case_milestone_stats (bypasses triggers we disabled) ──
