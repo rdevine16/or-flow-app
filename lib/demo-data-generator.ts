@@ -433,6 +433,7 @@ export async function generateDemoData(
     const allMilestones: any[] = []
     const allStaffAssignments: any[] = []
     const allImplants: any[] = []
+    const allFlipLinks: { fromCaseId: string; toCaseId: string }[] = []
 
     let caseNum = 1
     const prefix = facility.case_number_prefix || 'DEMO'
@@ -447,6 +448,7 @@ export async function generateDemoData(
       allMilestones.push(...result.milestones)
       allStaffAssignments.push(...result.staffAssignments)
       allImplants.push(...result.implants)
+      allFlipLinks.push(...result.flipLinks)
       caseNum += result.cases.length
       onProgress?.({ phase: 'generating', current: 25 + Math.floor(((si + 1) / resolved.length) * 25), total: 100,
         message: `Dr. ${surgeon.lastName}: ${result.cases.length} cases` })
@@ -459,6 +461,13 @@ export async function generateDemoData(
     for (let i = 0; i < allCases.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('cases').insert(allCases.slice(i, i + BATCH_SIZE))
       if (error) { await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}); return { success: false, casesGenerated: 0, error: `Case insert batch ${i}: ${error.message}` } }
+    }
+
+    // Apply flip room links AFTER all cases exist (self-referencing FK)
+    if (allFlipLinks.length > 0) {
+      for (const link of allFlipLinks) {
+        await supabase.from('cases').update({ called_next_case_id: link.toCaseId }).eq('id', link.fromCaseId)
+      }
     }
 
     onProgress?.({ phase: 'inserting', current: 70, total: 100, message: `Inserting ${allMilestones.length} milestones...` })
@@ -514,10 +523,11 @@ function generateSurgeonCases(
   const milestones: any[] = []
   const staffAssignments: any[] = []
   const implants: any[] = []
+  const flipLinks: { fromCaseId: string; toCaseId: string }[] = []
 
   let caseNum = startingNumber
   const surgeonProcs = allProcedureTypes.filter(pt => surgeon.procedureTypeIds.includes(pt.id))
-  if (!surgeonProcs.length) return { cases, milestones, staffAssignments, implants }
+  if (!surgeonProcs.length) return { cases, milestones, staffAssignments, implants, flipLinks }
 
   const speedCfg = SPEED_CONFIGS[surgeon.speedProfile]
   const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG : surgeon.specialty === 'spine' ? SPINE_CONFIG : null
@@ -527,7 +537,7 @@ function generateSurgeonCases(
   // Determine surgeon's rooms
   const primaryRoom = surgeon.primaryRoomId
   const flipRoom = surgeon.usesFlipRooms ? surgeon.flipRoomId : null
-  if (!primaryRoom) return { cases, milestones, staffAssignments, implants }
+  if (!primaryRoom) return { cases, milestones, staffAssignments, implants, flipLinks }
 
   const currentDate = new Date(startDate)
 
@@ -550,7 +560,7 @@ function generateSurgeonCases(
     // Track previous case data for flip room callback calculation
     let prevCaseMilestones: any[] = []
     let prevCaseData: any = null
-    let prevCaseLinked: any = null  // for called_next_case_id linking
+    let prevCaseLinkId: string | null = null  // for called_next_case_id deferred linking
 
     for (let i = 0; i < numCases; i++) {
       const proc = randomChoice(surgeonProcs)
@@ -654,11 +664,11 @@ function generateSurgeonCases(
         prevCaseMilestones = cms
         prevCaseData = caseData
 
-        // Link flip room cases
-        if (flipRoom && i > 0 && prevCaseLinked) {
-          prevCaseLinked.called_next_case_id = caseId
+        // Link flip room cases (deferred — applied after all cases inserted)
+        if (flipRoom && i > 0 && prevCaseLinkId) {
+          flipLinks.push({ fromCaseId: prevCaseLinkId, toCaseId: caseId })
         }
-        prevCaseLinked = flipRoom ? caseData : null
+        prevCaseLinkId = flipRoom ? caseId : null
       } else {
         // Future/scheduled cases: initialize milestones with recorded_at = NULL
         // This matches the CaseForm.initializeCaseMilestones pattern
@@ -715,7 +725,7 @@ function generateSurgeonCases(
     currentDate.setDate(currentDate.getDate() + 1)
   }
 
-  return { cases, milestones, staffAssignments, implants }
+  return { cases, milestones, staffAssignments, implants, flipLinks }
 }
 
 // =====================================================
