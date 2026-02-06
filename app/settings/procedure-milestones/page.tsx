@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -30,20 +30,65 @@ interface ProcedureMilestoneConfig {
   facility_milestone_id: string
 }
 
+interface Toast {
+  id: string
+  message: string
+  type: 'error' | 'success'
+}
+
 export default function ProcedureMilestonesSettingsPage() {
   const supabase = createClient()
-  
-  // Use the context - this automatically handles impersonation!
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
   const [configs, setConfigs] = useState<ProcedureMilestoneConfig[]>([])
   const [expandedProcedure, setExpandedProcedure] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<Toast[]>([])
 
-  // Fetch data once we have facility ID (from context, handles impersonation)
+  // Track which individual milestones are currently saving
+  // Key format: `${procedureId}:${milestoneId}`
+  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set())
+
+  // Prevent concurrent operations on the same milestone
+  const pendingOps = useRef<Set<string>>(new Set())
+
+  // --- Toast helpers ---
+  const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
+    const id = crypto.randomUUID()
+    setToasts(prev => [...prev, { id, message, type }])
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 4000)
+  }, [])
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }, [])
+
+  // --- Saving key helpers ---
+  const markSaving = useCallback((procedureId: string, milestoneIds: string[]) => {
+    setSavingKeys(prev => {
+      const next = new Set(prev)
+      milestoneIds.forEach(mid => next.add(`${procedureId}:${mid}`))
+      return next
+    })
+  }, [])
+
+  const clearSaving = useCallback((procedureId: string, milestoneIds: string[]) => {
+    setSavingKeys(prev => {
+      const next = new Set(prev)
+      milestoneIds.forEach(mid => next.delete(`${procedureId}:${mid}`))
+      return next
+    })
+  }, [])
+
+  const isSavingMilestone = useCallback((procedureId: string, milestoneId: string): boolean => {
+    return savingKeys.has(`${procedureId}:${milestoneId}`)
+  }, [savingKeys])
+
+  // --- Data fetching ---
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchData()
@@ -87,72 +132,26 @@ export default function ProcedureMilestonesSettingsPage() {
     )
   }
 
-  // Toggle a single (non-paired) milestone
-  const toggleMilestone = async (procedureId: string, milestoneId: string) => {
-    if (!effectiveFacilityId) return
-    setSaving(true)
-
-    const isEnabled = isMilestoneEnabled(procedureId, milestoneId)
-
-    if (isEnabled) {
-      const { error } = await supabase
-        .from('procedure_milestone_config')
-        .delete()
-        .eq('procedure_type_id', procedureId)
-        .eq('facility_milestone_id', milestoneId)
-
-      if (!error) {
-        setConfigs(prev => prev.filter(
-          c => !(c.procedure_type_id === procedureId && c.facility_milestone_id === milestoneId)
-        ))
-      }
-    } else {
-      const milestone = milestones.find(m => m.id === milestoneId)
-      const { data, error } = await supabase
-        .from('procedure_milestone_config')
-        .upsert(
-          {
-            facility_id: effectiveFacilityId,
-            procedure_type_id: procedureId,
-            facility_milestone_id: milestoneId,
-            display_order: milestone?.display_order || 0
-          },
-          { onConflict: 'facility_id,procedure_type_id,facility_milestone_id' }
-        )
-        .select()
-        .single()
-
-      if (data) {
-        setConfigs(prev => {
-          // Avoid duplicates in local state
-          const exists = prev.some(
-            c => c.procedure_type_id === procedureId && c.facility_milestone_id === milestoneId
-          )
-          return exists ? prev : [...prev, data]
-        })
-      }
-    }
-    setSaving(false)
-  }
-
-  // Toggle paired milestones together — handles both in a single batch
-  const togglePairedMilestone = async (procedureId: string, startMilestoneId: string) => {
+  // --- Core toggle: handles single or multiple milestone IDs ---
+  const toggleMilestoneIds = useCallback(async (procedureId: string, milestoneIds: string[]) => {
     if (!effectiveFacilityId) return
 
-    const startMilestone = milestones.find(m => m.id === startMilestoneId)
-    if (!startMilestone) return
+    // Guard against concurrent ops on the same milestones
+    const opKeys = milestoneIds.map(mid => `${procedureId}:${mid}`)
+    if (opKeys.some(k => pendingOps.current.has(k))) return
+    opKeys.forEach(k => pendingOps.current.add(k))
 
-    const endMilestoneId = startMilestone.pair_with_id
-    const milestoneIds = endMilestoneId
-      ? [startMilestoneId, endMilestoneId]
-      : [startMilestoneId]
+    const isEnabled = isMilestoneEnabled(procedureId, milestoneIds[0])
 
-    const isEnabled = isMilestoneEnabled(procedureId, startMilestoneId)
-
-    setSaving(true)
+    // Mark per-toggle spinner
+    markSaving(procedureId, milestoneIds)
 
     if (isEnabled) {
-      // Delete both in parallel
+      // Optimistically remove
+      setConfigs(prev => prev.filter(
+        c => !(c.procedure_type_id === procedureId && milestoneIds.includes(c.facility_milestone_id))
+      ))
+
       const deletePromises = milestoneIds.map(mid =>
         supabase
           .from('procedure_milestone_config')
@@ -160,17 +159,32 @@ export default function ProcedureMilestonesSettingsPage() {
           .eq('procedure_type_id', procedureId)
           .eq('facility_milestone_id', mid)
       )
-
       const results = await Promise.all(deletePromises)
-      const hasError = results.some(r => r.error)
 
-      if (!hasError) {
-        setConfigs(prev => prev.filter(
-          c => !(c.procedure_type_id === procedureId && milestoneIds.includes(c.facility_milestone_id))
-        ))
+      if (results.some(r => r.error)) {
+        showToast('Failed to remove milestone. Reverting change.')
+        await fetchData()
       }
     } else {
-      // Upsert both in a single call — no 409 possible
+      // Optimistically add placeholders
+      const optimisticConfigs: ProcedureMilestoneConfig[] = milestoneIds.map(mid => ({
+        id: `optimistic-${mid}`,
+        procedure_type_id: procedureId,
+        facility_milestone_id: mid
+      }))
+      setConfigs(prev => [...prev, ...optimisticConfigs])
+
+      // For paired milestones, delete first to avoid 409
+      if (milestoneIds.length > 1) {
+        await Promise.all(milestoneIds.map(mid =>
+          supabase
+            .from('procedure_milestone_config')
+            .delete()
+            .eq('procedure_type_id', procedureId)
+            .eq('facility_milestone_id', mid)
+        ))
+      }
+
       const rows = milestoneIds.map(mid => {
         const m = milestones.find(ms => ms.id === mid)
         return {
@@ -183,35 +197,121 @@ export default function ProcedureMilestonesSettingsPage() {
 
       const { data, error } = await supabase
         .from('procedure_milestone_config')
-        .upsert(rows, { onConflict: 'facility_id,procedure_type_id,facility_milestone_id' })
+        .insert(rows)
         .select()
 
-      if (data && !error) {
+      if (error || !data) {
+        showToast('Failed to add milestone. Reverting change.')
+        await fetchData()
+      } else {
+        // Replace optimistic placeholders with real rows
         setConfigs(prev => {
-          const newConfigs = [...prev]
-          for (const row of data) {
-            const exists = newConfigs.some(
-              c => c.procedure_type_id === row.procedure_type_id
-                && c.facility_milestone_id === row.facility_milestone_id
-            )
-            if (!exists) {
-              newConfigs.push(row)
-            }
-          }
-          return newConfigs
+          const cleaned = prev.filter(
+            c => !c.id.startsWith('optimistic-') &&
+              !(c.procedure_type_id === procedureId && milestoneIds.includes(c.facility_milestone_id))
+          )
+          return [...cleaned, ...data]
         })
       }
     }
 
-    setSaving(false)
-  }
+    clearSaving(procedureId, milestoneIds)
+    opKeys.forEach(k => pendingOps.current.delete(k))
+  }, [effectiveFacilityId, milestones, configs, markSaving, clearSaving, showToast])
 
-  // Get milestone count for procedure
+  // --- Public toggle handlers ---
+  const toggleMilestone = useCallback((procedureId: string, milestoneId: string) => {
+    toggleMilestoneIds(procedureId, [milestoneId])
+  }, [toggleMilestoneIds])
+
+  const togglePairedMilestone = useCallback((procedureId: string, startMilestoneId: string) => {
+    const startMilestone = milestones.find(m => m.id === startMilestoneId)
+    if (!startMilestone) return
+
+    const milestoneIds = startMilestone.pair_with_id
+      ? [startMilestoneId, startMilestone.pair_with_id]
+      : [startMilestoneId]
+
+    toggleMilestoneIds(procedureId, milestoneIds)
+  }, [milestones, toggleMilestoneIds])
+
+  // --- Bulk actions ---
+  const enableAllMilestones = useCallback(async (procedureId: string) => {
+    if (!effectiveFacilityId) return
+
+    const toEnable = milestones.filter(m => !isMilestoneEnabled(procedureId, m.id))
+    if (toEnable.length === 0) return
+
+    const milestoneIds = toEnable.map(m => m.id)
+    markSaving(procedureId, milestoneIds)
+
+    // Optimistic
+    const optimisticConfigs: ProcedureMilestoneConfig[] = toEnable.map(m => ({
+      id: `optimistic-${m.id}`,
+      procedure_type_id: procedureId,
+      facility_milestone_id: m.id
+    }))
+    setConfigs(prev => [...prev, ...optimisticConfigs])
+
+    const rows = toEnable.map(m => ({
+      facility_id: effectiveFacilityId,
+      procedure_type_id: procedureId,
+      facility_milestone_id: m.id,
+      display_order: m.display_order
+    }))
+
+    const { data, error } = await supabase
+      .from('procedure_milestone_config')
+      .insert(rows)
+      .select()
+
+    if (error || !data) {
+      showToast('Failed to enable all milestones. Reverting.')
+      await fetchData()
+    } else {
+      setConfigs(prev => {
+        const cleaned = prev.filter(
+          c => !c.id.startsWith('optimistic-') &&
+            !(c.procedure_type_id === procedureId && milestoneIds.includes(c.facility_milestone_id))
+        )
+        return [...cleaned, ...data]
+      })
+    }
+
+    clearSaving(procedureId, milestoneIds)
+  }, [effectiveFacilityId, milestones, configs, markSaving, clearSaving, showToast])
+
+  const disableAllMilestones = useCallback(async (procedureId: string) => {
+    if (!effectiveFacilityId) return
+
+    const toDisable = configs.filter(c => c.procedure_type_id === procedureId)
+    if (toDisable.length === 0) return
+
+    const milestoneIds = toDisable.map(c => c.facility_milestone_id)
+    markSaving(procedureId, milestoneIds)
+
+    // Optimistic
+    setConfigs(prev => prev.filter(c => c.procedure_type_id !== procedureId))
+
+    const { error } = await supabase
+      .from('procedure_milestone_config')
+      .delete()
+      .eq('facility_id', effectiveFacilityId)
+      .eq('procedure_type_id', procedureId)
+
+    if (error) {
+      showToast('Failed to clear milestones. Reverting.')
+      await fetchData()
+    }
+
+    clearSaving(procedureId, milestoneIds)
+  }, [effectiveFacilityId, configs, markSaving, clearSaving, showToast])
+
+  // --- Utility ---
   const getMilestoneCount = (procedureId: string): number => {
     return configs.filter(c => c.procedure_type_id === procedureId).length
   }
 
-  // Get implant category label
   const getCategoryLabel = (category: string | null): string => {
     const labels: Record<string, string> = {
       'total_hip': 'Total Hip',
@@ -224,64 +324,7 @@ export default function ProcedureMilestonesSettingsPage() {
     return category ? labels[category] || category : ''
   }
 
-  // Enable all milestones for a procedure
-  const enableAllMilestones = async (procedureId: string) => {
-    if (!effectiveFacilityId) return
-    setSaving(true)
-
-    // Build rows for all milestones that aren't already enabled
-    const rows = milestones
-      .filter(m => !isMilestoneEnabled(procedureId, m.id))
-      .map(m => ({
-        facility_id: effectiveFacilityId,
-        procedure_type_id: procedureId,
-        facility_milestone_id: m.id,
-        display_order: m.display_order
-      }))
-
-    if (rows.length > 0) {
-      const { data, error } = await supabase
-        .from('procedure_milestone_config')
-        .upsert(rows, { onConflict: 'facility_id,procedure_type_id,facility_milestone_id' })
-        .select()
-
-      if (data && !error) {
-        setConfigs(prev => {
-          const newConfigs = [...prev]
-          for (const row of data) {
-            const exists = newConfigs.some(
-              c => c.procedure_type_id === row.procedure_type_id
-                && c.facility_milestone_id === row.facility_milestone_id
-            )
-            if (!exists) {
-              newConfigs.push(row)
-            }
-          }
-          return newConfigs
-        })
-      }
-    }
-
-    setSaving(false)
-  }
-
-  // Disable all milestones for a procedure
-  const disableAllMilestones = async (procedureId: string) => {
-    if (!effectiveFacilityId) return
-    setSaving(true)
-
-    const { error } = await supabase
-      .from('procedure_milestone_config')
-      .delete()
-      .eq('facility_id', effectiveFacilityId)
-      .eq('procedure_type_id', procedureId)
-
-    if (!error) {
-      setConfigs(prev => prev.filter(c => c.procedure_type_id !== procedureId))
-    }
-
-    setSaving(false)
-  }
+  const isAnySaving = savingKeys.size > 0
 
   if (userLoading || loading) {
     return (
@@ -356,7 +399,6 @@ export default function ProcedureMilestonesSettingsPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {/* Progress indicator */}
                           <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-blue-500 rounded-full transition-all"
@@ -382,16 +424,18 @@ export default function ProcedureMilestonesSettingsPage() {
                           </p>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                             {milestones
-                              .filter(m => m.pair_position !== 'end') // Don't show "end" milestones separately
+                              .filter(m => m.pair_position !== 'end')
                               .map(milestone => {
                                 const isEnabled = isMilestoneEnabled(procedure.id, milestone.id)
-                                // Also check if the paired end milestone is enabled
                                 const isPaired = milestone.pair_position === 'start' && milestone.pair_with_id
+                                const isBusy = isSavingMilestone(procedure.id, milestone.id)
 
                                 return (
                                   <label
                                     key={milestone.id}
-                                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                    className={`relative flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                                      isBusy ? 'cursor-wait' : 'cursor-pointer'
+                                    } ${
                                       isEnabled
                                         ? 'bg-white border-blue-200 shadow-sm'
                                         : 'bg-white/50 border-slate-200 hover:border-slate-300'
@@ -407,7 +451,7 @@ export default function ProcedureMilestonesSettingsPage() {
                                           toggleMilestone(procedure.id, milestone.id)
                                         }
                                       }}
-                                      disabled={saving}
+                                      disabled={isBusy}
                                       className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                                     />
                                     <div className="min-w-0 flex-1">
@@ -417,13 +461,18 @@ export default function ProcedureMilestonesSettingsPage() {
                                       {isPaired && (
                                         <p className="text-xs text-slate-400">Start/End pair</p>
                                       )}
-                                      {milestone.source_milestone_type_id && (
+                                      {milestone.source_milestone_type_id ? (
                                         <span className="inline-flex items-center text-[10px] text-blue-600">Global</span>
-                                      )}
-                                      {!milestone.source_milestone_type_id && (
+                                      ) : (
                                         <span className="inline-flex items-center text-[10px] text-purple-600">Custom</span>
                                       )}
                                     </div>
+                                    {isBusy && (
+                                      <svg className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                      </svg>
+                                    )}
                                   </label>
                                 )
                               })}
@@ -433,7 +482,7 @@ export default function ProcedureMilestonesSettingsPage() {
                           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-200">
                             <button
                               onClick={() => enableAllMilestones(procedure.id)}
-                              disabled={saving}
+                              disabled={isAnySaving}
                               className="text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50"
                             >
                               Select All
@@ -441,23 +490,11 @@ export default function ProcedureMilestonesSettingsPage() {
                             <span className="text-slate-300">|</span>
                             <button
                               onClick={() => disableAllMilestones(procedure.id)}
-                              disabled={saving}
+                              disabled={isAnySaving}
                               className="text-xs font-medium text-slate-500 hover:text-slate-700 disabled:opacity-50"
                             >
                               Clear All
                             </button>
-                            {saving && (
-                              <>
-                                <span className="text-slate-300">|</span>
-                                <span className="text-xs text-slate-400 flex items-center gap-1">
-                                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                  </svg>
-                                  Saving...
-                                </span>
-                              </>
-                            )}
                           </div>
                         </div>
                       )}
@@ -478,6 +515,41 @@ export default function ProcedureMilestonesSettingsPage() {
             </>
           )}
         </SettingsLayout>
+
+        {/* Toast notifications */}
+        {toasts.length > 0 && (
+          <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+            {toasts.map(toast => (
+              <div
+                key={toast.id}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+                  toast.type === 'error'
+                    ? 'bg-red-50 text-red-800 border border-red-200'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                }`}
+              >
+                {toast.type === 'error' ? (
+                  <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                <span>{toast.message}</span>
+                <button
+                  onClick={() => dismissToast(toast.id)}
+                  className="ml-2 text-current opacity-50 hover:opacity-100"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </Container>
     </DashboardLayout>
   )
