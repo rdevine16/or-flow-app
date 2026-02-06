@@ -561,7 +561,9 @@ function generateSurgeonCases(
         start_time: formatTime(scheduledStart),
         status_id: isFuture ? scheduledStatusId : completedStatusId,
         payer_id: weightedChoice(payers.map(p => p.id), payers.map(p => PAYER_WEIGHTS[p.name] || 0.25)),
-        operative_side: randomChoice(['Left', 'Right', 'Bilateral', null]),
+        operative_side: surgeon.specialty === 'spine' ? 'n/a'
+          : surgeon.specialty === 'hand_wrist' ? randomChoice(['left', 'right'])
+          : Math.random() < 0.08 ? 'bilateral' : randomChoice(['left', 'right']),
         is_excluded_from_metrics: false,
         surgeon_left_at: null,
       }
