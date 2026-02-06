@@ -518,8 +518,24 @@ export async function generateDemoData(
 
     await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {})
 
-    onProgress?.({ phase: 'finalizing', current: 95, total: 100, message: 'Recalculating averages...' })
+    onProgress?.({ phase: 'finalizing', current: 92, total: 100, message: 'Recalculating averages...' })
     await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: any) => console.warn('Avg recalc:', e.message))
+
+    // Refresh materialized views so analytics reflect new data
+    onProgress?.({ phase: 'finalizing', current: 96, total: 100, message: 'Refreshing analytics views...' })
+    const matViews = [
+      'facility_milestone_stats',
+      'surgeon_milestone_stats',
+      'facility_procedure_stats',
+      'surgeon_overall_stats',
+      'surgeon_procedure_stats',
+    ]
+    for (const mv of matViews) {
+      await supabase.rpc('refresh_materialized_view', { view_name: mv }).then(
+        () => console.log(`Refreshed ${mv}`),
+        (e: any) => console.warn(`MatView ${mv} refresh failed:`, e.message)
+      )
+    }
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
     return { success: true, casesGenerated: allCases.length, details: { milestones: allMilestones.length, staff: allStaffAssignments.length, implants: allImplants.length } }
