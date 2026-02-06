@@ -523,19 +523,10 @@ export async function generateDemoData(
 
     // Refresh materialized views so analytics reflect new data
     onProgress?.({ phase: 'finalizing', current: 96, total: 100, message: 'Refreshing analytics views...' })
-    const matViews = [
-      'facility_milestone_stats',
-      'surgeon_milestone_stats',
-      'facility_procedure_stats',
-      'surgeon_overall_stats',
-      'surgeon_procedure_stats',
-    ]
-    for (const mv of matViews) {
-      await supabase.rpc('refresh_materialized_view', { view_name: mv }).then(
-        () => console.log(`Refreshed ${mv}`),
-        (e: any) => console.warn(`MatView ${mv} refresh failed:`, e.message)
-      )
-    }
+    await supabase.rpc('refresh_all_stats').then(
+      () => console.log('Refreshed all materialized views'),
+      (e: any) => console.warn('MatView refresh failed:', e.message)
+    )
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
     return { success: true, casesGenerated: allCases.length, details: { milestones: allMilestones.length, staff: allStaffAssignments.length, implants: allImplants.length } }
