@@ -55,6 +55,7 @@ import {
   SparklesIcon,
   ArrowRightIcon,
   XMarkIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -83,7 +84,8 @@ function KPICard({
   accentColor = 'blue',
   showTracker = true,
   onClick,
-  invertDelta = false
+  invertDelta = false,
+  tooltip,
 }: { 
   title: string
   kpi: KPIData
@@ -92,7 +94,10 @@ function KPICard({
   showTracker?: boolean
   onClick?: () => void
   invertDelta?: boolean
+  tooltip?: string
 }) {
+  const [showTooltip, setShowTooltip] = useState(false)
+
   const getDeltaType = () => {
     if (!kpi.deltaType || kpi.deltaType === 'unchanged') return 'unchanged'
     if (invertDelta) {
@@ -157,7 +162,26 @@ function KPICard({
                 <Icon className={`w-4 h-4 ${colors.iconColor}`} />
               </div>
             )}
-            <Text className="font-medium text-slate-600">{title}</Text>
+            <div className="flex items-center gap-1.5">
+              <Text className="font-medium text-slate-600">{title}</Text>
+              {tooltip && (
+                <div className="relative">
+                  <InformationCircleIcon 
+                    className="w-4 h-4 text-slate-400 hover:text-slate-600 cursor-help transition-colors" 
+                    onMouseEnter={() => setShowTooltip(true)}
+                    onMouseLeave={() => setShowTooltip(false)}
+                  />
+                  {showTooltip && (
+                    <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 px-3 py-2 bg-slate-800 text-white text-xs leading-relaxed rounded-lg shadow-lg pointer-events-none">
+                      {tooltip}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                        <div className="w-2 h-2 bg-slate-800 rotate-45" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           {kpi.delta !== undefined && kpi.deltaType && kpi.deltaType !== 'unchanged' && (
             <div className={`
@@ -1245,6 +1269,7 @@ export default function AnalyticsOverviewPage() {
                     kpi={analytics.fcots}
                     icon={ClockIcon}
                     accentColor="blue"
+                    tooltip="Percentage of first cases per room per day that started on time within the configured grace period."
                   />
                   <KPICard 
                     title="OR Utilization" 
@@ -1252,6 +1277,7 @@ export default function AnalyticsOverviewPage() {
                     icon={ChartBarIcon}
                     accentColor="violet"
                     onClick={() => setShowORUtilModal(true)}
+                    tooltip="Percentage of available OR hours used for patient care (Patient In to Patient Out). Click to view per-room breakdown."
                   />
                   <KPICard 
                     title="Case Volume" 
@@ -1259,12 +1285,14 @@ export default function AnalyticsOverviewPage() {
                     icon={CalendarDaysIcon}
                     accentColor="amber"
                     showTracker={false}
+                    tooltip="Total number of cases in the selected date range, compared to the equivalent previous period."
                   />
                   <KPICard 
                     title="Same-Day Cancellation" 
                     kpi={analytics.cancellationRate}
                     icon={ExclamationTriangleIcon}
                     accentColor="rose"
+                    tooltip="Percentage of cases cancelled on the same day they were scheduled. Lower is better."
                   />
                 </div>
               </section>
@@ -1277,22 +1305,25 @@ export default function AnalyticsOverviewPage() {
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <KPICard 
-                    title="Median Room Turnover" 
+                    title="Median Same Room Turnover" 
                     kpi={analytics.turnoverTime}
                     icon={ClockIcon}
                     accentColor="emerald"
+                    tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
                   />
                   <KPICard 
-                    title="Median Same-Room Surgical" 
+                    title="Median Same-Room Surgical Turnover" 
                     kpi={analytics.standardSurgicalTurnover}
                     icon={ClockIcon}
                     accentColor="blue"
+                    tooltip="Time from Surgeon Done (Case A) to Incision (Case B) for the same surgeon in the same room. Measures how long the surgeon waits between cuts."
                   />
                   <KPICard 
-                    title="Median Flip Room Time" 
+                    title="Median Flip-Room Surgical Turnover" 
                     kpi={analytics.flipRoomTime}
                     icon={ArrowRightIcon}
                     accentColor="violet"
+                    tooltip="Time from Surgeon Done (Case A) to Incision (Case B) when the surgeon moves to a different room. Measures flip room transition efficiency."
                   />
                   <KPICard 
                     title="Non-Operative Time" 
@@ -1301,6 +1332,7 @@ export default function AnalyticsOverviewPage() {
                     accentColor="amber"
                     showTracker={false}
                     invertDelta={true}
+                    tooltip="Average time the patient is in the OR but not being operated on. Includes Pre-Op (Patient In → Incision) and Post-Op (Closing Complete → Patient Out)."
                   />
                 </div>
               </section>
