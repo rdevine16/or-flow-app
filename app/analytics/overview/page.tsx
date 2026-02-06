@@ -39,6 +39,7 @@ import {
   type RoomHoursMap,
   type ORUtilizationResult,
   type RoomUtilizationDetail,
+  type SurgeonIdleSummary,
 } from '@/lib/analyticsV2'
 
 // Icons
@@ -238,24 +239,31 @@ function KPICard({
 }
 
 // ============================================
-// SURGEON IDLE TIME CARD (Insight Card)
+// SURGEON IDLE TIME CARD (Per-Surgeon Summary)
 // ============================================
 
 function SurgeonIdleTimeCard({ 
   combined, 
   flipKpi,
   sameRoomKpi,
+  summaries,
   onClick 
 }: { 
   combined: KPIData
   flipKpi: KPIData
   sameRoomKpi: KPIData
+  summaries: SurgeonIdleSummary[]
   onClick?: () => void 
 }) {
+  const statusConfig = {
+    on_track: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+    call_sooner: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+    call_later: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
+  }
+
   return (
     <div 
-      className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer overflow-hidden col-span-1 md:col-span-2"
-      onClick={onClick}
+      className="relative bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden col-span-1 md:col-span-3"
     >
       {/* Decorative elements */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -269,8 +277,8 @@ function SurgeonIdleTimeCard({
               <SparklesIcon className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <Text className="font-medium text-slate-700">Surgeon Idle Time</Text>
-              <Text className="text-xs text-slate-500">Between consecutive cases</Text>
+              <Text className="font-medium text-slate-700">Surgeon Callback Optimization</Text>
+              <Text className="text-xs text-slate-500">Per-surgeon idle time &amp; callback timing</Text>
             </div>
           </div>
           <span className="px-2.5 py-1 text-xs font-semibold bg-blue-600 text-white rounded-full shadow-sm">
@@ -278,63 +286,143 @@ function SurgeonIdleTimeCard({
           </span>
         </div>
 
-        {/* Combined metric */}
-        <div className="mb-4">
-          <span className="text-3xl font-semibold tracking-tight text-blue-900">
-            {combined.displayValue}
-          </span>
-          <Text className="text-blue-700/60 text-sm ml-2">avg across all gaps</Text>
+        {/* Summary row */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+            <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Combined Median</Text>
+            <div className="text-2xl font-semibold text-blue-900">{combined.displayValue}</div>
+            <Text className="text-xs text-slate-500 mt-0.5">{summaries.length} surgeons</Text>
+          </div>
+          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+            <div className="flex items-center gap-1.5 mb-1">
+              <ArrowRightIcon className="w-3 h-3 text-violet-500" />
+              <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">Flip Room</Text>
+            </div>
+            <div className="text-2xl font-semibold text-violet-700">{flipKpi.displayValue}</div>
+            <Text className="text-xs text-slate-500 mt-0.5">{flipKpi.subtitle?.split('·')[0]?.trim() || ''}</Text>
+          </div>
+          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
+            <div className="flex items-center gap-1.5 mb-1">
+              <ClockIcon className="w-3 h-3 text-amber-500" />
+              <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">Same Room</Text>
+            </div>
+            <div className="text-2xl font-semibold text-amber-700">{sameRoomKpi.displayValue}</div>
+            <Text className="text-xs text-slate-500 mt-0.5">{sameRoomKpi.subtitle?.split('·')[0]?.trim() || ''}</Text>
+          </div>
         </div>
 
-        {/* Split metrics */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          {/* Flip room idle */}
-          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
-            <div className="flex items-center gap-2 mb-1">
-              <ArrowRightIcon className="w-3.5 h-3.5 text-violet-500" />
-              <Text className="text-xs font-medium text-slate-600 uppercase tracking-wide">Flip Room</Text>
+        {/* Per-surgeon table */}
+        {summaries.length > 0 ? (
+          <div className="bg-white/70 backdrop-blur-sm rounded-lg border border-blue-200/40 overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-white/50 border-b border-blue-100/60 text-xs font-medium text-slate-500 uppercase tracking-wide">
+              <div className="col-span-3">Surgeon</div>
+              <div className="col-span-2 text-center">Cases</div>
+              <div className="col-span-2 text-center">Median Idle</div>
+              <div className="col-span-2 text-center">Callback Δ</div>
+              <div className="col-span-3 text-center">Status</div>
             </div>
-            <div className="text-xl font-semibold text-violet-700">{flipKpi.displayValue}</div>
-            <Text className="text-xs text-slate-500 mt-0.5 line-clamp-2">{flipKpi.subtitle}</Text>
-          </div>
-          
-          {/* Same room idle */}
-          <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
-            <div className="flex items-center gap-2 mb-1">
-              <ClockIcon className="w-3.5 h-3.5 text-amber-500" />
-              <Text className="text-xs font-medium text-slate-600 uppercase tracking-wide">Same Room</Text>
+
+            {/* Surgeon rows */}
+            <div className="divide-y divide-blue-100/40 max-h-[280px] overflow-y-auto">
+              {summaries.map((surgeon) => {
+                const sc = statusConfig[surgeon.status]
+                return (
+                  <div key={surgeon.surgeonId} className="grid grid-cols-12 gap-2 px-4 py-3 items-center hover:bg-white/40 transition-colors">
+                    <div className="col-span-3">
+                      <p className="font-medium text-slate-900 text-sm truncate">{surgeon.surgeonName}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {surgeon.flipGapCount > 0 && (
+                          <span className="text-[10px] text-violet-600 bg-violet-50 px-1 py-0.5 rounded">
+                            {surgeon.flipGapCount} flip
+                          </span>
+                        )}
+                        {surgeon.sameRoomGapCount > 0 && (
+                          <span className="text-[10px] text-amber-600 bg-amber-50 px-1 py-0.5 rounded">
+                            {surgeon.sameRoomGapCount} same
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="col-span-2 text-center">
+                      <span className="text-sm font-medium text-slate-700">{surgeon.caseCount}</span>
+                    </div>
+                    <div className="col-span-2 text-center">
+                      <span className={`text-sm font-semibold ${
+                        surgeon.medianIdleTime > 15 ? 'text-rose-600' : 
+                        surgeon.medianIdleTime > 10 ? 'text-amber-600' : 
+                        'text-slate-700'
+                      }`}>
+                        {Math.round(surgeon.medianIdleTime)} min
+                      </span>
+                    </div>
+                    <div className="col-span-2 text-center">
+                      <span className={`text-sm font-medium ${
+                        surgeon.medianCallbackDelta > 5 ? 'text-blue-700' : 'text-slate-500'
+                      }`}>
+                        {surgeon.medianCallbackDelta > 0 ? `${Math.round(surgeon.medianCallbackDelta)} min` : '—'}
+                      </span>
+                    </div>
+                    <div className="col-span-3 flex justify-center">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${sc.bg} ${sc.text} border ${sc.border}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                        {surgeon.statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <div className="text-xl font-semibold text-amber-700">{sameRoomKpi.displayValue}</div>
-            <Text className="text-xs text-slate-500 mt-0.5 line-clamp-2">{sameRoomKpi.subtitle}</Text>
           </div>
-        </div>
+        ) : (
+          <div className="p-4 bg-white/50 rounded-lg border border-blue-200/40 text-center">
+            <Text className="text-sm text-slate-500">No multi-case surgeon days in this period</Text>
+          </div>
+        )}
 
         {/* Insight box */}
-        {combined.value > 0 && (combined.value > 10) ? (
-          <div className="p-3 bg-amber-50/80 backdrop-blur-sm rounded-lg border border-amber-200/40">
-            <div className="flex items-start gap-2">
-              <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <Text className="text-amber-800 text-sm font-medium">
-                {Number(flipKpi.value) > Number(sameRoomKpi.value)
-                  ? 'Flip room transitions are the primary idle driver — consider calling next patients earlier'
-                  : 'Same-room gaps are the primary idle driver — focus on turnover speed between cases'}
-              </Text>
-            </div>
-          </div>
-        ) : combined.targetMet ? (
-          <div className="p-3 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/40">
-            <div className="flex items-start gap-2">
-              <CheckCircleIcon className="w-4 h-4 text-emerald-600 mt-0.5" />
-              <Text className="text-emerald-800 text-sm font-medium">Excellent! Minimal surgeon wait time</Text>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Click indicator */}
-        <div className="mt-4 pt-3 border-t border-blue-200/40 flex items-center text-xs font-medium text-blue-700 hover:text-blue-800">
-          View detailed idle time analysis
-          <ArrowRightIcon className="w-3 h-3 ml-1" />
-        </div>
+        {summaries.length > 0 && (() => {
+          const callSoonerCount = summaries.filter(s => s.status === 'call_sooner').length
+          const onTrackCount = summaries.filter(s => s.status === 'on_track').length
+          const callLaterCount = summaries.filter(s => s.status === 'call_later').length
+          
+          if (callSoonerCount > 0) {
+            return (
+              <div className="mt-4 p-3 bg-amber-50/80 backdrop-blur-sm rounded-lg border border-amber-200/40">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <Text className="text-amber-800 text-sm font-medium">
+                    {callSoonerCount} surgeon{callSoonerCount > 1 ? 's' : ''} could benefit from earlier patient callbacks — potential to recover {
+                      Math.round(summaries.filter(s => s.status === 'call_sooner').reduce((sum, s) => sum + s.medianCallbackDelta, 0))
+                    } min of idle time per day
+                  </Text>
+                </div>
+              </div>
+            )
+          } else if (callLaterCount > 0) {
+            return (
+              <div className="mt-4 p-3 bg-blue-50/80 backdrop-blur-sm rounded-lg border border-blue-200/40">
+                <div className="flex items-start gap-2">
+                  <ExclamationTriangleIcon className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <Text className="text-blue-800 text-sm font-medium">
+                    {callLaterCount} surgeon{callLaterCount > 1 ? 's' : ''} may be arriving before rooms are ready — consider adjusting callback timing
+                  </Text>
+                </div>
+              </div>
+            )
+          } else {
+            return (
+              <div className="mt-4 p-3 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/40">
+                <div className="flex items-start gap-2">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-600 mt-0.5" />
+                  <Text className="text-emerald-800 text-sm font-medium">
+                    All {onTrackCount} surgeons have well-timed callbacks — minimal idle time detected
+                  </Text>
+                </div>
+              </div>
+            )
+          }
+        })()}
       </div>
     </div>
   )
@@ -801,7 +889,6 @@ export default function AnalyticsOverviewPage() {
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
   
-  const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
   const [showORUtilModal, setShowORUtilModal] = useState(false)
   const [roomHoursMap, setRoomHoursMap] = useState<RoomHoursMap>({})
   const [fcotsConfig, setFcotsConfig] = useState<FCOTSConfig>({ milestone: 'patient_in', graceMinutes: 2, targetPercent: 85 })
@@ -1111,13 +1198,13 @@ export default function AnalyticsOverviewPage() {
                 </div>
               </section>
 
-              {/* ROW 2: TURNOVER METRICS (3 distinct cards) */}
+              {/* ROW 2: TURNOVER METRICS (4 cards including Non-Operative) */}
               <section>
                 <SectionHeader
                   title="Turnover Metrics"
                   subtitle="Room and surgeon transition efficiency"
                 />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <KPICard 
                     title="Room Turnover" 
                     kpi={analytics.turnoverTime}
@@ -1136,28 +1223,29 @@ export default function AnalyticsOverviewPage() {
                     icon={ArrowRightIcon}
                     accentColor="violet"
                   />
-                </div>
-              </section>
-
-              {/* ROW 3: EFFICIENCY INSIGHTS */}
-              <section>
-                <SectionHeader
-                  title="Efficiency Insights"
-                  subtitle="Non-operative analysis and surgeon optimization"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <KPICard 
                     title="Non-Operative Time" 
                     kpi={analytics.nonOperativeTime}
                     icon={ClockIcon}
-                    accentColor="blue"
+                    accentColor="amber"
                     showTracker={false}
+                    invertDelta={true}
                   />
+                </div>
+              </section>
+
+              {/* ROW 3: SURGEON CALLBACK OPTIMIZATION */}
+              <section>
+                <SectionHeader
+                  title="Surgeon Callback Optimization"
+                  subtitle="Per-surgeon idle time analysis and callback timing recommendations"
+                />
+                <div className="grid grid-cols-1 gap-4">
                   <SurgeonIdleTimeCard 
                     combined={analytics.surgeonIdleTime}
                     flipKpi={analytics.surgeonIdleFlip}
                     sameRoomKpi={analytics.surgeonIdleSameRoom}
-                    onClick={() => setShowFlipRoomModal(true)}
+                    summaries={analytics.surgeonIdleSummaries}
                   />
                 </div>
               </section>
@@ -1278,13 +1366,6 @@ export default function AnalyticsOverviewPage() {
                   </ChartCard>
                 </div>
               </section>
-
-              {/* FLIP ROOM MODAL */}
-              <FlipRoomModal
-                isOpen={showFlipRoomModal}
-                onClose={() => setShowFlipRoomModal(false)}
-                data={analytics.flipRoomAnalysis}
-              />
 
               {/* OR UTILIZATION MODAL */}
               <ORUtilizationModal

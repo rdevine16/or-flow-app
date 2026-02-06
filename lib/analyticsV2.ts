@@ -169,6 +169,7 @@ export interface AnalyticsOverview {
   standardSurgicalTurnover: KPIResult   // Same room turnover
   flipRoomTime: KPIResult               // Different room turnover
   flipRoomAnalysis: FlipRoomAnalysis[]  // Detailed idle data for modal
+  surgeonIdleSummaries: SurgeonIdleSummary[]  // Per-surgeon aggregated summaries
 
   // Time breakdown
   avgTotalCaseTime: number
@@ -1572,6 +1573,133 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
 }
 
 // ============================================
+// SURGEON IDLE SUMMARY (Per-Surgeon Aggregation)
+// ============================================
+
+export interface SurgeonIdleSummary {
+  surgeonId: string
+  surgeonName: string
+  caseCount: number          // Total cases in period
+  gapCount: number           // Number of idle gaps analyzed
+  medianIdleTime: number     // Median idle minutes across all gaps
+  medianCallbackDelta: number // Median optimalCallDelta (how much earlier to call)
+  flipGapCount: number
+  sameRoomGapCount: number
+  medianFlipIdle: number
+  medianSameRoomIdle: number
+  status: 'on_track' | 'call_sooner' | 'call_later'
+  statusLabel: string
+}
+
+/**
+ * Aggregate FlipRoomAnalysis[] into per-surgeon summaries with medians.
+ * 
+ * Status logic:
+ * - on_track:    median idle ≤ 5 min (surgeon timing callbacks well)
+ * - call_sooner: median idle > 5 min AND median callback delta > 3 min
+ * - call_later:  median idle ≤ 2 min (surgeon arriving before room ready — rare)
+ */
+export function aggregateSurgeonIdleSummaries(
+  details: FlipRoomAnalysis[],
+  cases: CaseWithMilestonesAndSurgeon[]
+): SurgeonIdleSummary[] {
+  // Group all gaps by surgeon
+  const bySurgeon = new Map<string, {
+    surgeonName: string
+    idleTimes: number[]
+    callbackDeltas: number[]
+    flipIdles: number[]
+    sameRoomIdles: number[]
+    gapCount: number
+    flipGapCount: number
+    sameRoomGapCount: number
+  }>()
+
+  details.forEach(analysis => {
+    const existing = bySurgeon.get(analysis.surgeonId) || {
+      surgeonName: analysis.surgeonName,
+      idleTimes: [],
+      callbackDeltas: [],
+      flipIdles: [],
+      sameRoomIdles: [],
+      gapCount: 0,
+      flipGapCount: 0,
+      sameRoomGapCount: 0,
+    }
+
+    analysis.idleGaps.forEach(gap => {
+      existing.idleTimes.push(gap.idleMinutes)
+      existing.callbackDeltas.push(gap.optimalCallDelta)
+      existing.gapCount++
+
+      if (gap.gapType === 'flip') {
+        existing.flipIdles.push(gap.idleMinutes)
+        existing.flipGapCount++
+      } else {
+        existing.sameRoomIdles.push(gap.idleMinutes)
+        existing.sameRoomGapCount++
+      }
+    })
+
+    existing.surgeonName = analysis.surgeonName
+    bySurgeon.set(analysis.surgeonId, existing)
+  })
+
+  // Count cases per surgeon
+  const caseCountBySurgeon = new Map<string, number>()
+  cases.forEach(c => {
+    if (!c.surgeon_id) return
+    caseCountBySurgeon.set(c.surgeon_id, (caseCountBySurgeon.get(c.surgeon_id) || 0) + 1)
+  })
+
+  // Build summaries
+  const summaries: SurgeonIdleSummary[] = []
+
+  bySurgeon.forEach((data, surgeonId) => {
+    const medianIdle = calculateMedian(data.idleTimes) ?? 0
+    const medianCallback = calculateMedian(data.callbackDeltas) ?? 0
+    const medianFlip = calculateMedian(data.flipIdles) ?? 0
+    const medianSameRoom = calculateMedian(data.sameRoomIdles) ?? 0
+
+    // Status determination
+    let status: SurgeonIdleSummary['status']
+    let statusLabel: string
+
+    if (medianIdle <= 2) {
+      status = 'call_later'
+      statusLabel = 'Call Later'
+    } else if (medianIdle <= 5) {
+      status = 'on_track'
+      statusLabel = 'On Track'
+    } else if (medianCallback > 3) {
+      status = 'call_sooner'
+      statusLabel = 'Call Sooner'
+    } else {
+      status = 'on_track'
+      statusLabel = 'On Track'
+    }
+
+    summaries.push({
+      surgeonId,
+      surgeonName: data.surgeonName,
+      caseCount: caseCountBySurgeon.get(surgeonId) || 0,
+      gapCount: data.gapCount,
+      medianIdleTime: medianIdle,
+      medianCallbackDelta: medianCallback,
+      flipGapCount: data.flipGapCount,
+      sameRoomGapCount: data.sameRoomGapCount,
+      medianFlipIdle: medianFlip,
+      medianSameRoomIdle: medianSameRoom,
+      status,
+      statusLabel,
+    })
+  })
+
+  // Sort by most improvable first (highest callback delta)
+  return summaries.sort((a, b) => b.medianCallbackDelta - a.medianCallbackDelta)
+}
+
+// ============================================
 // TIME BREAKDOWN CALCULATIONS
 // ============================================
 
@@ -1713,6 +1841,7 @@ export function calculateAnalyticsOverview(
   const cancelledCases = activeCases.filter(c => c.case_statuses?.name === 'cancelled')
   
   const surgeonIdleResult = calculateSurgeonIdleTime(activeCases)
+  const surgeonIdleSummaries = aggregateSurgeonIdleSummaries(surgeonIdleResult.details, activeCases)
   const timeBreakdown = calculateTimeBreakdown(activeCases)
   
   // Calculate the split turnovers (same room vs flip room)
@@ -1740,6 +1869,7 @@ export function calculateAnalyticsOverview(
     standardSurgicalTurnover: turnoverBreakdown.standardTurnover,
     flipRoomTime: turnoverBreakdown.flipRoomTime,
     flipRoomAnalysis: surgeonIdleResult.details,
+    surgeonIdleSummaries,
     
     // Time breakdown
     avgTotalCaseTime: timeBreakdown.avgTotalTime,
