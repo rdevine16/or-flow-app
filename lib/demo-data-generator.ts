@@ -499,12 +499,16 @@ export async function generateDemoData(
     }
 
     // ── Bulk insert ──
-    await supabase.rpc('disable_demo_audit_triggers').then(() => {}, () => {})
+    // Disable ALL triggers on cases + case_milestones to prevent trigger errors during bulk insert
+    await supabase.rpc('disable_demo_triggers').then(() => {}, () => {
+      // Fallback to old function if new one doesn't exist yet
+      supabase.rpc('disable_demo_audit_triggers').then(() => {}, () => {})
+    })
 
     onProgress?.({ phase: 'inserting', current: 55, total: 100, message: `Inserting ${allCases.length} cases...` })
     for (let i = 0; i < allCases.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('cases').insert(allCases.slice(i, i + BATCH_SIZE))
-      if (error) { await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}); return { success: false, casesGenerated: 0, error: `Case insert batch ${i}: ${error.message}` } }
+      if (error) { await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) }); return { success: false, casesGenerated: 0, error: `Case insert batch ${i}: ${error.message}` } }
     }
 
     // Apply flip room links AFTER all cases exist (self-referencing FK)
@@ -594,7 +598,7 @@ export async function generateDemoData(
       if (error) console.error('Implant err:', error.message)
     }
 
-    await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {})
+    await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) })
 
     onProgress?.({ phase: 'finalizing', current: 92, total: 100, message: 'Recalculating averages...' })
     await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: any) => console.warn('Avg recalc:', e.message))
@@ -609,7 +613,7 @@ export async function generateDemoData(
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
     return { success: true, casesGenerated: allCases.length, details: { milestones: allMilestones.length, staff: allStaffAssignments.length, implants: allImplants.length } }
   } catch (e) {
-    await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {})
+    await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) })
     return { success: false, casesGenerated: 0, error: e instanceof Error ? e.message : 'Unknown' }
   }
 }
@@ -819,7 +823,7 @@ function generateSurgeonCases(
             implants.push({
               case_id: caseId, implant_name: spec.name, implant_size: size,
               manufacturer: surgeon.preferredVendor,
-              catalog_number: `${comp.toUpperCase()}-${size}-${randomInt(1000, 9999)}`,
+
             })
           }
         }
