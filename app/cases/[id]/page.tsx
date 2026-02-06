@@ -489,8 +489,17 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     const timestamp = new Date().toISOString()
     const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
 
+    // Read current state via ref-stable snapshot to avoid stale closures
+    // (critical for paired milestones where start + end fire in quick succession)
+    const currentMilestones = await new Promise<CaseMilestone[]>(resolve => {
+      setCaseMilestones(prev => {
+        resolve(prev)
+        return prev // no-op update, just reading
+      })
+    })
+
     // Find the existing milestone row (pre-created with NULL)
-    const existingMilestone = caseMilestones.find(
+    const existingMilestone = currentMilestones.find(
       cm => cm.facility_milestone_id === milestoneTypeId || cm.milestone_type_id === milestoneTypeId
     )
 
@@ -507,10 +516,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       if (!error && data) {
         savedMilestone = data
-        // Update local state
-        setCaseMilestones(caseMilestones.map(cm =>
-          cm.id === existingMilestone.id ? { ...cm, recorded_at: timestamp } : cm
-        ))
+        // Use functional updater to avoid stale state
+        setCaseMilestones(prev =>
+          prev.map(cm =>
+            cm.id === existingMilestone.id ? { ...cm, recorded_at: timestamp } : cm
+          )
+        )
       }
     } else {
       // INSERT fallback (for old cases without pre-created milestones)
@@ -527,7 +538,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       if (!error && data) {
         savedMilestone = data
-        setCaseMilestones([...caseMilestones, data])
+        setCaseMilestones(prev => [...prev, data])
       }
     }
 
@@ -576,7 +587,15 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   const undoMilestone = async (milestoneId: string) => {
-    const milestone = caseMilestones.find(m => m.id === milestoneId)
+    // Read fresh state
+    const currentMilestones = await new Promise<CaseMilestone[]>(resolve => {
+      setCaseMilestones(prev => {
+        resolve(prev)
+        return prev
+      })
+    })
+
+    const milestone = currentMilestones.find(m => m.id === milestoneId)
     const milestoneType = milestone ? milestoneTypes.find(mt =>
       mt.id === milestone.facility_milestone_id || mt.id === milestone.milestone_type_id
     ) : null
@@ -589,9 +608,11 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
     if (!error) {
       // Update local state - set recorded_at to null
-      setCaseMilestones(caseMilestones.map(m =>
-        m.id === milestoneId ? { ...m, recorded_at: null } : m
-      ))
+      setCaseMilestones(prev =>
+        prev.map(m =>
+          m.id === milestoneId ? { ...m, recorded_at: null } : m
+        )
+      )
 
       if (milestoneType?.name === 'patient_in') {
         await updateCaseStatus('scheduled')
