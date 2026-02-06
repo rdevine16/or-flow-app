@@ -188,10 +188,37 @@ const HOLIDAYS = new Set([
 function randomInt(min: number, max: number): number { return Math.floor(Math.random() * (max - min + 1)) + min }
 function randomChoice<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }
 function addMinutes(d: Date, m: number): Date { return new Date(d.getTime() + m * 60000) }
-function formatTime(d: Date): string { return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+function formatTime(d: Date, tz?: string): string {
+  if (tz) {
+    // Convert UTC date back to facility local time for display
+    const parts = d.toLocaleString('en-US', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' }).split(':')
+    return `${parts[0].padStart(2, '0')}:${parts[1]}`
+  }
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+}
 function isHoliday(d: Date): boolean { return HOLIDAYS.has(d.toISOString().split('T')[0]) }
-function isWeekend(d: Date): boolean { const dow = d.getDay(); return dow === 0 || dow === 6 }
+function isWeekend(d: Date): boolean { const dow = d.getUTCDay(); return dow === 0 || dow === 6 }
 function dateKey(d: Date): string { return d.toISOString().split('T')[0] }
+
+// Build a Date in UTC that represents a specific local time at the facility.
+// E.g., facilityDate('2026-01-15', 7, 30, 'America/New_York') → UTC Date for 7:30 AM ET on Jan 15.
+// We construct the local time string and use the timezone to find the correct UTC offset.
+function facilityDate(dateStr: string, hours: number, minutes: number, tz: string): Date {
+  // Build an ISO-like string for the desired local time
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const localStr = `${dateStr}T${pad(hours)}:${pad(minutes)}:00`
+  // Use Intl to find the UTC offset for this timezone at this date
+  // Create a reference date at noon UTC on this day to get the offset
+  const refDate = new Date(`${dateStr}T12:00:00Z`)
+  const utcStr = refDate.toLocaleString('en-US', { timeZone: 'UTC' })
+  const tzStr = refDate.toLocaleString('en-US', { timeZone: tz })
+  const utcMs = new Date(utcStr).getTime()
+  const tzMs = new Date(tzStr).getTime()
+  const offsetMs = tzMs - utcMs  // positive means tz is ahead of UTC
+  // Now construct the UTC date: local time minus offset = UTC
+  const localMs = new Date(localStr + 'Z').getTime()  // treat localStr as if it were UTC
+  return new Date(localMs - offsetMs)
+}
 
 function weightedChoice(items: string[], weights: number[]): string {
   const total = weights.reduce((a, b) => a + b, 0)
@@ -369,8 +396,8 @@ export async function generateDemoData(
     onProgress?.({ phase: 'planning', current: 23, total: 100, message: 'Planning staff assignments...' })
 
     const today = new Date()
-    const startDate = new Date(today); startDate.setMonth(startDate.getMonth() - monthsOfHistory)
-    const endDate = new Date(today); endDate.setMonth(endDate.getMonth() + 1)
+    const startDate = new Date(today); startDate.setUTCMonth(startDate.getUTCMonth() - monthsOfHistory)
+    const endDate = new Date(today); endDate.setUTCMonth(endDate.getUTCMonth() + 1)
 
     // Collect all unique rooms used by surgeons
     const allRoomIds = new Set<string>()
@@ -385,9 +412,9 @@ export async function generateDemoData(
 
     const tempDate = new Date(startDate)
     while (tempDate <= endDate) {
-      if (isWeekend(tempDate) || isHoliday(tempDate)) { tempDate.setDate(tempDate.getDate() + 1); continue }
+      if (isWeekend(tempDate) || isHoliday(tempDate)) { tempDate.setUTCDate(tempDate.getUTCDate() + 1); continue }
       const dk = dateKey(tempDate)
-      const dow = tempDate.getDay() // 0=Sun … 6=Sat
+      const dow = tempDate.getUTCDay() // 0=Sun … 6=Sat
 
       // Figure out which rooms are active today
       const activeRoomIds: string[] = []
@@ -423,7 +450,7 @@ export async function generateDemoData(
           anes: anes ? { userId: anes.id, roleId: anes.role_id } : null,
         })
       }
-      tempDate.setDate(tempDate.getDate() + 1)
+      tempDate.setUTCDate(tempDate.getUTCDate() + 1)
     }
 
     // ── Generate cases ──
@@ -442,7 +469,8 @@ export async function generateDemoData(
       const surgeon = resolved[si]
       const result = generateSurgeonCases(
         surgeon, startDate, endDate, procedureTypes, milestoneTypes, procMilestoneMap, payers,
-        roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum
+        roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum,
+        facility.timezone || 'America/New_York'
       )
       allCases.push(...result.cases)
       allMilestones.push(...result.milestones)
@@ -517,7 +545,8 @@ function generateSurgeonCases(
   completedStatusId: string,
   scheduledStatusId: string,
   prefix: string,
-  startingNumber: number
+  startingNumber: number,
+  facilityTz: string
 ) {
   const cases: any[] = []
   const milestones: any[] = []
@@ -542,16 +571,17 @@ function generateSurgeonCases(
   const currentDate = new Date(startDate)
 
   while (currentDate <= endDate) {
-    const dow = currentDate.getDay()
+    const dow = currentDate.getUTCDay()
     if (!surgeon.operatingDays.includes(dow) || isWeekend(currentDate) || isHoliday(currentDate)) {
-      currentDate.setDate(currentDate.getDate() + 1)
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1)
       continue
     }
 
     const dk = dateKey(currentDate)
     const numCases = randomInt(casesPerDay.min, casesPerDay.max)
     const [h, m] = dayStartTime.split(':').map(Number)
-    let currentTime = new Date(currentDate); currentTime.setHours(h, m, 0, 0)
+    // Build start time in facility's local timezone → stored as UTC
+    let currentTime = facilityDate(dk, h, m, facilityTz)
 
     // Track which staff we've already added per room for this day (avoid dupes per case)
     const roomStaffAdded = new Set<string>()
@@ -613,7 +643,7 @@ function generateSurgeonCases(
         procedure_type_id: proc.id,
         or_room_id: roomId,
         scheduled_date: dk,
-        start_time: formatTime(scheduledStart),
+        start_time: formatTime(scheduledStart, facilityTz),
         status_id: isFuture ? scheduledStatusId : completedStatusId,
         payer_id: weightedChoice(payers.map(p => p.id), payers.map(p => PAYER_WEIGHTS[p.name] || 0.25)),
         operative_side: surgeon.specialty === 'spine' ? 'n/a'
@@ -720,7 +750,7 @@ function generateSurgeonCases(
 
       caseNum++
     }
-    currentDate.setDate(currentDate.getDate() + 1)
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1)
   }
 
   return { cases, milestones, staffAssignments, implants, flipLinks }
@@ -751,10 +781,15 @@ function buildMilestones(
 
   const base = new Date(patientInTime)
 
+  let lastOff = -1  // Track last offset to enforce chronological order
+
   const push = (name: string, offOrFn: number | ((st: number) => number), outlierChance = 0, outlierRange = { min: 0, max: 0 }) => {
     const fmId = getFmId(name); if (!fmId) return
     let off = typeof offOrFn === 'function' ? offOrFn(surgicalTime) : offOrFn
     if (outlierChance > 0) off = addOutlier(off, outlierChance, { min: off + outlierRange.min, max: off + outlierRange.max })
+    // Ensure milestones never go backwards — each must be at least 1 min after the previous
+    if (off <= lastOff) off = lastOff + 1
+    lastOff = off
     ms.push({
       case_id: caseId,
       facility_milestone_id: fmId,
