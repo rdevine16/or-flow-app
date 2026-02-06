@@ -473,7 +473,7 @@ export async function generateDemoData(
     onProgress?.({ phase: 'inserting', current: 70, total: 100, message: `Inserting ${allMilestones.length} milestones...` })
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('case_milestones').insert(allMilestones.slice(i, i + BATCH_SIZE))
-      if (error) console.error('Milestone err:', error.message)
+      if (error) { console.error(`Milestone batch ${i} err:`, error.message, 'Sample:', JSON.stringify(allMilestones[i])); }
     }
 
     onProgress?.({ phase: 'inserting', current: 80, total: 100, message: `Inserting ${allStaffAssignments.length} staff...` })
@@ -674,11 +674,9 @@ function generateSurgeonCases(
         // This matches the CaseForm.initializeCaseMilestones pattern
         if (allowedMilestones) {
           for (const fmId of allowedMilestones) {
-            const mt = milestoneTypes.find(m => m.id === fmId)
             milestones.push({
               case_id: caseId,
               facility_milestone_id: fmId,
-              milestone_type_id: mt?.source_milestone_type_id || null,
               recorded_at: null,
             })
           }
@@ -741,11 +739,11 @@ function buildMilestones(
   const ms: any[] = []
 
   // Resolve facility_milestone_id by name, but ONLY if it's in the procedure_milestone_config
-  const getEntry = (name: string): { fmId: string; mtId: string | null } | null => {
+  const getFmId = (name: string): string | null => {
     const mt = milestoneTypes.find(m => m.name === name)
     if (!mt) return null
     if (allowedMilestones && !allowedMilestones.has(mt.id)) return null
-    return { fmId: mt.id, mtId: mt.source_milestone_type_id }
+    return mt.id
   }
 
   const tmpl = surgeon.specialty === 'joint' ? JOINT_MS[surgeon.speedProfile]
@@ -754,13 +752,12 @@ function buildMilestones(
   const base = new Date(patientInTime)
 
   const push = (name: string, offOrFn: number | ((st: number) => number), outlierChance = 0, outlierRange = { min: 0, max: 0 }) => {
-    const entry = getEntry(name); if (!entry) return
+    const fmId = getFmId(name); if (!fmId) return
     let off = typeof offOrFn === 'function' ? offOrFn(surgicalTime) : offOrFn
     if (outlierChance > 0) off = addOutlier(off, outlierChance, { min: off + outlierRange.min, max: off + outlierRange.max })
     ms.push({
       case_id: caseId,
-      facility_milestone_id: entry.fmId,
-      milestone_type_id: entry.mtId,
+      facility_milestone_id: fmId,
       recorded_at: addMinutes(base, off).toISOString(),
     })
   }
