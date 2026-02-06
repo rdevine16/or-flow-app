@@ -1,17 +1,8 @@
 // app/api/demo-data/route.ts
-// API route for the Demo Data Wizard
-// Supports: list-facilities, list-surgeons, status, status-detailed, generate-wizard, clear
-
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import {
-  generateDemoData,
-  purgeCaseData,
-  getDetailedStatus,
-  type GenerationConfig,
-} from '@/lib/demo-data-generator'
+import { generateDemoData, purgeCaseData, getDetailedStatus, type GenerationConfig } from '@/lib/demo-data-generator'
 
-// Use service role key for admin operations
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,111 +14,57 @@ export async function POST(request: Request) {
     const { action, facilityId } = body
 
     switch (action) {
-      // ─── List demo-enabled facilities ───
       case 'list-facilities': {
-        const { data: facilities, error } = await supabase
-          .from('facilities')
-          .select('id, name, is_demo, case_number_prefix, timezone')
-          .eq('is_demo', true)
-          .order('name')
-
-        if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 })
-        }
-
-        return NextResponse.json({ facilities: facilities || [] })
+        const { data, error } = await supabase.from('facilities').select('id, name, is_demo, case_number_prefix, timezone').eq('is_demo', true).order('name')
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ facilities: data || [] })
       }
 
-      // ─── List surgeons in a facility ───
       case 'list-surgeons': {
-        if (!facilityId) {
-          return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
-        }
-
-        // Get the surgeon role ID
-        const { data: surgeonRole } = await supabase
-          .from('user_roles')
-          .select('id')
-          .eq('name', 'surgeon')
-          .single()
-
-        if (!surgeonRole) {
-          return NextResponse.json({ error: 'Surgeon role not found' }, { status: 500 })
-        }
-
-        const { data: surgeons, error } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, closing_workflow, closing_handoff_minutes')
-          .eq('facility_id', facilityId)
-          .eq('role_id', surgeonRole.id)
-          .eq('is_active', true)
-          .order('last_name')
-
-        if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 })
-        }
-
-        return NextResponse.json({ surgeons: surgeons || [] })
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
+        const { data: role } = await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()
+        if (!role) return NextResponse.json({ error: 'Surgeon role not found' }, { status: 500 })
+        const { data, error } = await supabase.from('users').select('id, first_name, last_name, closing_workflow, closing_handoff_minutes').eq('facility_id', facilityId).eq('role_id', role.id).eq('is_active', true).order('last_name')
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ surgeons: data || [] })
       }
 
-      // ─── Basic status (backward compatible) ───
+      case 'list-rooms': {
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
+        const { data, error } = await supabase.from('or_rooms').select('id, name').eq('facility_id', facilityId).eq('is_active', true).order('display_order')
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ rooms: data || [] })
+      }
+
+      case 'list-procedure-types': {
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
+        const { data, error } = await supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).eq('is_active', true).order('name')
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ procedureTypes: data || [] })
+      }
+
       case 'status': {
-        if (!facilityId) {
-          return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
-        }
-
-        const { count: caseCount } = await supabase
-          .from('cases')
-          .select('id', { count: 'exact', head: true })
-          .eq('facility_id', facilityId)
-
-        return NextResponse.json({
-          cases: caseCount || 0,
-          milestones: 0,
-          staff: 0,
-          implants: 0,
-          delays: 0,
-        })
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
+        const { count } = await supabase.from('cases').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId)
+        return NextResponse.json({ cases: count || 0, milestones: 0, staff: 0, implants: 0, delays: 0 })
       }
 
-      // ─── Detailed status for wizard ───
       case 'status-detailed': {
-        if (!facilityId) {
-          return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
-        }
-
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
         const status = await getDetailedStatus(supabase, facilityId)
         return NextResponse.json(status)
       }
 
-      // ─── Generate via wizard (v2) ───
       case 'generate-wizard': {
         const { surgeonProfiles, monthsOfHistory, purgeFirst } = body
-
-        if (!facilityId || !surgeonProfiles) {
-          return NextResponse.json(
-            { success: false, error: 'facilityId and surgeonProfiles required' },
-            { status: 400 }
-          )
-        }
-
-        const config: GenerationConfig = {
-          facilityId,
-          surgeonProfiles,
-          monthsOfHistory: monthsOfHistory || 6,
-          purgeFirst: purgeFirst !== false,
-        }
-
+        if (!facilityId || !surgeonProfiles) return NextResponse.json({ success: false, error: 'facilityId and surgeonProfiles required' }, { status: 400 })
+        const config: GenerationConfig = { facilityId, surgeonProfiles, monthsOfHistory: monthsOfHistory || 6, purgeFirst: purgeFirst !== false }
         const result = await generateDemoData(supabase, config)
         return NextResponse.json(result)
       }
 
-      // ─── Clear / purge case data ───
       case 'clear': {
-        if (!facilityId) {
-          return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
-        }
-
+        if (!facilityId) return NextResponse.json({ error: 'facilityId required' }, { status: 400 })
         const result = await purgeCaseData(supabase, facilityId)
         return NextResponse.json(result)
       }
@@ -137,9 +74,6 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error('Demo data API error:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal error' }, { status: 500 })
   }
 }

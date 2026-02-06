@@ -1,15 +1,11 @@
 // lib/demo-data-generator-v2.ts
-// ORbit Demo Data Generator — v2
-// 
-// Architecture change from v1:
-// - Surgeons, staff, rooms, procedure types, payers are PRE-EXISTING in the facility
-// - The script reads them from the DB rather than creating them
-// - The wizard UI passes surgeon speed profiles (fast/average/slow) per surgeon
-// - Purge only deletes case-level data, never configuration/users
+// ORbit Demo Data Generator v2
 //
-// This avoids the "Failed to create surgeons" error from v1 and ensures all
-// facility settings (milestone configs, reimbursements, cost categories, etc.)
-// are preserved across regenerations.
+// Architecture: facility config is permanent, script only generates case-level data.
+// Surgeon profiles come from the wizard UI with room assignments, procedure types, etc.
+// Staff are assigned at the ROOM level per day: 1 nurse, 2 techs, 1 anesthesiologist.
+// No staff member appears in two rooms on the same day.
+// Users are NEVER deleted — purge only touches case-level records.
 
 import { SupabaseClient } from '@supabase/supabase-js'
 
@@ -22,8 +18,11 @@ export interface SurgeonProfileInput {
   speedProfile: 'fast' | 'average' | 'slow'
   usesFlipRooms: boolean
   specialty: 'joint' | 'hand_wrist' | 'spine'
-  operatingDays: number[] // 1=Mon, 5=Fri
+  operatingDays: number[] // 1=Mon … 5=Fri
   preferredVendor: 'Stryker' | 'Zimmer Biomet' | 'DePuy Synthes' | null
+  primaryRoomId: string | null
+  flipRoomId: string | null       // only when usesFlipRooms
+  procedureTypeIds: string[]      // user-selected procedure types
 }
 
 interface ResolvedSurgeon extends SurgeonProfileInput {
@@ -32,17 +31,7 @@ interface ResolvedSurgeon extends SurgeonProfileInput {
   facilityId: string
   closingWorkflow: 'surgeon_closes' | 'pa_closes'
   closingHandoffMinutes: number
-  procedureTypeIds: string[]
 }
-
-export interface GenerationProgress {
-  phase: string
-  current: number
-  total: number
-  message: string
-}
-
-export type ProgressCallback = (progress: GenerationProgress) => void
 
 export interface GenerationConfig {
   facilityId: string
@@ -55,132 +44,69 @@ export interface GenerationResult {
   success: boolean
   casesGenerated: number
   error?: string
-  details?: {
-    milestones: number
-    staff: number
-    implants: number
-  }
+  details?: { milestones: number; staff: number; implants: number }
 }
 
+export interface GenerationProgress {
+  phase: string; current: number; total: number; message: string
+}
+export type ProgressCallback = (p: GenerationProgress) => void
+
 // =====================================================
-// CONFIGURATION — Timing Profiles
+// TIMING PROFILES
 // =====================================================
 
 const BATCH_SIZE = 100
 
 const SPEED_CONFIGS = {
-  fast: {
-    casesPerDay: { min: 6, max: 8 },
-    startTime: '07:00',
-    surgicalTime: { min: 28, max: 35 },
-    flipInterval: 60,
-  },
-  average: {
-    casesPerDay: { min: 4, max: 6 },
-    startTime: '07:30',
-    surgicalTime: { min: 48, max: 59 },
-    flipInterval: 90,
-  },
-  slow: {
-    casesPerDay: { min: 3, max: 4 },
-    startTime: '07:30',
-    surgicalTime: { min: 65, max: 88 },
-    flipInterval: 0,
-  },
+  fast:    { casesPerDay: { min: 6, max: 8 }, startTime: '07:00', surgicalTime: { min: 28, max: 35 }, flipInterval: 60 },
+  average: { casesPerDay: { min: 4, max: 6 }, startTime: '07:30', surgicalTime: { min: 48, max: 59 }, flipInterval: 90 },
+  slow:    { casesPerDay: { min: 3, max: 4 }, startTime: '07:30', surgicalTime: { min: 65, max: 88 }, flipInterval: 0 },
 }
 
-// Procedure-specific overrides (when non-zero, use instead of speed profile)
 const PROCEDURE_SURGICAL_TIMES: Record<string, { min: number; max: number }> = {
-  'Distal Radius ORIF': { min: 45, max: 60 },
-  'Carpal Tunnel Release': { min: 15, max: 25 },
-  'Trigger Finger Release': { min: 10, max: 15 },
-  'Wrist Arthroscopy': { min: 30, max: 45 },
-  'TFCC Repair': { min: 35, max: 50 },
-  'Lumbar Microdiscectomy': { min: 45, max: 60 },
-  'ACDF': { min: 60, max: 90 },
-  'Lumbar Laminectomy': { min: 50, max: 75 },
-  'Posterior Cervical Foraminotomy': { min: 40, max: 55 },
-  'Kyphoplasty': { min: 30, max: 45 },
+  'Distal Radius ORIF': { min: 45, max: 60 }, 'Carpal Tunnel Release': { min: 15, max: 25 },
+  'Trigger Finger Release': { min: 10, max: 15 }, 'Wrist Arthroscopy': { min: 30, max: 45 },
+  'TFCC Repair': { min: 35, max: 50 }, 'Lumbar Microdiscectomy': { min: 45, max: 60 },
+  'ACDF': { min: 60, max: 90 }, 'Lumbar Laminectomy': { min: 50, max: 75 },
+  'Posterior Cervical Foraminotomy': { min: 40, max: 55 }, 'Kyphoplasty': { min: 30, max: 45 },
 }
 
-// Hand/wrist specialty has its own timing envelope regardless of speed profile
-const HAND_WRIST_CONFIG = {
-  casesPerDay: { min: 5, max: 7 },
-  startTime: '07:30',
-}
-
-// Spine specialty
-const SPINE_CONFIG = {
-  casesPerDay: { min: 3, max: 5 },
-  startTime: '07:30',
-}
+const HAND_WRIST_CONFIG = { casesPerDay: { min: 5, max: 7 }, startTime: '07:30' }
+const SPINE_CONFIG      = { casesPerDay: { min: 3, max: 5 }, startTime: '07:30' }
 
 // =====================================================
-// MILESTONE TEMPLATES — per specialty × speed
+// MILESTONE TEMPLATES (offsets from Patient In = 0)
 // =====================================================
 
-// Offsets are minutes from Patient In (time 0)
-const JOINT_MILESTONES = {
+const JOINT_MS = {
   fast: {
-    patient_in: 0,
-    anes_start: 2,
-    anes_end: 10,
-    prep_drape_start: 12,
-    prep_drape_complete: 18,
-    incision: 20,
-    closing: (st: number) => 20 + st,
-    closing_complete: (st: number) => 20 + st + 6,
-    patient_out: (st: number) => 20 + st + 10,
-    room_cleaned: (st: number) => 20 + st + 20,
+    patient_in: 0, anes_start: 2, anes_end: 10, prep_drape_start: 12, prep_drape_complete: 18, incision: 20,
+    closing: (st: number) => 20 + st, closing_complete: (st: number) => 20 + st + 6,
+    patient_out: (st: number) => 20 + st + 10, room_cleaned: (st: number) => 20 + st + 20,
   },
   average: {
-    patient_in: 0,
-    anes_start: 3,
-    anes_end: 15,
-    prep_drape_start: 17,
-    prep_drape_complete: 25,
-    incision: 28,
-    closing: (st: number) => 28 + st,
-    closing_complete: (st: number) => 28 + st + 8,
-    patient_out: (st: number) => 28 + st + 12,
-    room_cleaned: (st: number) => 28 + st + 25,
+    patient_in: 0, anes_start: 3, anes_end: 15, prep_drape_start: 17, prep_drape_complete: 25, incision: 28,
+    closing: (st: number) => 28 + st, closing_complete: (st: number) => 28 + st + 8,
+    patient_out: (st: number) => 28 + st + 12, room_cleaned: (st: number) => 28 + st + 25,
   },
   slow: {
-    patient_in: 0,
-    anes_start: 4,
-    anes_end: 18,
-    prep_drape_start: 20,
-    prep_drape_complete: 30,
-    incision: 35,
-    closing: (st: number) => 35 + st,
-    closing_complete: (st: number) => 35 + st + 10,
-    patient_out: (st: number) => 35 + st + 15,
-    room_cleaned: (st: number) => 35 + st + 28,
+    patient_in: 0, anes_start: 4, anes_end: 18, prep_drape_start: 20, prep_drape_complete: 30, incision: 35,
+    closing: (st: number) => 35 + st, closing_complete: (st: number) => 35 + st + 10,
+    patient_out: (st: number) => 35 + st + 15, room_cleaned: (st: number) => 35 + st + 28,
   },
 }
 
-const HAND_WRIST_MILESTONES = {
-  patient_in: 0,
-  prep_drape_start: 8,
-  prep_drape_complete: 15,
-  incision: 18,
-  closing: (st: number) => 18 + st,
-  closing_complete: (st: number) => 18 + st + 5,
-  patient_out: (st: number) => 18 + st + 10,
-  room_cleaned: (st: number) => 18 + st + 20,
+const HAND_MS = {
+  patient_in: 0, prep_drape_start: 8, prep_drape_complete: 15, incision: 18,
+  closing: (st: number) => 18 + st, closing_complete: (st: number) => 18 + st + 5,
+  patient_out: (st: number) => 18 + st + 10, room_cleaned: (st: number) => 18 + st + 20,
 }
 
-const SPINE_MILESTONES = {
-  patient_in: 0,
-  anes_start: 3,
-  anes_end: 18,
-  prep_drape_start: 20,
-  prep_drape_complete: 28,
-  incision: 32,
-  closing: (st: number) => 32 + st,
-  closing_complete: (st: number) => 32 + st + 12,
-  patient_out: (st: number) => 32 + st + 20,
-  room_cleaned: (st: number) => 32 + st + 35,
+const SPINE_MS = {
+  patient_in: 0, anes_start: 3, anes_end: 18, prep_drape_start: 20, prep_drape_complete: 28, incision: 32,
+  closing: (st: number) => 32 + st, closing_complete: (st: number) => 32 + st + 12,
+  patient_out: (st: number) => 32 + st + 20, room_cleaned: (st: number) => 32 + st + 35,
 }
 
 // =====================================================
@@ -190,89 +116,80 @@ const SPINE_MILESTONES = {
 const IMPLANT_SPECS: Record<string, Record<string, Record<string, { name: string; sizes: string[]; common: string[] }>>> = {
   'Stryker': {
     THA: {
-      cup: { name: 'Tritanium Cup', sizes: ['44mm', '46mm', '48mm', '50mm', '52mm', '54mm', '56mm', '58mm', '60mm'], common: ['52mm', '54mm', '56mm'] },
-      stem: { name: 'Accolade II', sizes: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'], common: ['3', '4', '5', '6'] },
-      head: { name: 'V40 Head', sizes: ['28mm', '32mm', '36mm', '40mm'], common: ['32mm', '36mm'] },
-      liner: { name: 'X3 Liner', sizes: ['28mm', '32mm', '36mm', '40mm'], common: ['32mm', '36mm'] },
+      cup:   { name: 'Tritanium Cup', sizes: ['44mm','46mm','48mm','50mm','52mm','54mm','56mm','58mm','60mm'], common: ['52mm','54mm','56mm'] },
+      stem:  { name: 'Accolade II', sizes: ['0','1','2','3','4','5','6','7','8','9','10','11'], common: ['3','4','5','6'] },
+      head:  { name: 'V40 Head', sizes: ['28mm','32mm','36mm','40mm'], common: ['32mm','36mm'] },
+      liner: { name: 'X3 Liner', sizes: ['28mm','32mm','36mm','40mm'], common: ['32mm','36mm'] },
     },
     TKA: {
-      femur: { name: 'Triathlon Femur', sizes: ['1', '2', '3', '4', '5', '6', '7', '8'], common: ['3', '4', '5', '6'] },
-      tibia: { name: 'Triathlon Tibia', sizes: ['1', '2', '3', '4', '5', '6', '7', '8'], common: ['3', '4', '5', '6'] },
-      poly: { name: 'Triathlon Insert', sizes: ['9mm', '10mm', '11mm', '12mm', '14mm', '16mm', '18mm'], common: ['10mm', '11mm', '12mm'] },
-      patella: { name: 'Triathlon Patella', sizes: ['29mm', '32mm', '35mm', '38mm'], common: ['32mm', '35mm'] },
+      femur: { name: 'Triathlon Femur', sizes: ['1','2','3','4','5','6','7','8'], common: ['3','4','5','6'] },
+      tibia: { name: 'Triathlon Tibia', sizes: ['1','2','3','4','5','6','7','8'], common: ['3','4','5','6'] },
+      poly:  { name: 'Triathlon Poly', sizes: ['9mm','10mm','11mm','12mm','14mm','16mm'], common: ['10mm','11mm','12mm'] },
+      patella: { name: 'Triathlon Patella', sizes: ['26mm','29mm','32mm','35mm','38mm','41mm'], common: ['32mm','35mm'] },
     },
   },
   'Zimmer Biomet': {
     THA: {
-      cup: { name: 'G7 Cup', sizes: ['44mm', '46mm', '48mm', '50mm', '52mm', '54mm', '56mm', '58mm', '60mm'], common: ['50mm', '52mm', '54mm', '56mm'] },
-      stem: { name: 'Taperloc', sizes: ['4', '6', '8', '10', '12', '14', '16', '18', '20'], common: ['10', '12', '14'] },
-      head: { name: 'Biolox Head', sizes: ['28mm', '32mm', '36mm', '40mm'], common: ['32mm', '36mm'] },
-      liner: { name: 'E1 Liner', sizes: ['28mm', '32mm', '36mm', '40mm'], common: ['32mm', '36mm'] },
+      cup:   { name: 'G7 Cup', sizes: ['44mm','46mm','48mm','50mm','52mm','54mm','56mm','58mm'], common: ['50mm','52mm','54mm'] },
+      stem:  { name: 'Taperloc Complete', sizes: ['4','5','6','7','8','9','10','11','12','13'], common: ['7','8','9','10'] },
+      head:  { name: 'Kinectiv Head', sizes: ['28mm','32mm','36mm','40mm'], common: ['32mm','36mm'] },
+      liner: { name: 'E1 Liner', sizes: ['28mm','32mm','36mm','40mm'], common: ['32mm','36mm'] },
     },
     TKA: {
-      femur: { name: 'Persona Femur', sizes: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'], common: ['3', '4', '5', '6', '7'] },
-      tibia: { name: 'Persona Tibia', sizes: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], common: ['3', '4', '5', '6'] },
-      poly: { name: 'Persona Bearing', sizes: ['8mm', '9mm', '10mm', '11mm', '12mm', '13mm', '14mm'], common: ['10mm', '11mm', '12mm'] },
-      patella: { name: 'Persona Patella', sizes: ['8mm', '10mm', '12mm', '14mm'], common: ['10mm', '12mm'] },
+      femur: { name: 'Persona Femur', sizes: ['A','B','C','D','E','F','G','H'], common: ['C','D','E','F'] },
+      tibia: { name: 'Persona Tibia', sizes: ['1','2','3','4','5','6','7'], common: ['3','4','5'] },
+      poly:  { name: 'Persona Poly', sizes: ['9mm','10mm','11mm','12mm','14mm'], common: ['10mm','11mm'] },
+      patella: { name: 'Persona Patella', sizes: ['S','M','L','XL'], common: ['M','L'] },
     },
   },
   'DePuy Synthes': {
     THA: {
-      cup: { name: 'Pinnacle Cup', sizes: ['44mm', '46mm', '48mm', '50mm', '52mm', '54mm', '56mm', '58mm', '60mm'], common: ['50mm', '52mm', '54mm', '56mm'] },
-      stem: { name: 'Corail Stem', sizes: ['8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18'], common: ['11', '12', '13', '14'] },
-      head: { name: 'Articul/eze Head', sizes: ['28mm', '32mm', '36mm', '40mm'], common: ['32mm', '36mm'] },
-      liner: { name: 'Marathon Liner', sizes: ['28mm', '32mm', '36mm', '40mm'], common: ['32mm', '36mm'] },
+      cup:   { name: 'Pinnacle Cup', sizes: ['44mm','46mm','48mm','50mm','52mm','54mm','56mm','58mm'], common: ['50mm','52mm','54mm'] },
+      stem:  { name: 'Corail', sizes: ['8','9','10','11','12','13','14','15','16'], common: ['11','12','13','14'] },
+      head:  { name: 'Articul/EZE Head', sizes: ['28mm','32mm','36mm','40mm'], common: ['32mm','36mm'] },
+      liner: { name: 'Marathon Liner', sizes: ['28mm','32mm','36mm','40mm'], common: ['32mm','36mm'] },
     },
     TKA: {
-      femur: { name: 'ATTUNE Femur', sizes: ['3', '4', '5', '6', '7', '8', '9', '10'], common: ['5', '6', '7', '8'] },
-      tibia: { name: 'ATTUNE Tibia', sizes: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], common: ['4', '5', '6', '7'] },
-      poly: { name: 'ATTUNE Insert', sizes: ['8mm', '9mm', '10mm', '11mm', '12mm', '14mm', '16mm', '18mm'], common: ['10mm', '11mm', '12mm'] },
-      patella: { name: 'ATTUNE Patella', sizes: ['29mm', '32mm', '35mm', '38mm', '41mm'], common: ['32mm', '35mm'] },
+      femur: { name: 'Attune Femur', sizes: ['1','2','3','4','5','6','7','8','9'], common: ['4','5','6','7'] },
+      tibia: { name: 'Attune Tibia', sizes: ['1','2','3','4','5','6','7','8','9'], common: ['4','5','6','7'] },
+      poly:  { name: 'Attune Poly', sizes: ['9mm','10mm','11mm','12mm','14mm'], common: ['10mm','11mm','12mm'] },
+      patella: { name: 'Attune Patella', sizes: ['S','M','L','XL'], common: ['M','L'] },
     },
   },
 }
 
-// Payer distribution
-const PAYER_DISTRIBUTION: Record<string, number> = {
-  'Medicare': 0.45,
-  'BCBS': 0.30,
-  'Aetna': 0.125,
-  'UnitedHealthcare': 0.125,
-}
+// =====================================================
+// PAYER DISTRIBUTION
+// =====================================================
 
-// US Holidays (2024-2026)
-const US_HOLIDAYS = new Set([
-  '2024-07-04', '2024-09-02', '2024-11-28', '2024-11-29', '2024-12-25',
-  '2025-01-01', '2025-05-26', '2025-07-04', '2025-09-01', '2025-11-27', '2025-11-28', '2025-12-25',
-  '2026-01-01', '2026-05-25', '2026-07-03', '2026-09-07', '2026-11-26', '2026-11-27', '2026-12-25',
+const PAYER_WEIGHTS: Record<string, number> = { 'Medicare': 0.45, 'BCBS': 0.30, 'Aetna': 0.125, 'UnitedHealthcare': 0.125 }
+
+// =====================================================
+// HOLIDAYS (US Federal 2024-2026)
+// =====================================================
+
+const HOLIDAYS = new Set([
+  '2024-01-01','2024-01-15','2024-02-19','2024-05-27','2024-06-19','2024-07-04','2024-09-02','2024-10-14','2024-11-11','2024-11-28','2024-12-25',
+  '2025-01-01','2025-01-20','2025-02-17','2025-05-26','2025-06-19','2025-07-04','2025-09-01','2025-10-13','2025-11-11','2025-11-27','2025-12-25',
+  '2026-01-01','2026-01-19','2026-02-16','2026-05-25','2026-06-19','2026-07-03','2026-09-07','2026-10-12','2026-11-11','2026-11-26','2026-12-25',
 ])
-
-// Specialty → procedure name mappings
-const SPECIALTY_PROCEDURES: Record<string, string[]> = {
-  joint: ['THA', 'TKA', 'Mako THA', 'Mako TKA'],
-  hand_wrist: ['Distal Radius ORIF', 'Carpal Tunnel Release', 'Trigger Finger Release', 'Wrist Arthroscopy', 'TFCC Repair'],
-  spine: ['Lumbar Microdiscectomy', 'ACDF', 'Lumbar Laminectomy', 'Posterior Cervical Foraminotomy', 'Kyphoplasty'],
-}
 
 // =====================================================
 // UTILITY FUNCTIONS
 // =====================================================
 
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
+function randomInt(min: number, max: number): number { return Math.floor(Math.random() * (max - min + 1)) + min }
+function randomChoice<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)] }
+function addMinutes(d: Date, m: number): Date { return new Date(d.getTime() + m * 60000) }
+function formatTime(d: Date): string { return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+function isHoliday(d: Date): boolean { return HOLIDAYS.has(d.toISOString().split('T')[0]) }
+function isWeekend(d: Date): boolean { const dow = d.getDay(); return dow === 0 || dow === 6 }
+function dateKey(d: Date): string { return d.toISOString().split('T')[0] }
 
-function randomChoice<T>(array: T[]): T {
-  return array[Math.floor(Math.random() * array.length)]
-}
-
-function weightedRandomChoice<T>(items: T[], weights: number[]): T {
-  const total = weights.reduce((s, w) => s + w, 0)
+function weightedChoice(items: string[], weights: number[]): string {
+  const total = weights.reduce((a, b) => a + b, 0)
   let r = Math.random() * total
-  for (let i = 0; i < items.length; i++) {
-    r -= weights[i]
-    if (r <= 0) return items[i]
-  }
+  for (let i = 0; i < items.length; i++) { r -= weights[i]; if (r <= 0) return items[i] }
   return items[items.length - 1]
 }
 
@@ -280,105 +197,58 @@ function addOutlier(base: number, chance: number, range: { min: number; max: num
   return Math.random() < chance ? randomInt(range.min, range.max) : base
 }
 
-function addMinutes(date: Date, minutes: number): Date {
-  return new Date(date.getTime() + minutes * 60000)
-}
-
-function isWeekend(date: Date): boolean {
-  const d = date.getDay()
-  return d === 0 || d === 6
-}
-
-function isHoliday(date: Date): boolean {
-  return US_HOLIDAYS.has(date.toISOString().split('T')[0])
-}
-
-function formatTime(date: Date): string {
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:00`
-}
-
 // =====================================================
-// PURGE — Only deletes case-level data
+// PURGE — Only case-level data, NEVER users/config
 // =====================================================
 
 export async function purgeCaseData(
-  supabase: SupabaseClient,
-  facilityId: string,
-  onProgress?: ProgressCallback
+  supabase: SupabaseClient, facilityId: string, onProgress?: ProgressCallback
 ): Promise<{ success: boolean; error?: string; casesDeleted: number }> {
   try {
     onProgress?.({ phase: 'clearing', current: 5, total: 100, message: 'Fetching case IDs...' })
-
-    const { data: cases } = await supabase
-      .from('cases')
-      .select('id')
-      .eq('facility_id', facilityId)
-
-    const caseCount = cases?.length ?? 0
+    const { data: cases } = await supabase.from('cases').select('id').eq('facility_id', facilityId)
+    const count = cases?.length ?? 0
 
     if (cases && cases.length > 0) {
-      const caseIds = cases.map(c => c.id)
-
-      for (let i = 0; i < caseIds.length; i += BATCH_SIZE) {
-        const batch = caseIds.slice(i, i + BATCH_SIZE)
-
-        // Delete child records first
+      const ids = cases.map(c => c.id)
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE)
         await supabase.from('case_implants').delete().in('case_id', batch)
         await supabase.from('case_milestones').delete().in('case_id', batch)
         await supabase.from('case_staff').delete().in('case_id', batch)
-        // Also delete case delays if the table exists
         await supabase.from('case_delays').delete().in('case_id', batch).then(() => {}, () => {})
-
-        const progress = 10 + Math.floor((i / caseIds.length) * 60)
-        onProgress?.({ phase: 'clearing', current: progress, total: 100, message: `Cleared ${Math.min(i + BATCH_SIZE, caseIds.length)} of ${caseIds.length} cases...` })
+        onProgress?.({ phase: 'clearing', current: 10 + Math.floor((i / ids.length) * 60), total: 100, message: `Cleared ${Math.min(i + BATCH_SIZE, ids.length)} of ${ids.length}...` })
       }
     }
 
     onProgress?.({ phase: 'clearing', current: 70, total: 100, message: 'Deleting cases...' })
+    const { error } = await supabase.from('cases').delete().eq('facility_id', facilityId)
+    if (error) return { success: false, error: `Delete cases: ${error.message}`, casesDeleted: 0 }
 
-    const { error: caseError } = await supabase
-      .from('cases')
-      .delete()
-      .eq('facility_id', facilityId)
-
-    if (caseError) {
-      return { success: false, error: `Failed to delete cases: ${caseError.message}`, casesDeleted: 0 }
-    }
-
-    // Clear computed surgeon averages (these will be recalculated)
     onProgress?.({ phase: 'clearing', current: 85, total: 100, message: 'Clearing computed averages...' })
-
-    const { data: facilityUsers } = await supabase
-      .from('users')
-      .select('id')
-      .eq('facility_id', facilityId)
-
-    if (facilityUsers && facilityUsers.length > 0) {
-      const userIds = facilityUsers.map(u => u.id)
-      await supabase.from('surgeon_procedure_averages').delete().in('surgeon_id', userIds).then(() => {}, () => {})
-      await supabase.from('surgeon_milestone_averages').delete().in('surgeon_id', userIds).then(() => {}, () => {})
+    const { data: users } = await supabase.from('users').select('id').eq('facility_id', facilityId)
+    if (users && users.length > 0) {
+      const uids = users.map(u => u.id)
+      await supabase.from('surgeon_procedure_averages').delete().in('surgeon_id', uids).then(() => {}, () => {})
+      await supabase.from('surgeon_milestone_averages').delete().in('surgeon_id', uids).then(() => {}, () => {})
     }
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Purge complete!' })
-
-    return { success: true, casesDeleted: caseCount }
-  } catch (error) {
-    console.error('Purge error:', error)
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error', casesDeleted: 0 }
+    return { success: true, casesDeleted: count }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Unknown', casesDeleted: 0 }
   }
 }
 
 // =====================================================
-// DETAILED STATUS — for the wizard config step
+// DETAILED STATUS
 // =====================================================
 
-export async function getDetailedStatus(
-  supabase: SupabaseClient,
-  facilityId: string
-) {
-  const queries = await Promise.all([
+export async function getDetailedStatus(supabase: SupabaseClient, facilityId: string) {
+  const qs = await Promise.all([
     supabase.from('cases').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
-    supabase.from('users').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id ?? ''),
+    supabase.from('users').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId)
+      .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id ?? ''),
     supabase.from('or_rooms').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
     supabase.from('procedure_types').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId).eq('is_active', true),
     supabase.from('payers').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
@@ -393,29 +263,14 @@ export async function getDetailedStatus(
     supabase.from('procedure_milestone_config').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
     supabase.from('block_schedules').select('id', { count: 'exact', head: true }).eq('facility_id', facilityId),
   ])
-
-  // Extract counts safely (some tables might not exist in all installations)
-  const safe = (idx: number) => queries[idx]?.count ?? 0
-
+  const s = (i: number) => qs[i]?.count ?? 0
   return {
-    cases: safe(0),
-    surgeons: safe(1),
-    rooms: safe(2),
-    procedureTypes: safe(3),
-    payers: safe(4),
-    delayTypes: safe(5),
-    costCategories: safe(6),
-    facilityMilestones: safe(7),
-    cancellationReasons: safe(8),
-    preopChecklistFields: safe(9),
-    complexities: safe(10),
-    facilityAnalyticsSettings: !!queries[11]?.data,
-    procedureReimbursements: safe(12),
-    procedureMilestoneConfig: safe(13),
-    blockSchedules: safe(14),
-    milestones: 0,
-    staff: 0,
-    implants: 0,
+    cases: s(0), surgeons: s(1), rooms: s(2), procedureTypes: s(3), payers: s(4),
+    delayTypes: s(5), costCategories: s(6), facilityMilestones: s(7),
+    cancellationReasons: s(8), preopChecklistFields: s(9), complexities: s(10),
+    facilityAnalyticsSettings: !!qs[11]?.data,
+    procedureReimbursements: s(12), procedureMilestoneConfig: s(13), blockSchedules: s(14),
+    milestones: 0, staff: 0, implants: 0,
   }
 }
 
@@ -424,259 +279,195 @@ export async function getDetailedStatus(
 // =====================================================
 
 export async function generateDemoData(
-  supabase: SupabaseClient,
-  config: GenerationConfig,
-  onProgress?: ProgressCallback
+  supabase: SupabaseClient, config: GenerationConfig, onProgress?: ProgressCallback
 ): Promise<GenerationResult> {
   try {
     const { facilityId, surgeonProfiles, monthsOfHistory, purgeFirst } = config
 
-    // ── Step 0: Purge if requested ──
+    // ── Purge ──
     if (purgeFirst) {
-      onProgress?.({ phase: 'clearing', current: 0, total: 100, message: 'Purging existing data...' })
-      const purgeResult = await purgeCaseData(supabase, facilityId, (p) => {
-        onProgress?.({ ...p, current: Math.floor(p.current * 0.15) }) // 0-15% of total
-      })
-      if (!purgeResult.success) {
-        return { success: false, casesGenerated: 0, error: `Purge failed: ${purgeResult.error}` }
-      }
+      onProgress?.({ phase: 'clearing', current: 0, total: 100, message: 'Purging...' })
+      const pr = await purgeCaseData(supabase, facilityId, p => onProgress?.({ ...p, current: Math.floor(p.current * 0.15) }))
+      if (!pr.success) return { success: false, casesGenerated: 0, error: `Purge: ${pr.error}` }
     }
 
-    // ── Step 1: Load facility dependencies ──
-    onProgress?.({ phase: 'loading', current: 16, total: 100, message: 'Loading facility configuration...' })
+    // ── Load facility dependencies ──
+    onProgress?.({ phase: 'loading', current: 16, total: 100, message: 'Loading facility config...' })
 
-    const { data: facility } = await supabase
-      .from('facilities')
-      .select('id, name, case_number_prefix, timezone')
-      .eq('id', facilityId)
-      .single()
-
+    const { data: facility } = await supabase.from('facilities').select('id, name, case_number_prefix, timezone').eq('id', facilityId).single()
     if (!facility) return { success: false, casesGenerated: 0, error: 'Facility not found' }
 
-    // Load rooms
-    const { data: rooms } = await supabase
-      .from('or_rooms')
-      .select('id, name')
-      .eq('facility_id', facilityId)
-      .eq('is_active', true)
-      .order('display_order')
+    const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).eq('is_active', true)
+    if (!procedureTypes?.length) return { success: false, casesGenerated: 0, error: 'No procedure types' }
 
-    if (!rooms || rooms.length === 0) return { success: false, casesGenerated: 0, error: 'No OR rooms found — add rooms first' }
+    let milestoneTypes: { id: string; name: string }[] = []
+    const { data: fms } = await supabase.from('facility_milestones').select('id, name, source_milestone_type_id').eq('facility_id', facilityId).eq('is_active', true).order('display_order')
+    if (fms?.length) milestoneTypes = fms
+    else { const { data: gms } = await supabase.from('milestone_types').select('id, name').eq('is_active', true).order('display_order'); milestoneTypes = gms || [] }
+    if (!milestoneTypes.length) return { success: false, casesGenerated: 0, error: 'No milestone types' }
 
-    // Load procedure types
-    const { data: procedureTypes } = await supabase
-      .from('procedure_types')
-      .select('id, name')
-      .eq('facility_id', facilityId)
-      .eq('is_active', true)
+    const { data: payers } = await supabase.from('payers').select('id, name').eq('facility_id', facilityId)
+    if (!payers?.length) return { success: false, casesGenerated: 0, error: 'No payers' }
 
-    if (!procedureTypes || procedureTypes.length === 0) return { success: false, casesGenerated: 0, error: 'No procedure types found — add procedures first' }
+    const { data: completedStatus } = await supabase.from('case_statuses').select('id').eq('name', 'completed').single()
+    const { data: scheduledStatus } = await supabase.from('case_statuses').select('id').eq('name', 'scheduled').maybeSingle()
+    if (!completedStatus) return { success: false, casesGenerated: 0, error: 'No "completed" status' }
 
-    // Load milestone types (global or facility-level depending on your schema)
-    // Try facility_milestones first, fallback to milestone_types
-    let milestoneTypes: any[] = []
-    const { data: facilityMilestones } = await supabase
-      .from('facility_milestones')
-      .select('id, name, source_milestone_type_id')
-      .eq('facility_id', facilityId)
-      .eq('is_active', true)
-      .order('display_order')
-
-    if (facilityMilestones && facilityMilestones.length > 0) {
-      milestoneTypes = facilityMilestones
-    } else {
-      const { data: globalMilestones } = await supabase
-        .from('milestone_types')
-        .select('id, name')
-        .eq('is_active', true)
-        .order('display_order')
-      milestoneTypes = globalMilestones || []
-    }
-
-    if (milestoneTypes.length === 0) return { success: false, casesGenerated: 0, error: 'No milestone types found' }
-
-    // Load payers
-    const { data: payers } = await supabase
-      .from('payers')
-      .select('id, name')
-      .eq('facility_id', facilityId)
-
-    if (!payers || payers.length === 0) return { success: false, casesGenerated: 0, error: 'No payers found — add payers first' }
-
-    // Load completed status
-    const { data: completedStatus } = await supabase
-      .from('case_statuses')
-      .select('id')
-      .eq('name', 'completed')
-      .single()
-
-    if (!completedStatus) return { success: false, casesGenerated: 0, error: 'Completed case status not found' }
-
-    // Load staff for assignments
-    const { data: allStaff } = await supabase
-      .from('users')
-      .select('id, role_id')
-      .eq('facility_id', facilityId)
-      .eq('is_active', true)
-
-    const { data: roleData } = await supabase
-      .from('user_roles')
-      .select('id, name')
-
+    // Load ALL staff by role
+    const { data: allStaff } = await supabase.from('users').select('id, role_id, first_name, last_name').eq('facility_id', facilityId).eq('is_active', true)
+    const { data: roleData } = await supabase.from('user_roles').select('id, name')
     const roleMap = new Map((roleData || []).map(r => [r.id, r.name]))
-    const staff = {
+
+    const staffByRole = {
       anesthesiologists: (allStaff || []).filter(u => roleMap.get(u.role_id) === 'anesthesiologist'),
-      nurses: (allStaff || []).filter(u => roleMap.get(u.role_id) === 'nurse'),
-      techs: (allStaff || []).filter(u => roleMap.get(u.role_id) === 'tech'),
+      nurses:            (allStaff || []).filter(u => roleMap.get(u.role_id) === 'nurse'),
+      techs:             (allStaff || []).filter(u => roleMap.get(u.role_id) === 'tech'),
     }
 
-    // ── Step 2: Resolve surgeon profiles ──
-    onProgress?.({ phase: 'resolving', current: 20, total: 100, message: 'Resolving surgeon profiles...' })
+    // ── Resolve surgeon profiles ──
+    onProgress?.({ phase: 'resolving', current: 20, total: 100, message: 'Resolving surgeons...' })
 
-    const resolvedSurgeons: ResolvedSurgeon[] = []
-    for (const profile of surgeonProfiles) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, facility_id, closing_workflow, closing_handoff_minutes')
-        .eq('id', profile.surgeonId)
-        .single()
-
-      if (!userData) {
-        console.warn(`Surgeon ${profile.surgeonId} not found, skipping`)
-        continue
-      }
-
-      // Map specialty → procedure type IDs
-      const procNames = SPECIALTY_PROCEDURES[profile.specialty] || []
-      const procIds = procedureTypes
-        .filter(pt => procNames.includes(pt.name))
-        .map(pt => pt.id)
-
-      if (procIds.length === 0) {
-        console.warn(`No matching procedures for surgeon ${userData.first_name} ${userData.last_name} (${profile.specialty})`)
-        continue
-      }
-
-      resolvedSurgeons.push({
-        ...profile,
-        firstName: userData.first_name,
-        lastName: userData.last_name,
-        facilityId: userData.facility_id,
-        closingWorkflow: userData.closing_workflow || 'surgeon_closes',
-        closingHandoffMinutes: userData.closing_handoff_minutes || 0,
-        procedureTypeIds: procIds,
+    const resolved: ResolvedSurgeon[] = []
+    for (const p of surgeonProfiles) {
+      const { data: u } = await supabase.from('users').select('id, first_name, last_name, facility_id, closing_workflow, closing_handoff_minutes').eq('id', p.surgeonId).single()
+      if (!u) { console.warn(`Surgeon ${p.surgeonId} not found`); continue }
+      // Use wizard-selected procedure types (not name-matched)
+      const validProcIds = p.procedureTypeIds.filter(pid => procedureTypes.some(pt => pt.id === pid))
+      if (!validProcIds.length) { console.warn(`No valid procedures for Dr. ${u.last_name}`); continue }
+      resolved.push({
+        ...p,
+        procedureTypeIds: validProcIds,
+        firstName: u.first_name, lastName: u.last_name, facilityId: u.facility_id,
+        closingWorkflow: u.closing_workflow || 'surgeon_closes',
+        closingHandoffMinutes: u.closing_handoff_minutes || 0,
       })
     }
+    if (!resolved.length) return { success: false, casesGenerated: 0, error: 'No valid surgeons' }
 
-    if (resolvedSurgeons.length === 0) {
-      return { success: false, casesGenerated: 0, error: 'No surgeons could be resolved. Check that surgeon IDs exist and matching procedures are configured.' }
-    }
-
-    // ── Step 3: Generate all case data in memory ──
-    onProgress?.({ phase: 'generating', current: 25, total: 100, message: 'Generating case data...' })
+    // ── Build room-day staff assignments ──
+    // Each room gets 1 nurse, 2 techs, 1 anesthesiologist for the entire day.
+    // No staff member can be in two rooms on the same day.
+    onProgress?.({ phase: 'planning', current: 23, total: 100, message: 'Planning staff assignments...' })
 
     const today = new Date()
-    const startDate = new Date(today)
-    startDate.setMonth(startDate.getMonth() - monthsOfHistory)
-    const endDate = new Date(today)
-    endDate.setMonth(endDate.getMonth() + 1)
+    const startDate = new Date(today); startDate.setMonth(startDate.getMonth() - monthsOfHistory)
+    const endDate = new Date(today); endDate.setMonth(endDate.getMonth() + 1)
+
+    // Collect all unique rooms used by surgeons
+    const allRoomIds = new Set<string>()
+    for (const s of resolved) {
+      if (s.primaryRoomId) allRoomIds.add(s.primaryRoomId)
+      if (s.usesFlipRooms && s.flipRoomId) allRoomIds.add(s.flipRoomId)
+    }
+
+    // For each date, determine which rooms are active and assign staff
+    // Key: "YYYY-MM-DD|roomId" → { nurseId, techIds[2], anesId }
+    type RoomDayStaff = { nurseId: string | null; techIds: string[]; anesId: string | null }
+    const roomDayStaffMap = new Map<string, RoomDayStaff>()
+
+    const tempDate = new Date(startDate)
+    while (tempDate <= endDate) {
+      if (isWeekend(tempDate) || isHoliday(tempDate)) { tempDate.setDate(tempDate.getDate() + 1); continue }
+      const dk = dateKey(tempDate)
+      const dow = tempDate.getDay() // 0=Sun … 6=Sat
+
+      // Figure out which rooms are active today
+      const activeRoomIds: string[] = []
+      for (const s of resolved) {
+        if (!s.operatingDays.includes(dow)) continue
+        if (s.primaryRoomId && !activeRoomIds.includes(s.primaryRoomId)) activeRoomIds.push(s.primaryRoomId)
+        if (s.usesFlipRooms && s.flipRoomId && !activeRoomIds.includes(s.flipRoomId)) activeRoomIds.push(s.flipRoomId)
+      }
+
+      // Assign staff to rooms — round-robin, no double-booking
+      const usedNurses = new Set<string>()
+      const usedTechs = new Set<string>()
+      const usedAnes = new Set<string>()
+
+      for (const roomId of activeRoomIds) {
+        const nurse = staffByRole.nurses.find(n => !usedNurses.has(n.id))
+        const tech1 = staffByRole.techs.find(t => !usedTechs.has(t.id))
+        const tech2Candidates = staffByRole.techs.filter(t => !usedTechs.has(t.id) && t.id !== tech1?.id)
+        const tech2 = tech2Candidates.length > 0 ? tech2Candidates[0] : null
+        const anes = staffByRole.anesthesiologists.find(a => !usedAnes.has(a.id))
+
+        if (nurse) usedNurses.add(nurse.id)
+        if (tech1) usedTechs.add(tech1.id)
+        if (tech2) usedTechs.add(tech2.id)
+        if (anes) usedAnes.add(anes.id)
+
+        roomDayStaffMap.set(`${dk}|${roomId}`, {
+          nurseId: nurse?.id || null,
+          techIds: [tech1?.id, tech2?.id].filter(Boolean) as string[],
+          anesId: anes?.id || null,
+        })
+      }
+      tempDate.setDate(tempDate.getDate() + 1)
+    }
+
+    // ── Generate cases ──
+    onProgress?.({ phase: 'generating', current: 25, total: 100, message: 'Generating cases...' })
 
     const allCases: any[] = []
     const allMilestones: any[] = []
     const allStaffAssignments: any[] = []
     const allImplants: any[] = []
 
-    let caseCounter = 1
+    let caseNum = 1
     const prefix = facility.case_number_prefix || 'DEMO'
 
-    for (const surgeon of resolvedSurgeons) {
+    for (let si = 0; si < resolved.length; si++) {
+      const surgeon = resolved[si]
       const result = generateSurgeonCases(
-        surgeon, startDate, endDate, rooms, procedureTypes,
-        milestoneTypes, payers, staff, completedStatus.id, prefix, caseCounter
+        surgeon, startDate, endDate, procedureTypes, milestoneTypes, payers,
+        roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum
       )
-
       allCases.push(...result.cases)
       allMilestones.push(...result.milestones)
       allStaffAssignments.push(...result.staffAssignments)
       allImplants.push(...result.implants)
-      caseCounter += result.cases.length
-
-      onProgress?.({
-        phase: 'generating',
-        current: 25 + Math.floor((resolvedSurgeons.indexOf(surgeon) / resolvedSurgeons.length) * 25),
-        total: 100,
-        message: `Generated cases for Dr. ${surgeon.lastName} (${result.cases.length} cases)...`,
-      })
+      caseNum += result.cases.length
+      onProgress?.({ phase: 'generating', current: 25 + Math.floor(((si + 1) / resolved.length) * 25), total: 100,
+        message: `Dr. ${surgeon.lastName}: ${result.cases.length} cases` })
     }
 
-    // ── Step 4: Bulk insert ──
-    // Disable audit triggers if the RPC exists
+    // ── Bulk insert ──
     await supabase.rpc('disable_demo_audit_triggers').then(() => {}, () => {})
 
-    // Insert cases
     onProgress?.({ phase: 'inserting', current: 55, total: 100, message: `Inserting ${allCases.length} cases...` })
     for (let i = 0; i < allCases.length; i += BATCH_SIZE) {
-      const batch = allCases.slice(i, i + BATCH_SIZE)
-      const { error } = await supabase.from('cases').insert(batch)
-      if (error) {
-        console.error('Case insert error:', error)
-        await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {})
-        return { success: false, casesGenerated: 0, error: `Insert failed at case batch ${i}: ${error.message}` }
-      }
+      const { error } = await supabase.from('cases').insert(allCases.slice(i, i + BATCH_SIZE))
+      if (error) { await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}); return { success: false, casesGenerated: 0, error: `Case insert batch ${i}: ${error.message}` } }
     }
 
-    // Insert milestones
     onProgress?.({ phase: 'inserting', current: 70, total: 100, message: `Inserting ${allMilestones.length} milestones...` })
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
-      const batch = allMilestones.slice(i, i + BATCH_SIZE)
-      const { error } = await supabase.from('case_milestones').insert(batch)
-      if (error) console.error('Milestone insert error at batch', i, error.message)
+      const { error } = await supabase.from('case_milestones').insert(allMilestones.slice(i, i + BATCH_SIZE))
+      if (error) console.error('Milestone err:', error.message)
     }
 
-    // Insert staff
-    onProgress?.({ phase: 'inserting', current: 80, total: 100, message: `Inserting ${allStaffAssignments.length} staff assignments...` })
+    onProgress?.({ phase: 'inserting', current: 80, total: 100, message: `Inserting ${allStaffAssignments.length} staff...` })
     for (let i = 0; i < allStaffAssignments.length; i += BATCH_SIZE) {
-      const batch = allStaffAssignments.slice(i, i + BATCH_SIZE)
-      const { error } = await supabase.from('case_staff').insert(batch)
-      if (error) console.error('Staff insert error at batch', i, error.message)
+      const { error } = await supabase.from('case_staff').insert(allStaffAssignments.slice(i, i + BATCH_SIZE))
+      if (error) console.error('Staff err:', error.message)
     }
 
-    // Insert implants
     onProgress?.({ phase: 'inserting', current: 88, total: 100, message: `Inserting ${allImplants.length} implants...` })
     for (let i = 0; i < allImplants.length; i += BATCH_SIZE) {
-      const batch = allImplants.slice(i, i + BATCH_SIZE)
-      const { error } = await supabase.from('case_implants').insert(batch)
-      if (error) console.error('Implant insert error at batch', i, error.message)
+      const { error } = await supabase.from('case_implants').insert(allImplants.slice(i, i + BATCH_SIZE))
+      if (error) console.error('Implant err:', error.message)
     }
 
-    // Re-enable triggers
     await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {})
 
-    // Recalculate averages
-    onProgress?.({ phase: 'finalizing', current: 95, total: 100, message: 'Recalculating surgeon averages...' })
-    await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: any) => {
-      console.warn('Averages recalc skipped:', e.message)
-    })
+    onProgress?.({ phase: 'finalizing', current: 95, total: 100, message: 'Recalculating averages...' })
+    await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: any) => console.warn('Avg recalc:', e.message))
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
-
-    return {
-      success: true,
-      casesGenerated: allCases.length,
-      details: {
-        milestones: allMilestones.length,
-        staff: allStaffAssignments.length,
-        implants: allImplants.length,
-      },
-    }
-  } catch (error) {
-    console.error('Generation error:', error)
+    return { success: true, casesGenerated: allCases.length, details: { milestones: allMilestones.length, staff: allStaffAssignments.length, implants: allImplants.length } }
+  } catch (e) {
     await supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {})
-    return {
-      success: false,
-      casesGenerated: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }
+    return { success: false, casesGenerated: 0, error: e instanceof Error ? e.message : 'Unknown' }
   }
 }
 
@@ -684,16 +475,18 @@ export async function generateDemoData(
 // CASE GENERATION PER SURGEON
 // =====================================================
 
+type RoomDayStaff = { nurseId: string | null; techIds: string[]; anesId: string | null }
+
 function generateSurgeonCases(
   surgeon: ResolvedSurgeon,
   startDate: Date,
   endDate: Date,
-  rooms: any[],
-  allProcedureTypes: any[],
-  milestoneTypes: any[],
-  payers: any[],
-  staff: { anesthesiologists: any[]; nurses: any[]; techs: any[] },
+  allProcedureTypes: { id: string; name: string }[],
+  milestoneTypes: { id: string; name: string }[],
+  payers: { id: string; name: string }[],
+  roomDayStaffMap: Map<string, RoomDayStaff>,
   completedStatusId: string,
+  scheduledStatusId: string,
   prefix: string,
   startingNumber: number
 ) {
@@ -704,56 +497,57 @@ function generateSurgeonCases(
 
   let caseNum = startingNumber
   const surgeonProcs = allProcedureTypes.filter(pt => surgeon.procedureTypeIds.includes(pt.id))
+  if (!surgeonProcs.length) return { cases, milestones, staffAssignments, implants }
 
-  // Determine timing config
   const speedCfg = SPEED_CONFIGS[surgeon.speedProfile]
-  const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG
-    : surgeon.specialty === 'spine' ? SPINE_CONFIG
-    : null
-
+  const specialtyCfg = surgeon.specialty === 'hand_wrist' ? HAND_WRIST_CONFIG : surgeon.specialty === 'spine' ? SPINE_CONFIG : null
   const casesPerDay = specialtyCfg?.casesPerDay ?? speedCfg.casesPerDay
   const dayStartTime = specialtyCfg?.startTime ?? speedCfg.startTime
+
+  // Determine surgeon's rooms
+  const primaryRoom = surgeon.primaryRoomId
+  const flipRoom = surgeon.usesFlipRooms ? surgeon.flipRoomId : null
+  if (!primaryRoom) return { cases, milestones, staffAssignments, implants }
 
   const currentDate = new Date(startDate)
 
   while (currentDate <= endDate) {
     const dow = currentDate.getDay()
-
     if (!surgeon.operatingDays.includes(dow) || isWeekend(currentDate) || isHoliday(currentDate)) {
       currentDate.setDate(currentDate.getDate() + 1)
       continue
     }
 
+    const dk = dateKey(currentDate)
     const numCases = randomInt(casesPerDay.min, casesPerDay.max)
     const [h, m] = dayStartTime.split(':').map(Number)
-    let currentTime = new Date(currentDate)
-    currentTime.setHours(h, m, 0, 0)
+    let currentTime = new Date(currentDate); currentTime.setHours(h, m, 0, 0)
 
-    const assignedRooms = surgeon.usesFlipRooms && rooms.length >= 2
-      ? [rooms[0], rooms[1]]
-      : [rooms[randomInt(0, rooms.length - 1)]]
+    // Track which staff we've already added per room for this day (avoid dupes per case)
+    const roomStaffAdded = new Set<string>()
     let roomIdx = 0
 
     for (let i = 0; i < numCases; i++) {
       const proc = randomChoice(surgeonProcs)
-      const room = assignedRooms[roomIdx % assignedRooms.length]
 
-      // Determine surgical time
-      let surgicalTime: number
-      const override = PROCEDURE_SURGICAL_TIMES[proc.name]
-      if (override) {
-        surgicalTime = randomInt(override.min, override.max)
+      // Determine which room this case is in
+      let roomId: string
+      if (flipRoom) {
+        roomId = roomIdx % 2 === 0 ? primaryRoom : flipRoom
       } else {
-        surgicalTime = randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
+        roomId = primaryRoom
       }
 
-      // Start variance: 80% on time (±10min), 20% late (10-30min)
+      // Surgical time
+      const override = PROCEDURE_SURGICAL_TIMES[proc.name]
+      const surgicalTime = override ? randomInt(override.min, override.max) : randomInt(speedCfg.surgicalTime.min, speedCfg.surgicalTime.max)
+
+      // Start variance: 80% on time (±10min), 20% late
       const variance = Math.random() < 0.8 ? randomInt(-5, 10) : randomInt(10, 30)
       const scheduledStart = new Date(currentTime)
       const patientInTime = addMinutes(scheduledStart, variance)
 
-      // Build case record
-      const caseId = crypto.randomUUID?.() ?? `case-${caseNum}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      const caseId = crypto.randomUUID?.() ?? `c-${caseNum}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
       const isFuture = currentDate > new Date()
 
       const caseData: any = {
@@ -762,14 +556,11 @@ function generateSurgeonCases(
         case_number: `${prefix}-${String(caseNum).padStart(5, '0')}`,
         surgeon_id: surgeon.surgeonId,
         procedure_type_id: proc.id,
-        or_room_id: room.id,
-        scheduled_date: currentDate.toISOString().split('T')[0],
+        or_room_id: roomId,
+        scheduled_date: dk,
         start_time: formatTime(scheduledStart),
-        status_id: isFuture ? completedStatusId : completedStatusId, // You could use a 'scheduled' status for future
-        payer_id: payers.length > 0 ? weightedRandomChoice(
-          payers.map((p: any) => p.id),
-          payers.map((p: any) => PAYER_DISTRIBUTION[p.name] || 0.25)
-        ) : null,
+        status_id: isFuture ? scheduledStatusId : completedStatusId,
+        payer_id: weightedChoice(payers.map(p => p.id), payers.map(p => PAYER_WEIGHTS[p.name] || 0.25)),
         operative_side: randomChoice(['Left', 'Right', 'Bilateral', null]),
         is_excluded_from_metrics: false,
         surgeon_left_at: null,
@@ -777,52 +568,45 @@ function generateSurgeonCases(
 
       cases.push(caseData)
 
-      // Generate milestones (only for past cases)
+      // Milestones (past cases only)
       if (!isFuture) {
-        const caseMilestones = buildMilestones(caseId, surgeon, proc, milestoneTypes, patientInTime, surgicalTime)
-        milestones.push(...caseMilestones)
+        const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, patientInTime, surgicalTime)
+        milestones.push(...cms)
 
-        // Set surgeon_left_at
+        // surgeon_left_at
         if (surgeon.closingWorkflow === 'pa_closes') {
-          const closingMs = caseMilestones.find(ms =>
-            milestoneTypes.find(mt => mt.id === ms.milestone_type_id && mt.name === 'closing')
-          )
-          if (closingMs) {
-            caseData.surgeon_left_at = addMinutes(new Date(closingMs.recorded_at), surgeon.closingHandoffMinutes).toISOString()
-          }
+          const closingMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.milestone_type_id && mt.name === 'closing'))
+          if (closingMs) caseData.surgeon_left_at = addMinutes(new Date(closingMs.recorded_at), surgeon.closingHandoffMinutes).toISOString()
         } else {
-          const closingCompleteMs = caseMilestones.find(ms =>
-            milestoneTypes.find(mt => mt.id === ms.milestone_type_id && mt.name === 'closing_complete')
-          )
-          if (closingCompleteMs) {
-            caseData.surgeon_left_at = closingCompleteMs.recorded_at
-          }
+          const ccMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.milestone_type_id && mt.name === 'closing_complete'))
+          if (ccMs) caseData.surgeon_left_at = ccMs.recorded_at
         }
 
-        // Staff assignments
-        if (staff.anesthesiologists.length > 0 && (surgeon.specialty !== 'hand_wrist' || Math.random() > 0.3)) {
-          staffAssignments.push({ case_id: caseId, user_id: randomChoice(staff.anesthesiologists).id })
-        }
-        if (staff.nurses.length > 0) {
-          staffAssignments.push({ case_id: caseId, user_id: randomChoice(staff.nurses).id })
-        }
-        if (staff.techs.length > 0) {
-          staffAssignments.push({ case_id: caseId, user_id: randomChoice(staff.techs).id })
+        // Staff: look up room-day assignment and attach to every case in that room
+        const rdKey = `${dk}|${roomId}`
+        const rdStaff = roomDayStaffMap.get(rdKey)
+        if (rdStaff) {
+          // Always add nurse for every case (same nurse all day)
+          if (rdStaff.nurseId) staffAssignments.push({ case_id: caseId, user_id: rdStaff.nurseId })
+          // Both techs
+          for (const tid of rdStaff.techIds) staffAssignments.push({ case_id: caseId, user_id: tid })
+          // Anesthesiologist (skip ~30% hand/wrist cases that use local)
+          if (rdStaff.anesId && (surgeon.specialty !== 'hand_wrist' || Math.random() > 0.3)) {
+            staffAssignments.push({ case_id: caseId, user_id: rdStaff.anesId })
+          }
         }
 
         // Implants (joint only)
         if (surgeon.specialty === 'joint' && surgeon.preferredVendor) {
-          const procBase = proc.name.replace('Mako ', '')
-          const vendorSpecs = IMPLANT_SPECS[surgeon.preferredVendor]?.[procBase]
-          if (vendorSpecs) {
-            for (const [component, spec] of Object.entries(vendorSpecs)) {
+          const base = proc.name.replace('Mako ', '')
+          const specs = IMPLANT_SPECS[surgeon.preferredVendor]?.[base]
+          if (specs) {
+            for (const [comp, spec] of Object.entries(specs)) {
               const size = Math.random() < 0.7 ? randomChoice(spec.common) : randomChoice(spec.sizes)
               implants.push({
-                case_id: caseId,
-                implant_name: spec.name,
-                implant_size: size,
+                case_id: caseId, implant_name: spec.name, implant_size: size,
                 manufacturer: surgeon.preferredVendor,
-                catalog_number: `${component.toUpperCase()}-${size}-${randomInt(1000, 9999)}`,
+                catalog_number: `${comp.toUpperCase()}-${size}-${randomInt(1000, 9999)}`,
               })
             }
           }
@@ -830,24 +614,17 @@ function generateSurgeonCases(
       }
 
       // Advance time
-      if (surgeon.usesFlipRooms && speedCfg.flipInterval > 0) {
+      if (flipRoom && speedCfg.flipInterval > 0) {
         currentTime = addMinutes(currentTime, speedCfg.flipInterval)
         roomIdx++
       } else {
-        // Use patient_out milestone to determine next case start
-        const patientOutMs = milestones.filter(ms => ms.case_id === caseId).find(ms =>
-          milestoneTypes.find(mt => mt.id === ms.milestone_type_id && mt.name === 'patient_out')
-        )
-        if (patientOutMs) {
-          currentTime = addMinutes(new Date(patientOutMs.recorded_at), randomInt(15, 25))
-        } else {
-          currentTime = addMinutes(currentTime, 90)
-        }
+        const poMs = milestones.filter(ms => ms.case_id === caseId).find(ms =>
+          milestoneTypes.find(mt => mt.id === ms.milestone_type_id && mt.name === 'patient_out'))
+        currentTime = poMs ? addMinutes(new Date(poMs.recorded_at), randomInt(15, 25)) : addMinutes(currentTime, 90)
       }
 
       caseNum++
     }
-
     currentDate.setDate(currentDate.getDate() + 1)
   }
 
@@ -859,52 +636,34 @@ function generateSurgeonCases(
 // =====================================================
 
 function buildMilestones(
-  caseId: string,
-  surgeon: ResolvedSurgeon,
-  proc: any,
-  milestoneTypes: any[],
-  patientInTime: Date,
-  surgicalTime: number
+  caseId: string, surgeon: ResolvedSurgeon, proc: { name: string },
+  milestoneTypes: { id: string; name: string }[], patientInTime: Date, surgicalTime: number
 ): any[] {
   const ms: any[] = []
-  const getMsId = (name: string) => milestoneTypes.find(mt => mt.name === name)?.id
+  const getId = (name: string) => milestoneTypes.find(mt => mt.name === name)?.id
 
-  // Pick template
-  let template: any
-  if (surgeon.specialty === 'joint') {
-    template = JOINT_MILESTONES[surgeon.speedProfile]
-  } else if (surgeon.specialty === 'hand_wrist') {
-    template = HAND_WRIST_MILESTONES
-  } else {
-    template = SPINE_MILESTONES
-  }
+  const tmpl = surgeon.specialty === 'joint' ? JOINT_MS[surgeon.speedProfile]
+    : surgeon.specialty === 'hand_wrist' ? HAND_MS : SPINE_MS
 
   const base = new Date(patientInTime)
 
-  const push = (name: string, offsetOrFn: number | ((st: number) => number), outlierChance = 0, outlierExtra = { min: 0, max: 0 }) => {
-    const id = getMsId(name)
-    if (!id) return
-    let offset = typeof offsetOrFn === 'function' ? offsetOrFn(surgicalTime) : offsetOrFn
-    if (outlierChance > 0) {
-      offset = addOutlier(offset, outlierChance, { min: offset + outlierExtra.min, max: offset + outlierExtra.max })
-    }
-    ms.push({
-      case_id: caseId,
-      milestone_type_id: id,
-      recorded_at: addMinutes(base, offset).toISOString(),
-    })
+  const push = (name: string, offOrFn: number | ((st: number) => number), outlierChance = 0, outlierRange = { min: 0, max: 0 }) => {
+    const id = getId(name); if (!id) return
+    let off = typeof offOrFn === 'function' ? offOrFn(surgicalTime) : offOrFn
+    if (outlierChance > 0) off = addOutlier(off, outlierChance, { min: off + outlierRange.min, max: off + outlierRange.max })
+    ms.push({ case_id: caseId, milestone_type_id: id, recorded_at: addMinutes(base, off).toISOString() })
   }
 
-  push('patient_in', template.patient_in)
-  if (template.anes_start !== undefined) push('anes_start', template.anes_start)
-  if (template.anes_end !== undefined) push('anes_end', template.anes_end, 0.15, { min: 5, max: 12 })
-  push('prep_drape_start', template.prep_drape_start)
-  push('prep_drape_complete', template.prep_drape_complete)
-  push('incision', template.incision)
-  push('closing', template.closing, 0.15, { min: 5, max: 15 })
-  push('closing_complete', template.closing_complete, 0.15, { min: 5, max: 12 })
-  push('patient_out', template.patient_out)
-  push('room_cleaned', template.room_cleaned)
+  push('patient_in', tmpl.patient_in)
+  if ('anes_start' in tmpl) push('anes_start', (tmpl as any).anes_start)
+  if ('anes_end' in tmpl) push('anes_end', (tmpl as any).anes_end, 0.15, { min: 5, max: 12 })
+  push('prep_drape_start', tmpl.prep_drape_start)
+  push('prep_drape_complete', tmpl.prep_drape_complete)
+  push('incision', tmpl.incision)
+  push('closing', tmpl.closing, 0.15, { min: 5, max: 15 })
+  push('closing_complete', tmpl.closing_complete, 0.15, { min: 5, max: 12 })
+  push('patient_out', tmpl.patient_out)
+  push('room_cleaned', tmpl.room_cleaned)
 
   return ms
 }
