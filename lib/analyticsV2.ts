@@ -1579,25 +1579,30 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
 export interface SurgeonIdleSummary {
   surgeonId: string
   surgeonName: string
-  caseCount: number          // Total cases in period
-  gapCount: number           // Number of idle gaps analyzed
-  medianIdleTime: number     // Median idle minutes across all gaps
-  medianCallbackDelta: number // Median optimalCallDelta (how much earlier to call)
+  caseCount: number              // Total cases in period
+  gapCount: number               // Number of idle gaps analyzed
+  medianIdleTime: number         // Median idle minutes across ALL gaps
+  medianCallbackDelta: number    // Median optimalCallDelta from FLIP gaps only (callback only applies to flip)
   flipGapCount: number
   sameRoomGapCount: number
   medianFlipIdle: number
   medianSameRoomIdle: number
-  status: 'on_track' | 'call_sooner' | 'call_later'
+  hasFlipData: boolean           // Whether this surgeon has any flip room transitions
+  status: 'on_track' | 'call_sooner' | 'call_later' | 'turnover_only'
   statusLabel: string
 }
 
 /**
  * Aggregate FlipRoomAnalysis[] into per-surgeon summaries with medians.
  * 
+ * Callback optimization ONLY applies to flip room gaps — you can't call a patient
+ * sooner if the next case is in the same room (that's a turnover problem, not callback).
+ * 
  * Status logic:
- * - on_track:    median idle ≤ 5 min (surgeon timing callbacks well)
- * - call_sooner: median idle > 5 min AND median callback delta > 3 min
- * - call_later:  median idle ≤ 2 min (surgeon arriving before room ready — rare)
+ * - turnover_only: Surgeon has NO flip room gaps — callback timing is not applicable
+ * - on_track:      Surgeon has flip gaps, but median flip idle ≤ 5 min (good timing)
+ * - call_sooner:   Median flip idle > 5 min AND median flip callback delta > 3 min
+ * - call_later:    Median flip idle ≤ 2 min (surgeon arriving before room ready)
  */
 export function aggregateSurgeonIdleSummaries(
   details: FlipRoomAnalysis[],
@@ -1607,7 +1612,7 @@ export function aggregateSurgeonIdleSummaries(
   const bySurgeon = new Map<string, {
     surgeonName: string
     idleTimes: number[]
-    callbackDeltas: number[]
+    flipCallbackDeltas: number[]    // Only from flip gaps
     flipIdles: number[]
     sameRoomIdles: number[]
     gapCount: number
@@ -1619,7 +1624,7 @@ export function aggregateSurgeonIdleSummaries(
     const existing = bySurgeon.get(analysis.surgeonId) || {
       surgeonName: analysis.surgeonName,
       idleTimes: [],
-      callbackDeltas: [],
+      flipCallbackDeltas: [],
       flipIdles: [],
       sameRoomIdles: [],
       gapCount: 0,
@@ -1629,11 +1634,11 @@ export function aggregateSurgeonIdleSummaries(
 
     analysis.idleGaps.forEach(gap => {
       existing.idleTimes.push(gap.idleMinutes)
-      existing.callbackDeltas.push(gap.optimalCallDelta)
       existing.gapCount++
 
       if (gap.gapType === 'flip') {
         existing.flipIdles.push(gap.idleMinutes)
+        existing.flipCallbackDeltas.push(gap.optimalCallDelta)
         existing.flipGapCount++
       } else {
         existing.sameRoomIdles.push(gap.idleMinutes)
@@ -1657,21 +1662,33 @@ export function aggregateSurgeonIdleSummaries(
 
   bySurgeon.forEach((data, surgeonId) => {
     const medianIdle = calculateMedian(data.idleTimes) ?? 0
-    const medianCallback = calculateMedian(data.callbackDeltas) ?? 0
     const medianFlip = calculateMedian(data.flipIdles) ?? 0
     const medianSameRoom = calculateMedian(data.sameRoomIdles) ?? 0
+    const hasFlipData = data.flipGapCount > 0
 
-    // Status determination
+    // Callback delta ONLY from flip gaps (calling patient to a different room earlier)
+    const medianCallback = hasFlipData
+      ? (calculateMedian(data.flipCallbackDeltas) ?? 0)
+      : 0
+
+    // Status determination — based on flip room data only
     let status: SurgeonIdleSummary['status']
     let statusLabel: string
 
-    if (medianIdle <= 2) {
+    if (!hasFlipData) {
+      // No flip room transitions — callback timing doesn't apply
+      status = 'turnover_only'
+      statusLabel = 'Turnover Only'
+    } else if (medianFlip <= 2) {
+      // Surgeon arriving before room is ready — slow down callbacks
       status = 'call_later'
       statusLabel = 'Call Later'
-    } else if (medianIdle <= 5) {
+    } else if (medianFlip <= 5) {
+      // Good callback timing
       status = 'on_track'
       statusLabel = 'On Track'
     } else if (medianCallback > 3) {
+      // Meaningful idle time that could be recovered by earlier callbacks
       status = 'call_sooner'
       statusLabel = 'Call Sooner'
     } else {
@@ -1690,13 +1707,20 @@ export function aggregateSurgeonIdleSummaries(
       sameRoomGapCount: data.sameRoomGapCount,
       medianFlipIdle: medianFlip,
       medianSameRoomIdle: medianSameRoom,
+      hasFlipData,
       status,
       statusLabel,
     })
   })
 
-  // Sort by most improvable first (highest callback delta)
-  return summaries.sort((a, b) => b.medianCallbackDelta - a.medianCallbackDelta)
+  // Sort: call_sooner first (most actionable), then by flip callback delta desc
+  return summaries.sort((a, b) => {
+    // Status priority: call_sooner > call_later > on_track > turnover_only
+    const statusPriority = { call_sooner: 0, call_later: 1, on_track: 2, turnover_only: 3 }
+    const statusDiff = statusPriority[a.status] - statusPriority[b.status]
+    if (statusDiff !== 0) return statusDiff
+    return b.medianCallbackDelta - a.medianCallbackDelta
+  })
 }
 
 // ============================================
