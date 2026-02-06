@@ -320,7 +320,7 @@ function addMinutes(date: Date, minutes: number): Date {
 // MAIN GENERATION FUNCTION
 // =====================================================
 
-export async function generateEnhancedDemoData(
+export async function generateDemoData(
   supabase: SupabaseClient,
   facilityId: string,
   onProgress?: ProgressCallback
