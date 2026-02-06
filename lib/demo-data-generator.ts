@@ -165,6 +165,13 @@ const IMPLANT_SPECS: Record<string, Record<string, Record<string, { name: string
 const PAYER_WEIGHTS: Record<string, number> = { 'Medicare': 0.45, 'BCBS': 0.30, 'Aetna': 0.125, 'UnitedHealthcare': 0.125 }
 
 // =====================================================
+// STAFF TYPES
+// =====================================================
+
+type StaffEntry = { userId: string; roleId: string }
+type RoomDayStaff = { nurse: StaffEntry | null; techs: StaffEntry[]; anes: StaffEntry | null }
+
+// =====================================================
 // HOLIDAYS (US Federal 2024-2026)
 // =====================================================
 
@@ -300,10 +307,10 @@ export async function generateDemoData(
     const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).eq('is_active', true)
     if (!procedureTypes?.length) return { success: false, casesGenerated: 0, error: 'No procedure types' }
 
-    let milestoneTypes: { id: string; name: string }[] = []
+    let milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[] = []
     const { data: fms } = await supabase.from('facility_milestones').select('id, name, source_milestone_type_id').eq('facility_id', facilityId).eq('is_active', true).order('display_order')
     if (fms?.length) milestoneTypes = fms
-    else { const { data: gms } = await supabase.from('milestone_types').select('id, name').eq('is_active', true).order('display_order'); milestoneTypes = gms || [] }
+    else { const { data: gms } = await supabase.from('milestone_types').select('id, name').eq('is_active', true).order('display_order'); milestoneTypes = (gms || []).map(g => ({ ...g, source_milestone_type_id: g.id })) }
     if (!milestoneTypes.length) return { success: false, casesGenerated: 0, error: 'No milestone types' }
 
     // Load procedure_milestone_config: which milestones apply to each procedure type
@@ -373,8 +380,7 @@ export async function generateDemoData(
     }
 
     // For each date, determine which rooms are active and assign staff
-    // Key: "YYYY-MM-DD|roomId" → { nurseId, techIds[2], anesId }
-    type RoomDayStaff = { nurseId: string | null; techIds: string[]; anesId: string | null }
+    // Key: "YYYY-MM-DD|roomId" → { nurse, techs, anes } with user_id + role_id
     const roomDayStaffMap = new Map<string, RoomDayStaff>()
 
     const tempDate = new Date(startDate)
@@ -409,9 +415,12 @@ export async function generateDemoData(
         if (anes) usedAnes.add(anes.id)
 
         roomDayStaffMap.set(`${dk}|${roomId}`, {
-          nurseId: nurse?.id || null,
-          techIds: [tech1?.id, tech2?.id].filter(Boolean) as string[],
-          anesId: anes?.id || null,
+          nurse: nurse ? { userId: nurse.id, roleId: nurse.role_id } : null,
+          techs: [
+            tech1 ? { userId: tech1.id, roleId: tech1.role_id } : null,
+            tech2 ? { userId: tech2.id, roleId: tech2.role_id } : null,
+          ].filter(Boolean) as StaffEntry[],
+          anes: anes ? { userId: anes.id, roleId: anes.role_id } : null,
         })
       }
       tempDate.setDate(tempDate.getDate() + 1)
@@ -487,14 +496,12 @@ export async function generateDemoData(
 // CASE GENERATION PER SURGEON
 // =====================================================
 
-type RoomDayStaff = { nurseId: string | null; techIds: string[]; anesId: string | null }
-
 function generateSurgeonCases(
   surgeon: ResolvedSurgeon,
   startDate: Date,
   endDate: Date,
   allProcedureTypes: { id: string; name: string }[],
-  milestoneTypes: { id: string; name: string }[],
+  milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
   procMilestoneMap: Map<string, Set<string>>,
   payers: { id: string; name: string }[],
   roomDayStaffMap: Map<string, RoomDayStaff>,
@@ -572,8 +579,9 @@ function generateSurgeonCases(
 
       // Lookup anesthesiologist from room-day staff
       const rdStaffForCase = roomDayStaffMap.get(`${dk}|${roomId}`)
-      const anesId = (rdStaffForCase?.anesId && (surgeon.specialty !== 'hand_wrist' || Math.random() > 0.3))
-        ? rdStaffForCase.anesId : null
+      const anesEntry = rdStaffForCase?.anes
+      const skipAnes = surgeon.specialty === 'hand_wrist' && Math.random() < 0.3
+      const anesId = (anesEntry && !skipAnes) ? anesEntry.userId : null
 
       // call_time: when patient was called to pre-op (before patient_in)
       // First case: ~30-45 min before scheduled start; subsequent: ~15-25 min before
@@ -610,9 +618,10 @@ function generateSurgeonCases(
 
       cases.push(caseData)
 
-      // Milestones (past cases only)
+      // ── Milestones ──
+      const allowedMilestones = procMilestoneMap.get(proc.id)
       if (!isFuture) {
-        const allowedMilestones = procMilestoneMap.get(proc.id)
+        // Completed cases: insert milestones WITH timestamps
         const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, allowedMilestones, patientInTime, surgicalTime)
         milestones.push(...cms)
 
@@ -626,64 +635,67 @@ function generateSurgeonCases(
         }
 
         // ── Callback timing for flip room cases ──
-        // On case N (flip room), called_back_at = when surgeon was notified the flip room is ready.
-        // This is relative to prep_drape_complete on THIS case vs surgeon_left_at on the PREVIOUS case.
-        //
-        // Callback profiles (set per-surgeon):
-        //   Optimal: surgeon called back ~0-3 min before prep_drape_complete (arrives just in time, no idle)
-        //   Call sooner: surgeon called back 5-15 min AFTER prep_drape_complete (room waited for surgeon)  
-        //   Call later: surgeon called back 5-12 min BEFORE prep_drape_complete (surgeon idle waiting for room)
         if (flipRoom && i > 0 && prevCaseData) {
           const pdcMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'prep_drape_complete'))
           if (pdcMs) {
             const pdcTime = new Date(pdcMs.recorded_at)
             let callbackOffset: number
             if (surgeon.speedProfile === 'fast') {
-              // Optimal: called back right around prep_drape_complete (±3 min)
               callbackOffset = randomInt(-3, 3)
             } else if (surgeon.speedProfile === 'slow') {
-              // Should call sooner: callback comes AFTER room is ready (room idle 5-15 min)
               callbackOffset = randomInt(5, 15)
             } else {
-              // Average: sometimes optimal, sometimes slightly late
               callbackOffset = randomInt(-2, 8)
             }
             caseData.called_back_at = addMinutes(pdcTime, callbackOffset).toISOString()
           }
         }
 
-        // Store for next iteration's callback calc
         prevCaseMilestones = cms
         prevCaseData = caseData
 
-        // Link flip room cases: previous case's called_next_case_id → this case
+        // Link flip room cases
         if (flipRoom && i > 0 && prevCaseLinked) {
           prevCaseLinked.called_next_case_id = caseId
         }
         prevCaseLinked = flipRoom ? caseData : null
-
-        // Staff: look up room-day assignment and attach nurse + techs to case
-        // (anesthesiologist_id is already set on the case directly)
-        const rdKey = `${dk}|${roomId}`
-        const rdStaff = roomDayStaffMap.get(rdKey)
-        if (rdStaff) {
-          if (rdStaff.nurseId) staffAssignments.push({ case_id: caseId, user_id: rdStaff.nurseId })
-          for (const tid of rdStaff.techIds) staffAssignments.push({ case_id: caseId, user_id: tid })
+      } else {
+        // Future/scheduled cases: initialize milestones with recorded_at = NULL
+        // This matches the CaseForm.initializeCaseMilestones pattern
+        if (allowedMilestones) {
+          for (const fmId of allowedMilestones) {
+            const mt = milestoneTypes.find(m => m.id === fmId)
+            milestones.push({
+              case_id: caseId,
+              facility_milestone_id: fmId,
+              milestone_type_id: mt?.source_milestone_type_id || null,
+              recorded_at: null,
+            })
+          }
         }
+      }
 
-        // Implants (joint only)
-        if (surgeon.specialty === 'joint' && surgeon.preferredVendor) {
-          const base = proc.name.replace('Mako ', '')
-          const specs = IMPLANT_SPECS[surgeon.preferredVendor]?.[base]
-          if (specs) {
-            for (const [comp, spec] of Object.entries(specs)) {
-              const size = Math.random() < 0.7 ? randomChoice(spec.common) : randomChoice(spec.sizes)
-              implants.push({
-                case_id: caseId, implant_name: spec.name, implant_size: size,
-                manufacturer: surgeon.preferredVendor,
-                catalog_number: `${comp.toUpperCase()}-${size}-${randomInt(1000, 9999)}`,
-              })
-            }
+      // ── Staff (all cases, not just completed) ──
+      const rdKey = `${dk}|${roomId}`
+      const rdStaff = roomDayStaffMap.get(rdKey)
+      if (rdStaff) {
+        if (rdStaff.nurse) staffAssignments.push({ case_id: caseId, user_id: rdStaff.nurse.userId, role_id: rdStaff.nurse.roleId })
+        for (const tech of rdStaff.techs) staffAssignments.push({ case_id: caseId, user_id: tech.userId, role_id: tech.roleId })
+        if (anesId && rdStaff.anes) staffAssignments.push({ case_id: caseId, user_id: rdStaff.anes.userId, role_id: rdStaff.anes.roleId })
+      }
+
+      // ── Implants (joint only, all cases) ──
+      if (surgeon.specialty === 'joint' && surgeon.preferredVendor) {
+        const base = proc.name.replace('Mako ', '')
+        const specs = IMPLANT_SPECS[surgeon.preferredVendor]?.[base]
+        if (specs) {
+          for (const [comp, spec] of Object.entries(specs)) {
+            const size = Math.random() < 0.7 ? randomChoice(spec.common) : randomChoice(spec.sizes)
+            implants.push({
+              case_id: caseId, implant_name: spec.name, implant_size: size,
+              manufacturer: surgeon.preferredVendor,
+              catalog_number: `${comp.toUpperCase()}-${size}-${randomInt(1000, 9999)}`,
+            })
           }
         }
       }
@@ -712,19 +724,18 @@ function generateSurgeonCases(
 
 function buildMilestones(
   caseId: string, surgeon: ResolvedSurgeon, proc: { id: string; name: string },
-  milestoneTypes: { id: string; name: string }[],
+  milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
   allowedMilestones: Set<string> | undefined,
   patientInTime: Date, surgicalTime: number
 ): any[] {
   const ms: any[] = []
 
   // Resolve facility_milestone_id by name, but ONLY if it's in the procedure_milestone_config
-  const getId = (name: string): string | null => {
+  const getEntry = (name: string): { fmId: string; mtId: string | null } | null => {
     const mt = milestoneTypes.find(m => m.name === name)
     if (!mt) return null
-    // If we have a config for this procedure, respect it; otherwise allow all
     if (allowedMilestones && !allowedMilestones.has(mt.id)) return null
-    return mt.id
+    return { fmId: mt.id, mtId: mt.source_milestone_type_id }
   }
 
   const tmpl = surgeon.specialty === 'joint' ? JOINT_MS[surgeon.speedProfile]
@@ -733,10 +744,15 @@ function buildMilestones(
   const base = new Date(patientInTime)
 
   const push = (name: string, offOrFn: number | ((st: number) => number), outlierChance = 0, outlierRange = { min: 0, max: 0 }) => {
-    const id = getId(name); if (!id) return
+    const entry = getEntry(name); if (!entry) return
     let off = typeof offOrFn === 'function' ? offOrFn(surgicalTime) : offOrFn
     if (outlierChance > 0) off = addOutlier(off, outlierChance, { min: off + outlierRange.min, max: off + outlierRange.max })
-    ms.push({ case_id: caseId, facility_milestone_id: id, recorded_at: addMinutes(base, off).toISOString() })
+    ms.push({
+      case_id: caseId,
+      facility_milestone_id: entry.fmId,
+      milestone_type_id: entry.mtId,
+      recorded_at: addMinutes(base, off).toISOString(),
+    })
   }
 
   push('patient_in', tmpl.patient_in)
