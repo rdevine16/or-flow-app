@@ -486,7 +486,7 @@ export async function generateDemoData(
       const result = generateSurgeonCases(
         surgeon, startDate, endDate, procedureTypes, milestoneTypes, procMilestoneMap, payers,
         roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum,
-        facility.timezone || 'America/New_York'
+        facility.timezone || 'America/New_York', fmToMtMap
       )
       allCases.push(...result.cases)
       allMilestones.push(...result.milestones)
@@ -624,7 +624,8 @@ function generateSurgeonCases(
   scheduledStatusId: string,
   prefix: string,
   startingNumber: number,
-  facilityTz: string
+  facilityTz: string,
+  fmToMtMap: Map<string, string>
 ) {
   const cases: any[] = []
   const milestones: any[] = []
@@ -740,7 +741,7 @@ function generateSurgeonCases(
       const allowedMilestones = procMilestoneMap.get(proc.id)
       if (!isFuture) {
         // Completed cases: insert milestones WITH timestamps
-        const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, allowedMilestones, patientInTime, surgicalTime)
+        const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, allowedMilestones, patientInTime, surgicalTime, fmToMtMap)
         milestones.push(...cms)
 
         // surgeon_left_at
@@ -785,6 +786,7 @@ function generateSurgeonCases(
             milestones.push({
               case_id: caseId,
               facility_milestone_id: fmId,
+              milestone_type_id: fmToMtMap.get(fmId) || null,
               recorded_at: null,
             })
           }
@@ -842,7 +844,8 @@ function buildMilestones(
   caseId: string, surgeon: ResolvedSurgeon, proc: { id: string; name: string },
   milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
   allowedMilestones: Set<string> | undefined,
-  patientInTime: Date, surgicalTime: number
+  patientInTime: Date, surgicalTime: number,
+  fmToMtMap: Map<string, string>
 ): any[] {
   const ms: any[] = []
 
@@ -871,6 +874,7 @@ function buildMilestones(
     ms.push({
       case_id: caseId,
       facility_milestone_id: fmId,
+      milestone_type_id: fmToMtMap.get(fmId) || null,
       recorded_at: addMinutes(base, off).toISOString(),
     })
   }
