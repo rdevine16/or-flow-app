@@ -1277,19 +1277,19 @@ export default function AnalyticsOverviewPage() {
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <KPICard 
-                    title="Room Turnover" 
+                    title="Median Room Turnover" 
                     kpi={analytics.turnoverTime}
                     icon={ClockIcon}
                     accentColor="emerald"
                   />
                   <KPICard 
-                    title="Same-Room Surgical" 
+                    title="Median Same-Room Surgical" 
                     kpi={analytics.standardSurgicalTurnover}
                     icon={ClockIcon}
                     accentColor="blue"
                   />
                   <KPICard 
-                    title="Flip Room Time" 
+                    title="Median Flip Room Time" 
                     kpi={analytics.flipRoomTime}
                     icon={ArrowRightIcon}
                     accentColor="violet"

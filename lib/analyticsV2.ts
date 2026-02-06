@@ -655,13 +655,13 @@ export function calculateSurgicalTurnovers(
     }
   })
 
-  // Calculate averages
-  const avgSameRoom = calculateAverage(sameRoomTurnovers)
-  const avgFlipRoom = calculateAverage(flipRoomTurnovers)
+  // Calculate medians
+  const medianSameRoom = calculateMedian(sameRoomTurnovers) ?? 0
+  const medianFlipRoom = calculateMedian(flipRoomTurnovers) ?? 0
 
   // Calculate previous period for deltas
-  let prevAvgSameRoom: number | undefined
-  let prevAvgFlipRoom: number | undefined
+  let prevMedianSameRoom: number | undefined
+  let prevMedianFlipRoom: number | undefined
 
   if (previousPeriodCases && previousPeriodCases.length > 0) {
     const prevSameRoom: number[] = []
@@ -710,13 +710,13 @@ export function calculateSurgicalTurnovers(
       }
     })
 
-    if (prevSameRoom.length > 0) prevAvgSameRoom = calculateAverage(prevSameRoom)
-    if (prevFlipRoom.length > 0) prevAvgFlipRoom = calculateAverage(prevFlipRoom)
+    if (prevSameRoom.length > 0) prevMedianSameRoom = calculateMedian(prevSameRoom) ?? undefined
+    if (prevFlipRoom.length > 0) prevMedianFlipRoom = calculateMedian(prevFlipRoom) ?? undefined
   }
 
   // Build KPI results
-  const sameRoomDelta = calculateDelta(avgSameRoom, prevAvgSameRoom, true)
-  const flipRoomDelta = calculateDelta(avgFlipRoom, prevAvgFlipRoom, true)
+  const sameRoomDelta = calculateDelta(medianSameRoom, prevMedianSameRoom, true)
+  const flipRoomDelta = calculateDelta(medianFlipRoom, prevMedianFlipRoom, true)
 
   // Target compliance
   const sameRoomTarget = 45 // Target: 45 minutes for same room
@@ -737,11 +737,11 @@ export function calculateSurgicalTurnovers(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
     .map(([date, turnovers]) => {
-      const dayAvg = calculateAverage(turnovers)
+      const dayMedian = calculateMedian(turnovers) ?? 0
       return {
         date,
-        color: (dayAvg <= 40 ? 'emerald' : dayAvg <= 50 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayAvg)} min avg (${turnovers.length} turnovers)`
+        color: (dayMedian <= 40 ? 'emerald' : dayMedian <= 50 ? 'yellow' : 'red') as Color,
+        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} turnovers)`
       }
     })
 
@@ -750,34 +750,34 @@ export function calculateSurgicalTurnovers(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
     .map(([date, turnovers]) => {
-      const dayAvg = calculateAverage(turnovers)
+      const dayMedian = calculateMedian(turnovers) ?? 0
       return {
         date,
-        color: (dayAvg <= 10 ? 'emerald' : dayAvg <= 20 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayAvg)} min avg (${turnovers.length} flips)`
+        color: (dayMedian <= 10 ? 'emerald' : dayMedian <= 20 ? 'yellow' : 'red') as Color,
+        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} flips)`
       }
     })
 
   return {
     standardTurnover: {
-      value: Math.round(avgSameRoom),
-      displayValue: sameRoomTurnovers.length > 0 ? `${Math.round(avgSameRoom)} min` : '--',
+      value: Math.round(medianSameRoom),
+      displayValue: sameRoomTurnovers.length > 0 ? `${Math.round(medianSameRoom)} min` : '--',
       subtitle: sameRoomTurnovers.length > 0
         ? `${sameRoomCompliance}% ≤${sameRoomTarget} min · ${sameRoomTurnovers.length} turnovers`
         : 'No same-room turnovers',
       target: sameRoomTarget,
-      targetMet: avgSameRoom <= sameRoomTarget,
+      targetMet: medianSameRoom <= sameRoomTarget,
       ...sameRoomDelta,
       dailyData: sameRoomDailyData
     },
     flipRoomTime: {
-      value: Math.round(avgFlipRoom),
-      displayValue: flipRoomTurnovers.length > 0 ? `${Math.round(avgFlipRoom)} min` : '--',
+      value: Math.round(medianFlipRoom),
+      displayValue: flipRoomTurnovers.length > 0 ? `${Math.round(medianFlipRoom)} min` : '--',
       subtitle: flipRoomTurnovers.length > 0
         ? `${flipRoomCompliance}% ≤${flipRoomTarget} min · ${flipRoomTurnovers.length} flips`
         : 'No flip room data',
       target: flipRoomTarget,
-      targetMet: avgFlipRoom <= flipRoomTarget,
+      targetMet: medianFlipRoom <= flipRoomTarget,
       ...flipRoomDelta,
       dailyData: flipRoomDailyData
     },
@@ -956,12 +956,12 @@ export function calculateTurnoverTime(
     }
   })
   
-  const avgTurnover = calculateAverage(turnovers)
+  const medianTurnover = calculateMedian(turnovers) ?? 0
   const metTarget = turnovers.filter(t => t <= 30).length
   const complianceRate = turnovers.length > 0 ? Math.round((metTarget / turnovers.length) * 100) : 0
   
-  // Calculate previous period average for delta
-  let previousAvg: number | undefined
+  // Calculate previous period median for delta
+  let previousMedian: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
     const prevTurnovers: number[] = []
     const prevByRoomDate = new Map<string, CaseWithMilestones[]>()
@@ -988,31 +988,31 @@ export function calculateTurnoverTime(
     })
     
     if (prevTurnovers.length > 0) {
-      previousAvg = calculateAverage(prevTurnovers)
+      previousMedian = calculateMedian(prevTurnovers) ?? undefined
     }
   }
   
 
   
   // For turnover, lower is better
-  const { delta, deltaType } = calculateDelta(avgTurnover, previousAvg, true)
+  const { delta, deltaType } = calculateDelta(medianTurnover, previousMedian, true)
   
   // Build daily tracker
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
     .map(([date, dayTurnovers]) => {
-      const dayAvg = calculateAverage(dayTurnovers)
+      const dayMedian = calculateMedian(dayTurnovers) ?? 0
       return {
         date,
-        color: dayAvg <= 25 ? 'emerald' : dayAvg <= 30 ? 'yellow' : 'red' as Color,
-        tooltip: `${date}: ${Math.round(dayAvg)} min avg`
+        color: dayMedian <= 25 ? 'emerald' : dayMedian <= 30 ? 'yellow' : 'red' as Color,
+        tooltip: `${date}: ${Math.round(dayMedian)} min median`
       }
     })
   
   return {
-    value: Math.round(avgTurnover),
-    displayValue: `${Math.round(avgTurnover)} min`,
+    value: Math.round(medianTurnover),
+    displayValue: `${Math.round(medianTurnover)} min`,
     subtitle: `${complianceRate}% under 30 min target`,
     target: 80,
     targetMet: complianceRate >= 80,
