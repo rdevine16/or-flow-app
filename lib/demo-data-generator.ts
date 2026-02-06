@@ -532,7 +532,7 @@ async function createDemoSurgeons(
   const surgeons: DemoSurgeon[] = []
   
   const { data: surgeonRole } = await supabase
-    .from('roles')
+    .from('user_roles')
     .select('id')
     .eq('name', 'surgeon')
     .single()
@@ -629,9 +629,9 @@ async function createDemoStaff(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<{ anesthesiologists: any[]; nurses: any[]; techs: any[] }> {
-  const { data: anesthRole } = await supabase.from('roles').select('id').eq('name', 'anesthesiologist').single()
-  const { data: nurseRole } = await supabase.from('roles').select('id').eq('name', 'nurse').single()
-  const { data: techRole } = await supabase.from('roles').select('id').eq('name', 'surgical_tech').single()
+  const { data: anesthRole } = await supabase.from('user_roles').select('id').eq('name', 'anesthesiologist').single()
+  const { data: nurseRole } = await supabase.from('user_roles').select('id').eq('name', 'nurse').single()
+  const { data: techRole } = await supabase.from('user_roles').select('id').eq('name', 'tech').single()
 
   const anesthesiologists = []
   const nurses = []
