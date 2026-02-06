@@ -414,6 +414,12 @@ export default function DemoDataWizard() {
               <EmptyState icon="warning" title="No surgeons found" description="Add surgeons via Staff Management first." />
             ) : (
               <div className="space-y-3">
+                {/* ── Weekly Schedule Grid ── */}
+                <ScheduleGrid
+                  rooms={rooms}
+                  surgeons={surgeons}
+                  profiles={profiles}
+                />
                 {surgeons.map(surgeon => {
                   const p = profiles[surgeon.id]
                   if (!p) return null
@@ -833,6 +839,159 @@ export default function DemoDataWizard() {
 // SUB-COMPONENTS
 // ============================================================================
 
+const SURGEON_COLORS = [
+  { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
+  { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
+  { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
+  { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
+  { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-200' },
+  { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200' },
+  { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-200' },
+]
+
+function ScheduleGrid({ rooms, surgeons, profiles }: {
+  rooms: ORRoom[]
+  surgeons: Surgeon[]
+  profiles: Record<string, SurgeonProfile>
+}) {
+  // Build color map: surgeonId → color index
+  const colorMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    surgeons.forEach((s, i) => { map[s.id] = i % SURGEON_COLORS.length })
+    return map
+  }, [surgeons])
+
+  // Build schedule: for each room + day, which surgeons are there?
+  const schedule = useMemo(() => {
+    // Map: roomId → dayNumber → surgeonIds[]
+    const grid: Record<string, Record<number, string[]>> = {}
+    for (const room of rooms) {
+      grid[room.id] = { 1: [], 2: [], 3: [], 4: [], 5: [] }
+    }
+
+    for (const surgeon of surgeons) {
+      const p = profiles[surgeon.id]
+      if (!p) continue
+
+      for (const day of p.operatingDays) {
+        if (p.primaryRoomId && grid[p.primaryRoomId]) {
+          grid[p.primaryRoomId][day].push(surgeon.id)
+        }
+        if (p.usesFlipRooms && p.flipRoomId && grid[p.flipRoomId]) {
+          grid[p.flipRoomId][day].push(surgeon.id)
+        }
+      }
+    }
+    return grid
+  }, [rooms, surgeons, profiles])
+
+  // Find rooms that have at least one surgeon assigned
+  const activeRooms = useMemo(() => {
+    return rooms.filter(room => {
+      const days = schedule[room.id]
+      if (!days) return false
+      return Object.values(days).some(sIds => sIds.length > 0)
+    })
+  }, [rooms, schedule])
+
+  // Also show unassigned rooms (but de-emphasize)
+  const unassignedRooms = rooms.filter(r => !activeRooms.find(ar => ar.id === r.id))
+
+  if (rooms.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <h3 className="text-sm font-semibold text-slate-700">Weekly OR Schedule</h3>
+        </div>
+        <p className="text-[11px] text-slate-400">Updates live as you configure surgeons below</p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-slate-50">
+              <th className="px-3 py-2 text-left font-semibold text-slate-500 w-28 border-r border-slate-100">Room</th>
+              {WEEKDAYS.map(day => (
+                <th key={day} className="px-2 py-2 text-center font-semibold text-slate-500 border-r border-slate-100 last:border-r-0">{day}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {activeRooms.map(room => (
+              <tr key={room.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                <td className="px-3 py-2.5 font-medium text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                  {room.name}
+                </td>
+                {WEEKDAY_VALUES.map(day => {
+                  const surgeonIds = schedule[room.id]?.[day] || []
+                  return (
+                    <td key={day} className="px-1.5 py-1.5 border-r border-slate-100 last:border-r-0 align-top">
+                      <div className="flex flex-col gap-1 min-h-[28px]">
+                        {surgeonIds.map(sId => {
+                          const surgeon = surgeons.find(s => s.id === sId)
+                          if (!surgeon) return null
+                          const p = profiles[sId]
+                          const color = SURGEON_COLORS[colorMap[sId]]
+                          const isFlip = p?.usesFlipRooms && p.flipRoomId === room.id
+                          return (
+                            <div key={sId} className={`px-2 py-1 rounded-md border text-[11px] font-medium leading-tight ${color.bg} ${color.text} ${color.border}`}>
+                              <span>{surgeon.last_name}</span>
+                              {isFlip && <span className="opacity-60 ml-1">↔</span>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            {unassignedRooms.length > 0 && activeRooms.length > 0 && (
+              <tr className="border-t border-slate-100">
+                <td colSpan={6} className="px-3 py-2 text-[11px] text-slate-400 italic">
+                  {unassignedRooms.length} room{unassignedRooms.length > 1 ? 's' : ''} unassigned: {unassignedRooms.map(r => r.name).join(', ')}
+                </td>
+              </tr>
+            )}
+            {activeRooms.length === 0 && (
+              <tr className="border-t border-slate-100">
+                <td colSpan={6} className="px-3 py-6 text-center text-slate-400 text-xs">
+                  No rooms assigned yet — configure surgeons below to populate the schedule
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legend */}
+      {surgeons.length > 0 && (
+        <div className="px-5 py-2.5 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-x-4 gap-y-1">
+          {surgeons.map(s => {
+            const color = SURGEON_COLORS[colorMap[s.id]]
+            const p = profiles[s.id]
+            return (
+              <div key={s.id} className="flex items-center gap-1.5">
+                <div className={`w-3 h-3 rounded-sm ${color.bg} ${color.border} border`} />
+                <span className="text-[11px] text-slate-500">
+                  {s.last_name}
+                  {p?.usesFlipRooms && <span className="text-slate-400"> (flip)</span>}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -893,7 +1052,7 @@ function EmptyState({ icon, title, description }: { icon: 'building' | 'warning'
   )
 }
 
-// =============================== s==== a=========================================
+// ============================================================================
 // HELPERS
 // ============================================================================
 
