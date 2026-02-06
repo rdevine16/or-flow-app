@@ -249,6 +249,8 @@ export async function purgeCaseData(
         const batch = ids.slice(i, i + BATCH_SIZE)
         await supabase.from('case_implants').delete().in('case_id', batch)
         await supabase.from('case_milestones').delete().in('case_id', batch)
+        await supabase.from('case_milestone_stats').delete().in('case_id', batch).then(() => {}, () => {})
+        await supabase.from('case_completion_stats').delete().in('case_id', batch).then(() => {}, () => {})
         await supabase.from('case_staff').delete().in('case_id', batch)
         await supabase.from('case_delays').delete().in('case_id', batch).then(() => {}, () => {})
         onProgress?.({ phase: 'clearing', current: 10 + Math.floor((i / ids.length) * 60), total: 100, message: `Cleared ${Math.min(i + BATCH_SIZE, ids.length)} of ${ids.length}...` })
@@ -350,6 +352,20 @@ export async function generateDemoData(
     for (const row of (procMsConfig || [])) {
       if (!procMilestoneMap.has(row.procedure_type_id)) procMilestoneMap.set(row.procedure_type_id, new Set())
       procMilestoneMap.get(row.procedure_type_id)!.add(row.facility_milestone_id)
+    }
+
+    // Load global milestone_types for case_milestone_stats (the stats pipeline uses these IDs)
+    const { data: globalMilestoneTypes } = await supabase.from('milestone_types').select('id, name').eq('is_active', true)
+    // Build lookup: facility_milestone_id → global milestone_type_id (via matching name)
+    const fmToMtMap = new Map<string, string>()
+    for (const fm of milestoneTypes) {
+      // Match by source_milestone_type_id first, then by name
+      if (fm.source_milestone_type_id) {
+        fmToMtMap.set(fm.id, fm.source_milestone_type_id)
+      } else {
+        const gmt = (globalMilestoneTypes || []).find(g => g.name === fm.name)
+        if (gmt) fmToMtMap.set(fm.id, gmt.id)
+      }
     }
 
     const { data: payers } = await supabase.from('payers').select('id, name').eq('facility_id', facilityId)
@@ -502,6 +518,61 @@ export async function generateDemoData(
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
       const { error } = await supabase.from('case_milestones').insert(allMilestones.slice(i, i + BATCH_SIZE))
       if (error) { console.error(`Milestone batch ${i} err:`, error.message, 'Sample:', JSON.stringify(allMilestones[i])); }
+    }
+
+    // ── Build case_milestone_stats (bypasses triggers we disabled) ──
+    // Groups milestones by case, finds patient_in time, computes minutes_from_start
+    onProgress?.({ phase: 'inserting', current: 75, total: 100, message: 'Building milestone stats...' })
+    const allMilestoneStats: any[] = []
+
+    // Build a case lookup from allCases for facility_id, surgeon_id, procedure_type_id, scheduled_date
+    const caseMap = new Map<string, any>()
+    for (const c of allCases) caseMap.set(c.id, c)
+
+    // Find patient_in facility_milestone_id
+    const patientInFmId = milestoneTypes.find(m => m.name === 'patient_in')?.id
+
+    // Group milestones by case_id
+    const msByCaseId = new Map<string, any[]>()
+    for (const ms of allMilestones) {
+      if (!ms.recorded_at) continue  // skip future case placeholders
+      if (!msByCaseId.has(ms.case_id)) msByCaseId.set(ms.case_id, [])
+      msByCaseId.get(ms.case_id)!.push(ms)
+    }
+
+    for (const [caseId, caseMilestones] of msByCaseId) {
+      const caseData = caseMap.get(caseId)
+      if (!caseData) continue
+
+      // Find patient_in time for this case
+      const piMs = caseMilestones.find((m: any) => m.facility_milestone_id === patientInFmId)
+      if (!piMs) continue
+      const piTime = new Date(piMs.recorded_at).getTime()
+
+      for (const ms of caseMilestones) {
+        const mtId = fmToMtMap.get(ms.facility_milestone_id)
+        if (!mtId) continue  // skip if no global milestone_type mapping
+
+        const msTime = new Date(ms.recorded_at).getTime()
+        const minutesFromStart = Math.round(((msTime - piTime) / 60000) * 100) / 100
+
+        allMilestoneStats.push({
+          case_id: caseId,
+          facility_id: caseData.facility_id,
+          surgeon_id: caseData.surgeon_id,
+          procedure_type_id: caseData.procedure_type_id,
+          milestone_type_id: mtId,
+          case_date: caseData.scheduled_date,
+          minutes_from_start: minutesFromStart,
+          recorded_at: ms.recorded_at,
+        })
+      }
+    }
+
+    onProgress?.({ phase: 'inserting', current: 78, total: 100, message: `Inserting ${allMilestoneStats.length} milestone stats...` })
+    for (let i = 0; i < allMilestoneStats.length; i += BATCH_SIZE) {
+      const { error } = await supabase.from('case_milestone_stats').insert(allMilestoneStats.slice(i, i + BATCH_SIZE))
+      if (error) console.error(`MilestoneStats batch ${i} err:`, error.message, 'Sample:', JSON.stringify(allMilestoneStats[i]))
     }
 
     onProgress?.({ phase: 'inserting', current: 80, total: 100, message: `Inserting ${allStaffAssignments.length} staff...` })
