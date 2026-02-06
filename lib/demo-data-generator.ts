@@ -258,6 +258,8 @@ export async function purgeCaseData(
     }
 
     onProgress?.({ phase: 'clearing', current: 70, total: 100, message: 'Deleting cases...' })
+    // Clear self-referencing FK before delete to avoid constraint violations
+    await supabase.from('cases').update({ called_next_case_id: null }).eq('facility_id', facilityId).not('called_next_case_id', 'is', null)
     const { error } = await supabase.from('cases').delete().eq('facility_id', facilityId)
     if (error) return { success: false, error: `Delete cases: ${error.message}`, casesDeleted: 0 }
 
@@ -600,7 +602,18 @@ export async function generateDemoData(
 
     await supabase.rpc('enable_demo_triggers').then(() => {}, () => { supabase.rpc('enable_demo_audit_triggers').then(() => {}, () => {}) })
 
-    onProgress?.({ phase: 'finalizing', current: 92, total: 100, message: 'Recalculating averages...' })
+    // Validate completed cases to populate case_completion_stats via trigger
+    // The trigger fires when data_validated changes to TRUE and calls record_case_stats()
+    onProgress?.({ phase: 'finalizing', current: 90, total: 100, message: 'Validating completed cases for financial stats...' })
+    const completedCaseIds = allCases.filter(c => c.status_id === completedStatus.id).map(c => c.id)
+    console.log(`[DEMO-GEN] Validating ${completedCaseIds.length} completed cases for case_completion_stats...`)
+    for (let i = 0; i < completedCaseIds.length; i += BATCH_SIZE) {
+      const batch = completedCaseIds.slice(i, i + BATCH_SIZE)
+      const { error } = await supabase.from('cases').update({ data_validated: true }).in('id', batch)
+      if (error) console.error(`Validation batch ${i} err:`, error.message)
+    }
+
+    onProgress?.({ phase: 'finalizing', current: 93, total: 100, message: 'Recalculating averages...' })
     await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: any) => console.warn('Avg recalc:', e.message))
 
     // Refresh materialized views so analytics reflect new data
@@ -609,6 +622,13 @@ export async function generateDemoData(
       () => console.log('Refreshed all materialized views'),
       (e: any) => console.warn('MatView refresh failed:', e.message)
     )
+
+    // Verification counts
+    const { count: dbCaseCount } = await supabase.from('cases').select('*', { count: 'exact', head: true }).eq('facility_id', facilityId)
+    const { count: dbMsCount } = await supabase.from('case_milestones').select('*', { count: 'exact', head: true }).in('case_id', allCases.slice(0, 5).map(c => c.id))
+    const { count: dbStatsCount } = await supabase.from('case_completion_stats').select('*', { count: 'exact', head: true }).eq('facility_id', facilityId)
+    console.log(`[DEMO-GEN] Verification — DB cases: ${dbCaseCount}, milestones sample (5 cases): ${dbMsCount}, completion_stats: ${dbStatsCount}`)
+    console.log(`[DEMO-GEN] Expected — cases: ${allCases.length}, milestones: ${allMilestones.length}, validated: ${completedCaseIds.length}`)
 
     onProgress?.({ phase: 'complete', current: 100, total: 100, message: 'Done!' })
     return { success: true, casesGenerated: allCases.length, details: { milestones: allMilestones.length, staff: allStaffAssignments.length, implants: allImplants.length } }
