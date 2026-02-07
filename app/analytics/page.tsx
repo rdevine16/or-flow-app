@@ -593,10 +593,11 @@ export default function AnalyticsHubPage() {
         ),
         or_rooms (id, name),
         case_statuses (name),
-        case_milestones (
-          milestone_type_id,
-          recorded_at,
-          milestone_types (name)
+case_milestones (
+            facility_milestone_id,
+            recorded_at,
+            facility_milestones (name)
+          )
         )
       `)
       .eq('facility_id', effectiveFacilityId)
@@ -643,9 +644,9 @@ export default function AnalyticsHubPage() {
           or_rooms (id, name),
           case_statuses (name),
           case_milestones (
-            milestone_type_id,
+            facility_milestone_id,
             recorded_at,
-            milestone_types (name)
+            facility_milestones (name)
           )
         `)
         .eq('facility_id', effectiveFacilityId)
@@ -743,7 +744,7 @@ export default function AnalyticsHubPage() {
     let closingTimestamp: number | null = null
 
     milestones.forEach(m => {
-      const mType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
+const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
       if (mType?.name === 'incision') {
         incisionTimestamp = new Date(m.recorded_at).getTime()
       } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
