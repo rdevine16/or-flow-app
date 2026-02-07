@@ -1077,9 +1077,9 @@ export default function AnalyticsOverviewPage() {
         or_rooms (id, name),
         case_statuses (name),
         case_milestones (
-          milestone_type_id,
+          facility_milestone_id,
           recorded_at,
-          milestone_types (name)
+          facility_milestones (name)
         )
       `)
       .eq('facility_id', effectiveFacilityId)
@@ -1138,9 +1138,9 @@ export default function AnalyticsOverviewPage() {
           or_rooms (id, name),
           case_statuses (name),
           case_milestones (
-            milestone_type_id,
+            facility_milestone_id,
             recorded_at,
-            milestone_types (name)
+            facility_milestones (name)
           )
         `)
         .eq('facility_id', effectiveFacilityId)

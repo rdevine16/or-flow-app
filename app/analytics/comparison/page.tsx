@@ -74,9 +74,9 @@ export default function SurgeonComparisonPage() {
         procedure_types (id, name),
         or_rooms (name),
         case_milestones (
-          milestone_type_id,
+          facility_milestone_id,
           recorded_at,
-          milestone_types (name)
+          facility_milestones (name)
         )
       `)
       .eq('facility_id', userFacilityId)  // ← DYNAMIC!

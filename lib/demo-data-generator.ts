@@ -817,7 +817,6 @@ function generateSurgeonCases(
             milestones.push({
               case_id: caseId,
               facility_milestone_id: fmId,
-              milestone_type_id: fmToMtMap.get(fmId) || null,
               recorded_at: null,
             })
           }
@@ -905,7 +904,6 @@ function buildMilestones(
     ms.push({
       case_id: caseId,
       facility_milestone_id: fmId,
-      milestone_type_id: fmToMtMap.get(fmId) || null,
       recorded_at: addMinutes(base, off).toISOString(),
     })
   }

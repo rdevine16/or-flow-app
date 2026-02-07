@@ -856,23 +856,14 @@ export default function DataQualityPage() {
           .eq('id', existing.id)
       } else {
         // Insert new - need to get milestone_type_id
-        const { data: milestoneType } = await supabase
-          .from('milestone_types')
-          .select('id')
-          .eq('name', milestone.name)
-          .single()
-        
-        if (milestoneType) {
-          await supabase
-            .from('case_milestones')
-            .insert({
-              case_id: modalState.issue.case_id,
-              facility_milestone_id: milestone.id,
-              milestone_type_id: milestoneType.id,
-              recorded_at: milestone.recorded_at,
-              recorded_by: currentUserId
-            })
-        }
+        await supabase
+          .from('case_milestones')
+          .insert({
+            case_id: modalState.issue.case_id,
+            facility_milestone_id: milestone.id,
+            recorded_at: milestone.recorded_at,
+            recorded_by: currentUserId
+          })
       }
     }
     
