@@ -47,6 +47,9 @@ const icons = {
   device: "M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3",
   check: "M4.5 12.75l6 6 9-13.5",
   search: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z",
+  scan: "M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5",
+  refresh: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182",
+  arrowUp: "M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18",
 }
 
 // =============================================================================
@@ -134,6 +137,7 @@ export default function AdminDocsPage() {
   const [isEditMode, setIsEditMode] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
 
   const toastIdRef = useRef(0)
 
@@ -268,6 +272,22 @@ export default function AdminDocsPage() {
   }, [])
 
   // ============================================
+  // Scanner import handler
+  // ============================================
+
+  const handleScannerImport = (pageData: PageEntryInsert) => {
+    setShowScanner(false)
+    setEditingPage(pageData)
+    setIsEditMode(false)
+    setShowForm(true)
+  }
+
+  const handleScannerBulkDone = () => {
+    setShowScanner(false)
+    loadPages()
+  }
+
+  // ============================================
   // Access guard
   // ============================================
 
@@ -328,6 +348,17 @@ export default function AdminDocsPage() {
         />
       )}
 
+      {/* Scanner Modal */}
+      {showScanner && (
+        <ScannerModal
+          supabase={supabase}
+          onImport={handleScannerImport}
+          onBulkDone={handleScannerBulkDone}
+          onClose={() => setShowScanner(false)}
+          addToast={addToast}
+        />
+      )}
+
       <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* ================================================================ */}
         {/* LEFT PANEL — TOC                                                 */}
@@ -339,13 +370,22 @@ export default function AdminDocsPage() {
                 <Icon d={icons.book} className="w-5 h-5 text-slate-500" />
                 <h1 className="text-base font-semibold text-slate-800 tracking-tight">ORbit Docs</h1>
               </div>
-              <button
-                onClick={handleAdd}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
-                title="Add page"
-              >
-                <Icon d={icons.plus} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                  title="Scan codebase"
+                >
+                  <Icon d={icons.scan} />
+                </button>
+                <button
+                  onClick={handleAdd}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                  title="Add page"
+                >
+                  <Icon d={icons.plus} />
+                </button>
+              </div>
             </div>
             <div className="relative">
               <Icon d={icons.search} className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -795,6 +835,401 @@ function PageFormModal({
 
 // =============================================================================
 // Form Components
+// =============================================================================
+
+// =============================================================================
+// Scanner Modal
+// =============================================================================
+
+interface DiscoveredPage {
+  filePath: string
+  route: string
+  sizeBytes: number
+  lastModified: string
+}
+
+interface ScannedMetadata {
+  id: string
+  name: string
+  route: string
+  category: string
+  description: string
+  roles: string[]
+  reads: string[]
+  writes: string[]
+  rpcs: string[]
+  realtime: string[]
+  materialized_views: string[]
+  components: string[]
+  interactions: string[]
+  api_routes: string[]
+  ios_exists: boolean
+  ios_view_name: string | null
+  calculation_engine: string | null
+  timezone_aware: boolean
+  key_validations: string[]
+  state_management: string | null
+  notes: string | null
+  _scan_confidence: Record<string, string>
+  _source_lines: number
+}
+
+function ScannerModal({
+  supabase,
+  onImport,
+  onBulkDone,
+  onClose,
+  addToast,
+}: {
+  supabase: any
+  onImport: (page: PageEntryInsert) => void
+  onBulkDone: () => void
+  onClose: () => void
+  addToast: (msg: string, type: 'success' | 'error') => void
+}) {
+  const [isScanning, setIsScanning] = useState(false)
+  const [discoveredPages, setDiscoveredPages] = useState<DiscoveredPage[]>([])
+  const [registeredRoutes, setRegisteredRoutes] = useState<Set<string>>(new Set())
+  const [scanningFile, setScanningFile] = useState<string | null>(null)
+  const [scannedMeta, setScannedMeta] = useState<Record<string, ScannedMetadata>>({})
+  const [isBulkImporting, setIsBulkImporting] = useState(false)
+  const [hasScanned, setHasScanned] = useState(false)
+
+  // Load registered routes for comparison
+  useEffect(() => {
+    fetchPages(supabase).then(pages => {
+      setRegisteredRoutes(new Set(pages.map(p => p.route)))
+    })
+  }, [supabase])
+
+  const missingCount = discoveredPages.filter(p => !registeredRoutes.has(p.route)).length
+  const syncedCount = discoveredPages.filter(p => registeredRoutes.has(p.route)).length
+
+  const runScan = async () => {
+    setIsScanning(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/scan-pages', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      })
+      if (!res.ok) throw new Error('Scan failed')
+      const data = await res.json()
+      setDiscoveredPages(data.pages || [])
+      setHasScanned(true)
+    } catch (err: any) {
+      addToast(err.message || 'Scan failed', 'error')
+    }
+    setIsScanning(false)
+  }
+
+  const scanFile = async (filePath: string) => {
+    if (scannedMeta[filePath]) return // Already scanned
+    setScanningFile(filePath)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/admin/scan-pages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ filePath }),
+      })
+      if (!res.ok) throw new Error('Scan failed')
+      const data = await res.json()
+      setScannedMeta(prev => ({ ...prev, [filePath]: data.metadata }))
+    } catch (err: any) {
+      addToast(`Failed to scan: ${err.message}`, 'error')
+    }
+    setScanningFile(null)
+  }
+
+  const importFromScan = (meta: ScannedMetadata) => {
+    // Convert scanned metadata to PageEntryInsert
+    const { _scan_confidence, _source_lines, ...rest } = meta
+    const entry: PageEntryInsert = {
+      ...rest,
+      description: rest.description || '',
+      materialized_views: rest.materialized_views || [],
+      ios_exists: rest.ios_exists || false,
+      ios_view_name: rest.ios_view_name || null,
+      ios_notes: null,
+      parity_notes: null,
+      owner: null,
+      display_order: 0,
+    }
+    onImport(entry)
+  }
+
+  const bulkImport = async () => {
+    setIsBulkImporting(true)
+    const missing = discoveredPages.filter(p => !registeredRoutes.has(p.route))
+    let imported = 0
+
+    for (const page of missing) {
+      try {
+        // Scan the file first
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/admin/scan-pages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ filePath: page.filePath }),
+        })
+        if (!res.ok) continue
+        const data = await res.json()
+        const meta = data.metadata as ScannedMetadata
+        const { _scan_confidence, _source_lines, ...rest } = meta
+
+        // Insert into registry
+        const entry: PageEntryInsert = {
+          ...rest,
+          description: rest.description || '',
+          materialized_views: rest.materialized_views || [],
+          ios_exists: false,
+          ios_view_name: null,
+          ios_notes: null,
+          parity_notes: null,
+          owner: null,
+          display_order: 0,
+        }
+        await insertPage(supabase, entry)
+        imported++
+      } catch { /* skip failed */ }
+    }
+
+    addToast(`Imported ${imported} of ${missing.length} pages`, 'success')
+    setIsBulkImporting(false)
+    onBulkDone()
+  }
+
+  const confidenceColor = (level: string) => {
+    if (level === 'high') return 'text-emerald-600'
+    if (level === 'medium') return 'text-amber-600'
+    return 'text-slate-400'
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <Icon d={icons.scan} className="w-5 h-5 text-slate-500" />
+            <h2 className="text-lg font-semibold text-slate-800">Codebase Scanner</h2>
+          </div>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+            <Icon d={icons.x} className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {!hasScanned ? (
+            /* Pre-scan state */
+            <div className="text-center py-12">
+              <Icon d={icons.scan} className="w-10 h-10 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-base font-medium text-slate-700 mb-2">Scan your codebase</h3>
+              <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
+                Reads every page.tsx in your app directory, extracts table dependencies, components,
+                and metadata — then compares against the registry.
+              </p>
+              <button
+                onClick={runScan}
+                disabled={isScanning}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                {isScanning ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Scanning...
+                  </>
+                ) : (
+                  <>
+                    <Icon d={icons.scan} className="w-4 h-4" />
+                    Start Scan
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            /* Post-scan results */
+            <div>
+              {/* Summary bar */}
+              <div className="flex items-center gap-4 mb-5 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="text-sm">
+                  <span className="font-semibold text-slate-700">{discoveredPages.length}</span>
+                  <span className="text-slate-500"> pages found</span>
+                </div>
+                <div className="h-4 w-px bg-slate-300" />
+                <div className="text-sm">
+                  <span className="font-semibold text-red-600">{missingCount}</span>
+                  <span className="text-slate-500"> missing</span>
+                </div>
+                <div className="text-sm">
+                  <span className="font-semibold text-emerald-600">{syncedCount}</span>
+                  <span className="text-slate-500"> registered</span>
+                </div>
+                <div className="ml-auto flex gap-2">
+                  <button
+                    onClick={runScan}
+                    disabled={isScanning}
+                    className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    Re-scan
+                  </button>
+                  {missingCount > 0 && (
+                    <button
+                      onClick={bulkImport}
+                      disabled={isBulkImporting}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+                    >
+                      {isBulkImporting ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Importing...
+                        </>
+                      ) : (
+                        <>Import All Missing</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Page list */}
+              <div className="space-y-1">
+                {discoveredPages.map(page => {
+                  const isRegistered = registeredRoutes.has(page.route)
+                  const meta = scannedMeta[page.filePath]
+                  const isExpanded = !!meta
+                  const isLoadingThis = scanningFile === page.filePath
+
+                  return (
+                    <div key={page.filePath} className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => { if (!isRegistered) scanFile(page.filePath) }}
+                        className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors
+                          ${isRegistered ? 'bg-emerald-50/50' : 'bg-white hover:bg-slate-50'}`}
+                      >
+                        {/* Status dot */}
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isRegistered ? 'bg-emerald-500' : 'bg-red-400'}`} />
+
+                        {/* Route */}
+                        <code className="font-mono text-xs text-slate-600 flex-1 truncate">{page.route}</code>
+
+                        {/* File path */}
+                        <span className="text-[11px] text-slate-400 hidden sm:block truncate max-w-[200px]">
+                          {page.filePath}
+                        </span>
+
+                        {/* Status badge */}
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border flex-shrink-0
+                          ${isRegistered
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-red-50 text-red-600 border-red-200'
+                          }`}
+                        >
+                          {isRegistered ? 'REGISTERED' : 'MISSING'}
+                        </span>
+
+                        {isLoadingThis && (
+                          <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin flex-shrink-0" />
+                        )}
+                      </button>
+
+                      {/* Expanded scan results */}
+                      {isExpanded && meta && (
+                        <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/50">
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
+                            <div>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Name</span>
+                              <div className="text-sm text-slate-700">{meta.name}</div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Category</span>
+                              <div className="text-sm text-slate-700">{meta.category}</div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                Reads
+                                <span className={`ml-1 ${confidenceColor(meta._scan_confidence.reads)}`}>
+                                  ({meta._scan_confidence.reads})
+                                </span>
+                              </span>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {meta.reads.length > 0 ? meta.reads.map(t => (
+                                  <code key={t} className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-mono">{t}</code>
+                                )) : <span className="text-xs text-slate-400">none</span>}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                Writes
+                                <span className={`ml-1 ${confidenceColor(meta._scan_confidence.writes)}`}>
+                                  ({meta._scan_confidence.writes})
+                                </span>
+                              </span>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {meta.writes.length > 0 ? meta.writes.map(t => (
+                                  <code key={t} className="text-[11px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-mono">{t}</code>
+                                )) : <span className="text-xs text-slate-400">none</span>}
+                              </div>
+                            </div>
+                            {meta.rpcs.length > 0 && (
+                              <div>
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">RPCs</span>
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {meta.rpcs.map(r => (
+                                    <code key={r} className="text-[11px] px-1.5 py-0.5 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded font-mono">{r}</code>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {meta.components.length > 0 && (
+                              <div>
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Components</span>
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {meta.components.map(c => (
+                                    <code key={c} className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-mono">{c}</code>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => importFromScan(meta)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
+                            >
+                              <Icon d={icons.plus} className="w-3 h-3" />
+                              Import to Registry
+                            </button>
+                            <span className="text-[11px] text-slate-400">
+                              {meta._source_lines} lines • Review before saving
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Overlay>
+  )
+}
+
+// =============================================================================
+// Overlay
 // =============================================================================
 
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
