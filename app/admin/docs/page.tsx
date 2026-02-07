@@ -949,6 +949,7 @@ function ScannerModal({
     const { _scan_confidence, _source_lines, ...rest } = meta
     const entry: PageEntryInsert = {
       ...rest,
+      category: rest.category as PageCategory,
       description: rest.description || '',
       materialized_views: rest.materialized_views || [],
       ios_exists: rest.ios_exists || false,
@@ -986,6 +987,7 @@ function ScannerModal({
         // Insert into registry
         const entry: PageEntryInsert = {
           ...rest,
+          category: rest.category as PageCategory,
           description: rest.description || '',
           materialized_views: rest.materialized_views || [],
           ios_exists: false,
