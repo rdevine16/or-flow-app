@@ -163,8 +163,8 @@ export function buildBaselines(
 
   historicalCases.forEach(c => {
     const m = getMilestoneMap(c)
-    const surgeonId = c.surgeon_id
-    const procedureId = c.procedure_types?.id
+    const surgeonId = c.surgeon_id ?? null
+    const procedureId = c.procedure_types?.id ?? null
 
     metrics.forEach(metric => {
       // Skip cross-case metrics (turnover, fcots) — they need different baseline logic
@@ -407,8 +407,8 @@ export function evaluateCase(
 ): CaseFlag[] {
   const flags: CaseFlag[] = []
   const milestones = getMilestoneMap(caseData)
-  const surgeonId = caseData.surgeon_id
-  const procedureId = caseData.procedure_types?.id
+  const surgeonId = caseData.surgeon_id ?? null
+  const procedureId = caseData.procedure_types?.id ?? null
   const facilityId = caseData.facility_id
 
   // Must have at least patient_in and patient_out to evaluate
