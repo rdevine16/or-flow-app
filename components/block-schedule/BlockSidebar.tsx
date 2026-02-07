@@ -56,6 +56,7 @@ export function BlockSidebar({
   
   // Color picker state
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null)
+  const [colorPickerPos, setColorPickerPos] = useState({ top: 0, left: 0 })
   const colorPickerRef = useRef<HTMLDivElement>(null)
 
   // Close color picker when clicking outside
@@ -243,7 +244,7 @@ export function BlockSidebar({
                     {isSelected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
                   </div>
                   <span className={`text-sm truncate ${isSelected ? 'text-slate-800' : 'text-slate-500'}`}>
-                    Dr. {surgeon.last_name}
+                    Dr. {surgeon.first_name} {surgeon.last_name}
                   </span>
                 </button>
                 
@@ -251,19 +252,32 @@ export function BlockSidebar({
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
-                    setColorPickerOpen(colorPickerOpen === surgeon.id ? null : surgeon.id)
+                    if (colorPickerOpen === surgeon.id) {
+                      setColorPickerOpen(null)
+                    } else {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                      setColorPickerPos({
+                        top: rect.top,
+                        left: rect.right + 8,
+                      })
+                      setColorPickerOpen(surgeon.id)
+                    }
                   }}
                   className="p-1 opacity-0 group-hover:opacity-100 hover:bg-slate-100 rounded transition-all"
                 >
                   <MoreVertical className="h-4 w-4 text-slate-400" />
                 </button>
 
-                {/* Color Picker Dropdown */}
+                {/* Color Picker Dropdown — fixed so it escapes overflow/stacking */}
                 {colorPickerOpen === surgeon.id && (
                   <div 
                     ref={colorPickerRef}
-                    className="absolute left-full top-0 ml-2 bg-white rounded-lg shadow-xl border border-slate-200 p-3 z-[100]"
-                    style={{ width: '200px' }}
+                    className="fixed bg-white rounded-lg shadow-xl border border-slate-200 p-3 z-[200]"
+                    style={{ 
+                      width: '200px',
+                      top: `${colorPickerPos.top}px`,
+                      left: `${colorPickerPos.left}px`,
+                    }}
                   >
                     <div className="text-sm font-medium text-slate-700 mb-2">Display this only</div>
                     <div className="text-sm text-slate-500 mb-3 pb-3 border-b border-slate-100">Settings and sharing</div>

@@ -44,6 +44,7 @@ export function WeekCalendar({
   // Refs for stable access inside document-level listeners
   const isDraggingRef = useRef(false)
   const dragStartRef = useRef<{ day: number; hour: number } | null>(null)
+  const dragEndRef = useRef<{ day: number; hour: number } | null>(null)
 
   // Generate week days
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -178,6 +179,7 @@ export function WeekCalendar({
 
     isDraggingRef.current = true
     dragStartRef.current = { day, hour }
+    dragEndRef.current = { day, hour: hour + 0.5 }
     setIsDragging(true)
     setDragStart({ day, hour })
     setDragEnd({ day, hour: hour + 0.5 }) // Default to 30 min
@@ -191,7 +193,9 @@ export function WeekCalendar({
     lastMouseYRef.current = e.clientY
 
     const hour = getTimeFromY(e.clientY)
-    setDragEnd({ day: dragStartRef.current.day, hour })
+    const newEnd = { day: dragStartRef.current.day, hour }
+    dragEndRef.current = newEnd
+    setDragEnd(newEnd)
 
     // Auto-scroll when near edges of the scroll container
     if (scrollContainerRef.current) {
@@ -211,6 +215,10 @@ export function WeekCalendar({
   }, [getTimeFromY, startAutoScroll, stopAutoScroll])
 
   // Document-level mouseup — always fires, even outside the grid
+  // FIX: Uses the continuously-updated drag state instead of recalculating
+  // from cursor Y. When the cursor is outside the grid (e.g. above it or
+  // on another element), getTimeFromY returns 0 which causes the time
+  // mismatch bug (popover shows 12:00 AM instead of the real start).
   const handleDocumentMouseUp = useCallback((e: MouseEvent) => {
     if (!isDraggingRef.current) return
 
@@ -218,7 +226,17 @@ export function WeekCalendar({
 
     const start = dragStartRef.current
     if (start) {
-      const endHour = getTimeFromY(e.clientY)
+      // Try to get end from current cursor position, but fall back to
+      // the last known good drag-end if the cursor is outside the grid
+      let endHour: number
+      const rect = gridRef.current?.getBoundingClientRect()
+      if (rect && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        endHour = getTimeFromY(e.clientY)
+      } else {
+        // Cursor is outside grid — use the last dragEnd we tracked during mousemove
+        endHour = dragEndRef.current?.hour ?? start.hour + 0.5
+      }
+
       const startHour = Math.min(start.hour, endHour)
       const rawEndHour = Math.max(start.hour, endHour)
 
@@ -237,6 +255,7 @@ export function WeekCalendar({
 
     isDraggingRef.current = false
     dragStartRef.current = null
+    dragEndRef.current = null
     setIsDragging(false)
     setDragStart(null)
     setDragEnd(null)
