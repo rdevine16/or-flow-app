@@ -1736,6 +1736,7 @@ export default function BlockUtilizationPage() {
                       icon={<Target className="w-4 h-4" />}
                       accentColor={summaryMetrics.avgUtil >= 85 ? 'emerald' : summaryMetrics.avgUtil >= 60 ? 'amber' : 'red'}
                       progress={summaryMetrics.avgUtil}
+                      tooltip="Percentage of allocated block time used for surgery. Calculated as total case time (patient in → patient out) divided by total scheduled block hours."
                     />
                     <EnhancedMetricCard
                       title="Block Hours"
@@ -1743,6 +1744,7 @@ export default function BlockUtilizationPage() {
                       subtitle="Allocated"
                       icon={<CalendarDays className="w-4 h-4" />}
                       accentColor="blue"
+                      tooltip="Total scheduled OR block time across all surgeons for the selected period. Based on recurring block schedules, excluding facility holidays and closures."
                     />
                     <EnhancedMetricCard
                       title="Used Hours"
@@ -1750,6 +1752,7 @@ export default function BlockUtilizationPage() {
                       subtitle={`${summaryMetrics.totalCases} cases`}
                       icon={<Activity className="w-4 h-4" />}
                       accentColor="blue"
+                      tooltip="Actual time spent in surgery (patient in → patient out) during allocated block time. Turnover time between cases is not included in this total."
                     />
                     <EnhancedMetricCard
                       title="Unused Hours"
@@ -1759,6 +1762,11 @@ export default function BlockUtilizationPage() {
                         : 'Available capacity'}
                       icon={<Clock className="w-4 h-4" />}
                       accentColor="emerald"
+                      tooltip={`Time remaining after the last case ends until the block ends, summed across all block days.${
+                        orHourlyRate
+                          ? ` Cost estimate uses your facility's OR hourly rate of $${orHourlyRate.toLocaleString()}/hr (from facility settings).`
+                          : ' Set an OR hourly rate in facility settings to see the estimated cost of unused time.'
+                      }`}
                     />
                     <EnhancedMetricCard
                       title="Outside Block"
@@ -1766,6 +1774,7 @@ export default function BlockUtilizationPage() {
                       subtitle="Cases on non-block days"
                       icon={<AlertTriangle className="w-4 h-4" />}
                       accentColor={summaryMetrics.totalOutside > 0 ? 'amber' : 'slate'}
+                      tooltip="Cases performed by block-holding surgeons on days they don't have scheduled block time. A high number may indicate demand for additional block allocation."
                     />
                   </div>
 
@@ -1938,6 +1947,7 @@ export default function BlockUtilizationPage() {
                       icon={<Target className="w-4 h-4" />}
                       accentColor={roomSummary.avgUtil >= 85 ? 'emerald' : roomSummary.avgUtil >= 60 ? 'amber' : 'red'}
                       progress={roomSummary.avgUtil}
+                      tooltip="Average percentage of available room time used for cases across all rooms. Calculated as total case time divided by total room open hours."
                     />
                     <EnhancedMetricCard
                       title="Available Hours"
@@ -1945,6 +1955,7 @@ export default function BlockUtilizationPage() {
                       subtitle={`${rooms.length} rooms`}
                       icon={<Building2 className="w-4 h-4" />}
                       accentColor="blue"
+                      tooltip="Total hours rooms were open and available for cases during the selected period. Based on room schedules, excluding closures and holidays."
                     />
                     <EnhancedMetricCard
                       title="Used Hours"
@@ -1952,6 +1963,7 @@ export default function BlockUtilizationPage() {
                       subtitle={`${roomSummary.totalCases} cases`}
                       icon={<Activity className="w-4 h-4" />}
                       accentColor="blue"
+                      tooltip="Total time rooms were occupied by cases (patient in → patient out) across all rooms during the selected period."
                     />
                     <EnhancedMetricCard
                       title="Idle Hours"
@@ -1959,6 +1971,11 @@ export default function BlockUtilizationPage() {
                       subtitle={orHourlyRate ? `~$${Math.round((roomSummary.totalIdle / 60) * orHourlyRate).toLocaleString()} opportunity` : 'Unused capacity'}
                       icon={<Clock className="w-4 h-4" />}
                       accentColor="emerald"
+                      tooltip={`Room time with no cases scheduled — the gap between available hours and used hours.${
+                        orHourlyRate
+                          ? ` Cost estimate uses your facility's OR hourly rate of $${orHourlyRate.toLocaleString()}/hr.`
+                          : ' Set an OR hourly rate in facility settings to see the estimated cost.'
+                      }`}
                     />
                     <EnhancedMetricCard
                       title="Block Allocation"
@@ -1966,6 +1983,7 @@ export default function BlockUtilizationPage() {
                       subtitle="Of room time is blocked"
                       icon={<CalendarDays className="w-4 h-4" />}
                       accentColor="violet"
+                      tooltip="Percentage of total room availability assigned to surgeon block schedules. Remaining time is open/unblocked and available for add-on cases or other scheduling."
                     />
                   </div>
 
