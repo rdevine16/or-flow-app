@@ -1,8 +1,7 @@
 // app/settings/flags/page.tsx
 // ORbit Flag System Settings — Phase 2
-// Two sections:
-//   1. Threshold Flag Rules — auto-detection rules with adjustable thresholds
-//   2. Delay Types — user-reported delay categories (add, rename, reorder, deactivate)
+// Threshold Flag Rules — auto-detection rules with adjustable thresholds
+// Delay types are managed on the dedicated delay types settings page.
 
 'use client'
 
@@ -37,16 +36,6 @@ interface FlagRule {
   source_rule_id: string | null
   created_at: string
   updated_at: string
-}
-
-interface DelayType {
-  id: string
-  name: string
-  display_name: string | null
-  description: string | null
-  display_order: number
-  is_active: boolean
-  facility_id: string | null
 }
 
 type Severity = 'info' | 'warning' | 'critical'
@@ -94,19 +83,10 @@ export default function FlagsSettingsPage() {
 
   // State
   const [rules, setRules] = useState<FlagRule[]>([])
-  const [delayTypes, setDelayTypes] = useState<DelayType[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<string | null>(null) // rule/delay ID being saved
+  const [saving, setSaving] = useState<string | null>(null) // rule ID being saved
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
-
-  // New delay type form
-  const [showNewDelay, setShowNewDelay] = useState(false)
-  const [newDelayName, setNewDelayName] = useState('')
-
-  // Editing delay type
-  const [editingDelay, setEditingDelay] = useState<string | null>(null)
-  const [editDelayName, setEditDelayName] = useState('')
 
   // =====================================================
   // DATA FETCHING
@@ -124,22 +104,13 @@ export default function FlagsSettingsPage() {
     if (!effectiveFacilityId) return
     setLoading(true)
 
-    const [rulesRes, delaysRes] = await Promise.all([
-      supabase
-        .from('flag_rules')
-        .select('*')
-        .eq('facility_id', effectiveFacilityId)
-        .order('display_order', { ascending: true }),
-      supabase
-        .from('delay_types')
-        .select('*')
-        .or(`facility_id.eq.${effectiveFacilityId},facility_id.is.null`)
-        .is('deleted_at', null)
-        .order('display_order', { ascending: true }),
-    ])
+    const { data } = await supabase
+      .from('flag_rules')
+      .select('*')
+      .eq('facility_id', effectiveFacilityId)
+      .order('display_order', { ascending: true })
 
-    if (rulesRes.data) setRules(rulesRes.data)
-    if (delaysRes.data) setDelayTypes(delaysRes.data)
+    if (data) setRules(data)
 
     setLoading(false)
   }
@@ -214,76 +185,6 @@ export default function FlagsSettingsPage() {
   }
 
   // =====================================================
-  // DELAY TYPE HANDLERS
-  // =====================================================
-
-  const addDelayType = async () => {
-    if (!newDelayName.trim() || !effectiveFacilityId) return
-    setSaving('new-delay')
-
-    const maxOrder = delayTypes.reduce((max, d) => Math.max(max, d.display_order), 0)
-
-    const { data, error } = await supabase
-      .from('delay_types')
-      .insert({
-        name: newDelayName.trim().toLowerCase().replace(/\s+/g, '_'),
-        display_name: newDelayName.trim(),
-        facility_id: effectiveFacilityId,
-        display_order: maxOrder + 1,
-        is_active: true,
-      })
-      .select()
-      .single()
-
-    if (data && !error) {
-      setDelayTypes(prev => [...prev, data])
-      setNewDelayName('')
-      setShowNewDelay(false)
-      setToast({ message: `"${data.display_name}" added`, type: 'success' })
-    } else {
-      setToast({ message: 'Failed to add delay type', type: 'error' })
-    }
-    setSaving(null)
-  }
-
-  const renameDelayType = async (delay: DelayType) => {
-    if (!editDelayName.trim()) return
-    setSaving(delay.id)
-
-    const { error } = await supabase
-      .from('delay_types')
-      .update({ display_name: editDelayName.trim() })
-      .eq('id', delay.id)
-
-    if (!error) {
-      setDelayTypes(prev => prev.map(d => d.id === delay.id ? { ...d, display_name: editDelayName.trim() } : d))
-      setEditingDelay(null)
-      setEditDelayName('')
-      setToast({ message: 'Delay type renamed', type: 'success' })
-    } else {
-      setToast({ message: 'Failed to rename', type: 'error' })
-    }
-    setSaving(null)
-  }
-
-  const deactivateDelayType = async (delay: DelayType) => {
-    setSaving(delay.id)
-
-    const { error } = await supabase
-      .from('delay_types')
-      .update({ is_active: false })
-      .eq('id', delay.id)
-
-    if (!error) {
-      setDelayTypes(prev => prev.filter(d => d.id !== delay.id))
-      setToast({ message: `"${delay.display_name || delay.name}" deactivated`, type: 'success' })
-    } else {
-      setToast({ message: 'Failed to deactivate', type: 'error' })
-    }
-    setSaving(null)
-  }
-
-  // =====================================================
   // RENDER HELPERS
   // =====================================================
 
@@ -320,7 +221,7 @@ export default function FlagsSettingsPage() {
     return (
       <DashboardLayout>
         <Container>
-          <SettingsLayout title="Case Flags" description="Configure auto-detection rules and delay categories for your facility.">
+          <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
@@ -334,7 +235,7 @@ export default function FlagsSettingsPage() {
     return (
       <DashboardLayout>
         <Container>
-          <SettingsLayout title="Case Flags" description="Configure auto-detection rules and delay categories for your facility.">
+          <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
             <div className="text-center py-12 text-slate-500">
               No facility found. Please contact support.
             </div>
@@ -351,7 +252,7 @@ export default function FlagsSettingsPage() {
   return (
     <DashboardLayout>
       <Container>
-        <SettingsLayout title="Case Flags" description="Configure auto-detection rules and delay categories for your facility.">
+        <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
           <div className="space-y-10">
 
             {/* ============================================= */}
@@ -574,181 +475,6 @@ export default function FlagsSettingsPage() {
                             </div>
                           </div>
                         )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </section>
-
-
-            {/* ============================================= */}
-            {/* SECTION 2: DELAY TYPES                         */}
-            {/* ============================================= */}
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Delay Types</h2>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Categories available when staff report delays on a case. 
-                    These appear in the delay picker on the case detail page.
-                  </p>
-                </div>
-                <button
-                  onClick={() => { setShowNewDelay(true); setNewDelayName('') }}
-                  className="px-3.5 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                >
-                  + Add Type
-                </button>
-              </div>
-
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center gap-4 px-5 py-2.5 bg-slate-50 border-b border-slate-100 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                  <div className="w-8">#</div>
-                  <div className="flex-1">Name</div>
-                  <div className="w-24 text-center">Scope</div>
-                  <div className="w-20 text-right">Actions</div>
-                </div>
-
-                {/* Add New Row */}
-                {showNewDelay && (
-                  <div className="flex items-center gap-4 px-5 py-3 bg-blue-50/50 border-b border-blue-100">
-                    <div className="w-8 text-xs text-slate-400">—</div>
-                    <div className="flex-1 flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={newDelayName}
-                        onChange={(e) => setNewDelayName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && addDelayType()}
-                        placeholder="Delay type name..."
-                        autoFocus
-                        className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div className="w-24" />
-                    <div className="w-20 flex items-center justify-end gap-1">
-                      <button
-                        onClick={addDelayType}
-                        disabled={!newDelayName.trim() || saving === 'new-delay'}
-                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-40"
-                        title="Save"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setShowNewDelay(false)}
-                        className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="Cancel"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Delay Type Rows */}
-                {delayTypes.length === 0 ? (
-                  <div className="px-6 py-10 text-center text-sm text-slate-400">
-                    No delay types configured.
-                  </div>
-                ) : (
-                  delayTypes.map((delay, index) => {
-                    const isEditing = editingDelay === delay.id
-                    const isSaving = saving === delay.id
-                    const isGlobal = delay.facility_id === null
-
-                    return (
-                      <div key={delay.id} className="flex items-center gap-4 px-5 py-3 border-b border-slate-50 last:border-b-0 hover:bg-slate-50/50 transition-colors">
-                        {/* Order */}
-                        <div className="w-8 text-xs text-slate-400 font-mono">
-                          {index + 1}
-                        </div>
-
-                        {/* Name */}
-                        <div className="flex-1 min-w-0">
-                          {isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                value={editDelayName}
-                                onChange={(e) => setEditDelayName(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') renameDelayType(delay)
-                                  if (e.key === 'Escape') { setEditingDelay(null); setEditDelayName('') }
-                                }}
-                                autoFocus
-                                className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              />
-                              <button
-                                onClick={() => renameDelayType(delay)}
-                                disabled={!editDelayName.trim() || isSaving}
-                                className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors disabled:opacity-40"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => { setEditingDelay(null); setEditDelayName('') }}
-                                className="p-1 text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-slate-900">
-                              {delay.display_name || delay.name}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Scope Badge */}
-                        <div className="w-24 text-center">
-                          <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-medium rounded-full ${
-                            isGlobal
-                              ? 'bg-slate-100 text-slate-500'
-                              : 'bg-blue-50 text-blue-600'
-                          }`}>
-                            {isGlobal ? 'Global' : 'Custom'}
-                          </span>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="w-20 flex items-center justify-end gap-1">
-                          {!isEditing && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setEditingDelay(delay.id)
-                                  setEditDelayName(delay.display_name || delay.name)
-                                }}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                title="Rename"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => deactivateDelayType(delay)}
-                                disabled={isSaving}
-                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
-                                title="Deactivate"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                </svg>
-                              </button>
-                            </>
-                          )}
-                        </div>
                       </div>
                     )
                   })
