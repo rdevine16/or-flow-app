@@ -390,7 +390,7 @@ export default function BlockSchedulePage() {
           />
 
           {/* Main Calendar */}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             {/* Navigation Header */}
             <div className="flex items-center gap-4 px-4 py-2 border-b border-slate-100 bg-white flex-shrink-0">
               <button
@@ -422,7 +422,7 @@ export default function BlockSchedulePage() {
             </div>
 
             {/* Calendar Grid */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden min-h-0">
               <WeekCalendar
                 weekStart={currentWeekStart}
                 blocks={filteredBlocks}

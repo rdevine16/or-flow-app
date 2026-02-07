@@ -378,7 +378,7 @@ export function WeekCalendar({
   const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Day Headers - Google Calendar Style */}
       <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
         <div className="w-[60px] flex-shrink-0" />
@@ -415,7 +415,7 @@ export function WeekCalendar({
       {/* Scrollable Time Grid */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto min-h-0"
       >
         <div
           ref={gridRef}
