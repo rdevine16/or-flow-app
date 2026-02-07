@@ -1,15 +1,22 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import {
-  pageRegistry,
-  getPagesByCategory,
-  getCategories,
+  fetchPages,
+  insertPage,
+  updatePage,
+  deletePage,
+  groupByCategory,
   getPagesByTable,
+  generateSlug,
+  createEmptyPage,
+  PAGE_CATEGORIES,
+  ROLE_OPTIONS,
   type PageEntry,
+  type PageEntryInsert,
   type PageCategory,
 } from '@/lib/pageRegistry'
 import {
@@ -18,85 +25,87 @@ import {
 } from '@/lib/supabaseIntrospection'
 
 // =============================================================================
-// Icons (inline SVGs — swap for your icon library if you have one)
+// Icons
 // =============================================================================
 
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
-      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-  )
-}
+const Icon = ({ d, className = 'w-4 h-4' }: { d: string; className?: string }) => (
+  <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d={d} />
+  </svg>
+)
 
-function BookIcon({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-    </svg>
-  )
-}
-
-function TableIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M10.875 12c-.621 0-1.125.504-1.125 1.125M12 12c.621 0 1.125.504 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m-2.25 0c-.621 0-1.125.504-1.125 1.125" />
-    </svg>
-  )
-}
-
-function BoltIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-    </svg>
-  )
-}
-
-function DeviceIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
-    </svg>
-  )
-}
-
-function CubeIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
-    </svg>
-  )
+const icons = {
+  book: "M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25",
+  chevron: "M9 5l7 7-7 7",
+  plus: "M12 4.5v15m7.5-7.5h-15",
+  pencil: "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10",
+  trash: "M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0",
+  x: "M6 18L18 6M6 6l12 12",
+  cube: "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9",
+  table: "M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375",
+  bolt: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z",
+  device: "M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3",
+  check: "M4.5 12.75l6 6 9-13.5",
+  search: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z",
 }
 
 // =============================================================================
-// Category badge colors (light theme)
+// Constants
 // =============================================================================
 
-const CATEGORY_COLORS: Record<PageCategory, string> = {
+const CATEGORY_COLORS: Record<string, string> = {
   'Surgeon-Facing': 'bg-blue-50 text-blue-700 border-blue-200',
   'Admin': 'bg-amber-50 text-amber-700 border-amber-200',
   'Global Admin': 'bg-red-50 text-red-700 border-red-200',
-  'Shared': 'bg-green-50 text-green-700 border-green-200',
-  'Auth': 'bg-purple-50 text-purple-700 border-purple-200',
+  'Shared': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'Auth': 'bg-violet-50 text-violet-700 border-violet-200',
   'API Routes': 'bg-cyan-50 text-cyan-700 border-cyan-200',
 }
 
-// =============================================================================
-// Detail tabs
-// =============================================================================
+const TAG_COLORS: Record<string, string> = {
+  blue: 'bg-blue-50 text-blue-700 border-blue-200',
+  amber: 'bg-amber-50 text-amber-700 border-amber-200',
+  green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  purple: 'bg-violet-50 text-violet-700 border-violet-200',
+  red: 'bg-red-50 text-red-700 border-red-200',
+  slate: 'bg-slate-100 text-slate-600 border-slate-200',
+}
 
 type DetailTab = 'overview' | 'database' | 'triggers' | 'platform'
 
-const TABS: { id: DetailTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'overview', label: 'Overview', icon: <CubeIcon /> },
-  { id: 'database', label: 'Database', icon: <TableIcon /> },
-  { id: 'triggers', label: 'Triggers & FKs', icon: <BoltIcon /> },
-  { id: 'platform', label: 'Platform', icon: <DeviceIcon /> },
+const TABS: { id: DetailTab; label: string; icon: string }[] = [
+  { id: 'overview', label: 'Overview', icon: icons.cube },
+  { id: 'database', label: 'Database', icon: icons.table },
+  { id: 'triggers', label: 'Triggers & FKs', icon: icons.bolt },
+  { id: 'platform', label: 'Platform', icon: icons.device },
 ]
+
+// =============================================================================
+// Toast
+// =============================================================================
+
+interface Toast {
+  id: number
+  message: string
+  type: 'success' | 'error'
+}
+
+function ToastContainer({ toasts }: { toasts: Toast[] }) {
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+      {toasts.map(t => (
+        <div
+          key={t.id}
+          className={`px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-slide-up
+            ${t.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}
+        >
+          {t.message}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 // =============================================================================
 // Main Page
@@ -106,27 +115,40 @@ export default function AdminDocsPage() {
   const supabase = createClient()
   const { isGlobalAdmin } = useUser()
 
+  // Data state
+  const [pages, setPages] = useState<PageEntry[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(getCategories()))
   const [tableMetadata, setTableMetadata] = useState<Record<string, TableMetadata>>({})
   const [isLoadingMeta, setIsLoadingMeta] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
 
-  const grouped = useMemo(() => getPagesByCategory(), [])
-  const categories = useMemo(() => getCategories(), [])
+  // UI state
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(PAGE_CATEGORIES))
+  const [searchQuery, setSearchQuery] = useState('')
+  const [toasts, setToasts] = useState<Toast[]>([])
+  const [showForm, setShowForm] = useState(false)
+  const [editingPage, setEditingPage] = useState<PageEntryInsert | null>(null)
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const toastIdRef = useRef(0)
+
+  // Derived
   const selectedPage = useMemo(
-    () => pageRegistry.find(p => p.id === selectedPageId) ?? null,
-    [selectedPageId]
+    () => pages.find(p => p.id === selectedPageId) ?? null,
+    [pages, selectedPageId]
   )
 
-  // Filter pages by search
+  const grouped = useMemo(() => groupByCategory(pages), [pages])
+
   const filteredGrouped = useMemo(() => {
     if (!searchQuery.trim()) return grouped
     const q = searchQuery.toLowerCase()
-    const result: Partial<Record<PageCategory, PageEntry[]>> = {}
-    for (const cat of categories) {
-      const pages = (grouped[cat] || []).filter(
+    const result: Record<string, PageEntry[]> = {}
+    for (const [cat, catPages] of Object.entries(grouped)) {
+      const filtered = catPages.filter(
         p =>
           p.name.toLowerCase().includes(q) ||
           p.route.toLowerCase().includes(q) ||
@@ -134,24 +156,38 @@ export default function AdminDocsPage() {
           p.reads.some(t => t.toLowerCase().includes(q)) ||
           p.writes.some(t => t.toLowerCase().includes(q))
       )
-      if (pages.length > 0) result[cat] = pages
+      if (filtered.length > 0) result[cat] = filtered
     }
     return result
-  }, [grouped, categories, searchQuery])
+  }, [grouped, searchQuery])
 
-  const toggleCategory = useCallback((cat: string) => {
-    setExpandedCategories(prev => {
-      const next = new Set(prev)
-      if (next.has(cat)) next.delete(cat)
-      else next.add(cat)
-      return next
-    })
+  // ============================================
+  // Toast helper
+  // ============================================
+
+  const addToast = useCallback((message: string, type: 'success' | 'error') => {
+    const id = ++toastIdRef.current
+    setToasts(prev => [...prev, { id, message, type }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
   }, [])
 
-  // Load database metadata when a page is selected
+  // ============================================
+  // Data loading
+  // ============================================
+
+  const loadPages = useCallback(async () => {
+    const data = await fetchPages(supabase)
+    setPages(data)
+    setIsLoading(false)
+  }, [supabase])
+
+  useEffect(() => {
+    loadPages()
+  }, [loadPages])
+
+  // Load table metadata when selection changes
   useEffect(() => {
     if (!selectedPage) return
-
     const allTables = [...new Set([...selectedPage.reads, ...selectedPage.writes])]
     const missing = allTables.filter(t => !tableMetadata[t])
     if (missing.length === 0) return
@@ -163,7 +199,76 @@ export default function AdminDocsPage() {
     })
   }, [selectedPage, tableMetadata, supabase])
 
-  // Access guard — global admin only
+  // ============================================
+  // CRUD handlers
+  // ============================================
+
+  const handleAdd = () => {
+    setEditingPage(createEmptyPage())
+    setIsEditMode(false)
+    setShowForm(true)
+  }
+
+  const handleEdit = () => {
+    if (!selectedPage) return
+    const { created_at, updated_at, ...rest } = selectedPage
+    setEditingPage(rest)
+    setIsEditMode(true)
+    setShowForm(true)
+  }
+
+  const handleSave = async (page: PageEntryInsert) => {
+    setIsSaving(true)
+    if (isEditMode) {
+      const { id, ...updates } = page
+      const { error } = await updatePage(supabase, id, updates)
+      if (error) {
+        addToast(`Error: ${error}`, 'error')
+      } else {
+        addToast(`${page.name} updated`, 'success')
+        await loadPages()
+      }
+    } else {
+      const { error } = await insertPage(supabase, page)
+      if (error) {
+        addToast(`Error: ${error}`, 'error')
+      } else {
+        addToast(`${page.name} added`, 'success')
+        await loadPages()
+        setSelectedPageId(page.id)
+      }
+    }
+    setIsSaving(false)
+    setShowForm(false)
+    setEditingPage(null)
+  }
+
+  const handleDelete = async () => {
+    if (!selectedPage) return
+    const { error } = await deletePage(supabase, selectedPage.id)
+    if (error) {
+      addToast(`Error: ${error}`, 'error')
+    } else {
+      addToast(`${selectedPage.name} deleted`, 'success')
+      setSelectedPageId(null)
+      await loadPages()
+    }
+    setShowDeleteConfirm(false)
+  }
+
+  const toggleCategory = useCallback((cat: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat)
+      else next.add(cat)
+      return next
+    })
+  }, [])
+
+  // ============================================
+  // Access guard
+  // ============================================
+
   if (!isGlobalAdmin) {
     return (
       <DashboardLayout>
@@ -174,151 +279,674 @@ export default function AdminDocsPage() {
     )
   }
 
+  // ============================================
+  // Render
+  // ============================================
+
   return (
     <DashboardLayout>
-    <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* ================================================================ */}
-      {/* LEFT PANEL — Table of Contents                                   */}
-      {/* ================================================================ */}
-      <aside className="w-72 flex-shrink-0 border-r border-slate-200 flex flex-col bg-slate-50/50">
-        {/* Header */}
-        <div className="px-4 py-4 border-b border-slate-200">
-          <div className="flex items-center gap-2 mb-3">
-            <BookIcon className="w-5 h-5 text-slate-600" />
-            <h1 className="text-base font-semibold text-slate-800 tracking-tight">ORbit Docs</h1>
-          </div>
-          <input
-            type="text"
-            placeholder="Search pages, tables..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg
-                       placeholder-slate-400 text-slate-700
-                       focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300
-                       transition-colors"
-          />
-        </div>
+      <style jsx global>{`
+        @keyframes slide-up {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slide-up 0.2s ease-out; }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in { animation: fade-in 0.15s ease-out; }
+        .form-input {
+          width: 100%;
+          padding: 0.5rem 0.75rem;
+          font-size: 0.875rem;
+          line-height: 1.25rem;
+          color: #334155;
+          background-color: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 0.5rem;
+          outline: none;
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .form-input:focus {
+          border-color: #94a3b8;
+          box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+        }
+        .form-input::placeholder { color: #94a3b8; }
+        .form-input:disabled { background-color: #f8fafc; color: #94a3b8; }
+        select.form-input { appearance: auto; }
+        textarea.form-input { font-family: inherit; }
+      `}</style>
 
-        {/* Category Tree */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-          {Object.entries(filteredGrouped).map(([category, pages]) => (
-            <div key={category}>
+      <ToastContainer toasts={toasts} />
+
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && selectedPage && (
+        <Overlay onClose={() => setShowDeleteConfirm(false)}>
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold text-slate-800 mb-2">Delete Page</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Remove <strong>{selectedPage.name}</strong> from the registry? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
               <button
-                onClick={() => toggleCategory(category)}
-                className="w-full flex items-center gap-2 px-2 py-2 text-xs font-semibold uppercase tracking-wider
-                           text-slate-400 hover:text-slate-600 transition-colors rounded"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
               >
-                <ChevronIcon open={expandedCategories.has(category)} />
-                <span>{category}</span>
-                <span className="ml-auto text-slate-300 text-[10px] font-normal">
-                  {(pages as PageEntry[]).length}
-                </span>
+                Cancel
               </button>
-
-              {expandedCategories.has(category) && (
-                <div className="ml-4 space-y-0.5">
-                  {(pages as PageEntry[]).map(page => (
-                    <button
-                      key={page.id}
-                      onClick={() => {
-                        setSelectedPageId(page.id)
-                        setActiveTab('overview')
-                      }}
-                      className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-all duration-150
-                        ${
-                          selectedPageId === page.id
-                            ? 'bg-slate-200/70 text-slate-900 font-medium'
-                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-                        }`}
-                    >
-                      <div className="leading-snug">{page.name}</div>
-                      <div className="text-xs text-slate-400 mt-0.5 truncate font-mono">{page.route}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
+              </button>
             </div>
-          ))}
-        </nav>
-
-        {/* Footer */}
-        <div className="px-4 py-3 border-t border-slate-200 text-xs text-slate-400">
-          {pageRegistry.length} pages documented
-        </div>
-      </aside>
-
-      {/* ================================================================ */}
-      {/* RIGHT PANEL — Detail View                                        */}
-      {/* ================================================================ */}
-      <main className="flex-1 overflow-y-auto bg-white">
-        {!selectedPage ? (
-          <EmptyState />
-        ) : (
-          <div className="max-w-4xl mx-auto px-8 py-6">
-            {/* Page Header */}
-            <div className="mb-6">
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-xl font-bold text-slate-800 tracking-tight">{selectedPage.name}</h2>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[selectedPage.category]}`}>
-                  {selectedPage.category}
-                </span>
-              </div>
-              <p className="text-slate-500 text-sm">{selectedPage.description}</p>
-              <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
-                <code className="px-2 py-1 bg-slate-100 border border-slate-200 rounded font-mono text-slate-600">
-                  {selectedPage.route}
-                </code>
-                <span>Roles: {selectedPage.roles.join(', ')}</span>
-                {selectedPage.lastReviewed && <span>Reviewed: {selectedPage.lastReviewed}</span>}
-              </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-1 mb-6 border-b border-slate-200 pb-px">
-              {TABS.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
-                    ${
-                      activeTab === tab.id
-                        ? 'text-slate-800 border-b-2 border-slate-800 -mb-px'
-                        : 'text-slate-400 hover:text-slate-600'
-                    }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            {activeTab === 'overview' && <OverviewTab page={selectedPage} />}
-            {activeTab === 'database' && (
-              <DatabaseTab page={selectedPage} metadata={tableMetadata} isLoading={isLoadingMeta} />
-            )}
-            {activeTab === 'triggers' && (
-              <TriggersTab page={selectedPage} metadata={tableMetadata} isLoading={isLoadingMeta} />
-            )}
-            {activeTab === 'platform' && <PlatformTab page={selectedPage} />}
           </div>
-        )}
-      </main>
-    </div>
+        </Overlay>
+      )}
+
+      {/* Add/Edit Form Modal */}
+      {showForm && editingPage && (
+        <PageFormModal
+          page={editingPage}
+          isEdit={isEditMode}
+          isSaving={isSaving}
+          onSave={handleSave}
+          onClose={() => { setShowForm(false); setEditingPage(null) }}
+        />
+      )}
+
+      <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* ================================================================ */}
+        {/* LEFT PANEL — TOC                                                 */}
+        {/* ================================================================ */}
+        <aside className="w-72 flex-shrink-0 border-r border-slate-200 flex flex-col bg-slate-50/60">
+          <div className="px-4 py-4 border-b border-slate-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Icon d={icons.book} className="w-5 h-5 text-slate-500" />
+                <h1 className="text-base font-semibold text-slate-800 tracking-tight">ORbit Docs</h1>
+              </div>
+              <button
+                onClick={handleAdd}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                title="Add page"
+              >
+                <Icon d={icons.plus} />
+              </button>
+            </div>
+            <div className="relative">
+              <Icon d={icons.search} className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search pages, tables..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg
+                           placeholder-slate-400 text-slate-700
+                           focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300
+                           transition-colors"
+              />
+            </div>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0.5">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+              </div>
+            ) : Object.keys(filteredGrouped).length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">
+                {searchQuery ? 'No results' : 'No pages documented yet'}
+              </p>
+            ) : (
+              Object.entries(filteredGrouped).map(([category, catPages]) => (
+                <div key={category}>
+                  <button
+                    onClick={() => toggleCategory(category)}
+                    className="w-full flex items-center gap-2 px-2 py-2 text-[11px] font-semibold uppercase tracking-wider
+                               text-slate-400 hover:text-slate-600 transition-colors rounded"
+                  >
+                    <svg
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedCategories.has(category) ? 'rotate-90' : ''}`}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d={icons.chevron} />
+                    </svg>
+                    <span>{category}</span>
+                    <span className="ml-auto text-slate-300 text-[10px]">{catPages.length}</span>
+                  </button>
+                  {expandedCategories.has(category) && (
+                    <div className="ml-3 space-y-0.5 mb-1">
+                      {catPages.map(page => (
+                        <button
+                          key={page.id}
+                          onClick={() => {
+                            setSelectedPageId(page.id)
+                            setActiveTab('overview')
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-all duration-150
+                            ${selectedPageId === page.id
+                              ? 'bg-white text-slate-900 font-medium shadow-sm border border-slate-200'
+                              : 'text-slate-500 hover:text-slate-700 hover:bg-white/60 border border-transparent'
+                            }`}
+                        >
+                          <div className="leading-snug">{page.name}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 truncate font-mono">{page.route}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </nav>
+
+          <div className="px-4 py-3 border-t border-slate-200 text-[11px] text-slate-400 flex items-center justify-between">
+            <span>{pages.length} pages</span>
+            <span>{getAllUniqueTablesCount(pages)} tables</span>
+          </div>
+        </aside>
+
+        {/* ================================================================ */}
+        {/* RIGHT PANEL — Detail                                             */}
+        {/* ================================================================ */}
+        <main className="flex-1 overflow-y-auto bg-white">
+          {!selectedPage ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+              <Icon d={icons.book} className="w-8 h-8 text-slate-300 mb-3" />
+              <p className="text-base font-medium text-slate-500">Select a page from the sidebar</p>
+              <p className="text-sm mt-1 mb-4">or add a new one to start documenting</p>
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                <Icon d={icons.plus} />
+                Add Page
+              </button>
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto px-8 py-6 animate-fade-in" key={selectedPage.id}>
+              {/* Page Header */}
+              <div className="mb-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 mb-1.5">
+                      <h2 className="text-xl font-bold text-slate-800 tracking-tight">{selectedPage.name}</h2>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${CATEGORY_COLORS[selectedPage.category] || TAG_COLORS.slate}`}>
+                        {selectedPage.category}
+                      </span>
+                    </div>
+                    <p className="text-slate-500 text-sm">{selectedPage.description}</p>
+                    <div className="flex items-center gap-3 mt-2.5 text-xs text-slate-400">
+                      <code className="px-2 py-1 bg-slate-50 border border-slate-200 rounded font-mono text-slate-600">
+                        {selectedPage.route}
+                      </code>
+                      <span className="text-slate-300">|</span>
+                      <span>{selectedPage.roles.join(', ')}</span>
+                      {selectedPage.owner && (
+                        <>
+                          <span className="text-slate-300">|</span>
+                          <span>Owner: {selectedPage.owner}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 ml-4 flex-shrink-0">
+                    <button
+                      onClick={handleEdit}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                    >
+                      <Icon d={icons.pencil} className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="p-1.5 text-slate-400 rounded-lg hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Delete page"
+                    >
+                      <Icon d={icons.trash} className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-1 mb-6 border-b border-slate-200 pb-px">
+                {TABS.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors
+                      ${activeTab === tab.id
+                        ? 'text-slate-800 border-b-2 border-slate-700 -mb-px'
+                        : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                  >
+                    <Icon d={tab.icon} className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {activeTab === 'overview' && <OverviewTab page={selectedPage} />}
+              {activeTab === 'database' && (
+                <DatabaseTab page={selectedPage} allPages={pages} metadata={tableMetadata} isLoading={isLoadingMeta} />
+              )}
+              {activeTab === 'triggers' && (
+                <TriggersTab page={selectedPage} metadata={tableMetadata} isLoading={isLoadingMeta} />
+              )}
+              {activeTab === 'platform' && <PlatformTab page={selectedPage} />}
+            </div>
+          )}
+        </main>
+      </div>
     </DashboardLayout>
   )
 }
 
 // =============================================================================
-// Empty State
+// Helpers
 // =============================================================================
 
-function EmptyState() {
+function getAllUniqueTablesCount(pages: PageEntry[]): number {
+  const tables = new Set<string>()
+  for (const p of pages) {
+    p.reads.forEach(t => tables.add(t))
+    p.writes.forEach(t => tables.add(t))
+  }
+  return tables.size
+}
+
+// =============================================================================
+// Page Form Modal
+// =============================================================================
+
+function PageFormModal({
+  page, isEdit, isSaving, onSave, onClose,
+}: {
+  page: PageEntryInsert
+  isEdit: boolean
+  isSaving: boolean
+  onSave: (page: PageEntryInsert) => void
+  onClose: () => void
+}) {
+  const [form, setForm] = useState<PageEntryInsert>(page)
+
+  const set = (field: keyof PageEntryInsert, value: any) =>
+    setForm(prev => ({ ...prev, [field]: value }))
+
+  const handleNameChange = (name: string) => {
+    set('name', name)
+    if (!isEdit) set('id', generateSlug(name))
+  }
+
+  const handleSubmit = () => {
+    if (!form.id || !form.name || !form.route) return
+    onSave(form)
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center h-full text-slate-400">
-      <BookIcon className="w-8 h-8 text-slate-300" />
-      <p className="mt-3 text-base font-medium text-slate-500">Select a page from the sidebar</p>
-      <p className="text-sm mt-1">to view its documentation and live database metadata</p>
+    <Overlay onClose={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[85vh] flex flex-col animate-slide-up"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {isEdit ? 'Edit Page' : 'Add Page'}
+          </h2>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+            <Icon d={icons.x} className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {/* Core Info */}
+          <FormSection title="Core">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Name" required>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={e => handleNameChange(e.target.value)}
+                  placeholder="Surgeon Dashboard"
+                  className="form-input"
+                />
+              </FormField>
+              <FormField label="ID (slug)" required>
+                <input
+                  type="text"
+                  value={form.id}
+                  onChange={e => set('id', e.target.value)}
+                  placeholder="surgeon-dashboard"
+                  disabled={isEdit}
+                  className={`form-input font-mono text-xs ${isEdit ? 'bg-slate-50 text-slate-400' : ''}`}
+                />
+              </FormField>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Route" required>
+                <input
+                  type="text"
+                  value={form.route}
+                  onChange={e => set('route', e.target.value)}
+                  placeholder="/dashboard/surgeon"
+                  className="form-input font-mono text-xs"
+                />
+              </FormField>
+              <FormField label="Category">
+                <select
+                  value={form.category}
+                  onChange={e => set('category', e.target.value)}
+                  className="form-input"
+                >
+                  {PAGE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </FormField>
+            </div>
+            <FormField label="Description">
+              <input
+                type="text"
+                value={form.description}
+                onChange={e => set('description', e.target.value)}
+                placeholder="One-line description of what this page does"
+                className="form-input"
+              />
+            </FormField>
+            <FormField label="Roles">
+              <MultiCheckbox
+                options={ROLE_OPTIONS as unknown as string[]}
+                selected={form.roles}
+                onChange={v => set('roles', v)}
+              />
+            </FormField>
+          </FormSection>
+
+          {/* Data Dependencies */}
+          <FormSection title="Data Dependencies">
+            <TagInput label="Reads (tables)" value={form.reads} onChange={v => set('reads', v)} placeholder="table name" />
+            <TagInput label="Writes (tables)" value={form.writes} onChange={v => set('writes', v)} placeholder="table name" />
+            <TagInput label="RPC Functions" value={form.rpcs} onChange={v => set('rpcs', v)} placeholder="function name" />
+            <TagInput label="Realtime Subscriptions" value={form.realtime} onChange={v => set('realtime', v)} placeholder="table name" />
+            <TagInput label="Materialized Views" value={form.materialized_views} onChange={v => set('materialized_views', v)} placeholder="view name" />
+            <TagInput label="API Routes" value={form.api_routes} onChange={v => set('api_routes', v)} placeholder="/api/route" />
+          </FormSection>
+
+          {/* Business Logic */}
+          <FormSection title="Business Logic">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Calculation Engine">
+                <input
+                  type="text"
+                  value={form.calculation_engine || ''}
+                  onChange={e => set('calculation_engine', e.target.value || null)}
+                  placeholder="analyticsV2"
+                  className="form-input font-mono text-xs"
+                />
+              </FormField>
+              <FormField label="Timezone Aware">
+                <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.timezone_aware}
+                    onChange={e => set('timezone_aware', e.target.checked)}
+                    className="rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+                  />
+                  <span className="text-sm text-slate-600">Handles facility timezone</span>
+                </label>
+              </FormField>
+            </div>
+            <TagInput label="Key Validations" value={form.key_validations} onChange={v => set('key_validations', v)} placeholder="validation rule" />
+          </FormSection>
+
+          {/* Platform Parity */}
+          <FormSection title="Platform Parity">
+            <label className="flex items-center gap-2 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={form.ios_exists}
+                onChange={e => set('ios_exists', e.target.checked)}
+                className="rounded border-slate-300 text-slate-700 focus:ring-slate-400"
+              />
+              <span className="text-sm text-slate-600">iOS equivalent exists</span>
+            </label>
+            {form.ios_exists && (
+              <div className="space-y-3 pl-6 border-l-2 border-slate-200">
+                <FormField label="SwiftUI View Name">
+                  <input
+                    type="text"
+                    value={form.ios_view_name || ''}
+                    onChange={e => set('ios_view_name', e.target.value || null)}
+                    placeholder="SurgeonDashboardView"
+                    className="form-input font-mono text-xs"
+                  />
+                </FormField>
+                <FormField label="iOS Notes">
+                  <input
+                    type="text"
+                    value={form.ios_notes || ''}
+                    onChange={e => set('ios_notes', e.target.value || null)}
+                    placeholder="Implementation notes for iOS"
+                    className="form-input"
+                  />
+                </FormField>
+              </div>
+            )}
+            <FormField label="Parity Notes">
+              <textarea
+                value={form.parity_notes || ''}
+                onChange={e => set('parity_notes', e.target.value || null)}
+                placeholder="Known differences between web and iOS"
+                className="form-input min-h-[60px] resize-y"
+                rows={2}
+              />
+            </FormField>
+          </FormSection>
+
+          {/* UI Details */}
+          <FormSection title="UI Details">
+            <TagInput label="Components" value={form.components} onChange={v => set('components', v)} placeholder="ComponentName" />
+            <TagInput label="Interactions" value={form.interactions} onChange={v => set('interactions', v)} placeholder="user action" />
+            <FormField label="State Management Notes">
+              <textarea
+                value={form.state_management || ''}
+                onChange={e => set('state_management', e.target.value || null)}
+                placeholder="Notable state patterns or gotchas"
+                className="form-input min-h-[60px] resize-y"
+                rows={2}
+              />
+            </FormField>
+          </FormSection>
+
+          {/* Metadata */}
+          <FormSection title="Metadata">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Owner">
+                <input
+                  type="text"
+                  value={form.owner || ''}
+                  onChange={e => set('owner', e.target.value || null)}
+                  placeholder="Developer name"
+                  className="form-input"
+                />
+              </FormField>
+              <FormField label="Display Order">
+                <input
+                  type="number"
+                  value={form.display_order}
+                  onChange={e => set('display_order', parseInt(e.target.value) || 0)}
+                  className="form-input"
+                />
+              </FormField>
+            </div>
+            <FormField label="Notes">
+              <textarea
+                value={form.notes || ''}
+                onChange={e => set('notes', e.target.value || null)}
+                placeholder="Freeform notes"
+                className="form-input min-h-[60px] resize-y"
+                rows={2}
+              />
+            </FormField>
+          </FormSection>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={isSaving || !form.id || !form.name || !form.route}
+            className="px-5 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors
+                       disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isSaving ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Icon d={icons.check} className="w-4 h-4" />
+            )}
+            {isEdit ? 'Save Changes' : 'Add Page'}
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  )
+}
+
+// =============================================================================
+// Form Components
+// =============================================================================
+
+function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+    >
+      <div onClick={e => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{title}</h3>
+      <div className="space-y-3">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function FormField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1">
+        {label}
+        {required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function TagInput({
+  label, value, onChange, placeholder,
+}: {
+  label: string
+  value: string[]
+  onChange: (v: string[]) => void
+  placeholder: string
+}) {
+  const [input, setInput] = useState('')
+
+  const add = () => {
+    const trimmed = input.trim()
+    if (trimmed && !value.includes(trimmed)) {
+      onChange([...value, trimmed])
+    }
+    setInput('')
+  }
+
+  const remove = (item: string) => {
+    onChange(value.filter(v => v !== item))
+  }
+
+  return (
+    <FormField label={label}>
+      <div className="flex flex-wrap gap-1.5 mb-1.5">
+        {value.map(item => (
+          <span
+            key={item}
+            className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-slate-600"
+          >
+            {item}
+            <button
+              type="button"
+              onClick={() => remove(item)}
+              className="text-slate-400 hover:text-red-500 transition-colors"
+            >
+              &times;
+            </button>
+          </span>
+        ))}
+      </div>
+      <input
+        type="text"
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); add() }
+        }}
+        onBlur={add}
+        placeholder={value.length === 0 ? placeholder : `Add ${placeholder}...`}
+        className="form-input text-xs font-mono"
+      />
+    </FormField>
+  )
+}
+
+function MultiCheckbox({ options, selected, onChange }: { options: string[]; selected: string[]; onChange: (v: string[]) => void }) {
+  const toggle = (opt: string) => {
+    if (selected.includes(opt)) {
+      onChange(selected.filter(s => s !== opt))
+    } else {
+      onChange([...selected, opt])
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => (
+        <label
+          key={opt}
+          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer border transition-all
+            ${selected.includes(opt)
+              ? 'bg-slate-800 text-white border-slate-800'
+              : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+            }`}
+        >
+          <input
+            type="checkbox"
+            checked={selected.includes(opt)}
+            onChange={() => toggle(opt)}
+            className="sr-only"
+          />
+          {opt}
+        </label>
+      ))}
     </div>
   )
 }
@@ -346,43 +974,43 @@ function OverviewTab({ page }: { page: PageEntry }) {
               <TagList items={page.rpcs} color="cyan" />
             </div>
           )}
-          {page.realtime && page.realtime.length > 0 && (
+          {page.realtime.length > 0 && (
             <div>
               <Label>Realtime Subscriptions</Label>
               <TagList items={page.realtime} color="green" />
             </div>
           )}
-          {page.materializedViews && page.materializedViews.length > 0 && (
+          {page.materialized_views.length > 0 && (
             <div>
               <Label>Materialized Views</Label>
-              <TagList items={page.materializedViews} color="purple" />
+              <TagList items={page.materialized_views} color="purple" />
             </div>
           )}
-          {page.apiRoutes && page.apiRoutes.length > 0 && (
+          {page.api_routes.length > 0 && (
             <div>
               <Label>API Routes</Label>
-              <TagList items={page.apiRoutes} color="red" />
+              <TagList items={page.api_routes} color="red" />
             </div>
           )}
         </div>
       </Section>
 
-      {(page.calculationEngine || page.keyValidations || page.timezoneAware) && (
+      {(page.calculation_engine || page.key_validations.length > 0 || page.timezone_aware) && (
         <Section title="Business Logic">
           <div className="space-y-3">
-            {page.calculationEngine && (
+            {page.calculation_engine && (
               <div>
                 <Label>Calculation Engine</Label>
                 <code className="text-sm px-2 py-1 bg-amber-50 border border-amber-200 rounded font-mono text-amber-800">
-                  {page.calculationEngine}
+                  {page.calculation_engine}
                 </code>
               </div>
             )}
-            {page.keyValidations && page.keyValidations.length > 0 && (
+            {page.key_validations.length > 0 && (
               <div>
                 <Label>Key Validations</Label>
                 <ul className="space-y-1.5">
-                  {page.keyValidations.map((v, i) => (
+                  {page.key_validations.map((v, i) => (
                     <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
                       <span className="text-amber-500 mt-0.5 text-xs">&#9888;</span>
                       <code className="font-mono text-xs bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-slate-700">{v}</code>
@@ -391,7 +1019,7 @@ function OverviewTab({ page }: { page: PageEntry }) {
                 </ul>
               </div>
             )}
-            {page.timezoneAware && (
+            {page.timezone_aware && (
               <div className="text-sm text-slate-500 flex items-center gap-2">
                 <span className="text-blue-500">&#128336;</span>
                 Handles facility-specific timezone logic
@@ -401,16 +1029,16 @@ function OverviewTab({ page }: { page: PageEntry }) {
         </Section>
       )}
 
-      {(page.components || page.interactions || page.stateManagement) && (
+      {(page.components.length > 0 || page.interactions.length > 0 || page.state_management) && (
         <Section title="UI Details">
           <div className="space-y-3">
-            {page.components && page.components.length > 0 && (
+            {page.components.length > 0 && (
               <div>
                 <Label>Components</Label>
                 <TagList items={page.components} color="green" />
               </div>
             )}
-            {page.interactions && page.interactions.length > 0 && (
+            {page.interactions.length > 0 && (
               <div>
                 <Label>User Interactions</Label>
                 <ul className="space-y-1">
@@ -423,10 +1051,10 @@ function OverviewTab({ page }: { page: PageEntry }) {
                 </ul>
               </div>
             )}
-            {page.stateManagement && (
+            {page.state_management && (
               <div>
                 <Label>State Management Notes</Label>
-                <p className="text-sm text-slate-600">{page.stateManagement}</p>
+                <p className="text-sm text-slate-600">{page.state_management}</p>
               </div>
             )}
           </div>
@@ -447,22 +1075,16 @@ function OverviewTab({ page }: { page: PageEntry }) {
 // =============================================================================
 
 function DatabaseTab({
-  page, metadata, isLoading,
+  page, allPages, metadata, isLoading,
 }: {
   page: PageEntry
+  allPages: PageEntry[]
   metadata: Record<string, TableMetadata>
   isLoading: boolean
 }) {
   const allTables = [...new Set([...page.reads, ...page.writes])]
 
-  if (isLoading) {
-    return (
-      <div className="text-center py-12 text-slate-400">
-        <div className="animate-spin inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full mb-3" />
-        <p className="text-sm">Loading database metadata...</p>
-      </div>
-    )
-  }
+  if (isLoading) return <LoadingSpinner text="Loading database metadata..." />
 
   return (
     <div className="space-y-5">
@@ -491,7 +1113,7 @@ function DatabaseTab({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
+                    <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wider">
                       <th className="pb-2 pr-4">Column</th>
                       <th className="pb-2 pr-4">Type</th>
                       <th className="pb-2 pr-4">Nullable</th>
@@ -519,35 +1141,34 @@ function DatabaseTab({
               </div>
             ) : (
               <p className="text-sm text-slate-400 italic">
-                Deploy the introspection RPCs to see live column data.
-                <br />
-                <span className="text-xs">Run <code className="bg-slate-100 px-1 rounded">introspection_setup.sql</code> in Supabase SQL Editor</span>
+                Deploy introspection RPCs to see live column data.
               </p>
             )}
-
-            {/* Cross-reference */}
             <div className="mt-3 pt-3 border-t border-slate-100">
               <span className="text-xs text-slate-400">Also used by: </span>
-              {getPagesByTable(tableName)
+              {getPagesByTable(allPages, tableName)
                 .filter(p => p.id !== page.id)
                 .map((p, i) => (
                   <span key={p.id} className="text-xs text-slate-500">
                     {i > 0 && ', '}{p.name}
                   </span>
                 ))}
-              {getPagesByTable(tableName).filter(p => p.id !== page.id).length === 0 && (
+              {getPagesByTable(allPages, tableName).filter(p => p.id !== page.id).length === 0 && (
                 <span className="text-xs text-slate-300 italic">no other pages</span>
               )}
             </div>
           </Section>
         )
       })}
+      {allTables.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-8">No tables declared. Edit this page to add data dependencies.</p>
+      )}
     </div>
   )
 }
 
 // =============================================================================
-// Triggers & Foreign Keys Tab
+// Triggers Tab
 // =============================================================================
 
 function TriggersTab({
@@ -559,14 +1180,7 @@ function TriggersTab({
 }) {
   const allTables = [...new Set([...page.reads, ...page.writes])]
 
-  if (isLoading) {
-    return (
-      <div className="text-center py-12 text-slate-400">
-        <div className="animate-spin inline-block w-6 h-6 border-2 border-slate-300 border-t-slate-600 rounded-full mb-3" />
-        <p className="text-sm">Loading trigger and FK data...</p>
-      </div>
-    )
-  }
+  if (isLoading) return <LoadingSpinner text="Loading triggers and FK data..." />
 
   const hasTriggers = allTables.some(t => metadata[t]?.triggers.length > 0)
   const hasFKs = allTables.some(t => metadata[t]?.foreignKeys.length > 0)
@@ -574,7 +1188,6 @@ function TriggersTab({
 
   return (
     <div className="space-y-5">
-      {/* Triggers */}
       <Section title="Triggers">
         {allTables.map(tableName => {
           const triggers = metadata[tableName]?.triggers || []
@@ -602,16 +1215,9 @@ function TriggersTab({
             </div>
           )
         })}
-        {!hasTriggers && (
-          <p className="text-sm text-slate-400 italic">
-            {Object.keys(metadata).length > 0
-              ? 'No triggers found on tables used by this page.'
-              : 'Deploy introspection RPCs to see triggers.'}
-          </p>
-        )}
+        {!hasTriggers && <EmptyMeta text="No triggers found on tables used by this page." metadata={metadata} />}
       </Section>
 
-      {/* Foreign Keys */}
       <Section title="Foreign Key Relationships">
         {allTables.map(tableName => {
           const fks = metadata[tableName]?.foreignKeys || []
@@ -631,16 +1237,9 @@ function TriggersTab({
             </div>
           )
         })}
-        {!hasFKs && (
-          <p className="text-sm text-slate-400 italic">
-            {Object.keys(metadata).length > 0
-              ? 'No foreign keys found on tables used by this page.'
-              : 'Deploy introspection RPCs to see relationships.'}
-          </p>
-        )}
+        {!hasFKs && <EmptyMeta text="No foreign keys found." metadata={metadata} />}
       </Section>
 
-      {/* Indexes */}
       <Section title="Indexes">
         {allTables.map(tableName => {
           const idxs = metadata[tableName]?.indexes || []
@@ -659,13 +1258,7 @@ function TriggersTab({
             </div>
           )
         })}
-        {!hasIndexes && (
-          <p className="text-sm text-slate-400 italic">
-            {Object.keys(metadata).length > 0
-              ? 'No indexes found.'
-              : 'Deploy introspection RPCs to see indexes.'}
-          </p>
-        )}
+        {!hasIndexes && <EmptyMeta text="No indexes found." metadata={metadata} />}
       </Section>
     </div>
   )
@@ -681,40 +1274,38 @@ function PlatformTab({ page }: { page: PageEntry }) {
       <Section title="iOS Parity">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${page.ios.exists ? 'bg-green-500' : 'bg-slate-300'}`} />
+            <span className={`w-2.5 h-2.5 rounded-full ${page.ios_exists ? 'bg-emerald-500' : 'bg-slate-300'}`} />
             <span className="text-sm text-slate-600">
-              {page.ios.exists ? 'iOS equivalent exists' : 'No iOS equivalent'}
+              {page.ios_exists ? 'iOS equivalent exists' : 'No iOS equivalent'}
             </span>
           </div>
-
-          {page.ios.exists && page.ios.viewName && (
+          {page.ios_exists && page.ios_view_name && (
             <div>
               <Label>SwiftUI View</Label>
-              <code className="text-sm px-2 py-1 bg-green-50 border border-green-200 rounded font-mono text-green-800">
-                {page.ios.viewName}
+              <code className="text-sm px-2 py-1 bg-emerald-50 border border-emerald-200 rounded font-mono text-emerald-800">
+                {page.ios_view_name}
               </code>
             </div>
           )}
-
-          {page.ios.notes && (
+          {page.ios_notes && (
             <div>
               <Label>iOS Notes</Label>
-              <p className="text-sm text-slate-600">{page.ios.notes}</p>
+              <p className="text-sm text-slate-600">{page.ios_notes}</p>
             </div>
           )}
         </div>
       </Section>
 
-      {page.parityNotes && (
+      {page.parity_notes && (
         <Section title="Parity Notes">
-          <p className="text-sm text-slate-600">{page.parityNotes}</p>
+          <p className="text-sm text-slate-600">{page.parity_notes}</p>
         </Section>
       )}
 
       <Section title="Feature Matrix">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
+            <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wider">
               <th className="pb-2 pr-4">Feature</th>
               <th className="pb-2 pr-4">Web</th>
               <th className="pb-2">iOS</th>
@@ -724,17 +1315,17 @@ function PlatformTab({ page }: { page: PageEntry }) {
             <tr className="text-slate-600">
               <td className="py-2 pr-4">Page exists</td>
               <td className="py-2 pr-4"><StatusDot active /></td>
-              <td className="py-2"><StatusDot active={page.ios.exists} /></td>
+              <td className="py-2"><StatusDot active={page.ios_exists} /></td>
             </tr>
             <tr className="text-slate-600">
               <td className="py-2 pr-4">Realtime updates</td>
-              <td className="py-2 pr-4"><StatusDot active={!!page.realtime && page.realtime.length > 0} /></td>
-              <td className="py-2"><StatusDot active={page.ios.exists && !!page.realtime && page.realtime.length > 0} /></td>
+              <td className="py-2 pr-4"><StatusDot active={page.realtime.length > 0} /></td>
+              <td className="py-2"><StatusDot active={page.ios_exists && page.realtime.length > 0} /></td>
             </tr>
             <tr className="text-slate-600">
               <td className="py-2 pr-4">Write operations</td>
               <td className="py-2 pr-4"><StatusDot active={page.writes.length > 0} /></td>
-              <td className="py-2"><StatusDot active={page.ios.exists && page.writes.length > 0} /></td>
+              <td className="py-2"><StatusDot active={page.ios_exists && page.writes.length > 0} /></td>
             </tr>
           </tbody>
         </table>
@@ -744,7 +1335,7 @@ function PlatformTab({ page }: { page: PageEntry }) {
 }
 
 // =============================================================================
-// Shared UI Components
+// Shared UI
 // =============================================================================
 
 function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
@@ -757,16 +1348,7 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">{children}</div>
-}
-
-const TAG_COLORS: Record<string, string> = {
-  blue: 'bg-blue-50 text-blue-700 border-blue-200',
-  amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  green: 'bg-green-50 text-green-700 border-green-200',
-  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-  purple: 'bg-purple-50 text-purple-700 border-purple-200',
-  red: 'bg-red-50 text-red-700 border-red-200',
+  return <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">{children}</div>
 }
 
 function TagList({ items, color }: { items: string[]; color: string }) {
@@ -774,10 +1356,7 @@ function TagList({ items, color }: { items: string[]; color: string }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map(item => (
-        <code
-          key={item}
-          className={`text-xs px-2 py-0.5 rounded-md border font-mono ${TAG_COLORS[color] || TAG_COLORS.blue}`}
-        >
+        <code key={item} className={`text-xs px-2 py-0.5 rounded-md border font-mono ${TAG_COLORS[color] || TAG_COLORS.slate}`}>
           {item}
         </code>
       ))}
@@ -787,12 +1366,29 @@ function TagList({ items, color }: { items: string[]; color: string }) {
 
 function MiniTag({ children, color }: { children: React.ReactNode; color: string }) {
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider border ${TAG_COLORS[color] || TAG_COLORS.blue}`}>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider border ${TAG_COLORS[color] || TAG_COLORS.slate}`}>
       {children}
     </span>
   )
 }
 
 function StatusDot({ active }: { active: boolean }) {
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-green-500' : 'bg-slate-200'}`} />
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+}
+
+function LoadingSpinner({ text }: { text: string }) {
+  return (
+    <div className="text-center py-12 text-slate-400">
+      <div className="animate-spin inline-block w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full mb-3" />
+      <p className="text-sm">{text}</p>
+    </div>
+  )
+}
+
+function EmptyMeta({ text, metadata }: { text: string; metadata: Record<string, TableMetadata> }) {
+  return (
+    <p className="text-sm text-slate-400 italic">
+      {Object.keys(metadata).length > 0 ? text : 'Deploy introspection RPCs to see live data.'}
+    </p>
+  )
 }

@@ -1,16 +1,15 @@
 // =============================================================================
-// ORbit Page Registry — Single source of truth for app documentation
+// ORbit Page Registry — Supabase-backed documentation system
 // =============================================================================
-// Add one entry per page. The admin docs page reads this file and enriches
-// each entry with live database metadata (triggers, FKs, indexes, columns)
-// via Supabase system catalog introspection.
+// All page documentation lives in the `page_registry` table.
+// This file provides types and CRUD helpers.
 // =============================================================================
+
+import { SupabaseClient } from '@supabase/supabase-js'
 
 // -----------------------------------------------------------------------------
 // Types
 // -----------------------------------------------------------------------------
-
-export type UserRole = 'global_admin' | 'facility_admin' | 'surgeon' | 'anesthesiologist' | 'nurse' | 'tech' | 'staff';
 
 export type PageCategory =
   | 'Surgeon-Facing'
@@ -18,248 +17,207 @@ export type PageCategory =
   | 'Global Admin'
   | 'Shared'
   | 'Auth'
-  | 'API Routes';
+  | 'API Routes'
 
-export interface IOSParity {
-  exists: boolean;
-  viewName?: string;            // SwiftUI view name, e.g. 'SurgeonDashboardView'
-  notes?: string;               // Known differences or sync considerations
-}
+export const PAGE_CATEGORIES: PageCategory[] = [
+  'Surgeon-Facing',
+  'Admin',
+  'Global Admin',
+  'Shared',
+  'Auth',
+  'API Routes',
+]
+
+export const ROLE_OPTIONS = [
+  'global_admin',
+  'facility_admin',
+  'surgeon',
+  'anesthesiologist',
+  'nurse',
+  'tech',
+  'staff',
+  'user',
+] as const
 
 export interface PageEntry {
-  // --- Core Identity ---
-  id: string;                   // Unique slug: 'surgeon-dashboard'
-  name: string;                 // Display name: 'Surgeon Dashboard'
-  route: string;                // Web path: '/dashboard/surgeon'
-  category: PageCategory;
-  description: string;          // One-liner on what the page does
-  roles: UserRole[];            // Which roles can access this page
+  id: string
+  name: string
+  route: string
+  category: PageCategory
+  description: string
+  roles: string[]
 
-  // --- Data Dependencies ---
-  reads: string[];              // Tables/views it queries
-  writes: string[];             // Tables it inserts into or updates
-  rpcs: string[];               // Supabase RPC functions it calls
-  realtime?: string[];          // Tables it subscribes to for live updates
-  materializedViews?: string[]; // Materialized views it depends on
+  reads: string[]
+  writes: string[]
+  rpcs: string[]
+  realtime: string[]
+  materialized_views: string[]
 
-  // --- Business Logic ---
-  calculationEngine?: string;   // Reference to shared logic, e.g. 'analyticsV2'
-  keyValidations?: string[];    // Critical checks, e.g. 'recorded_at != NULL'
-  timezoneAware?: boolean;      // Whether it handles facility-specific timezones
+  calculation_engine: string | null
+  key_validations: string[]
+  timezone_aware: boolean
 
-  // --- Platform Parity ---
-  ios: IOSParity;
-  parityNotes?: string;         // Known sync or behavioral differences
+  ios_exists: boolean
+  ios_view_name: string | null
+  ios_notes: string | null
+  parity_notes: string | null
 
-  // --- UI Details ---
-  components?: string[];        // Key shared components used
-  interactions?: string[];      // Notable user actions
-  stateManagement?: string;     // Notes on tricky state patterns
+  components: string[]
+  interactions: string[]
+  state_management: string | null
 
-  // --- API Dependencies ---
-  apiRoutes?: string[];         // Next.js API routes this page calls
+  api_routes: string[]
 
-  // --- Metadata ---
-  owner?: string;               // Responsible developer
-  lastReviewed?: string;        // ISO date of last review
-  notes?: string;               // Freeform notes
+  owner: string | null
+  notes: string | null
+  display_order: number
+  created_at: string
+  updated_at: string
 }
 
+export type PageEntryInsert = Omit<PageEntry, 'created_at' | 'updated_at'>
 
-// -----------------------------------------------------------------------------
-// Registry
-// -----------------------------------------------------------------------------
-// Add entries below. The admin docs page auto-generates a TOC from categories.
-// Database metadata (columns, triggers, FKs, indexes) is fetched live at runtime.
-// -----------------------------------------------------------------------------
-
-export const pageRegistry: PageEntry[] = [
-
-  // ===========================================================================
-  // SURGEON-FACING
-  // ===========================================================================
-
-  {
-    id: 'surgeon-dashboard',
-    name: 'Surgeon Dashboard',
-    route: '/dashboard/surgeon',
-    category: 'Surgeon-Facing',
-    description: 'Real-time overview of active cases, room status, and daily schedule for surgeons.',
-    roles: ['surgeon'],
-    reads: ['cases', 'case_milestones', 'rooms', 'users'],
+// Default values for a new page entry
+export function createEmptyPage(): PageEntryInsert {
+  return {
+    id: '',
+    name: '',
+    route: '',
+    category: 'Shared',
+    description: '',
+    roles: [],
+    reads: [],
     writes: [],
     rpcs: [],
-    realtime: ['cases', 'case_milestones'],
-    materializedViews: [],
-    ios: {
-      exists: true,
-      viewName: 'SurgeonDashboardView',
-    },
-    components: ['CaseTimeline', 'RoomStatusCard'],
-    interactions: ['view active case', 'view room status', 'navigate to case detail'],
-  },
+    realtime: [],
+    materialized_views: [],
+    calculation_engine: null,
+    key_validations: [],
+    timezone_aware: false,
+    ios_exists: false,
+    ios_view_name: null,
+    ios_notes: null,
+    parity_notes: null,
+    components: [],
+    interactions: [],
+    state_management: null,
+    api_routes: [],
+    owner: null,
+    notes: null,
+    display_order: 0,
+  }
+}
 
-  {
-    id: 'case-detail',
-    name: 'Case Detail',
-    route: '/cases/[id]',
-    category: 'Surgeon-Facing',
-    description: 'Detailed view of a single surgical case with milestone tracking and timing data.',
-    roles: ['surgeon', 'facility_admin', 'global_admin', 'nurse', 'tech', 'anesthesiologist'],
-    reads: ['cases', 'case_milestones', 'facility_milestones', 'surgeon_milestone_averages', 'users', 'rooms'],
-    writes: ['case_milestones'],
-    rpcs: [],
-    realtime: ['case_milestones'],
-    keyValidations: ['recorded_at != NULL for milestone completion'],
-    timezoneAware: true,
-    ios: {
-      exists: true,
-      viewName: 'CaseDetailView',
-      notes: 'Uses NavigationSplitView on iPad. Milestone recording uses same NULL timestamp pattern.',
-    },
-    parityNotes: 'iOS previously miscounted milestones by treating NULL recorded_at as completed. Fixed.',
-    components: ['MilestoneTracker', 'CaseTimeline'],
-    interactions: ['record milestone timestamp', 'view milestone history', 'view pace tracking'],
-    stateManagement: 'Functional updaters for rapid milestone toggles to prevent stale closures.',
-  },
+// -----------------------------------------------------------------------------
+// CRUD Operations
+// -----------------------------------------------------------------------------
 
-  // ===========================================================================
-  // ADMIN
-  // ===========================================================================
+/** Fetch all pages ordered by category + display_order */
+export async function fetchPages(supabase: SupabaseClient): Promise<PageEntry[]> {
+  const { data, error } = await supabase
+    .from('page_registry')
+    .select('*')
+    .order('category')
+    .order('display_order')
+    .order('name')
 
-  {
-    id: 'admin-overview',
-    name: 'Admin Overview',
-    route: '/admin/overview',
-    category: 'Admin',
-    description: 'Facility-level analytics dashboard with OR utilization, turnover metrics, and surgeon performance.',
-    roles: ['facility_admin', 'global_admin'],
-    reads: ['cases', 'case_milestones', 'case_milestone_stats', 'rooms', 'users'],
-    writes: [],
-    rpcs: [],
-    materializedViews: ['case_milestone_stats'],
-    calculationEngine: 'analyticsV2',
-    timezoneAware: true,
-    ios: { exists: false },
-    components: ['AnalyticsChart', 'TurnoverMetrics', 'SurgeonIdleTime'],
-    interactions: ['filter by date range', 'filter by surgeon', 'view turnover breakdown', 'view surgeon idle time'],
-    notes: 'Uses median values over averages for resilience against outliers (lunch breaks, delays).',
-  },
+  if (error) {
+    console.error('[PageRegistry] fetch error:', error)
+    return []
+  }
+  return data || []
+}
 
-  {
-    id: 'admin-rooms',
-    name: 'Rooms Management',
-    route: '/admin/rooms',
-    category: 'Admin',
-    description: 'Configure and manage operating rooms for the facility.',
-    roles: ['facility_admin', 'global_admin'],
-    reads: ['rooms', 'facilities'],
-    writes: ['rooms'],
-    rpcs: [],
-    ios: { exists: false },
-    interactions: ['add room', 'edit room', 'deactivate room'],
-  },
+/** Insert a new page */
+export async function insertPage(
+  supabase: SupabaseClient,
+  page: PageEntryInsert
+): Promise<{ data: PageEntry | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('page_registry')
+    .insert(page)
+    .select()
+    .single()
 
-  // ===========================================================================
-  // GLOBAL ADMIN
-  // ===========================================================================
+  if (error) {
+    console.error('[PageRegistry] insert error:', error)
+    return { data: null, error: error.message }
+  }
+  return { data, error: null }
+}
 
-  {
-    id: 'global-admin-dashboard',
-    name: 'Global Admin Dashboard',
-    route: '/admin/global',
-    category: 'Global Admin',
-    description: 'Cross-facility management, user provisioning, and system-wide configuration.',
-    roles: ['global_admin'],
-    reads: ['facilities', 'users', 'user_roles', 'rooms'],
-    writes: ['facilities', 'users'],
-    rpcs: [],
-    ios: { exists: false },
-    interactions: ['create facility', 'create user', 'manage roles'],
-  },
+/** Update an existing page */
+export async function updatePage(
+  supabase: SupabaseClient,
+  id: string,
+  updates: Partial<PageEntryInsert>
+): Promise<{ data: PageEntry | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('page_registry')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
 
-  {
-    id: 'admin-demo',
-    name: 'Demo Data Generator',
-    route: '/admin/demo',
-    category: 'Global Admin',
-    description: 'Generate realistic surgical demo data with configurable surgeon profiles and scheduling patterns.',
-    roles: ['global_admin'],
-    reads: ['facilities', 'users', 'rooms', 'facility_milestones', 'procedure_types'],
-    writes: ['cases', 'case_milestones', 'case_staff', 'case_implants'],
-    rpcs: [],
-    ios: { exists: false },
-    apiRoutes: ['/api/demo-data'],
-    notes: 'Generates flip-room scheduling, surgeon speed profiles, and realistic outlier patterns.',
-  },
+  if (error) {
+    console.error('[PageRegistry] update error:', error)
+    return { data: null, error: error.message }
+  }
+  return { data, error: null }
+}
 
-  // ===========================================================================
-  // AUTH
-  // ===========================================================================
+/** Delete a page */
+export async function deletePage(
+  supabase: SupabaseClient,
+  id: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('page_registry')
+    .delete()
+    .eq('id', id)
 
-  {
-    id: 'login',
-    name: 'Login',
-    route: '/login',
-    category: 'Auth',
-    description: 'User authentication with facility-specific routing.',
-    roles: ['global_admin', 'facility_admin', 'surgeon', 'anesthesiologist', 'nurse', 'tech', 'staff'],
-    reads: ['users', 'user_roles', 'facilities'],
-    writes: [],
-    rpcs: [],
-    ios: {
-      exists: true,
-      viewName: 'LoginView',
-    },
-    interactions: ['email/password login', 'password reset'],
-  },
-
-  // ===========================================================================
-  // Add more pages below as you build them.
-  // Each entry appears in the admin docs TOC automatically.
-  // ===========================================================================
-];
-
+  if (error) {
+    console.error('[PageRegistry] delete error:', error)
+    return { error: error.message }
+  }
+  return { error: null }
+}
 
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
 
-/** Get all unique categories in display order */
-export function getCategories(): PageCategory[] {
-  const order: PageCategory[] = ['Surgeon-Facing', 'Admin', 'Global Admin', 'Shared', 'Auth', 'API Routes'];
-  const used = new Set(pageRegistry.map(p => p.category));
-  return order.filter(c => used.has(c));
+/** Group pages by category */
+export function groupByCategory(pages: PageEntry[]): Record<string, PageEntry[]> {
+  const grouped: Record<string, PageEntry[]> = {}
+  for (const page of pages) {
+    if (!grouped[page.category]) grouped[page.category] = []
+    grouped[page.category].push(page)
+  }
+  return grouped
 }
 
-/** Get pages grouped by category */
-export function getPagesByCategory(): Record<PageCategory, PageEntry[]> {
-  const grouped = {} as Record<PageCategory, PageEntry[]>;
-  for (const page of pageRegistry) {
-    if (!grouped[page.category]) grouped[page.category] = [];
-    grouped[page.category].push(page);
+/** Get all unique table names across all pages */
+export function getAllTables(pages: PageEntry[]): string[] {
+  const tables = new Set<string>()
+  for (const page of pages) {
+    page.reads.forEach(t => tables.add(t))
+    page.writes.forEach(t => tables.add(t))
   }
-  return grouped;
-}
-
-/** Get all unique table names across the entire registry */
-export function getAllTables(): string[] {
-  const tables = new Set<string>();
-  for (const page of pageRegistry) {
-    page.reads.forEach(t => tables.add(t));
-    page.writes.forEach(t => tables.add(t));
-  }
-  return Array.from(tables).sort();
+  return Array.from(tables).sort()
 }
 
 /** Find which pages depend on a given table */
-export function getPagesByTable(tableName: string): PageEntry[] {
-  return pageRegistry.filter(
+export function getPagesByTable(pages: PageEntry[], tableName: string): PageEntry[] {
+  return pages.filter(
     p => p.reads.includes(tableName) || p.writes.includes(tableName)
-  );
+  )
 }
 
-/** Find which pages use a given RPC */
-export function getPagesByRpc(rpcName: string): PageEntry[] {
-  return pageRegistry.filter(p => p.rpcs.includes(rpcName));
+/** Generate an ID slug from a name */
+export function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
 }
