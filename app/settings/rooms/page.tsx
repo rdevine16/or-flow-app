@@ -324,7 +324,7 @@ export default function RoomsSettingsPage() {
 
       if (!error && data) {
         // Save room schedule
-        await saveRoomSchedule(data.id, formSchedule)
+        await saveRoomSchedule(data.id, formSchedule, undefined, data.name)
 
         setRooms([...rooms, data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
@@ -355,7 +355,7 @@ export default function RoomsSettingsPage() {
 
       if (!error) {
         // Save room schedule
-        await saveRoomSchedule(modal.room.id, formSchedule)
+        await saveRoomSchedule(modal.room.id, formSchedule, undefined, formData.name.trim())
 
         setRooms(
           rooms

@@ -3,6 +3,7 @@
 
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { roomScheduleAudit } from '@/lib/audit-logger'
 
 export interface RoomScheduleRow {
   id: string
@@ -174,7 +175,8 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
   const saveRoomSchedule = useCallback(async (
     roomId: string,
     schedule: RoomDaySchedule[],
-    effectiveDate?: string
+    effectiveDate?: string,
+    roomName?: string
   ): Promise<boolean> => {
     if (!facilityId) return false
 
@@ -186,6 +188,9 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
       const yesterday = new Date()
       yesterday.setDate(yesterday.getDate() - 1)
       const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+      // Capture the old schedule BEFORE we overwrite it (for audit logging)
+      const oldSchedule = await fetchRoomSchedule(roomId)
 
       // End all current active schedules for this room (set effective_end to yesterday)
       const { error: endError } = await supabase
@@ -233,6 +238,25 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
           .update({ available_hours: Math.round(avgHours * 10) / 10 })
           .eq('id', roomId)
       }
+
+      // Audit log: record the schedule change
+      const formatForAudit = (sched: RoomDaySchedule[]) =>
+        sched.map(d => ({
+          day: DAY_LABELS[d.dayOfWeek],
+          open: d.openTime,
+          close: d.closeTime,
+          closed: d.isClosed,
+        }))
+
+      await roomScheduleAudit.updated(
+        supabase,
+        roomId,
+        roomName || roomId,
+        formatForAudit(oldSchedule),
+        formatForAudit(schedule),
+        facilityId,
+        effDate
+      )
 
       return true
     } catch (err) {

@@ -125,6 +125,9 @@ export type AuditAction =
   | 'room.deleted'
   | 'room.restored'
   | 'room.reordered'
+    // Room Schedules
+  | 'room_schedule.updated'
+  | 'room_schedule.created_with_room'
   // Procedure Types
   | 'procedure_type.created'
   | 'procedure_type.updated'
@@ -314,6 +317,9 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'room.deleted': 'deleted an OR room',
   'room.restored': 'restored an OR room',
   'room.reordered': 'reordered OR rooms',
+    // Room Schedules
+  'room_schedule.updated': 'updated room operating hours',
+  'room_schedule.created_with_room': 'set initial room operating hours',
 
 
   // Procedure Types
@@ -1651,6 +1657,69 @@ async deleted(supabase: SupabaseClient, roomName: string, roomId: string) {
       targetId: roomId,
       targetLabel: roomName,
       newValues: { restored: true },
+    })
+  },
+}
+// =====================================================
+// ROOM SCHEDULE AUDIT
+// =====================================================
+
+export const roomScheduleAudit = {
+  /**
+   * Log when a room's weekly operating hours are updated.
+   * Captures old and new schedule as day-of-week → open/close pairs.
+   */
+  async updated(
+    supabase: SupabaseClient,
+    roomId: string,
+    roomName: string,
+    oldSchedule: Array<{ day: string; open: string; close: string; closed: boolean }>,
+    newSchedule: Array<{ day: string; open: string; close: string; closed: boolean }>,
+    facilityId: string,
+    effectiveDate?: string
+  ) {
+    // Build compact old/new representations for the audit log
+    const formatSchedule = (sched: typeof oldSchedule) => {
+      const result: Record<string, string> = {}
+      for (const d of sched) {
+        result[d.day] = d.closed ? 'Closed' : `${d.open} – ${d.close}`
+      }
+      return result
+    }
+
+    await log(supabase, 'room_schedule.updated', {
+      targetType: 'room_schedule',
+      targetId: roomId,
+      targetLabel: roomName,
+      facilityId,
+      oldValues: formatSchedule(oldSchedule),
+      newValues: formatSchedule(newSchedule),
+      metadata: effectiveDate ? { effective_date: effectiveDate } : undefined,
+    })
+  },
+
+  /**
+   * Log when a new room is created with an initial schedule.
+   * Used during room creation flow.
+   */
+  async createdWithRoom(
+    supabase: SupabaseClient,
+    roomId: string,
+    roomName: string,
+    schedule: Array<{ day: string; open: string; close: string; closed: boolean }>,
+    facilityId: string
+  ) {
+    const formatted: Record<string, string> = {}
+    for (const d of schedule) {
+      formatted[d.day] = d.closed ? 'Closed' : `${d.open} – ${d.close}`
+    }
+
+    await log(supabase, 'room_schedule.created_with_room', {
+      targetType: 'room_schedule',
+      targetId: roomId,
+      targetLabel: roomName,
+      facilityId,
+      newValues: formatted,
     })
   },
 }
