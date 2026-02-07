@@ -36,11 +36,9 @@ interface FacilityMilestone {
 
 interface CaseMilestone {
   id: string
-  milestone_type_id: string
-  facility_milestone_id: string | null
-  recorded_at: string | null  // <-- Allow null
+  facility_milestone_id: string
+  recorded_at: string | null
 }
-
 interface CaseData {
   id: string
   case_number: string
@@ -295,7 +293,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       // Fetch recorded milestones
       const { data: milestonesResult } = await supabase
         .from('case_milestones')
-        .select('id, milestone_type_id, facility_milestone_id, recorded_at')
+.select('id, facility_milestone_id, recorded_at')
         .eq('case_id', id)
 
       // Fetch case staff
@@ -482,7 +480,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   // ============================================================================
 
   const getMilestoneByTypeId = (typeId: string): CaseMilestone | undefined => {
-    return caseMilestones.find(m => m.facility_milestone_id === typeId || m.milestone_type_id === typeId)
+return caseMilestones.find(m => m.facility_milestone_id === typeId)
   }
 
   const recordMilestone = async (milestoneTypeId: string) => {
@@ -500,7 +498,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
     // Find the existing milestone row (pre-created with NULL)
     const existingMilestone = currentMilestones.find(
-      cm => cm.facility_milestone_id === milestoneTypeId || cm.milestone_type_id === milestoneTypeId
+cm => cm.facility_milestone_id === milestoneTypeId
     )
 
     let savedMilestone: CaseMilestone | null = null
@@ -527,9 +525,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       // INSERT fallback (for old cases without pre-created milestones)
       const { data, error } = await supabase
         .from('case_milestones')
-        .insert({
+.insert({
           case_id: id,
-          milestone_type_id: milestoneType?.source_milestone_type_id || milestoneTypeId,
           facility_milestone_id: milestoneTypeId,
           recorded_at: timestamp
         })
@@ -597,7 +594,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
     const milestone = currentMilestones.find(m => m.id === milestoneId)
     const milestoneType = milestone ? milestoneTypes.find(mt =>
-      mt.id === milestone.facility_milestone_id || mt.id === milestone.milestone_type_id
+mt.id === milestone.facility_milestone_id
     ) : null
 
     // UPDATE to NULL instead of DELETE
@@ -1357,7 +1354,7 @@ recordedMilestones={caseMilestones
   .filter(cm => cm.recorded_at !== null)  // <-- Only pass recorded ones
   .map(cm => ({
     id: cm.id,
-    facility_milestone_id: cm.facility_milestone_id || cm.milestone_type_id,
+facility_milestone_id: cm.facility_milestone_id,
     recorded_at: cm.recorded_at!,  // <-- Non-null assertion (safe because we filtered)
   }))}
           onRecordMilestone={recordMilestone}
@@ -1367,7 +1364,7 @@ recordedMilestones={caseMilestones
             const fetchMilestones = async () => {
               const { data } = await supabase
                 .from('case_milestones')
-                .select('id, milestone_type_id, facility_milestone_id, recorded_at')
+.select('id, facility_milestone_id, recorded_at')
                 .eq('case_id', id)
               if (data) setCaseMilestones(data)
             }
