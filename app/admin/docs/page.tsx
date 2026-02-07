@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -72,6 +72,8 @@ const TAG_COLORS: Record<string, string> = {
   slate: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
+const FORM_INPUT = 'w-full px-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200 placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400'
+
 type DetailTab = 'overview' | 'database' | 'triggers' | 'platform'
 
 const TABS: { id: DetailTab; label: string; icon: string }[] = [
@@ -97,7 +99,7 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
       {toasts.map(t => (
         <div
           key={t.id}
-          className={`px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium animate-slide-up
+          className={`px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all duration-200
             ${t.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}
         >
           {t.message}
@@ -285,38 +287,7 @@ export default function AdminDocsPage() {
 
   return (
     <DashboardLayout>
-      <style jsx global>{`
-        @keyframes slide-up {
-          from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-slide-up { animation: slide-up 0.2s ease-out; }
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .animate-fade-in { animation: fade-in 0.15s ease-out; }
-        .form-input {
-          width: 100%;
-          padding: 0.5rem 0.75rem;
-          font-size: 0.875rem;
-          line-height: 1.25rem;
-          color: #334155;
-          background-color: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.5rem;
-          outline: none;
-          transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .form-input:focus {
-          border-color: #94a3b8;
-          box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
-        }
-        .form-input::placeholder { color: #94a3b8; }
-        .form-input:disabled { background-color: #f8fafc; color: #94a3b8; }
-        select.form-input { appearance: auto; }
-        textarea.form-input { font-family: inherit; }
-      `}</style>
+      {/* Animations handled via Tailwind animate classes */}
 
       <ToastContainer toasts={toasts} />
 
@@ -467,7 +438,7 @@ export default function AdminDocsPage() {
               </button>
             </div>
           ) : (
-            <div className="max-w-4xl mx-auto px-8 py-6 animate-fade-in" key={selectedPage.id}>
+            <div className="max-w-4xl mx-auto px-8 py-6 transition-all duration-150" key={selectedPage.id}>
               {/* Page Header */}
               <div className="mb-6">
                 <div className="flex items-start justify-between">
@@ -590,7 +561,7 @@ function PageFormModal({
   return (
     <Overlay onClose={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[85vh] flex flex-col animate-slide-up"
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[85vh] flex flex-col transition-all duration-200"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -614,7 +585,7 @@ function PageFormModal({
                   value={form.name}
                   onChange={e => handleNameChange(e.target.value)}
                   placeholder="Surgeon Dashboard"
-                  className="form-input"
+                  className={FORM_INPUT}
                 />
               </FormField>
               <FormField label="ID (slug)" required>
@@ -624,7 +595,7 @@ function PageFormModal({
                   onChange={e => set('id', e.target.value)}
                   placeholder="surgeon-dashboard"
                   disabled={isEdit}
-                  className={`form-input font-mono text-xs ${isEdit ? 'bg-slate-50 text-slate-400' : ''}`}
+                  className={`${FORM_INPUT} font-mono text-xs ${isEdit ? 'bg-slate-50 text-slate-400' : ''}`}
                 />
               </FormField>
             </div>
@@ -635,14 +606,14 @@ function PageFormModal({
                   value={form.route}
                   onChange={e => set('route', e.target.value)}
                   placeholder="/dashboard/surgeon"
-                  className="form-input font-mono text-xs"
+                  className={`${FORM_INPUT} font-mono text-xs`}
                 />
               </FormField>
               <FormField label="Category">
                 <select
                   value={form.category}
                   onChange={e => set('category', e.target.value)}
-                  className="form-input"
+                  className={FORM_INPUT}
                 >
                   {PAGE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
@@ -654,7 +625,7 @@ function PageFormModal({
                 value={form.description}
                 onChange={e => set('description', e.target.value)}
                 placeholder="One-line description of what this page does"
-                className="form-input"
+                className={FORM_INPUT}
               />
             </FormField>
             <FormField label="Roles">
@@ -685,7 +656,7 @@ function PageFormModal({
                   value={form.calculation_engine || ''}
                   onChange={e => set('calculation_engine', e.target.value || null)}
                   placeholder="analyticsV2"
-                  className="form-input font-mono text-xs"
+                  className={`${FORM_INPUT} font-mono text-xs`}
                 />
               </FormField>
               <FormField label="Timezone Aware">
@@ -722,7 +693,7 @@ function PageFormModal({
                     value={form.ios_view_name || ''}
                     onChange={e => set('ios_view_name', e.target.value || null)}
                     placeholder="SurgeonDashboardView"
-                    className="form-input font-mono text-xs"
+                    className={`${FORM_INPUT} font-mono text-xs`}
                   />
                 </FormField>
                 <FormField label="iOS Notes">
@@ -731,7 +702,7 @@ function PageFormModal({
                     value={form.ios_notes || ''}
                     onChange={e => set('ios_notes', e.target.value || null)}
                     placeholder="Implementation notes for iOS"
-                    className="form-input"
+                    className={FORM_INPUT}
                   />
                 </FormField>
               </div>
@@ -741,7 +712,7 @@ function PageFormModal({
                 value={form.parity_notes || ''}
                 onChange={e => set('parity_notes', e.target.value || null)}
                 placeholder="Known differences between web and iOS"
-                className="form-input min-h-[60px] resize-y"
+                className={`${FORM_INPUT} min-h-[60px] resize-y`}
                 rows={2}
               />
             </FormField>
@@ -756,7 +727,7 @@ function PageFormModal({
                 value={form.state_management || ''}
                 onChange={e => set('state_management', e.target.value || null)}
                 placeholder="Notable state patterns or gotchas"
-                className="form-input min-h-[60px] resize-y"
+                className={`${FORM_INPUT} min-h-[60px] resize-y`}
                 rows={2}
               />
             </FormField>
@@ -771,7 +742,7 @@ function PageFormModal({
                   value={form.owner || ''}
                   onChange={e => set('owner', e.target.value || null)}
                   placeholder="Developer name"
-                  className="form-input"
+                  className={FORM_INPUT}
                 />
               </FormField>
               <FormField label="Display Order">
@@ -779,7 +750,7 @@ function PageFormModal({
                   type="number"
                   value={form.display_order}
                   onChange={e => set('display_order', parseInt(e.target.value) || 0)}
-                  className="form-input"
+                  className={FORM_INPUT}
                 />
               </FormField>
             </div>
@@ -788,7 +759,7 @@ function PageFormModal({
                 value={form.notes || ''}
                 onChange={e => set('notes', e.target.value || null)}
                 placeholder="Freeform notes"
-                className="form-input min-h-[60px] resize-y"
+                className={`${FORM_INPUT} min-h-[60px] resize-y`}
                 rows={2}
               />
             </FormField>
@@ -829,7 +800,7 @@ function PageFormModal({
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm transition-all duration-150"
       onClick={onClose}
     >
       <div onClick={e => e.stopPropagation()}>
@@ -912,7 +883,7 @@ function TagInput({
         }}
         onBlur={add}
         placeholder={value.length === 0 ? placeholder : `Add ${placeholder}...`}
-        className="form-input text-xs font-mono"
+        className={`${FORM_INPUT} text-xs font-mono`}
       />
     </FormField>
   )
