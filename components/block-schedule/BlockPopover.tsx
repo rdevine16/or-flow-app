@@ -87,7 +87,7 @@ function getSurgeonBlockLoad(
     const [sh, sm] = b.start_time.split(':').map(Number)
     const [eh, em] = b.end_time.split(':').map(Number)
     totalMinutes += (eh * 60 + em) - (sh * 60 + sm)
-    const dayAbbr = DAY_OF_WEEK_LABELS[new Date(b.block_date).getDay()]?.slice(0, 3)
+    const dayAbbr = DAY_OF_WEEK_LABELS[new Date(b.block_date + 'T00:00:00').getDay()]?.slice(0, 3)
     const startFmt = formatTimeShort(b.start_time)
     const endFmt = formatTimeShort(b.end_time)
     parts.push(`${dayAbbr} ${startFmt}-${endFmt}`)
@@ -241,8 +241,7 @@ export function BlockPopover({
     if (!open) { setOverlapWarning(null); return }
     const conflicting = allBlocks.filter(b => {
       if (editingBlock && b.block_id === editingBlock.id) return false
-      const blockDow = new Date(b.block_date).getDay()
-      if (blockDow !== dayOfWeek) return false
+      if (new Date(b.block_date + 'T00:00:00').getDay() !== dayOfWeek) return false
       return timesOverlap(startTime, endTime, b.start_time, b.end_time)
     })
     if (conflicting.length > 0) {
