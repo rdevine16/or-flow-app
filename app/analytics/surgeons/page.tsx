@@ -443,7 +443,7 @@ export default function SurgeonPerformancePage() {
           id, case_number, scheduled_date, start_time, surgeon_id,
           procedure_types (id, name, technique_id),
           or_rooms (id, name),
-          case_milestones (milestone_type_id, recorded_at, milestone_types (name))
+case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
         `)
         .eq('facility_id', effectiveFacilityId)
         .eq('surgeon_id', selectedSurgeon)
@@ -456,7 +456,7 @@ export default function SurgeonPerformancePage() {
         .select(`
           id, case_number, scheduled_date, start_time, surgeon_id,
           procedure_types (id, name, technique_id),
-          case_milestones (milestone_type_id, recorded_at, milestone_types (name))
+case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
         `)
         .eq('facility_id', effectiveFacilityId)
         .eq('surgeon_id', selectedSurgeon)
@@ -501,7 +501,7 @@ export default function SurgeonPerformancePage() {
         surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
         procedure_types (id, name, technique_id),
         or_rooms (id, name),
-        case_milestones (milestone_type_id, recorded_at, milestone_types (name))
+case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
       `
 
       const [dayRes, last30Res, allTimeRes] = await Promise.all([
@@ -596,7 +596,7 @@ export default function SurgeonPerformancePage() {
     let closingTimestamp: number | null = null
 
     milestones.forEach(m => {
-      const mType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
+const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
       if (mType?.name === 'incision') {
         incisionTimestamp = new Date(m.recorded_at).getTime()
       } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {

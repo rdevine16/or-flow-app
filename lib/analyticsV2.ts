@@ -29,10 +29,11 @@ export interface CaseWithMilestones {
   or_rooms?: { id: string; name: string } | null
   case_statuses?: { name: string } | null
   case_milestones: Array<{
-    milestone_type_id: string
+    facility_milestone_id: string
     recorded_at: string
-    milestone_types?: { name: string } | null
+    facility_milestones?: { name: string } | null
   }>
+
 }
 export interface TurnoverBreakdown {
   standardTurnover: KPIResult    // Same room: Surgeon Done → Incision
@@ -190,7 +191,7 @@ export function getMilestoneMap(caseData: CaseWithMilestones): MilestoneMap {
   const map: MilestoneMap = {}
   
   caseData.case_milestones.forEach(m => {
-    const name = m.milestone_types?.name
+    const name = m.facility_milestones?.name
     if (name && m.recorded_at) {
       const date = new Date(m.recorded_at)
       switch (name) {
