@@ -377,30 +377,30 @@ export function WeekCalendar({
     : (dragStart?.hour ?? 0) + 1
   const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
 
-  // Measure available height for scroll container (avoids flex chain issues)
+  // Measure available height for scroll container using root element's position
   const rootRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
-  const [scrollHeight, setScrollHeight] = useState<number | null>(null)
+  const [scrollHeight, setScrollHeight] = useState<number>(400) // safe default
 
   useEffect(() => {
-    const root = rootRef.current
-    const header = headerRef.current
-    if (!root || !header) return
-
-    const observer = new ResizeObserver(() => {
-      const rootH = root.getBoundingClientRect().height
-      const headerH = header.getBoundingClientRect().height
-      const available = rootH - headerH
-      if (available > 100) {
+    function measure() {
+      const header = headerRef.current
+      if (!header) return
+      // Use the header's bottom position relative to viewport
+      // Everything below it should be the scroll area
+      const headerBottom = header.getBoundingClientRect().bottom
+      const available = window.innerHeight - headerBottom
+      if (available > 50) {
         setScrollHeight(available)
       }
-    })
-    observer.observe(root)
-    return () => observer.disconnect()
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
   }, [])
 
   return (
-    <div ref={rootRef} className="flex flex-col h-full min-h-0">
+    <div ref={rootRef} className="flex flex-col">
       {/* Day Headers - Google Calendar Style */}
       <div ref={headerRef} className="flex border-b border-slate-200 bg-white flex-shrink-0">
         <div className="w-[60px] flex-shrink-0" />
@@ -438,7 +438,7 @@ export function WeekCalendar({
       <div
         ref={scrollContainerRef}
         className="overflow-auto"
-        style={scrollHeight ? { height: `${scrollHeight}px` } : { flex: 1, minHeight: 0 }}
+        style={{ height: `${scrollHeight}px` }}
       >
         <div
           ref={gridRef}
