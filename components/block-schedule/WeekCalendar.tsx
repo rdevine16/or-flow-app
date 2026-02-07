@@ -458,35 +458,48 @@ export function WeekCalendar({
                   />
                 ))}
 
-                {/* Closed overlay */}
+                {/* Closed overlay — renders BEHIND blocks */}
                 {isClosed && (
-                  <div className="absolute inset-0 bg-slate-100/70 pointer-events-none">
-                    <div className="absolute inset-0 opacity-10" style={{
+                  <div className="absolute inset-0 bg-slate-100/50 pointer-events-none z-[1]">
+                    <div className="absolute inset-0 opacity-[0.07]" style={{
                       backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',
                     }} />
                   </div>
                 )}
 
-                {/* Blocks - with overlap handling */}
-                {!isClosed && (() => {
+                {/* Blocks — always render, dimmed + non-interactive on closed days */}
+                {(() => {
                   const blockLayout = calculateBlockLayout(dayBlocks)
                   return dayBlocks.map(block => {
                     const layout = blockLayout.get(block.block_id) || { columnIndex: 0, totalColumns: 1, isSameStart: false }
                     return (
-                      <BlockCard
+                      <div
                         key={block.block_id}
-                        block={block}
-                        color={colorMap[block.surgeon_id] || '#3B82F6'}
-                        hourHeight={HOUR_HEIGHT}
-                        startHour={0}
-                        onClick={(e) => handleBlockClick(block, e)}
-                        columnIndex={layout.columnIndex}
-                        totalColumns={layout.totalColumns}
-                        isSameStart={layout.isSameStart}
-                      />
+                        className={isClosed ? 'opacity-30 pointer-events-none relative z-[2]' : 'relative z-[2]'}
+                      >
+                        <BlockCard
+                          block={block}
+                          color={colorMap[block.surgeon_id] || '#3B82F6'}
+                          hourHeight={HOUR_HEIGHT}
+                          startHour={0}
+                          onClick={isClosed ? () => {} : (e) => handleBlockClick(block, e)}
+                          columnIndex={layout.columnIndex}
+                          totalColumns={layout.totalColumns}
+                          isSameStart={layout.isSameStart}
+                        />
+                      </div>
                     )
                   })
                 })()}
+
+                {/* Closed label overlay — renders ON TOP of dimmed blocks */}
+                {isClosed && (
+                  <div className="absolute inset-0 pointer-events-none z-[3] flex items-start justify-center pt-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded">
+                      Closed
+                    </span>
+                  </div>
+                )}
 
                 {/* Drag selection preview with live time display */}
                 {isDragging && dragStart?.day === dayIndex && (
