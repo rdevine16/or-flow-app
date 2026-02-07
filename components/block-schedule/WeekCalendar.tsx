@@ -377,10 +377,32 @@ export function WeekCalendar({
     : (dragStart?.hour ?? 0) + 1
   const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
 
+  // Measure available height for scroll container (avoids flex chain issues)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [scrollHeight, setScrollHeight] = useState<number | null>(null)
+
+  useEffect(() => {
+    const root = rootRef.current
+    const header = headerRef.current
+    if (!root || !header) return
+
+    const observer = new ResizeObserver(() => {
+      const rootH = root.getBoundingClientRect().height
+      const headerH = header.getBoundingClientRect().height
+      const available = rootH - headerH
+      if (available > 100) {
+        setScrollHeight(available)
+      }
+    })
+    observer.observe(root)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div ref={rootRef} className="flex flex-col h-full min-h-0">
       {/* Day Headers - Google Calendar Style */}
-      <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
+      <div ref={headerRef} className="flex border-b border-slate-200 bg-white flex-shrink-0">
         <div className="w-[60px] flex-shrink-0" />
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
@@ -415,7 +437,8 @@ export function WeekCalendar({
       {/* Scrollable Time Grid */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto min-h-0"
+        className="overflow-auto"
+        style={scrollHeight ? { height: `${scrollHeight}px` } : { flex: 1, minHeight: 0 }}
       >
         <div
           ref={gridRef}
