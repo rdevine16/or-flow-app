@@ -1,6 +1,6 @@
 // hooks/useBlockSchedules.ts
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { blockScheduleAudit } from '@/lib/audit-logger'
 import {
@@ -10,6 +10,7 @@ import {
   UpdateBlockInput,
   DAY_OF_WEEK_LABELS,
   RECURRENCE_LABELS,
+  RecurrenceType,
 } from '@/types/block-scheduling'
 
 interface UseBlockSchedulesOptions {
@@ -23,7 +24,8 @@ interface SurgeonInfo {
 }
 
 export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
-const supabase = createClient()
+  // FIX #6: Memoize supabase client so it doesn't break useCallback deps
+  const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [blocks, setBlocks] = useState<ExpandedBlock[]>([])
@@ -137,7 +139,7 @@ const supabase = createClient()
   const updateBlock = useCallback(
     async (
       blockId: string,
-      input: UpdateBlockInput,
+      input: UpdateBlockInput & { surgeon_id?: string; effective_start?: string },
       surgeon: SurgeonInfo,
       oldValues: Partial<BlockSchedule>
     ): Promise<boolean> => {
@@ -157,7 +159,7 @@ const supabase = createClient()
 
         if (updateError) throw updateError
 
-        // Build audit values
+        // Build audit values — only include changed fields
         const surgeonName = `Dr. ${surgeon.last_name}`
         const auditOld: Record<string, string | null | undefined> = {}
         const auditNew: Record<string, string | null | undefined> = {}
@@ -175,12 +177,16 @@ const supabase = createClient()
           auditNew.end_time = input.end_time
         }
         if (input.recurrence_type !== undefined && input.recurrence_type !== oldValues.recurrence_type) {
-          auditOld.recurrence = RECURRENCE_LABELS[oldValues.recurrence_type!]
+          auditOld.recurrence = RECURRENCE_LABELS[oldValues.recurrence_type as RecurrenceType]
           auditNew.recurrence = RECURRENCE_LABELS[input.recurrence_type]
         }
         if (input.effective_end !== undefined && input.effective_end !== oldValues.effective_end) {
           auditOld.effective_end = oldValues.effective_end
           auditNew.effective_end = input.effective_end
+        }
+        if (input.notes !== undefined && input.notes !== oldValues.notes) {
+          auditOld.notes = oldValues.notes
+          auditNew.notes = input.notes
         }
 
         await blockScheduleAudit.updated(
@@ -289,15 +295,20 @@ const supabase = createClient()
         // First fetch current exception dates
         const { data: currentBlock, error: fetchError } = await supabase
           .from('block_schedules')
-          .select('exception_dates')
+          .select('exception_dates, day_of_week')
           .eq('id', blockId)
           .single()
 
         if (fetchError) throw fetchError
 
-        // Add new date to exceptions array
-        const currentExceptions = currentBlock?.exception_dates || []
-        const updatedExceptions = [...currentExceptions, exceptionDate]
+        // FIX #3: Deduplicate exception dates
+        const currentExceptions: string[] = currentBlock?.exception_dates || []
+        const updatedExceptions = [...new Set([...currentExceptions, exceptionDate])]
+
+        // If already had this date, nothing to do
+        if (updatedExceptions.length === currentExceptions.length) {
+          return true
+        }
 
         // Update the block
         const { error: updateError } = await supabase
@@ -310,14 +321,15 @@ const supabase = createClient()
 
         if (updateError) throw updateError
 
-        // Audit log - use a simple format that the logger accepts
+        // FIX #4: Use proper audit metadata instead of shoehorning into effective_end
         const surgeonName = `Dr. ${surgeon.last_name}`
+        const dayName = DAY_OF_WEEK_LABELS[currentBlock?.day_of_week ?? 0]
         await blockScheduleAudit.updated(
           supabase,
           blockId,
           surgeonName,
-          {},
-          { effective_end: `Exception added: ${exceptionDate}` },
+          { exception_dates: currentExceptions.join(', ') || '(none)' },
+          { exception_dates: updatedExceptions.join(', ') },
           facilityId
         )
 
@@ -326,6 +338,59 @@ const supabase = createClient()
         const message = err instanceof Error ? err.message : 'Failed to add exception date'
         setError(message)
         console.error('Error adding exception date:', err)
+        return false
+      } finally {
+        setLoading(false)
+      }
+    },
+    [facilityId, supabase]
+  )
+
+  // Remove an exception date (for undo)
+  const removeExceptionDate = useCallback(
+    async (blockId: string, exceptionDate: string, surgeon: SurgeonInfo): Promise<boolean> => {
+      if (!facilityId) return false
+
+      setLoading(true)
+      setError(null)
+
+      try {
+        const { data: currentBlock, error: fetchError } = await supabase
+          .from('block_schedules')
+          .select('exception_dates, day_of_week')
+          .eq('id', blockId)
+          .single()
+
+        if (fetchError) throw fetchError
+
+        const currentExceptions: string[] = currentBlock?.exception_dates || []
+        const updatedExceptions = currentExceptions.filter(d => d !== exceptionDate)
+
+        const { error: updateError } = await supabase
+          .from('block_schedules')
+          .update({
+            exception_dates: updatedExceptions,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', blockId)
+
+        if (updateError) throw updateError
+
+        const surgeonName = `Dr. ${surgeon.last_name}`
+        await blockScheduleAudit.updated(
+          supabase,
+          blockId,
+          surgeonName,
+          { exception_dates: currentExceptions.join(', ') },
+          { exception_dates: updatedExceptions.join(', ') || '(none)' },
+          facilityId
+        )
+
+        return true
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to remove exception date'
+        setError(message)
+        console.error('Error removing exception date:', err)
         return false
       } finally {
         setLoading(false)
@@ -344,6 +409,7 @@ const supabase = createClient()
     updateBlock,
     deleteBlock,
     addExceptionDate,
+    removeExceptionDate,
     restoreBlock,
   }
 }

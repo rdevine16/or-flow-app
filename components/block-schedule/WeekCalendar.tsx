@@ -1,7 +1,7 @@
 // components/block-schedule/WeekCalendar.tsx
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { ExpandedBlock, formatTime12Hour, DAY_OF_WEEK_SHORT } from '@/types/block-scheduling'
 import { BlockCard } from './BlockCard'
 
@@ -41,6 +41,9 @@ export function WeekCalendar({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const autoScrollRef = useRef<number | null>(null)
   const lastMouseYRef = useRef<number>(0)
+  // Refs for stable access inside document-level listeners
+  const isDraggingRef = useRef(false)
+  const dragStartRef = useRef<{ day: number; hour: number } | null>(null)
 
   // Generate week days
   const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -57,25 +60,24 @@ export function WeekCalendar({
   }, [])
 
   // Get time from Y position with 15-min snapping for precision
-  const getTimeFromY = (y: number): number => {
+  const getTimeFromY = useCallback((y: number): number => {
     const rect = gridRef.current?.getBoundingClientRect()
     if (!rect) return DEFAULT_SCROLL_HOUR
     const relativeY = y - rect.top
-    // Snap to 15-minute increments
     const rawHour = relativeY / HOUR_HEIGHT
-    const snappedHour = Math.round(rawHour * 4) / 4 // Round to nearest 0.25
+    const snappedHour = Math.round(rawHour * 4) / 4
     return Math.max(0, Math.min(24, snappedHour))
-  }
+  }, [])
 
   // Get day from X position
-  const getDayFromX = (x: number): number => {
+  const getDayFromX = useCallback((x: number): number => {
     const rect = gridRef.current?.getBoundingClientRect()
     if (!rect) return 0
     const relativeX = x - rect.left - 60
     const dayWidth = (rect.width - 60) / 7
     const day = Math.floor(relativeX / dayWidth)
     return Math.max(0, Math.min(6, day))
-  }
+  }, [])
 
   // Format hour to time string
   const hourToTimeString = (hour: number): string => {
@@ -97,47 +99,72 @@ export function WeekCalendar({
     return `${h}h ${m}m`
   }
 
-  // Auto-scroll when dragging near edges
-  const SCROLL_ZONE = 60 // pixels from edge to trigger scroll
-  const SCROLL_SPEED = 8 // pixels per frame
+  // =====================================================
+  // AUTO-SCROLL: Smooth, speed ramps near edges
+  // =====================================================
+  const SCROLL_ZONE = 80 // pixels from edge to trigger scroll
+  const SCROLL_SPEED_MIN = 3
+  const SCROLL_SPEED_MAX = 14
 
-  const startAutoScroll = (direction: 'up' | 'down') => {
-    if (autoScrollRef.current) return
+  const startAutoScroll = useCallback((direction: 'up' | 'down') => {
+    // Always restart — direction may have changed
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current)
+      autoScrollRef.current = null
+    }
 
     const scroll = () => {
       if (!scrollContainerRef.current || !gridRef.current) return
-      
-      const delta = direction === 'up' ? -SCROLL_SPEED : SCROLL_SPEED
+      if (!isDraggingRef.current) return // Stop if drag ended
+
+      const containerRect = scrollContainerRef.current.getBoundingClientRect()
+      const mouseY = lastMouseYRef.current
+
+      // Calculate scroll speed based on distance from edge (closer = faster)
+      let distFromEdge: number
+      if (direction === 'up') {
+        distFromEdge = containerRect.top + SCROLL_ZONE - mouseY
+      } else {
+        distFromEdge = mouseY - (containerRect.bottom - SCROLL_ZONE)
+      }
+      const ratio = Math.min(1, Math.max(0, distFromEdge / SCROLL_ZONE))
+      const speed = SCROLL_SPEED_MIN + ratio * (SCROLL_SPEED_MAX - SCROLL_SPEED_MIN)
+
+      const delta = direction === 'up' ? -speed : speed
       scrollContainerRef.current.scrollTop += delta
 
-      // Update drag end position based on scroll position and last mouse Y
+      // Update drag end position based on new scroll + mouse position
       const gridRect = gridRef.current.getBoundingClientRect()
-      const relativeY = lastMouseYRef.current - gridRect.top
+      const relativeY = mouseY - gridRect.top
       const rawHour = relativeY / HOUR_HEIGHT
       const snappedHour = Math.round(rawHour * 4) / 4
       const newHour = Math.max(0, Math.min(24, snappedHour))
-      
+
       setDragEnd(prev => prev ? { ...prev, hour: newHour } : null)
 
       autoScrollRef.current = requestAnimationFrame(scroll)
     }
 
     autoScrollRef.current = requestAnimationFrame(scroll)
-  }
+  }, [])
 
-  const stopAutoScroll = () => {
+  const stopAutoScroll = useCallback(() => {
     if (autoScrollRef.current) {
       cancelAnimationFrame(autoScrollRef.current)
       autoScrollRef.current = null
     }
-  }
+  }, [])
 
   // Cleanup auto-scroll on unmount
   useEffect(() => {
     return () => stopAutoScroll()
-  }, [])
+  }, [stopAutoScroll])
 
-  // Mouse handlers for drag selection
+  // =====================================================
+  // DRAG HANDLERS: Use document-level move/up so drag
+  // survives leaving the grid element
+  // =====================================================
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
     if ((e.target as HTMLElement).closest('.block-card')) return
@@ -147,69 +174,96 @@ export function WeekCalendar({
 
     if (isDateClosed(weekDays[day])) return
 
+    e.preventDefault() // Prevent text selection during drag
+
+    isDraggingRef.current = true
+    dragStartRef.current = { day, hour }
     setIsDragging(true)
     setDragStart({ day, hour })
-    setDragEnd({ day, hour: hour + 1 })
+    setDragEnd({ day, hour: hour + 0.5 }) // Default to 30 min
+    lastMouseYRef.current = e.clientY
   }
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !dragStart) return
+  // Document-level mousemove — works even when cursor leaves the grid
+  const handleDocumentMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDraggingRef.current || !dragStartRef.current) return
 
-    // Track mouse position for auto-scroll
     lastMouseYRef.current = e.clientY
 
     const hour = getTimeFromY(e.clientY)
-    // Allow dragging in both directions
-    setDragEnd({ day: dragStart.day, hour })
+    setDragEnd({ day: dragStartRef.current.day, hour })
 
-    // Check if near edges for auto-scroll
+    // Auto-scroll when near edges of the scroll container
     if (scrollContainerRef.current) {
       const rect = scrollContainerRef.current.getBoundingClientRect()
-      const mouseY = e.clientY
 
-      if (mouseY < rect.top + SCROLL_ZONE && scrollContainerRef.current.scrollTop > 0) {
-        // Near top edge - scroll up
+      if (e.clientY < rect.top + SCROLL_ZONE && scrollContainerRef.current.scrollTop > 0) {
         startAutoScroll('up')
-      } else if (mouseY > rect.bottom - SCROLL_ZONE && 
-                 scrollContainerRef.current.scrollTop < scrollContainerRef.current.scrollHeight - rect.height) {
-        // Near bottom edge - scroll down
+      } else if (
+        e.clientY > rect.bottom - SCROLL_ZONE &&
+        scrollContainerRef.current.scrollTop < scrollContainerRef.current.scrollHeight - rect.height
+      ) {
         startAutoScroll('down')
       } else {
-        // Not near edge - stop auto-scroll
         stopAutoScroll()
       }
     }
-  }
+  }, [getTimeFromY, startAutoScroll, stopAutoScroll])
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    stopAutoScroll() // Always stop auto-scroll on mouse up
-    
-    if (isDragging && dragStart && dragEnd) {
-      const startHour = Math.min(dragStart.hour, dragEnd.hour)
-      const endHour = Math.max(dragStart.hour, dragEnd.hour)
+  // Document-level mouseup — always fires, even outside the grid
+  const handleDocumentMouseUp = useCallback((e: MouseEvent) => {
+    if (!isDraggingRef.current) return
+
+    stopAutoScroll()
+
+    const start = dragStartRef.current
+    if (start) {
+      const endHour = getTimeFromY(e.clientY)
+      const startHour = Math.min(start.hour, endHour)
+      const rawEndHour = Math.max(start.hour, endHour)
 
       // Ensure minimum 30-min block
-      const finalEndHour = endHour <= startHour + 0.25 ? startHour + 0.5 : endHour
+      const finalEndHour = rawEndHour <= startHour + 0.25 ? startHour + 0.5 : rawEndHour
 
       const startTime = hourToTimeString(startHour)
       const endTime = hourToTimeString(finalEndHour)
 
-      onDragSelect(dragStart.day, startTime, endTime, { x: e.clientX, y: e.clientY })
+      // Position the popover near the mouse, clamped to viewport
+      const popX = Math.min(e.clientX, window.innerWidth - 400)
+      const popY = Math.min(e.clientY, window.innerHeight - 300)
+
+      onDragSelect(start.day, startTime, endTime, { x: popX, y: popY })
     }
 
+    isDraggingRef.current = false
+    dragStartRef.current = null
     setIsDragging(false)
     setDragStart(null)
     setDragEnd(null)
-  }
+  }, [getTimeFromY, onDragSelect, stopAutoScroll])
+
+  // Register/unregister document listeners when dragging starts/stops
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleDocumentMouseMove)
+      document.addEventListener('mouseup', handleDocumentMouseUp)
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleDocumentMouseMove)
+      document.removeEventListener('mouseup', handleDocumentMouseUp)
+    }
+  }, [isDragging, handleDocumentMouseMove, handleDocumentMouseUp])
 
   const handleBlockClick = (block: ExpandedBlock, e: React.MouseEvent) => {
     e.stopPropagation()
-    onBlockClick(block, { x: e.clientX, y: e.clientY })
+    // Position popover clamped to viewport
+    const popX = Math.min(e.clientX, window.innerWidth - 400)
+    const popY = Math.min(e.clientY, window.innerHeight - 300)
+    onBlockClick(block, { x: popX, y: popY })
   }
 
   // Helper to get day index from date string safely (avoid timezone issues)
   const getDayIndexFromDateString = (dateStr: string): number => {
-    // Parse as local date to avoid timezone shifts
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(year, month - 1, day)
     return date.getDay()
@@ -228,7 +282,6 @@ export function WeekCalendar({
   // Group blocks by day index (0-6) based on actual week dates
   const blocksByDay: Record<number, ExpandedBlock[]> = {}
   blocks.forEach(block => {
-    // Find which day of the current week this block belongs to
     weekDays.forEach((weekDay, dayIndex) => {
       if (dateMatchesWeekDay(block.block_date, weekDay)) {
         if (!blocksByDay[dayIndex]) blocksByDay[dayIndex] = []
@@ -238,13 +291,11 @@ export function WeekCalendar({
   })
 
   // Calculate overlap columns for blocks (Google Calendar style)
-  // - Same start time blocks = side by side (equal width columns)
-  // - Different start times = cascading offset
   const calculateBlockLayout = (dayBlocks: ExpandedBlock[]): Map<string, { columnIndex: number; totalColumns: number; isSameStart: boolean }> => {
     const layout = new Map<string, { columnIndex: number; totalColumns: number; isSameStart: boolean }>()
-    
+
     if (dayBlocks.length === 0) return layout
-    
+
     // First, group blocks by exact start time
     const byStartTime = new Map<string, ExpandedBlock[]>()
     dayBlocks.forEach(block => {
@@ -252,10 +303,9 @@ export function WeekCalendar({
       if (!byStartTime.has(key)) byStartTime.set(key, [])
       byStartTime.get(key)!.push(block)
     })
-    
-    // Process each start time group
+
     // Blocks with same start time get equal columns (side by side)
-    byStartTime.forEach((group, startTime) => {
+    byStartTime.forEach((group) => {
       group.forEach((block, index) => {
         layout.set(block.block_id, {
           columnIndex: index,
@@ -264,53 +314,47 @@ export function WeekCalendar({
         })
       })
     })
-    
-    // Now handle cascading for different start times
-    // Sort all blocks by start time
+
+    // Handle cascading for different start times
     const sorted = [...dayBlocks].sort((a, b) => a.start_time.localeCompare(b.start_time))
-    
-    // For blocks that are the only one at their start time, 
-    // calculate cascade offset based on how many earlier blocks they overlap with
+
     sorted.forEach((block, i) => {
       const currentLayout = layout.get(block.block_id)
-      
-      // Only adjust single blocks (not part of same-start group)
+
       if (currentLayout && currentLayout.totalColumns === 1) {
         const [startH, startM] = block.start_time.split(':').map(Number)
         const blockStart = startH * 60 + startM
-        
-        // Count how many earlier blocks this one overlaps with
+
         let cascadeOffset = 0
         for (let j = 0; j < i; j++) {
           const prevBlock = sorted[j]
           const [pEndH, pEndM] = prevBlock.end_time.split(':').map(Number)
           const prevEnd = pEndH * 60 + pEndM
-          
+
           if (prevEnd > blockStart) {
-            // This block overlaps with a previous block
             cascadeOffset++
           }
         }
-        
+
         if (cascadeOffset > 0) {
           layout.set(block.block_id, {
             columnIndex: cascadeOffset,
-            totalColumns: 1, // Keep as 1 for cascade style
+            totalColumns: 1,
             isSameStart: false
           })
         }
       }
     })
-    
+
     return layout
   }
 
   // Calculate drag selection display values (handle dragging up or down)
-  const dragStartHour = dragStart && dragEnd 
-    ? Math.min(dragStart.hour, dragEnd.hour) 
+  const dragStartHour = dragStart && dragEnd
+    ? Math.min(dragStart.hour, dragEnd.hour)
     : dragStart?.hour ?? 0
-  const dragEndHour = dragStart && dragEnd 
-    ? Math.max(dragStart.hour, dragEnd.hour) 
+  const dragEndHour = dragStart && dragEnd
+    ? Math.max(dragStart.hour, dragEnd.hour)
     : (dragStart?.hour ?? 0) + 1
   const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
 
@@ -359,16 +403,7 @@ export function WeekCalendar({
           className="flex relative select-none"
           style={{ height: `${HOURS.length * HOUR_HEIGHT}px` }}
           onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={() => {
-            stopAutoScroll()
-            if (isDragging) {
-              setIsDragging(false)
-              setDragStart(null)
-              setDragEnd(null)
-            }
-          }}
+          // No onMouseMove/onMouseUp/onMouseLeave — handled at document level
         >
           {/* Time Labels - Google style */}
           <div className="w-[60px] flex-shrink-0 bg-white sticky left-0 z-10 border-r border-slate-100">
@@ -396,7 +431,7 @@ export function WeekCalendar({
                   isClosed ? 'bg-slate-50 cursor-not-allowed' : 'bg-white cursor-crosshair'
                 }`}
               >
-                {/* Hour lines - subtle like Google */}
+                {/* Hour lines */}
                 {HOURS.map(hour => (
                   <div
                     key={hour}
@@ -444,7 +479,6 @@ export function WeekCalendar({
                       opacity: 0.9,
                     }}
                   >
-                    {/* Time badge - always visible */}
                     <div className="absolute inset-x-0 top-0 p-2">
                       <div className="text-white text-sm font-semibold">
                         {formatTime12Hour(hourToTimeString(dragStartHour))} – {formatTime12Hour(hourToTimeString(dragEndHour))}

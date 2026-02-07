@@ -682,6 +682,8 @@ export const blockScheduleAudit = {
       end_time?: string
       recurrence?: string
       effective_end?: string | null
+      notes?: string | null
+      exception_dates?: string
     },
     newValues: {
       day_of_week?: string
@@ -689,6 +691,8 @@ export const blockScheduleAudit = {
       end_time?: string
       recurrence?: string
       effective_end?: string | null
+      notes?: string | null
+      exception_dates?: string
     },
     facilityId: string
   ) {
