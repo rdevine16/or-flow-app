@@ -33,6 +33,7 @@ import {
   DoorOpen,
   ChevronDown,
   ChevronUp,
+  TimerOff,
 } from 'lucide-react'
 
 import {
@@ -163,6 +164,8 @@ interface SurgeonUtilization {
   outsideBlockDates: string[]
   blockDayCount: number
   avgCasesPerBlockDay: number
+  totalOverrunMinutes: number
+  overrunDayCount: number
 }
 
 // NEW: Room utilization types
@@ -1511,6 +1514,8 @@ export default function BlockUtilizationPage() {
       const totalUsed = days.reduce((s, d) => s + d.usedMinutes, 0)
       const totalRemaining = days.reduce((s, d) => s + d.remainingMinutes, 0)
       const totalCases = days.reduce((s, d) => s + d.cases.length, 0)
+      const totalOverrun = days.reduce((s, d) => s + d.overrunMinutes, 0)
+      const overrunDays = days.filter(d => d.overrunMinutes > 0).length
       const outside = outsideBlockMap.get(surgeonId) || { count: 0, dates: [] }
 
       surgeonUtilizations.push({
@@ -1527,6 +1532,8 @@ export default function BlockUtilizationPage() {
         outsideBlockDates: outside.dates,
         blockDayCount: days.length,
         avgCasesPerBlockDay: days.length > 0 ? totalCases / days.length : 0,
+        totalOverrunMinutes: totalOverrun,
+        overrunDayCount: overrunDays,
       })
     }
 
@@ -1591,11 +1598,14 @@ export default function BlockUtilizationPage() {
     const totalRemaining = utils.reduce((s, u) => s + u.totalRemainingMinutes, 0)
     const totalCases = utils.reduce((s, u) => s + u.totalCases, 0)
     const totalOutside = utils.reduce((s, u) => s + u.casesOutsideBlock, 0)
+    const totalOverrun = utils.reduce((s, u) => s + u.totalOverrunMinutes, 0)
+    const overrunDays = utils.reduce((s, u) => s + u.overrunDayCount, 0)
+    const totalBlockDays = utils.reduce((s, u) => s + u.blockDayCount, 0)
     const avgUtil = totalBlock > 0 ? Math.round((totalUsed / totalBlock) * 100) : 0
     const unusedHours = totalRemaining / 60
     const financialImpact = orHourlyRate ? Math.round(unusedHours * orHourlyRate) : null
 
-    return { totalBlock, totalUsed, totalRemaining, totalCases, totalOutside, avgUtil, financialImpact }
+    return { totalBlock, totalUsed, totalRemaining, totalCases, totalOutside, avgUtil, financialImpact, totalOverrun, overrunDays, totalBlockDays }
   }, [isAllSurgeons, surgeonUtilizations, selectedUtil, orHourlyRate])
 
   // Room summary metrics
@@ -1729,7 +1739,7 @@ export default function BlockUtilizationPage() {
                   )}
 
                   {/* Summary Cards */}
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                     <EnhancedMetricCard
                       title="Avg Utilization"
                       value={`${summaryMetrics.avgUtil}%`}
@@ -1767,6 +1777,16 @@ export default function BlockUtilizationPage() {
                           ? ` Cost estimate uses your facility's OR hourly rate of $${orHourlyRate.toLocaleString()}/hr (from facility settings).`
                           : ' Set an OR hourly rate in facility settings to see the estimated cost of unused time.'
                       }`}
+                    />
+                    <EnhancedMetricCard
+                      title="Overrun"
+                      value={formatHours(summaryMetrics.totalOverrun)}
+                      subtitle={summaryMetrics.overrunDays > 0
+                        ? `${summaryMetrics.overrunDays} of ${summaryMetrics.totalBlockDays} block days`
+                        : 'No overruns'}
+                      icon={<TimerOff className="w-4 h-4" />}
+                      accentColor={summaryMetrics.overrunDays > 0 ? 'red' : 'slate'}
+                      tooltip="Total time cases ran past the scheduled block end. Overruns delay subsequent room users, extend staff hours, and may indicate scheduling, workflow, or case complexity issues."
                     />
                     <EnhancedMetricCard
                       title="Outside Block"
@@ -1825,6 +1845,17 @@ export default function BlockUtilizationPage() {
                             {selectedUtil.casesOutsideBlock > 0 && (
                               <> Additionally, {selectedUtil.casesOutsideBlock} case{selectedUtil.casesOutsideBlock > 1 ? 's were' : ' was'} performed outside block time.</>
                             )}
+                          </p>
+                        </InsightCard>
+                      )}
+
+                      {selectedUtil.overrunDayCount > 0 && (
+                        <InsightCard icon={<TimerOff className="w-4 h-4" />} title="Block Overruns Detected" type="warning">
+                          <p className="text-[13px] text-slate-700">
+                            Dr. {selectedUtil.surgeonName} ran past block end on{' '}
+                            <strong>{selectedUtil.overrunDayCount} of {selectedUtil.blockDayCount}</strong> block days
+                            ({formatDuration(selectedUtil.totalOverrunMinutes)} total overrun).
+                            {' '}This may indicate a need to adjust block length, reduce caseload, or investigate workflow delays.
                           </p>
                         </InsightCard>
                       )}
