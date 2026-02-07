@@ -341,8 +341,8 @@ function matchCasesToBlocks(
     const milestones = c.case_milestones || []
     // Find patient_in to determine date
     const patientIn = milestones.find(m => {
-      const fm = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
-      const name = fm?.name || facilityMilestoneNames.get(m.milestone_type_id) || ''
+const fm = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+      const name = fm?.name || facilityMilestoneNames.get(m.facility_milestone_id) || ''
       return name === 'patient_in'
     })
     if (!patientIn) continue
@@ -370,8 +370,8 @@ function matchCasesToBlocks(
       let poTime: number | null = null
 
       for (const m of milestones) {
-        const fm = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
-        const name = fm?.name || facilityMilestoneNames.get(m.milestone_type_id) || ''
+const fm = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+      const name = fm?.name || facilityMilestoneNames.get(m.facility_milestone_id) || ''
         const recorded = new Date(m.recorded_at)
         const minuteOfDay = recorded.getHours() * 60 + recorded.getMinutes()
 
@@ -464,8 +464,8 @@ function findCasesOutsideBlocks(
 
     const milestones = c.case_milestones || []
     const patientIn = milestones.find(m => {
-      const fm = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
-      const name = fm?.name || facilityMilestoneNames.get(m.milestone_type_id) || ''
+const fm = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+      const name = fm?.name || facilityMilestoneNames.get(m.facility_milestone_id) || ''
       return name === 'patient_in'
     })
     if (!patientIn) continue
@@ -519,8 +519,8 @@ function calculateWhatFits(
     let closingTime: number | null = null
 
     for (const m of milestones) {
-      const fm = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
-      const name = fm?.name || facilityMilestoneNames.get(m.milestone_type_id) || ''
+const fm = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+      const name = fm?.name || facilityMilestoneNames.get(m.facility_milestone_id) || ''
       const recorded = new Date(m.recorded_at)
       const minuteOfDay = recorded.getHours() * 60 + recorded.getMinutes()
 
@@ -1087,9 +1087,9 @@ export default function BlockUtilizationPage() {
               scheduled_date, start_time, status_id,
               case_statuses(name),
               procedure_types(id, name),
-              case_milestones(
-                milestone_type_id, recorded_at,
-                milestone_types(name)
+case_milestones(
+                facility_milestone_id, recorded_at,
+                facility_milestones(name)
               )
             `)
             .eq('facility_id', facilityId)
@@ -1110,8 +1110,9 @@ export default function BlockUtilizationPage() {
 
           // 5. Facility milestones (for name lookup)
           supabase
-            .from('milestone_types')
-            .select('id, name'),
+            .from('facility_milestones')
+            .select('id, name')
+            .eq('facility_id', facilityId),
 
           // 6. Facility for OR hourly rate
           supabase
