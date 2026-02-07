@@ -355,7 +355,10 @@ function minutesToTimeStr(mins: number): string {
 }
 
 function toDateStr(d: Date): string {
-  return d.toISOString().split('T')[0]
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function formatDuration(minutes: number): string {
@@ -390,7 +393,9 @@ function matchCasesToBlocks(
     })
     if (!patientIn) continue
 
-    const caseDate = patientIn.recorded_at.split('T')[0]
+    // Use scheduled_date (date-only, no TZ issues) as the match key.
+    // Fall back to patient_in timestamp date if scheduled_date is missing.
+    const caseDate = c.scheduled_date || patientIn.recorded_at.split('T')[0].split(' ')[0]
     const surgeonId = c.surgeon_id
     if (!surgeonId) continue
 
@@ -491,7 +496,7 @@ function findCasesOutsideBlocks(
     })
     if (!patientIn) continue
 
-    const caseDate = patientIn.recorded_at.split('T')[0]
+    const caseDate = c.scheduled_date || patientIn.recorded_at.split('T')[0].split(' ')[0]
     const key = `${surgeonId}|${caseDate}`
 
     if (!blockDaySet.has(key)) {
@@ -1296,6 +1301,43 @@ export default function BlockUtilizationPage() {
   useEffect(() => {
     if (!facilityId) return
 
+    // Paginated fetch — Supabase defaults to 1000 rows per query.
+    // A facility with 5 surgeons doing 6+ cases/week can hit 1000+ in 6 months.
+    async function fetchAllCases(startStr: string, endStr: string) {
+      const pageSize = 1000
+      let allCases: any[] = []
+      let from = 0
+      let hasMore = true
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('cases')
+          .select(`
+            id, case_number, facility_id, surgeon_id, or_room_id,
+            scheduled_date, start_time, status_id,
+            case_statuses(name),
+            procedure_types(id, name),
+            case_milestones(
+              facility_milestone_id, recorded_at,
+              facility_milestones(name)
+            )
+          `)
+          .eq('facility_id', facilityId)
+          .gte('scheduled_date', startStr)
+          .lte('scheduled_date', endStr)
+          .order('scheduled_date', { ascending: true })
+          .range(from, from + pageSize - 1)
+
+        if (error) throw error
+
+        allCases = allCases.concat(data || [])
+        hasMore = (data?.length || 0) === pageSize
+        from += pageSize
+      }
+
+      return allCases
+    }
+
     async function loadData() {
       setLoading(true)
       const endDate = new Date()
@@ -1306,7 +1348,7 @@ export default function BlockUtilizationPage() {
 
       try {
         const [
-          blocksRes, casesRes, closuresRes, holidaysRes,
+          blocksRes, casesData, closuresRes, holidaysRes,
           milestoneNamesRes, facilityRes, reimbursementsRes,
           roomsRes, roomSchedulesRes
         ] = await Promise.all([
@@ -1317,22 +1359,8 @@ export default function BlockUtilizationPage() {
             .eq('facility_id', facilityId)
             .is('deleted_at', null),
 
-          // 2. Completed cases with milestones
-          supabase
-            .from('cases')
-            .select(`
-              id, case_number, facility_id, surgeon_id, or_room_id,
-              scheduled_date, start_time, status_id,
-              case_statuses(name),
-              procedure_types(id, name),
-              case_milestones(
-                facility_milestone_id, recorded_at,
-                facility_milestones(name)
-              )
-            `)
-            .eq('facility_id', facilityId)
-            .gte('scheduled_date', startStr)
-            .lte('scheduled_date', endStr),
+          // 2. All cases with milestones (paginated — no 1000-row limit)
+          fetchAllCases(startStr, endStr),
 
           // 3. Closures
           supabase
@@ -1384,7 +1412,7 @@ export default function BlockUtilizationPage() {
 
         setBlockSchedules((blocksRes.data || []) as BlockScheduleRow[])
 
-        const allCases = (casesRes.data as unknown as CaseWithMilestones[]) || []
+        const allCases = (casesData as unknown as CaseWithMilestones[]) || []
         const completedCases = allCases.filter(c => {
           const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
           return status?.name === 'completed'
