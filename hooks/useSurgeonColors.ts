@@ -22,21 +22,31 @@ interface UseSurgeonColorsOptions {
   facilityId: string | null
 }
 
+// Read saved colors from localStorage
+function getStoredColors(facilityId: string): Record<string, string> {
+  try {
+    const stored = localStorage.getItem(`surgeon-colors-${facilityId}`)
+    return stored ? JSON.parse(stored) : {}
+  } catch {
+    return {}
+  }
+}
+
 export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
-  // Stabilize the supabase client — createClient() on every render
-  // produces a new reference, which invalidates useCallback deps and
-  // causes the page-level useEffect to re-run fetchColors on every
-  // render, overwriting any color the user just picked.
+  // Stabilize the supabase client so useCallback deps don't change every render
   const supabaseRef = useRef(createClient())
   const [colors, setColors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
 
-  // Fetch colors from database (or localStorage as fallback)
+  // Fetch colors from database, merging with localStorage as fallback
   const fetchColors = useCallback(async (surgeonIds: string[]) => {
     if (!facilityId || surgeonIds.length === 0) return
 
     setLoading(true)
     try {
+      // Start with localStorage colors (always available, always up-to-date)
+      const storedColors = getStoredColors(facilityId)
+
       // Try to fetch from surgeon_colors table
       const { data, error } = await supabaseRef.current
         .from('surgeon_colors')
@@ -44,41 +54,39 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
         .eq('facility_id', facilityId)
         .in('surgeon_id', surgeonIds)
 
-      if (!error && data) {
-        const colorMap: Record<string, string> = {}
+      // Build the final color map:
+      // Priority: Supabase DB > localStorage > default palette
+      const colorMap: Record<string, string> = {}
+
+      // Layer 1: Start with defaults
+      surgeonIds.forEach((id, index) => {
+        colorMap[id] = DEFAULT_COLORS[index % DEFAULT_COLORS.length]
+      })
+
+      // Layer 2: Override with localStorage (survives even if DB has no table)
+      Object.entries(storedColors).forEach(([id, color]) => {
+        if (surgeonIds.includes(id)) {
+          colorMap[id] = color
+        }
+      })
+
+      // Layer 3: Override with DB values (source of truth when available)
+      if (!error && data && data.length > 0) {
         data.forEach(row => {
           colorMap[row.surgeon_id] = row.color
         })
-        
-        // Assign default colors to surgeons without a color
-        surgeonIds.forEach((id, index) => {
-          if (!colorMap[id]) {
-            colorMap[id] = DEFAULT_COLORS[index % DEFAULT_COLORS.length]
-          }
-        })
-        
-        setColors(colorMap)
-      } else {
-        // Table doesn't exist or error - use localStorage fallback
-        const stored = localStorage.getItem(`surgeon-colors-${facilityId}`)
-        if (stored) {
-          setColors(JSON.parse(stored))
-        } else {
-          // Assign default colors
-          const colorMap: Record<string, string> = {}
-          surgeonIds.forEach((id, index) => {
-            colorMap[id] = DEFAULT_COLORS[index % DEFAULT_COLORS.length]
-          })
-          setColors(colorMap)
-        }
       }
+
+      setColors(colorMap)
     } catch (err) {
       console.error('Error fetching surgeon colors:', err)
-      // Fallback to localStorage
-      const stored = localStorage.getItem(`surgeon-colors-${facilityId}`)
-      if (stored) {
-        setColors(JSON.parse(stored))
-      }
+      // Pure localStorage fallback
+      const storedColors = getStoredColors(facilityId)
+      const colorMap: Record<string, string> = {}
+      surgeonIds.forEach((id, index) => {
+        colorMap[id] = storedColors[id] || DEFAULT_COLORS[index % DEFAULT_COLORS.length]
+      })
+      setColors(colorMap)
     } finally {
       setLoading(false)
     }
@@ -88,15 +96,15 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
   const setColor = useCallback(async (surgeonId: string, color: string) => {
     if (!facilityId) return
 
-    // Update local state immediately
+    // Update local state immediately (optimistic)
     setColors(prev => {
       const updated = { ...prev, [surgeonId]: color }
-      // Also save to localStorage as backup
+      // Always save to localStorage — this is the reliable persistence layer
       localStorage.setItem(`surgeon-colors-${facilityId}`, JSON.stringify(updated))
       return updated
     })
 
-    // Try to save to database
+    // Try to save to database (best-effort)
     try {
       const { error } = await supabaseRef.current
         .from('surgeon_colors')
@@ -110,7 +118,6 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
         })
 
       if (error) {
-        // Table might not exist - that's ok, localStorage is the backup
         console.log('Could not save color to database, using localStorage')
       }
     } catch (err) {
