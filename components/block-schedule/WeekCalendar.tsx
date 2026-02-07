@@ -41,6 +41,7 @@ export function WeekCalendar({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const autoScrollRef = useRef<number | null>(null)
   const lastMouseYRef = useRef<number>(0)
+
   // Refs for stable access inside document-level listeners
   const isDraggingRef = useRef(false)
   const dragStartRef = useRef<{ day: number; hour: number } | null>(null)
@@ -165,7 +166,6 @@ export function WeekCalendar({
   // DRAG HANDLERS: Use document-level move/up so drag
   // survives leaving the grid element
   // =====================================================
-
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return
     if ((e.target as HTMLElement).closest('.block-card')) return
@@ -180,6 +180,7 @@ export function WeekCalendar({
     isDraggingRef.current = true
     dragStartRef.current = { day, hour }
     dragEndRef.current = { day, hour: hour + 0.5 }
+
     setIsDragging(true)
     setDragStart({ day, hour })
     setDragEnd({ day, hour: hour + 0.5 }) // Default to 30 min
@@ -215,10 +216,8 @@ export function WeekCalendar({
   }, [getTimeFromY, startAutoScroll, stopAutoScroll])
 
   // Document-level mouseup — always fires, even outside the grid
-  // FIX: Uses the continuously-updated drag state instead of recalculating
-  // from cursor Y. When the cursor is outside the grid (e.g. above it or
-  // on another element), getTimeFromY returns 0 which causes the time
-  // mismatch bug (popover shows 12:00 AM instead of the real start).
+  // Uses the continuously-updated drag state instead of recalculating
+  // from cursor Y to avoid bugs when cursor is outside the grid
   const handleDocumentMouseUp = useCallback((e: MouseEvent) => {
     if (!isDraggingRef.current) return
 
@@ -377,32 +376,10 @@ export function WeekCalendar({
     : (dragStart?.hour ?? 0) + 1
   const dragDuration = Math.max(dragEndHour - dragStartHour, 0.25)
 
-  // Measure available height for scroll container using root element's position
-  const rootRef = useRef<HTMLDivElement>(null)
-  const headerRef = useRef<HTMLDivElement>(null)
-  const [scrollHeight, setScrollHeight] = useState<number>(400) // safe default
-
-  useEffect(() => {
-    function measure() {
-      const header = headerRef.current
-      if (!header) return
-      // Use the header's bottom position relative to viewport
-      // Everything below it should be the scroll area
-      const headerBottom = header.getBoundingClientRect().bottom
-      const available = window.innerHeight - headerBottom
-      if (available > 50) {
-        setScrollHeight(available)
-      }
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [])
-
   return (
-    <div ref={rootRef} className="flex flex-col">
+    <div className="flex flex-col h-full">
       {/* Day Headers - Google Calendar Style */}
-      <div ref={headerRef} className="flex border-b border-slate-200 bg-white flex-shrink-0">
+      <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
         <div className="w-[60px] flex-shrink-0" />
         {weekDays.map((date, i) => {
           const isToday = isSameDay(date, new Date())
@@ -437,8 +414,7 @@ export function WeekCalendar({
       {/* Scrollable Time Grid */}
       <div
         ref={scrollContainerRef}
-        className="overflow-auto"
-        style={{ height: `${scrollHeight}px` }}
+        className="flex-1 overflow-auto"
       >
         <div
           ref={gridRef}
@@ -481,49 +457,40 @@ export function WeekCalendar({
                   />
                 ))}
 
-                {/* Closed overlay — renders BEHIND blocks */}
+                {/* Closed overlay */}
                 {isClosed && (
-                  <div className="absolute inset-0 bg-slate-100/50 pointer-events-none z-[1]">
+                  <div className="absolute inset-0 bg-slate-100/50 pointer-events-none">
                     <div className="absolute inset-0 opacity-[0.07]" style={{
                       backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',
                     }} />
+                    <div className="flex items-start justify-center pt-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded">
+                        Closed
+                      </span>
+                    </div>
                   </div>
                 )}
 
-                {/* Blocks — always render, dimmed + non-interactive on closed days */}
-                {(() => {
+                {/* Blocks - with overlap handling (hidden on closed days) */}
+                {!isClosed && (() => {
                   const blockLayout = calculateBlockLayout(dayBlocks)
                   return dayBlocks.map(block => {
                     const layout = blockLayout.get(block.block_id) || { columnIndex: 0, totalColumns: 1, isSameStart: false }
                     return (
-                      <div
+                      <BlockCard
                         key={block.block_id}
-                        className={isClosed ? 'opacity-30 pointer-events-none' : ''}
-                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2 }}
-                      >
-                        <BlockCard
-                          block={block}
-                          color={colorMap[block.surgeon_id] || '#3B82F6'}
-                          hourHeight={HOUR_HEIGHT}
-                          startHour={0}
-                          onClick={isClosed ? () => {} : (e) => handleBlockClick(block, e)}
-                          columnIndex={layout.columnIndex}
-                          totalColumns={layout.totalColumns}
-                          isSameStart={layout.isSameStart}
-                        />
-                      </div>
+                        block={block}
+                        color={colorMap[block.surgeon_id] || '#3B82F6'}
+                        hourHeight={HOUR_HEIGHT}
+                        startHour={0}
+                        onClick={(e) => handleBlockClick(block, e)}
+                        columnIndex={layout.columnIndex}
+                        totalColumns={layout.totalColumns}
+                        isSameStart={layout.isSameStart}
+                      />
                     )
                   })
                 })()}
-
-                {/* Closed label overlay — renders ON TOP of dimmed blocks */}
-                {isClosed && (
-                  <div className="absolute inset-0 pointer-events-none z-[3] flex items-start justify-center pt-2">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded">
-                      Closed
-                    </span>
-                  </div>
-                )}
 
                 {/* Drag selection preview with live time display */}
                 {isDragging && dragStart?.day === dayIndex && (

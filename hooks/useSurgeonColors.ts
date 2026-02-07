@@ -1,7 +1,7 @@
 // hooks/useSurgeonColors.ts
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 
 // Default color palette - assigned to surgeons in order
@@ -23,7 +23,11 @@ interface UseSurgeonColorsOptions {
 }
 
 export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
-  const supabase = createClient()
+  // Stabilize the supabase client — createClient() on every render
+  // produces a new reference, which invalidates useCallback deps and
+  // causes the page-level useEffect to re-run fetchColors on every
+  // render, overwriting any color the user just picked.
+  const supabaseRef = useRef(createClient())
   const [colors, setColors] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
 
@@ -34,7 +38,7 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
     setLoading(true)
     try {
       // Try to fetch from surgeon_colors table
-      const { data, error } = await supabase
+      const { data, error } = await supabaseRef.current
         .from('surgeon_colors')
         .select('surgeon_id, color')
         .eq('facility_id', facilityId)
@@ -78,7 +82,7 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
     } finally {
       setLoading(false)
     }
-  }, [facilityId, supabase])
+  }, [facilityId])
 
   // Set a surgeon's color
   const setColor = useCallback(async (surgeonId: string, color: string) => {
@@ -94,7 +98,7 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
 
     // Try to save to database
     try {
-      const { error } = await supabase
+      const { error } = await supabaseRef.current
         .from('surgeon_colors')
         .upsert({
           facility_id: facilityId,
@@ -112,7 +116,7 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
     } catch (err) {
       console.error('Error saving surgeon color:', err)
     }
-  }, [facilityId, supabase])
+  }, [facilityId])
 
   // Get the color map (for passing to components)
   const getColorMap = useCallback(() => {
