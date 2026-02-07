@@ -498,7 +498,8 @@ export function WeekCalendar({
                     return (
                       <div
                         key={block.block_id}
-                        className={isClosed ? 'opacity-30 pointer-events-none relative z-[2]' : 'relative z-[2]'}
+                        className={isClosed ? 'opacity-30 pointer-events-none' : ''}
+                        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2 }}
                       >
                         <BlockCard
                           block={block}
