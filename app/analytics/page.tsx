@@ -26,6 +26,8 @@ import {
   type FlipRoomAnalysis,
 } from '@/lib/analyticsV2'
 
+import FlagsSummaryCard from '@/components/analytics/FlagsSummaryCard'
+
 // Icons
 import { 
   ClockIcon, 
@@ -48,6 +50,7 @@ import {
   ClipboardDocumentListIcon,
   CubeIcon,
   CurrencyDollarIcon,
+  FlagIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -529,6 +532,8 @@ export default function AnalyticsHubPage() {
   const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [loading, setLoading] = useState(true)
   const [dateFilter, setDateFilter] = useState('month')
+  const [currentStartDate, setCurrentStartDate] = useState<string | undefined>()
+  const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
 
@@ -663,11 +668,17 @@ case_milestones (
     if (!effectiveFacilityId) return
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
+    const start = monthStart.toISOString().split('T')[0]
+    const end = today.toISOString().split('T')[0]
+    setCurrentStartDate(start)
+    setCurrentEndDate(end)
+    fetchData(start, end)
   }, [effectiveFacilityId])
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
     setDateFilter(filter)
+    setCurrentStartDate(startDate)
+    setCurrentEndDate(endDate)
     fetchData(startDate, endDate)
   }
 
@@ -925,7 +936,15 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       href: '/analytics/block-utilization',
       icon: CalendarDaysIcon,
       accentColor: 'blue',
-},
+    },
+    {
+      title: 'Case Flags',
+      description: 'Review flagged cases, timing anomalies, and reported delays across your facility',
+      href: '/analytics/flags',
+      icon: FlagIcon,
+      accentColor: 'rose',
+      badge: 'New',
+    },
   ]
 
   // Loading state
@@ -1108,6 +1127,21 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                   </div>
                 </div>
               </section>
+
+              {/* CASE FLAGS SUMMARY */}
+              {effectiveFacilityId && (
+                <section>
+                  <SectionHeader
+                    title="Case Flags"
+                    subtitle="Auto-detected anomalies and reported delays"
+                  />
+                  <FlagsSummaryCard
+                    facilityId={effectiveFacilityId}
+                    startDate={currentStartDate}
+                    endDate={currentEndDate}
+                  />
+                </section>
+              )}
 
               {/* ROBOTIC VS TRADITIONAL COMPARISON */}
               {(kneeComparisonData.length > 0 || hipComparisonData.length > 0) && (
