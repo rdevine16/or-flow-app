@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
 import {
   pageRegistry,
   getPagesByCategory,
@@ -165,13 +166,16 @@ export default function AdminDocsPage() {
   // Access guard — global admin only
   if (!isGlobalAdmin) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <p className="text-slate-400 text-sm">Access restricted to global administrators.</p>
-      </div>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <p className="text-slate-400 text-sm">Access restricted to global administrators.</p>
+        </div>
+      </DashboardLayout>
     )
   }
 
   return (
+    <DashboardLayout>
     <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       {/* ================================================================ */}
       {/* LEFT PANEL — Table of Contents                                   */}
@@ -301,6 +305,7 @@ export default function AdminDocsPage() {
         )}
       </main>
     </div>
+    </DashboardLayout>
   )
 }
 
