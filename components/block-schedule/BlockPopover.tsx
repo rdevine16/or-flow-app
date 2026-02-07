@@ -34,6 +34,9 @@ interface BlockPopoverProps {
   initialStartTime?: string
   initialEndTime?: string
   clickPosition?: { x: number; y: number }
+  // NEW: Pass the week the user is currently viewing so we can compute
+  // the correct effective_start when creating blocks on past/future weeks
+  currentWeekStart?: Date
 }
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
@@ -41,6 +44,19 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const minutes = (i % 2) * 30
   return `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`
 })
+
+/**
+ * Compute the actual date for a given day-of-week within the week that
+ * starts on `weekStart`. E.g., if weekStart is Sun Jan 5 and dayOfWeek
+ * is 3 (Wednesday), returns "2026-01-08".
+ */
+function getDateForDayInWeek(weekStart: Date, dayOfWeek: number): string {
+  const weekStartDay = weekStart.getDay() // 0=Sun
+  const offset = dayOfWeek - weekStartDay
+  const target = new Date(weekStart)
+  target.setDate(target.getDate() + offset)
+  return target.toISOString().split('T')[0]
+}
 
 export function BlockPopover({
   open,
@@ -55,6 +71,7 @@ export function BlockPopover({
   initialStartTime,
   initialEndTime,
   clickPosition,
+  currentWeekStart,
 }: BlockPopoverProps) {
   const supabase = createClient()
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -149,14 +166,25 @@ export function BlockPopover({
         setIsCustom(false)
         setCustomRecurrence(null)
       } else {
-        // New block - use drag selection values
+        // New block - compute the correct effective_start based on the
+        // day the user selected within the week they're currently viewing.
+        const selectedDay = initialDayOfWeek ?? 1
+        let computedEffectiveStart: string
+
+        if (currentWeekStart) {
+          // Compute the actual date for this day-of-week in the viewed week
+          computedEffectiveStart = getDateForDayInWeek(currentWeekStart, selectedDay)
+        } else {
+          // Fallback: use today's date (original behavior)
+          computedEffectiveStart = new Date().toISOString().split('T')[0]
+        }
+
         setSurgeonId(surgeons[0]?.id || '')
-        setDayOfWeek(initialDayOfWeek ?? 1)
-        // Use the times from drag selection
+        setDayOfWeek(selectedDay)
         setStartTime(initialStartTime || '07:00:00')
         setEndTime(initialEndTime || '15:00:00')
         setRecurrenceType('weekly')
-        setEffectiveStart(new Date().toISOString().split('T')[0])
+        setEffectiveStart(computedEffectiveStart)
         setEffectiveEnd('')
         setHasEndDate(false)
         setShowMoreOptions(false)
@@ -169,7 +197,17 @@ export function BlockPopover({
     if (!open) {
       hasInitialized.current = false
     }
-  }, [open, editingBlock, surgeons, initialDayOfWeek, initialStartTime, initialEndTime])
+  }, [open, editingBlock, surgeons, initialDayOfWeek, initialStartTime, initialEndTime, currentWeekStart])
+
+  // When the user changes day_of_week in the form for a NEW block,
+  // recalculate effective_start to match the new day within the viewed week
+  const handleDayOfWeekChange = useCallback((newDay: number) => {
+    setDayOfWeek(newDay)
+    // Only recalculate for new blocks (not editing existing ones)
+    if (!editingBlock && currentWeekStart) {
+      setEffectiveStart(getDateForDayInWeek(currentWeekStart, newDay))
+    }
+  }, [editingBlock, currentWeekStart])
 
   // Drag handlers
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -328,6 +366,13 @@ export function BlockPopover({
   const durationHours = (endH + endM/60) - (startH + startM/60)
   const durationText = durationHours === 1 ? '1 hour' : `${durationHours} hours`
 
+  // Show a helpful indicator when the effective start is in the past
+  const effectiveStartDate = new Date(effectiveStart + 'T00:00:00')
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const isEffectiveStartInPast = effectiveStartDate < today
+  const isEffectiveStartInFuture = effectiveStartDate > today
+
   return (
     <>
       {/* Backdrop */}
@@ -445,7 +490,7 @@ export function BlockPopover({
             </div>
             <select
               value={dayOfWeek}
-              onChange={e => setDayOfWeek(Number(e.target.value))}
+              onChange={e => handleDayOfWeekChange(Number(e.target.value))}
               className="flex-1 px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:bg-gray-100 transition-colors"
             >
               {(Object.entries(DAY_OF_WEEK_LABELS) as [string, string][]).map(([value, label]) => (
@@ -490,6 +535,29 @@ export function BlockPopover({
               )}
             </div>
           </div>
+
+          {/* Effective Start Indicator (always visible for new blocks) */}
+          {!isEditing && (
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+              isEffectiveStartInPast
+                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                : isEffectiveStartInFuture
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : 'bg-gray-50 text-gray-600 border border-gray-200'
+            }`}>
+              <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>
+                Effective from{' '}
+                <span className="font-semibold">
+                  {new Date(effectiveStart + 'T12:00:00').toLocaleDateString('en-US', {
+                    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+                  })}
+                </span>
+                {isEffectiveStartInPast && ' (retroactive)'}
+                {isEffectiveStartInFuture && ' (future)'}
+              </span>
+            </div>
+          )}
 
           {/* More Options */}
           {!showMoreOptions ? (

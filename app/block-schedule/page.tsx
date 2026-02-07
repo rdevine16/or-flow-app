@@ -366,6 +366,7 @@ useEffect(() => {
             initialStartTime={dragSelection?.startTime}
             initialEndTime={dragSelection?.endTime}
             clickPosition={clickPosition}
+            currentWeekStart={currentWeekStart} 
           />
 
           {/* Delete Confirmation Modal */}

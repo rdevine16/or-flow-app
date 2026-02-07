@@ -1,12 +1,25 @@
+// app/settings/rooms/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { roomAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
+import {
+  useRoomSchedules,
+  RoomDaySchedule,
+  DAY_LABELS,
+  DAY_LABELS_SHORT,
+  getDefaultWeekSchedule,
+} from '@/hooks/useRoomSchedules'
+import { formatTime12Hour } from '@/types/block-scheduling'
+
+// ============================================
+// TYPES
+// ============================================
 
 interface ORRoom {
   id: string
@@ -32,27 +45,200 @@ interface ModalState {
   room: ORRoom | null
 }
 
+// ============================================
+// TIME OPTIONS (30-min increments)
+// ============================================
+
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2)
+  const minutes = (i % 2) * 30
+  return `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`
+})
+
+
+// ============================================
+// ROOM SCHEDULE EDITOR COMPONENT
+// ============================================
+
+function RoomScheduleEditor({
+  schedule,
+  onChange,
+}: {
+  schedule: RoomDaySchedule[]
+  onChange: (schedule: RoomDaySchedule[]) => void
+}) {
+  const updateDay = (dayOfWeek: number, updates: Partial<RoomDaySchedule>) => {
+    onChange(schedule.map(d =>
+      d.dayOfWeek === dayOfWeek ? { ...d, ...updates } : d
+    ))
+  }
+
+  // Apply one day's schedule to all weekdays
+  const applyToWeekdays = (sourceDayOfWeek: number) => {
+    const source = schedule.find(d => d.dayOfWeek === sourceDayOfWeek)
+    if (!source) return
+
+    onChange(schedule.map(d => {
+      // Apply to Mon-Fri (1-5), skip the source day and weekends
+      if (d.dayOfWeek >= 1 && d.dayOfWeek <= 5) {
+        return { ...d, openTime: source.openTime, closeTime: source.closeTime, isClosed: source.isClosed }
+      }
+      return d
+    }))
+  }
+
+  // Check if all weekdays have the same schedule
+  const weekdays = schedule.filter(d => d.dayOfWeek >= 1 && d.dayOfWeek <= 5)
+  const allWeekdaysSame = weekdays.every(
+    d => d.openTime === weekdays[0].openTime &&
+         d.closeTime === weekdays[0].closeTime &&
+         d.isClosed === weekdays[0].isClosed
+  )
+
+  return (
+    <div className="space-y-1">
+      {/* Header row */}
+      <div className="grid grid-cols-[100px_1fr_1fr_60px] gap-2 px-2 pb-1">
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Day</span>
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Opens</span>
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Closes</span>
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">Open?</span>
+      </div>
+
+      {/* Day rows — weekdays first, then weekend */}
+      {[1, 2, 3, 4, 5, 6, 0].map(dayOfWeek => {
+        const day = schedule.find(d => d.dayOfWeek === dayOfWeek)!
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
+
+        return (
+          <div
+            key={dayOfWeek}
+            className={`grid grid-cols-[100px_1fr_1fr_60px] gap-2 items-center px-2 py-1.5 rounded-lg transition-colors ${
+              day.isClosed
+                ? 'bg-slate-50 opacity-60'
+                : isWeekend
+                  ? 'bg-blue-50/50'
+                  : 'hover:bg-slate-50'
+            }`}
+          >
+            {/* Day name */}
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${day.isClosed ? 'text-slate-400' : 'text-slate-700'}`}>
+                {DAY_LABELS[dayOfWeek]}
+              </span>
+            </div>
+
+            {/* Open time */}
+            <select
+              value={day.openTime}
+              onChange={e => updateDay(dayOfWeek, { openTime: e.target.value })}
+              disabled={day.isClosed}
+              className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {TIME_OPTIONS.map(t => (
+                <option key={t} value={t}>{formatTime12Hour(t)}</option>
+              ))}
+            </select>
+
+            {/* Close time */}
+            <select
+              value={day.closeTime}
+              onChange={e => updateDay(dayOfWeek, { closeTime: e.target.value })}
+              disabled={day.isClosed}
+              className="px-2 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {TIME_OPTIONS.filter(t => t > day.openTime).map(t => (
+                <option key={t} value={t}>{formatTime12Hour(t)}</option>
+              ))}
+            </select>
+
+            {/* Open toggle */}
+            <div className="flex justify-center">
+              <button
+                onClick={() => updateDay(dayOfWeek, { isClosed: !day.isClosed })}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  day.isClosed ? 'bg-slate-300' : 'bg-blue-500'
+                }`}
+              >
+                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  day.isClosed ? 'left-0.5' : 'left-[22px]'
+                }`} />
+              </button>
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Apply to all weekdays button */}
+      {!allWeekdaysSame && (
+        <div className="pt-2">
+          <button
+            onClick={() => applyToWeekdays(1)}
+            className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2"
+          >
+            Apply Monday's hours to all weekdays
+          </button>
+        </div>
+      )}
+
+      {/* Weekly summary */}
+      <div className="pt-3 px-2 border-t border-slate-100 mt-2">
+        <div className="flex items-center gap-4 text-xs text-slate-500">
+          <span>
+            <span className="font-semibold text-slate-700">
+              {schedule.filter(d => !d.isClosed).length}
+            </span> days open
+          </span>
+          <span>
+            <span className="font-semibold text-slate-700">
+              {(() => {
+                const openDays = schedule.filter(d => !d.isClosed)
+                if (openDays.length === 0) return '0h'
+                const totalMins = openDays.reduce((sum, d) => {
+                  const [oh, om] = d.openTime.split(':').map(Number)
+                  const [ch, cm] = d.closeTime.split(':').map(Number)
+                  return sum + (ch * 60 + cm) - (oh * 60 + om)
+                }, 0)
+                return `${(totalMins / 60).toFixed(1)}h`
+              })()}
+            </span> total weekly hours
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================
+// MAIN PAGE
+// ============================================
+
 export default function RoomsSettingsPage() {
   const supabase = createClient()
-  
-  // Use the context - this automatically handles impersonation!
   const { effectiveFacilityId, loading: userLoading } = useUser()
-  
+
   const [rooms, setRooms] = useState<ORRoom[]>([])
   const [loading, setLoading] = useState(true)
   const [showDeleted, setShowDeleted] = useState(false)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', room: null })
-  const [formData, setFormData] = useState({ name: '', available_hours: '10' })
+  const [formData, setFormData] = useState({ name: '' })
+  const [formSchedule, setFormSchedule] = useState<RoomDaySchedule[]>(getDefaultWeekSchedule())
   const [saving, setSaving] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
     isOpen: false,
     room: null,
     dependencies: { cases: 0, blockSchedules: 0 },
-    loading: false
+    loading: false,
   })
+
+  const {
+    fetchRoomSchedule,
+    saveRoomSchedule,
+    loading: scheduleLoading,
+  } = useRoomSchedules({ facilityId: effectiveFacilityId })
 
   // Get current user ID on mount
   useEffect(() => {
@@ -74,85 +260,133 @@ export default function RoomsSettingsPage() {
   const fetchRooms = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
-const { data } = await supabase
+    const { data } = await supabase
       .from('or_rooms')
       .select('id, name, available_hours, deleted_at, deleted_by')
       .eq('facility_id', effectiveFacilityId)
       .order('name')
-    
+
     setRooms(data || [])
     setLoading(false)
   }
 
+  // Show toast with auto-dismiss
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }, [])
+
   const openAddModal = () => {
-    setFormData({ name: '', available_hours: '10' })
+    setFormData({ name: '' })
+    setFormSchedule(getDefaultWeekSchedule())
     setModal({ isOpen: true, mode: 'add', room: null })
   }
 
-  const openEditModal = (room: ORRoom) => {
-    setFormData({ name: room.name, available_hours: String(room.available_hours ?? 10) })
+  const openEditModal = async (room: ORRoom) => {
+    setFormData({ name: room.name })
+    // Load this room's current schedule
+    const schedule = await fetchRoomSchedule(room.id)
+    setFormSchedule(schedule)
     setModal({ isOpen: true, mode: 'edit', room })
   }
 
   const closeModal = () => {
     setModal({ isOpen: false, mode: 'add', room: null })
-    setFormData({ name: '', available_hours: '10' })
+    setFormData({ name: '' })
+    setFormSchedule(getDefaultWeekSchedule())
   }
 
   const handleSave = async () => {
     if (!formData.name.trim() || !effectiveFacilityId) return
-    
+
     setSaving(true)
 
     if (modal.mode === 'add') {
+      // Calculate legacy available_hours from schedule
+      const openDays = formSchedule.filter(d => !d.isClosed)
+      const avgHours = openDays.length > 0
+        ? openDays.reduce((sum, d) => {
+            const [oh, om] = d.openTime.split(':').map(Number)
+            const [ch, cm] = d.closeTime.split(':').map(Number)
+            return sum + (ch + cm / 60) - (oh + om / 60)
+          }, 0) / openDays.length
+        : 10
+
       const { data, error } = await supabase
         .from('or_rooms')
-        .insert({ name: formData.name.trim(), facility_id: effectiveFacilityId, available_hours: parseFloat(formData.available_hours) || 10 })
+        .insert({
+          name: formData.name.trim(),
+          facility_id: effectiveFacilityId,
+          available_hours: Math.round(avgHours * 10) / 10,
+        })
         .select('id, name, available_hours, deleted_at, deleted_by')
         .single()
 
       if (!error && data) {
+        // Save room schedule
+        await saveRoomSchedule(data.id, formSchedule)
+
         setRooms([...rooms, data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
-        
-        // Audit log
+        showToast(`${data.name} created`, 'success')
         await roomAudit.created(supabase, formData.name.trim(), data.id)
+      } else {
+        showToast('Failed to create room', 'error')
       }
     } else if (modal.mode === 'edit' && modal.room) {
       const oldName = modal.room.name
 
+      const openDays = formSchedule.filter(d => !d.isClosed)
+      const avgHours = openDays.length > 0
+        ? openDays.reduce((sum, d) => {
+            const [oh, om] = d.openTime.split(':').map(Number)
+            const [ch, cm] = d.closeTime.split(':').map(Number)
+            return sum + (ch + cm / 60) - (oh + om / 60)
+          }, 0) / openDays.length
+        : 10
+
       const { error } = await supabase
         .from('or_rooms')
-        .update({ name: formData.name.trim(), available_hours: parseFloat(formData.available_hours) || 10 })
+        .update({
+          name: formData.name.trim(),
+          available_hours: Math.round(avgHours * 10) / 10,
+        })
         .eq('id', modal.room.id)
 
       if (!error) {
+        // Save room schedule
+        await saveRoomSchedule(modal.room.id, formSchedule)
+
         setRooms(
           rooms
-            .map(r => r.id === modal.room!.id ? { ...r, name: formData.name.trim(), available_hours: parseFloat(formData.available_hours) || 10 } : r)
+            .map(r => r.id === modal.room!.id
+              ? { ...r, name: formData.name.trim(), available_hours: Math.round(avgHours * 10) / 10 }
+              : r
+            )
             .sort((a, b) => a.name.localeCompare(b.name))
         )
         closeModal()
-        
-        // Audit log
+        showToast(`${formData.name.trim()} updated`, 'success')
+
         if (oldName !== formData.name.trim()) {
           await roomAudit.updated(supabase, modal.room.id, oldName, formData.name.trim())
         }
+      } else {
+        showToast('Failed to update room', 'error')
       }
     }
 
     setSaving(false)
   }
 
-const openDeleteModal = async (room: ORRoom) => {
+  const openDeleteModal = async (room: ORRoom) => {
     setDeleteModal({
       isOpen: true,
       room,
       dependencies: { cases: 0, blockSchedules: 0 },
-      loading: true
+      loading: true,
     })
 
-    // Check dependencies
     const [casesResult, blocksResult] = await Promise.all([
       supabase
         .from('cases')
@@ -161,16 +395,16 @@ const openDeleteModal = async (room: ORRoom) => {
       supabase
         .from('block_schedules')
         .select('id', { count: 'exact', head: true })
-        .eq('or_room_id', room.id)
+        .eq('or_room_id', room.id),
     ])
 
     setDeleteModal(prev => ({
       ...prev,
       dependencies: {
         cases: casesResult.count || 0,
-        blockSchedules: blocksResult.count || 0
+        blockSchedules: blocksResult.count || 0,
       },
-      loading: false
+      loading: false,
     }))
   }
 
@@ -179,7 +413,7 @@ const openDeleteModal = async (room: ORRoom) => {
       isOpen: false,
       room: null,
       dependencies: { cases: 0, blockSchedules: 0 },
-      loading: false
+      loading: false,
     })
   }
 
@@ -187,249 +421,181 @@ const openDeleteModal = async (room: ORRoom) => {
     if (!deleteModal.room || !currentUserId) return
 
     setSaving(true)
-    const room = deleteModal.room
-
     const { error } = await supabase
       .from('or_rooms')
-      .update({ 
+      .update({
         deleted_at: new Date().toISOString(),
-        deleted_by: currentUserId
+        deleted_by: currentUserId,
       })
-      .eq('id', room.id)
+      .eq('id', deleteModal.room.id)
 
     if (!error) {
-      setRooms(rooms.map(r => 
-        r.id === room.id ? { ...r, deleted_at: new Date().toISOString(), deleted_by: currentUserId } : r
+      setRooms(rooms.map(r =>
+        r.id === deleteModal.room!.id
+          ? { ...r, deleted_at: new Date().toISOString(), deleted_by: currentUserId }
+          : r
       ))
-      showToast(`"${room.name}" moved to archive`, 'success')
-      await roomAudit.deleted(supabase, room.name, room.id)
-    } else {
-      showToast('Failed to archive room', 'error')
+      closeDeleteModal()
+      showToast(`${deleteModal.room.name} archived`, 'success')
+      await roomAudit.deleted(supabase, deleteModal.room.id, deleteModal.room.name)
     }
-
     setSaving(false)
-    closeDeleteModal()
   }
 
-const handleRestore = async (id: string) => {
-    const room = rooms.find(r => r.id === id)
-    if (!room) return
-
-    setSaving(true)
-
+  const handleRestore = async (room: ORRoom) => {
     const { error } = await supabase
       .from('or_rooms')
       .update({ deleted_at: null, deleted_by: null })
-      .eq('id', id)
+      .eq('id', room.id)
 
     if (!error) {
-      setRooms(rooms.map(r => 
-        r.id === id ? { ...r, deleted_at: null, deleted_by: null } : r
+      setRooms(rooms.map(r =>
+        r.id === room.id ? { ...r, deleted_at: null, deleted_by: null } : r
       ))
-      showToast(`"${room.name}" restored successfully`, 'success')
-      await roomAudit.restored(supabase, room.name, id)
-    } else {
-      showToast('Failed to restore room', 'error')
+      showToast(`${room.name} restored`, 'success')
+      await roomAudit.restored(supabase, room.id, room.name)
     }
-
-    setSaving(false)
   }
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  // Filter rooms based on showDeleted toggle
+  // Separate active vs deleted rooms
   const activeRooms = rooms.filter(r => !r.deleted_at)
   const deletedRooms = rooms.filter(r => r.deleted_at)
-  const displayRooms = showDeleted ? rooms : activeRooms
 
   return (
     <DashboardLayout>
       <Container className="py-8">
         <SettingsLayout
           title="OR Rooms"
-          description="Manage the operating rooms available at your facility."
+          description="Manage the operating rooms and their daily schedules at your facility."
         >
           {loading || userLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-20">
               <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
-          ) : !effectiveFacilityId ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500">No facility selected</p>
-            </div>
           ) : (
-            <div className="space-y-4">
-              {/* Show deleted toggle */}
-              {deletedRooms.length > 0 && (
-                <div className="flex items-center justify-end">
-                  <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showDeleted}
-                      onChange={(e) => setShowDeleted(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                    />
-                    Show deleted rooms ({deletedRooms.length})
-                  </label>
+            <div className="max-w-3xl">
+              {/* Add Room button */}
+              <div className="flex justify-end mb-6">
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Room
+                </button>
+              </div>
+
+              {/* Active Rooms */}
+              {activeRooms.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                  <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <p className="text-slate-500 font-medium">No rooms configured</p>
+                  <p className="text-sm text-slate-400 mt-1">Add your first operating room to get started</p>
+                  <button
+                    onClick={openAddModal}
+                    className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-700"
+                  >
+                    + Add Room
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeRooms.map(room => (
+                    <div
+                      key={room.id}
+                      className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:border-slate-300 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                          </svg>
+                        </div>
+                        <div>
+                          <span className="text-sm font-semibold text-slate-900">{room.name}</span>
+                          <p className="text-xs text-slate-500">
+                            {room.available_hours ? `~${room.available_hours}h avg/day` : 'No hours set'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => openEditModal(room)}
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit room & schedule"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(room)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Archive room"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
-              {/* Main Card */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-slate-900">Operating Rooms</h3>
-                    <p className="text-sm text-slate-500">
-                      {activeRooms.length} active room{activeRooms.length !== 1 ? 's' : ''}
-                      {deletedRooms.length > 0 && (
-                        <span className="text-slate-400"> · {deletedRooms.length} deleted</span>
-                      )}
-                    </p>
-                  </div>
+              {/* Archived Rooms */}
+              {deletedRooms.length > 0 && (
+                <div className="mt-6">
                   <button
-                    onClick={openAddModal}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={() => setShowDeleted(!showDeleted)}
+                    className="text-sm text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1"
                   >
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-</svg>
-                    Add Room
+                    <svg className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    {deletedRooms.length} archived room{deletedRooms.length !== 1 ? 's' : ''}
                   </button>
-                </div>
-
-                {/* Table */}
-                {displayRooms.length === 0 ? (
-                  <div className="px-6 py-12 text-center">
-                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                    </div>
-                    <p className="text-slate-500">No rooms configured yet.</p>
-                    <button
-                      onClick={openAddModal}
-                      className="mt-2 text-blue-600 hover:underline text-sm"
-                    >
-                      Add your first room
-                    </button>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    {/* Table Header */}
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      <div className="col-span-1">#</div>
-                      <div className="col-span-5">Room Name</div>
-                      <div className="col-span-2">Hours/Day</div>
-                      <div className="col-span-2">Status</div>
-                      <div className="col-span-2 text-right">Actions</div>
-                    </div>
-
-                    {/* Table Body */}
-                    <div className="divide-y divide-slate-100">
-                      {displayRooms.map((room, index) => {
-                        const isDeleted = !!room.deleted_at
-
-                        return (
-                          <div 
-                            key={room.id} 
-                            className={`grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors ${
-                              isDeleted ? 'bg-slate-50' : 'hover:bg-slate-50'
-                            }`}
+                  {showDeleted && (
+                    <div className="mt-3 space-y-2">
+                      {deletedRooms.map(room => (
+                        <div
+                          key={room.id}
+                          className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg opacity-60"
+                        >
+                          <span className="text-sm text-slate-500 line-through">{room.name}</span>
+                          <button
+                            onClick={() => handleRestore(room)}
+                            className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           >
-                            {/* Index */}
-                            <div className="col-span-1">
-                              <span className="text-sm text-slate-400">{index + 1}</span>
-                            </div>
-
-                            {/* Room Name */}
-                            <div className="col-span-5">
-                              <p className={`font-medium ${isDeleted ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                                {room.name}
-                              </p>
-                            </div>
-
-                            {/* Available Hours */}
-                            <div className="col-span-2">
-                              <span className={`text-sm ${isDeleted ? 'text-slate-400' : 'text-slate-600'}`}>
-                                {room.available_hours ?? 10}h
-                              </span>
-                            </div>
-
-                            {/* Status */}
-                            <div className="col-span-2">
-                              {isDeleted ? (
-                                <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-500">
-                                  Deleted
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                  Active
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Actions */}
-                            <div className="col-span-2 flex items-center justify-end gap-1">
-                              {isDeleted ? (
-                                <button
-                                  onClick={() => handleRestore(room.id)}
-                                  className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                >
-                                  Restore
-                                </button>
-                              ) : (
-                                <>
-                                  <button
-                                    onClick={() => openEditModal(room)}
-                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                    title="Edit"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </button>
-                                  <button
-onClick={() => openDeleteModal(room)}
-                                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Archive"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
+                            Restore
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Modal */}
+          {/* Add/Edit Modal with Schedule Editor */}
           {modal.isOpen && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                <div className="px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
                   <h3 className="text-lg font-semibold text-slate-900">
                     {modal.mode === 'add' ? 'Add Room' : 'Edit Room'}
                   </h3>
                 </div>
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-6">
+                  {/* Room Name */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
                       Room Name *
@@ -447,26 +613,24 @@ onClick={() => openDeleteModal(room)}
                       Use a short, recognizable name for your OR staff
                     </p>
                   </div>
+
+                  {/* Weekly Schedule */}
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Available Hours per Day
+                    <label className="block text-sm font-medium text-slate-700 mb-3">
+                      Operating Hours
                     </label>
-                    <input
-                      type="number"
-                      value={formData.available_hours}
-                      onChange={(e) => setFormData({ ...formData, available_hours: e.target.value })}
-                      min="1"
-                      max="24"
-                      step="0.5"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      placeholder="10"
-                    />
+                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                      <RoomScheduleEditor
+                        schedule={formSchedule}
+                        onChange={setFormSchedule}
+                      />
+                    </div>
                     <p className="mt-1.5 text-xs text-slate-500">
-                      Scheduled OR hours per day — used for utilization calculations
+                      Define when this room is available for cases — used for utilization analytics
                     </p>
                   </div>
                 </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3 sticky bottom-0 bg-white rounded-b-2xl">
                   <button
                     onClick={closeModal}
                     className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
@@ -484,6 +648,7 @@ onClick={() => openDeleteModal(room)}
               </div>
             </div>
           )}
+
           {/* Delete Confirmation Modal */}
           {deleteModal.isOpen && deleteModal.room && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
