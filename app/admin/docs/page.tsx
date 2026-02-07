@@ -841,9 +841,11 @@ function PageFormModal({
 // Scanner Modal
 // =============================================================================
 
-interface DiscoveredPage {
+interface DiscoveredFile {
   filePath: string
   route: string
+  fileName: string
+  scope: 'pages' | 'api' | 'lib' | 'components'
   sizeBytes: number
   lastModified: string
 }
@@ -872,6 +874,7 @@ interface ScannedMetadata {
   notes: string | null
   _scan_confidence: Record<string, string>
   _source_lines: number
+  _scope: string
 }
 
 function ScannerModal({
@@ -888,12 +891,13 @@ function ScannerModal({
   addToast: (msg: string, type: 'success' | 'error') => void
 }) {
   const [isScanning, setIsScanning] = useState(false)
-  const [discoveredPages, setDiscoveredPages] = useState<DiscoveredPage[]>([])
+  const [discoveredFiles, setDiscoveredFiles] = useState<DiscoveredFile[]>([])
   const [registeredRoutes, setRegisteredRoutes] = useState<Set<string>>(new Set())
   const [scanningFile, setScanningFile] = useState<string | null>(null)
   const [scannedMeta, setScannedMeta] = useState<Record<string, ScannedMetadata>>({})
   const [isBulkImporting, setIsBulkImporting] = useState(false)
   const [hasScanned, setHasScanned] = useState(false)
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'pages' | 'api' | 'lib' | 'components'>('all')
 
   // Load registered routes for comparison
   useEffect(() => {
@@ -902,8 +906,20 @@ function ScannerModal({
     })
   }, [supabase])
 
-  const missingCount = discoveredPages.filter(p => !registeredRoutes.has(p.route)).length
-  const syncedCount = discoveredPages.filter(p => registeredRoutes.has(p.route)).length
+  const filteredFiles = scopeFilter === 'all'
+    ? discoveredFiles
+    : discoveredFiles.filter(f => f.scope === scopeFilter)
+
+  const missingCount = filteredFiles.filter(p => !registeredRoutes.has(p.route)).length
+  const syncedCount = filteredFiles.filter(p => registeredRoutes.has(p.route)).length
+
+  const scopeCounts = {
+    all: discoveredFiles.length,
+    pages: discoveredFiles.filter(f => f.scope === 'pages').length,
+    api: discoveredFiles.filter(f => f.scope === 'api').length,
+    lib: discoveredFiles.filter(f => f.scope === 'lib').length,
+    components: discoveredFiles.filter(f => f.scope === 'components').length,
+  }
 
   const runScan = async () => {
     setIsScanning(true)
@@ -914,7 +930,7 @@ function ScannerModal({
       })
       if (!res.ok) throw new Error('Scan failed')
       const data = await res.json()
-      setDiscoveredPages(data.pages || [])
+      setDiscoveredFiles(data.files || [])
       setHasScanned(true)
     } catch (err: any) {
       addToast(err.message || 'Scan failed', 'error')
@@ -964,7 +980,7 @@ function ScannerModal({
 
   const bulkImport = async () => {
     setIsBulkImporting(true)
-    const missing = discoveredPages.filter(p => !registeredRoutes.has(p.route))
+    const missing = filteredFiles.filter(p => !registeredRoutes.has(p.route))
     let imported = 0
 
     for (const page of missing) {
@@ -1062,11 +1078,31 @@ function ScannerModal({
           ) : (
             /* Post-scan results */
             <div>
+              {/* Scope filter tabs */}
+              <div className="flex gap-1 mb-4">
+                {(['all', 'pages', 'api', 'lib', 'components'] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setScopeFilter(s)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors
+                      ${scopeFilter === s
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-slate-100 text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+                      }`}
+                  >
+                    {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+                    <span className={`ml-1.5 ${scopeFilter === s ? 'text-slate-300' : 'text-slate-400'}`}>
+                      {scopeCounts[s]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {/* Summary bar */}
-              <div className="flex items-center gap-4 mb-5 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
                 <div className="text-sm">
-                  <span className="font-semibold text-slate-700">{discoveredPages.length}</span>
-                  <span className="text-slate-500"> pages found</span>
+                  <span className="font-semibold text-slate-700">{filteredFiles.length}</span>
+                  <span className="text-slate-500"> files</span>
                 </div>
                 <div className="h-4 w-px bg-slate-300" />
                 <div className="text-sm">
@@ -1104,9 +1140,9 @@ function ScannerModal({
                 </div>
               </div>
 
-              {/* Page list */}
+              {/* File list */}
               <div className="space-y-1">
-                {discoveredPages.map(page => {
+                {filteredFiles.map(page => {
                   const isRegistered = registeredRoutes.has(page.route)
                   const meta = scannedMeta[page.filePath]
                   const isExpanded = !!meta
@@ -1128,6 +1164,11 @@ function ScannerModal({
                         {/* File path */}
                         <span className="text-[11px] text-slate-400 hidden sm:block truncate max-w-[200px]">
                           {page.filePath}
+                        </span>
+
+                        {/* Scope badge */}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border bg-slate-50 text-slate-500 border-slate-200 flex-shrink-0 uppercase tracking-wider">
+                          {page.scope}
                         </span>
 
                         {/* Status badge */}
