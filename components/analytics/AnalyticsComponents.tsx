@@ -56,6 +56,66 @@ export function SectionHeader({ title, subtitle, icon, accentColor = 'blue', act
 
 
 // ============================================
+// INFO TOOLTIP — Hover popover for metric explanations
+// ============================================
+
+function InfoTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false)
+  const [above, setAbove] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const tooltipRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (show && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect()
+      // Show above if too close to bottom of viewport
+      setAbove(rect.bottom + 160 > window.innerHeight)
+    }
+  }, [show])
+
+  // Close on outside click
+  useEffect(() => {
+    if (!show) return
+    const handleClick = (e: MouseEvent) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
+        tooltipRef.current && !tooltipRef.current.contains(e.target as Node)
+      ) {
+        setShow(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [show])
+
+  return (
+    <div className="relative inline-flex">
+      <button
+        ref={triggerRef}
+        onClick={() => setShow(!show)}
+        className="text-slate-300 hover:text-slate-500 transition-colors focus:outline-none"
+        aria-label="More info"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </button>
+      {show && (
+        <div
+          ref={tooltipRef}
+          className={`absolute z-50 w-64 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600 bg-white border border-slate-200 rounded-lg shadow-lg ${
+            above ? 'bottom-full mb-2' : 'top-full mt-2'
+          } left-1/2 -translate-x-1/2`}
+        >
+          {text}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ============================================
 // ENHANCED METRIC CARD — With accent, sparkline, trend pill
 // ============================================
 
@@ -73,11 +133,13 @@ interface EnhancedMetricCardProps {
   format?: 'number' | 'time' | 'percentage'
   // Optional radial progress for percentage values
   progress?: number // 0-100
+  // Optional info tooltip — shows (i) icon next to title with hover popover
+  tooltip?: string
 }
 
 export function EnhancedMetricCard({ 
   title, value, subtitle, trend, icon, 
-  accentColor = 'blue', progress 
+  accentColor = 'blue', progress, tooltip 
 }: EnhancedMetricCardProps) {
   const accentStyles: Record<string, { bar: string; icon: string; value: string }> = {
     blue: { bar: 'bg-blue-500', icon: 'bg-blue-50 text-blue-600', value: 'text-blue-600' },
@@ -97,7 +159,10 @@ export function EnhancedMetricCard({
       
       <div className="p-5">
         <div className="flex items-start justify-between mb-3">
-          <p className="text-[13px] font-medium text-slate-500 leading-tight">{title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-[13px] font-medium text-slate-500 leading-tight">{title}</p>
+            {tooltip && <InfoTooltip text={tooltip} />}
+          </div>
           {icon && (
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${style.icon}`}>
               {icon}
