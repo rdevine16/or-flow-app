@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { getRateLimitStats } from '@/lib/rate-limiter'
 
 type TimeRange = '24h' | '7d' | '30d'
 type ViewMode = 'aggregate' | 'facility' | 'comparison'
@@ -22,9 +21,6 @@ interface ErrorLog {
   created_at: string
   context?: any
   facility_id?: string
-  facilities?: {
-    name?: string
-  }
 }
 
 interface AuditLog {
@@ -36,13 +32,6 @@ interface AuditLog {
   created_at: string
   metadata?: any
   facility_id?: string
-  facilities?: {
-    name?: string
-  }
-  users?: {
-    full_name?: string
-    email?: string
-  }
 }
 
 interface SessionInfo {
@@ -53,7 +42,6 @@ interface SessionInfo {
   last_activity: string
   user_agent: string
   ip_address: string
-  facility_id?: string
   users?: {
     email?: string
     full_name?: string
@@ -81,7 +69,6 @@ export default function GlobalSecurityDashboard() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [activeSessions, setActiveSessions] = useState<SessionInfo[]>([])
   const [facilityStats, setFacilityStats] = useState<FacilityStats[]>([])
-  const [rateLimitStats, setRateLimitStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'errors' | 'audits' | 'sessions' | 'failed-logins'>('errors')
   
@@ -98,7 +85,6 @@ export default function GlobalSecurityDashboard() {
   }, [timeRange, selectedFacility, facilities])
 
   useEffect(() => {
-    // Refresh every 30 seconds
     const interval = setInterval(() => {
       if (facilities.length > 0) {
         loadDashboardData()
@@ -128,38 +114,31 @@ export default function GlobalSecurityDashboard() {
     const startTime = timeRangeMap[timeRange]
 
     try {
-      // Build queries with facility filter
-      const facilityFilter = selectedFacility === 'all' 
-        ? {} 
-        : { facility_id: selectedFacility }
+      const facilityFilter = selectedFacility === 'all' ? {} : { facility_id: selectedFacility }
 
-      // Load error logs
       const { data: errors } = await supabase
         .from('error_logs')
-        .select('*, facilities(name)')
+        .select('*')
         .match(facilityFilter)
         .gte('created_at', startTime.toISOString())
         .order('created_at', { ascending: false })
         .limit(200)
 
-      // Load audit logs (NOTE: using audit_log singular table name)
       const { data: audits } = await supabase
         .from('audit_log')
-        .select('*, facilities(name), users(full_name, email)')
+        .select('*')
         .match(facilityFilter)
         .gte('created_at', startTime.toISOString())
         .order('created_at', { ascending: false })
         .limit(200)
 
-      // Load active sessions
       const { data: sessions } = await supabase
         .from('user_sessions')
-        .select('*, users(full_name, email, facility_id), facilities(name)')
+        .select('*, users(full_name, email, facility_id)')
         .match(facilityFilter)
         .gt('expires_at', new Date().toISOString())
         .order('last_activity', { ascending: false })
 
-      // Calculate per-facility stats
       const stats: FacilityStats[] = facilities.map(facility => {
         const facilityErrors = (errors || []).filter(e => e.facility_id === facility.id)
         const facilityAudits = (audits || []).filter(a => a.facility_id === facility.id)
@@ -174,20 +153,16 @@ export default function GlobalSecurityDashboard() {
           ).length,
           audits: facilityAudits.length,
           failedLogins: facilityAudits.filter(a => 
-            a.action === 'login' && !a.success
+            a.action === 'auth.login_failed' || (a.action === 'login' && !a.success)
           ).length,
           activeSessions: facilitySessions.length,
         }
       })
 
-      // Get rate limit stats (client-side only)
-      const rateLimits = getRateLimitStats()
-
       setErrorLogs(errors || [])
       setAuditLogs(audits || [])
       setActiveSessions(sessions || [])
       setFacilityStats(stats)
-      setRateLimitStats(rateLimits)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
     } finally {
@@ -195,30 +170,19 @@ export default function GlobalSecurityDashboard() {
     }
   }
 
-  // Calculate aggregate stats
   const aggregateStats = {
     totalErrors: errorLogs.length,
     criticalErrors: errorLogs.filter(e => e.severity === 'critical' || e.severity === 'error').length,
     totalAudits: auditLogs.length,
     successfulAudits: auditLogs.filter(a => a.success).length,
     failedAudits: auditLogs.filter(a => !a.success).length,
-    failedLogins: auditLogs.filter(a => a.action === 'login' && !a.success).length,
+    failedLogins: auditLogs.filter(a => a.action === 'auth.login_failed' || (a.action === 'login' && !a.success)).length,
     totalSessions: activeSessions.length,
     savedSessions: activeSessions.filter(s => s.remember_me).length,
   }
 
-  const getTimeRangeLabel = (range: TimeRange) => {
-    const labels = {
-      '24h': 'Last 24 Hours',
-      '7d': 'Last 7 Days',
-      '30d': 'Last 30 Days',
-    }
-    return labels[range]
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
       <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -229,9 +193,7 @@ export default function GlobalSecurityDashboard() {
               </p>
             </div>
             
-            {/* Controls */}
             <div className="flex flex-wrap items-center gap-3">
-              {/* Facility Filter */}
               <select
                 value={selectedFacility}
                 onChange={(e) => setSelectedFacility(e.target.value)}
@@ -245,7 +207,6 @@ export default function GlobalSecurityDashboard() {
                 ))}
               </select>
 
-              {/* View Mode */}
               <div className="flex gap-2 bg-slate-100 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('aggregate')}
@@ -279,7 +240,6 @@ export default function GlobalSecurityDashboard() {
                 </button>
               </div>
 
-              {/* Time Range */}
               <div className="flex gap-2">
                 {(['24h', '7d', '30d'] as TimeRange[]).map((range) => (
                   <button
@@ -307,12 +267,9 @@ export default function GlobalSecurityDashboard() {
           </div>
         ) : (
           <>
-            {/* Aggregate View */}
             {viewMode === 'aggregate' && (
               <>
-                {/* Stats Overview */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  {/* Errors */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-medium text-slate-600">System Errors</h3>
@@ -324,7 +281,6 @@ export default function GlobalSecurityDashboard() {
                     <div className="text-sm text-red-600">{aggregateStats.criticalErrors} critical/error</div>
                   </div>
 
-                  {/* Audits */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-medium text-slate-600">User Actions</h3>
@@ -339,7 +295,6 @@ export default function GlobalSecurityDashboard() {
                     </div>
                   </div>
 
-                  {/* Sessions */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-medium text-slate-600">Active Users</h3>
@@ -351,7 +306,6 @@ export default function GlobalSecurityDashboard() {
                     <div className="text-sm text-slate-600">{aggregateStats.savedSessions} with remember me</div>
                   </div>
 
-                  {/* Failed Logins */}
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-medium text-slate-600">Failed Logins</h3>
@@ -360,13 +314,10 @@ export default function GlobalSecurityDashboard() {
                       </svg>
                     </div>
                     <div className="text-3xl font-bold text-slate-900 mb-2">{aggregateStats.failedLogins}</div>
-                    <div className="text-sm text-orange-600">
-                      {rateLimitStats?.emailBlocks?.length || 0} currently blocked
-                    </div>
+                    <div className="text-sm text-orange-600">Across all facilities</div>
                   </div>
                 </div>
 
-                {/* Main Content Tabs */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200">
                   <div className="border-b border-slate-200">
                     <nav className="flex gap-8 px-6" aria-label="Tabs">
@@ -394,7 +345,6 @@ export default function GlobalSecurityDashboard() {
                     </nav>
                   </div>
 
-                  {/* Tab Content */}
                   <div className="p-6">
                     {activeTab === 'errors' && (
                       <div className="overflow-x-auto">
@@ -441,6 +391,13 @@ export default function GlobalSecurityDashboard() {
                                 </td>
                               </tr>
                             ))}
+                            {errorLogs.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-8 text-center text-slate-500">
+                                  No errors found - great job! 🎉
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -492,6 +449,13 @@ export default function GlobalSecurityDashboard() {
                                 </td>
                               </tr>
                             ))}
+                            {auditLogs.length === 0 && (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-slate-500">
+                                  No audit logs found
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -544,6 +508,13 @@ export default function GlobalSecurityDashboard() {
                                 </td>
                               </tr>
                             ))}
+                            {activeSessions.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-8 text-center text-slate-500">
+                                  No active sessions
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -563,7 +534,7 @@ export default function GlobalSecurityDashboard() {
                           </thead>
                           <tbody className="divide-y divide-slate-200">
                             {auditLogs
-                              .filter(log => log.action === 'login' && !log.success)
+                              .filter(log => log.action === 'auth.login_failed' || (log.action === 'login' && !log.success))
                               .slice(0, 50)
                               .map((log) => (
                                 <tr key={log.id} className="hover:bg-slate-50">
@@ -594,6 +565,13 @@ export default function GlobalSecurityDashboard() {
                                   </td>
                                 </tr>
                               ))}
+                            {aggregateStats.failedLogins === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-8 text-center text-slate-500">
+                                  No failed logins - excellent security! 🔒
+                                </td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -603,7 +581,6 @@ export default function GlobalSecurityDashboard() {
               </>
             )}
 
-            {/* Facility Breakdown View */}
             {viewMode === 'facility' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {facilityStats
@@ -643,7 +620,6 @@ export default function GlobalSecurityDashboard() {
               </div>
             )}
 
-            {/* Comparison View */}
             {viewMode === 'comparison' && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="text-lg font-semibold text-slate-900 mb-6">Facility Comparison</h3>
@@ -663,7 +639,6 @@ export default function GlobalSecurityDashboard() {
                     <tbody className="divide-y divide-slate-200">
                       {facilityStats
                         .sort((a, b) => {
-                          // Health score: lower errors = higher score
                           const scoreA = Math.max(0, 100 - (a.criticalErrors * 10) - (a.failedLogins * 5))
                           const scoreB = Math.max(0, 100 - (b.criticalErrors * 10) - (b.failedLogins * 5))
                           return scoreB - scoreA
