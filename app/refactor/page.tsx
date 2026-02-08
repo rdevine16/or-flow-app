@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import DashboardLayout from '@/components/layouts/DashboardLayout'
+import Container from '@/components/ui/Container'
 import { IssueCard } from './IssueCard'
 import { ProgressBar, FilterBar } from './components'
 
@@ -113,133 +115,135 @@ export default function RefactorDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
-            ORbit Refactoring Assistant
-          </h1>
-          <p className="text-slate-600">
-            Guided code improvements with safety checks
-          </p>
-        </div>
-
-        {/* Scan Button */}
-        {issues.length === 0 && !scanning && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
-            <div className="max-w-md mx-auto">
-              <h2 className="text-xl font-semibold text-slate-900 mb-2">
-                Ready to scan your codebase?
-              </h2>
-              <p className="text-slate-600 mb-6">
-                This will analyze your app for refactoring opportunities
-              </p>
-              <button
-                onClick={handleScan}
-                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Start Scan
-              </button>
-            </div>
+    <DashboardLayout>
+      <Container className="py-8">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+              Refactoring Assistant
+            </h1>
+            <p className="text-slate-600">
+              Guided code improvements with safety checks
+            </p>
           </div>
-        )}
 
-        {/* Scanning State */}
-        {scanning && (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-slate-900 mb-2">
-                Scanning your codebase...
-              </h2>
-              <p className="text-slate-600">
-                This may take a minute
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Results */}
-        {issues.length > 0 && !scanning && (
-          <div className="space-y-6">
-            {/* Progress Overview */}
-            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Progress
-                  </h2>
-                  <p className="text-sm text-slate-600">
-                    {stats.fixed} of {stats.total} issues addressed
-                  </p>
-                </div>
+          {/* Scan Button */}
+          {issues.length === 0 && !scanning && (
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
+              <div className="max-w-md mx-auto">
+                <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                  Ready to scan your codebase?
+                </h2>
+                <p className="text-slate-600 mb-6">
+                  This will analyze your app for refactoring opportunities
+                </p>
                 <button
                   onClick={handleScan}
-                  className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                  className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  Re-scan
+                  Start Scan
                 </button>
               </div>
-              
-              <ProgressBar 
-                current={stats.fixed} 
-                total={stats.total} 
-              />
+            </div>
+          )}
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-3 gap-4 mt-6">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-700">
-                    {stats.byRisk.safe}
-                  </div>
-                  <div className="text-sm text-green-600">Safe to fix</div>
-                </div>
-                <div className="text-center p-4 bg-amber-50 rounded-lg">
-                  <div className="text-2xl font-bold text-amber-700">
-                    {stats.byRisk.review}
-                  </div>
-                  <div className="text-sm text-amber-600">Review needed</div>
-                </div>
-                <div className="text-center p-4 bg-red-50 rounded-lg">
-                  <div className="text-2xl font-bold text-red-700">
-                    {stats.byRisk.manual}
-                  </div>
-                  <div className="text-sm text-red-600">Manual only</div>
-                </div>
+          {/* Scanning State */}
+          {scanning && (
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-slate-900 mb-2">
+                  Scanning your codebase...
+                </h2>
+                <p className="text-slate-600">
+                  This may take a minute
+                </p>
               </div>
             </div>
+          )}
 
-            {/* Filters */}
-            <FilterBar
-              filter={filter}
-              onChange={setFilter}
-              stats={stats}
-            />
-
-            {/* Issues List */}
-            <div className="space-y-4">
-              {filteredIssues.length === 0 ? (
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
-                  <p className="text-slate-600">
-                    No issues match your filters
-                  </p>
+          {/* Results */}
+          {issues.length > 0 && !scanning && (
+            <div className="space-y-6">
+              {/* Progress Overview */}
+              <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">
+                      Progress
+                    </h2>
+                    <p className="text-sm text-slate-600">
+                      {stats.fixed} of {stats.total} issues addressed
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleScan}
+                    className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                  >
+                    Re-scan
+                  </button>
                 </div>
-              ) : (
-                filteredIssues.map(issue => (
-                  <IssueCard
-                    key={issue.id}
-                    issue={issue}
-                    isFixed={fixedIssues.has(issue.id)}
-                    onMarkFixed={() => markAsFixed(issue.id)}
-                    onMarkUnfixed={() => markAsUnfixed(issue.id)}
-                  />
-                ))
-              )}
+                
+                <ProgressBar 
+                  current={stats.fixed} 
+                  total={stats.total} 
+                />
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-3 gap-4 mt-6">
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <div className="text-2xl font-bold text-green-700">
+                      {stats.byRisk.safe}
+                    </div>
+                    <div className="text-sm text-green-600">Safe to fix</div>
+                  </div>
+                  <div className="text-center p-4 bg-amber-50 rounded-lg">
+                    <div className="text-2xl font-bold text-amber-700">
+                      {stats.byRisk.review}
+                    </div>
+                    <div className="text-sm text-amber-600">Review needed</div>
+                  </div>
+                  <div className="text-center p-4 bg-red-50 rounded-lg">
+                    <div className="text-2xl font-bold text-red-700">
+                      {stats.byRisk.manual}
+                    </div>
+                    <div className="text-sm text-red-600">Manual only</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <FilterBar
+                filter={filter}
+                onChange={setFilter}
+                stats={stats}
+              />
+
+              {/* Issues List */}
+              <div className="space-y-4">
+                {filteredIssues.length === 0 ? (
+                  <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
+                    <p className="text-slate-600">
+                      No issues match your filters
+                    </p>
+                  </div>
+                ) : (
+                  filteredIssues.map(issue => (
+                    <IssueCard
+                      key={issue.id}
+                      issue={issue}
+                      isFixed={fixedIssues.has(issue.id)}
+                      onMarkFixed={() => markAsFixed(issue.id)}
+                      onMarkUnfixed={() => markAsUnfixed(issue.id)}
+                    />
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </div>
+      </Container>
+    </DashboardLayout>
   )
 }
