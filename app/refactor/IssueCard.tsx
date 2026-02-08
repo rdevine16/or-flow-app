@@ -53,9 +53,56 @@ const typeLabels: Record<string, string> = {
   'sortable-table': 'Sortable Table → DataTable Component',
 }
 
+// ========================================
+// NEW: Parse step-by-step instructions
+// ========================================
+interface Step {
+  number: string
+  title: string
+  lineNumber?: string
+  code: string
+}
+
+function parseSteps(text: string): Step[] {
+  if (!text) return []
+  
+  const steps: Step[] = []
+  const lines = text.split('\n')
+  
+  let currentStep: Step | null = null
+  
+  lines.forEach(line => {
+    // Match step headers like "1. ADD IMPORT (Line 9):"
+    const stepMatch = line.match(/^(\d+)\.\s+(.*?)(?:\s+\(Line\s+(\d+)\))?:/)
+    if (stepMatch) {
+      if (currentStep != null) {
+        steps.push(currentStep)
+      }
+      currentStep = {
+        number: stepMatch[1],
+        title: stepMatch[2],
+        lineNumber: stepMatch[3],
+        code: ''
+      }
+    } else if (currentStep != null && line.trim()) {
+      // Accumulate code for current step (skip the header line)
+      if (!line.includes('STEP-BY-STEP FIX:') && !line.includes('Found ')) {
+        currentStep.code = (currentStep.code || '') + (currentStep.code ? '\n' : '') + line.trim()
+      }
+    }
+  })
+  
+  if (currentStep != null) {
+    steps.push(currentStep)
+  }
+  
+  return steps
+}
+
 export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedStep, setCopiedStep] = useState<string | null>(null)
   
   const config = riskConfig[issue.risk]
 
@@ -64,6 +111,22 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const handleCopyStep = async (code: string, stepNumber: string) => {
+    await navigator.clipboard.writeText(code)
+    setCopiedStep(stepNumber)
+    setTimeout(() => setCopiedStep(null), 2000)
+  }
+
+  // ========================================
+  // NEW: Separate step-by-step from other warnings
+  // ========================================
+  const stepByStepWarning = issue.warnings?.find(w => w.includes('STEP-BY-STEP FIX'))
+  const otherWarnings = issue.warnings?.filter(w => !w.includes('STEP-BY-STEP FIX')) || []
+  const steps = stepByStepWarning ? parseSteps(stepByStepWarning) : []
+
+  // Show related locations count if available
+  const relatedCount = issue.metadata?.relatedLocations?.length
 
   return (
     <div 
@@ -83,6 +146,11 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
               </h3>
               <p className="text-sm text-slate-600">
                 {issue.file}:{issue.line}
+                {relatedCount && relatedCount > 1 && (
+                  <span className="ml-2 text-blue-600">
+                    · {relatedCount} locations to update
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -91,13 +159,13 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
             {issue.description}
           </p>
 
-          {/* Warnings */}
-          {issue.warnings && issue.warnings.length > 0 && (
+          {/* Other Warnings (not step-by-step) */}
+          {otherWarnings.length > 0 && (
             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <div className="flex items-start gap-2">
                 <span className="text-amber-600 text-sm font-medium">⚠️ Warning:</span>
                 <div className="text-sm text-amber-700 space-y-1">
-                  {issue.warnings.map((warning, i) => (
+                  {otherWarnings.map((warning, i) => (
                     <div key={i}>{warning}</div>
                   ))}
                 </div>
@@ -129,6 +197,72 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
       {/* Expanded Content */}
       {expanded && (
         <div className="border-t border-slate-200">
+          
+          {/* ========================================
+              NEW: Step-by-Step Instructions
+              ======================================== */}
+          {steps.length > 0 && (
+            <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-slate-200">
+              <h4 className="font-semibold text-slate-900 flex items-center gap-2 mb-4">
+                <span className="text-xl">📋</span>
+                Step-by-Step Fix
+              </h4>
+              
+              <div className="space-y-3">
+                {steps.map((step) => (
+                  <div 
+                    key={step.number} 
+                    className="bg-white rounded-lg p-4 border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        {/* Step number badge */}
+                        <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          {step.number}
+                        </div>
+                        <div>
+                          <h5 className="font-semibold text-slate-900">{step.title}</h5>
+                          {step.lineNumber && (
+                            <p className="text-xs text-slate-500 mt-1">
+                              Line {step.lineNumber}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Copy button for this step */}
+                      <button
+                        onClick={() => handleCopyStep(step.code, step.number)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors"
+                      >
+                        {copiedStep === step.number ? (
+                          <>
+                            <CheckIcon className="w-3 h-3" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <ClipboardIcon className="w-3 h-3" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    
+                    {/* Code block */}
+                    {step.code && (
+                      <div className="bg-slate-900 rounded-lg p-3 overflow-x-auto">
+                        <pre className="text-sm font-mono text-slate-200">
+                          {step.code}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Context */}
           {issue.context && (
             <div className="p-4 bg-slate-50 border-b border-slate-200">
