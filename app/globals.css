@@ -502,3 +502,193 @@
 .animate-slide-up {
   animation: slideUp 0.3s ease-out;
 }
+ /* ============================================
+   LOGIN PAGE - Pure CSS (No Tailwind)
+   ============================================ */
+
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 1024px) {
+  .login-container {
+    flex-direction: row;
+  }
+}
+
+.login-dark-panel {
+  display: flex;
+  width: 100%;
+  background: linear-gradient(135deg, rgb(2, 6, 23) 0%, rgb(15, 23, 42) 50%, rgb(2, 6, 23) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .login-dark-panel {
+    width: 50%;
+  }
+}
+
+.login-dark-panel-glow-1 {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24rem;
+  height: 24rem;
+  background-color: rgb(59, 130, 246);
+  border-radius: 50%;
+  filter: blur(96px);
+  opacity: 0.05;
+}
+
+.login-dark-panel-glow-2 {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 24rem;
+  height: 24rem;
+  background-color: rgb(96, 165, 250);
+  border-radius: 50%;
+  filter: blur(96px);
+  opacity: 0.05;
+}
+
+.login-dark-panel-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.02;
+  background-image: 
+    linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+  background-size: 100px 100px;
+}
+
+.login-dark-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 4rem;
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 1s ease;
+}
+
+.login-logo {
+  margin-bottom: 2rem;
+}
+
+.login-logo img {
+  height: 8rem;
+  width: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 25px 25px rgb(0 0 0 / 0.15));
+}
+
+.login-slogan {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.login-slogan h1 {
+  font-size: 1.875rem;
+  font-weight: 300;
+  color: white;
+  letter-spacing: 0.025em;
+}
+
+@media (min-width: 768px) {
+  .login-slogan h1 {
+    font-size: 2.25rem;
+  }
+}
+
+.login-tagline {
+  text-align: center;
+  max-width: 28rem;
+}
+
+.login-tagline p {
+  font-size: 1rem;
+  color: rgb(148, 163, 184);
+  font-weight: 300;
+  line-height: 1.625;
+}
+
+.login-hipaa-badge {
+  margin-top: 3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.login-hipaa-divider {
+  height: 1px;
+  width: 3rem;
+  background: linear-gradient(to right, transparent, rgb(71, 85, 105));
+}
+
+.login-hipaa-divider-reverse {
+  background: linear-gradient(to left, transparent, rgb(71, 85, 105));
+}
+
+.login-hipaa-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(100, 116, 139);
+  font-size: 0.875rem;
+}
+
+.login-hipaa-icon {
+  width: 1rem;
+  height: 1rem;
+  color: rgb(52, 211, 153);
+}
+
+.login-form-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+}
+
+@media (min-width: 1024px) {
+  .login-form-panel {
+    width: 50%;
+  }
+}
+
+.login-form-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .login-form-container {
+    padding: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .login-form-container {
+    padding: 3rem;
+  }
+}
+
+.login-form-inner {
+  width: 100%;
+  max-width: 28rem;
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.7s ease;
+}

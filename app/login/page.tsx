@@ -227,27 +227,18 @@ export default function LoginPage() {
     return `Please wait ${minutes}m ${seconds}s before trying again.`
   }
 
-  return (
-<div className="min-h-screen flex flex-col lg:flex-row">
-      {/* Left Panel - Branding */}
-<div className="flex w-full lg:w-1/2 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
-        {/* Subtle geometric accent */}
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-400 rounded-full blur-3xl" />
-        </div>
-        
-        {/* Grid overlay for depth */}
-        <div 
-          className="absolute inset-0 opacity-[0.02]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-                             linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '100px 100px'
-          }}
-        />
-        
-        {/* Content Container */}
+return (
+  <div className="login-container">
+    {/* Left Panel - Branding */}
+    <div className="login-dark-panel">
+      {/* Glows */}
+      <div className="login-dark-panel-glow-1"></div>
+      <div className="login-dark-panel-glow-2"></div>
+      
+      {/* Grid overlay */}
+      <div className="login-dark-panel-grid"></div>
+      
+      {/* Content Container */}
         <div className={`relative z-10 flex flex-col items-center justify-center w-full px-16 transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           {/* Logo */}
           <div className="mb-8">
