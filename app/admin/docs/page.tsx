@@ -229,7 +229,7 @@ export default function AdminDocsPage() {
     setCategories(cats)
     setExpandedCategories(prev => {
       const next = new Set(prev)
-      cats.forEach(c => next.add(c.id))
+      cats.forEach(c => next.add(c.name))
       return next
     })
     setIsLoading(false)
