@@ -25,6 +25,9 @@ import {
 
 interface OverviewTabProps {
   metrics: FinancialsMetrics
+  onProcedureClick?: (procedureId: string) => void
+  onSurgeonClick?: (surgeonId: string) => void
+  // Aliases for flexibility
   onProcedureSelect?: (procedureId: string) => void
   onSurgeonSelect?: (surgeonId: string) => void
 }
@@ -67,9 +70,14 @@ function sortBy<T>(arr: T[], key: (item: T) => number | null, dir: SortDir): T[]
 
 export default function OverviewTab({
   metrics,
+  onProcedureClick,
+  onSurgeonClick,
   onProcedureSelect,
   onSurgeonSelect,
 }: OverviewTabProps) {
+  const handleProcedureSelect = onProcedureClick ?? onProcedureSelect
+  const handleSurgeonSelect = onSurgeonClick ?? onSurgeonSelect
+
   return (
     <div className="space-y-6">
       {/* P&L Summary */}
@@ -127,11 +135,11 @@ export default function OverviewTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TopProceduresTable
           procedures={metrics.procedureStats}
-          onSelect={onProcedureSelect}
+          onSelect={handleProcedureSelect}
         />
         <TopSurgeonsTable
           surgeons={metrics.surgeonStats}
-          onSelect={onSurgeonSelect}
+          onSelect={handleSurgeonSelect}
         />
       </div>
 
