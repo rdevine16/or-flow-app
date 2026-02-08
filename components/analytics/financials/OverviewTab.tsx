@@ -1,8 +1,4 @@
 // components/analytics/financials/OverviewTab.tsx
-// REDESIGNED: Replaced "Time = Money" gradient cards with P&L summary
-// ADDED: Profit per OR hour, margin %, cost breakdown
-// ADDED: Sortable procedure and surgeon tables
-// FIXED: Profit trend now shows per-case median + case count
 
 'use client'
 
@@ -11,12 +7,13 @@ import { FinancialsMetrics, ProcedureStats, SurgeonStats } from './types'
 import { formatCurrency } from './utils'
 import {
   InformationCircleIcon,
-  ChevronRightIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
   ChevronUpIcon,
   ChevronDownIcon,
-  ExclamationTriangleIcon,
+  BanknotesIcon,
+  ReceiptPercentIcon,
+  ClockIcon,
+  CurrencyDollarIcon,
+  ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -27,7 +24,6 @@ interface OverviewTabProps {
   metrics: FinancialsMetrics
   onProcedureClick?: (procedureId: string) => void
   onSurgeonClick?: (surgeonId: string) => void
-  // Aliases for flexibility
   onProcedureSelect?: (procedureId: string) => void
   onSurgeonSelect?: (surgeonId: string) => void
 }
@@ -47,11 +43,6 @@ function formatDuration(minutes: number | null): string {
 function formatPercent(value: number | null): string {
   if (value === null || value === undefined) return '—'
   return `${value.toFixed(1)}%`
-}
-
-function formatRate(value: number | null): string {
-  if (value === null || value === undefined) return '—'
-  return formatCurrency(value)
 }
 
 type SortDir = 'asc' | 'desc'
@@ -78,16 +69,54 @@ export default function OverviewTab({
   const handleProcedureSelect = onProcedureClick ?? onProcedureSelect
   const handleSurgeonSelect = onSurgeonClick ?? onSurgeonSelect
 
+  const totalCosts = metrics.totalDebits - metrics.totalCredits + metrics.totalORCost
+
   return (
     <div className="space-y-6">
-      {/* P&L Summary */}
-      <PLSummary metrics={metrics} />
+      {/* Financial Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <SummaryCard
+          label="Total Reimbursement"
+          value={formatCurrency(metrics.totalReimbursement)}
+          subtitle={`${metrics.totalCases} cases`}
+          icon={BanknotesIcon}
+        />
+        <SummaryCard
+          label="Total Costs"
+          value={formatCurrency(totalCosts)}
+          subtitle={`Avg ${formatCurrency(metrics.totalCases > 0 ? totalCosts / metrics.totalCases : 0)}/case`}
+          icon={ReceiptPercentIcon}
+          negative
+        />
+        <SummaryCard
+          label="Total Debits"
+          value={formatCurrency(metrics.totalDebits)}
+          subtitle="Implants & supplies"
+          icon={ArrowTrendingDownIcon}
+          negative
+        />
+        <SummaryCard
+          label="Total OR Cost"
+          value={formatCurrency(metrics.totalORCost)}
+          subtitle={`${formatCurrency(metrics.orRate)}/hr rate`}
+          icon={ClockIcon}
+          negative
+        />
+        <SummaryCard
+          label="Net Profit"
+          value={formatCurrency(metrics.totalProfit)}
+          subtitle={`${formatPercent(metrics.avgMargin)} margin`}
+          icon={CurrencyDollarIcon}
+          highlight={metrics.totalProfit >= 0}
+          negative={metrics.totalProfit < 0}
+        />
+      </div>
 
-      {/* Key Performance Indicators */}
+      {/* Secondary KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           label="Profit per OR Hour"
-          value={formatRate(metrics.profitPerORHour)}
+          value={metrics.profitPerORHour !== null ? formatCurrency(metrics.profitPerORHour) : '—'}
           tooltip="Total profit ÷ total OR hours. The single best measure of OR financial efficiency."
           highlight
         />
@@ -112,25 +141,6 @@ export default function OverviewTab({
         />
       </div>
 
-      {/* Outlier Alert Banner */}
-      {metrics.outlierStats.total > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 flex items-start gap-3">
-          <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-amber-900">
-              {metrics.outlierStats.total} outlier {metrics.outlierStats.total === 1 ? 'case' : 'cases'} detected
-            </p>
-            <p className="text-sm text-amber-700 mt-0.5">
-              {metrics.outlierStats.profitOutliers > 0 && `${metrics.outlierStats.profitOutliers} low-profit`}
-              {metrics.outlierStats.profitOutliers > 0 && metrics.outlierStats.durationOutliers > 0 && ' · '}
-              {metrics.outlierStats.durationOutliers > 0 && `${metrics.outlierStats.durationOutliers} over-time`}
-              {' — '}
-              excess time cost: {formatCurrency(metrics.excessTimeCost)}
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Two-Column: Top Procedures + Top Surgeons */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TopProceduresTable
@@ -152,122 +162,47 @@ export default function OverviewTab({
 }
 
 // ============================================
-// P&L SUMMARY — Enterprise waterfall-style
+// SUMMARY CARDS — Top-level financial metrics
 // ============================================
 
-function PLSummary({ metrics }: { metrics: FinancialsMetrics }) {
-  const netCost = metrics.totalDebits - metrics.totalCredits + metrics.totalORCost
-  
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-slate-200">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Financial Summary</h3>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {metrics.totalCases} cases in period
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">OR Rate</p>
-            <p className="text-sm font-semibold text-slate-700">
-              {formatCurrency(metrics.orRate)}/hr
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-6 py-5">
-        {/* Revenue */}
-        <div className="flex items-center justify-between py-2.5">
-          <span className="text-sm font-medium text-slate-700">Total Reimbursement</span>
-          <span className="text-sm font-semibold text-slate-900 tabular-nums">
-            {formatCurrency(metrics.totalReimbursement)}
-          </span>
-        </div>
-
-        {/* Cost Breakdown */}
-        <div className="border-t border-slate-100 mt-1 pt-1">
-          <PLRow label="Debits (implants, supplies)" value={-metrics.totalDebits} negative />
-          {metrics.totalCredits > 0 && (
-            <PLRow label="Credits (tech fees, rebates)" value={metrics.totalCredits} positive />
-          )}
-          <PLRow label="OR Time Cost" value={-metrics.totalORCost} negative />
-        </div>
-
-        {/* Total Costs */}
-        <div className="flex items-center justify-between py-2.5 border-t border-slate-200 mt-1">
-          <span className="text-sm font-medium text-slate-500">Total Costs</span>
-          <span className="text-sm font-semibold text-red-600 tabular-nums">
-            ({formatCurrency(netCost)})
-          </span>
-        </div>
-
-        {/* Net Profit */}
-        <div className="flex items-center justify-between py-3 border-t-2 border-slate-900 mt-1">
-          <span className="text-base font-bold text-slate-900">Net Profit</span>
-          <div className="text-right">
-            <span className={`text-lg font-bold tabular-nums ${
-              metrics.totalProfit >= 0 ? 'text-emerald-600' : 'text-red-600'
-            }`}>
-              {formatCurrency(metrics.totalProfit)}
-            </span>
-            <span className="text-sm text-slate-500 ml-2">
-              ({formatPercent(metrics.avgMargin)} margin)
-            </span>
-          </div>
-        </div>
-
-        {/* Per-Case Averages */}
-        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100">
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide">Avg Revenue/Case</p>
-            <p className="text-sm font-semibold text-slate-900 mt-1 tabular-nums">
-              {formatCurrency(metrics.totalCases > 0 ? metrics.totalReimbursement / metrics.totalCases : 0)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide">Avg Cost/Case</p>
-            <p className="text-sm font-semibold text-slate-900 mt-1 tabular-nums">
-              {formatCurrency(metrics.totalCases > 0 ? netCost / metrics.totalCases : 0)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wide">Avg Profit/Case</p>
-            <p className={`text-sm font-semibold mt-1 tabular-nums ${
-              metrics.avgProfit >= 0 ? 'text-emerald-600' : 'text-red-600'
-            }`}>
-              {formatCurrency(metrics.avgProfit)}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PLRow({
+function SummaryCard({
   label,
   value,
+  subtitle,
+  icon: Icon,
+  highlight,
   negative,
-  positive,
 }: {
   label: string
-  value: number
+  value: string
+  subtitle?: string
+  icon: React.ComponentType<{ className?: string }>
+  highlight?: boolean
   negative?: boolean
-  positive?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between py-2 pl-4">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className={`text-sm font-medium tabular-nums ${
-        positive ? 'text-emerald-600' : negative ? 'text-red-500' : 'text-slate-900'
+    <div className={`rounded-xl border p-5 shadow-sm ${
+      highlight ? 'bg-emerald-50 border-emerald-200' :
+      'bg-white border-slate-200'
+    }`}>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className={`w-4 h-4 ${
+          highlight ? 'text-emerald-600' :
+          negative ? 'text-red-400' :
+          'text-slate-400'
+        }`} />
+        <p className="text-sm font-medium text-slate-500">{label}</p>
+      </div>
+      <p className={`text-2xl font-bold tabular-nums ${
+        highlight ? 'text-emerald-700' :
+        negative ? 'text-red-600' :
+        'text-slate-900'
       }`}>
-        {positive && '+'}{formatCurrency(Math.abs(value))}
-        {negative && value !== 0 && (
-          <span className="text-slate-400 ml-0.5">−</span>
-        )}
-      </span>
+        {value}
+      </p>
+      {subtitle && (
+        <p className="text-xs text-slate-500 mt-1">{subtitle}</p>
+      )}
     </div>
   )
 }
@@ -498,14 +433,37 @@ function TopSurgeonsTable({
 }
 
 // ============================================
-// PROFIT TREND — with case count context
+// PROFIT TREND — Fixed chart rendering
 // ============================================
 
 function ProfitTrend({ data }: { data: FinancialsMetrics['profitTrend'] }) {
-  if (data.length === 0) return null
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
 
-  const maxProfit = Math.max(...data.map(d => d.profit), 1)
-  const maxCases = Math.max(...data.map(d => d.caseCount), 1)
+  // Filter out invalid entries, sort by date
+  const validData = useMemo(() => {
+    return [...data]
+      .filter(d => d.date && d.profit !== null && d.profit !== undefined)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [data])
+
+  if (validData.length < 2) return null
+
+  const maxProfit = Math.max(...validData.map(d => Math.abs(d.profit)), 1)
+  const hasNegative = validData.some(d => d.profit < 0)
+  const minProfit = hasNegative ? Math.min(...validData.map(d => d.profit)) : 0
+  const range = maxProfit - minProfit || 1
+
+  const formatDate = (dateStr: string) => {
+    try {
+      const [year, month, day] = dateStr.split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    } catch {
+      return dateStr
+    }
+  }
+
+  const labelInterval = Math.max(Math.ceil(validData.length / 6), 1)
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
@@ -516,47 +474,60 @@ function ProfitTrend({ data }: { data: FinancialsMetrics['profitTrend'] }) {
             <div className="w-3 h-2 rounded-sm bg-emerald-500" />
             <span>Profit</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-2 rounded-sm bg-slate-300" />
-            <span>Cases</span>
-          </div>
+          <span>{validData.length} days</span>
         </div>
       </div>
 
-      {/* Simple bar chart */}
-      <div className="flex items-end gap-1 h-32">
-        {data.map((d, i) => {
-          const profitHeight = Math.max((d.profit / maxProfit) * 100, 2)
-          const caseHeight = Math.max((d.caseCount / maxCases) * 100, 4)
+      <div className="relative">
+        <div className="flex items-end gap-[2px] h-40" onMouseLeave={() => setHoveredIdx(null)}>
+          {validData.map((d, i) => {
+            const barHeight = Math.max((Math.abs(d.profit) / range) * 100, 3)
+            const isNeg = d.profit < 0
+            const isHovered = hoveredIdx === i
 
-          return (
-            <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5 group relative">
-              {/* Tooltip */}
-              <div className="absolute bottom-full mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                <div className="font-semibold">{d.date}</div>
-                <div>{formatCurrency(d.profit)} · {d.caseCount} cases</div>
-                <div>{formatCurrency(d.caseCount > 0 ? d.profit / d.caseCount : 0)}/case</div>
-              </div>
-
-              {/* Profit bar */}
+            return (
               <div
-                className="w-full rounded-t bg-emerald-500/80 hover:bg-emerald-500 transition-colors"
-                style={{ height: `${profitHeight}%` }}
-              />
-            </div>
-          )
-        })}
+                key={d.date}
+                className="flex-1 flex flex-col items-center justify-end relative h-full"
+                onMouseEnter={() => setHoveredIdx(i)}
+              >
+                {isHovered && (
+                  <div className="absolute bottom-full mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg pointer-events-none whitespace-nowrap z-20 shadow-lg">
+                    <div className="font-semibold">{formatDate(d.date)}</div>
+                    <div className="mt-0.5">{formatCurrency(d.profit)}</div>
+                    <div className="text-slate-400">{d.caseCount} {d.caseCount === 1 ? 'case' : 'cases'}</div>
+                    {d.caseCount > 0 && (
+                      <div className="text-slate-400">{formatCurrency(d.profit / d.caseCount)}/case</div>
+                    )}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                  </div>
+                )}
+
+                <div
+                  className={`w-full rounded-t transition-all duration-150 ${
+                    isNeg 
+                      ? isHovered ? 'bg-red-500' : 'bg-red-400/70'
+                      : isHovered ? 'bg-emerald-500' : 'bg-emerald-500/70'
+                  }`}
+                  style={{ 
+                    height: `${barHeight}%`,
+                    minHeight: '3px',
+                  }}
+                />
+              </div>
+            )
+          })}
+        </div>
       </div>
 
-      {/* X-axis labels (show every few) */}
-      <div className="flex gap-1 mt-1">
-        {data.map((d, i) => (
+      <div className="flex gap-[2px] mt-2">
+        {validData.map((d, i) => (
           <div key={d.date} className="flex-1 text-center">
-            {(i === 0 || i === data.length - 1 || i % Math.max(Math.floor(data.length / 5), 1) === 0) && (
-              <span className="text-[10px] text-slate-400">
-                {new Date(d.date + 'T00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {(i === 0 || i === validData.length - 1 || i % labelInterval === 0) ? (
+              <span className="text-[10px] text-slate-400 leading-tight block">
+                {formatDate(d.date)}
               </span>
-            )}
+            ) : null}
           </div>
         ))}
       </div>
