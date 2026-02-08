@@ -253,6 +253,7 @@ interface ExtractedMetadata {
   components: string[]
   interactions: string[]
   api_routes: string[]
+  http_methods: string[]
   ios_exists: boolean
   ios_view_name: string | null
   calculation_engine: string | null
@@ -307,22 +308,22 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-  // ---- Category ----
-  let category = 'Shared'
+  // ---- Category (uses slug ids matching page_categories table) ----
+  let category = 'shared'
   if (scope === 'api') {
-    category = 'API Routes'
+    category = 'api-routes'
   } else if (scope === 'lib') {
-    category = 'Shared'
+    category = 'shared'
   } else if (scope === 'components') {
-    category = 'Shared'
+    category = 'shared'
   } else if (route.startsWith('/admin/settings') || route.startsWith('/admin/facilities') || route.startsWith('/admin/audit')) {
-    category = 'Global Admin'
+    category = 'global-admin'
   } else if (route.startsWith('/admin')) {
-    category = 'Admin'
+    category = 'admin'
   } else if (route === '/login' || route.startsWith('/auth')) {
-    category = 'Auth'
+    category = 'auth'
   }
-  if (/isGlobalAdmin/.test(source) && category === 'Shared') category = 'Global Admin'
+  if (/isGlobalAdmin/.test(source) && category === 'shared') category = 'global-admin'
   confidence['category'] = 'medium'
 
   // ---- Roles ----
@@ -426,6 +427,16 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
     keyValidations.push('recorded_at != NULL for milestone completion')
   }
 
+  // ---- HTTP methods (API routes) ----
+  const httpMethods: string[] = []
+  if (scope === 'api') {
+    if (/export\s+(?:async\s+)?function\s+GET\b/.test(source)) httpMethods.push('GET')
+    if (/export\s+(?:async\s+)?function\s+POST\b/.test(source)) httpMethods.push('POST')
+    if (/export\s+(?:async\s+)?function\s+PUT\b/.test(source)) httpMethods.push('PUT')
+    if (/export\s+(?:async\s+)?function\s+PATCH\b/.test(source)) httpMethods.push('PATCH')
+    if (/export\s+(?:async\s+)?function\s+DELETE\b/.test(source)) httpMethods.push('DELETE')
+  }
+
   // ---- Description hints ----
   let description = ''
   if (scope === 'api') {
@@ -457,6 +468,7 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
     components: Array.from(components).sort(),
     interactions,
     api_routes: Array.from(apiRoutes).sort(),
+    http_methods: httpMethods,
     ios_exists: false,
     ios_view_name: null,
     calculation_engine: calculationEngine,

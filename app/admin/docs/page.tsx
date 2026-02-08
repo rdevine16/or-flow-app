@@ -13,11 +13,24 @@ import {
   getPagesByTable,
   generateSlug,
   createEmptyPage,
-  PAGE_CATEGORIES,
+  detectDrift,
+  syncAutoFields,
+  exportRegistryJSON,
+  exportRegistryMarkdown,
+  fetchCategories,
+  insertCategory,
+  updateCategory,
+  deleteCategory,
+  generateCategorySlug,
+  DEFAULT_CATEGORIES,
+  CATEGORY_COLOR_OPTIONS,
   ROLE_OPTIONS,
   type PageEntry,
   type PageEntryInsert,
   type PageCategory,
+  type Category,
+  type CategoryInsert,
+  type DriftResult,
 } from '@/lib/pageRegistry'
 import {
   getTablesMetadata,
@@ -49,21 +62,15 @@ const icons = {
   search: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z",
   scan: "M7.5 3.75H6A2.25 2.25 0 003.75 6v1.5M16.5 3.75H18A2.25 2.25 0 0120.25 6v1.5m0 9V18A2.25 2.25 0 0118 20.25h-1.5m-9 0H6A2.25 2.25 0 013.75 18v-1.5",
   refresh: "M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182",
-  arrowUp: "M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18",
+  link: "M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.54a4.5 4.5 0 00-1.242-7.244l4.5-4.5a4.5 4.5 0 016.364 6.364l-1.757 1.757",
+  download: "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3",
+  warning: "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z",
+  tag: "M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3zM6 6h.008v.008H6V6z",
 }
 
 // =============================================================================
 // Constants
 // =============================================================================
-
-const CATEGORY_COLORS: Record<string, string> = {
-  'Surgeon-Facing': 'bg-blue-50 text-blue-700 border-blue-200',
-  'Admin': 'bg-amber-50 text-amber-700 border-amber-200',
-  'Global Admin': 'bg-red-50 text-red-700 border-red-200',
-  'Shared': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  'Auth': 'bg-violet-50 text-violet-700 border-violet-200',
-  'API Routes': 'bg-cyan-50 text-cyan-700 border-cyan-200',
-}
 
 const TAG_COLORS: Record<string, string> = {
   blue: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -75,15 +82,41 @@ const TAG_COLORS: Record<string, string> = {
   slate: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
+// Category color maps — Tailwind JIT-safe (no dynamic interpolation)
+const CATEGORY_BADGE_COLORS: Record<string, string> = {
+  blue: 'bg-blue-50 text-blue-700 border-blue-200',
+  amber: 'bg-amber-50 text-amber-700 border-amber-200',
+  red: 'bg-red-50 text-red-700 border-red-200',
+  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  violet: 'bg-violet-50 text-violet-700 border-violet-200',
+  cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  slate: 'bg-slate-100 text-slate-600 border-slate-200',
+  rose: 'bg-rose-50 text-rose-700 border-rose-200',
+  orange: 'bg-orange-50 text-orange-700 border-orange-200',
+  teal: 'bg-teal-50 text-teal-700 border-teal-200',
+}
+
+const DOT_COLORS: Record<string, string> = {
+  blue: 'bg-blue-500', amber: 'bg-amber-500', red: 'bg-red-500',
+  emerald: 'bg-emerald-500', violet: 'bg-violet-500', cyan: 'bg-cyan-500',
+  slate: 'bg-slate-400', rose: 'bg-rose-500', orange: 'bg-orange-500', teal: 'bg-teal-500',
+}
+
+function getCategoryColor(categories: Category[], categoryName: string): string {
+  const cat = categories.find(c => c.name === categoryName)
+  return CATEGORY_BADGE_COLORS[cat?.color || 'slate'] || CATEGORY_BADGE_COLORS.slate
+}
+
 const FORM_INPUT = 'w-full px-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200 placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-400'
 
-type DetailTab = 'overview' | 'database' | 'triggers' | 'platform'
+type DetailTab = 'overview' | 'database' | 'triggers' | 'platform' | 'dependencies'
 
 const TABS: { id: DetailTab; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: icons.cube },
   { id: 'database', label: 'Database', icon: icons.table },
   { id: 'triggers', label: 'Triggers & FKs', icon: icons.bolt },
   { id: 'platform', label: 'Platform', icon: icons.device },
+  { id: 'dependencies', label: 'Dependencies', icon: icons.link },
 ]
 
 // =============================================================================
@@ -122,6 +155,7 @@ export default function AdminDocsPage() {
 
   // Data state
   const [pages, setPages] = useState<PageEntry[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
@@ -129,7 +163,7 @@ export default function AdminDocsPage() {
   const [isLoadingMeta, setIsLoadingMeta] = useState(false)
 
   // UI state
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(PAGE_CATEGORIES))
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
   const [toasts, setToasts] = useState<Toast[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -138,6 +172,7 @@ export default function AdminDocsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
+  const [showCategoryManager, setShowCategoryManager] = useState(false)
 
   const toastIdRef = useRef(0)
 
@@ -147,25 +182,26 @@ export default function AdminDocsPage() {
     [pages, selectedPageId]
   )
 
-  const grouped = useMemo(() => groupByCategory(pages), [pages])
+  const grouped = useMemo(() => groupByCategory(pages, categories), [pages, categories])
 
   const filteredGrouped = useMemo(() => {
     if (!searchQuery.trim()) return grouped
     const q = searchQuery.toLowerCase()
-    const result: Record<string, PageEntry[]> = {}
-    for (const [cat, catPages] of Object.entries(grouped)) {
+    const result: [string, PageEntry[]][] = []
+    for (const [cat, catPages] of grouped) {
       const filtered = catPages.filter(
         p =>
           p.name.toLowerCase().includes(q) ||
           p.route.toLowerCase().includes(q) ||
           p.description.toLowerCase().includes(q) ||
           p.reads.some(t => t.toLowerCase().includes(q)) ||
-          p.writes.some(t => t.toLowerCase().includes(q))
+          p.writes.some(t => t.toLowerCase().includes(q)) ||
+          (categories.find(c => c.id === cat)?.name || cat).toLowerCase().includes(q)
       )
-      if (filtered.length > 0) result[cat] = filtered
+      if (filtered.length > 0) result.push([cat, filtered])
     }
     return result
-  }, [grouped, searchQuery])
+  }, [grouped, searchQuery, categories])
 
   // ============================================
   // Toast helper
@@ -182,8 +218,17 @@ export default function AdminDocsPage() {
   // ============================================
 
   const loadPages = useCallback(async () => {
-    const data = await fetchPages(supabase)
+    const [data, cats] = await Promise.all([
+      fetchPages(supabase),
+      fetchCategories(supabase),
+    ])
     setPages(data)
+    setCategories(cats)
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      cats.forEach(c => next.add(c.id))
+      return next
+    })
     setIsLoading(false)
   }, [supabase])
 
@@ -288,6 +333,24 @@ export default function AdminDocsPage() {
   }
 
   // ============================================
+  // Export handler
+  // ============================================
+
+  const handleExport = (format: 'json' | 'md') => {
+    const content = format === 'json'
+      ? exportRegistryJSON(pages, categories)
+      : exportRegistryMarkdown(pages, categories)
+    const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `orbit-registry.${format === 'json' ? 'json' : 'md'}`
+    a.click()
+    URL.revokeObjectURL(url)
+    addToast(`Exported as ${format.toUpperCase()}`, 'success')
+  }
+
+  // ============================================
   // Access guard
   // ============================================
 
@@ -343,6 +406,7 @@ export default function AdminDocsPage() {
           page={editingPage}
           isEdit={isEditMode}
           isSaving={isSaving}
+          categories={categories}
           onSave={handleSave}
           onClose={() => { setShowForm(false); setEditingPage(null) }}
         />
@@ -359,6 +423,16 @@ export default function AdminDocsPage() {
         />
       )}
 
+      {/* Category Manager Modal */}
+      {showCategoryManager && (
+        <CategoryManagerModal
+          supabase={supabase}
+          categories={categories}
+          onClose={() => { setShowCategoryManager(false); loadPages() }}
+          addToast={addToast}
+        />
+      )}
+
       <div className="flex h-[calc(100vh-7rem)] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* ================================================================ */}
         {/* LEFT PANEL — TOC                                                 */}
@@ -371,6 +445,13 @@ export default function AdminDocsPage() {
                 <h1 className="text-base font-semibold text-slate-800 tracking-tight">ORbit Docs</h1>
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowCategoryManager(true)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                  title="Manage categories"
+                >
+                  <Icon d={icons.tag} />
+                </button>
                 <button
                   onClick={() => setShowScanner(true)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
@@ -407,56 +488,80 @@ export default function AdminDocsPage() {
               <div className="flex items-center justify-center py-12">
                 <div className="w-5 h-5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
               </div>
-            ) : Object.keys(filteredGrouped).length === 0 ? (
+            ) : filteredGrouped.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-8">
                 {searchQuery ? 'No results' : 'No pages documented yet'}
               </p>
             ) : (
-              Object.entries(filteredGrouped).map(([category, catPages]) => (
-                <div key={category}>
-                  <button
-                    onClick={() => toggleCategory(category)}
-                    className="w-full flex items-center gap-2 px-2 py-2 text-[11px] font-semibold uppercase tracking-wider
-                               text-slate-400 hover:text-slate-600 transition-colors rounded"
-                  >
-                    <svg
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedCategories.has(category) ? 'rotate-90' : ''}`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              filteredGrouped.map(([categoryName, catPages]) => {
+                const catInfo = categories.find(c => c.name === categoryName)
+                return (
+                  <div key={categoryName}>
+                    <button
+                      onClick={() => toggleCategory(categoryName)}
+                      className="w-full flex items-center gap-2 px-2 py-2 text-[11px] font-semibold uppercase tracking-wider
+                                 text-slate-400 hover:text-slate-600 transition-colors rounded group"
+                      title={catInfo?.description || ''}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" d={icons.chevron} />
-                    </svg>
-                    <span>{category}</span>
-                    <span className="ml-auto text-slate-300 text-[10px]">{catPages.length}</span>
-                  </button>
-                  {expandedCategories.has(category) && (
-                    <div className="ml-3 space-y-0.5 mb-1">
-                      {catPages.map(page => (
-                        <button
-                          key={page.id}
-                          onClick={() => {
-                            setSelectedPageId(page.id)
-                            setActiveTab('overview')
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-all duration-150
-                            ${selectedPageId === page.id
-                              ? 'bg-white text-slate-900 font-medium shadow-sm border border-slate-200'
-                              : 'text-slate-500 hover:text-slate-700 hover:bg-white/60 border border-transparent'
-                            }`}
-                        >
-                          <div className="leading-snug">{page.name}</div>
-                          <div className="text-[11px] text-slate-400 mt-0.5 truncate font-mono">{page.route}</div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))
+                      <svg
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedCategories.has(categoryName) ? 'rotate-90' : ''}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d={icons.chevron} />
+                      </svg>
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${DOT_COLORS[catInfo?.color || 'slate'] || DOT_COLORS.slate}`} />
+                      <span className="truncate">{categoryName}</span>
+                      <span className="ml-auto text-slate-300 text-[10px]">{catPages.length}</span>
+                    </button>
+                    {expandedCategories.has(categoryName) && catInfo?.description && (
+                      <p className="px-2 ml-7 mb-1 text-[10px] text-slate-400 leading-tight">{catInfo.description}</p>
+                    )}
+                    {expandedCategories.has(categoryName) && (
+                      <div className="ml-3 space-y-0.5 mb-1">
+                        {catPages.map(page => (
+                          <button
+                            key={page.id}
+                            onClick={() => {
+                              setSelectedPageId(page.id)
+                              setActiveTab('overview')
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-all duration-150
+                              ${selectedPageId === page.id
+                                ? 'bg-white text-slate-900 font-medium shadow-sm border border-slate-200'
+                                : 'text-slate-500 hover:text-slate-700 hover:bg-white/60 border border-transparent'
+                              }`}
+                          >
+                            <div className="leading-snug">{page.name}</div>
+                            <div className="text-[11px] text-slate-400 mt-0.5 truncate font-mono">{page.route}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })
             )}
           </nav>
 
-          <div className="px-4 py-3 border-t border-slate-200 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>{pages.length} pages</span>
-            <span>{getAllUniqueTablesCount(pages)} tables</span>
+          <div className="px-4 py-3 border-t border-slate-200 text-[11px] text-slate-400">
+            <div className="flex items-center justify-between mb-2">
+              <span>{pages.length} entries</span>
+              <span>{getAllUniqueTablesCount(pages)} tables</span>
+            </div>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => handleExport('json')}
+                className="flex-1 px-2 py-1.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors text-center"
+              >
+                Export JSON
+              </button>
+              <button
+                onClick={() => handleExport('md')}
+                className="flex-1 px-2 py-1.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors text-center"
+              >
+                Export MD
+              </button>
+            </div>
           </div>
         </aside>
 
@@ -485,7 +590,7 @@ export default function AdminDocsPage() {
                   <div>
                     <div className="flex items-center gap-3 mb-1.5">
                       <h2 className="text-xl font-bold text-slate-800 tracking-tight">{selectedPage.name}</h2>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${CATEGORY_COLORS[selectedPage.category] || TAG_COLORS.slate}`}>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${getCategoryColor(categories, selectedPage.category)}`}>
                         {selectedPage.category}
                       </span>
                     </div>
@@ -549,6 +654,7 @@ export default function AdminDocsPage() {
                 <TriggersTab page={selectedPage} metadata={tableMetadata} isLoading={isLoadingMeta} />
               )}
               {activeTab === 'platform' && <PlatformTab page={selectedPage} />}
+              {activeTab === 'dependencies' && <DependenciesTab page={selectedPage} allPages={pages} />}
             </div>
           )}
         </main>
@@ -575,11 +681,12 @@ function getAllUniqueTablesCount(pages: PageEntry[]): number {
 // =============================================================================
 
 function PageFormModal({
-  page, isEdit, isSaving, onSave, onClose,
+  page, isEdit, isSaving, categories, onSave, onClose,
 }: {
   page: PageEntryInsert
   isEdit: boolean
   isSaving: boolean
+  categories: Category[]
   onSave: (page: PageEntryInsert) => void
   onClose: () => void
 }) {
@@ -655,7 +762,7 @@ function PageFormModal({
                   onChange={e => set('category', e.target.value)}
                   className={FORM_INPUT}
                 >
-                  {PAGE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
               </FormField>
             </div>
@@ -685,6 +792,15 @@ function PageFormModal({
             <TagInput label="Realtime Subscriptions" value={form.realtime} onChange={v => set('realtime', v)} placeholder="table name" />
             <TagInput label="Materialized Views" value={form.materialized_views} onChange={v => set('materialized_views', v)} placeholder="view name" />
             <TagInput label="API Routes" value={form.api_routes} onChange={v => set('api_routes', v)} placeholder="/api/route" />
+            {form.category === 'api-routes' && (
+              <FormField label="HTTP Methods">
+                <MultiCheckbox
+                  options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE']}
+                  selected={form.http_methods || []}
+                  onChange={v => set('http_methods', v)}
+                />
+              </FormField>
+            )}
           </FormSection>
 
           {/* Business Logic */}
@@ -865,6 +981,7 @@ interface ScannedMetadata {
   components: string[]
   interactions: string[]
   api_routes: string[]
+  http_methods: string[]
   ios_exists: boolean
   ios_view_name: string | null
   calculation_engine: string | null
@@ -893,16 +1010,19 @@ function ScannerModal({
   const [isScanning, setIsScanning] = useState(false)
   const [discoveredFiles, setDiscoveredFiles] = useState<DiscoveredFile[]>([])
   const [registeredRoutes, setRegisteredRoutes] = useState<Set<string>>(new Set())
+  const [registeredEntries, setRegisteredEntries] = useState<Map<string, PageEntry>>(new Map())
   const [scanningFile, setScanningFile] = useState<string | null>(null)
   const [scannedMeta, setScannedMeta] = useState<Record<string, ScannedMetadata>>({})
+  const [fileDrift, setFileDrift] = useState<Record<string, DriftResult[]>>({})
   const [isBulkImporting, setIsBulkImporting] = useState(false)
   const [hasScanned, setHasScanned] = useState(false)
   const [scopeFilter, setScopeFilter] = useState<'all' | 'pages' | 'api' | 'lib' | 'components'>('all')
 
-  // Load registered routes for comparison
+  // Load registry for comparison
   useEffect(() => {
     fetchPages(supabase).then(pages => {
       setRegisteredRoutes(new Set(pages.map(p => p.route)))
+      setRegisteredEntries(new Map(pages.map(p => [p.route, p])))
     })
   }, [supabase])
 
@@ -912,6 +1032,7 @@ function ScannerModal({
 
   const missingCount = filteredFiles.filter(p => !registeredRoutes.has(p.route)).length
   const syncedCount = filteredFiles.filter(p => registeredRoutes.has(p.route)).length
+  const driftCount = Object.values(fileDrift).filter(d => d.length > 0).length
 
   const scopeCounts = {
     all: discoveredFiles.length,
@@ -932,6 +1053,8 @@ function ScannerModal({
       const data = await res.json()
       setDiscoveredFiles(data.files || [])
       setHasScanned(true)
+      setScannedMeta({})
+      setFileDrift({})
     } catch (err: any) {
       addToast(err.message || 'Scan failed', 'error')
     }
@@ -939,7 +1062,7 @@ function ScannerModal({
   }
 
   const scanFile = async (filePath: string) => {
-    if (scannedMeta[filePath]) return // Already scanned
+    if (scannedMeta[filePath]) return
     setScanningFile(filePath)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -953,7 +1076,15 @@ function ScannerModal({
       })
       if (!res.ok) throw new Error('Scan failed')
       const data = await res.json()
-      setScannedMeta(prev => ({ ...prev, [filePath]: data.metadata }))
+      const meta = data.metadata as ScannedMetadata
+      setScannedMeta(prev => ({ ...prev, [filePath]: meta }))
+
+      // If registered, compute drift
+      const existing = registeredEntries.get(meta.route)
+      if (existing) {
+        const drift = detectDrift(existing, meta)
+        setFileDrift(prev => ({ ...prev, [filePath]: drift }))
+      }
     } catch (err: any) {
       addToast(`Failed to scan: ${err.message}`, 'error')
     }
@@ -961,13 +1092,13 @@ function ScannerModal({
   }
 
   const importFromScan = (meta: ScannedMetadata) => {
-    // Convert scanned metadata to PageEntryInsert
-    const { _scan_confidence, _source_lines, ...rest } = meta
+    const { _scan_confidence, _source_lines, _scope, ...rest } = meta
     const entry: PageEntryInsert = {
       ...rest,
-      category: rest.category as PageCategory,
+      category: rest.category || 'shared',
       description: rest.description || '',
       materialized_views: rest.materialized_views || [],
+      http_methods: rest.http_methods || [],
       ios_exists: rest.ios_exists || false,
       ios_view_name: rest.ios_view_name || null,
       ios_notes: null,
@@ -978,6 +1109,65 @@ function ScannerModal({
     onImport(entry)
   }
 
+  // Smart sync — update only auto-detected fields, preserve manual edits
+  const handleSmartSync = async (route: string, meta: ScannedMetadata) => {
+    const existing = registeredEntries.get(route)
+    if (!existing) return
+
+    const { _scan_confidence, _source_lines, _scope, ...scannedFields } = meta
+    const { error } = await syncAutoFields(supabase, existing.id, scannedFields)
+    if (error) {
+      addToast(`Sync failed: ${error}`, 'error')
+    } else {
+      addToast(`${existing.name} synced — manual fields preserved`, 'success')
+      // Refresh
+      const updated = await fetchPages(supabase)
+      setRegisteredRoutes(new Set(updated.map(p => p.route)))
+      setRegisteredEntries(new Map(updated.map(p => [p.route, p])))
+      // Clear drift for this file
+      const file = discoveredFiles.find(f => f.route === route)
+      if (file) {
+        setFileDrift(prev => ({ ...prev, [file.filePath]: [] }))
+      }
+    }
+  }
+
+  // Bulk sync — re-scan + sync all registered entries that have drift
+  const bulkSync = async () => {
+    setIsBulkImporting(true)
+    const registered = filteredFiles.filter(p => registeredRoutes.has(p.route))
+    let synced = 0
+
+    for (const file of registered) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/admin/scan-pages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({ filePath: file.filePath }),
+        })
+        if (!res.ok) continue
+        const data = await res.json()
+        const meta = data.metadata as ScannedMetadata
+        const existing = registeredEntries.get(file.route)
+        if (!existing) continue
+        const drift = detectDrift(existing, meta)
+        if (drift.length > 0) {
+          const { _scan_confidence, _source_lines, _scope, ...scannedFields } = meta
+          await syncAutoFields(supabase, existing.id, scannedFields)
+          synced++
+        }
+      } catch { /* skip */ }
+    }
+
+    addToast(`Synced ${synced} entries (manual fields preserved)`, 'success')
+    setIsBulkImporting(false)
+    onBulkDone()
+  }
+
   const bulkImport = async () => {
     setIsBulkImporting(true)
     const missing = filteredFiles.filter(p => !registeredRoutes.has(p.route))
@@ -985,7 +1175,6 @@ function ScannerModal({
 
     for (const page of missing) {
       try {
-        // Scan the file first
         const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch('/api/admin/scan-pages', {
           method: 'POST',
@@ -998,14 +1187,14 @@ function ScannerModal({
         if (!res.ok) continue
         const data = await res.json()
         const meta = data.metadata as ScannedMetadata
-        const { _scan_confidence, _source_lines, ...rest } = meta
+        const { _scan_confidence, _source_lines, _scope, ...rest } = meta
 
-        // Insert into registry
         const entry: PageEntryInsert = {
           ...rest,
-          category: rest.category as PageCategory,
+          category: rest.category || 'shared',
           description: rest.description || '',
           materialized_views: rest.materialized_views || [],
+          http_methods: rest.http_methods || [],
           ios_exists: false,
           ios_view_name: null,
           ios_notes: null,
@@ -1018,15 +1207,16 @@ function ScannerModal({
       } catch { /* skip failed */ }
     }
 
-    addToast(`Imported ${imported} of ${missing.length} pages`, 'success')
+    addToast(`Imported ${imported} of ${missing.length} entries`, 'success')
     setIsBulkImporting(false)
     onBulkDone()
   }
 
-  const confidenceColor = (level: string) => {
-    if (level === 'high') return 'text-emerald-600'
-    if (level === 'medium') return 'text-amber-600'
-    return 'text-slate-400'
+  // Stale check: file modified after registry updated_at
+  const isStale = (file: DiscoveredFile): boolean => {
+    const entry = registeredEntries.get(file.route)
+    if (!entry) return false
+    return new Date(file.lastModified) > new Date(entry.updated_at)
   }
 
   return (
@@ -1049,13 +1239,12 @@ function ScannerModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {!hasScanned ? (
-            /* Pre-scan state */
             <div className="text-center py-12">
               <Icon d={icons.scan} className="w-10 h-10 text-slate-300 mx-auto mb-4" />
               <h3 className="text-base font-medium text-slate-700 mb-2">Scan your codebase</h3>
               <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
-                Reads every page.tsx in your app directory, extracts table dependencies, components,
-                and metadata — then compares against the registry.
+                Reads every file in your project, extracts table dependencies, components,
+                and metadata — then compares against the registry for drift.
               </p>
               <button
                 onClick={runScan}
@@ -1076,7 +1265,6 @@ function ScannerModal({
               </button>
             </div>
           ) : (
-            /* Post-scan results */
             <div>
               {/* Scope filter tabs */}
               <div className="flex gap-1 mb-4">
@@ -1099,7 +1287,7 @@ function ScannerModal({
               </div>
 
               {/* Summary bar */}
-              <div className="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200 flex-wrap">
                 <div className="text-sm">
                   <span className="font-semibold text-slate-700">{filteredFiles.length}</span>
                   <span className="text-slate-500"> files</span>
@@ -1113,7 +1301,13 @@ function ScannerModal({
                   <span className="font-semibold text-emerald-600">{syncedCount}</span>
                   <span className="text-slate-500"> registered</span>
                 </div>
-                <div className="ml-auto flex gap-2">
+                {driftCount > 0 && (
+                  <div className="text-sm">
+                    <span className="font-semibold text-amber-600">{driftCount}</span>
+                    <span className="text-slate-500"> drifted</span>
+                  </div>
+                )}
+                <div className="ml-auto flex gap-2 flex-wrap">
                   <button
                     onClick={runScan}
                     disabled={isScanning}
@@ -1121,6 +1315,15 @@ function ScannerModal({
                   >
                     Re-scan
                   </button>
+                  {syncedCount > 0 && (
+                    <button
+                      onClick={bulkSync}
+                      disabled={isBulkImporting}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    >
+                      {isBulkImporting ? 'Syncing...' : 'Sync All Registered'}
+                    </button>
+                  )}
                   {missingCount > 0 && (
                     <button
                       onClick={bulkImport}
@@ -1142,43 +1345,57 @@ function ScannerModal({
 
               {/* File list */}
               <div className="space-y-1">
-                {filteredFiles.map(page => {
-                  const isRegistered = registeredRoutes.has(page.route)
-                  const meta = scannedMeta[page.filePath]
+                {filteredFiles.map(file => {
+                  const isRegistered = registeredRoutes.has(file.route)
+                  const meta = scannedMeta[file.filePath]
+                  const drift = fileDrift[file.filePath] || []
+                  const stale = isStale(file)
                   const isExpanded = !!meta
-                  const isLoadingThis = scanningFile === page.filePath
+                  const isLoadingThis = scanningFile === file.filePath
 
                   return (
-                    <div key={page.filePath} className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div key={file.filePath} className="border border-slate-200 rounded-lg overflow-hidden">
                       <button
-                        onClick={() => { if (!isRegistered) scanFile(page.filePath) }}
+                        onClick={() => scanFile(file.filePath)}
                         className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors
-                          ${isRegistered ? 'bg-emerald-50/50' : 'bg-white hover:bg-slate-50'}`}
+                          ${isRegistered ? 'bg-emerald-50/50 hover:bg-emerald-50' : 'bg-white hover:bg-slate-50'}`}
                       >
                         {/* Status dot */}
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isRegistered ? 'bg-emerald-500' : 'bg-red-400'}`} />
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0
+                          ${drift.length > 0 ? 'bg-amber-500' : isRegistered ? 'bg-emerald-500' : 'bg-red-400'}`}
+                        />
 
                         {/* Route */}
-                        <code className="font-mono text-xs text-slate-600 flex-1 truncate">{page.route}</code>
+                        <code className="font-mono text-xs text-slate-600 flex-1 truncate">{file.route}</code>
 
                         {/* File path */}
-                        <span className="text-[11px] text-slate-400 hidden sm:block truncate max-w-[200px]">
-                          {page.filePath}
+                        <span className="text-[11px] text-slate-400 hidden sm:block truncate max-w-[180px]">
+                          {file.filePath}
                         </span>
 
                         {/* Scope badge */}
                         <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border bg-slate-50 text-slate-500 border-slate-200 flex-shrink-0 uppercase tracking-wider">
-                          {page.scope}
+                          {file.scope}
                         </span>
+
+                        {/* Stale indicator */}
+                        {stale && isRegistered && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium flex-shrink-0"
+                                title="File modified after last registry update">
+                            STALE
+                          </span>
+                        )}
 
                         {/* Status badge */}
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border flex-shrink-0
-                          ${isRegistered
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-red-50 text-red-600 border-red-200'
+                          ${drift.length > 0
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : isRegistered
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-red-50 text-red-600 border-red-200'
                           }`}
                         >
-                          {isRegistered ? 'REGISTERED' : 'MISSING'}
+                          {drift.length > 0 ? 'DRIFT' : isRegistered ? 'SYNCED' : 'MISSING'}
                         </span>
 
                         {isLoadingThis && (
@@ -1186,9 +1403,48 @@ function ScannerModal({
                         )}
                       </button>
 
-                      {/* Expanded scan results */}
+                      {/* Expanded: scan results + drift details */}
                       {isExpanded && meta && (
                         <div className="px-4 pb-4 pt-2 border-t border-slate-100 bg-slate-50/50">
+                          {/* Drift details for registered entries */}
+                          {isRegistered && drift.length > 0 && (
+                            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Icon d={icons.warning} className="w-4 h-4 text-amber-600" />
+                                <span className="text-xs font-semibold text-amber-800">
+                                  {drift.length} field{drift.length !== 1 ? 's' : ''} drifted from registry
+                                </span>
+                              </div>
+                              <div className="space-y-1.5">
+                                {drift.map(d => (
+                                  <div key={d.field} className="text-xs">
+                                    <span className="font-mono font-semibold text-amber-700">{d.field}</span>
+                                    <div className="ml-4 mt-0.5 flex gap-4">
+                                      <span className="text-red-600">
+                                        Registry: {Array.isArray(d.registryValue) ? d.registryValue.join(', ') || '(empty)' : String(d.registryValue ?? 'null')}
+                                      </span>
+                                      <span className="text-emerald-700">
+                                        Code: {Array.isArray(d.scannedValue) ? d.scannedValue.join(', ') || '(empty)' : String(d.scannedValue ?? 'null')}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {isRegistered && drift.length === 0 && (
+                            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <Icon d={icons.check} className="w-4 h-4 text-emerald-600" />
+                                <span className="text-xs font-medium text-emerald-700">
+                                  Registry matches code — no drift detected
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Scanned data preview */}
                           <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
                             <div>
                               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Name</span>
@@ -1199,12 +1455,7 @@ function ScannerModal({
                               <div className="text-sm text-slate-700">{meta.category}</div>
                             </div>
                             <div>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                                Reads
-                                <span className={`ml-1 ${confidenceColor(meta._scan_confidence.reads)}`}>
-                                  ({meta._scan_confidence.reads})
-                                </span>
-                              </span>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Reads</span>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {meta.reads.length > 0 ? meta.reads.map(t => (
                                   <code key={t} className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-mono">{t}</code>
@@ -1212,12 +1463,7 @@ function ScannerModal({
                               </div>
                             </div>
                             <div>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                                Writes
-                                <span className={`ml-1 ${confidenceColor(meta._scan_confidence.writes)}`}>
-                                  ({meta._scan_confidence.writes})
-                                </span>
-                              </span>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Writes</span>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {meta.writes.length > 0 ? meta.writes.map(t => (
                                   <code key={t} className="text-[11px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-mono">{t}</code>
@@ -1234,6 +1480,16 @@ function ScannerModal({
                                 </div>
                               </div>
                             )}
+                            {meta.http_methods.length > 0 && (
+                              <div>
+                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">HTTP Methods</span>
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {meta.http_methods.map(m => (
+                                    <span key={m} className="text-[11px] px-1.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded font-semibold">{m}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                             {meta.components.length > 0 && (
                               <div>
                                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Components</span>
@@ -1245,16 +1501,30 @@ function ScannerModal({
                               </div>
                             )}
                           </div>
+
+                          {/* Action buttons */}
                           <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => importFromScan(meta)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
-                            >
-                              <Icon d={icons.plus} className="w-3 h-3" />
-                              Import to Registry
-                            </button>
+                            {isRegistered && drift.length > 0 ? (
+                              <button
+                                onClick={() => handleSmartSync(file.route, meta)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
+                              >
+                                <Icon d={icons.refresh} className="w-3 h-3" />
+                                Sync Auto Fields
+                              </button>
+                            ) : !isRegistered ? (
+                              <button
+                                onClick={() => importFromScan(meta)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
+                              >
+                                <Icon d={icons.plus} className="w-3 h-3" />
+                                Import to Registry
+                              </button>
+                            ) : null}
                             <span className="text-[11px] text-slate-400">
-                              {meta._source_lines} lines • Review before saving
+                              {meta._source_lines} lines
+                              {isRegistered && drift.length > 0 && ' • Only code-detected fields will update'}
+                              {!isRegistered && ' • Review before saving'}
                             </span>
                           </div>
                         </div>
@@ -1270,6 +1540,249 @@ function ScannerModal({
     </Overlay>
   )
 }
+
+
+// =============================================================================
+// Category Manager Modal
+// =============================================================================
+
+function CategoryManagerModal({
+  supabase,
+  categories,
+  onClose,
+  addToast,
+}: {
+  supabase: any
+  categories: Category[]
+  onClose: () => void
+  addToast: (msg: string, type: 'success' | 'error') => void
+}) {
+  const [cats, setCats] = useState<Category[]>(categories)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [isAdding, setIsAdding] = useState(false)
+  const [form, setForm] = useState({ name: '', description: '', color: 'slate', display_order: 0 })
+  const [isSaving, setIsSaving] = useState(false)
+
+  const reload = async () => {
+    const data = await fetchCategories(supabase)
+    setCats(data)
+  }
+
+  const startEdit = (cat: Category) => {
+    setEditingId(cat.id)
+    setForm({ name: cat.name, description: cat.description, color: cat.color, display_order: cat.display_order })
+    setIsAdding(false)
+  }
+
+  const startAdd = () => {
+    setIsAdding(true)
+    setEditingId(null)
+    setForm({ name: '', description: '', color: 'slate', display_order: cats.length + 1 })
+  }
+
+  const cancel = () => {
+    setEditingId(null)
+    setIsAdding(false)
+    setForm({ name: '', description: '', color: 'slate', display_order: 0 })
+  }
+
+  const handleSave = async () => {
+    if (!form.name.trim()) return
+    setIsSaving(true)
+
+    if (isAdding) {
+      const slug = generateSlug(form.name)
+      const { error } = await insertCategory(supabase, {
+        id: slug,
+        name: form.name.trim(),
+        description: form.description.trim(),
+        color: form.color,
+        display_order: form.display_order,
+      })
+      if (error) addToast(`Error: ${error}`, 'error')
+      else {
+        addToast(`"${form.name}" created`, 'success')
+        await reload()
+        cancel()
+      }
+    } else if (editingId) {
+      const { error } = await updateCategory(supabase, editingId, {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        color: form.color,
+        display_order: form.display_order,
+      })
+      if (error) addToast(`Error: ${error}`, 'error')
+      else {
+        addToast(`"${form.name}" updated`, 'success')
+        await reload()
+        cancel()
+      }
+    }
+
+    setIsSaving(false)
+  }
+
+  const handleDelete = async (cat: Category) => {
+    if (!confirm(`Delete "${cat.name}"? Pages using this category won't be deleted but will show an unrecognized category slug.`)) return
+    const { error } = await deleteCategory(supabase, cat.id)
+    if (error) addToast(`Error: ${error}`, 'error')
+    else {
+      addToast(`"${cat.name}" deleted`, 'success')
+      await reload()
+    }
+  }
+
+  // Color picker inline component
+  const ColorPicker = () => (
+    <div className="flex items-center gap-3">
+      <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider flex-shrink-0">Color</label>
+      <div className="flex gap-1.5 flex-wrap">
+        {CATEGORY_COLOR_OPTIONS.map(opt => (
+          <button
+            key={opt.id}
+            onClick={() => setForm(prev => ({ ...prev, color: opt.id }))}
+            className={`w-6 h-6 rounded-full border-2 transition-all ${DOT_COLORS[opt.id] || DOT_COLORS.slate}
+              ${form.color === opt.id ? 'border-slate-800 scale-110 ring-2 ring-slate-300' : 'border-transparent hover:border-slate-300'}`}
+            title={opt.label}
+          />
+        ))}
+      </div>
+    </div>
+  )
+
+  // Inline edit form
+  const EditForm = ({ isNew }: { isNew: boolean }) => (
+    <div className={`p-4 border rounded-lg space-y-3 ${isNew ? 'border-dashed border-slate-300 bg-slate-50/50' : 'border-slate-300 bg-slate-50'}`}>
+      <div>
+        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1 block">Name</label>
+        <input
+          type="text"
+          value={form.name}
+          onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))}
+          placeholder="Category name"
+          className={FORM_INPUT}
+          autoFocus
+        />
+      </div>
+      <div>
+        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1 block">Description</label>
+        <textarea
+          value={form.description}
+          onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="What belongs in this category?"
+          rows={2}
+          className={FORM_INPUT}
+        />
+      </div>
+      <ColorPicker />
+      <div className="flex items-center gap-3">
+        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider flex-shrink-0">Sort Order</label>
+        <input
+          type="number"
+          value={form.display_order}
+          onChange={e => setForm(prev => ({ ...prev, display_order: parseInt(e.target.value) || 0 }))}
+          className={`${FORM_INPUT} w-20`}
+        />
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={handleSave}
+          disabled={isSaving || !form.name.trim()}
+          className="px-3 py-1.5 text-xs font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+        >
+          {isSaving ? 'Saving...' : isNew ? 'Create' : 'Save'}
+        </button>
+        <button onClick={cancel} className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <Overlay onClose={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-3">
+            <Icon d={icons.tag} className="w-5 h-5 text-slate-500" />
+            <h2 className="text-lg font-semibold text-slate-800">Categories</h2>
+            <span className="text-xs text-slate-400">{cats.length} total</span>
+          </div>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+            <Icon d={icons.x} className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="space-y-2">
+            {cats.map(cat => {
+              if (editingId === cat.id) {
+                return <div key={cat.id}><EditForm isNew={false} /></div>
+              }
+              return (
+                <div
+                  key={cat.id}
+                  className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50/50 transition-colors group"
+                >
+                  <span className={`w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${
+                    DOT_COLORS[cat.color] || DOT_COLORS.slate
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">{cat.name}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">{cat.id}</span>
+                    </div>
+                    {cat.description && (
+                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{cat.description}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <button
+                      onClick={() => startEdit(cat)}
+                      className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                      title="Edit"
+                    >
+                      <Icon d={icons.pencil} className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cat)}
+                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                      title="Delete"
+                    >
+                      <Icon d={icons.trash} className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+
+            {isAdding && <EditForm isNew />}
+          </div>
+        </div>
+
+        {/* Footer */}
+        {!isAdding && !editingId && (
+          <div className="px-6 py-3 border-t border-slate-200">
+            <button
+              onClick={startAdd}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
+            >
+              <Icon d={icons.plus} className="w-4 h-4" />
+              New Category
+            </button>
+          </div>
+        )}
+      </div>
+    </Overlay>
+  )
+}
+
 
 // =============================================================================
 // Overlay
@@ -1439,6 +1952,12 @@ function OverviewTab({ page }: { page: PageEntry }) {
             <div>
               <Label>API Routes</Label>
               <TagList items={page.api_routes} color="red" />
+            </div>
+          )}
+          {page.http_methods && page.http_methods.length > 0 && (
+            <div>
+              <Label>HTTP Methods</Label>
+              <TagList items={page.http_methods} color="purple" />
             </div>
           )}
         </div>
@@ -1784,7 +2303,113 @@ function PlatformTab({ page }: { page: PageEntry }) {
 }
 
 // =============================================================================
-// Shared UI
+// Dependencies Tab — reverse lookup by table
+// =============================================================================
+
+function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEntry[] }) {
+  const allTables = [...new Set([...page.reads, ...page.writes])]
+
+  return (
+    <div className="space-y-5">
+      <Section title="Table Impact Map">
+        <p className="text-sm text-slate-500 mb-4">
+          Every table this entry touches and what else depends on it.
+          Useful before schema changes.
+        </p>
+        {allTables.length === 0 ? (
+          <p className="text-sm text-slate-400 italic">No table dependencies declared.</p>
+        ) : (
+          <div className="space-y-4">
+            {allTables.map(table => {
+              const dependents = getPagesByTable(allPages, table).filter(p => p.id !== page.id)
+              const isRead = page.reads.includes(table)
+              const isWrite = page.writes.includes(table)
+              return (
+                <div key={table} className="border border-slate-200 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <code className="text-sm font-mono font-semibold text-slate-700">{table}</code>
+                    <div className="flex gap-1">
+                      {isRead && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-medium">
+                          READ
+                        </span>
+                      )}
+                      {isWrite && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium">
+                          WRITE
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {dependents.length > 0 ? (
+                    <div>
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Also used by ({dependents.length})
+                      </span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {dependents.map(dep => (
+                          <span
+                            key={dep.id}
+                            className="inline-flex items-center gap-1.5 text-xs px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg"
+                          >
+                            <span className="text-slate-600 font-medium">{dep.name}</span>
+                            <span className="text-slate-400">
+                              {dep.reads.includes(table) && dep.writes.includes(table) ? 'R/W'
+                                : dep.reads.includes(table) ? 'R' : 'W'}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400">No other entries use this table</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Section>
+
+      {page.api_routes.length > 0 && (
+        <Section title="API Dependencies">
+          <div className="space-y-2">
+            {page.api_routes.map(route => (
+              <div key={route} className="flex items-center gap-2">
+                <code className="text-xs font-mono px-2 py-1 bg-cyan-50 border border-cyan-200 rounded text-cyan-700">{route}</code>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {page.components.length > 0 && (
+        <Section title="Component Dependencies">
+          <div className="flex flex-wrap gap-2">
+            {page.components.map(comp => {
+              // Find if this component is documented
+              const compEntry = allPages.find(p =>
+                p.name.toLowerCase().replace(/\s/g, '') === comp.toLowerCase() ||
+                p.route.endsWith('/' + comp)
+              )
+              return (
+                <span
+                  key={comp}
+                  className={`text-xs px-2 py-1 rounded-lg border font-medium
+                    ${compEntry ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
+                >
+                  {comp}
+                  {compEntry && <span className="ml-1 text-emerald-400">✓</span>}
+                </span>
+              )
+            })}
+          </div>
+        </Section>
+      )}
+    </div>
+  )
+}
+
 // =============================================================================
 
 function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
