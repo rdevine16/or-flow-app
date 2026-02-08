@@ -12,6 +12,7 @@ import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
 
 import {
   FlagIcon,
@@ -377,7 +378,7 @@ export default function FlagsReportPage() {
     fetchFlags(start, end)
   }, [effectiveFacilityId])
 
-  const handleDateFilterChange = (filter: string, startDate?: string, endDate?: string) => {
+  const handleDateFilterChange = (filter: string, startDate: string, endDate: string) => {
     setDateFilter(filter)
     setCurrentStartDate(startDate)
     setCurrentEndDate(endDate)
@@ -651,8 +652,7 @@ export default function FlagsReportPage() {
                 </p>
               </div>
             </div>
-            <DateFilterWithCustom selectedFilter={dateFilter} onFilterChange={handleDateFilterChange} />
-          </div>
+<DateRangeSelector value={dateFilter} onChange={handleDateFilterChange} />          </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-24">

@@ -1,11 +1,13 @@
-// components/analytics/financials/DateRangeSelector.tsx
+// components/ui/DateRangeSelector.tsx
+// Shared date range selector used across all analytics pages.
+// Provides preset ranges + custom date picker with unified onChange API.
 
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { CalendarDaysIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
-interface DateRangeSelectorProps {
+export interface DateRangeSelectorProps {
   value: string
   onChange: (range: string, startDate: string, endDate: string) => void
 }
@@ -14,7 +16,7 @@ interface DateRangeSelectorProps {
 // DATE HELPERS
 // ============================================
 
-function toDateStr(date: Date): string {
+export function toDateStr(date: Date): string {
   return date.toISOString().split('T')[0]
 }
 
@@ -22,7 +24,7 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
-function getPresetDates(preset: string): { start: string; end: string; label: string } {
+export function getPresetDates(preset: string): { start: string; end: string; label: string } {
   const today = startOfDay(new Date())
   const end = toDateStr(today)
 
@@ -113,6 +115,27 @@ function formatDisplayDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/**
+ * Given a start/end date, compute the equivalent previous period for comparison.
+ * E.g., if current = Jan 15 - Jan 30 (15 days), prev = Dec 31 - Jan 14
+ */
+export function getPrevPeriodDates(startDate: string, endDate: string): { prevStart: string; prevEnd: string } {
+  const start = new Date(startDate + 'T00:00:00')
+  const end = new Date(endDate + 'T00:00:00')
+  const periodMs = end.getTime() - start.getTime()
+  const periodDays = Math.ceil(periodMs / (1000 * 60 * 60 * 24))
+
+  const prevEnd = new Date(start)
+  prevEnd.setDate(prevEnd.getDate() - 1)
+  const prevStart = new Date(prevEnd)
+  prevStart.setDate(prevStart.getDate() - periodDays)
+
+  return {
+    prevStart: toDateStr(prevStart),
+    prevEnd: toDateStr(prevEnd),
+  }
 }
 
 // ============================================

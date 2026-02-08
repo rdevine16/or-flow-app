@@ -11,6 +11,8 @@ import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { useSurgeons, useProcedureTypes } from '@/hooks'
+import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
+
 
 // Tremor components
 import {
@@ -45,7 +47,6 @@ import {
   EnhancedMetricCard,
   TrendPill,
   RadialProgress,
-  PeriodSelector,
   SurgeonSelector,
   ConsistencyBadge,
   InlineBar,
@@ -107,63 +108,6 @@ function formatDateDisplay(dateStr: string): string {
   return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })
 }
 
-function getDateRange(period: string): { startDate: string; endDate: string; prevStartDate: string; prevEndDate: string; label: string } {
-  const today = new Date()
-  let startDate: Date
-  let endDate = today
-  let prevStartDate: Date
-  let prevEndDate: Date
-  let label: string
-
-  switch (period) {
-    case 'week':
-      startDate = new Date(today)
-      startDate.setDate(today.getDate() - 7)
-      prevEndDate = new Date(startDate)
-      prevEndDate.setDate(prevEndDate.getDate() - 1)
-      prevStartDate = new Date(prevEndDate)
-      prevStartDate.setDate(prevEndDate.getDate() - 6)
-      label = 'Last 7 Days'
-      break
-    case 'month':
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1)
-      prevEndDate = new Date(startDate)
-      prevEndDate.setDate(prevEndDate.getDate() - 1)
-      prevStartDate = new Date(prevEndDate.getFullYear(), prevEndDate.getMonth(), 1)
-      label = 'This Month'
-      break
-    case 'quarter':
-      const currentQuarter = Math.floor(today.getMonth() / 3)
-      startDate = new Date(today.getFullYear(), currentQuarter * 3, 1)
-      prevEndDate = new Date(startDate)
-      prevEndDate.setDate(prevEndDate.getDate() - 1)
-      prevStartDate = new Date(prevEndDate.getFullYear(), Math.floor(prevEndDate.getMonth() / 3) * 3, 1)
-      label = 'This Quarter'
-      break
-    case 'year':
-      startDate = new Date(today.getFullYear(), 0, 1)
-      prevEndDate = new Date(startDate)
-      prevEndDate.setDate(prevEndDate.getDate() - 1)
-      prevStartDate = new Date(prevEndDate.getFullYear(), 0, 1)
-      label = 'This Year'
-      break
-    default:
-      startDate = new Date(today.getFullYear(), today.getMonth(), 1)
-      prevEndDate = new Date(startDate)
-      prevEndDate.setDate(prevEndDate.getDate() - 1)
-      prevStartDate = new Date(prevEndDate.getFullYear(), prevEndDate.getMonth(), 1)
-      label = 'This Month'
-  }
-
-  return {
-    startDate: startDate.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0],
-    prevStartDate: prevStartDate.toISOString().split('T')[0],
-    prevEndDate: prevEndDate.toISOString().split('T')[0],
-    label,
-  }
-}
-
 function getConsistencyLabel(avgSeconds: number | null, stddevSeconds: number | null): { label: string; color: string } {
   if (!avgSeconds || !stddevSeconds || avgSeconds === 0) {
     return { label: 'N/A', color: 'text-slate-400' }
@@ -198,95 +142,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
-  )
-}
-
-// ============================================
-// ENHANCED PERIOD SELECTOR WITH CUSTOM OPTION
-// ============================================
-
-interface DateFilterProps {
-  selectedPeriod: string
-  onPeriodChange: (period: string) => void
-  customStartDate?: string
-  customEndDate?: string
-  onCustomDateChange?: (start: string, end: string) => void
-}
-
-function PeriodSelectorWithCustom({ 
-  selectedPeriod, 
-  onPeriodChange,
-  customStartDate,
-  customEndDate,
-  onCustomDateChange 
-}: DateFilterProps) {
-  const [showCustom, setShowCustom] = useState(selectedPeriod === 'custom')
-  const [localStart, setLocalStart] = useState(customStartDate || '')
-  const [localEnd, setLocalEnd] = useState(customEndDate || '')
-
-  const presetOptions = [
-    { value: 'week', label: '1W' },
-    { value: 'month', label: '1M' },
-    { value: 'quarter', label: '3M' },
-    { value: 'year', label: '1Y' },
-  ]
-
-  const handlePresetChange = (value: string) => {
-    setShowCustom(false)
-    onPeriodChange(value)
-  }
-
-  const handleApplyCustom = () => {
-    if (localStart && localEnd && onCustomDateChange) {
-      onCustomDateChange(localStart, localEnd)
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex items-center gap-1">
-        <PeriodSelector
-          options={presetOptions}
-          selected={showCustom ? '' : selectedPeriod}
-          onChange={handlePresetChange}
-        />
-        <button
-          onClick={() => setShowCustom(!showCustom)}
-          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-            showCustom
-              ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-          }`}
-        >
-          Custom
-        </button>
-      </div>
-
-      {showCustom && (
-        <div className="flex items-center gap-2 ml-2">
-          <input
-            type="date"
-            value={localStart}
-            onChange={(e) => setLocalStart(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow"
-          />
-          <span className="text-slate-400 text-sm">to</span>
-          <input
-            type="date"
-            value={localEnd}
-            onChange={(e) => setLocalEnd(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow"
-          />
-          <button
-            onClick={handleApplyCustom}
-            disabled={!localStart || !localEnd}
-            className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Apply
-          </button>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -326,9 +181,13 @@ export default function SurgeonPerformancePage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'day'>('overview')
   
   // Overview tab state
-  const [timePeriod, setTimePeriod] = useState('month')
-  const [customStartDate, setCustomStartDate] = useState<string>('')
-  const [customEndDate, setCustomEndDate] = useState<string>('')
+  const [dateRange, setDateRange] = useState('mtd')
+  const [overviewStart, setOverviewStart] = useState(() => {
+  const { start } = getPresetDates('mtd'); return start
+  })
+  const [overviewEnd, setOverviewEnd] = useState(() => {
+  const { end } = getPresetDates('mtd'); return end
+})
   const [periodCases, setPeriodCases] = useState<CaseWithMilestones[]>([])
   const [prevPeriodCases, setPrevPeriodCases] = useState<CaseWithMilestones[]>([])
   const [procedureBreakdown, setProcedureBreakdown] = useState<ProcedureBreakdown[]>([])
@@ -408,26 +267,18 @@ export default function SurgeonPerformancePage() {
 
   // Helper to get date range (handles custom dates)
   const getEffectiveDateRange = () => {
-    if (timePeriod === 'custom' && customStartDate && customEndDate) {
-      const start = new Date(customStartDate)
-      const end = new Date(customEndDate)
-      const periodLength = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-      
-      const prevEnd = new Date(start)
-      prevEnd.setDate(prevEnd.getDate() - 1)
-      const prevStart = new Date(prevEnd)
-      prevStart.setDate(prevStart.getDate() - periodLength)
-
-      return {
-        startDate: customStartDate,
-        endDate: customEndDate,
-        prevStartDate: prevStart.toISOString().split('T')[0],
-        prevEndDate: prevEnd.toISOString().split('T')[0],
-        label: `${formatDateDisplay(customStartDate)} - ${formatDateDisplay(customEndDate)}`,
-      }
-    }
-    return getDateRange(timePeriod)
-  }
+  const { prevStart, prevEnd } = getPrevPeriodDates(overviewStart, overviewEnd)
+  const { label } = getPresetDates(dateRange)
+  return {
+startDate: overviewStart,
+endDate: overviewEnd,
+prevStartDate: prevStart,
+prevEndDate: prevEnd,
+label: dateRange === 'custom'
+? `${formatDateDisplay(overviewStart)} – ${formatDateDisplay(overviewEnd)}`
+: label,
+   }
+ }
 
   // Fetch Overview data
   useEffect(() => {
@@ -472,14 +323,13 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
     }
 
     fetchOverviewData()
-  }, [selectedSurgeon, timePeriod, customStartDate, customEndDate, effectiveFacilityId, activeTab])
-
+}, [selectedSurgeon, overviewStart, overviewEnd, effectiveFacilityId, activeTab])
   // Handle custom date change
-  const handleCustomDateChange = (start: string, end: string) => {
-    setCustomStartDate(start)
-    setCustomEndDate(end)
-    setTimePeriod('custom')
-  }
+const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
+  setDateRange(range)
+  setOverviewStart(startDate)
+  setOverviewEnd(endDate)
+}
 
   // Fetch Day Analysis data
   useEffect(() => {
@@ -986,13 +836,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                 <div className="space-y-6">
                   {/* Period Selector */}
                   <div className="flex justify-end">
-                    <PeriodSelectorWithCustom
-                      selectedPeriod={timePeriod}
-                      onPeriodChange={setTimePeriod}
-                      customStartDate={customStartDate}
-                      customEndDate={customEndDate}
-                      onCustomDateChange={handleCustomDateChange}
-                    />
+<DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
                   </div>
 
                   {/* KPI Cards */}

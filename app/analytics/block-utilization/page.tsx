@@ -14,6 +14,7 @@ import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { CalendarDaysIcon } from '@heroicons/react/24/outline'
 import { useSurgeons } from '@/hooks'
 import { AreaChart, BarChart } from '@tremor/react'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import {
   CalendarDays,
   Clock,
@@ -48,7 +49,6 @@ import {
 import {
   SectionHeader,
   EnhancedMetricCard,
-  PeriodSelector,
   SurgeonSelector,
   InsightCard,
   EmptyState,
@@ -1277,8 +1277,12 @@ export default function BlockUtilizationPage() {
   // State
   const [loading, setLoading] = useState(true)
   const [selectedSurgeonId, setSelectedSurgeonId] = useState<string>('all')
-  const [periodDays, setPeriodDays] = useState('30')
-  const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
+const [dateRange, setDateRange] = useState('last_30')
+const [dateStart, setDateStart] = useState(() => {
+const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]
+})
+const [dateEnd, setDateEnd] = useState(() => new Date().toISOString().split('T')[0])  
+const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
   const [activeTab, setActiveTab] = useState<'block' | 'room'>('block')
 
   // Data
@@ -1291,14 +1295,13 @@ export default function BlockUtilizationPage() {
   const [rooms, setRooms] = useState<ORRoomRow[]>([])
   const [roomSchedules, setRoomSchedules] = useState<RoomScheduleRow[]>([])
 
-  const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
+  const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
+  setDateRange(range)
+  setDateStart(startDate)
+  setDateEnd(endDate)
+}
 
-  const periodOptions = [
-    { label: '1M', value: '30' },
-    { label: '3M', value: '90' },
-    { label: '6M', value: '180' },
-    { label: '1Y', value: '365' },
-  ]
+  const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
 
   // Load all data
   useEffect(() => {
@@ -1343,11 +1346,8 @@ export default function BlockUtilizationPage() {
 
     async function loadData() {
       setLoading(true)
-      const endDate = new Date()
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() - parseInt(periodDays))
-      const startStr = toDateStr(startDate)
-      const endStr = toDateStr(endDate)
+      const startStr = dateStart
+      const endStr = dateEnd
 
       try {
         const [
@@ -1451,7 +1451,7 @@ export default function BlockUtilizationPage() {
     }
 
     loadData()
-  }, [facilityId, periodDays, supabase])
+  }, [facilityId, dateStart, dateEnd, supabase])
 
 
   // ============================================
@@ -1469,9 +1469,8 @@ export default function BlockUtilizationPage() {
       }
     }
 
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - parseInt(periodDays))
+    const startDate = new Date(dateStart + 'T00:00:00')
+    const endDate = new Date(dateEnd + 'T00:00:00')
 
     const surgeonMap = new Map<string, string>()
     for (const s of surgeons) {
@@ -1549,8 +1548,7 @@ export default function BlockUtilizationPage() {
     const weeklyTrends = calculateWeeklyTrends(allBlockDays)
 
     return { surgeonUtilizations, allBlockDays, weeklyTrends, whatFitsMap, surgeonTurnovers }
-  }, [blockSchedules, cases, closures, holidays, surgeons, facilityId, periodDays, facilityMilestoneNames, reimbursements])
-
+}, [blockSchedules, cases, closures, holidays, surgeons, facilityId, dateStart, dateEnd, facilityMilestoneNames, reimbursements])
 
   // ============================================
   // COMPUTED: Room Utilization (NEW)
@@ -1559,9 +1557,8 @@ export default function BlockUtilizationPage() {
   const roomUtilizations = useMemo(() => {
     if (rooms.length === 0 || !facilityId) return [] as RoomUtilization[]
 
-    const endDate = new Date()
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - parseInt(periodDays))
+    const startDate = new Date(dateStart + 'T00:00:00')
+    const endDate = new Date(dateEnd + 'T00:00:00')
 
     const closureDates = new Set<string>(closures.map(c => c.closure_date))
     const holidayDates = resolveHolidayDates(holidays, startDate, endDate)
@@ -1571,7 +1568,7 @@ export default function BlockUtilizationPage() {
       computedData.allBlockDays, facilityMilestoneNames,
       closureDates, holidayDates, startDate, endDate
     )
-  }, [cases, rooms, roomSchedules, computedData.allBlockDays, closures, holidays, facilityId, periodDays, facilityMilestoneNames])
+   }, [cases, rooms, roomSchedules, computedData.allBlockDays, closures, holidays, facilityId, dateStart, dateEnd, facilityMilestoneNames])
 
 
   // ============================================
@@ -1691,11 +1688,7 @@ export default function BlockUtilizationPage() {
                 </>
               )}
             </div>
-            <PeriodSelector
-              options={periodOptions}
-              selected={periodDays}
-              onChange={setPeriodDays}
-            />
+<DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
           </div>
 
 
@@ -1724,7 +1717,7 @@ export default function BlockUtilizationPage() {
                   <EmptyState
                     icon={<Activity className="w-8 h-8" />}
                     title="No Block Activity"
-                    description={`No active block days found in the last ${periodDays} days. Try expanding the time period.`}
+                    description="No active block days found in this date range. Try expanding the time period."
                   />
                 )
               ) : (

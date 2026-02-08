@@ -1,3 +1,4 @@
+//app/analytics/financials/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -19,7 +20,7 @@ import {
   SubTab 
 } from '@/components/analytics/financials/types'
 import { useFinancialsMetrics } from '@/components/analytics/financials/useFinancialsMetrics'
-import DateRangeSelector from '@/components/analytics/financials/DateRangeSelector'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import OverviewTab from '@/components/analytics/financials/OverviewTab'
 import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'

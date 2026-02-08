@@ -7,6 +7,7 @@ import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
 
 // Tremor components
 import {
@@ -71,117 +72,6 @@ interface ProcedureTechnique {
   id: string
   name: string
   display_name: string
-}
-
-// ============================================
-// DATE FILTER WITH CUSTOM OPTION
-// ============================================
-
-interface DateFilterProps {
-  selectedFilter: string
-  onFilterChange: (filter: string, startDate?: string, endDate?: string) => void
-}
-
-function DateFilterWithCustom({ selectedFilter, onFilterChange }: DateFilterProps) {
-  const [customStart, setCustomStart] = useState('')
-  const [customEnd, setCustomEnd] = useState('')
-  const [showCustom, setShowCustom] = useState(selectedFilter === 'custom')
-
-  const presets = [
-    { value: 'week', label: 'Last 7 Days' },
-    { value: 'month', label: 'This Month' },
-    { value: 'quarter', label: 'This Quarter' },
-    { value: 'year', label: 'This Year' },
-    { value: 'custom', label: 'Custom Range' },
-  ]
-
-  const handlePresetChange = (value: string) => {
-    if (value === 'custom') {
-      setShowCustom(true)
-      // Don't trigger filter change yet - wait for dates
-    } else {
-      setShowCustom(false)
-      const { startDate, endDate } = getDateRangeFromPreset(value)
-      onFilterChange(value, startDate, endDate)
-    }
-  }
-
-  const handleCustomApply = () => {
-    if (customStart && customEnd) {
-      onFilterChange('custom', customStart, customEnd)
-    }
-  }
-
-  const getDateRangeFromPreset = (preset: string) => {
-    const today = new Date()
-    let startDate: Date
-    let endDate = today
-
-    switch (preset) {
-      case 'week':
-        startDate = new Date(today)
-        startDate.setDate(today.getDate() - 7)
-        break
-      case 'month':
-        startDate = new Date(today.getFullYear(), today.getMonth(), 1)
-        break
-      case 'quarter':
-        const currentQuarter = Math.floor(today.getMonth() / 3)
-        startDate = new Date(today.getFullYear(), currentQuarter * 3, 1)
-        break
-      case 'year':
-        startDate = new Date(today.getFullYear(), 0, 1)
-        break
-      default:
-        startDate = new Date(today.getFullYear(), today.getMonth(), 1)
-    }
-
-    return {
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <select
-        value={showCustom ? 'custom' : selectedFilter}
-        onChange={(e) => handlePresetChange(e.target.value)}
-        className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-      >
-        {presets.map((preset) => (
-          <option key={preset.value} value={preset.value}>
-            {preset.label}
-          </option>
-        ))}
-      </select>
-
-      {showCustom && (
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={customStart}
-            onChange={(e) => setCustomStart(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-          />
-          <span className="text-slate-400 text-sm">to</span>
-          <input
-            type="date"
-            value={customEnd}
-            onChange={(e) => setCustomEnd(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-          />
-          <button
-            onClick={handleCustomApply}
-            disabled={!customStart || !customEnd}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Apply
-          </button>
-        </div>
-      )}
-    </div>
-  )
 }
 
 // ============================================
@@ -668,7 +558,7 @@ case_milestones (
     fetchData(start, end)
   }, [effectiveFacilityId])
 
-  const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
+  const handleFilterChange = (filter: string, startDate: string, endDate: string) => {
     setDateFilter(filter)
     setCurrentStartDate(startDate)
     setCurrentEndDate(endDate)
@@ -869,7 +759,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     {
       title: 'KPI Overview',
       description: 'Complete dashboard with all key performance indicators, targets, and daily trends',
-      href: '/analytics/overview',
+      href: '/analytics/kpi',
       icon: PresentationChartLineIcon,
       accentColor: 'blue',
       badge: 'Full Report',
@@ -955,7 +845,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                 Performance insights and operational metrics
               </p>
             </div>
-            <DateFilterWithCustom selectedFilter={dateFilter} onFilterChange={handleFilterChange} />
+            <DateRangeSelector value={dateFilter} onChange={handleFilterChange} />
           </div>
 
           {loading ? (
