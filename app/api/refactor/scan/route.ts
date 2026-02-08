@@ -148,7 +148,7 @@ function findConsoleLogs(
       if (!match) return
 
       const type = match[1]
-      const message = match[2].trim()
+      const rawMessage = match[2].trim()
 
       // Determine risk level
       let risk: RiskLevel = 'safe'
@@ -224,35 +224,70 @@ function findConsoleLogs(
         instruction: 'Replace this console statement with the toast call'
       })
 
+      // ========================================
+      // FIXED: Generate proper message syntax
+      // ========================================
+      
+      // Parse the message to handle different formats
+      let messageCode = ''
+      
+      // Check if message contains an error variable (e.g., "error", "err", "e")
+      const hasErrorVar = /,\s*(error|err|e)\s*\)?\s*$/.test(rawMessage)
+      
+      if (hasErrorVar) {
+        // Extract the string part and error variable
+        const parts = rawMessage.split(',').map(p => p.trim())
+        const errorVar = parts[parts.length - 1].replace(/\)$/, '').trim()
+        const stringParts = parts.slice(0, -1)
+        
+        if (stringParts.length > 0) {
+          // Has both string and error variable
+          const stringPart = stringParts.join(', ').replace(/^['"`]|['"`]$/g, '')
+          messageCode = `\`${stringPart} \${${errorVar}.message || ${errorVar}}\``
+        } else {
+          // Just error variable
+          messageCode = `${errorVar}.message || String(${errorVar})`
+        }
+      } else {
+        // Just a string message
+        messageCode = rawMessage
+      }
+
       // Generate suggested fix
       let toastType = 'info'
       let afterCode = ''
+      let toastTitle = 'Notification'
 
       if (type === 'error') {
         toastType = 'error'
-        afterCode = `showToast({ 
-  type: 'error', 
+        toastTitle = 'Error'
+        afterCode = `showToast({
+  type: 'error',
   title: 'Error',
-  message: ${message}
+  message: ${messageCode}
 })`
       } else if (type === 'warn') {
         toastType = 'warning'
-        afterCode = `showToast({ 
-  type: 'warning', 
+        toastTitle = 'Warning'
+        afterCode = `showToast({
+  type: 'warning',
   title: 'Warning',
-  message: ${message}
+  message: ${messageCode}
 })`
       } else {
         // Infer from message content
-        if (message.toLowerCase().includes('success') || 
-            message.toLowerCase().includes('saved') ||
-            message.toLowerCase().includes('deleted') ||
-            message.toLowerCase().includes('created')) {
+        const lowerMessage = rawMessage.toLowerCase()
+        if (lowerMessage.includes('success') || 
+            lowerMessage.includes('saved') ||
+            lowerMessage.includes('deleted') ||
+            lowerMessage.includes('created')) {
           toastType = 'success'
+          toastTitle = 'Success'
         }
-        afterCode = `showToast({ 
-  type: '${toastType}', 
-  title: ${message}
+        afterCode = `showToast({
+  type: '${toastType}',
+  title: '${toastTitle}',
+  message: ${messageCode}
 })`
       }
 

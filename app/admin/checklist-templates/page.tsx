@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 
 // =====================================================
 // TYPES
@@ -375,6 +377,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
 // =====================================================
 // MAIN COMPONENT
 // =====================================================
+const { showToast } = useToast()
 
 export default function ChecklistTemplatesPage() {
   const router = useRouter()
@@ -452,13 +455,17 @@ export default function ChecklistTemplatesPage() {
         .select()
         .single()
 
-      if (error) {
-        console.error('Error creating template:', error)
-      } else {
-        setFields(prev => [...prev, data])
-        setSuccessMessage('Template created')
-        setTimeout(() => setSuccessMessage(null), 3000)
-      }
+if (error) {
+  showToast({
+    type: 'error',
+    title: 'Error',
+    message: `Error creating template: ${error.message || error}`
+  })
+} else {
+  setFields(prev => [...prev, data])
+  setSuccessMessage('Template created')
+  setTimeout(() => setSuccessMessage(null), 3000)
+}
     } else if (editingField) {
       // Update existing template
       const { error } = await supabase
