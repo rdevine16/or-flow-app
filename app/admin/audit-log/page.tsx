@@ -8,7 +8,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { Spinner } from '@/components/ui/Loading'
-
+import { usePagination } from '@/hooks/usePagination'
 
 interface AuditLogEntry {
   id: string
@@ -97,12 +97,10 @@ export default function GlobalAuditLogPage() {
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [expandedLog, setExpandedLog] = useState<string | null>(null)
-  const pageSize = 50
+const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
-  // Filters
-  const [dateFrom, setDateFrom] = useState('')
+// Filters
+const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [actionFilter, setActionFilter] = useState('')
   const [facilityFilter, setFacilityFilter] = useState('')
@@ -181,52 +179,53 @@ export default function GlobalAuditLogPage() {
     setLoading(false)
   }, [currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter, supabase])
 
-  const exportToCSV = async () => {
-    // Fetch all matching logs for export (up to 10000)
-    let query = supabase
-      .from('audit_log')
-      .select('*, facility:facilities(name)')
-      .order('created_at', { ascending: false })
-      .limit(10000)
+const pageSize = 50
 
-    if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00`)
-    if (dateTo) query = query.lte('created_at', `${dateTo}T23:59:59`)
-    if (actionFilter) query = query.eq('action', actionFilter)
-    if (facilityFilter) query = query.eq('facility_id', facilityFilter)
-    if (successFilter === 'success') query = query.eq('success', true)
-    else if (successFilter === 'failed') query = query.eq('success', false)
+const exportToCSV = async () => {
+  // Fetch all matching logs for export (up to 10000)
+  let query = supabase
+    .from('audit_log')
+    .select('*, facility:facilities(name)')
+    .order('created_at', { ascending: false })
+    .limit(10000)
 
-    const { data } = await query
+  if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00`)
+  if (dateTo) query = query.lte('created_at', `${dateTo}T23:59:59`)
+  if (actionFilter) query = query.eq('action', actionFilter)
+  if (facilityFilter) query = query.eq('facility_id', facilityFilter)
+  if (successFilter === 'success') query = query.eq('success', true)
+  else if (successFilter === 'failed') query = query.eq('success', false)
 
-    if (!data) return
+  const { data } = await query
 
-   const headers = ['Date', 'Time', 'Facility', 'User', 'Action', 'Target', 'Old Values', 'New Values', 'Success', 'Error']
-const rows = data.map((log: AuditLogEntry) => [
-  formatDate(log.created_at),
-  formatTime(log.created_at),
-  (log.facility as { name: string } | null)?.name || 'Global',
-  log.user_email,
-  log.action,
-  log.target_label || '',
-  log.old_values ? JSON.stringify(log.old_values) : '',
-  log.new_values ? JSON.stringify(log.new_values) : '',
-  log.success ? 'Yes' : 'No',
-  log.error_message || '',
-])
+  if (!data) return
 
-const csvContent = [
-  headers.join(','),
-  ...rows.map((row: string[]) => row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
-].join('\n')
+  const headers = ['Date', 'Time', 'Facility', 'User', 'Action', 'Target', 'Old Values', 'New Values', 'Success', 'Error']
+  const rows = data.map((log: AuditLogEntry) => [
+    formatDate(log.created_at),
+    formatTime(log.created_at),
+    (log.facility as { name: string } | null)?.name || 'Global',
+    log.user_email,
+    log.action,
+    log.target_label || '',
+    log.old_values ? JSON.stringify(log.old_values) : '',
+    log.new_values ? JSON.stringify(log.new_values) : '',
+    log.success ? 'Yes' : 'No',
+    log.error_message || '',
+  ])
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = `audit-log-global-${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
-  }
+  const csvContent = [
+    headers.join(','),
+    ...rows.map((row: string[]) => row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+  ].join('\n')
 
-  const totalPages = Math.ceil(totalCount / pageSize)
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `audit-log-global-${new Date().toISOString().split('T')[0]}.csv`
+  link.click()
+}
+
 
   // Filter logs by search query (client-side)
   const filteredLogs = searchQuery
@@ -237,6 +236,15 @@ const csvContent = [
         (log.facility as { name: string } | null)?.name?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : logs
+
+      const { 
+    currentItems: paginatedLogs,
+    currentPage, 
+    totalPages, 
+    nextPage, 
+    previousPage,
+    goToPage 
+  } = usePagination(filteredLogs, 50) 
 
   if (userLoading || (!isGlobalAdmin && !userLoading)) {
     return (
@@ -401,7 +409,7 @@ const csvContent = [
             </div>
 
             <div className="divide-y divide-slate-100">
-              {filteredLogs.map((log) => (
+{paginatedLogs.map((log) => (
                 <div key={log.id} className="hover:bg-slate-50 transition-colors">
                   <div
                     className="px-4 py-3 flex items-center gap-4 cursor-pointer"
@@ -550,8 +558,8 @@ const csvContent = [
               First
             </button>
             <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+  onClick={previousPage}
+  disabled={currentPage === 1}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
@@ -559,16 +567,16 @@ const csvContent = [
             <span className="px-3 py-1.5 text-sm text-slate-600">
               Page {currentPage} of {totalPages}
             </span>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
+<button
+  onClick={nextPage}
+  disabled={currentPage === totalPages}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
+<button
+  onClick={() => goToPage(totalPages)}
+  disabled={currentPage === totalPages}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Last
