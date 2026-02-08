@@ -7,8 +7,11 @@
  * - Server-side error logging
  * - Performance monitoring
  * - Custom event tracking
+ * - Multi-facility support
  * - Integration with Sentry (optional)
  */
+
+import { createClient } from '@/lib/supabase'
 
 // Error severity levels
 export enum ErrorSeverity {
@@ -26,7 +29,8 @@ export enum ErrorCategory {
   API = 'api',
   VALIDATION = 'validation',
   NETWORK = 'network',
-  UNKNOWN = 'unknown',
+  SYSTEM = 'system',
+  GENERAL = 'general',
 }
 
 interface ErrorContext {
@@ -35,6 +39,7 @@ interface ErrorContext {
   route?: string
   action?: string
   url?: string
+  facilityId?: string | null
   metadata?: Record<string, any>
 }
 
@@ -47,6 +52,7 @@ interface ErrorLog {
   stack?: string
   context: ErrorContext
   userAgent?: string
+  facilityId?: string | null
 }
 
 /**
@@ -69,15 +75,44 @@ class ErrorLogger {
   }
   
   /**
+   * Get current user's facility_id (null for global admins)
+   */
+  private async getCurrentFacilityId(): Promise<string | null> {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      if (!user) return null
+      
+      const { data: userData } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
+      
+      // Return null for global admins (no facility), or the facility_id
+      return userData?.facility_id || null
+    } catch (error) {
+      console.error('Failed to get facility_id:', error)
+      return null
+    }
+  }
+  
+  /**
    * Log an error
    */
-  log(
+  async log(
     message: string,
     severity: ErrorSeverity = ErrorSeverity.ERROR,
-    category: ErrorCategory = ErrorCategory.UNKNOWN,
+    category: ErrorCategory = ErrorCategory.GENERAL,
     error?: Error,
     context?: ErrorContext
-  ): void {
+  ): Promise<void> {
+    // Get facility_id if not provided in context
+    const facilityId = context?.facilityId !== undefined 
+      ? context.facilityId 
+      : await this.getCurrentFacilityId()
+    
     const errorLog: ErrorLog = {
       id: this.generateId(),
       timestamp: new Date(),
@@ -87,10 +122,12 @@ class ErrorLogger {
       stack: error?.stack,
       context: {
         ...context,
+        facilityId,
         route: typeof window !== 'undefined' ? window.location.pathname : undefined,
         url: typeof window !== 'undefined' ? window.location.href : undefined,
       },
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      facilityId,
     }
     
     // Console log in development
@@ -108,38 +145,38 @@ class ErrorLogger {
     
     // Flush immediately for critical errors
     if (severity === ErrorSeverity.CRITICAL) {
-      this.flush()
+      await this.flush()
     }
   }
   
   /**
    * Convenience methods
    */
-  debug(message: string, context?: ErrorContext): void {
-    this.log(message, ErrorSeverity.DEBUG, ErrorCategory.UNKNOWN, undefined, context)
+  async debug(message: string, context?: ErrorContext): Promise<void> {
+    await this.log(message, ErrorSeverity.DEBUG, ErrorCategory.GENERAL, undefined, context)
   }
   
-  info(message: string, context?: ErrorContext): void {
-    this.log(message, ErrorSeverity.INFO, ErrorCategory.UNKNOWN, undefined, context)
+  async info(message: string, context?: ErrorContext): Promise<void> {
+    await this.log(message, ErrorSeverity.INFO, ErrorCategory.GENERAL, undefined, context)
   }
   
-  warning(message: string, context?: ErrorContext): void {
-    this.log(message, ErrorSeverity.WARNING, ErrorCategory.UNKNOWN, undefined, context)
+  async warning(message: string, context?: ErrorContext): Promise<void> {
+    await this.log(message, ErrorSeverity.WARNING, ErrorCategory.GENERAL, undefined, context)
   }
   
-  error(message: string, error?: Error, context?: ErrorContext): void {
-    this.log(message, ErrorSeverity.ERROR, ErrorCategory.UNKNOWN, error, context)
+  async error(message: string, error?: Error, context?: ErrorContext): Promise<void> {
+    await this.log(message, ErrorSeverity.ERROR, ErrorCategory.GENERAL, error, context)
   }
   
-  critical(message: string, error?: Error, context?: ErrorContext): void {
-    this.log(message, ErrorSeverity.CRITICAL, ErrorCategory.UNKNOWN, error, context)
+  async critical(message: string, error?: Error, context?: ErrorContext): Promise<void> {
+    await this.log(message, ErrorSeverity.CRITICAL, ErrorCategory.GENERAL, error, context)
   }
   
   /**
    * Log authentication errors
    */
-  authError(message: string, email?: string, error?: Error): void {
-    this.log(
+  async authError(message: string, email?: string, error?: Error): Promise<void> {
+    await this.log(
       message,
       ErrorSeverity.ERROR,
       ErrorCategory.AUTHENTICATION,
@@ -151,8 +188,8 @@ class ErrorLogger {
   /**
    * Log database errors
    */
-  dbError(message: string, query?: string, error?: Error): void {
-    this.log(
+  async dbError(message: string, query?: string, error?: Error): Promise<void> {
+    await this.log(
       message,
       ErrorSeverity.ERROR,
       ErrorCategory.DATABASE,
@@ -166,7 +203,8 @@ class ErrorLogger {
    */
   private consoleLog(errorLog: ErrorLog): void {
     const style = this.getConsoleStyle(errorLog.severity)
-    const prefix = `[${errorLog.severity.toUpperCase()}] [${errorLog.category}]`
+    const facilityInfo = errorLog.facilityId ? `[Facility: ${errorLog.facilityId}]` : '[Global Admin]'
+    const prefix = `[${errorLog.severity.toUpperCase()}] [${errorLog.category}] ${facilityInfo}`
     
     console.log(
       `%c${prefix} ${errorLog.message}`,
@@ -210,7 +248,6 @@ class ErrorLogger {
     this.queue = []
     
     try {
-      const { createClient } = await import('@/lib/supabase')
       const supabase = createClient()
       
       // Insert errors in batch
@@ -223,6 +260,7 @@ class ErrorLogger {
           context: e.context,
           user_agent: e.userAgent,
           url: e.context.url,
+          facility_id: e.facilityId,
           created_at: e.timestamp.toISOString(),
         }))
       )
@@ -262,6 +300,7 @@ class ErrorLogger {
         level: errorLog.severity,
         tags: {
           category: errorLog.category,
+          facilityId: errorLog.facilityId || 'global_admin',
         },
         extra: errorLog.context,
       })
@@ -314,16 +353,17 @@ export async function measureAsync<T>(
  * Database migration for error_logs table
  */
 export const CREATE_ERROR_LOGS_TABLE = `
--- Error Logs Table
+-- Error Logs Table (Updated with facility_id support)
 CREATE TABLE IF NOT EXISTS error_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   severity TEXT NOT NULL CHECK (severity IN ('debug', 'info', 'warning', 'error', 'critical')),
-  category TEXT NOT NULL CHECK (category IN ('authentication', 'database', 'api', 'validation', 'network', 'unknown')),
+  category TEXT NOT NULL CHECK (category IN ('authentication', 'database', 'api', 'validation', 'network', 'system', 'general')),
   message TEXT NOT NULL,
   stack TEXT,
   context JSONB,
   user_agent TEXT,
   url TEXT,
+  facility_id UUID REFERENCES facilities(id) ON DELETE SET NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -331,18 +371,30 @@ CREATE TABLE IF NOT EXISTS error_logs (
 CREATE INDEX IF NOT EXISTS idx_error_logs_severity ON error_logs(severity);
 CREATE INDEX IF NOT EXISTS idx_error_logs_category ON error_logs(category);
 CREATE INDEX IF NOT EXISTS idx_error_logs_created_at ON error_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_error_logs_facility_id ON error_logs(facility_id);
 CREATE INDEX IF NOT EXISTS idx_error_logs_context_user ON error_logs USING GIN ((context->'userId'));
 
 -- RLS Policies (only admins can view error logs)
 ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Only global admins can view error logs"
+CREATE POLICY "Global admins can view all error logs"
   ON error_logs FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM users
       WHERE users.id = auth.uid()
       AND users.access_level = 'global_admin'
+    )
+  );
+
+CREATE POLICY "Facility admins can view their facility errors"
+  ON error_logs FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users
+      WHERE users.id = auth.uid()
+      AND users.access_level IN ('admin', 'super_admin')
+      AND users.facility_id = error_logs.facility_id
     )
   );
 
@@ -365,58 +417,41 @@ $$ LANGUAGE plpgsql;
 `
 
 /**
- * Sentry Integration Setup (optional)
- * 
- * Installation:
- * npm install @sentry/nextjs
- * 
- * sentry.client.config.js:
+ * Migration to add facility_id to existing error_logs table
  */
-export const SENTRY_CLIENT_CONFIG = `
-import * as Sentry from '@sentry/nextjs'
+export const ADD_FACILITY_ID_TO_ERROR_LOGS = `
+-- Add facility_id column if it doesn't exist
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_name = 'error_logs' AND column_name = 'facility_id'
+  ) THEN
+    ALTER TABLE error_logs ADD COLUMN facility_id UUID REFERENCES facilities(id) ON DELETE SET NULL;
+    CREATE INDEX idx_error_logs_facility_id ON error_logs(facility_id);
+  END IF;
+END $$;
 
-Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  environment: process.env.NODE_ENV,
-  tracesSampleRate: 0.1, // 10% of transactions
-  debug: false,
-  
-  beforeSend(event, hint) {
-    // Filter out sensitive data
-    if (event.request) {
-      delete event.request.cookies
-      delete event.request.headers
-    }
-    
-    // Don't send in development
-    if (process.env.NODE_ENV === 'development') {
-      return null
-    }
-    
-    return event
-  },
-  
-  integrations: [
-    new Sentry.BrowserTracing(),
-    new Sentry.Replay({
-      maskAllText: true,
-      blockAllMedia: true,
-    }),
-  ],
-})
+-- Update category constraint to include 'general' and 'system'
+ALTER TABLE error_logs DROP CONSTRAINT IF EXISTS error_logs_category_check;
+ALTER TABLE error_logs ADD CONSTRAINT error_logs_category_check 
+  CHECK (category IN ('authentication', 'database', 'api', 'validation', 'network', 'system', 'general'));
 `
 
 /**
  * Usage Examples:
  * 
- * // Basic logging
- * errorLogger.error('Failed to fetch user data', error, { userId: '123' })
+ * // Basic logging (automatically tracks facility)
+ * await errorLogger.error('Failed to fetch user data', error, { userId: '123' })
  * 
- * // Authentication errors
- * errorLogger.authError('Invalid credentials', email, error)
+ * // Authentication errors (category set to 'authentication')
+ * await errorLogger.authError('Invalid credentials', email, error)
  * 
- * // Database errors
- * errorLogger.dbError('Query failed', 'SELECT * FROM users', error)
+ * // Database errors (category set to 'database')
+ * await errorLogger.dbError('Query failed', 'SELECT * FROM users', error)
+ * 
+ * // Override facility_id (useful for specific scenarios)
+ * await errorLogger.info('System event', { facilityId: null }) // Force global admin
  * 
  * // Performance monitoring
  * await measureAsync('fetchUserData', async () => {

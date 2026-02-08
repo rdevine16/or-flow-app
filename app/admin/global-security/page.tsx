@@ -371,11 +371,15 @@ export default function GlobalSecurityDashboard() {
                                 </td>
                                 <td className="py-4">
                                   <span className="text-sm text-slate-900">
-                                    {facilities.find(f => f.id === log.facility_id)?.name || 'Unknown'}
+                                    {log.facility_id === null 
+                                      ? 'Global Admin' 
+                                      : facilities.find(f => f.id === log.facility_id)?.name || 'Unknown'}
                                   </span>
                                 </td>
                                 <td className="py-4">
-                                  <span className="text-sm text-slate-900">{log.category}</span>
+                                  <span className="text-sm text-slate-900 capitalize">
+                                    {log.category || 'general'}
+                                  </span>
                                 </td>
                                 <td className="py-4">
                                   <span className="text-sm text-slate-600 max-w-md truncate block">
@@ -424,7 +428,9 @@ export default function GlobalSecurityDashboard() {
                                 </td>
                                 <td className="py-4">
                                   <span className="text-sm text-slate-600">
-                                    {facilities.find(f => f.id === log.facility_id)?.name || 'Unknown'}
+                                    {log.facility_id === null
+                                      ? 'Global Admin'
+                                      : facilities.find(f => f.id === log.facility_id)?.name || 'Unknown'}
                                   </span>
                                 </td>
                                 <td className="py-4">
@@ -481,7 +487,9 @@ export default function GlobalSecurityDashboard() {
                                 </td>
                                 <td className="py-4">
                                   <span className="text-sm text-slate-600">
-                                    {facilities.find(f => f.id === session.users?.facility_id)?.name || 'Unknown'}
+                                    {session.users?.facility_id === null
+                                      ? 'Global Admin'
+                                      : facilities.find(f => f.id === session.users?.facility_id)?.name || 'Unknown'}
                                   </span>
                                 </td>
                                 <td className="py-4">
