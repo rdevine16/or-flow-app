@@ -1,38 +1,12 @@
+//app/login/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { updateLastLogin, checkUserActive } from '@/lib/auth-helpers'
 import { authAudit } from '@/lib/audit-logger'
-
-// ORbit Logo - Full with text
-const LogoFull = () => (
-  <svg width="160" height="48" viewBox="0 0 280 75" fill="none" xmlns="http://www.w3.org/2000/svg">
-    {/* Icon part */}
-    <circle cx="38" cy="38" r="14" stroke="#3b82f6" strokeWidth="4" fill="none"/>
-    <ellipse cx="38" cy="38" rx="26" ry="10" stroke="#60a5fa" strokeWidth="2.5" fill="none" transform="rotate(-25 38 38)"/>
-    <circle cx="58" cy="24" r="6" fill="#10b981"/>
-    {/* Text: "OR" in blue */}
-    <text x="85" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="700" fill="#3b82f6">OR</text>
-    {/* Text: "bit" in white */}
-    <text x="138" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="600" fill="#ffffff">bit</text>
-  </svg>
-)
-
-// ORbit Logo - For light backgrounds (mobile)
-const LogoFullDark = () => (
-  <svg width="140" height="42" viewBox="0 0 280 75" fill="none" xmlns="http://www.w3.org/2000/svg">
-    {/* Icon part */}
-    <circle cx="38" cy="38" r="14" stroke="#3b82f6" strokeWidth="4" fill="none"/>
-    <ellipse cx="38" cy="38" rx="26" ry="10" stroke="#60a5fa" strokeWidth="2.5" fill="none" transform="rotate(-25 38 38)"/>
-    <circle cx="58" cy="24" r="6" fill="#10b981"/>
-    {/* Text: "OR" in blue */}
-    <text x="85" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="700" fill="#3b82f6">OR</text>
-    {/* Text: "bit" in slate */}
-    <text x="138" y="50" fontFamily="system-ui, -apple-system, sans-serif" fontSize="36" fontWeight="600" fill="#64748b">bit</text>
-  </svg>
-)
+import Image from 'next/image'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -44,9 +18,29 @@ export default function LoginPage() {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmailSent, setResetEmailSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+  const [mounted, setMounted] = useState(false)
   
   const router = useRouter()
   const supabase = createClient()
+
+  // Handle mount for animations
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K to focus email input
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        document.getElementById('email')?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -66,6 +60,8 @@ export default function LoginPage() {
         // Provide friendlier error messages
         if (signInError.message.includes('Invalid login credentials')) {
           setError('Invalid email or password. Please try again.')
+        } else if (signInError.message.includes('Email not confirmed')) {
+          setError('Please verify your email address before signing in.')
         } else {
           setError(signInError.message)
         }
@@ -122,6 +118,13 @@ export default function LoginPage() {
       return
     }
 
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.')
+      return
+    }
+
     setResetLoading(true)
     setError(null)
 
@@ -160,95 +163,138 @@ export default function LoginPage() {
           }}
         />
         
-        {/* Accent glow */}
-        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl" />
+        {/* Accent glows */}
+        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
         
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+        <div className={`relative z-10 flex flex-col justify-between p-12 w-full transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
           <div>
-            <LogoFull />
+            {/* Logo - Using Next.js Image for optimization */}
+            <div className="mb-4">
+              <Image 
+                src="/images/logo_white.png" 
+                alt="ORbit Surgical" 
+                width={200} 
+                height={60}
+                priority
+                className="h-12 w-auto"
+              />
+            </div>
           </div>
           
-          <div className="space-y-6">
-            <h1 className="text-4xl font-light text-white leading-tight">
-              Surgical efficiency,<br />
-              <span className="text-blue-400 font-medium">measured and improved.</span>
-            </h1>
-            <p className="text-slate-400 text-lg max-w-md leading-relaxed">
-              Track every milestone. Identify bottlenecks. Optimize your operating room workflow with precision timing.
+          <div className="space-y-8">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-4 leading-tight">
+                Surgical Excellence,<br />Powered by Data
+              </h1>
+              <p className="text-lg text-slate-300 leading-relaxed">
+                Real-time OR analytics and comprehensive case management for modern surgical centers.
+              </p>
+            </div>
+
+            {/* Feature highlights */}
+            <div className="space-y-4">
+              {[
+                { icon: '📊', title: 'Real-Time Analytics', desc: 'Track milestones and performance metrics live' },
+                { icon: '🗓️', title: 'Smart Scheduling', desc: 'Optimize block schedules and turnover times' },
+                { icon: '⚡', title: 'Instant Insights', desc: 'Make data-driven decisions on the fly' },
+              ].map((feature, idx) => (
+                <div 
+                  key={idx} 
+                  className="flex items-start gap-4 group transition-transform duration-300 hover:translate-x-2"
+                >
+                  <div className="text-2xl flex-shrink-0 transform group-hover:scale-110 transition-transform">
+                    {feature.icon}
+                  </div>
+                  <div>
+                    <h3 className="text-white font-semibold mb-1">{feature.title}</h3>
+                    <p className="text-slate-400 text-sm">{feature.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Trust indicators */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-slate-400 text-sm">
+              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>HIPAA Compliant</span>
+              <span className="text-slate-600">•</span>
+              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>Enterprise Security</span>
+            </div>
+            <p className="text-xs text-slate-500">
+              Trusted by leading surgical centers nationwide
             </p>
-          </div>
-          
-          <div className="flex items-center gap-8 text-sm text-slate-500">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full" />
-              <span>Real-time tracking</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-500 rounded-full" />
-              <span>Efficiency analytics</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full" />
-              <span>HIPAA compliant</span>
-            </div>
           </div>
         </div>
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="w-full lg:w-1/2 flex flex-col bg-slate-50">
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-md">
-            {/* Mobile logo */}
-            <div className="lg:hidden flex items-center justify-center mb-12">
-              <LogoFullDark />
-            </div>
+      <div className="w-full lg:w-1/2 flex flex-col bg-white">
+        {/* Mobile Logo */}
+        <div className="lg:hidden p-6 border-b border-slate-200 bg-white">
+          <Image 
+            src="/images/logo_white.png" 
+            alt="ORbit Surgical" 
+            width={140} 
+            height={42}
+            priority
+            className="h-10 w-auto"
+            style={{ filter: 'invert(1) brightness(0)' }} // Makes white logo visible on white background
+          />
+        </div>
 
-            {/* Forgot Password Flow */}
+        {/* Form Container */}
+        <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12">
+          <div className={`w-full max-w-md transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
             {showForgotPassword ? (
+              /* Password Reset Flow */
               <div>
-                <button
-                  onClick={handleBackToLogin}
-                  className="flex items-center gap-2 text-slate-500 hover:text-slate-700 mb-8 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back to sign in
-                </button>
-
                 {resetEmailSent ? (
                   <div className="text-center">
-                    <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
                     </div>
-                    <h2 className="text-2xl font-semibold text-slate-900 mb-2">Check your email</h2>
-                    <p className="text-slate-500 mb-6">
-                      We've sent password reset instructions to<br />
-                      <span className="font-medium text-slate-700">{email}</span>
+                    <h2 className="text-2xl font-semibold text-slate-900 mb-3">Check your email</h2>
+                    <p className="text-slate-600 mb-8 leading-relaxed">
+                      We&apos;ve sent password reset instructions to <strong>{email}</strong>
                     </p>
-                    <p className="text-sm text-slate-400">
-                      Didn't receive it? Check your spam folder or{' '}
-                      <button 
-                        onClick={() => setResetEmailSent(false)}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        try again
-                      </button>
-                    </p>
+                    <button
+                      onClick={handleBackToLogin}
+                      className="text-blue-600 hover:text-blue-700 font-medium transition-colors inline-flex items-center gap-2 group"
+                    >
+                      <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                      </svg>
+                      Back to login
+                    </button>
                   </div>
                 ) : (
                   <>
                     <div className="mb-8">
-                      <h2 className="text-2xl font-semibold text-slate-900 mb-2">Reset your password</h2>
-                      <p className="text-slate-500">Enter your email and we'll send you instructions to reset your password.</p>
+                      <button
+                        onClick={handleBackToLogin}
+                        className="text-slate-600 hover:text-slate-900 font-medium transition-colors inline-flex items-center gap-2 group mb-6"
+                      >
+                        <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        Back to login
+                      </button>
+                      <h2 className="text-3xl font-semibold text-slate-900 mb-2">Reset your password</h2>
+                      <p className="text-slate-500">Enter your email address and we&apos;ll send you instructions to reset your password.</p>
                     </div>
 
-                    <form onSubmit={handleForgotPassword} className="space-y-6">
+                    <form onSubmit={handleForgotPassword} className="space-y-5">
                       <div>
                         <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700 mb-2">
                           Email address
@@ -260,13 +306,18 @@ export default function LoginPage() {
                           onChange={(e) => setEmail(e.target.value)}
                           required
                           autoComplete="email"
+                          autoFocus
                           className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                           placeholder="you@hospital.org"
+                          aria-describedby={error ? "reset-error" : undefined}
                         />
                       </div>
 
                       {error && (
-                        <div className="p-4 rounded-xl bg-red-50 border border-red-100">
+                        <div id="reset-error" role="alert" className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
+                          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
                           <p className="text-sm text-red-600">{error}</p>
                         </div>
                       )}
@@ -274,7 +325,8 @@ export default function LoginPage() {
                       <button
                         type="submit"
                         disabled={resetLoading}
-                        className="w-full py-3.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
+                        className="w-full py-3.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 transform hover:scale-[1.02] active:scale-[0.98]"
+                        aria-label={resetLoading ? "Sending reset instructions" : "Send reset instructions"}
                       >
                         {resetLoading ? (
                           <span className="flex items-center justify-center gap-2">
@@ -300,21 +352,28 @@ export default function LoginPage() {
                   <p className="text-slate-500">Enter your credentials to access your facility dashboard.</p>
                 </div>
 
-                <form onSubmit={handleLogin} className="space-y-5">
+                <form onSubmit={handleLogin} className="space-y-5" noValidate>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                       Email address
                     </label>
-                    <input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      autoComplete="email"
-                      className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
-                      placeholder="you@hospital.org"
-                    />
+                    <div className="relative">
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        autoComplete="email"
+                        autoFocus
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                        placeholder="you@hospital.org"
+                        aria-describedby={error ? "login-error" : undefined}
+                      />
+                      <kbd className="absolute right-4 top-1/2 -translate-y-1/2 hidden sm:inline-block px-2 py-1 text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-200 rounded">
+                        ⌘K
+                      </kbd>
+                    </div>
                   </div>
 
                   <div>
@@ -331,12 +390,14 @@ export default function LoginPage() {
                         autoComplete="current-password"
                         className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
                         placeholder="••••••••••••"
+                        aria-describedby={error ? "login-error" : undefined}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded p-1"
                         tabIndex={-1}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? (
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -353,14 +414,15 @@ export default function LoginPage() {
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className="flex items-center gap-2 cursor-pointer group">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20"
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 transition-colors cursor-pointer"
+                        aria-label="Remember me for 30 days"
                       />
-                      <span className="text-sm text-slate-600">Remember me</span>
+                      <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">Remember me</span>
                     </label>
                     <button
                       type="button"
@@ -368,15 +430,15 @@ export default function LoginPage() {
                         setShowForgotPassword(true)
                         setError(null)
                       }}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1"
                     >
                       Forgot password?
                     </button>
                   </div>
 
                   {error && (
-                    <div className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
-                      <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div id="login-error" role="alert" className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
+                      <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p className="text-sm text-red-600">{error}</p>
@@ -386,15 +448,16 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20"
+                    className="w-full py-3.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 transform hover:scale-[1.02] active:scale-[0.98]"
+                    aria-label={loading ? "Signing in" : "Sign in to your account"}
                   >
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Signing in...
+                        <span>Signing in...</span>
                       </span>
                     ) : (
                       'Sign in'
@@ -403,7 +466,7 @@ export default function LoginPage() {
                 </form>
 
                 <p className="mt-8 text-center text-sm text-slate-500">
-                  Need access? Contact your facility administrator.
+                  Need access? <a href="mailto:support@orbitsurgical.com" className="text-blue-600 hover:text-blue-700 font-medium transition-colors">Contact your facility administrator</a>
                 </p>
               </>
             )}
@@ -412,12 +475,12 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="p-6 text-center text-xs text-slate-400 border-t border-slate-200">
-          <div className="flex items-center justify-center gap-4">
-            <a href="/privacy" className="hover:text-slate-600 transition-colors">Privacy Policy</a>
-            <span>·</span>
-            <a href="/terms" className="hover:text-slate-600 transition-colors">Terms of Service</a>
-            <span>·</span>
-            <a href="mailto:support@orbitsurgical.com" className="hover:text-slate-600 transition-colors">Support</a>
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4">
+            <a href="/privacy" className="hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">Privacy Policy</a>
+            <span className="hidden sm:inline">·</span>
+            <a href="/terms" className="hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">Terms of Service</a>
+            <span className="hidden sm:inline">·</span>
+            <a href="mailto:support@orbitsurgical.com" className="hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">Support</a>
           </div>
           <p className="mt-2">© {new Date().getFullYear()} ORbit Surgical. All rights reserved.</p>
         </div>
