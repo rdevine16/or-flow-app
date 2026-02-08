@@ -18,14 +18,12 @@ interface OverviewTabProps {
   metrics: FinancialsMetrics
   onProcedureClick: (procedureId: string) => void
   onSurgeonClick: (surgeonId: string) => void
-  onOutliersClick: () => void
 }
 
 export default function OverviewTab({ 
   metrics, 
   onProcedureClick, 
   onSurgeonClick,
-  onOutliersClick 
 }: OverviewTabProps) {
   return (
     <div className="space-y-6">
@@ -65,38 +63,12 @@ export default function OverviewTab({
           title="Avg Margin"
           value={formatPercent(metrics.avgMargin)}
         />
-        
-        {/* Updated: Outlier card with dual classification */}
-        <div 
-          className={`bg-white rounded-xl border p-5 cursor-pointer hover:border-slate-300 transition-colors ${
-            metrics.outlierStats.total > 0 ? 'border-amber-200' : 'border-slate-200'
-          }`}
-          onClick={onOutliersClick}
-        >
-          <p className="text-sm font-medium text-slate-500 mb-1">Outlier Cases</p>
-          <p className={`text-2xl font-bold ${metrics.outlierStats.total > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
-            {metrics.outlierStats.total}
-          </p>
-          {metrics.outlierStats.total > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {metrics.outlierStats.both > 0 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
-                  {metrics.outlierStats.both} critical
-                </span>
-              )}
-              {metrics.outlierStats.personalOnly > 0 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                  {metrics.outlierStats.personalOnly} personal
-                </span>
-              )}
-              {metrics.outlierStats.facilityOnly > 0 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
-                  {metrics.outlierStats.facilityOnly} facility
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+
+        <MetricCard
+          title="Typical Duration"
+          value={metrics.medianDuration !== null ? `${Math.round(metrics.medianDuration)} min` : '—'}
+          subtitle={`Avg: ${Math.round(metrics.avgDuration)} min`}
+        />
       </div>
 
       {/* Two Column Layout */}
@@ -201,35 +173,6 @@ export default function OverviewTab({
           <p className="text-sm text-emerald-600 mt-2">Potential savings per case</p>
         </div>
       </div>
-
-      {/* Outlier Type Summary - Only show if there are outliers */}
-      {metrics.outlierStats.total > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Outlier Classification</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-red-50 rounded-lg border border-red-100">
-              <p className="text-3xl font-bold text-red-600">{metrics.outlierStats.both}</p>
-              <p className="text-sm font-medium text-red-700 mt-1">Critical</p>
-              <p className="text-xs text-red-500 mt-1">Below both baselines</p>
-            </div>
-            <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-100">
-              <p className="text-3xl font-bold text-blue-600">{metrics.outlierStats.personalOnly}</p>
-              <p className="text-sm font-medium text-blue-700 mt-1">Personal</p>
-              <p className="text-xs text-blue-500 mt-1">Below surgeon's baseline</p>
-            </div>
-            <div className="text-center p-4 bg-orange-50 rounded-lg border border-orange-100">
-              <p className="text-3xl font-bold text-orange-600">{metrics.outlierStats.facilityOnly}</p>
-              <p className="text-sm font-medium text-orange-700 mt-1">Facility</p>
-              <p className="text-xs text-orange-500 mt-1">Below facility baseline</p>
-            </div>
-            <div className="text-center p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <p className="text-3xl font-bold text-slate-600">{metrics.outlierStats.durationOutliers}</p>
-              <p className="text-sm font-medium text-slate-700 mt-1">Over Time</p>
-              <p className="text-xs text-slate-500 mt-1">Duration outliers</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Profit Trend Chart */}
       {metrics.profitTrend.length > 0 && (

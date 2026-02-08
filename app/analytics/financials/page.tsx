@@ -23,7 +23,6 @@ import DateRangeSelector from '@/components/analytics/financials/DateRangeSelect
 import OverviewTab from '@/components/analytics/financials/OverviewTab'
 import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
-import OutliersTab from '@/components/analytics/financials/OutliersTab'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
@@ -230,10 +229,6 @@ export default function FinancialsAnalyticsPage() {
     setActiveTab('surgeon')
   }
 
-  const handleOutliersClick = () => {
-    setActiveTab('outliers')
-  }
-
   // Loading state
   if (userLoading || !facilityCheckComplete) {
     return (
@@ -342,7 +337,6 @@ export default function FinancialsAnalyticsPage() {
                 { id: 'overview' as SubTab, label: 'Overview' },
                 { id: 'procedure' as SubTab, label: 'By Procedure' },
                 { id: 'surgeon' as SubTab, label: 'By Surgeon' },
-                { id: 'outliers' as SubTab, label: `Outliers${metrics.outlierStats.total > 0 ? ` (${metrics.outlierStats.total})` : ''}` },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -364,7 +358,6 @@ export default function FinancialsAnalyticsPage() {
                 metrics={metrics}
                 onProcedureClick={handleProcedureClick}
                 onSurgeonClick={handleSurgeonClick}
-                onOutliersClick={handleOutliersClick}
               />
             )}
 
@@ -385,9 +378,6 @@ export default function FinancialsAnalyticsPage() {
               />
             )}
 
-            {activeTab === 'outliers' && (
-              <OutliersTab metrics={metrics} />
-            )}
           </>
         )}
       </Container>

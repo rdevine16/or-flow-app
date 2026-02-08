@@ -575,9 +575,7 @@ export interface FinancialsMetrics {
 // UI TYPES
 // ============================================
 
-export type SubTab = 'overview' | 'procedure' | 'surgeon' | 'outliers'
-
-export type OutlierFilter = 'all' | 'personal' | 'facility' | 'both' | 'duration' | 'profit'
+export type SubTab = 'overview' | 'procedure' | 'surgeon'
 
 // ============================================
 // FACILITY SETTINGS (unchanged)
