@@ -596,3 +596,8 @@ textarea::placeholder {
 [data-tremor-id="tremor-Tracker"] {
   gap: 2px;
 }
+/* Toast progress bar animation */
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}

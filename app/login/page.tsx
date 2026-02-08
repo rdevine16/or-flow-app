@@ -154,21 +154,54 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative overflow-hidden">
-        {/* Subtle accent */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-950/20 to-transparent" />
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
+        {/* Subtle geometric accent */}
+        <div className="absolute inset-0 opacity-5">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-400 rounded-full blur-3xl" />
+        </div>
         
-        {/* Centered Logo */}
-        <div className={`relative z-10 flex items-center justify-center w-full transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-          <div className="text-center">
+        {/* Grid overlay for depth */}
+        <div 
+          className="absolute inset-0 opacity-[0.02]"
+          style={{
+            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+                             linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+            backgroundSize: '100px 100px'
+          }}
+        />
+        
+        {/* Content Container */}
+        <div className={`relative z-10 flex flex-col items-center justify-center w-full px-16 transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+          {/* Logo */}
+          <div className="mb-12">
             <Image 
               src="/images/logo_white.png" 
               alt="ORbit Surgical" 
-              width={400} 
-              height={120}
+              width={500} 
+              height={150}
               priority
-              className="h-24 w-auto mx-auto"
+              className="h-32 w-auto mx-auto drop-shadow-2xl"
             />
+          </div>
+          
+          {/* Tagline */}
+          <div className="text-center max-w-md">
+            <p className="text-xl text-slate-300 font-light leading-relaxed">
+              Modern OR Analytics & Case Management
+            </p>
+          </div>
+          
+          {/* Subtle divider */}
+          <div className="mt-12 flex items-center gap-3">
+            <div className="h-px w-12 bg-gradient-to-r from-transparent to-slate-600" />
+            <div className="flex items-center gap-2 text-slate-500 text-sm">
+              <svg className="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>HIPAA Compliant</span>
+            </div>
+            <div className="h-px w-12 bg-gradient-to-l from-transparent to-slate-600" />
           </div>
         </div>
       </div>
@@ -176,16 +209,18 @@ export default function LoginPage() {
       {/* Right Panel - Login Form */}
       <div className="w-full lg:w-1/2 flex flex-col bg-white">
         {/* Mobile Logo */}
-        <div className="lg:hidden p-6 border-b border-slate-200 bg-white">
-          <Image 
-            src="/images/logo_white.png" 
-            alt="ORbit Surgical" 
-            width={140} 
-            height={42}
-            priority
-            className="h-10 w-auto"
-            style={{ filter: 'invert(1) brightness(0)' }} // Makes white logo visible on white background
-          />
+        <div className="lg:hidden p-6 bg-gradient-to-b from-white to-slate-50 border-b border-slate-200">
+          <div className="flex items-center justify-center">
+            <Image 
+              src="/images/logo_white.png" 
+              alt="ORbit Surgical" 
+              width={180} 
+              height={54}
+              priority
+              className="h-12 w-auto"
+              style={{ filter: 'invert(1) brightness(0)' }}
+            />
+          </div>
         </div>
 
         {/* Form Container */}
@@ -285,8 +320,8 @@ export default function LoginPage() {
               /* Login Form */
               <>
                 <div className="mb-10">
-                  <h2 className="text-3xl font-semibold text-slate-900 mb-2">Welcome back</h2>
-                  <p className="text-slate-500">Enter your credentials to access your facility dashboard.</p>
+                  <h2 className="text-3xl font-semibold text-slate-900 mb-3">Welcome back</h2>
+                  <p className="text-slate-500 leading-relaxed">Sign in to access your facility dashboard and analytics.</p>
                 </div>
 
                 <form onSubmit={handleLogin} className="space-y-5" noValidate>
@@ -411,15 +446,23 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <div className="p-6 text-center text-xs text-slate-400 border-t border-slate-200">
-          <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4">
-            <a href="/privacy" className="hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">Privacy Policy</a>
-            <span className="hidden sm:inline">·</span>
-            <a href="/terms" className="hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">Terms of Service</a>
-            <span className="hidden sm:inline">·</span>
-            <a href="mailto:support@orbitsurgical.com" className="hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">Support</a>
+        <div className="p-6 text-center border-t border-slate-100 bg-slate-50">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-6 mb-3">
+            <a href="/privacy" className="text-xs text-slate-500 hover:text-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">
+              Privacy Policy
+            </a>
+            <span className="text-slate-300 hidden sm:inline">•</span>
+            <a href="/terms" className="text-xs text-slate-500 hover:text-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">
+              Terms of Service
+            </a>
+            <span className="text-slate-300 hidden sm:inline">•</span>
+            <a href="mailto:support@orbitsurgical.com" className="text-xs text-slate-500 hover:text-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 rounded px-1">
+              Support
+            </a>
           </div>
-          <p className="mt-2">© {new Date().getFullYear()} ORbit Surgical. All rights reserved.</p>
+          <p className="text-xs text-slate-400">
+            © {new Date().getFullYear()} ORbit Surgical. All rights reserved.
+          </p>
         </div>
       </div>
     </div>
