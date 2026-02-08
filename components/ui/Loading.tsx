@@ -1,329 +1,241 @@
 // components/ui/Loading.tsx
-// Standardized loading states for ORbit
-//
-// Usage:
-//   import { Spinner, PageLoader, Skeleton, SkeletonCard } from '@/components/ui/Loading'
+'use client'
 
 import { ReactNode } from 'react'
 
 // ============================================
-// Spinner - Consistent loading spinner
+// Spinner
 // ============================================
 
-type SpinnerSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+type SpinnerSize = 'sm' | 'md' | 'lg' | 'xl'
+type SpinnerColor = 'blue' | 'white' | 'slate' | 'green' | 'red'
 
 interface SpinnerProps {
   size?: SpinnerSize
+  color?: SpinnerColor
   className?: string
-  color?: 'blue' | 'white' | 'slate' | 'teal'
 }
 
-const spinnerSizes: Record<SpinnerSize, string> = {
-  xs: 'h-3 w-3 border',
-  sm: 'h-4 w-4 border-2',
-  md: 'h-6 w-6 border-2',
-  lg: 'h-8 w-8 border-2',
-  xl: 'h-12 w-12 border-3',
+const sizeClasses: Record<SpinnerSize, string> = {
+  sm: 'w-4 h-4 border-2',
+  md: 'w-8 h-8 border-2',
+  lg: 'w-12 h-12 border-3',
+  xl: 'w-16 h-16 border-4',
 }
 
-const spinnerColors = {
+const colorClasses: Record<SpinnerColor, string> = {
   blue: 'border-blue-600 border-t-transparent',
   white: 'border-white border-t-transparent',
-  slate: 'border-slate-400 border-t-transparent',
-  teal: 'border-teal-500 border-t-transparent',
+  slate: 'border-slate-600 border-t-transparent',
+  green: 'border-green-600 border-t-transparent',
+  red: 'border-red-600 border-t-transparent',
 }
 
 export function Spinner({ size = 'md', color = 'blue', className = '' }: SpinnerProps) {
   return (
     <div
       className={`
-        ${spinnerSizes[size]}
-        ${spinnerColors[color]}
-        rounded-full animate-spin
+        ${sizeClasses[size]}
+        ${colorClasses[color]}
+        rounded-full
+        animate-spin
         ${className}
       `}
       role="status"
       aria-label="Loading"
-    />
+    >
+      <span className="sr-only">Loading...</span>
+    </div>
   )
 }
 
 // ============================================
-// PageLoader - Full page centered loading
+// Page Loader (Full Screen)
 // ============================================
 
 interface PageLoaderProps {
   message?: string
-  size?: SpinnerSize
 }
 
-export function PageLoader({ message = 'Loading...', size = 'lg' }: PageLoaderProps) {
+export function PageLoader({ message = 'Loading...' }: PageLoaderProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[400px] py-12">
-      <Spinner size={size} />
+    <div className="flex flex-col items-center justify-center h-64">
+      <Spinner size="lg" />
       {message && (
-        <p className="mt-4 text-sm text-slate-500">{message}</p>
+        <p className="mt-4 text-sm text-slate-600">{message}</p>
       )}
     </div>
   )
 }
 
 // ============================================
-// InlineLoader - For inline loading states
-// ============================================
-
-interface InlineLoaderProps {
-  message?: string
-  size?: SpinnerSize
-}
-
-export function InlineLoader({ message, size = 'sm' }: InlineLoaderProps) {
-  return (
-    <span className="inline-flex items-center gap-2 text-slate-500">
-      <Spinner size={size} />
-      {message && <span className="text-sm">{message}</span>}
-    </span>
-  )
-}
-
-// ============================================
-// LoadingOverlay - Overlay for forms/modals
-// ============================================
-
-interface LoadingOverlayProps {
-  show: boolean
-  message?: string
-}
-
-export function LoadingOverlay({ show, message }: LoadingOverlayProps) {
-  if (!show) return null
-
-  return (
-    <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
-      <div className="flex flex-col items-center">
-        <Spinner size="lg" />
-        {message && (
-          <p className="mt-3 text-sm text-slate-600">{message}</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// ButtonLoader - For button loading states
-// ============================================
-
-interface ButtonLoaderProps {
-  loading: boolean
-  children: ReactNode
-  loadingText?: string
-}
-
-export function ButtonLoader({ loading, children, loadingText }: ButtonLoaderProps) {
-  if (!loading) return <>{children}</>
-
-  return (
-    <span className="inline-flex items-center gap-2">
-      <Spinner size="xs" color="white" />
-      {loadingText || children}
-    </span>
-  )
-}
-
-// ============================================
-// Skeleton - Base skeleton building blocks
+// Skeleton Components
 // ============================================
 
 interface SkeletonProps {
   className?: string
 }
 
-// Base skeleton element
-export function Skeleton({ className = '' }: SkeletonProps) {
+function SkeletonBase({ className = '' }: SkeletonProps) {
   return (
-    <div className={`bg-slate-200 animate-pulse rounded ${className}`} />
+    <div
+      className={`animate-pulse bg-slate-200 rounded ${className}`}
+      role="status"
+      aria-label="Loading content"
+    />
   )
 }
 
-// Text line skeleton
-export function SkeletonText({ lines = 1, className = '' }: { lines?: number; className?: string }) {
-  return (
+export const Skeleton = {
+  // Text line
+  Line: ({ className = '' }: SkeletonProps) => (
+    <SkeletonBase className={`h-4 ${className}`} />
+  ),
+
+  // Text paragraph (3 lines)
+  Text: ({ className = '' }: SkeletonProps) => (
     <div className={`space-y-2 ${className}`}>
-      {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton
-          key={i}
-          className={`h-4 ${i === lines - 1 && lines > 1 ? 'w-3/4' : 'w-full'}`}
-        />
-      ))}
+      <SkeletonBase className="h-4 w-full" />
+      <SkeletonBase className="h-4 w-5/6" />
+      <SkeletonBase className="h-4 w-4/6" />
     </div>
-  )
-}
+  ),
 
-// Circle skeleton (for avatars)
-export function SkeletonCircle({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
-  const sizes = {
-    sm: 'h-8 w-8',
-    md: 'h-10 w-10',
-    lg: 'h-12 w-12',
-  }
-  return <Skeleton className={`${sizes[size]} rounded-full`} />
-}
+  // Title
+  Title: ({ className = '' }: SkeletonProps) => (
+    <SkeletonBase className={`h-8 w-1/3 ${className}`} />
+  ),
 
-// ============================================
-// SkeletonCard - Common card loading state
-// ============================================
+  // Avatar/Circle
+  Avatar: ({ className = '' }: SkeletonProps) => (
+    <SkeletonBase className={`h-10 w-10 rounded-full ${className}`} />
+  ),
 
-interface SkeletonCardProps {
-  hasHeader?: boolean
-  lines?: number
-  className?: string
-}
+  // Button
+  Button: ({ className = '' }: SkeletonProps) => (
+    <SkeletonBase className={`h-10 w-24 ${className}`} />
+  ),
 
-export function SkeletonCard({ hasHeader = true, lines = 3, className = '' }: SkeletonCardProps) {
-  return (
-    <div className={`bg-white rounded-xl border border-slate-200 overflow-hidden ${className}`}>
-      {hasHeader && (
-        <div className="px-6 py-4 border-b border-slate-200">
-          <Skeleton className="h-5 w-32" />
-        </div>
-      )}
-      <div className="p-6 space-y-4">
-        <SkeletonText lines={lines} />
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// SkeletonTable - Table loading state
-// ============================================
-
-interface SkeletonTableProps {
-  rows?: number
-  columns?: number
-}
-
-export function SkeletonTable({ rows = 5, columns = 4 }: SkeletonTableProps) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-3 border-b border-slate-200 bg-slate-50">
-        <div className="flex gap-4">
-          {Array.from({ length: columns }).map((_, i) => (
-            <Skeleton key={i} className="h-4 flex-1" />
-          ))}
+  // Card
+  Card: ({ className = '' }: SkeletonProps) => (
+    <div className={`bg-white border border-slate-200 rounded-lg p-6 ${className}`}>
+      <div className="flex items-center gap-4 mb-4">
+        <SkeletonBase className="h-10 w-10 rounded-full" />
+        <div className="flex-1">
+          <SkeletonBase className="h-4 w-1/3 mb-2" />
+          <SkeletonBase className="h-3 w-1/2" />
         </div>
       </div>
-      {/* Rows */}
+      <div className="space-y-2">
+        <SkeletonBase className="h-4 w-full" />
+        <SkeletonBase className="h-4 w-5/6" />
+        <SkeletonBase className="h-4 w-4/6" />
+      </div>
+    </div>
+  ),
+
+  // Table Row
+  TableRow: ({ className = '' }: SkeletonProps) => (
+    <div className={`flex items-center gap-4 py-3 ${className}`}>
+      <SkeletonBase className="h-4 w-1/4" />
+      <SkeletonBase className="h-4 w-1/4" />
+      <SkeletonBase className="h-4 w-1/4" />
+      <SkeletonBase className="h-4 w-1/4" />
+    </div>
+  ),
+
+  // Table (5 rows)
+  Table: ({ className = '' }: SkeletonProps) => (
+    <div className={`bg-white border border-slate-200 rounded-lg overflow-hidden ${className}`}>
+      <div className="border-b border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-center gap-4">
+          <SkeletonBase className="h-4 w-1/4" />
+          <SkeletonBase className="h-4 w-1/4" />
+          <SkeletonBase className="h-4 w-1/4" />
+          <SkeletonBase className="h-4 w-1/4" />
+        </div>
+      </div>
       <div className="divide-y divide-slate-100">
-        {Array.from({ length: rows }).map((_, rowIndex) => (
-          <div key={rowIndex} className="px-6 py-4">
-            <div className="flex gap-4 items-center">
-              {Array.from({ length: columns }).map((_, colIndex) => (
-                <Skeleton
-                  key={colIndex}
-                  className={`h-4 flex-1 ${colIndex === 0 ? 'max-w-[200px]' : ''}`}
-                />
-              ))}
-            </div>
-          </div>
+        {[...Array(5)].map((_, i) => (
+          <Skeleton.TableRow key={i} className="px-4" />
         ))}
       </div>
     </div>
-  )
-}
+  ),
 
-// ============================================
-// SkeletonList - List loading state
-// ============================================
-
-interface SkeletonListProps {
-  items?: number
-  hasAvatar?: boolean
-}
-
-export function SkeletonList({ items = 5, hasAvatar = false }: SkeletonListProps) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: items }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 p-4 bg-white rounded-lg border border-slate-200">
-          {hasAvatar && <SkeletonCircle size="md" />}
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-4 w-1/3" />
-            <Skeleton className="h-3 w-1/2" />
-          </div>
-          <Skeleton className="h-8 w-20" />
-        </div>
-      ))}
+  // Input Field
+  Input: ({ className = '' }: SkeletonProps) => (
+    <div className={className}>
+      <SkeletonBase className="h-4 w-24 mb-2" />
+      <SkeletonBase className="h-10 w-full" />
     </div>
-  )
-}
+  ),
 
-// ============================================
-// SkeletonStats - Stats grid loading state
-// ============================================
-
-interface SkeletonStatsProps {
-  count?: number
-}
-
-export function SkeletonStats({ count = 4 }: SkeletonStatsProps) {
-  return (
-    <div className={`grid grid-cols-2 md:grid-cols-${count} gap-4`}>
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-white rounded-xl border border-slate-200 p-4">
-          <Skeleton className="h-4 w-20 mb-2" />
-          <Skeleton className="h-8 w-16" />
-        </div>
-      ))}
+  // Form (3 fields + button)
+  Form: ({ className = '' }: SkeletonProps) => (
+    <div className={`space-y-4 ${className}`}>
+      <Skeleton.Input />
+      <Skeleton.Input />
+      <Skeleton.Input />
+      <SkeletonBase className="h-10 w-32 mt-6" />
     </div>
-  )
+  ),
 }
 
 // ============================================
-// SkeletonForm - Form loading state
+// Loading Overlay
 // ============================================
 
-interface SkeletonFormProps {
-  fields?: number
+interface LoadingOverlayProps {
+  show: boolean
+  message?: string
+  children?: ReactNode
 }
 
-export function SkeletonForm({ fields = 4 }: SkeletonFormProps) {
+export function LoadingOverlay({ show, message, children }: LoadingOverlayProps) {
+  if (!show) return <>{children}</>
+
   return (
-    <div className="space-y-6">
-      {Array.from({ length: fields }).map((_, i) => (
-        <div key={i} className="space-y-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-10 w-full" />
+    <div className="relative">
+      {children && (
+        <div className="opacity-50 pointer-events-none">
+          {children}
         </div>
-      ))}
-      <div className="flex justify-end gap-3 pt-4">
-        <Skeleton className="h-10 w-24" />
-        <Skeleton className="h-10 w-24" />
+      )}
+      <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+        <div className="flex flex-col items-center">
+          <Spinner size="lg" />
+          {message && (
+            <p className="mt-4 text-sm text-slate-600">{message}</p>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
 // ============================================
-// DashboardSkeleton - Full dashboard loading
+// Usage Examples (in comments)
 // ============================================
 
-export function DashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Stats row */}
-      <SkeletonStats count={4} />
-      
-      {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SkeletonCard lines={5} />
-        <SkeletonCard lines={5} />
-      </div>
-      
-      {/* Table */}
-      <SkeletonTable rows={5} columns={5} />
-    </div>
-  )
-}
+/*
+// Basic spinner
+<Spinner />
+<Spinner size="sm" />
+<Spinner size="lg" color="white" />
+
+// Full page loader
+<PageLoader message="Loading your data..." />
+
+// Skeleton loaders
+<Skeleton.Line />
+<Skeleton.Text />
+<Skeleton.Title />
+<Skeleton.Card />
+<Skeleton.Table />
+
+// Loading overlay
+<LoadingOverlay show={isLoading} message="Saving...">
+  <YourContent />
+</LoadingOverlay>
+*/

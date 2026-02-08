@@ -1,4 +1,3 @@
-//app/login/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +6,9 @@ import { useRouter } from 'next/navigation'
 import { updateLastLogin, checkUserActive } from '@/lib/auth-helpers'
 import { authAudit } from '@/lib/audit-logger'
 import Image from 'next/image'
+import { checkRateLimit, recordFailedAttempt, clearRateLimit } from '@/lib/rate-limiter'
+import { signInWithSession } from '@/lib/session-manager'
+import { errorLogger, ErrorCategory } from '@/lib/error-logger'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -19,6 +21,8 @@ export default function LoginPage() {
   const [resetEmailSent, setResetEmailSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [isRateLimited, setIsRateLimited] = useState(false)
+  const [rateLimitUntil, setRateLimitUntil] = useState<Date | null>(null)
   
   const router = useRouter()
   const supabase = createClient()
@@ -31,7 +35,6 @@ export default function LoginPage() {
   // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K to focus email input
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         document.getElementById('email')?.focus()
@@ -42,24 +45,73 @@ export default function LoginPage() {
     return () => window.removeEventListener('keydown', handleKeyPress)
   }, [])
 
+  // Check rate limit countdown
+  useEffect(() => {
+    if (!rateLimitUntil) return
+
+    const interval = setInterval(() => {
+      if (new Date() > rateLimitUntil) {
+        setIsRateLimited(false)
+        setRateLimitUntil(null)
+        setError(null)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [rateLimitUntil])
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      // Get client IP for rate limiting
+      const clientIP = 'web-client' // This would be set by middleware in production
+      
+      // Check rate limit BEFORE attempting login
+      const rateCheck = checkRateLimit(email, clientIP)
+      
+      if (!rateCheck.allowed) {
+        setIsRateLimited(true)
+        setRateLimitUntil(rateCheck.blockedUntil || null)
+        
+        const minutesLeft = rateCheck.blockedUntil 
+          ? Math.ceil((rateCheck.blockedUntil.getTime() - Date.now()) / 60000)
+          : 15
+        
+        setError(`Too many failed attempts. Please try again in ${minutesLeft} minute${minutesLeft > 1 ? 's' : ''}.`)
+        
+        errorLogger.authError('Rate limit triggered', email)
+        setLoading(false)
+        return
+      }
+
+      // Attempt sign in with enhanced session management
+      const { data, error: signInError } = await signInWithSession(
         email,
         password,
-      })
+        rememberMe
+      )
 
       if (signInError) {
+        // Record failed attempt for rate limiting
+        recordFailedAttempt(email, clientIP)
+        
         // Log failed login attempt
         await authAudit.login(supabase, email, false, signInError.message)
         
+        // Log error
+        errorLogger.authError('Login failed', email, signInError)
+        
         // Provide friendlier error messages
         if (signInError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password. Please try again.')
+          const remaining = rateCheck.remainingAttempts || 0
+          if (remaining <= 2 && remaining > 0) {
+            setError(`Invalid email or password. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining.`)
+          } else {
+            setError('Invalid email or password. Please try again.')
+          }
         } else if (signInError.message.includes('Email not confirmed')) {
           setError('Please verify your email address before signing in.')
         } else {
@@ -69,13 +121,17 @@ export default function LoginPage() {
         return
       }
 
-      if (data.user) {
+      if (data?.session?.user) {
+        const userId = data.session.user.id
+        
         // Check if user is active (not deactivated)
-        const { isActive, error: activeError } = await checkUserActive(supabase, data.user.id)
+        const { isActive, error: activeError } = await checkUserActive(supabase, userId)
         
         if (!isActive) {
           // Log deactivated user login attempt
           await authAudit.login(supabase, email, false, 'Account deactivated')
+          errorLogger.authError('Deactivated account login attempt', email)
+          
           // Sign them out immediately if deactivated
           await supabase.auth.signOut()
           setError(activeError || 'Your account has been deactivated. Please contact your administrator.')
@@ -83,17 +139,21 @@ export default function LoginPage() {
           return
         }
 
+        // Clear rate limit on successful login
+        clearRateLimit(email)
+
         // Update last login timestamp
-        await updateLastLogin(supabase, data.user.id)
+        await updateLastLogin(supabase, userId)
 
         // Log successful login
         await authAudit.login(supabase, email, true)
+        errorLogger.info('User logged in successfully', { userId, email })
 
         // Check access level to determine redirect
         const { data: userRecord } = await supabase
           .from('users')
           .select('access_level')
-          .eq('id', data.user.id)
+          .eq('id', userId)
           .single()
 
         // Redirect based on role
@@ -105,6 +165,7 @@ export default function LoginPage() {
         router.refresh()
       }
     } catch (err) {
+      errorLogger.critical('Unexpected login error', err as Error, { email })
       setError('An unexpected error occurred. Please try again.')
       setLoading(false)
     }
@@ -134,11 +195,14 @@ export default function LoginPage() {
       })
 
       if (resetError) {
+        errorLogger.authError('Password reset failed', email, resetError)
         setError(resetError.message)
       } else {
+        errorLogger.info('Password reset email sent', { email })
         setResetEmailSent(true)
       }
     } catch (err) {
+      errorLogger.error('Password reset error', err as Error, { email })
       setError('Failed to send reset email. Please try again.')
     } finally {
       setResetLoading(false)
@@ -149,6 +213,18 @@ export default function LoginPage() {
     setShowForgotPassword(false)
     setResetEmailSent(false)
     setError(null)
+  }
+
+  // Format rate limit countdown
+  const getRateLimitMessage = () => {
+    if (!rateLimitUntil) return ''
+    
+    const now = new Date()
+    const diff = rateLimitUntil.getTime() - now.getTime()
+    const minutes = Math.floor(diff / 60000)
+    const seconds = Math.floor((diff % 60000) / 1000)
+    
+    return `Please wait ${minutes}m ${seconds}s before trying again.`
   }
 
   return (
@@ -174,7 +250,7 @@ export default function LoginPage() {
         {/* Content Container */}
         <div className={`relative z-10 flex flex-col items-center justify-center w-full px-16 transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           {/* Logo */}
-          <div className="mb-12">
+          <div className="mb-8">
             <Image 
               src="/images/logo_white.png" 
               alt="ORbit Surgical" 
@@ -185,9 +261,16 @@ export default function LoginPage() {
             />
           </div>
           
+          {/* Slogan */}
+          <div className="text-center mb-6">
+            <h1 className="text-2xl md:text-3xl font-light text-white tracking-wide">
+              Your OR. In perfect orbit.
+            </h1>
+          </div>
+          
           {/* Tagline */}
           <div className="text-center max-w-md">
-            <p className="text-xl text-slate-300 font-light leading-relaxed">
+            <p className="text-base text-slate-400 font-light leading-relaxed">
               Modern OR Analytics & Case Management
             </p>
           </div>
@@ -338,7 +421,8 @@ export default function LoginPage() {
                         required
                         autoComplete="email"
                         autoFocus
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                        disabled={isRateLimited}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="you@hospital.org"
                         aria-describedby={error ? "login-error" : undefined}
                       />
@@ -360,7 +444,8 @@ export default function LoginPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         autoComplete="current-password"
-                        className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200"
+                        disabled={isRateLimited}
+                        className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="••••••••••••"
                         aria-describedby={error ? "login-error" : undefined}
                       />
@@ -391,7 +476,8 @@ export default function LoginPage() {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 transition-colors cursor-pointer"
+                        disabled={isRateLimited}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         aria-label="Remember me for 30 days"
                       />
                       <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">Remember me</span>
@@ -413,13 +499,18 @@ export default function LoginPage() {
                       <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <p className="text-sm text-red-600">{error}</p>
+                      <div className="flex-1">
+                        <p className="text-sm text-red-600">{error}</p>
+                        {isRateLimited && rateLimitUntil && (
+                          <p className="text-xs text-red-500 mt-1">{getRateLimitMessage()}</p>
+                        )}
+                      </div>
                     </div>
                   )}
 
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || isRateLimited}
                     className="w-full py-3.5 px-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 transform hover:scale-[1.02] active:scale-[0.98]"
                     aria-label={loading ? "Signing in" : "Sign in to your account"}
                   >
