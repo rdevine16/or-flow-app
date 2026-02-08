@@ -12,6 +12,7 @@ import {
   InformationCircleIcon, 
   ChevronRightIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   CalendarDaysIcon,
   ClockIcon,
   CurrencyDollarIcon,
@@ -41,10 +42,14 @@ function formatDuration(minutes: number | null): string {
   return `${mins}m`
 }
 
+function formatPercent(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+  return `${value.toFixed(1)}%`
+}
+
 function formatTime(timeStr: string | null, dateStr?: string | null): string {
   if (!timeStr) return '—'
   
-  // If we have a date, combine and convert from UTC to local
   if (dateStr) {
     try {
       const utcDate = new Date(`${dateStr}T${timeStr}Z`)
@@ -60,7 +65,6 @@ function formatTime(timeStr: string | null, dateStr?: string | null): string {
     }
   }
   
-  // Fallback: parse time string directly (already local or no date context)
   const [hours, minutes] = timeStr.split(':').map(Number)
   if (isNaN(hours) || isNaN(minutes)) return '—'
   const suffix = hours >= 12 ? 'PM' : 'AM'
@@ -112,6 +116,16 @@ function calculateMedian(values: number[]): number | null {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
+type SortDir = 'asc' | 'desc'
+
+function sortByKey<T>(arr: T[], key: (item: T) => number | null, dir: SortDir): T[] {
+  return [...arr].sort((a, b) => {
+    const aVal = key(a) ?? -Infinity
+    const bVal = key(b) ?? -Infinity
+    return dir === 'desc' ? bVal - aVal : aVal - bVal
+  })
+}
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -124,12 +138,10 @@ export default function SurgeonTab({
 }: SurgeonTabProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   
-  // Navigation state for breadcrumb
   const currentView = selectedDate ? 'day' : selectedSurgeon ? 'detail' : 'list'
   
   const selectedSurgeonData = metrics.surgeonStats.find(s => s.surgeonId === selectedSurgeon)
   
-  // Get surgeon's cases from caseStats
   const surgeonCases = useMemo(() => {
     if (!selectedSurgeon) return []
     return caseStats.filter(c => c.surgeon_id === selectedSurgeon)
@@ -137,7 +149,6 @@ export default function SurgeonTab({
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb Navigation */}
       <Breadcrumb 
         surgeonName={selectedSurgeonData?.surgeonName}
         selectedDate={selectedDate}
@@ -151,7 +162,6 @@ export default function SurgeonTab({
         }}
       />
       
-      {/* View Router */}
       {currentView === 'list' && (
         <AllSurgeonsOverview 
           metrics={metrics} 
@@ -181,7 +191,7 @@ export default function SurgeonTab({
 }
 
 // ============================================
-// BREADCRUMB COMPONENT
+// BREADCRUMB
 // ============================================
 
 function Breadcrumb({ 
@@ -235,8 +245,10 @@ function Breadcrumb({
 }
 
 // ============================================
-// ALL SURGEONS OVERVIEW (Profit Leaderboard)
+// ALL SURGEONS OVERVIEW — Sortable Leaderboard
 // ============================================
+
+type LeaderboardSortKey = 'totalProfit' | 'caseCount' | 'profitPerORHour' | 'avgMarginPercent' | 'medianProfit'
 
 function AllSurgeonsOverview({ 
   metrics, 
@@ -245,11 +257,34 @@ function AllSurgeonsOverview({
   metrics: FinancialsMetrics
   onSurgeonSelect: (surgeonId: string) => void 
 }) {
-  const [expandedSurgeon, setExpandedSurgeon] = useState<string | null>(null)
-  
-  // Sort by total profit
-  const sortedSurgeons = [...metrics.surgeonStats].sort((a, b) => b.totalProfit - a.totalProfit)
-  
+  const [sortKey, setSortKey] = useState<LeaderboardSortKey>('totalProfit')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  const sortedSurgeons = useMemo(() => {
+    return sortByKey(metrics.surgeonStats, s => {
+      switch (sortKey) {
+        case 'totalProfit': return s.totalProfit
+        case 'caseCount': return s.caseCount
+        case 'profitPerORHour': return s.profitPerORHour
+        case 'avgMarginPercent': return s.avgMarginPercent
+        case 'medianProfit': return s.medianProfit ?? s.avgProfit
+      }
+    }, sortDir)
+  }, [metrics.surgeonStats, sortKey, sortDir])
+
+  const toggleSort = (key: LeaderboardSortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
+  // Summary totals
+  const totalProfit = metrics.surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0)
+  const totalCases = metrics.surgeonStats.reduce((sum, s) => sum + s.caseCount, 0)
+
   return (
     <>
       {/* Summary Cards */}
@@ -261,106 +296,92 @@ function AllSurgeonsOverview({
         />
         <SummaryCard 
           title="Total Profit"
-          value={formatCurrency(metrics.surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0))}
+          value={formatCurrency(totalProfit)}
           icon={CurrencyDollarIcon}
           variant="success"
         />
         <SummaryCard 
           title="Total Cases"
-          value={metrics.surgeonStats.reduce((sum, s) => sum + s.caseCount, 0)}
+          value={totalCases}
           icon={ChartBarIcon}
         />
         <SummaryCard 
-          title="Avg Profit/Surgeon"
-          value={formatCurrency(
-            metrics.surgeonStats.length > 0 
-              ? metrics.surgeonStats.reduce((sum, s) => sum + s.totalProfit, 0) / metrics.surgeonStats.length
-              : 0
-          )}
+          title="Avg $/OR Hour"
+          value={metrics.profitPerORHour !== null ? formatCurrency(metrics.profitPerORHour) : '—'}
           icon={ArrowTrendingUpIcon}
         />
       </div>
 
-      {/* Profit Leaderboard */}
+      {/* Sortable Leaderboard Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Profit Leaderboard</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Surgeon Leaderboard</h3>
               <p className="text-sm text-slate-500 mt-0.5">Click a surgeon to view detailed performance</p>
             </div>
           </div>
         </div>
-        
-        <div className="divide-y divide-slate-100">
-          {sortedSurgeons.map((surgeon, idx) => (
-            <div key={surgeon.surgeonId}>
-              {/* Surgeon Row */}
-              <div 
-                className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50/80 cursor-pointer transition-colors"
-                onClick={() => onSurgeonSelect(surgeon.surgeonId)}
-              >
-                {/* Rank Badge */}
-                <div className={`
-                  w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm
-                  ${idx === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white' : ''}
-                  ${idx === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : ''}
-                  ${idx === 2 ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white' : ''}
-                  ${idx > 2 ? 'bg-slate-100 text-slate-600' : ''}
-                `}>
-                  {idx + 1}
-                </div>
-                
-                {/* Surgeon Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900">{surgeon.surgeonName}</span>
-                    {surgeon.caseCount < 10 && (
-                      <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 rounded">
-                        Low volume
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500">
-                    <span>{surgeon.caseCount} cases</span>
-                    <span className="text-slate-300">•</span>
-                    <span>{surgeon.procedureBreakdown?.length || 0} procedures</span>
-                  </div>
-                </div>
-                
-                {/* Metrics */}
-                <div className="flex items-center gap-8">
-                  <div className="text-right">
-                    <div className="text-xs text-slate-500 uppercase tracking-wide">Total Profit</div>
-                    <div className="text-lg font-bold text-emerald-600">{formatCurrency(surgeon.totalProfit)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-slate-500 uppercase tracking-wide">Avg/Case</div>
-                    <div className="text-lg font-semibold text-slate-900">
-                      {formatCurrency(surgeon.medianProfit || surgeon.avgProfit)}
+
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-slate-50/80">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-8">#</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Surgeon</th>
+                <SortTH label="Cases" sortKey="caseCount" current={sortKey} dir={sortDir} onClick={toggleSort} align="center" />
+                <SortTH label="Total Profit" sortKey="totalProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTH label="Typical/Case" sortKey="medianProfit" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTH label="$/OR Hr" sortKey="profitPerORHour" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <SortTH label="Margin" sortKey="avgMarginPercent" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                <th className="px-6 py-3 w-8"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {sortedSurgeons.map((surgeon, idx) => (
+                <tr 
+                  key={surgeon.surgeonId}
+                  className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                  onClick={() => onSurgeonSelect(surgeon.surgeonId)}
+                >
+                  <td className="px-6 py-4">
+                    <RankBadge rank={idx + 1} />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-900">{surgeon.surgeonName}</span>
+                      {surgeon.caseCount < 10 && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 rounded">
+                          Low volume
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  <ChevronRightIcon className="w-5 h-5 text-slate-400" />
-                </div>
-              </div>
-              
-              {/* Expandable Procedure Breakdown */}
-              {expandedSurgeon === surgeon.surgeonId && surgeon.procedureBreakdown && (
-                <div className="px-6 pb-4 bg-slate-50/50">
-                  <div className="ml-14 grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    {surgeon.procedureBreakdown.slice(0, 4).map(proc => (
-                      <div key={proc.procedureId} className="bg-white rounded-lg border border-slate-200 p-3">
-                        <div className="text-xs text-slate-500 truncate">{proc.procedureName}</div>
-                        <div className="text-sm font-semibold text-slate-900 mt-1">
-                          {proc.caseCount} cases
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                    <div className="flex items-center gap-3 mt-0.5 text-sm text-slate-500">
+                      <span>{surgeon.procedureBreakdown?.length || 0} procedures</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="text-lg font-bold text-emerald-600 tabular-nums">
+                      {formatCurrency(surgeon.totalProfit)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right text-slate-900 tabular-nums">
+                    {formatCurrency(surgeon.medianProfit || surgeon.avgProfit)}
+                  </td>
+                  <td className="px-6 py-4 text-right font-medium text-blue-700 tabular-nums">
+                    {surgeon.profitPerORHour !== null ? formatCurrency(surgeon.profitPerORHour) : '—'}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <MarginBadge value={surgeon.avgMarginPercent} />
+                  </td>
+                  <td className="px-6 py-4">
+                    <ChevronRightIcon className="w-5 h-5 text-slate-400" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
@@ -384,7 +405,6 @@ function SurgeonDetail({
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'daily' | 'procedures'>('overview')
   
-  // Group cases by date for daily activity
   const dailyStats = useMemo(() => {
     const byDate: Record<string, CaseCompletionStats[]> = {}
     surgeonCases.forEach(c => {
@@ -408,7 +428,6 @@ function SurgeonDetail({
       .sort((a, b) => b.date.localeCompare(a.date))
   }, [surgeonCases])
 
-  // Calculate efficiency metrics
   const efficiencyMetrics = useMemo(() => {
     const durations = surgeonCases
       .map(c => c.total_duration_minutes)
@@ -425,7 +444,6 @@ function SurgeonDetail({
     const medianDuration = calculateMedian(durations)
     const medianProfit = calculateMedian(profits)
     
-    // Calculate consistency (coefficient of variation)
     const avgDuration = durations.length > 0 
       ? durations.reduce((a, b) => a + b, 0) / durations.length 
       : null
@@ -452,7 +470,7 @@ function SurgeonDetail({
 
   return (
     <div className="space-y-6">
-      {/* Header Card */}
+      {/* Header Card — Enhanced with financial metrics */}
       <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
@@ -468,8 +486,8 @@ function SurgeonDetail({
           </div>
         </div>
         
-        {/* Quick Stats */}
-        <div className="grid grid-cols-4 gap-6 mt-6 pt-6 border-t border-white/10">
+        {/* Quick Stats — Now 6 columns with financial metrics */}
+        <div className="grid grid-cols-3 lg:grid-cols-6 gap-6 mt-6 pt-6 border-t border-white/10">
           <div>
             <div className="text-slate-400 text-sm">Total Profit</div>
             <div className="text-2xl font-bold mt-1">{formatCurrency(surgeon.totalProfit)}</div>
@@ -478,6 +496,18 @@ function SurgeonDetail({
             <div className="text-slate-400 text-sm">Typical/Case</div>
             <div className="text-2xl font-bold mt-1">
               {formatCurrency(efficiencyMetrics.medianProfit || surgeon.avgProfit)}
+            </div>
+          </div>
+          <div>
+            <div className="text-slate-400 text-sm">$/OR Hour</div>
+            <div className="text-2xl font-bold mt-1 text-blue-300">
+              {surgeon.profitPerORHour !== null ? formatCurrency(surgeon.profitPerORHour) : '—'}
+            </div>
+          </div>
+          <div>
+            <div className="text-slate-400 text-sm">Margin</div>
+            <div className="text-2xl font-bold mt-1">
+              {formatPercent(surgeon.avgMarginPercent)}
             </div>
           </div>
           <div>
@@ -514,9 +544,8 @@ function SurgeonDetail({
         ))}
       </div>
 
-      {/* Tab Content */}
       {activeTab === 'overview' && (
-        <OverviewTab surgeon={surgeon} efficiencyMetrics={efficiencyMetrics} metrics={metrics} />
+        <SurgeonOverviewTab surgeon={surgeon} efficiencyMetrics={efficiencyMetrics} metrics={metrics} surgeonCases={surgeonCases} />
       )}
       
       {activeTab === 'daily' && (
@@ -531,13 +560,14 @@ function SurgeonDetail({
 }
 
 // ============================================
-// OVERVIEW TAB
+// SURGEON OVERVIEW TAB — Enhanced with cost breakdown
 // ============================================
 
-function OverviewTab({ 
+function SurgeonOverviewTab({ 
   surgeon,
   efficiencyMetrics,
-  metrics 
+  metrics,
+  surgeonCases,
 }: { 
   surgeon: SurgeonStats
   efficiencyMetrics: {
@@ -547,63 +577,127 @@ function OverviewTab({
     avgSurgicalTime: number | null
   }
   metrics: FinancialsMetrics
+  surgeonCases: CaseCompletionStats[]
 }) {
+  // Compute revenue/cost breakdown from case data
+  const costBreakdown = useMemo(() => {
+    const totalReimbursement = surgeonCases.reduce((sum, c) => sum + (c.reimbursement || 0), 0)
+    const totalDebits = surgeonCases.reduce((sum, c) => {
+      return sum + (c.total_debits ?? c.soft_goods_cost ?? 0)
+    }, 0)
+    const totalCredits = surgeonCases.reduce((sum, c) => {
+      return sum + (c.total_credits ?? c.hard_goods_cost ?? 0)
+    }, 0)
+    const totalORCost = surgeonCases.reduce((sum, c) => sum + (c.or_cost ?? c.or_time_cost ?? 0), 0)
+    const count = surgeonCases.length
+
+    return {
+      totalReimbursement,
+      totalDebits,
+      totalCredits,
+      totalORCost,
+      avgReimbursement: count > 0 ? totalReimbursement / count : 0,
+      avgDebits: count > 0 ? totalDebits / count : 0,
+      avgCredits: count > 0 ? totalCredits / count : 0,
+      avgORCost: count > 0 ? totalORCost / count : 0,
+      avgProfit: count > 0 ? surgeon.totalProfit / count : 0,
+    }
+  }, [surgeonCases, surgeon.totalProfit])
+
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* Time vs Facility */}
-      <MetricCard
-        title="Time vs Facility"
-        tooltip="Weighted average comparing this surgeon's duration to facility median for each procedure type"
-      >
-        <div className={`text-2xl font-bold ${
-          surgeon.durationVsFacilityMinutes < 0 ? 'text-emerald-600' : 
-          surgeon.durationVsFacilityMinutes > 10 ? 'text-red-500' : 'text-slate-900'
-        }`}>
-          {surgeon.durationVsFacilityMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsFacilityMinutes)} min
-        </div>
-        <div className="text-sm text-slate-500 mt-1">
-          {surgeon.durationVsFacilityMinutes < 0 ? 'Faster' : 'Slower'} than facility typical
-        </div>
-      </MetricCard>
+    <div className="space-y-6">
+      {/* Performance Metrics Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Time vs Facility"
+          tooltip="Weighted average comparing this surgeon's duration to facility median for each procedure type"
+        >
+          <div className={`text-2xl font-bold ${
+            surgeon.durationVsFacilityMinutes < 0 ? 'text-emerald-600' : 
+            surgeon.durationVsFacilityMinutes > 10 ? 'text-red-500' : 'text-slate-900'
+          }`}>
+            {surgeon.durationVsFacilityMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsFacilityMinutes)} min
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            {surgeon.durationVsFacilityMinutes < 0 ? 'Faster' : 'Slower'} than facility typical
+          </div>
+        </MetricCard>
 
-      {/* Profit Impact */}
-      <MetricCard
-        title="Profit Impact"
-        tooltip="Estimated profit impact per case based on time efficiency"
-      >
-        <div className={`text-2xl font-bold ${
-          surgeon.profitImpact >= 0 ? 'text-emerald-600' : 'text-red-500'
-        }`}>
-          {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
-        </div>
-        <div className="text-sm text-slate-500 mt-1">
-          From time efficiency
-        </div>
-      </MetricCard>
+        <MetricCard
+          title="Profit Impact"
+          tooltip="Estimated profit impact per case based on time efficiency"
+        >
+          <div className={`text-2xl font-bold ${
+            surgeon.profitImpact >= 0 ? 'text-emerald-600' : 'text-red-500'
+          }`}>
+            {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            From time efficiency
+          </div>
+        </MetricCard>
 
-      {/* Surgical Time */}
-      <MetricCard
-        title="Typical Surgical Time"
-        tooltip="Median incision-to-closing time across all cases"
-      >
-        <div className="text-2xl font-bold text-slate-900">
-          {formatDuration(efficiencyMetrics.avgSurgicalTime)}
-        </div>
-        <div className="text-sm text-slate-500 mt-1">
-          Incision to closing
-        </div>
-      </MetricCard>
+        <MetricCard
+          title="Typical Surgical Time"
+          tooltip="Median incision-to-closing time across all cases"
+        >
+          <div className="text-2xl font-bold text-slate-900">
+            {formatDuration(efficiencyMetrics.avgSurgicalTime)}
+          </div>
+          <div className="text-sm text-slate-500 mt-1">
+            Incision to closing
+          </div>
+        </MetricCard>
 
-      {/* Consistency */}
-      <MetricCard
-        title="Consistency"
-        tooltip="Based on variation in case durations (lower variation = higher consistency)"
-      >
-        <ConsistencyBadge rating={efficiencyMetrics.consistencyRating} size="large" />
-        <div className="text-sm text-slate-500 mt-2">
-          Case duration variance
+        <MetricCard
+          title="Consistency"
+          tooltip="Based on variation in case durations (lower variation = higher consistency)"
+        >
+          <ConsistencyBadge rating={efficiencyMetrics.consistencyRating} size="large" />
+          <div className="text-sm text-slate-500 mt-2">
+            Case duration variance
+          </div>
+        </MetricCard>
+      </div>
+
+      {/* Average Case Economics */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Average Case Economics</h3>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between py-1.5">
+            <span className="text-sm text-slate-500">Reimbursement</span>
+            <span className="text-sm font-medium text-slate-900 tabular-nums">
+              {formatCurrency(costBreakdown.avgReimbursement)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-1.5 pl-4">
+            <span className="text-sm text-slate-500">Debits (implants, supplies)</span>
+            <span className="text-sm font-medium text-red-500 tabular-nums">
+              ({formatCurrency(costBreakdown.avgDebits)})
+            </span>
+          </div>
+          {costBreakdown.avgCredits > 0 && (
+            <div className="flex items-center justify-between py-1.5 pl-4">
+              <span className="text-sm text-slate-500">Credits (rebates, fees)</span>
+              <span className="text-sm font-medium text-emerald-600 tabular-nums">
+                +{formatCurrency(costBreakdown.avgCredits)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between py-1.5 pl-4">
+            <span className="text-sm text-slate-500">OR Time Cost</span>
+            <span className="text-sm font-medium text-red-500 tabular-nums">
+              ({formatCurrency(costBreakdown.avgORCost)})
+            </span>
+          </div>
+          <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-slate-200">
+            <span className="text-sm font-semibold text-slate-900">Avg Profit/Case</span>
+            <span className={`text-sm font-bold tabular-nums ${costBreakdown.avgProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {formatCurrency(costBreakdown.avgProfit)}
+            </span>
+          </div>
         </div>
-      </MetricCard>
+      </div>
     </div>
   )
 }
@@ -653,18 +747,15 @@ function DailyActivityTab({
             onClick={() => onDateSelect(day.date)}
             className="flex items-center gap-4 px-6 py-4 hover:bg-blue-50/50 cursor-pointer transition-all group"
           >
-            {/* Date */}
             <div className="w-20">
               <div className="text-lg font-bold text-slate-900">{formatShortDate(day.date)}</div>
               <div className="text-sm text-slate-500">{day.dayOfWeek}</div>
             </div>
             
-            {/* Case Count Badge */}
             <div className="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-semibold">
               {day.caseCount} {day.caseCount === 1 ? 'case' : 'cases'}
             </div>
             
-            {/* Metrics */}
             <div className="flex-1 flex items-center gap-8 justify-end">
               <div className="text-right">
                 <div className="text-xs text-slate-500 uppercase tracking-wide">Duration</div>
@@ -689,7 +780,7 @@ function DailyActivityTab({
 }
 
 // ============================================
-// PROCEDURES TAB
+// PROCEDURES TAB (within surgeon detail)
 // ============================================
 
 function ProceduresTab({ 
@@ -749,13 +840,13 @@ function ProceduresTab({
                       <span className="ml-1.5 text-amber-500 text-xs">*</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right font-semibold text-emerald-600">
+                  <td className="px-6 py-4 text-right font-semibold text-emerald-600 tabular-nums">
                     {formatCurrency(proc.totalProfit)}
                   </td>
-                  <td className="px-6 py-4 text-right text-slate-900">
+                  <td className="px-6 py-4 text-right text-slate-900 tabular-nums">
                     {formatDuration(proc.medianDuration)}
                   </td>
-                  <td className="px-6 py-4 text-right text-slate-500">
+                  <td className="px-6 py-4 text-right text-slate-500 tabular-nums">
                     {formatDuration(facilityMedian)}
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -785,12 +876,11 @@ function ProceduresTab({
 // SURGEON DAY VIEW
 // ============================================
 
-// Phase type for duration pills
 interface CasePhases {
-  preOp: number | null      // patient_in → incision
-  surgical: number | null   // incision → closing
-  closing: number | null    // closing → closing_complete
-  emergence: number | null  // closing_complete → patient_out
+  preOp: number | null
+  surgical: number | null
+  closing: number | null
+  emergence: number | null
 }
 
 function SurgeonDayView({
@@ -807,14 +897,12 @@ function SurgeonDayView({
   const [milestoneMap, setMilestoneMap] = useState<Record<string, CasePhases>>({})
   const [loadingMilestones, setLoadingMilestones] = useState(false)
 
-  // Filter cases for selected date
   const dayCases = useMemo(() => {
     return surgeonCases
       .filter(c => c.case_date === selectedDate)
       .sort((a, b) => (a.actual_start_time || '').localeCompare(b.actual_start_time || ''))
   }, [surgeonCases, selectedDate])
 
-  // Fetch milestones for the day's cases
   const fetchMilestones = useCallback(async (caseIds: string[]) => {
     if (caseIds.length === 0) {
       setMilestoneMap({})
@@ -841,10 +929,7 @@ function SurgeonDayView({
         return
       }
 
-      // Build phase map per case
       const phaseMap: Record<string, CasePhases> = {}
-      
-      // Group milestones by case
       const byCaseId: Record<string, Array<{ name: string; recorded_at: string }>> = {}
       for (const m of data || []) {
         const fm = Array.isArray(m.facility_milestones) 
@@ -856,7 +941,6 @@ function SurgeonDayView({
         byCaseId[m.case_id].push({ name: fm.name, recorded_at: m.recorded_at })
       }
 
-      // Calculate phases for each case
       for (const [caseId, milestones] of Object.entries(byCaseId)) {
         const timeMap: Record<string, number> = {}
         for (const m of milestones) {
@@ -887,13 +971,11 @@ function SurgeonDayView({
     }
   }, [])
 
-  // Fetch milestones when day cases change
   useEffect(() => {
     const caseIds = dayCases.map(c => c.case_id)
     fetchMilestones(caseIds)
   }, [dayCases, fetchMilestones])
 
-  // Calculate surgeon's medians for comparison
   const surgeonMedians = useMemo(() => {
     const byProcedure: Record<string, { durations: number[], profits: number[] }> = {}
     
@@ -916,7 +998,6 @@ function SurgeonDayView({
     return result
   }, [surgeonCases])
 
-  // Day metrics
   const dayMetrics = useMemo(() => {
     const totalProfit = dayCases.reduce((sum, c) => sum + (c.profit || 0), 0)
     const totalDuration = dayCases.reduce((sum, c) => sum + (c.total_duration_minutes || 0), 0)
@@ -937,7 +1018,6 @@ function SurgeonDayView({
 
   return (
     <div className="space-y-6">
-      {/* Date Picker Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">{formatDateDisplay(selectedDate)}</h2>
@@ -951,7 +1031,6 @@ function SurgeonDayView({
         />
       </div>
 
-      {/* Day Overview Metrics */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
@@ -963,7 +1042,6 @@ function SurgeonDayView({
           </div>
         </div>
 
-        {/* Top Metrics Row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <DayMetricCard 
             icon={ClockIcon}
@@ -988,7 +1066,6 @@ function SurgeonDayView({
           />
         </div>
 
-        {/* Uptime Bar */}
         {dayMetrics.totalDuration > 0 && (
           <div className="mt-6 pt-6 border-t border-slate-100">
             <div className="flex items-center justify-between mb-2">
@@ -1023,7 +1100,6 @@ function SurgeonDayView({
               <h3 className="text-lg font-semibold text-slate-900">Cases</h3>
               <p className="text-sm text-slate-500 mt-0.5">{dayCases.length} cases completed</p>
             </div>
-            {/* Phase Legend */}
             {dayCases.length > 0 && !loadingMilestones && Object.keys(milestoneMap).length > 0 && (
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Pre-Op</div>
@@ -1063,7 +1139,6 @@ function SurgeonDayView({
               return (
                 <div key={caseData.case_id} className="px-6 py-5 hover:bg-slate-50/50 transition-colors">
                   <div className="flex items-start gap-4">
-                    {/* Case Number Badge */}
                     <div className="flex flex-col items-center gap-1">
                       <div className={`
                         w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold
@@ -1079,7 +1154,6 @@ function SurgeonDayView({
                       )}
                     </div>
 
-                    {/* Case Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-slate-900">
@@ -1094,7 +1168,6 @@ function SurgeonDayView({
                         <span>{formatTime(caseData.actual_start_time, caseData.case_date)}</span>
                       </div>
 
-                      {/* Phase Duration Pills */}
                       {phases && (
                         <div className="flex items-center gap-1.5 mt-2.5">
                           <PhasePill label="Pre-Op" minutes={phases.preOp} color="blue" />
@@ -1112,9 +1185,7 @@ function SurgeonDayView({
                       )}
                     </div>
 
-                    {/* Metrics with Comparison Pills */}
                     <div className="flex items-center gap-6 flex-shrink-0">
-                      {/* Duration */}
                       <div className="text-right">
                         <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Duration</div>
                         <div className="flex items-center justify-end gap-2">
@@ -1127,7 +1198,6 @@ function SurgeonDayView({
                         </div>
                       </div>
 
-                      {/* Profit */}
                       <div className="text-right min-w-[140px]">
                         <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Profit</div>
                         <div className="flex items-center justify-end gap-2">
@@ -1241,7 +1311,86 @@ function DayMetricCard({
 }
 
 // ============================================
-// ENTERPRISE-LEVEL COMPARISON PILL
+// SORT TABLE HEADER
+// ============================================
+
+function SortTH<T extends string>({
+  label,
+  sortKey,
+  current,
+  dir,
+  onClick,
+  align = 'right',
+}: {
+  label: string
+  sortKey: T
+  current: T
+  dir: SortDir
+  onClick: (key: T) => void
+  align?: 'left' | 'center' | 'right'
+}) {
+  const isActive = current === sortKey
+  const alignClass = align === 'center' ? 'text-center' : align === 'left' ? 'text-left' : 'text-right'
+
+  return (
+    <th
+      className={`px-6 py-3 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 transition-colors ${alignClass} ${
+        isActive ? 'text-slate-700' : 'text-slate-500'
+      }`}
+      onClick={() => onClick(sortKey)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {isActive && (
+          dir === 'desc'
+            ? <ChevronDownIcon className="w-3 h-3" />
+            : <ChevronUpIcon className="w-3 h-3" />
+        )}
+      </span>
+    </th>
+  )
+}
+
+// ============================================
+// RANK BADGE
+// ============================================
+
+function RankBadge({ rank }: { rank: number }) {
+  const styles = rank <= 3
+    ? [
+        'bg-gradient-to-br from-amber-400 to-amber-500 text-white',
+        'bg-gradient-to-br from-slate-300 to-slate-400 text-white',
+        'bg-gradient-to-br from-amber-600 to-amber-700 text-white',
+      ][rank - 1]
+    : 'bg-slate-100 text-slate-600'
+
+  return (
+    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm ${styles}`}>
+      {rank}
+    </div>
+  )
+}
+
+// ============================================
+// MARGIN BADGE
+// ============================================
+
+function MarginBadge({ value }: { value: number }) {
+  const color =
+    value >= 30 ? 'bg-emerald-50 text-emerald-700' :
+    value >= 15 ? 'bg-amber-50 text-amber-700' :
+    value >= 0 ? 'bg-red-50 text-red-700' :
+    'bg-red-100 text-red-800'
+
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-semibold tabular-nums ${color}`}>
+      {formatPercent(value)}
+    </span>
+  )
+}
+
+// ============================================
+// COMPARISON PILL
 // ============================================
 
 function ComparisonPill({ 
@@ -1253,13 +1402,10 @@ function ComparisonPill({
   value: number
   unit?: string
   format?: 'currency' | 'percent'
-  invertColors?: boolean  // For duration, negative is good
+  invertColors?: boolean
 }) {
   const isPositive = value > 0
   const isNeutral = Math.abs(value) < 0.5
-  
-  // For duration: negative = faster = good (green)
-  // For profit: positive = more money = good (green)
   const isGood = invertColors ? !isPositive : isPositive
   
   let displayValue: string

@@ -392,6 +392,39 @@ export interface OutlierStats {
 }
 
 // ============================================
+// ISSUE TYPE (discriminated union for IssuesBadge)
+// ============================================
+
+export type Issue =
+  | {
+      type: 'overTime'
+      actualMinutes: number
+      expectedMinutes: number
+      minutesOver: number
+    }
+  | {
+      type: 'lowProfit'
+      actualProfit: number
+      expectedProfit: number
+      amountBelow: number
+    }
+  | {
+      type: 'delay'
+      delays: { name: string; minutes?: number }[]
+      totalMinutes: number
+    }
+  | {
+      type: 'lowPayer'
+      payerName: string
+      payerRate: number
+      defaultRate: number
+      percentBelow: number
+    }
+  | {
+      type: 'unknown'
+    }
+
+// ============================================
 // PROFIT TREND
 // ============================================
 
