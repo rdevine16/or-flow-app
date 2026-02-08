@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import { Spinner } from '@/components/ui/Loading'
 
 
 interface AuditLogEntry {
@@ -242,7 +243,7 @@ const csvContent = [
       <DashboardLayout>
         <Container className="py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+<Spinner size="md" />
           </div>
         </Container>
       </DashboardLayout>
