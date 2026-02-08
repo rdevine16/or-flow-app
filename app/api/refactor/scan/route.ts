@@ -169,6 +169,61 @@ function findConsoleLogs(
         warnings.push('Inside try/catch - verify error handling')
       }
 
+      // ========================================
+      // ENHANCED: Find where to add imports and hooks
+      // ========================================
+      const relatedLocations: Array<{ line: number; code: string; type: string; instruction: string }> = []
+      
+      // Find import location (first import or top of file)
+      let importLine = 1
+      for (let i = 0; i < Math.min(50, lines.length); i++) {
+        if (lines[i].includes('import ') && lines[i].includes('from')) {
+          importLine = i + 1
+        }
+        if (lines[i].includes('export') && (lines[i].includes('function') || lines[i].includes('const'))) {
+          break // Stop at first export
+        }
+      }
+      
+      relatedLocations.push({
+        line: importLine,
+        code: "import { useToast } from '@/components/ui/Toast/ToastProvider'",
+        type: 'import',
+        instruction: 'Add this import with your other imports at the top'
+      })
+      
+      // Find where to add the hook (inside component/function)
+      let hookLine = lineNum
+      for (let i = index; i >= 0; i--) {
+        // Look for function declarations
+        if (lines[i].match(/^export\s+(default\s+)?function/) || 
+            lines[i].match(/^(export\s+)?(const|function)\s+\w+\s*=/) ||
+            lines[i].includes('export default function')) {
+          // Found the function, hook goes right after the opening brace
+          for (let j = i; j < Math.min(i + 10, lines.length); j++) {
+            if (lines[j].includes('{')) {
+              hookLine = j + 2 // Skip opening brace and add on next line
+              break
+            }
+          }
+          break
+        }
+      }
+      
+      relatedLocations.push({
+        line: hookLine,
+        code: "const { showToast } = useToast()",
+        type: 'hook',
+        instruction: 'Add this hook at the top of your component (after the function declaration)'
+      })
+      
+      relatedLocations.push({
+        line: lineNum,
+        code: trimmed,
+        type: 'console-statement',
+        instruction: 'Replace this console statement with the toast call'
+      })
+
       // Generate suggested fix
       let toastType = 'info'
       let afterCode = ''
@@ -201,6 +256,24 @@ function findConsoleLogs(
 })`
       }
 
+      // ========================================
+      // ENHANCED: Add helpful step-by-step instructions
+      // ========================================
+      const stepByStep = `STEP-BY-STEP FIX:
+
+1. ADD IMPORT (Line ${importLine}):
+   ${relatedLocations[0].code}
+
+2. ADD HOOK (Line ${hookLine}, inside your component):
+   ${relatedLocations[1].code}
+
+3. REPLACE CONSOLE (Line ${lineNum}):
+   BEFORE: ${trimmed}
+   AFTER: ${afterCode}`
+
+      warnings.push(stepByStep)
+      warnings.push(`Found ${relatedLocations.length} code locations to update`)
+
       issues.push({
         id: `${file}-${lineNum}-console`,
         file,
@@ -211,11 +284,15 @@ function findConsoleLogs(
         beforeCode: trimmed,
         afterCode,
         context: getContext(lines, index, 5),
-        imports: [
-          "import { useToast } from '@/components/ui/Toast/ToastProvider'",
-          "const { showToast } = useToast()"
-        ],
-        warnings: warnings.length > 0 ? warnings : undefined,
+        warnings,
+        // ENHANCED: Add metadata with exact locations
+        metadata: {
+          relatedLocations,
+          importLine,
+          hookLine,
+          autoFixable: true,
+          stepByStep
+        }
       })
     }
   })
