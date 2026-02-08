@@ -82,7 +82,14 @@ const ToastContext = createContext<ToastContextValue | undefined>(undefined)
 export function useToast() {
   const context = useContext(ToastContext)
   if (!context) {
-    throw new Error('useToast must be used within ToastProvider')
+    // Safe fallback for SSR/build
+    console.warn('useToast called outside ToastProvider, using fallback')
+    return {
+      toasts: [],
+      showToast: () => '',
+      dismissToast: () => {},
+      dismissAll: () => {}
+    }
   }
   return context
 }
