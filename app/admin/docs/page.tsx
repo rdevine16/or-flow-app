@@ -310,6 +310,96 @@ export default function AdminDocsPage() {
     setShowDeleteConfirm(false)
   }
 
+  const [isRescanning, setIsRescanning] = useState(false)
+  const [isBulkRescanning, setIsBulkRescanning] = useState(false)
+
+  /** Derive the source file path for a registry entry */
+  const deriveFilePath = (page: PageEntry): string => {
+    // Primary: extract from notes (set by scanner: "Auto-scanned from <path> (N lines)")
+    const fromNotes = page.notes?.match(/Auto-scanned from (.+?) \(/)?.[1]
+    if (fromNotes) return fromNotes
+
+    // Fallback: reverse-derive from route
+    const route = page.route
+    if (route.startsWith('/api/')) return `app${route}/route.ts`
+    if (route.startsWith('lib/') || route.startsWith('components/')) return `${route}.ts`
+    if (route.startsWith('/')) {
+      const stripped = route === '/' ? '' : route
+      return `app${stripped}/page.tsx`
+    }
+    return `${route}.ts`
+  }
+
+  /** Scan a single file and sync auto fields */
+  const rescanEntry = async (page: PageEntry, session: any): Promise<boolean> => {
+    let filePath = deriveFilePath(page)
+
+    let res = await fetch('/api/admin/scan-pages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ filePath }),
+    })
+
+    // Try .tsx variant if .ts 404'd
+    if (res.status === 404 && filePath.endsWith('.ts')) {
+      filePath = filePath.replace(/\.ts$/, '.tsx')
+      res = await fetch('/api/admin/scan-pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ filePath }),
+      })
+    }
+
+    if (!res.ok) return false
+
+    const data = await res.json()
+    const meta = data.metadata
+
+    await syncAutoFields(supabase, page.id, meta)
+    await updatePage(supabase, page.id, {
+      notes: `Auto-scanned from ${filePath} (${meta._source_lines} lines)`,
+    })
+    return true
+  }
+
+  const handleRescan = async () => {
+    if (!selectedPage) return
+    setIsRescanning(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const ok = await rescanEntry(selectedPage, session)
+      if (!ok) throw new Error('File not found — add the file path via Edit → Notes')
+      addToast(`Re-scanned ${selectedPage.name} — auto fields updated`, 'success')
+      await loadPages()
+    } catch (err: any) {
+      addToast(err.message || 'Re-scan failed', 'error')
+    }
+    setIsRescanning(false)
+  }
+
+  const handleRescanAll = async () => {
+    setIsBulkRescanning(true)
+    let synced = 0
+    let failed = 0
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      for (const page of pages) {
+        try {
+          const ok = await rescanEntry(page, session)
+          if (ok) synced++
+          else failed++
+        } catch {
+          failed++
+        }
+      }
+      await loadPages()
+      addToast(`Re-scanned ${synced} entries${failed > 0 ? ` (${failed} failed)` : ''}`, synced > 0 ? 'success' : 'error')
+    } catch (err: any) {
+      addToast(err.message || 'Bulk re-scan failed', 'error')
+    }
+    setIsBulkRescanning(false)
+  }
+
   const toggleCategory = useCallback((cat: string) => {
     setExpandedCategories(prev => {
       const next = new Set(prev)
@@ -585,6 +675,8 @@ export default function AdminDocsPage() {
               pages={pages}
               categories={categories}
               onNavigate={(id: string) => { setSelectedPageId(id); setActiveTab('overview'); setShowHealth(false) }}
+              onRescanAll={handleRescanAll}
+              isRescanning={isBulkRescanning}
             />
           ) : !selectedPage ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-400">
@@ -627,6 +719,19 @@ export default function AdminDocsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 ml-4 flex-shrink-0">
+                    <button
+                      onClick={handleRescan}
+                      disabled={isRescanning}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                      title="Re-scan file and update auto fields"
+                    >
+                      {isRescanning ? (
+                        <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                      ) : (
+                        <Icon d={icons.refresh} className="w-3.5 h-3.5" />
+                      )}
+                      Re-scan
+                    </button>
                     <button
                       onClick={handleEdit}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
@@ -2540,7 +2645,7 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
       severity: 'warning',
       group: 'Dead Code',
       title: 'Orphaned Components',
-      description: 'Registered components not imported by any other entry. May be unused or missing from import tracking.',
+      description: 'Registered components not listed in any other entry\'s imports. Re-scan importing pages to refresh their components[] before removing.',
       entries: orphanedComponents.map(p => ({ id: p.id, name: p.name, route: p.route })),
     })
   }
@@ -2782,10 +2887,14 @@ function HealthPanel({
   pages,
   categories,
   onNavigate,
+  onRescanAll,
+  isRescanning,
 }: {
   pages: PageEntry[]
   categories: Category[]
   onNavigate: (id: string) => void
+  onRescanAll: () => void
+  isRescanning: boolean
 }) {
   const issues = useMemo(() => analyzeHealth(pages), [pages])
   const [expandedIssue, setExpandedIssue] = useState<string | null>(null)
@@ -2822,9 +2931,23 @@ function HealthPanel({
     <div className="max-w-4xl mx-auto px-8 py-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
-          <Icon d={icons.health} className="w-6 h-6 text-rose-500" />
-          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Registry Health</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 mb-1">
+            <Icon d={icons.health} className="w-6 h-6 text-rose-500" />
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Registry Health</h2>
+          </div>
+          <button
+            onClick={onRescanAll}
+            disabled={isRescanning}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+          >
+            {isRescanning ? (
+              <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+            ) : (
+              <Icon d={icons.refresh} className="w-3.5 h-3.5" />
+            )}
+            Re-scan All
+          </button>
         </div>
         <p className="text-sm text-slate-500">
           Cross-cutting analysis of {pages.length} registered entries
