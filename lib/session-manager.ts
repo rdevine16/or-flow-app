@@ -10,6 +10,7 @@
  */
 
 import { createClient } from '@/lib/supabase'
+import { useState, useEffect } from 'react'
 
 // Session durations
 const SESSION_DURATION = {
