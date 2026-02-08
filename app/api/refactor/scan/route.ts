@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { RefactorIssue, RiskLevel, IssueType } from '@/app/refactor/page'
 
+
 // Directories to scan
 const SCAN_DIRS = ['app', 'components']
 const EXCLUDE_DIRS = ['node_modules', '.next', '.git', 'dist', 'build']
@@ -386,47 +387,152 @@ function findInlineDeleteConfirms(
   })
 }
 
+// ============================================
+// ENHANCED findHardcodedColors Function
+// Place this after findInlineDeleteConfirms in route.ts
+// ============================================
+
 function findHardcodedColors(
   file: string,
   lines: string[],
   issues: RefactorIssue[]
 ) {
-  const colorPattern = /['"`](bg|text|border)-(blue|emerald|amber|red|slate|green|yellow|orange|purple|pink|indigo)-(\d+)['"`]/g
+  const hardcodedColorPattern = /(text|bg|border)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(\d{2,3})/
 
   lines.forEach((line, index) => {
-    const matches = [...line.matchAll(colorPattern)]
+    const matches = line.matchAll(new RegExp(hardcodedColorPattern, 'g'))
     
-    if (matches.length > 0) {
+    for (const match of matches) {
       const lineNum = index + 1
-      const trimmed = line.trim()
+      const fullMatch = match[0]
+      const colorType = match[1] as 'text' | 'bg' | 'border'
+      const colorName = match[2]
+      const colorShade = match[3]
 
-      // Check if this looks like a status-related color
-      const context = getContext(lines, index, 5)
-      const isStatus = context.match(/status|completed|scheduled|in_progress|delayed|cancelled|active|inactive/i)
-
-      if (isStatus) {
-        issues.push({
-          id: `${file}-${lineNum}-color`,
-          file,
-          line: lineNum,
-          type: 'hardcoded-color',
-          risk: 'safe',
-          description: 'Replace hardcoded status colors with design tokens',
-          beforeCode: trimmed,
-          afterCode: `import { getStatusColors } from '@/lib/design-tokens'
-
-const colors = getStatusColors(status)
-// Use: colors.bg, colors.text, colors.border, etc.`,
-          context,
-          imports: [
-            "import { getStatusColors } from '@/lib/design-tokens'"
-          ],
-        })
+      // Skip if it's in a comment
+      if (line.trim().startsWith('//') || line.trim().startsWith('/*')) {
+        continue
       }
+
+      // Check if this is a conditional color (e.g., isActive ? 'text-green-500' : 'text-gray-400')
+      const isConditional = line.includes('?') && line.includes(':')
+      
+      let activeColor = fullMatch
+      let inactiveColor = ''
+      
+      if (isConditional) {
+        // Try to extract both colors from the ternary
+        const ternaryMatch = line.match(/\?\s*['"`]([^'"`]+)['"`]\s*:\s*['"`]([^'"`]+)['"`]/)
+        if (ternaryMatch) {
+          activeColor = ternaryMatch[1]
+          inactiveColor = ternaryMatch[2]
+        }
+      }
+
+      // Generate the context
+      const context = getContext(lines, index, 5)
+
+      // Detect what variable is being checked (e.g., is_active, status, etc.)
+      const conditionVar = detectConditionVariable(line)
+
+      // Generate suggested colors (for now, suggest common alternatives)
+      const suggestedActive = getSuggestedColors(activeColor, 'active')
+      const suggestedInactive = inactiveColor ? getSuggestedColors(inactiveColor, 'inactive') : []
+
+      issues.push({
+        id: `${file}-${lineNum}-hardcoded-color`,
+        file,
+        line: lineNum,
+        type: 'hardcoded-color',
+        risk: 'safe',
+        description: 'Replace hardcoded status colors with design tokens',
+        beforeCode: line.trim(),
+        afterCode: `// Select your colors from the picker below
+className={\`font-medium \${${conditionVar} ? 'ACTIVE_COLOR' : 'INACTIVE_COLOR'}\`}`,
+        context,
+        warnings: [
+          `Found hardcoded colors: ${activeColor}${inactiveColor ? ` and ${inactiveColor}` : ''}`,
+          `Suggested active colors: ${suggestedActive.join(', ')}`,
+          inactiveColor ? `Suggested inactive colors: ${suggestedInactive.join(', ')}` : '',
+        ].filter(Boolean),
+        metadata: {
+          colorType,
+          isConditional,
+          conditionVariable: conditionVar,
+          currentColors: {
+            active: activeColor,
+            inactive: inactiveColor || null
+          },
+          suggestedColors: {
+            active: suggestedActive,
+            inactive: suggestedInactive
+          },
+          // This tells the UI to show enhanced suggestions
+          hasColorSuggestions: true,
+          autoFixable: false,
+        }
+      })
     }
   })
 }
 
+/**
+ * Detect the variable being checked in a conditional
+ * e.g., "reason.is_active ? ..." → "reason.is_active"
+ */
+function detectConditionVariable(line: string): string {
+  // Look for common patterns
+  const patterns = [
+    /(\w+\.is_active)\s*\?/,
+    /(\w+\.active)\s*\?/,
+    /(\w+\.status)\s*\?/,
+    /(\w+)\s*===\s*['"`]active['"`]/,
+    /(\w+)\s*\?/
+  ]
+
+  for (const pattern of patterns) {
+    const match = line.match(pattern)
+    if (match) return match[1]
+  }
+
+  return 'isActive' // Default fallback
+}
+
+/**
+ * Get suggested color alternatives
+ * For now, returns simple suggestions
+ * Later: can be enhanced to read from CSS files
+ */
+function getSuggestedColors(currentColor: string, state: 'active' | 'inactive'): string[] {
+  const colorMatch = currentColor.match(/(text|bg|border)-([a-z]+)-(\d+)/)
+  if (!colorMatch) return []
+  
+  const [, type, name, shade] = colorMatch
+  const suggestions: string[] = []
+  
+  if (state === 'active') {
+    // Darker shades for active state
+    suggestions.push(`${type}-${name}-900`)
+    suggestions.push(`${type}-${name}-800`)
+    suggestions.push(`${type}-${name}-700`)
+  } else {
+    // Lighter shades for inactive state
+    suggestions.push(`${type}-${name}-400`)
+    suggestions.push(`${type}-${name}-300`)
+    suggestions.push(`${type}-${name}-200`)
+  }
+  
+  // Add different color families
+  if (state === 'active') {
+    suggestions.push(`${type}-slate-900`)
+    suggestions.push(`${type}-emerald-900`)
+  } else {
+    suggestions.push(`${type}-slate-400`)
+    suggestions.push(`${type}-gray-400`)
+  }
+  
+  return suggestions
+}
 function findInlineSpinners(
   file: string,
   lines: string[],
