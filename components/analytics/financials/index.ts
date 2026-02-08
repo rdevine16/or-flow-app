@@ -2,7 +2,7 @@
 export * from './types'
 export * from './utils'
 export { useFinancialsMetrics } from './useFinancialsMetrics'
-export { default as DateRangeSelector } from './DateRangeSelector'
+export { default as DateRangeSelector } from '@/components/ui/DateRangeSelector'
 export { default as MetricCard } from './MetricCard'
 export { default as IssuesBadge } from './IssuesBadge'
 export { default as OverviewTab } from './OverviewTab'
