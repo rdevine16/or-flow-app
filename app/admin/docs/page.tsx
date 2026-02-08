@@ -792,7 +792,7 @@ function PageFormModal({
             <TagInput label="Realtime Subscriptions" value={form.realtime} onChange={v => set('realtime', v)} placeholder="table name" />
             <TagInput label="Materialized Views" value={form.materialized_views} onChange={v => set('materialized_views', v)} placeholder="view name" />
             <TagInput label="API Routes" value={form.api_routes} onChange={v => set('api_routes', v)} placeholder="/api/route" />
-            {form.category === 'api-routes' && (
+            {form.category === 'API Routes' && (
               <FormField label="HTTP Methods">
                 <MultiCheckbox
                   options={['GET', 'POST', 'PUT', 'PATCH', 'DELETE']}
@@ -961,7 +961,7 @@ interface DiscoveredFile {
   filePath: string
   route: string
   fileName: string
-  scope: 'pages' | 'api' | 'lib' | 'components'
+  scope: 'pages' | 'api' | 'layouts' | 'lib' | 'components' | 'infra'
   sizeBytes: number
   lastModified: string
 }
@@ -1016,7 +1016,7 @@ function ScannerModal({
   const [fileDrift, setFileDrift] = useState<Record<string, DriftResult[]>>({})
   const [isBulkImporting, setIsBulkImporting] = useState(false)
   const [hasScanned, setHasScanned] = useState(false)
-  const [scopeFilter, setScopeFilter] = useState<'all' | 'pages' | 'api' | 'lib' | 'components'>('all')
+  const [scopeFilter, setScopeFilter] = useState<'all' | 'pages' | 'api' | 'layouts' | 'lib' | 'components' | 'infra'>('all')
 
   // Load registry for comparison
   useEffect(() => {
@@ -1038,8 +1038,10 @@ function ScannerModal({
     all: discoveredFiles.length,
     pages: discoveredFiles.filter(f => f.scope === 'pages').length,
     api: discoveredFiles.filter(f => f.scope === 'api').length,
+    layouts: discoveredFiles.filter(f => f.scope === 'layouts').length,
     lib: discoveredFiles.filter(f => f.scope === 'lib').length,
     components: discoveredFiles.filter(f => f.scope === 'components').length,
+    infra: discoveredFiles.filter(f => f.scope === 'infra').length,
   }
 
   const runScan = async () => {
@@ -1095,7 +1097,7 @@ function ScannerModal({
     const { _scan_confidence, _source_lines, _scope, ...rest } = meta
     const entry: PageEntryInsert = {
       ...rest,
-      category: rest.category || 'shared',
+      category: rest.category || 'Shared',
       description: rest.description || '',
       materialized_views: rest.materialized_views || [],
       http_methods: rest.http_methods || [],
@@ -1191,7 +1193,7 @@ function ScannerModal({
 
         const entry: PageEntryInsert = {
           ...rest,
-          category: rest.category || 'shared',
+          category: rest.category || 'Shared',
           description: rest.description || '',
           materialized_views: rest.materialized_views || [],
           http_methods: rest.http_methods || [],
@@ -1267,8 +1269,8 @@ function ScannerModal({
           ) : (
             <div>
               {/* Scope filter tabs */}
-              <div className="flex gap-1 mb-4">
-                {(['all', 'pages', 'api', 'lib', 'components'] as const).map(s => (
+              <div className="flex gap-1 mb-4 flex-wrap">
+                {(['all', 'pages', 'api', 'layouts', 'lib', 'components', 'infra'] as const).map(s => (
                   <button
                     key={s}
                     onClick={() => setScopeFilter(s)}

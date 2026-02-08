@@ -1,6 +1,6 @@
 // app/api/admin/scan-pages/route.ts
-// Scans the project for all TypeScript files and extracts metadata.
-// GET ?scope=all|pages|api|lib|components — list discovered files
+// Scans the ENTIRE project for all TypeScript files and extracts metadata.
+// GET ?scope=all|pages|api|layouts|lib|components|infra — list discovered files
 // POST { filePath } — scan a specific file and extract metadata
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -42,7 +42,7 @@ async function verifyGlobalAdmin(req: NextRequest): Promise<boolean> {
 // Types
 // =============================================================================
 
-type FileScope = 'pages' | 'api' | 'lib' | 'components'
+type FileScope = 'pages' | 'api' | 'layouts' | 'lib' | 'components' | 'infra'
 
 interface DiscoveredFile {
   filePath: string
@@ -52,6 +52,18 @@ interface DiscoveredFile {
   sizeBytes: number
   lastModified: string
 }
+
+// =============================================================================
+// Directories to always skip
+// =============================================================================
+
+const SKIP_DIRS = new Set([
+  'node_modules', '.next', '.git', '.vercel', '.turbo',
+  'coverage', 'dist', 'build', '__tests__', '__mocks__',
+])
+
+/** Directories already covered by their own scope */
+const SCOPED_DIRS = new Set(['app', 'lib', 'components'])
 
 // =============================================================================
 // GET — Discover files
@@ -67,17 +79,17 @@ export async function GET(req: NextRequest) {
     const projectRoot = process.cwd()
     const files: DiscoveredFile[] = []
 
-    // Pages: app/**/page.tsx
+    // ── 1. Pages: app/**/page.tsx (skip api/) ──
     if (scope === 'all' || scope === 'pages') {
       const appDir = path.join(projectRoot, 'app')
       if (fs.existsSync(appDir)) {
         files.push(...findFiles(appDir, projectRoot, 'pages', (name) => {
           return name === 'page.tsx' || name === 'page.ts'
-        }, ['node_modules', '.next', 'api']))
+        }, ['api']))
       }
     }
 
-    // API routes: app/api/**/route.ts
+    // ── 2. API routes: app/api/**/route.ts ──
     if (scope === 'all' || scope === 'api') {
       const apiDir = path.join(projectRoot, 'app', 'api')
       if (fs.existsSync(apiDir)) {
@@ -87,7 +99,25 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Lib files: lib/**/*.ts
+    // ── 3. Layouts & special Next.js files ──
+    if (scope === 'all' || scope === 'layouts') {
+      const appDir = path.join(projectRoot, 'app')
+      const specialFiles = new Set([
+        'layout.tsx', 'layout.ts',
+        'loading.tsx', 'loading.ts',
+        'error.tsx', 'error.ts',
+        'not-found.tsx', 'not-found.ts',
+        'template.tsx', 'template.ts',
+        'global-error.tsx', 'global-error.ts',
+      ])
+      if (fs.existsSync(appDir)) {
+        files.push(...findFiles(appDir, projectRoot, 'layouts', (name) => {
+          return specialFiles.has(name)
+        }, ['api']))
+      }
+    }
+
+    // ── 4. Lib files: lib/**/*.ts(x) ──
     if (scope === 'all' || scope === 'lib') {
       const libDir = path.join(projectRoot, 'lib')
       if (fs.existsSync(libDir)) {
@@ -97,7 +127,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Components: components/**/*.tsx
+    // ── 5. Components: components/**/*.tsx ──
     if (scope === 'all' || scope === 'components') {
       const compDir = path.join(projectRoot, 'components')
       if (fs.existsSync(compDir)) {
@@ -107,11 +137,67 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ files })
+    // ── 6. Infra: everything else ──
+    if (scope === 'all' || scope === 'infra') {
+      // 6a. Root-level files (middleware.ts, next.config.ts, tailwind.config.ts, etc.)
+      const rootEntries = fs.readdirSync(projectRoot, { withFileTypes: true })
+      for (const entry of rootEntries) {
+        if (entry.isFile() && isInfraFile(entry.name)) {
+          const relativePath = entry.name
+          const stat = fs.statSync(path.join(projectRoot, relativePath))
+          files.push({
+            filePath: relativePath,
+            route: relativePath.replace(/\.(tsx?|js|mjs|cjs)$/, ''),
+            fileName: entry.name,
+            scope: 'infra',
+            sizeBytes: stat.size,
+            lastModified: stat.mtime.toISOString(),
+          })
+        }
+      }
+
+      // 6b. Auto-discover any top-level directories not already covered
+      for (const entry of rootEntries) {
+        if (!entry.isDirectory()) continue
+        if (entry.name.startsWith('.')) continue
+        if (SKIP_DIRS.has(entry.name)) continue
+        if (SCOPED_DIRS.has(entry.name)) continue
+        // This catches: hooks/, utils/, helpers/, services/, types/, contexts/,
+        // providers/, supabase/, config/, styles/, store/, etc.
+        const dirPath = path.join(projectRoot, entry.name)
+        files.push(...findFiles(dirPath, projectRoot, 'infra', (name) => {
+          return (name.endsWith('.ts') || name.endsWith('.tsx') ||
+                  name.endsWith('.js') || name.endsWith('.mjs') ||
+                  name.endsWith('.css') || name.endsWith('.sql'))
+                  && !name.endsWith('.d.ts')
+        }))
+      }
+    }
+
+    return NextResponse.json({ files, stats: buildStats(files) })
   } catch (error: any) {
     console.error('[scan-pages] GET error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+}
+
+/** Root-level config/infra files to discover */
+function isInfraFile(name: string): boolean {
+  if (name === 'middleware.ts' || name === 'middleware.tsx') return true
+  if (name.startsWith('next.config')) return true
+  if (name.startsWith('tailwind.config')) return true
+  if (name.startsWith('postcss.config')) return true
+  if (name.startsWith('tsconfig')) return true
+  if (name === 'instrumentation.ts') return true
+  // Skip non-code config
+  return false
+}
+
+/** Quick summary stats returned with file list */
+function buildStats(files: DiscoveredFile[]) {
+  const byScope: Record<string, number> = {}
+  for (const f of files) byScope[f.scope] = (byScope[f.scope] || 0) + 1
+  return { total: files.length, byScope }
 }
 
 // =============================================================================
@@ -132,11 +218,21 @@ export async function POST(req: NextRequest) {
     const projectRoot = process.cwd()
     const fullPath = path.join(projectRoot, filePath)
 
-    // Security: only allow reading from known directories
-    const allowed = ['app', 'lib', 'components'].some(dir =>
-      fullPath.startsWith(path.join(projectRoot, dir))
-    )
-    if (!allowed) {
+    // Security: allow reading from known directories AND root-level infra files
+    const isRootInfra = !filePath.includes('/') && isInfraFile(filePath)
+    const allowed = isRootInfra || [
+      'app', 'lib', 'components',
+      // Auto-discovered dirs — allow anything that isn't in SKIP_DIRS
+    ].some(dir => fullPath.startsWith(path.join(projectRoot, dir)))
+
+    // Secondary check: block anything in skip dirs
+    const pathParts = filePath.split('/')
+    const isSkipped = pathParts.some((p: string) => SKIP_DIRS.has(p))
+
+    if (!allowed && !isAutoDiscoveredDir(filePath, projectRoot)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 400 })
+    }
+    if (isSkipped) {
       return NextResponse.json({ error: 'Invalid file path' }, { status: 400 })
     }
 
@@ -152,6 +248,18 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('[scan-pages] POST error:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+/** Check if a file is in an auto-discovered directory */
+function isAutoDiscoveredDir(filePath: string, projectRoot: string): boolean {
+  const topDir = filePath.split('/')[0]
+  if (!topDir || SKIP_DIRS.has(topDir) || SCOPED_DIRS.has(topDir) || topDir.startsWith('.')) return false
+  const fullDir = path.join(projectRoot, topDir)
+  try {
+    return fs.statSync(fullDir).isDirectory()
+  } catch {
+    return false
   }
 }
 
@@ -175,7 +283,7 @@ function findFiles(
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name)
 
-    if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '.next') continue
+    if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue
 
     if (entry.isDirectory()) {
       if (skipDirs.includes(entry.name)) continue
@@ -204,10 +312,22 @@ function findFiles(
 
 function inferScope(filePath: string): FileScope {
   if (filePath.startsWith('app/api/')) return 'api'
-  if (filePath.startsWith('app/')) return 'pages'
+
+  // Next.js special files in app/
+  if (filePath.startsWith('app/')) {
+    const fileName = filePath.split('/').pop() || ''
+    const specialFiles = ['layout.', 'loading.', 'error.', 'not-found.', 'template.', 'global-error.']
+    if (specialFiles.some(sf => fileName.startsWith(sf))) return 'layouts'
+    if (fileName.startsWith('page.')) return 'pages'
+    // Other files in app/ (e.g. globals.css) → layouts scope
+    return 'layouts'
+  }
+
   if (filePath.startsWith('lib/')) return 'lib'
   if (filePath.startsWith('components/')) return 'components'
-  return 'pages'
+
+  // Everything else is infra
+  return 'infra'
 }
 
 function deriveRoute(filePath: string, scope: FileScope): string {
@@ -225,11 +345,23 @@ function deriveRoute(filePath: string, scope: FileScope): string {
         .replace(/^app/, '')
         .replace(/\/route\.(tsx|ts)$/, '')
     }
+    case 'layouts': {
+      // Keep full path so layout.tsx in different dirs are distinguishable
+      let route = filePath
+        .replace(/^app\//, '/')
+        .replace(/\.(tsx|ts)$/, '')
+      route = route.replace(/\/\([^)]+\)/g, '')
+      route = route.replace(/\/+/g, '/')
+      return route || '/'
+    }
     case 'lib': {
       return filePath.replace(/\.(tsx|ts)$/, '')
     }
     case 'components': {
       return filePath.replace(/\.(tsx|ts)$/, '')
+    }
+    case 'infra': {
+      return filePath.replace(/\.(tsx?|js|mjs|cjs|css|sql)$/, '')
     }
   }
 }
@@ -274,56 +406,106 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
   // ---- Name ----
   let name = ''
 
+  // Default export function name
   const defaultFuncMatch = source.match(/export\s+default\s+function\s+(\w+)/)
   if (defaultFuncMatch) {
     name = defaultFuncMatch[1]
       .replace(/Page$/, '')
+      .replace(/Layout$/, '')
+      .replace(/Loading$/, '')
+      .replace(/Error$/, '')
       .replace(/([A-Z])/g, ' $1')
       .trim()
     confidence['name'] = 'high'
   }
 
-  if (!name && (scope === 'lib' || scope === 'components')) {
-    const fileName = filePath.split('/').pop()?.replace(/\.(tsx|ts)$/, '') || ''
-    name = fileName.replace(/([A-Z])/g, ' $1').trim()
+  // Lib, components, infra — use filename
+  if (!name && (scope === 'lib' || scope === 'components' || scope === 'infra')) {
+    const fileName = filePath.split('/').pop()?.replace(/\.(tsx?|js|mjs|cjs|css|sql)$/, '') || ''
+    name = fileName.replace(/([A-Z])/g, ' $1').replace(/[-_.]/g, ' ').trim()
+    // Capitalize first letter
+    name = name.charAt(0).toUpperCase() + name.slice(1)
     confidence['name'] = 'medium'
   }
 
+  // API routes — use directory path
   if (!name && scope === 'api') {
-    // Use the directory path for API routes
     const parts = filePath.replace(/^app\/api\//, '').replace(/\/route\.(tsx|ts)$/, '').split('/')
-    name = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1).replace(/-/g, ' ')).join(' ') + ' API'
+    name = parts.map((p: string) => p.charAt(0).toUpperCase() + p.slice(1).replace(/-/g, ' ')).join(' ') + ' API'
     confidence['name'] = 'medium'
   }
 
+  // Layouts — use type + route location
+  if (!name && scope === 'layouts') {
+    const fileName = filePath.split('/').pop()?.replace(/\.(tsx|ts)$/, '') || ''
+    const routeSegment = filePath
+      .replace(/^app\//, '')
+      .replace(/\/[^/]+$/, '')
+      .replace(/\([^)]+\)\/?/g, '')
+      .replace(/\//g, ' › ')
+      .trim()
+    const typeLabel = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/-/g, ' ')
+    name = routeSegment ? `${typeLabel} (${routeSegment})` : `Root ${typeLabel}`
+    confidence['name'] = 'medium'
+  }
+
+  // Fallback
   if (!name) {
-    name = route.split('/').filter(Boolean).pop()?.replace(/-/g, ' ') || 'Unknown'
+    name = route.split('/').filter(Boolean).pop()?.replace(/[-_]/g, ' ') || 'Unknown'
     name = name.charAt(0).toUpperCase() + name.slice(1)
     confidence['name'] = 'low'
   }
 
   // ---- ID ----
-  const id = (name || route)
+  const id = (filePath || route)
     .toLowerCase()
+    .replace(/\.(tsx?|js|mjs|cjs|css|sql)$/, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-  // ---- Category (uses slug ids matching page_categories table) ----
-  let category = 'shared'
+  // ---- Category (uses category display names) ----
+  let category = 'Shared'
   if (scope === 'api') {
-    category = 'api-routes'
+    category = 'API Routes'
+  } else if (scope === 'infra') {
+    // Sub-categorize infra
+    if (filePath.startsWith('middleware')) category = 'Auth'
+    else if (filePath.startsWith('hooks/') || filePath.startsWith('contexts/') || filePath.startsWith('providers/')) category = 'Shared'
+    else if (filePath.startsWith('types/')) category = 'Shared'
+    else if (filePath.startsWith('utils/') || filePath.startsWith('helpers/') || filePath.startsWith('services/')) category = 'Shared'
+    else if (filePath.startsWith('supabase/')) category = 'Global Admin'
+    else if (filePath.startsWith('styles/')) category = 'Shared'
+    else if (filePath.startsWith('store/')) category = 'Shared'
+    else category = 'Shared'
+  } else if (scope === 'layouts') {
+    // Layouts inherit the route's category
+    if (filePath.includes('/admin/settings') || filePath.includes('/admin/facilities') || filePath.includes('/admin/audit')) {
+      category = 'Global Admin'
+    } else if (filePath.includes('/admin')) {
+      category = 'Admin'
+    } else if (filePath.includes('/login') || filePath.includes('/auth')) {
+      category = 'Auth'
+    } else {
+      category = 'Shared'
+    }
   } else if (scope === 'lib') {
-    category = 'shared'
+    category = 'Shared'
   } else if (scope === 'components') {
-    category = 'shared'
-  } else if (route.startsWith('/admin/settings') || route.startsWith('/admin/facilities') || route.startsWith('/admin/audit')) {
-    category = 'global-admin'
-  } else if (route.startsWith('/admin')) {
-    category = 'admin'
-  } else if (route === '/login' || route.startsWith('/auth')) {
-    category = 'auth'
+    category = 'Shared'
+  } else if (scope === 'pages') {
+    if (route.startsWith('/admin/settings') || route.startsWith('/admin/facilities') || route.startsWith('/admin/audit')) {
+      category = 'Global Admin'
+    } else if (route.startsWith('/admin')) {
+      category = 'Admin'
+    } else if (route === '/login' || route.startsWith('/auth')) {
+      category = 'Auth'
+    } else {
+      category = 'Surgeon-Facing'
+    }
   }
-  if (/isGlobalAdmin/.test(source) && category === 'shared') category = 'global-admin'
+
+  // Global admin override
+  if (/isGlobalAdmin/.test(source) && category === 'Shared') category = 'Global Admin'
   confidence['category'] = 'medium'
 
   // ---- Roles ----
@@ -387,9 +569,15 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
   const namedImportPattern = /import\s+\{([^}]+)\}\s+from\s+['"]@\/components\/(?!layouts)([^'"]+)['"]/g
   let namedMatch
   while ((namedMatch = namedImportPattern.exec(source)) !== null) {
-    namedMatch[1].split(',').map(n => n.trim().split(' as ')[0].trim()).forEach(n => { if (n) components.add(n) })
+    namedMatch[1].split(',').map((n: string) => n.trim().split(' as ')[0].trim()).forEach((n: string) => { if (n) components.add(n) })
   }
   confidence['components'] = components.size > 0 ? 'high' : 'none'
+
+  // ---- Lib imports (for infra/layouts tracking) ----
+  const libImports = new Set<string>()
+  const libImportPattern = /from\s+['"]@\/lib\/([^'"]+)['"]/g
+  let libMatch
+  while ((libMatch = libImportPattern.exec(source)) !== null) libImports.add(libMatch[1])
 
   // ---- API routes from fetch ----
   const apiRoutes = new Set<string>()
@@ -411,13 +599,14 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
   if (/useReducer/.test(source)) smPatterns.push('useReducer')
   if (/set\w+\s*\(\s*prev\s*=>/.test(source)) smPatterns.push('functional updaters')
   if (/useContext/.test(source)) smPatterns.push('context')
+  if (/createContext/.test(source)) smPatterns.push('context provider')
   if (smPatterns.length > 0) stateManagement = `Uses ${smPatterns.join(', ')}`
 
   // ---- Interactions ----
   const interactions: string[] = []
   const buttonLabels = source.match(/>\s*(Save|Submit|Delete|Add|Create|Update|Cancel|Export|Import|Generate|Refresh|Reset|Clear|Filter|Search|Edit|Remove|Confirm|Download|Upload)\b/gi)
   if (buttonLabels) {
-    const unique = [...new Set(buttonLabels.map(b => b.replace(/^>\s*/, '').toLowerCase()))]
+    const unique = [...new Set(buttonLabels.map((b: string) => b.replace(/^>\s*/, '').toLowerCase()))]
     interactions.push(...unique)
   }
 
@@ -439,18 +628,59 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
 
   // ---- Description hints ----
   let description = ''
-  if (scope === 'api') {
-    const topComment = source.match(/^\/\/\s*(.+)/m)
-    if (topComment && !topComment[1].includes('app/')) description = topComment[1].trim()
+
+  // Top-of-file comment
+  const topComment = source.match(/^\/\/\s*(.+)/m)
+  if (topComment && !topComment[1].includes('app/') && topComment[1].length > 5 && topComment[1].length < 120) {
+    description = topComment[1].trim()
   }
-  if (scope === 'lib') {
+
+  // Lib/infra: list exports
+  if (!description && (scope === 'lib' || scope === 'infra')) {
     const exports = new Set<string>()
     const exportPattern = /export\s+(?:async\s+)?(?:function|const|class|type|interface)\s+(\w+)/g
     let expMatch
     while ((expMatch = exportPattern.exec(source)) !== null) exports.add(expMatch[1])
     if (exports.size > 0) {
-      description = `Exports: ${Array.from(exports).slice(0, 5).join(', ')}${exports.size > 5 ? '...' : ''}`
+      description = `Exports: ${Array.from(exports).slice(0, 6).join(', ')}${exports.size > 6 ? ` (+${exports.size - 6} more)` : ''}`
     }
+  }
+
+  // Layouts: describe type
+  if (!description && scope === 'layouts') {
+    const fileName = filePath.split('/').pop()?.replace(/\.(tsx|ts)$/, '') || ''
+    const typeDescriptions: Record<string, string> = {
+      'layout': 'Wraps child routes with shared UI (navigation, providers)',
+      'loading': 'Suspense fallback — shown while route content loads',
+      'error': 'Error boundary — catches runtime errors in this segment',
+      'not-found': 'Shown when notFound() is called or route doesn\'t match',
+      'template': 'Re-creates on navigation (unlike layout which persists)',
+      'global-error': 'Root-level error boundary — catches errors in root layout',
+    }
+    description = typeDescriptions[fileName] || `Next.js ${fileName} file`
+  }
+
+  // Components: count lines + hooks used
+  if (!description && scope === 'components') {
+    const hookMatches = source.match(/use[A-Z]\w+/g)
+    const hooks = hookMatches ? [...new Set(hookMatches)].slice(0, 4) : []
+    const parts: string[] = [`${lines.length} lines`]
+    if (hooks.length > 0) parts.push(`Hooks: ${hooks.join(', ')}`)
+    description = parts.join(' · ')
+  }
+
+  // Root-level infra files
+  if (!description && scope === 'infra' && !filePath.includes('/')) {
+    const infraDescriptions: Record<string, string> = {
+      'middleware': 'Runs before every request — handles auth redirects, headers',
+      'next.config': 'Next.js project configuration',
+      'tailwind.config': 'Tailwind CSS theme, plugins, and content paths',
+      'postcss.config': 'PostCSS plugin configuration',
+      'tsconfig': 'TypeScript compiler options and path aliases',
+      'instrumentation': 'Server-side instrumentation (OpenTelemetry, logging)',
+    }
+    const baseName = filePath.replace(/\.(tsx?|js|mjs|cjs)$/, '')
+    description = infraDescriptions[baseName] || ''
   }
 
   return {
