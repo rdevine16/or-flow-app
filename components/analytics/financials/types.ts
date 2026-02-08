@@ -1,13 +1,12 @@
 // components/analytics/financials/types.ts
-// Updated with SurgeonProcedureBreakdown for drill-down view
+// UPDATED: Added total_debits/total_credits/or_time_cost to CaseCompletionStats
+// UPDATED: Added profitPerORHour to SurgeonStats and ProcedureStats
+// UPDATED: Added revenue/cost breakdown to FinancialsMetrics
 
 // ============================================
 // CASE STATS FROM MATERIALIZED VIEWS
 // ============================================
 
-/**
- * Raw case data from case_completion_stats table
- */
 export interface CaseCompletionStats {
   id: string
   case_id: string
@@ -43,15 +42,22 @@ export interface CaseCompletionStats {
   surgeon_case_sequence: number | null
   room_case_sequence: number | null
   
-  // Financial
+  // Financial — legacy columns (now populated correctly)
   reimbursement: number | null
-  soft_goods_cost: number | null
-  hard_goods_cost: number | null
+  soft_goods_cost: number | null   // = total_debits
+  hard_goods_cost: number | null   // = total_credits
   or_cost: number | null
   profit: number | null
   or_hourly_rate: number | null
   
-  // Joined data (from query) - may be array or single object from Supabase
+  // Financial — new columns
+  total_debits: number | null
+  total_credits: number | null
+  net_cost: number | null
+  or_time_cost: number | null
+  cost_source: string | null
+  
+  // Joined data
   surgeon?: {
     first_name: string
     last_name: string
@@ -80,16 +86,15 @@ export interface CaseCompletionStats {
   }[] | null
 }
 
-/**
- * Pre-computed stats per surgeon per procedure from surgeon_procedure_stats view
- */
+// ============================================
+// PRE-COMPUTED STATS (unchanged)
+// ============================================
+
 export interface SurgeonProcedureStats {
   facility_id: string
   surgeon_id: string
   procedure_type_id: string
   sample_size: number
-  
-  // Duration
   avg_duration: number | null
   median_duration: number | null
   stddev_duration: number | null
@@ -97,67 +102,42 @@ export interface SurgeonProcedureStats {
   p75_duration: number | null
   min_duration: number | null
   max_duration: number | null
-  
-  // Surgical time
   avg_surgical_duration: number | null
   median_surgical_duration: number | null
   stddev_surgical_duration: number | null
-  
-  // Anesthesia time
   avg_anesthesia_duration: number | null
   median_anesthesia_duration: number | null
-  
-  // Call to patient in
   avg_call_to_patient_in: number | null
   median_call_to_patient_in: number | null
   stddev_call_to_patient_in: number | null
-  
-  // Schedule variance
   avg_schedule_variance: number | null
   median_schedule_variance: number | null
-  
-  // Room turnover (excluding first cases)
   avg_room_turnover: number | null
   median_room_turnover: number | null
   stddev_room_turnover: number | null
-  
-  // Surgical turnover (excluding first cases)
   avg_surgical_turnover: number | null
   median_surgical_turnover: number | null
   stddev_surgical_turnover: number | null
-  
-  // First case stats
   avg_first_case_delay: number | null
   median_first_case_delay: number | null
   first_case_count: number
-  
-  // Profit
   avg_profit: number | null
   median_profit: number | null
   stddev_profit: number | null
   p25_profit: number | null
   p75_profit: number | null
   total_profit: number | null
-  
-  // Reimbursement
   avg_reimbursement: number | null
   median_reimbursement: number | null
-  
-  // Metadata
   last_case_date: string
   first_case_date: string
 }
 
-/**
- * Pre-computed stats per procedure at facility level from facility_procedure_stats view
- */
 export interface FacilityProcedureStats {
   facility_id: string
   procedure_type_id: string
   sample_size: number
   surgeon_count: number
-  
-  // Duration
   avg_duration: number | null
   median_duration: number | null
   stddev_duration: number | null
@@ -165,211 +145,106 @@ export interface FacilityProcedureStats {
   p75_duration: number | null
   min_duration: number | null
   max_duration: number | null
-  
-  // Surgical time
   avg_surgical_duration: number | null
   median_surgical_duration: number | null
   stddev_surgical_duration: number | null
-  
-  // Anesthesia time
   avg_anesthesia_duration: number | null
   median_anesthesia_duration: number | null
-  
-  // Call to patient in
   avg_call_to_patient_in: number | null
   median_call_to_patient_in: number | null
   stddev_call_to_patient_in: number | null
-  
-  // Schedule variance
   avg_schedule_variance: number | null
   median_schedule_variance: number | null
-  
-  // Room turnover
   avg_room_turnover: number | null
   median_room_turnover: number | null
   stddev_room_turnover: number | null
-  
-  // Surgical turnover
   avg_surgical_turnover: number | null
   median_surgical_turnover: number | null
   stddev_surgical_turnover: number | null
-  
-  // First case stats
   avg_first_case_delay: number | null
   median_first_case_delay: number | null
   first_case_count: number
-  
-  // Profit
   avg_profit: number | null
   median_profit: number | null
   stddev_profit: number | null
   p25_profit: number | null
   p75_profit: number | null
   total_profit: number | null
-  
-  // Reimbursement
   avg_reimbursement: number | null
   median_reimbursement: number | null
-  
-  // Metadata
   last_case_date: string
   first_case_date: string
 }
 
-/**
- * Overall surgeon stats from surgeon_overall_stats view
- */
 export interface SurgeonOverallStats {
   facility_id: string
   surgeon_id: string
   total_cases: number
   procedure_type_count: number
   days_worked: number
-  
-  // Duration
   avg_duration: number | null
   median_duration: number | null
   stddev_duration: number | null
-  
-  // Surgical time
   avg_surgical_duration: number | null
   median_surgical_duration: number | null
-  
-  // Turnover
   avg_surgical_turnover: number | null
   median_surgical_turnover: number | null
-  
-  // Multi-room
   avg_rooms_per_day: number | null
   max_rooms_per_day: number | null
   multi_room_case_count: number
-  
-  // Profit
   total_profit: number | null
   avg_profit: number | null
   median_profit: number | null
   stddev_profit: number | null
-  
-  // Activity
   last_case_date: string
   first_case_date: string
   cases_last_30_days: number
   cases_last_90_days: number
 }
 
-
 // ============================================
-// OUTLIER TYPES
+// OUTLIER / ISSUE TYPES (unchanged)
 // ============================================
 
 export type OutlierType = 'personal' | 'facility' | 'both' | 'none'
 
-export type Issue = 
-  | {
-      type: 'overTime'
-      actualMinutes: number
-      expectedMinutes: number
-      thresholdMinutes: number
-      minutesOver: number
-    }
-  | {
-      type: 'lowProfit'
-      actualProfit: number
-      expectedProfit: number
-      thresholdProfit: number
-      amountBelow: number
-    }
-  | {
-      type: 'delay'
-      totalMinutes: number
-      delays: Array<{ name: string; minutes?: number }>
-    }
-  | {
-      type: 'lowPayer'
-      payerName: string
-      payerRate: number
-      defaultRate: number
-      percentBelow: number
-    }
-  | {
-      type: 'unknown'
-    }
-
 export interface OutlierFlags {
-  // Duration outliers (ABOVE threshold = bad)
   isDurationPersonalOutlier: boolean
   isDurationFacilityOutlier: boolean
   durationOutlierType: OutlierType
-  
-  // Profit outliers (BELOW threshold = bad)
   isProfitPersonalOutlier: boolean
   isProfitFacilityOutlier: boolean
   profitOutlierType: OutlierType
-  
-  // Thresholds (for display/tooltip)
-  personalDurationThreshold: number | null    // surgeon median + stddev
-  facilityDurationThreshold: number | null    // facility median + stddev
-  personalProfitThreshold: number | null      // surgeon median - stddev
-  facilityProfitThreshold: number | null      // facility median - stddev
+  personalDurationThreshold: number | null
+  facilityDurationThreshold: number | null
+  personalProfitThreshold: number | null
+  facilityProfitThreshold: number | null
 }
 
-// ============================================
-// ISSUE TYPES
-// ============================================
-
 export type CaseIssue = 
-  | { 
-      type: 'overTime'
-      actualMinutes: number
-      expectedMinutes: number  // surgeon's median
-      thresholdMinutes: number // median + stddev
-      minutesOver: number
-    }
-  | { 
-      type: 'delay'
-      delays: { name: string; minutes: number | null }[]
-      totalMinutes: number
-    }
-  | { 
-      type: 'lowPayer'
-      payerName: string
-      payerRate: number
-      defaultRate: number
-      percentBelow: number
-    }
-  | { 
-      type: 'lowProfit'
-      actualProfit: number
-      expectedProfit: number  // surgeon's median
-      thresholdProfit: number // median - stddev
-      amountBelow: number
-    }
-  | { 
-      type: 'unknown' 
-    }
-
-// ============================================
-// FINANCIAL BREAKDOWN (FOR DRAWER)
-// ============================================
+  | { type: 'overTime'; actualMinutes: number; expectedMinutes: number; thresholdMinutes: number; minutesOver: number }
+  | { type: 'delay'; delays: { name: string; minutes: number | null }[]; totalMinutes: number }
+  | { type: 'lowPayer'; payerName: string; payerRate: number; defaultRate: number; percentBelow: number }
+  | { type: 'lowProfit'; actualProfit: number; expectedProfit: number; thresholdProfit: number; amountBelow: number }
+  | { type: 'unknown' }
 
 export interface FinancialBreakdown {
   reimbursement: number
+  totalDebits: number
+  totalCredits: number
+  orTimeCost: number
+  orRate: number
+  payerName: string | null
+  costSource: string | null
+  // Legacy aliases
   softGoodsCost: number
   hardGoodsCost: number
   orCost: number
-  orRate: number
-  payerName: string | null
-  
-  // Comparison to expected
-  expectedProfit: number | null       // surgeon's median profit for this procedure
-  facilityExpectedProfit: number | null // facility median profit for this procedure
-  expectedDuration: number | null     // surgeon's median duration
-  facilityExpectedDuration: number | null // facility median duration
+  expectedProfit: number | null
+  facilityExpectedProfit: number | null
+  expectedDuration: number | null
+  facilityExpectedDuration: number | null
 }
-
-// ============================================
-// OUTLIER CASE (UPDATED WITH DUAL FLAGS)
-// ============================================
 
 export interface OutlierCase {
   caseId: string
@@ -380,63 +255,40 @@ export interface OutlierCase {
   procedureId: string | null
   procedureName: string
   roomName: string | null
-  
-  // Actual values
   actualProfit: number
   actualDuration: number
-  
-  // Expected values (surgeon's median for this procedure)
   expectedProfit: number | null
   expectedDuration: number | null
-  
-  // Facility baseline (for comparison)
   facilityExpectedProfit: number | null
   facilityExpectedDuration: number | null
-  
-  // Gaps
-  profitGap: number  // actual - expected (negative = below)
-  durationGap: number // actual - expected (positive = over)
-  
-  // Outlier classification
+  profitGap: number
+  durationGap: number
   outlierFlags: OutlierFlags
-  
-  // Detected issues
   issues: CaseIssue[]
-  
-  // Full breakdown for drawer
   financialBreakdown: FinancialBreakdown
 }
 
 // ============================================
-// SURGEON PROCEDURE BREAKDOWN (NEW)
-// For drill-down view showing how surgeon compares per procedure
+// SURGEON PROCEDURE BREAKDOWN
 // ============================================
 
 export interface SurgeonProcedureBreakdown {
   procedureId: string
   procedureName: string
   caseCount: number
-  
-  // Surgeon's stats for this procedure
   medianDuration: number | null
   medianProfit: number | null
   totalProfit: number
-  
-  // Facility baseline for this procedure
   facilityMedianDuration: number | null
   facilityMedianProfit: number | null
-  
-  // Comparison (surgeon - facility)
-  durationVsFacility: number  // negative = faster
-  profitVsFacility: number    // positive = more profitable
-  
-  // Percentage difference
+  durationVsFacility: number
+  profitVsFacility: number
   durationVsFacilityPct: number | null
   profitVsFacilityPct: number | null
 }
 
 // ============================================
-// STATS TYPES (UPDATED WITH PROCEDURE BREAKDOWN)
+// STATS TYPES — UPDATED with profitPerORHour, margin, cost breakdown
 // ============================================
 
 export interface SurgeonStats {
@@ -444,32 +296,43 @@ export interface SurgeonStats {
   surgeonName: string
   caseCount: number
   
-  // Profit (both avg and median)
+  // Revenue & costs
+  totalReimbursement: number
+  totalDebits: number
+  totalCredits: number
+  totalORCost: number
+  
+  // Profit
   totalProfit: number
   avgProfit: number
   medianProfit: number | null
   stddevProfit: number | null
   profitRange: { p25: number | null; p75: number | null }
   
-  // Duration (both avg and median)
+  // Margin
+  avgMarginPercent: number
+  
+  // Profit per OR hour (the key enterprise metric)
+  profitPerORHour: number | null
+  
+  // Duration
   avgDurationMinutes: number
   medianDurationMinutes: number | null
   stddevDurationMinutes: number | null
+  totalORMinutes: number
   
   // Comparison to facility baseline (procedure-adjusted)
-  durationVsFacilityMinutes: number  // weighted avg of (surgeon - facility) per procedure
-  profitVsFacility: number           // weighted avg of (surgeon - facility) per procedure
-  
-  // Profit impact from duration difference
+  durationVsFacilityMinutes: number
+  profitVsFacility: number
   profitImpact: number
   
-  // Consistency rating (lower stddev = more consistent)
+  // Consistency
   consistencyRating: 'high' | 'medium' | 'low' | null
   
-  // Turnover stats
+  // Turnover
   medianSurgicalTurnover: number | null
   
-  // Procedure breakdown for drill-down (NEW)
+  // Procedure breakdown
   procedureBreakdown?: SurgeonProcedureBreakdown[]
 }
 
@@ -479,7 +342,14 @@ export interface ProcedureStats {
   caseCount: number
   surgeonCount: number
   
-  // Profit (both avg and median)
+  // Revenue & costs
+  totalReimbursement: number
+  avgReimbursement: number
+  totalDebits: number
+  totalCredits: number
+  totalORCost: number
+  
+  // Profit
   totalProfit: number
   avgProfit: number
   medianProfit: number | null
@@ -487,7 +357,10 @@ export interface ProcedureStats {
   profitRange: { p25: number | null; p75: number | null }
   avgMarginPercent: number
   
-  // Duration (both avg and median)
+  // Profit per OR hour
+  profitPerORHour: number | null
+  
+  // Duration
   avgDurationMinutes: number
   medianDurationMinutes: number | null
   stddevDurationMinutes: number | null
@@ -498,7 +371,7 @@ export interface ProcedureStats {
 }
 
 // ============================================
-// ISSUE STATS (UPDATED)
+// ISSUE STATS & OUTLIER STATS (unchanged)
 // ============================================
 
 export interface IssueStats {
@@ -511,11 +384,9 @@ export interface IssueStats {
 
 export interface OutlierStats {
   total: number
-  personalOnly: number      // Only flagged by surgeon's own baseline
-  facilityOnly: number      // Only flagged by facility baseline
-  both: number              // Flagged by both
-  
-  // By type
+  personalOnly: number
+  facilityOnly: number
+  both: number
   durationOutliers: number
   profitOutliers: number
 }
@@ -528,18 +399,24 @@ export interface ProfitTrendPoint {
   date: string
   profit: number
   caseCount: number
-  medianProfit: number | null  // Running median (optional)
+  medianProfit: number | null
 }
 
 // ============================================
-// MAIN METRICS OBJECT (UPDATED)
+// MAIN METRICS OBJECT — UPDATED with P&L summary
 // ============================================
 
 export interface FinancialsMetrics {
   // Case counts
   totalCases: number
   
-  // Profit summary (both avg and median)
+  // Revenue & cost breakdown (NEW — for P&L view)
+  totalReimbursement: number
+  totalDebits: number
+  totalCredits: number
+  totalORCost: number
+  
+  // Profit summary
   totalProfit: number
   avgProfit: number
   medianProfit: number | null
@@ -547,11 +424,15 @@ export interface FinancialsMetrics {
   profitRange: { p25: number | null; p75: number | null }
   avgMargin: number
   
+  // Profit per OR hour
+  profitPerORHour: number | null
+  
   // Duration summary
   avgDuration: number
   medianDuration: number | null
+  totalORMinutes: number
   
-  // Outliers (updated with dual classification)
+  // Outliers
   outlierStats: OutlierStats
   outlierDetails: OutlierCase[]
   issueStats: IssueStats
@@ -576,10 +457,6 @@ export interface FinancialsMetrics {
 // ============================================
 
 export type SubTab = 'overview' | 'procedure' | 'surgeon'
-
-// ============================================
-// FACILITY SETTINGS (unchanged)
-// ============================================
 
 export interface FacilitySettings {
   or_hourly_rate: number | null
