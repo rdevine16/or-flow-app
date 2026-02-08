@@ -4,10 +4,11 @@
 // COMPLETED CASE VIEW - Enhanced with Insights & Analytics
 // ============================================================================
 // Professional read-only view for completed surgical cases
-// Shows metrics, timeline visualization, phase breakdown, delays, and insights
+// Shows metrics, timeline visualization, phase breakdown, flags, and insights
 
 import { useState } from 'react'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
+import CaseFlagsSection from './CaseFlagsSection'
 
 // ============================================================================
 // TYPES
@@ -24,14 +25,6 @@ interface StaffMember {
   id: string
   name: string
   role: string
-}
-
-interface DelayData {
-  id: string
-  typeName: string
-  durationMinutes: number | null
-  notes: string | null
-  recordedAt: string
 }
 
 interface MilestoneAverage {
@@ -97,7 +90,9 @@ interface CompletedCaseViewProps {
   anesthesiologist: { firstName: string; lastName: string } | null
   milestones: MilestoneData[]
   staff: StaffMember[]
-  delays: DelayData[]
+  facilityId: string
+  userId: string | null
+  supabase: any
   patientCallTime: string | null
   // Averages from surgeon_procedure_averages
   surgeonAverage: {
@@ -285,23 +280,6 @@ function formatDateTimeShort(isoString: string | null): string {
   })
 }
 
-// Delay type icons
-function getDelayIcon(typeName: string): string {
-  const icons: Record<string, string> = {
-    'Equipment Issue': '🔧',
-    'Patient Prep': '👤',
-    'Staff Availability': '👥',
-    'Anesthesia Delay': '💉',
-    'Room Turnover': '🚪',
-    'Surgeon Delayed': '⏰',
-    'Previous Case Ran Over': '📋',
-    'Patient Transport': '🚶',
-    'Lab Results Pending': '🔬',
-    'Consent Issues': '📝',
-  }
-  return icons[typeName] || '⚠️'
-}
-
 // ============================================================================
 // SUB-COMPONENTS
 // ============================================================================
@@ -476,7 +454,9 @@ export default function CompletedCaseView({
   anesthesiologist,
   milestones,
   staff,
-  delays,
+  facilityId,
+  userId,
+  supabase,
   patientCallTime,
   surgeonAverage,
   milestoneAverages,
@@ -504,9 +484,6 @@ export default function CompletedCaseView({
   const anesthesiaMinutes = minutesBetween(anesStart, anesEnd)
   const startVariance = getStartVariance(caseData.startTime, patientIn, caseData.scheduledDate)
   
-  // Total delays
-  const totalDelayMinutes = delays.reduce((sum, d) => sum + (d.durationMinutes || 0), 0)
-
   // ========================================
   // MILESTONE AVERAGES COMPARISON
   // ========================================
@@ -610,15 +587,6 @@ export default function CompletedCaseView({
     }
   }
 
-  // Delays insight
-  if (delays.length > 0) {
-    insights.push({ 
-      icon: '⚠', 
-      text: `${delays.length} delay${delays.length > 1 ? 's' : ''} recorded (${totalDelayMinutes} min total)`, 
-      type: 'warning' 
-    })
-  }
-
   // Milestones recorded insight
   if (recordedMilestones.length === milestones.length && milestones.length > 0) {
     insights.push({ icon: '✓', text: `All ${milestones.length} milestones recorded`, type: 'success' })
@@ -714,12 +682,12 @@ export default function CompletedCaseView({
           } : undefined}
         />
 
-        {/* Delays Card */}
+        {/* Flags Card — count is shown in the CaseFlagsSection below */}
         <MetricCard
-          label="Delays"
-          value={delays.length > 0 ? `${delays.length}` : '0'}
-          subtitle={delays.length > 0 ? `${totalDelayMinutes} min total` : 'No delays recorded'}
-          variant={delays.length === 0 ? 'default' : delays.length > 2 ? 'danger' : 'warning'}
+          label="Flags"
+          value="—"
+          subtitle="See details below"
+          variant="default"
         />
       </div>
 
@@ -863,7 +831,7 @@ export default function CompletedCaseView({
       </div>
 
       {/* ================================================================== */}
-      {/* ROW 3: Insights + Delays + Staff */}
+      {/* ROW 3: Insights + Flags + Staff */}
       {/* ================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
@@ -927,48 +895,14 @@ export default function CompletedCaseView({
           )}
         </div>
 
-        {/* Delays Card */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">Delays</h3>
-          
-          {delays.length === 0 ? (
-            <div className="text-center py-6">
-              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <p className="text-sm text-slate-500">No delays recorded</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {delays.map((delay) => (
-                <div 
-                  key={delay.id} 
-                  className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span>{getDelayIcon(delay.typeName)}</span>
-                      <span className="text-xs font-medium text-amber-800">{delay.typeName}</span>
-                    </div>
-                    {delay.durationMinutes && (
-                      <span className="text-xs font-semibold text-amber-700">{delay.durationMinutes} min</span>
-                    )}
-                  </div>
-                  {delay.notes && (
-                    <p className="text-[10px] text-amber-700 mt-1 pl-6">{delay.notes}</p>
-                  )}
-                </div>
-              ))}
-              <div className="pt-2 border-t border-slate-100 mt-2">
-                <p className="text-xs text-slate-500">
-                  Total delay: <span className="font-semibold text-slate-700">{totalDelayMinutes} minutes</span>
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Case Flags */}
+        <CaseFlagsSection
+          caseId={caseData.id}
+          facilityId={facilityId}
+          isCompleted={true}
+          userId={userId}
+          supabase={supabase}
+        />
 
         {/* Surgical Team Card */}
         <div className="bg-white rounded-xl border border-slate-200 p-4">

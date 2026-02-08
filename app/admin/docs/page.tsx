@@ -66,6 +66,8 @@ const icons = {
   download: "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3",
   warning: "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z",
   tag: "M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3zM6 6h.008v.008H6V6z",
+  health: "M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z",
+  bug: "M12 12.75c1.148 0 2.278.08 3.383.237 1.037.146 1.866.966 1.866 2.013 0 3.728-2.35 6.75-5.25 6.75S6.75 18.728 6.75 15c0-1.046.83-1.867 1.866-2.013A24.204 24.204 0 0112 12.75zm0 0c2.883 0 5.647.508 8.207 1.44a23.91 23.91 0 01-1.152-6.135c-.22-2.065-.882-3.622-1.602-4.14a2.25 2.25 0 00-2.453-.084c-.57.344-1.244.921-2 1.744-.756-.823-1.43-1.4-2-1.744a2.25 2.25 0 00-2.453.084c-.72.518-1.382 2.075-1.602 4.14a23.91 23.91 0 01-1.152 6.135A24.142 24.142 0 0112 12.75z",
 }
 
 // =============================================================================
@@ -173,6 +175,7 @@ export default function AdminDocsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
   const [showCategoryManager, setShowCategoryManager] = useState(false)
+  const [showHealth, setShowHealth] = useState(false)
 
   const toastIdRef = useRef(0)
 
@@ -446,6 +449,13 @@ export default function AdminDocsPage() {
               </div>
               <div className="flex items-center gap-1">
                 <button
+                  onClick={() => { setShowHealth(true); setSelectedPageId(null) }}
+                  className={`p-1.5 rounded-lg transition-colors ${showHealth ? 'text-rose-600 bg-rose-50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200'}`}
+                  title="Health check"
+                >
+                  <Icon d={icons.health} />
+                </button>
+                <button
                   onClick={() => setShowCategoryManager(true)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
                   title="Manage categories"
@@ -524,6 +534,7 @@ export default function AdminDocsPage() {
                             onClick={() => {
                               setSelectedPageId(page.id)
                               setActiveTab('overview')
+                              setShowHealth(false)
                             }}
                             className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-all duration-150
                               ${selectedPageId === page.id
@@ -569,7 +580,13 @@ export default function AdminDocsPage() {
         {/* RIGHT PANEL — Detail                                             */}
         {/* ================================================================ */}
         <main className="flex-1 overflow-y-auto bg-white">
-          {!selectedPage ? (
+          {showHealth ? (
+            <HealthPanel
+              pages={pages}
+              categories={categories}
+              onNavigate={(id: string) => { setSelectedPageId(id); setActiveTab('overview'); setShowHealth(false) }}
+            />
+          ) : !selectedPage ? (
             <div className="flex flex-col items-center justify-center h-full text-slate-400">
               <Icon d={icons.book} className="w-8 h-8 text-slate-300 mb-3" />
               <p className="text-base font-medium text-slate-500">Select a page from the sidebar</p>
@@ -2445,6 +2462,530 @@ function MiniTag({ children, color }: { children: React.ReactNode; color: string
     <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider border ${TAG_COLORS[color] || TAG_COLORS.slate}`}>
       {children}
     </span>
+  )
+}
+
+// =============================================================================
+// Health Panel — Cross-cutting analysis across all registry entries
+// =============================================================================
+
+interface HealthIssue {
+  id: string
+  severity: 'critical' | 'warning' | 'info'
+  group: string
+  title: string
+  description: string
+  entries: { id: string; name: string; route: string }[]
+}
+
+function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
+  const issues: HealthIssue[] = []
+
+  // ── Build lookup maps ──────────────────────────────────────────────────
+  const pagesByRoute = new Map(pages.map(p => [p.route, p]))
+
+  // Entries by implicit scope (inferred from route pattern)
+  const componentEntries = pages.filter(p => p.route.startsWith('components/'))
+  const apiEntries = pages.filter(p => p.route.startsWith('/api/'))
+  const libEntries = pages.filter(p => p.route.startsWith('lib/'))
+  const pageEntries = pages.filter(p =>
+    p.route.startsWith('/') && !p.route.startsWith('/api/') &&
+    !p.route.includes('layout') && !p.route.includes('loading') &&
+    !p.route.includes('error') && !p.route.includes('not-found')
+  )
+
+  // All component names that exist as registered entries
+  const registeredComponentNames = new Set(componentEntries.map(p => p.name))
+
+  // All API routes that exist as registered entries
+  const registeredApiRoutes = new Set(apiEntries.map(p => p.route))
+
+  // All lib file routes that exist as registered entries
+  const registeredLibRoutes = new Set(libEntries.map(p => p.route))
+
+  // Track what's actually referenced
+  const referencedComponents = new Set<string>()
+  const referencedApiRoutes = new Set<string>()
+  const referencedLibRoutes = new Set<string>()
+
+  // Collect all table reads/writes across the registry
+  const allReads = new Map<string, PageEntry[]>()
+  const allWrites = new Map<string, PageEntry[]>()
+
+  for (const page of pages) {
+    // Track component references
+    for (const comp of page.components) referencedComponents.add(comp)
+
+    // Track API route references
+    for (const api of page.api_routes) referencedApiRoutes.add(api)
+
+    // Track table usage
+    for (const t of page.reads) {
+      if (!allReads.has(t)) allReads.set(t, [])
+      allReads.get(t)!.push(page)
+    }
+    for (const t of page.writes) {
+      if (!allWrites.has(t)) allWrites.set(t, [])
+      allWrites.get(t)!.push(page)
+    }
+  }
+
+  // ── 1. DEAD CODE ───────────────────────────────────────────────────────
+
+  // Orphaned components: registered but never referenced
+  const orphanedComponents = componentEntries.filter(p => !referencedComponents.has(p.name))
+  if (orphanedComponents.length > 0) {
+    issues.push({
+      id: 'orphaned-components',
+      severity: 'warning',
+      group: 'Dead Code',
+      title: 'Orphaned Components',
+      description: 'Registered components not imported by any other entry. May be unused or missing from import tracking.',
+      entries: orphanedComponents.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  // Dead API routes: registered but no page calls them
+  const deadApis = apiEntries.filter(p => !referencedApiRoutes.has(p.route))
+  if (deadApis.length > 0) {
+    issues.push({
+      id: 'dead-api-routes',
+      severity: 'warning',
+      group: 'Dead Code',
+      title: 'Unreferenced API Routes',
+      description: 'API endpoints not called by any registered page via fetch(). May be called externally, from iOS, or via server-side logic.',
+      entries: deadApis.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  // Unused lib files: registered but not imported by anything
+  // (We check if any other entry's route or notes reference the lib name)
+  const libNames = libEntries.map(p => {
+    const parts = p.route.replace('lib/', '').split('/')
+    return { entry: p, fileName: parts[parts.length - 1] }
+  })
+  const allSourceText = pages.map(p => `${p.components.join(' ')} ${p.api_routes.join(' ')} ${p.notes || ''}`).join(' ')
+  const unusedLibs = libNames.filter(({ fileName }) => {
+    // Check if this lib file name appears in any other entry's imports or references
+    const importPattern = new RegExp(`@/lib/.*${fileName}|from.*lib.*${fileName}`, 'i')
+    return !importPattern.test(allSourceText) && !referencedComponents.has(fileName)
+  })
+  // Only report if we have lib entries to check
+  if (unusedLibs.length > 0 && libEntries.length > 2) {
+    issues.push({
+      id: 'unused-lib-files',
+      severity: 'info',
+      group: 'Dead Code',
+      title: 'Potentially Unused Lib Files',
+      description: 'Library files not clearly referenced by other entries. Limited detection — verify manually before removing.',
+      entries: unusedLibs.map(({ entry }) => ({ id: entry.id, name: entry.name, route: entry.route })),
+    })
+  }
+
+  // ── 2. DATA INTEGRITY ─────────────────────────────────────────────────
+
+  // Write-only tables
+  const writeOnlyTables: { table: string; writers: PageEntry[] }[] = []
+  for (const [table, writers] of allWrites) {
+    if (!allReads.has(table)) {
+      writeOnlyTables.push({ table, writers })
+    }
+  }
+  if (writeOnlyTables.length > 0) {
+    issues.push({
+      id: 'write-only-tables',
+      severity: 'warning',
+      group: 'Data Integrity',
+      title: `Write-Only Tables (${writeOnlyTables.length})`,
+      description: 'Tables written to but never read by any registered entry. Data goes in but may not be displayed anywhere.',
+      entries: writeOnlyTables.flatMap(({ table, writers }) =>
+        writers.map(w => ({ id: w.id, name: `${w.name} → ${table}`, route: w.route }))
+      ),
+    })
+  }
+
+  // Read-only tables with no writer
+  const readNoWriter: { table: string; readers: PageEntry[] }[] = []
+  for (const [table, readers] of allReads) {
+    if (!allWrites.has(table)) {
+      readNoWriter.push({ table, readers })
+    }
+  }
+  if (readNoWriter.length > 0) {
+    issues.push({
+      id: 'read-no-writer',
+      severity: 'info',
+      group: 'Data Integrity',
+      title: `Read-Only Tables — No Writer (${readNoWriter.length})`,
+      description: 'Tables read but no registered entry writes to them. May be populated by triggers, migrations, external services, or iOS.',
+      entries: readNoWriter.flatMap(({ table, readers }) =>
+        readers.map(r => ({ id: r.id, name: `${r.name} ← ${table}`, route: r.route }))
+      ),
+    })
+  }
+
+  // ── 3. RELATIONSHIP ISSUES ─────────────────────────────────────────────
+
+  // Broken API references
+  const brokenApiRefs: { page: PageEntry; missingRoute: string }[] = []
+  for (const page of pages) {
+    for (const apiRoute of page.api_routes) {
+      // Normalize: /api/foo matches /api/foo
+      if (!registeredApiRoutes.has(apiRoute)) {
+        brokenApiRefs.push({ page, missingRoute: apiRoute })
+      }
+    }
+  }
+  if (brokenApiRefs.length > 0) {
+    issues.push({
+      id: 'broken-api-refs',
+      severity: 'critical',
+      group: 'Relationships',
+      title: 'Broken API References',
+      description: 'Pages reference API routes that aren\'t in the registry. The endpoint may exist but isn\'t documented, or may be deleted.',
+      entries: brokenApiRefs.map(({ page, missingRoute }) => ({
+        id: page.id, name: `${page.name} → ${missingRoute}`, route: page.route,
+      })),
+    })
+  }
+
+  // Missing component docs
+  const missingCompDocs: { page: PageEntry; component: string }[] = []
+  for (const page of pages) {
+    for (const comp of page.components) {
+      if (!registeredComponentNames.has(comp)) {
+        missingCompDocs.push({ page, component: comp })
+      }
+    }
+  }
+  if (missingCompDocs.length > 0) {
+    issues.push({
+      id: 'missing-component-docs',
+      severity: 'info',
+      group: 'Relationships',
+      title: 'Undocumented Component References',
+      description: 'Pages import components that aren\'t registered. Run the scanner with Components scope to find and import them.',
+      entries: missingCompDocs.map(({ page, component }) => ({
+        id: page.id, name: `${page.name} → ${component}`, route: page.route,
+      })),
+    })
+  }
+
+  // Duplicate routes
+  const routeCount = new Map<string, PageEntry[]>()
+  for (const page of pages) {
+    if (!routeCount.has(page.route)) routeCount.set(page.route, [])
+    routeCount.get(page.route)!.push(page)
+  }
+  const dupes = [...routeCount.entries()].filter(([, entries]) => entries.length > 1)
+  if (dupes.length > 0) {
+    issues.push({
+      id: 'duplicate-routes',
+      severity: 'critical',
+      group: 'Relationships',
+      title: `Duplicate Routes (${dupes.length})`,
+      description: 'Multiple entries share the same route. One should be removed or routes should be corrected.',
+      entries: dupes.flatMap(([, entries]) =>
+        entries.map(e => ({ id: e.id, name: e.name, route: e.route }))
+      ),
+    })
+  }
+
+  // ── 4. QUALITY GAPS ───────────────────────────────────────────────────
+
+  // Missing description
+  const noDescription = pages.filter(p => !p.description || p.description.trim() === '')
+  if (noDescription.length > 0) {
+    issues.push({
+      id: 'no-description',
+      severity: 'info',
+      group: 'Quality',
+      title: `Missing Description (${noDescription.length})`,
+      description: 'Entries with no description. Add context so teammates know what each file does.',
+      entries: noDescription.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  // iOS parity missing
+  const noIos = pageEntries.filter(p => !p.ios_exists)
+  if (noIos.length > 0) {
+    issues.push({
+      id: 'no-ios-parity',
+      severity: 'info',
+      group: 'Quality',
+      title: `Missing iOS Parity (${noIos.length})`,
+      description: 'Pages without a corresponding iOS view. Mark ios_exists if implemented, or note as planned.',
+      entries: noIos.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  // No owner
+  const noOwner = pages.filter(p => !p.owner)
+  if (noOwner.length > 0) {
+    issues.push({
+      id: 'no-owner',
+      severity: 'info',
+      group: 'Quality',
+      title: `No Owner Assigned (${noOwner.length})`,
+      description: 'Entries without an owner. Assign ownership for accountability on changes and reviews.',
+      entries: noOwner.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  // Default roles (scanner couldn't determine — low confidence)
+  const defaultRoles = pages.filter(p =>
+    p.roles.length === 3 &&
+    p.roles.includes('global_admin') &&
+    p.roles.includes('facility_admin') &&
+    p.roles.includes('user')
+  )
+  if (defaultRoles.length > 0) {
+    issues.push({
+      id: 'default-roles',
+      severity: 'info',
+      group: 'Quality',
+      title: `Default Roles — Needs Review (${defaultRoles.length})`,
+      description: 'The scanner assigned default roles because it couldn\'t determine access level. Review and narrow to actual roles.',
+      entries: defaultRoles.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  // Large files (over 500 lines, inferred from notes)
+  const largeFiles = pages.filter(p => {
+    const lineMatch = p.notes?.match(/\((\d+) lines\)/)
+    return lineMatch && parseInt(lineMatch[1]) > 500
+  })
+  if (largeFiles.length > 0) {
+    issues.push({
+      id: 'large-files',
+      severity: 'info',
+      group: 'Quality',
+      title: `Large Files — Over 500 Lines (${largeFiles.length})`,
+      description: 'Files exceeding 500 lines. Consider splitting for maintainability.',
+      entries: largeFiles.map(p => {
+        const lineMatch = p.notes?.match(/\((\d+) lines\)/)
+        return { id: p.id, name: `${p.name} (${lineMatch?.[1]} lines)`, route: p.route }
+      }),
+    })
+  }
+
+  return issues
+}
+
+const SEVERITY_STYLES = {
+  critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500', label: 'Critical' },
+  warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500', label: 'Warning' },
+  info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', dot: 'bg-blue-400', label: 'Info' },
+}
+
+function HealthPanel({
+  pages,
+  categories,
+  onNavigate,
+}: {
+  pages: PageEntry[]
+  categories: Category[]
+  onNavigate: (id: string) => void
+}) {
+  const issues = useMemo(() => analyzeHealth(pages), [pages])
+  const [expandedIssue, setExpandedIssue] = useState<string | null>(null)
+  const [filterSeverity, setFilterSeverity] = useState<'all' | 'critical' | 'warning' | 'info'>('all')
+
+  const filtered = filterSeverity === 'all' ? issues : issues.filter(i => i.severity === filterSeverity)
+
+  const criticalCount = issues.filter(i => i.severity === 'critical').length
+  const warningCount = issues.filter(i => i.severity === 'warning').length
+  const infoCount = issues.filter(i => i.severity === 'info').length
+  const totalAffected = issues.reduce((sum, i) => sum + i.entries.length, 0)
+
+  // Group by group name
+  const grouped = useMemo(() => {
+    const groups: Record<string, HealthIssue[]> = {}
+    for (const issue of filtered) {
+      if (!groups[issue.group]) groups[issue.group] = []
+      groups[issue.group].push(issue)
+    }
+    return Object.entries(groups)
+  }, [filtered])
+
+  // Health score (0-100)
+  const score = useMemo(() => {
+    if (pages.length === 0) return 100
+    const penalty = (criticalCount * 15) + (warningCount * 5) + (infoCount * 1)
+    return Math.max(0, Math.min(100, 100 - penalty))
+  }, [pages.length, criticalCount, warningCount, infoCount])
+
+  const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 50 ? 'text-amber-600' : 'text-red-600'
+  const scoreRingColor = score >= 80 ? 'stroke-emerald-500' : score >= 50 ? 'stroke-amber-500' : 'stroke-red-500'
+
+  return (
+    <div className="max-w-4xl mx-auto px-8 py-6">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <Icon d={icons.health} className="w-6 h-6 text-rose-500" />
+          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Registry Health</h2>
+        </div>
+        <p className="text-sm text-slate-500">
+          Cross-cutting analysis of {pages.length} registered entries
+        </p>
+      </div>
+
+      {/* Score + Summary Cards */}
+      <div className="grid grid-cols-5 gap-4 mb-6">
+        {/* Score circle */}
+        <div className="col-span-1 flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl">
+          <div className="relative w-16 h-16 mb-1">
+            <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e2e8f0" strokeWidth="3" />
+              <circle
+                cx="18" cy="18" r="15.5" fill="none"
+                className={scoreRingColor}
+                strokeWidth="3"
+                strokeDasharray={`${score * 0.975} 100`}
+                strokeLinecap="round"
+              />
+            </svg>
+            <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${scoreColor}`}>
+              {score}
+            </span>
+          </div>
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Score</span>
+        </div>
+
+        {/* Severity cards */}
+        <button
+          onClick={() => setFilterSeverity(filterSeverity === 'critical' ? 'all' : 'critical')}
+          className={`p-4 rounded-xl border transition-all text-left
+            ${filterSeverity === 'critical' ? 'border-red-300 bg-red-50 ring-2 ring-red-200' : 'border-slate-200 bg-white hover:border-red-200'}`}
+        >
+          <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
+          <div className="text-[11px] font-medium text-red-500 uppercase tracking-wider">Critical</div>
+        </button>
+
+        <button
+          onClick={() => setFilterSeverity(filterSeverity === 'warning' ? 'all' : 'warning')}
+          className={`p-4 rounded-xl border transition-all text-left
+            ${filterSeverity === 'warning' ? 'border-amber-300 bg-amber-50 ring-2 ring-amber-200' : 'border-slate-200 bg-white hover:border-amber-200'}`}
+        >
+          <div className="text-2xl font-bold text-amber-600">{warningCount}</div>
+          <div className="text-[11px] font-medium text-amber-500 uppercase tracking-wider">Warnings</div>
+        </button>
+
+        <button
+          onClick={() => setFilterSeverity(filterSeverity === 'info' ? 'all' : 'info')}
+          className={`p-4 rounded-xl border transition-all text-left
+            ${filterSeverity === 'info' ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 bg-white hover:border-blue-200'}`}
+        >
+          <div className="text-2xl font-bold text-blue-600">{infoCount}</div>
+          <div className="text-[11px] font-medium text-blue-500 uppercase tracking-wider">Info</div>
+        </button>
+
+        <div className="p-4 rounded-xl border border-slate-200 bg-white">
+          <div className="text-2xl font-bold text-slate-700">{totalAffected}</div>
+          <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Affected</div>
+        </div>
+      </div>
+
+      {/* All clear state */}
+      {issues.length === 0 && (
+        <div className="text-center py-16 text-slate-400">
+          <Icon d={icons.check} className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+          <p className="text-lg font-medium text-emerald-600">All clear</p>
+          <p className="text-sm mt-1">No issues detected across {pages.length} entries</p>
+        </div>
+      )}
+
+      {/* No results for filter */}
+      {issues.length > 0 && filtered.length === 0 && (
+        <div className="text-center py-12 text-slate-400">
+          <p className="text-sm">No {filterSeverity} issues found</p>
+          <button onClick={() => setFilterSeverity('all')} className="text-xs text-slate-500 underline mt-1">
+            Show all
+          </button>
+        </div>
+      )}
+
+      {/* Issue groups */}
+      <div className="space-y-6">
+        {grouped.map(([groupName, groupIssues]) => (
+          <div key={groupName}>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <span className="w-4 h-px bg-slate-200" />
+              {groupName}
+              <span className="w-4 h-px bg-slate-200" />
+            </h3>
+            <div className="space-y-3">
+              {groupIssues.map(issue => {
+                const style = SEVERITY_STYLES[issue.severity]
+                const isExpanded = expandedIssue === issue.id
+                return (
+                  <div key={issue.id} className={`rounded-xl border ${style.border} overflow-hidden`}>
+                    <button
+                      onClick={() => setExpandedIssue(isExpanded ? null : issue.id)}
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 ${style.bg} hover:opacity-90 transition-opacity`}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${style.dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-semibold ${style.text}`}>{issue.title}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${style.bg} ${style.text} ${style.border}`}>
+                            {issue.entries.length}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{issue.description}</p>
+                      </div>
+                      <svg
+                        className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d={icons.chevron} />
+                      </svg>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 bg-white divide-y divide-slate-50">
+                        {issue.entries.map((entry, idx) => (
+                          <button
+                            key={`${entry.id}-${idx}`}
+                            onClick={() => onNavigate(entry.id)}
+                            className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 transition-colors group"
+                          >
+                            <span className="w-5 text-[10px] text-slate-300 font-mono text-right flex-shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm text-slate-700 group-hover:text-slate-900 font-medium">
+                                {entry.name}
+                              </span>
+                              <span className="text-xs text-slate-400 font-mono ml-2 truncate">
+                                {entry.route}
+                              </span>
+                            </div>
+                            <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d={icons.chevron} />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer meta */}
+      {issues.length > 0 && (
+        <div className="mt-8 pt-4 border-t border-slate-100 text-center">
+          <p className="text-[11px] text-slate-400">
+            {issues.length} checks · {totalAffected} affected entries · Analysis based on registry data only
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 

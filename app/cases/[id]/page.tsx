@@ -18,6 +18,7 @@ import CompletedCaseView from '@/components/cases/CompletedCaseView'
 import DeviceRepSection from '@/components/cases/DeviceRepSection'
 import { runDetectionForCase } from '@/lib/dataQuality'
 import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWrapper'
+import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
 
 
 // ============================================================================
@@ -185,15 +186,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [milestoneAverages, setMilestoneAverages] = useState<{
     milestoneName: string
     avgMinutesFromStart: number
-  }[]>([])
-
-  // Delays
-  const [delays, setDelays] = useState<{
-    id: string
-    typeName: string
-    durationMinutes: number | null
-    notes: string | null
-    recordedAt: string
   }[]>([])
 
   // Implants
@@ -368,23 +360,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             deliveredByName: deliveredUser ? `${deliveredUser.first_name} ${deliveredUser.last_name}` : null,
           }
         }))
-      }
-
-      // Fetch delays
-      const { data: delaysResult } = await supabase
-        .from('case_delays')
-        .select(`id, duration_minutes, notes, recorded_at, delay_types (name)`)
-        .eq('case_id', id)
-        .order('recorded_at', { ascending: true })
-
-      if (delaysResult) {
-        setDelays(delaysResult.map(d => ({
-          id: d.id,
-          typeName: (d.delay_types as any)?.name || 'Unknown',
-          durationMinutes: d.duration_minutes,
-          notes: d.notes,
-          recordedAt: d.recorded_at
-        })))
       }
 
       setPatientCallTime(caseResult?.call_time || null)
@@ -856,12 +831,14 @@ const totalMilestoneCount = milestoneTypes.length
                 role: role?.name || 'staff'
               }
             })}
-            delays={delays}
             patientCallTime={patientCallTime}
             surgeonAverage={surgeonProcedureAverage}
             milestoneAverages={milestoneAverages}
             implants={implants}
             implantCategory={implantCategory}
+            facilityId={userFacilityId!}
+            userId={userId}
+            supabase={supabase}
             deviceCompanies={deviceCompanies}
           />
         </div>
@@ -1286,24 +1263,16 @@ elapsedDisplay = `${mins}m ${secs}s`       }
               </div>
             )}
 
-            {/* DELAYS */}
-            {delays.length > 0 && (
-              <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4">
-                <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2">
-                  Delays ({delays.length})
-                </h3>
-                <div className="space-y-2">
-                  {delays.map(d => (
-                    <div key={d.id} className="text-sm">
-                      <span className="font-medium text-amber-800">{d.typeName}</span>
-                      {d.durationMinutes && (
-                        <span className="text-amber-600 ml-1">• {d.durationMinutes}m</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+{/* FLAGS & DELAYS */}
+{userFacilityId && (
+  <CaseFlagsSection
+    caseId={id}
+    facilityId={userFacilityId}
+    isCompleted={false}
+    userId={userId}
+    supabase={supabase}
+  />
+)}
           </div>
         </div>
       </div>
