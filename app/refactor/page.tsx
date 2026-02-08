@@ -36,6 +36,7 @@ export interface RefactorIssue {
   context: string // Surrounding lines
   imports?: string[]
   warnings?: string[]
+  metadata?: any
 }
 
 export default function RefactorDashboard() {

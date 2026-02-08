@@ -486,35 +486,195 @@ function findPaginationLogic(
     if (paginationPattern.test(line)) {
       const lineNum = index + 1
       const context = getContext(lines, index, 15)
+      const fullFileContent = lines.join('\n')
 
       // Look for pagination logic (next, prev, total pages, etc.)
       if (context.match(/totalPages|nextPage|prevPage|itemsPerPage|pageSize/i)) {
+        
+        // ========================================
+        // ENHANCED: Detect server-side vs client-side
+        // ========================================
+        let paginationType: 'server-side' | 'client-side' | 'unknown' = 'unknown'
+        let confidence: 'high' | 'medium' | 'low' = 'low'
+        const evidence: string[] = []
+        
+        // Server-side indicators
+        if (fullFileContent.includes('.range(')) {
+          paginationType = 'server-side'
+          confidence = 'high'
+          evidence.push('Detected .range() - Supabase/API pagination')
+        } else if (fullFileContent.match(/[?&](page|offset|limit)=/)) {
+          paginationType = 'server-side'
+          confidence = 'high'
+          evidence.push('Detected API query parameters')
+        } else if (fullFileContent.includes('totalCount') && !fullFileContent.includes('.length')) {
+          paginationType = 'server-side'
+          confidence = 'medium'
+          evidence.push('Uses totalCount from API')
+        }
+        
+        // Client-side indicators
+        if (fullFileContent.includes('.slice(') && fullFileContent.includes('startIndex')) {
+          paginationType = 'client-side'
+          confidence = 'high'
+          evidence.push('Detected array .slice() with startIndex')
+        } else if (fullFileContent.includes('.length') && fullFileContent.includes('itemsPerPage')) {
+          if (paginationType === 'unknown') {
+            paginationType = 'client-side'
+            confidence = 'medium'
+            evidence.push('Uses array.length for pagination')
+          }
+        }
+        
+        // ========================================
+        // ENHANCED: Find all related code locations
+        // ========================================
+        const relatedLocations: Array<{ line: number; code: string; type: string }> = []
+        
+        lines.forEach((l, i) => {
+          // Find button handlers
+          if (l.includes('onClick') && (l.includes('setCurrentPage') || l.includes('setPage'))) {
+            relatedLocations.push({
+              line: i + 1,
+              code: l.trim(),
+              type: 'button-handler'
+            })
+          }
+          
+          // Find API/range calls
+          if (l.includes('.range(') && (l.includes('currentPage') || l.includes('page'))) {
+            relatedLocations.push({
+              line: i + 1,
+              code: l.trim(),
+              type: 'api-call'
+            })
+          }
+          
+          // Find array slicing
+          if (l.includes('.slice(') && (l.includes('startIndex') || l.includes('currentPage'))) {
+            relatedLocations.push({
+              line: i + 1,
+              code: l.trim(),
+              type: 'array-slice'
+            })
+          }
+          
+          // Find useEffect dependencies
+          if (l.includes('useEffect') || (i > 0 && lines[i-1].includes('useEffect'))) {
+            if (l.includes('currentPage') || l.includes('page')) {
+              relatedLocations.push({
+                line: i + 1,
+                code: l.trim(),
+                type: 'useEffect-dependency'
+              })
+            }
+          }
+        })
+        
+        // ========================================
+        // ENHANCED: Generate type-specific fix
+        // ========================================
+        let afterCode = ''
+        let description = 'Extract pagination logic to usePagination hook'
+        
+        if (paginationType === 'server-side') {
+          description = `Server-side pagination detected: Extract to usePagination hook`
+          afterCode = `// Server-side pagination (fetches from API)
+import { usePagination } from '@/hooks/usePagination'
+
+const pagination = usePagination({
+  totalItems: totalCount,  // From API response
+  itemsPerPage: 50,
+})
+
+// In your fetch function:
+const from = (pagination.currentPage - 1) * pagination.itemsPerPage
+const to = from + pagination.itemsPerPage - 1
+query = query.range(from, to)
+
+// Buttons:
+<button onClick={pagination.prevPage} disabled={!pagination.canGoPrev}>
+  Previous
+</button>
+<button onClick={pagination.nextPage} disabled={!pagination.canGoNext}>
+  Next
+</button>`
+        } else if (paginationType === 'client-side') {
+          description = `Client-side pagination detected: Extract to usePagination hook`
+          afterCode = `// Client-side pagination (slices local array)
+import { usePagination } from '@/hooks/usePagination'
+
+const pagination = usePagination({
+  totalItems: items.length,  // Local array
+  itemsPerPage: 50,
+})
+
+// Slice the array:
+const currentItems = items.slice(pagination.startIndex, pagination.endIndex)
+
+// Buttons:
+<button onClick={pagination.prevPage} disabled={!pagination.canGoPrev}>
+  Previous
+</button>
+<button onClick={pagination.nextPage} disabled={!pagination.canGoNext}>
+  Next
+</button>`
+        } else {
+          // Unknown type - provide both options
+          afterCode = `// Option 1: Server-side (if fetching from API)
+const pagination = usePagination({
+  totalItems: totalCount,
+  itemsPerPage: 50,
+})
+
+// Option 2: Client-side (if slicing local array)
+const pagination = usePagination({
+  totalItems: items.length,
+  itemsPerPage: 50,
+})
+const currentItems = items.slice(pagination.startIndex, pagination.endIndex)`
+        }
+        
+        // ========================================
+        // ENHANCED: Build warnings with evidence
+        // ========================================
+        const warnings: string[] = [
+          'Pagination logic is duplicated across 4 files',
+        ]
+        
+        if (paginationType !== 'unknown') {
+          warnings.push(`Detected as ${paginationType} pagination (${confidence} confidence)`)
+        }
+        
+        if (evidence.length > 0) {
+          warnings.push(`Evidence: ${evidence.join(', ')}`)
+        }
+        
+        if (relatedLocations.length > 0) {
+          warnings.push(`Found ${relatedLocations.length} related code locations that need updating`)
+        }
+        
+        // ========================================
+        // Push the enhanced issue
+        // ========================================
         issues.push({
           id: `${file}-${lineNum}-pagination`,
           file,
           line: lineNum,
           type: 'pagination' as IssueType,
           risk: 'review',
-          description: 'Extract pagination logic to reusable DataTable or usePagination hook',
+          description,
           beforeCode: context.slice(0, 300) + '...',
-          afterCode: `// Create a reusable pagination hook or component
-import { usePagination } from '@/hooks/usePagination'
-
-const { 
-  currentPage, 
-  totalPages, 
-  nextPage, 
-  prevPage, 
-  goToPage 
-} = usePagination({ 
-  totalItems, 
-  itemsPerPage: 10 
-})`,
+          afterCode,
           context,
-          warnings: [
-            'Pagination logic is duplicated across 4 files',
-            'Consider creating a shared DataTable component with built-in pagination'
-          ],
+          warnings,
+          metadata: {
+            paginationType,
+            confidence,
+            relatedLocations,
+            evidence,
+            autoFixable: confidence === 'high',
+          }
         })
       }
     }
