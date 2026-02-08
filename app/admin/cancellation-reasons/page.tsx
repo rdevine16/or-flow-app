@@ -6,6 +6,8 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 
 // ============================================================================
 // TYPES
@@ -60,6 +62,8 @@ export default function AdminCancellationReasonsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  // Toast
+  const { showToast } = useToast()
 
   // ============================================================================
   // DATA FETCHING
@@ -71,34 +75,38 @@ export default function AdminCancellationReasonsPage() {
     }
   }, [userLoading, isGlobalAdmin, showArchived])
 
-  const fetchReasons = async () => {
-    setLoading(true)
-    
-    let query = supabase
-      .from('cancellation_reason_templates')
-      .select('*')
-      .order('category')
-      .order('display_order')
-    
-    if (!showArchived) {
-      query = query.eq('is_active', true).is('deleted_at', null)
-    }
-    
-    const { data, error } = await query
-    
-    if (error) {
-      console.error('Error fetching cancellation reasons:', error)
-      setErrorMessage('Failed to load cancellation reasons')
-    } else {
-      setReasons(data || [])
-    }
-    
-    setLoading(false)
+const fetchReasons = async () => {
+  setLoading(true)
+  
+  let query = supabase
+    .from('cancellation_reason_templates')
+    .select('*')
+    .order('category')
+    .order('display_order')
+  
+  if (!showArchived) {
+    query = query.eq('is_active', true).is('deleted_at', null)
+  }
+  
+  const { data, error } = await query
+
+  if (error) {
+    showToast({
+      type: 'error',
+      title: 'Error',
+      message: 'Error fetching cancellation reasons: ' + error
+    })
+    setErrorMessage('Failed to load cancellation reasons')
+  } else {
+    setReasons(data || [])
   }
 
-  // ============================================================================
-  // MODAL HANDLERS
-  // ============================================================================
+  setLoading(false)
+}
+
+// ============================================================================
+// MODAL HANDLERS
+// ============================================================================
 
   const openCreateModal = () => {
     setEditingReason(null)
