@@ -97,10 +97,16 @@ export default function GlobalAuditLogPage() {
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
-const [expandedLog, setExpandedLog] = useState<string | null>(null)
+  const [expandedLog, setExpandedLog] = useState<string | null>(null)
+  
+  // Pagination (for server-side API calls)
+  const pagination = usePagination({
+    totalItems: totalCount,
+    itemsPerPage: 50,
+  })
 
-// Filters
-const [dateFrom, setDateFrom] = useState('')
+  // Filters
+  const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [actionFilter, setActionFilter] = useState('')
   const [facilityFilter, setFacilityFilter] = useState('')
@@ -124,7 +130,7 @@ const [dateFrom, setDateFrom] = useState('')
     if (isGlobalAdmin) {
       fetchLogs()
     }
-  }, [isGlobalAdmin, currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter])
+  }, [isGlobalAdmin, pagination.currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter])
 
   const fetchFacilities = async () => {
     const { data } = await supabase
@@ -165,8 +171,8 @@ const [dateFrom, setDateFrom] = useState('')
     }
 
     // Pagination
-    const from = (currentPage - 1) * pageSize
-    const to = from + pageSize - 1
+    const from = (pagination.currentPage - 1) * pagination.itemsPerPage
+    const to = from + pagination.itemsPerPage - 1
     query = query.range(from, to)
 
     const { data, count, error } = await query
@@ -177,54 +183,52 @@ const [dateFrom, setDateFrom] = useState('')
     }
 
     setLoading(false)
-  }, [currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter, supabase])
+  }, [pagination.currentPage, pagination.itemsPerPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter, supabase])
 
-const pageSize = 50
+  const exportToCSV = async () => {
+    // Fetch all matching logs for export (up to 10000)
+    let query = supabase
+      .from('audit_log')
+      .select('*, facility:facilities(name)')
+      .order('created_at', { ascending: false })
+      .limit(10000)
 
-const exportToCSV = async () => {
-  // Fetch all matching logs for export (up to 10000)
-  let query = supabase
-    .from('audit_log')
-    .select('*, facility:facilities(name)')
-    .order('created_at', { ascending: false })
-    .limit(10000)
+    if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00`)
+    if (dateTo) query = query.lte('created_at', `${dateTo}T23:59:59`)
+    if (actionFilter) query = query.eq('action', actionFilter)
+    if (facilityFilter) query = query.eq('facility_id', facilityFilter)
+    if (successFilter === 'success') query = query.eq('success', true)
+    else if (successFilter === 'failed') query = query.eq('success', false)
 
-  if (dateFrom) query = query.gte('created_at', `${dateFrom}T00:00:00`)
-  if (dateTo) query = query.lte('created_at', `${dateTo}T23:59:59`)
-  if (actionFilter) query = query.eq('action', actionFilter)
-  if (facilityFilter) query = query.eq('facility_id', facilityFilter)
-  if (successFilter === 'success') query = query.eq('success', true)
-  else if (successFilter === 'failed') query = query.eq('success', false)
+    const { data } = await query
 
-  const { data } = await query
+    if (!data) return
 
-  if (!data) return
+   const headers = ['Date', 'Time', 'Facility', 'User', 'Action', 'Target', 'Old Values', 'New Values', 'Success', 'Error']
+const rows = data.map((log: AuditLogEntry) => [
+  formatDate(log.created_at),
+  formatTime(log.created_at),
+  (log.facility as { name: string } | null)?.name || 'Global',
+  log.user_email,
+  log.action,
+  log.target_label || '',
+  log.old_values ? JSON.stringify(log.old_values) : '',
+  log.new_values ? JSON.stringify(log.new_values) : '',
+  log.success ? 'Yes' : 'No',
+  log.error_message || '',
+])
 
-  const headers = ['Date', 'Time', 'Facility', 'User', 'Action', 'Target', 'Old Values', 'New Values', 'Success', 'Error']
-  const rows = data.map((log: AuditLogEntry) => [
-    formatDate(log.created_at),
-    formatTime(log.created_at),
-    (log.facility as { name: string } | null)?.name || 'Global',
-    log.user_email,
-    log.action,
-    log.target_label || '',
-    log.old_values ? JSON.stringify(log.old_values) : '',
-    log.new_values ? JSON.stringify(log.new_values) : '',
-    log.success ? 'Yes' : 'No',
-    log.error_message || '',
-  ])
+const csvContent = [
+  headers.join(','),
+  ...rows.map((row: string[]) => row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+].join('\n')
 
-  const csvContent = [
-    headers.join(','),
-    ...rows.map((row: string[]) => row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
-  ].join('\n')
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `audit-log-global-${new Date().toISOString().split('T')[0]}.csv`
-  link.click()
-}
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `audit-log-global-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+  }
 
 
   // Filter logs by search query (client-side)
@@ -236,15 +240,6 @@ const exportToCSV = async () => {
         (log.facility as { name: string } | null)?.name?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : logs
-
-      const { 
-    currentItems: paginatedLogs,
-    currentPage, 
-    totalPages, 
-    nextPage, 
-    previousPage,
-    goToPage 
-  } = usePagination(filteredLogs, 50) 
 
   if (userLoading || (!isGlobalAdmin && !userLoading)) {
     return (
@@ -285,7 +280,7 @@ const exportToCSV = async () => {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <p className="text-sm text-slate-500">Page</p>
-          <p className="text-2xl font-bold text-slate-600">{currentPage} / {totalPages || 1}</p>
+          <p className="text-2xl font-bold text-slate-600">{pagination.currentPage} / {pagination.totalPages || 1}</p>
         </div>
       </div>
 
@@ -298,7 +293,7 @@ const exportToCSV = async () => {
             <input
               type="date"
               value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1) }}
+              onChange={(e) => { setDateFrom(e.target.value); pagination.reset() }}
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
@@ -307,7 +302,7 @@ const exportToCSV = async () => {
             <input
               type="date"
               value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1) }}
+              onChange={(e) => { setDateTo(e.target.value); pagination.reset() }}
               className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
@@ -315,7 +310,7 @@ const exportToCSV = async () => {
           {/* Facility Filter */}
           <select
             value={facilityFilter}
-            onChange={(e) => { setFacilityFilter(e.target.value); setCurrentPage(1) }}
+            onChange={(e) => { setFacilityFilter(e.target.value); pagination.reset() }}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           >
             <option value="">All Facilities</option>
@@ -327,7 +322,7 @@ const exportToCSV = async () => {
           {/* Action Filter */}
           <select
             value={actionFilter}
-            onChange={(e) => { setActionFilter(e.target.value); setCurrentPage(1) }}
+            onChange={(e) => { setActionFilter(e.target.value); pagination.reset() }}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           >
             <option value="">All Actions</option>
@@ -343,7 +338,7 @@ const exportToCSV = async () => {
           {/* Success Filter */}
           <select
             value={successFilter}
-            onChange={(e) => { setSuccessFilter(e.target.value); setCurrentPage(1) }}
+            onChange={(e) => { setSuccessFilter(e.target.value); pagination.reset() }}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           >
             <option value="">All Status</option>
@@ -409,7 +404,7 @@ const exportToCSV = async () => {
             </div>
 
             <div className="divide-y divide-slate-100">
-{paginatedLogs.map((log) => (
+              {filteredLogs.map((log) => (
                 <div key={log.id} className="hover:bg-slate-50 transition-colors">
                   <div
                     className="px-4 py-3 flex items-center gap-4 cursor-pointer"
@@ -544,39 +539,39 @@ const exportToCSV = async () => {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {pagination.totalPages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <p className="text-sm text-slate-500">
-            Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount.toLocaleString()}
+            Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, totalCount)} of {totalCount.toLocaleString()}
           </p>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
+              onClick={() => pagination.goToPage(1)}
+              disabled={!pagination.canGoPrev}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               First
             </button>
             <button
-  onClick={previousPage}
-  disabled={currentPage === 1}
+              onClick={pagination.prevPage}
+              disabled={!pagination.canGoPrev}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <span className="px-3 py-1.5 text-sm text-slate-600">
-              Page {currentPage} of {totalPages}
+              Page {pagination.currentPage} of {pagination.totalPages}
             </span>
-<button
-  onClick={nextPage}
-  disabled={currentPage === totalPages}
+            <button
+              onClick={pagination.nextPage}
+              disabled={!pagination.canGoNext}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
             </button>
-<button
-  onClick={() => goToPage(totalPages)}
-  disabled={currentPage === totalPages}
+            <button
+              onClick={() => pagination.goToPage(pagination.totalPages)}
+              disabled={!pagination.canGoNext}
               className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Last
