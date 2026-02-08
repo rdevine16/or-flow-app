@@ -154,84 +154,21 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
-        {/* Subtle grid pattern */}
-        <div 
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-          }}
-        />
+      <div className="hidden lg:flex lg:w-1/2 bg-slate-950 relative overflow-hidden">
+        {/* Subtle accent */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-950/20 to-transparent" />
         
-        {/* Accent glows */}
-        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
-        
-        {/* Content */}
-        <div className={`relative z-10 flex flex-col justify-between p-12 w-full transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
-          <div>
-            {/* Logo - Using Next.js Image for optimization */}
-            <div className="mb-4">
-              <Image 
-                src="/images/logo_white.png" 
-                alt="ORbit Surgical" 
-                width={200} 
-                height={60}
-                priority
-                className="h-12 w-auto"
-              />
-            </div>
-          </div>
-          
-          <div className="space-y-8">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-4 leading-tight">
-                Surgical Excellence,<br />Powered by Data
-              </h1>
-              <p className="text-lg text-slate-300 leading-relaxed">
-                Real-time OR analytics and comprehensive case management for modern surgical centers.
-              </p>
-            </div>
-
-            {/* Feature highlights */}
-            <div className="space-y-4">
-              {[
-                { icon: '📊', title: 'Real-Time Analytics', desc: 'Track milestones and performance metrics live' },
-                { icon: '🗓️', title: 'Smart Scheduling', desc: 'Optimize block schedules and turnover times' },
-                { icon: '⚡', title: 'Instant Insights', desc: 'Make data-driven decisions on the fly' },
-              ].map((feature, idx) => (
-                <div 
-                  key={idx} 
-                  className="flex items-start gap-4 group transition-transform duration-300 hover:translate-x-2"
-                >
-                  <div className="text-2xl flex-shrink-0 transform group-hover:scale-110 transition-transform">
-                    {feature.icon}
-                  </div>
-                  <div>
-                    <h3 className="text-white font-semibold mb-1">{feature.title}</h3>
-                    <p className="text-slate-400 text-sm">{feature.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Trust indicators */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
-              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>HIPAA Compliant</span>
-              <span className="text-slate-600">•</span>
-              <svg className="w-4 h-4 text-green-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>Enterprise Security</span>
-            </div>
-            <p className="text-xs text-slate-500">
-              Trusted by leading surgical centers nationwide
-            </p>
+        {/* Centered Logo */}
+        <div className={`relative z-10 flex items-center justify-center w-full transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="text-center">
+            <Image 
+              src="/images/logo_white.png" 
+              alt="ORbit Surgical" 
+              width={400} 
+              height={120}
+              priority
+              className="h-24 w-auto mx-auto"
+            />
           </div>
         </div>
       </div>

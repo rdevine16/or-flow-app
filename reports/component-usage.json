@@ -1,0 +1,420 @@
+{
+  "generatedAt": "2026-02-08T13:31:13.155Z",
+  "components": {
+    "layouts/DashboardLayout": {
+      "usedIn": [
+        "app/admin/audit-log/page.tsx",
+        "app/admin/cancellation-reasons/page.tsx",
+        "app/admin/checklist-templates/page.tsx",
+        "app/admin/complexities/page.tsx",
+        "app/admin/docs/page.tsx",
+        "app/admin/facilities/[id]/page.tsx",
+        "app/admin/facilities/new/page.tsx",
+        "app/admin/facilities/page.tsx",
+        "app/admin/page.tsx",
+        "app/admin/settings/body-regions/page.tsx",
+        "app/admin/settings/cost-categories/page.tsx",
+        "app/admin/settings/delay-types/page.tsx",
+        "app/admin/settings/implant-companies/page.tsx",
+        "app/admin/settings/milestones/page.tsx",
+        "app/admin/settings/procedure-categories/page.tsx",
+        "app/admin/settings/procedure-milestones/page.tsx",
+        "app/admin/settings/procedures/page.tsx",
+        "app/analytics/block-utilization/page.tsx",
+        "app/analytics/financials/outliers/[caseId]/page.tsx",
+        "app/analytics/financials/page.tsx",
+        "app/analytics/flags/page.tsx",
+        "app/analytics/kpi/page.tsx",
+        "app/analytics/page.tsx",
+        "app/analytics/surgeons/page.tsx",
+        "app/block-schedule/page.tsx",
+        "app/cases/[id]/cancel/page.tsx",
+        "app/cases/[id]/edit/page.tsx",
+        "app/cases/[id]/page.tsx",
+        "app/cases/new/page.tsx",
+        "app/cases/page.tsx",
+        "app/checkin/page.tsx",
+        "app/dashboard/data-quality/page.tsx",
+        "app/dashboard/page.tsx",
+        "app/profile/page.tsx",
+        "app/settings/analytics/page.tsx",
+        "app/settings/audit-log/page.tsx",
+        "app/settings/cancellation-reasons/page.tsx",
+        "app/settings/checkin/page.tsx",
+        "app/settings/checklist-builder/page.tsx",
+        "app/settings/closures/page.tsx",
+        "app/settings/complexities/page.tsx",
+        "app/settings/delay-types/page.tsx",
+        "app/settings/device-reps/page.tsx",
+        "app/settings/facilities/page.tsx",
+        "app/settings/financials/cost-categories/page.tsx",
+        "app/settings/financials/page.tsx",
+        "app/settings/financials/payers/page.tsx",
+        "app/settings/financials/procedure-pricing/page.tsx",
+        "app/settings/financials/surgeon-variance/page.tsx",
+        "app/settings/flags/page.tsx",
+        "app/settings/general/page.tsx",
+        "app/settings/implant-companies/page.tsx",
+        "app/settings/integrations/page.tsx",
+        "app/settings/milestones/page.tsx",
+        "app/settings/notifications/page.tsx",
+        "app/settings/procedure-milestones/page.tsx",
+        "app/settings/procedures/page.tsx",
+        "app/settings/rooms/page.tsx",
+        "app/settings/subscription/page.tsx",
+        "app/settings/surgeon-preferences/page.tsx",
+        "app/settings/users/page.tsx",
+        "app/spd/page.tsx"
+      ],
+      "usageCount": 62
+    },
+    "ui/Container": {
+      "usedIn": [
+        "app/admin/audit-log/page.tsx",
+        "app/admin/cancellation-reasons/page.tsx",
+        "app/admin/complexities/page.tsx",
+        "app/admin/settings/body-regions/page.tsx",
+        "app/admin/settings/cost-categories/page.tsx",
+        "app/admin/settings/delay-types/page.tsx",
+        "app/admin/settings/implant-companies/page.tsx",
+        "app/admin/settings/milestones/page.tsx",
+        "app/admin/settings/procedure-categories/page.tsx",
+        "app/admin/settings/procedure-milestones/page.tsx",
+        "app/admin/settings/procedures/page.tsx",
+        "app/analytics/block-utilization/page.tsx",
+        "app/analytics/financials/outliers/[caseId]/page.tsx",
+        "app/analytics/financials/page.tsx",
+        "app/analytics/flags/page.tsx",
+        "app/analytics/kpi/page.tsx",
+        "app/analytics/page.tsx",
+        "app/analytics/surgeons/page.tsx",
+        "app/cases/[id]/cancel/page.tsx",
+        "app/cases/[id]/edit/page.tsx",
+        "app/cases/new/page.tsx",
+        "app/dashboard/data-quality/page.tsx",
+        "app/settings/analytics/page.tsx",
+        "app/settings/audit-log/page.tsx",
+        "app/settings/cancellation-reasons/page.tsx",
+        "app/settings/complexities/page.tsx",
+        "app/settings/delay-types/page.tsx",
+        "app/settings/device-reps/page.tsx",
+        "app/settings/facilities/page.tsx",
+        "app/settings/financials/cost-categories/page.tsx",
+        "app/settings/financials/page.tsx",
+        "app/settings/financials/payers/page.tsx",
+        "app/settings/financials/procedure-pricing/page.tsx",
+        "app/settings/financials/surgeon-variance/page.tsx",
+        "app/settings/flags/page.tsx",
+        "app/settings/general/page.tsx",
+        "app/settings/implant-companies/page.tsx",
+        "app/settings/integrations/page.tsx",
+        "app/settings/milestones/page.tsx",
+        "app/settings/notifications/page.tsx",
+        "app/settings/procedure-milestones/page.tsx",
+        "app/settings/procedures/page.tsx",
+        "app/settings/rooms/page.tsx",
+        "app/settings/subscription/page.tsx",
+        "app/settings/surgeon-preferences/page.tsx",
+        "app/settings/users/page.tsx"
+      ],
+      "usageCount": 46
+    },
+    "FacilityLogoUpload": {
+      "usedIn": [
+        "app/admin/facilities/[id]/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "modals/DeleteFacilityModal": {
+      "usedIn": [
+        "app/admin/facilities/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "analytics/AnalyticsBreadcrumb": {
+      "usedIn": [
+        "app/analytics/block-utilization/page.tsx",
+        "app/analytics/financials/page.tsx",
+        "app/analytics/surgeons/page.tsx"
+      ],
+      "usageCount": 3
+    },
+    "ui/DateRangeSelector": {
+      "usedIn": [
+        "app/analytics/block-utilization/page.tsx",
+        "app/analytics/financials/page.tsx",
+        "app/analytics/flags/page.tsx",
+        "app/analytics/page.tsx"
+      ],
+      "usageCount": 4
+    },
+    "analytics/AnalyticsComponents": {
+      "usedIn": [
+        "app/analytics/block-utilization/page.tsx",
+        "app/analytics/surgeons/page.tsx"
+      ],
+      "usageCount": 2
+    },
+    "analytics/financials/types": {
+      "usedIn": [
+        "app/analytics/financials/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "analytics/financials/useFinancialsMetrics": {
+      "usedIn": [
+        "app/analytics/financials/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "analytics/financials/OverviewTab": {
+      "usedIn": [
+        "app/analytics/financials/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "analytics/financials/ProcedureTab": {
+      "usedIn": [
+        "app/analytics/financials/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "analytics/financials/SurgeonTab": {
+      "usedIn": [
+        "app/analytics/financials/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "ui/DateFilter": {
+      "usedIn": [
+        "app/analytics/kpi/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "analytics/FlagsSummaryCard": {
+      "usedIn": [
+        "app/analytics/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "block-schedule/WeekCalendar": {
+      "usedIn": [
+        "app/block-schedule/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "block-schedule/BlockSidebar": {
+      "usedIn": [
+        "app/block-schedule/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "block-schedule/BlockPopover": {
+      "usedIn": [
+        "app/block-schedule/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "block-schedule/DeleteBlockModal": {
+      "usedIn": [
+        "app/block-schedule/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "ui/Card": {
+      "usedIn": [
+        "app/cases/[id]/edit/page.tsx",
+        "app/cases/new/page.tsx"
+      ],
+      "usageCount": 2
+    },
+    "cases/CaseForm": {
+      "usedIn": [
+        "app/cases/[id]/edit/page.tsx",
+        "app/cases/new/page.tsx"
+      ],
+      "usageCount": 2
+    },
+    "ui/FloatingActionButton": {
+      "usedIn": [
+        "app/cases/[id]/page.tsx",
+        "app/cases/page.tsx",
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 3
+    },
+    "CallNextPatientModal": {
+      "usedIn": [
+        "app/cases/[id]/page.tsx",
+        "app/cases/page.tsx",
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 3
+    },
+    "cases/CompletedCaseView": {
+      "usedIn": [
+        "app/cases/[id]/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "cases/DeviceRepSection": {
+      "usedIn": [
+        "app/cases/[id]/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "cases/CaseFlagsSection": {
+      "usedIn": [
+        "app/cases/[id]/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "ui/SurgeonAvatar": {
+      "usedIn": [
+        "app/cases/page.tsx",
+        "app/spd/page.tsx",
+        "components/cases/CaseSummary.tsx"
+      ],
+      "usageCount": 3
+    },
+    "FeatureGate": {
+      "usedIn": [
+        "app/checkin/page.tsx",
+        "app/settings/checkin/page.tsx",
+        "app/settings/checklist-builder/page.tsx"
+      ],
+      "usageCount": 3
+    },
+    "dashboard/CaseListView": {
+      "usedIn": [
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "dashboard/EnhancedRoomGridView": {
+      "usedIn": [
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "dashboard/RoomOrderModal": {
+      "usedIn": [
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "dashboard/StaffAssignmentPanel": {
+      "usedIn": [
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "dashboard/StaffDragOverlay": {
+      "usedIn": [
+        "app/dashboard/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "settings/SettingsLayout": {
+      "usedIn": [
+        "app/settings/analytics/page.tsx",
+        "app/settings/audit-log/page.tsx",
+        "app/settings/cancellation-reasons/page.tsx",
+        "app/settings/checkin/page.tsx",
+        "app/settings/checklist-builder/page.tsx",
+        "app/settings/complexities/page.tsx",
+        "app/settings/delay-types/page.tsx",
+        "app/settings/device-reps/page.tsx",
+        "app/settings/facilities/page.tsx",
+        "app/settings/financials/cost-categories/page.tsx",
+        "app/settings/financials/page.tsx",
+        "app/settings/financials/payers/page.tsx",
+        "app/settings/financials/procedure-pricing/page.tsx",
+        "app/settings/financials/surgeon-variance/page.tsx",
+        "app/settings/flags/page.tsx",
+        "app/settings/general/page.tsx",
+        "app/settings/implant-companies/page.tsx",
+        "app/settings/integrations/page.tsx",
+        "app/settings/milestones/page.tsx",
+        "app/settings/notifications/page.tsx",
+        "app/settings/procedure-milestones/page.tsx",
+        "app/settings/procedures/page.tsx",
+        "app/settings/rooms/page.tsx",
+        "app/settings/subscription/page.tsx",
+        "app/settings/surgeon-preferences/page.tsx",
+        "app/settings/users/page.tsx"
+      ],
+      "usageCount": 26
+    },
+    "ui/SearchableDropdown": {
+      "usedIn": [
+        "app/settings/financials/surgeon-variance/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "ui/Badge": {
+      "usedIn": [
+        "app/settings/users/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "InviteUserModal": {
+      "usedIn": [
+        "app/settings/users/page.tsx"
+      ],
+      "usageCount": 1
+    },
+    "ui/Loading": {
+      "usedIn": [
+        "components/ui/Loading.tsx"
+      ],
+      "usageCount": 1
+    }
+  },
+  "summary": {
+    "totalComponents": 37,
+    "mostUsed": [
+      {
+        "path": "layouts/DashboardLayout",
+        "count": 62
+      },
+      {
+        "path": "ui/Container",
+        "count": 46
+      },
+      {
+        "path": "settings/SettingsLayout",
+        "count": 26
+      },
+      {
+        "path": "ui/DateRangeSelector",
+        "count": 4
+      },
+      {
+        "path": "analytics/AnalyticsBreadcrumb",
+        "count": 3
+      },
+      {
+        "path": "ui/FloatingActionButton",
+        "count": 3
+      },
+      {
+        "path": "CallNextPatientModal",
+        "count": 3
+      },
+      {
+        "path": "ui/SurgeonAvatar",
+        "count": 3
+      },
+      {
+        "path": "FeatureGate",
+        "count": 3
+      },
+      {
+        "path": "analytics/AnalyticsComponents",
+        "count": 2
+      }
+    ],
+    "unused": []
+  }
+}
