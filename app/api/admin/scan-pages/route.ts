@@ -561,12 +561,12 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
 
   // ---- Components ----
   const components = new Set<string>()
-  const defaultImportPattern = /import\s+(\w+)\s+from\s+['"]@\/components\/(?!layouts)([^'"]+)['"]/g
+  const defaultImportPattern = /import\s+(\w+)\s+from\s+['"]@\/components\/([^'"]+)['"]/g
   let compMatch
   while ((compMatch = defaultImportPattern.exec(source)) !== null) {
-    if (!['DashboardLayout', 'ErrorBoundary'].includes(compMatch[1])) components.add(compMatch[1])
+    components.add(compMatch[1])
   }
-  const namedImportPattern = /import\s+\{([^}]+)\}\s+from\s+['"]@\/components\/(?!layouts)([^'"]+)['"]/g
+  const namedImportPattern = /import\s+\{([^}]+)\}\s+from\s+['"]@\/components\/([^'"]+)['"]/g
   let namedMatch
   while ((namedMatch = namedImportPattern.exec(source)) !== null) {
     namedMatch[1].split(',').map((n: string) => n.trim().split(' as ')[0].trim()).forEach((n: string) => { if (n) components.add(n) })

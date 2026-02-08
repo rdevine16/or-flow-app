@@ -2127,7 +2127,15 @@ function OverviewTab({ page }: { page: PageEntry }) {
             {page.components.length > 0 && (
               <div>
                 <Label>Components</Label>
-                <TagList items={page.components} color="green" />
+                {(() => {
+                  const [regular, wrappers] = splitComponents(page.components)
+                  return (
+                    <>
+                      <TagList items={regular} color="green" />
+                      <LayoutWrapperCollapse wrappers={wrappers} color="slate" />
+                    </>
+                  )
+                })()}
               </div>
             )}
             {page.interactions.length > 0 && (
@@ -2509,10 +2517,10 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
 
       {page.components.length > 0 && (
         <Section title="Component Dependencies">
-          <div className="flex flex-wrap gap-2">
-            {page.components.map(comp => {
-              // Find if this component is documented
-              const compEntry = allPages.find(p =>
+          {(() => {
+            const [regular, wrappers] = splitComponents(page.components)
+            const renderComp = (comp: string) => {
+              const compEntry = allPages.find((p: PageEntry) =>
                 p.name.toLowerCase().replace(/\s/g, '') === comp.toLowerCase() ||
                 p.route.endsWith('/' + comp)
               )
@@ -2526,8 +2534,18 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
                   {compEntry && <span className="ml-1 text-emerald-400">✓</span>}
                 </span>
               )
-            })}
-          </div>
+            }
+            return (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {regular.map(renderComp)}
+                </div>
+                {wrappers.length > 0 && (
+                  <LayoutWrapperCollapse wrappers={wrappers} color="slate" />
+                )}
+              </>
+            )
+          })()}
         </Section>
       )}
     </div>
@@ -2541,6 +2559,47 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
     <div className="bg-white border border-slate-200 rounded-xl p-5">
       <h3 className="text-sm font-semibold text-slate-700 mb-4">{title}</h3>
       {children}
+    </div>
+  )
+}
+
+/** Identify layout/infrastructure wrappers that appear on nearly every page */
+const LAYOUT_PATTERNS = ['Layout', 'Provider', 'ErrorBoundary', 'Wrapper', 'Guard', 'Shell']
+function isLayoutWrapper(name: string): boolean {
+  return LAYOUT_PATTERNS.some(p => name.includes(p))
+}
+
+/** Split components into [regular, layoutWrappers] */
+function splitComponents(components: string[]): [string[], string[]] {
+  const regular: string[] = []
+  const wrappers: string[] = []
+  for (const c of components) {
+    if (isLayoutWrapper(c)) wrappers.push(c)
+    else regular.push(c)
+  }
+  return [regular, wrappers]
+}
+
+/** Collapsible layout wrappers row */
+function LayoutWrapperCollapse({ wrappers, color }: { wrappers: string[]; color?: string }) {
+  const [open, setOpen] = useState(false)
+  if (wrappers.length === 0) return null
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+        Layout Wrappers ({wrappers.length})
+      </button>
+      {open && (
+        <div className="mt-1.5 ml-4">
+          <TagList items={wrappers} color={color || 'slate'} />
+        </div>
+      )}
     </div>
   )
 }
@@ -2654,14 +2713,38 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
     const importName = parts[parts.length - 1] // PascalCase filename
     return !referencedComponents.has(importName) && !referencedComponents.has(p.name)
   })
-  if (orphanedComponents.length > 0) {
+
+  // Split into real orphans vs layout wrappers (infrastructure that wraps many pages)
+  const orphanedRegular = orphanedComponents.filter(p => {
+    const parts = p.route.split('/')
+    const importName = parts[parts.length - 1]
+    return !isLayoutWrapper(importName) && !isLayoutWrapper(p.name)
+  })
+  const orphanedWrappers = orphanedComponents.filter(p => {
+    const parts = p.route.split('/')
+    const importName = parts[parts.length - 1]
+    return isLayoutWrapper(importName) || isLayoutWrapper(p.name)
+  })
+
+  if (orphanedRegular.length > 0) {
     issues.push({
       id: 'orphaned-components',
       severity: 'warning',
       group: 'Dead Code',
       title: 'Orphaned Components',
       description: 'Registered components not listed in any other entry\'s imports. Re-scan importing pages to refresh their components[] before removing.',
-      entries: orphanedComponents.map(p => ({ id: p.id, name: p.name, route: p.route })),
+      entries: orphanedRegular.map(p => ({ id: p.id, name: p.name, route: p.route })),
+    })
+  }
+
+  if (orphanedWrappers.length > 0) {
+    issues.push({
+      id: 'orphaned-layout-wrappers',
+      severity: 'info',
+      group: 'Dead Code',
+      title: 'Unreferenced Layout Wrappers',
+      description: 'Layout/provider components not yet in any entry\'s imports. Usually a scanning gap — re-scan all to populate. Only a concern if truly unused.',
+      entries: orphanedWrappers.map(p => ({ id: p.id, name: p.name, route: p.route })),
     })
   }
 
