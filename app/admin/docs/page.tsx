@@ -2600,7 +2600,18 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
   )
 
   // All component names that exist as registered entries
-  const registeredComponentNames = new Set(componentEntries.map(p => p.name))
+  // Build a map: importName → entry (e.g. "CaseListView" → entry)
+  // Components are referenced by their PascalCase import name in other entries' components[]
+  // but the entry's name field has spaces ("Case List View"). So we derive the import name from the route.
+  const componentImportNames = new Map<string, PageEntry>()
+  for (const ce of componentEntries) {
+    // Route like "components/dashboard/CaseListView" → filename "CaseListView"
+    const parts = ce.route.split('/')
+    const fileName = parts[parts.length - 1]
+    componentImportNames.set(fileName, ce)
+    // Also match on the display name in case someone manually set it to match
+    componentImportNames.set(ce.name, ce)
+  }
 
   // All API routes that exist as registered entries
   const registeredApiRoutes = new Set(apiEntries.map(p => p.route))
@@ -2637,8 +2648,12 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
 
   // ── 1. DEAD CODE ───────────────────────────────────────────────────────
 
-  // Orphaned components: registered but never referenced
-  const orphanedComponents = componentEntries.filter(p => !referencedComponents.has(p.name))
+  // Orphaned components: registered but never referenced by import name
+  const orphanedComponents = componentEntries.filter(p => {
+    const parts = p.route.split('/')
+    const importName = parts[parts.length - 1] // PascalCase filename
+    return !referencedComponents.has(importName) && !referencedComponents.has(p.name)
+  })
   if (orphanedComponents.length > 0) {
     issues.push({
       id: 'orphaned-components',
@@ -2722,7 +2737,7 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
       severity: 'info',
       group: 'Data Integrity',
       title: `Read-Only Tables — No Writer (${readNoWriter.length})`,
-      description: 'Tables read but no registered entry writes to them. May be populated by triggers, migrations, external services, or iOS.',
+      description: 'Tables read but no registered entry writes to them. Common causes: writes happen in iOS, database triggers, migrations, seed scripts, or a page that hasn\'t been scanned yet.',
       entries: readNoWriter.flatMap(({ table, readers }) =>
         readers.map(r => ({ id: r.id, name: `${r.name} ← ${table}`, route: r.route }))
       ),
@@ -2758,7 +2773,7 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
   const missingCompDocs: { page: PageEntry; component: string }[] = []
   for (const page of pages) {
     for (const comp of page.components) {
-      if (!registeredComponentNames.has(comp)) {
+      if (!componentImportNames.has(comp)) {
         missingCompDocs.push({ page, component: comp })
       }
     }
