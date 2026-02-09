@@ -11,6 +11,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -523,7 +524,7 @@ export default function CheckInPage() {
   const supabase = createClient()
   const { userData, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
-
+  const { showToast } = useToast()
   const [checkins, setCheckins] = useState<CheckinRecord[]>([])
   const [statuses, setStatuses] = useState<PatientStatus[]>([])
   const [checklistFields, setChecklistFields] = useState<ChecklistField[]>([])
@@ -591,14 +592,22 @@ export default function CheckInPage() {
         .order('case(start_time)', { ascending: true })
 
       if (error) {
-        console.error('Error fetching checkins:', error)
+showToast({
+  type: 'error',
+  title: 'Error fetching checkins:',
+  message: error instanceof Error ? error.message : 'Error fetching checkins:'
+})
       } else {
         // Filter out any null cases (shouldn't happen but safety)
         const validCheckins = (checkinData || []).filter(c => c.case !== null)
         setCheckins(validCheckins as CheckinRecord[])
       }
     } catch (err) {
-      console.error('Error fetching data:', err)
+      showToast({
+  type: 'error',
+  title: 'Error fetching data:',
+  message: err instanceof Error ? err.message : 'Error fetching data:'
+})
     } finally {
       setLoading(false)
     }
@@ -645,7 +654,11 @@ export default function CheckInPage() {
       .eq('id', checkinId)
 
     if (error) {
-      console.error('Error updating status:', error)
+      showToast({
+  type: 'error',
+  title: 'Error updating status:',
+  message: error instanceof Error ? error.message : 'Error updating status:'
+})
       // Revert on error
       setCheckins(prev => prev.map(c =>
         c.id === checkinId ? checkin : c
@@ -674,7 +687,11 @@ export default function CheckInPage() {
       .eq('id', checkinId)
 
     if (error) {
-      console.error('Error updating checklist:', error)
+      showToast({
+        type: 'error',
+        title: 'Error updating checklist:',
+        message: error instanceof Error ? error.message : 'Error updating checklist:'
+      })
     }
   }
 
@@ -687,7 +704,11 @@ export default function CheckInPage() {
       })
 
       if (error) {
-        console.error('Error generating link:', error)
+        showToast({
+          type: 'error',
+          title: 'Error generating escort link:',
+          message: error instanceof Error ? error.message : 'Error generating escort link:'
+        })
         return null
       }
 
@@ -709,7 +730,11 @@ export default function CheckInPage() {
 
       return fullUrl
     } catch (err) {
-      console.error('Error generating escort link:', err)
+      showToast({
+  type: 'error',
+  title: 'Error generating escort link:',
+  message: err instanceof Error ? err.message : 'Error generating escort link:'
+})
       return null
     }
   }
@@ -727,7 +752,11 @@ export default function CheckInPage() {
       .eq('id', checkinId)
 
     if (error) {
-      console.error('Error updating escort info:', error)
+      showToast({
+        type: 'error',
+        title: 'Error updating escort info:',
+        message: error instanceof Error ? error.message : 'Error updating escort info:'
+      })
     }
   }
 

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { checkPasswordStrength } from '@/lib/passwords'
 import { authAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface UserProfile {
   id: string
@@ -27,7 +28,7 @@ interface UserProfile {
 export default function ProfilePage() {
   const router = useRouter()
   const supabase = createClient()
-
+  const { showToast } = useToast()
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,7 +69,11 @@ export default function ProfilePage() {
         .single()
 
       if (error) {
-        console.error('Error fetching profile:', error)
+        showToast({
+  type: 'error',
+  title: 'Error fetching profile:',
+  message: error instanceof Error ? error.message : 'Error fetching profile:'
+})
         setLoading(false)
         return
       }
@@ -89,90 +94,141 @@ export default function ProfilePage() {
     setSaving(true)
     setMessage(null)
 
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-        })
-        .eq('id', profile.id)
+try {
+  const { error } = await supabase
+    .from('users')
+    .update({
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+    })
+    .eq('id', profile.id)
 
-      if (error) throw error
+  if (error) throw error
 
-      setProfile({ ...profile, first_name: firstName.trim(), last_name: lastName.trim() })
-      setMessage({ type: 'success', text: 'Profile updated successfully' })
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      setMessage({ type: 'error', text: 'Failed to update profile' })
-    } finally {
-      setSaving(false)
-    }
+  setProfile({ ...profile, first_name: firstName.trim(), last_name: lastName.trim() })
+  
+  // ✅ Success toast
+  showToast({
+    type: 'success',
+    title: 'Profile Updated',
+    message: 'Your profile has been updated successfully'
+  })
+  
+  // You can keep setMessage too if you're displaying it on the page
+  setMessage({ type: 'success', text: 'Profile updated successfully' })
+  
+} catch (error) {
+  // ❌ REMOVE: console.error('Error updating profile:', error)
+  
+  const message = error instanceof Error ? error.message : 'Failed to update profile'
+  
+  // ✅ Error toast
+  showToast({
+    type: 'error',
+    title: 'Update Failed',
+    message
+  })
+  
+  // You can keep setMessage too
+  setMessage({ type: 'error', text: 'Failed to update profile' })
+  
+} finally {
+  setSaving(false)
+}
   }
 
   // Change password
-  const handleChangePassword = async () => {
-    setMessage(null)
-
-    // Validation
-    if (!currentPassword) {
-      setMessage({ type: 'error', text: 'Please enter your current password' })
-      return
-    }
-
-    if (newPassword.length < 8) {
-      setMessage({ type: 'error', text: 'New password must be at least 8 characters' })
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' })
-      return
-    }
-
-    if (passwordStrength.level === 'weak') {
-      setMessage({ type: 'error', text: 'Please choose a stronger password' })
-      return
-    }
-
-    setChangingPassword(true)
-
-    try {
-      // Verify current password by attempting to sign in
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile?.email || '',
-        password: currentPassword,
-      })
-
-      if (signInError) {
-        setMessage({ type: 'error', text: 'Current password is incorrect' })
-        setChangingPassword(false)
-        return
-      }
-
-      // Update password
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword,
-      })
-
-      if (updateError) throw updateError
-
-      // Log password change
-      await authAudit.passwordChanged(supabase)
-
-      // Clear form
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setShowPasswordSection(false)
-      setMessage({ type: 'success', text: 'Password changed successfully' })
-    } catch (error) {
-      console.error('Error changing password:', error)
-      setMessage({ type: 'error', text: 'Failed to change password' })
-    } finally {
-      setChangingPassword(false)
-    }
+const handleChangePassword = async () => {
+  // Validation with toasts
+  if (!currentPassword) {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'Please enter your current password'
+    })
+    return
   }
+
+  if (newPassword.length < 8) {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'New password must be at least 8 characters'
+    })
+    return
+  }
+
+  if (newPassword !== confirmPassword) {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'New passwords do not match'
+    })
+    return
+  }
+
+  if (passwordStrength.level === 'weak') {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'Please choose a stronger password'
+    })
+    return
+  }
+
+  setChangingPassword(true)
+
+  try {
+    // Verify current password by attempting to sign in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: profile?.email || '',
+      password: currentPassword,
+    })
+
+    if (signInError) {
+      showToast({
+        type: 'error',
+        title: 'Invalid Password',
+        message: 'Current password is incorrect'
+      })
+      setChangingPassword(false)
+      return
+    }
+
+    // Update password
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    })
+
+    if (updateError) throw updateError
+
+    // Log password change
+    await authAudit.passwordChanged(supabase)
+
+    // Clear form
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setShowPasswordSection(false)
+    
+    // Success toast
+    showToast({
+      type: 'success',
+      title: 'Password Changed',
+      message: 'Your password has been updated successfully'
+    })
+    
+  } catch (error) {
+    // Error toast
+    showToast({
+      type: 'error',
+      title: 'Password Change Failed',
+      message: error instanceof Error ? error.message : 'Failed to change password'
+    })
+  } finally {
+    setChangingPassword(false)
+  }
+}
 
   // Sign out
   const handleSignOut = async () => {

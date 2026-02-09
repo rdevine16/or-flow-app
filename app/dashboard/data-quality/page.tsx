@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -218,7 +219,7 @@ export default function DataQualityPage() {
   const [resolutionTypes, setResolutionTypes] = useState<ResolutionType[]>([])
   const [summary, setSummary] = useState<DataQualitySummary | null>(null)
   const [loading, setLoading] = useState(true)
-
+  const { showToast } = useToast()
   // Filter state
   const [filterType, setFilterType] = useState<string>('all')
   const [showResolved, setShowResolved] = useState(false)
@@ -323,10 +324,18 @@ export default function DataQualityPage() {
         .eq('case_id', caseId)
       
       if (cmError) {
-        console.error('Error loading case milestones:', cmError)
+        showToast({
+          type: 'error',
+          title: 'Error loading case milestones:',
+          message: cmError.message || 'Error loading case milestones'
+        })
       }
       
-      console.log('Loaded case_milestones:', caseMilestones?.length, caseMilestones)
+showToast({
+  type: 'info',
+  title: 'Loaded case_milestones:',
+  message: `Loaded case_milestones: ${caseMilestones?.length} ${caseMilestones}`
+})
       
       // 2. Get unique facility_milestone_ids to look up
       const facilityMilestoneIds = [...new Set(
@@ -349,12 +358,19 @@ export default function DataQualityPage() {
           .in('id', facilityMilestoneIds)
         
         if (fmError) {
-          console.error('Error loading facility_milestones:', fmError)
+          showToast({
+            type: 'error',
+            title: 'Error loading facility_milestones:',
+            message: fmError.message || 'Error loading facility_milestones'
+          })
         } else {
           facilityMilestones = fmData || []
         }
-        console.log('Loaded facility_milestones:', facilityMilestones?.length, facilityMilestones)
-      }
+showToast({
+  type: 'info',
+  title: 'Loaded facility_milestones:',
+  message: `Loaded facility_milestones: ${facilityMilestones?.length} ${facilityMilestones}`
+})      }
       
       // Create lookup map for facility_milestones
       const fmLookup = new Map(facilityMilestones.map(fm => [fm.id, fm]))
@@ -367,7 +383,11 @@ export default function DataQualityPage() {
         .is('resolved_at', null)
       
       if (issuesError) {
-        console.error('Error loading case issues:', issuesError)
+        showToast({
+  type: 'error',
+  title: 'Error loading case issues:',
+  message: `Error loading case issues: ${issuesError}`
+})
       }
       
       // Also fetch facility_milestones for issues (might have some not in case_milestones)
@@ -422,8 +442,11 @@ export default function DataQualityPage() {
               recorded_at: cm.recorded_at
             })
           } else {
-            console.log('Missing facility_milestone for id:', cm.facility_milestone_id)
-          }
+showToast({
+  type: 'info',
+  title: 'Missing facility_milestone for id:',
+  message: `Missing facility_milestone for id: ${cm.facility_milestone_id}`
+})          }
         }
       })
       
@@ -509,7 +532,11 @@ export default function DataQualityPage() {
       setImpact(newImpact)
       
     } catch (err) {
-      console.error('Error in loadAllMilestonesForCase:', err)
+      showToast({
+  type: 'error',
+  title: 'Error in loadAllMilestonesForCase:',
+  message: err instanceof Error ? err.message : 'Error in loadAllMilestonesForCase:'
+})
     }
     
     setLoadingMilestones(false)
@@ -530,7 +557,11 @@ export default function DataQualityPage() {
       .is('resolved_at', null)
     
     if (error) {
-      console.error('Error loading case issues:', error)
+      showToast({
+        type: 'error',
+        title: 'Error loading case issues:',
+        message: error.message || 'Error loading case issues'
+      })
       return
     }
     

@@ -16,6 +16,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface InviteData {
   id: string
@@ -36,7 +37,7 @@ function AcceptInviteContent() {
   const params = useParams()
   const token = params.token as string
   const supabase = createClient()
-
+  const { showToast } = useToast()
   const [invite, setInvite] = useState<InviteData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -135,34 +136,50 @@ function AcceptInviteContent() {
     setSubmitting(true)
     setError(null)
 
-    try {
-      // Call API to create user (uses service role key, bypasses email confirmation)
-      const response = await fetch('/api/invite/accept', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          password: password,
-        }),
-      })
+try {
+  // Call API to create user
+  const response = await fetch('/api/invite/accept', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      token: token,
+      password: password,
+    }),
+  })
 
-      const result = await response.json()
+  const result = await response.json()
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create account')
-      }
+  if (!response.ok) {
+    throw new Error(result.error || 'Failed to create account')
+  }
 
-      // Success! Redirect to login page with success message
-      router.push('/login?registered=true')
+  // ✅ Success toast
+  showToast({
+    type: 'success',
+    title: 'Account Created',
+    message: 'Redirecting to login...'
+  })
 
-    } catch (err: any) {
-      console.error('Error creating account:', err)
-      setError(err.message || 'Failed to create account. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
+  // Success! Redirect to login page with success message
+  router.push('/login?registered=true')
+
+} catch (error) {
+  // ❌ REMOVE: console.error('Error creating account:', err)
+  
+  const message = error instanceof Error ? error.message : 'Failed to create account. Please try again.'
+  setError(message)
+  
+  // ✅ ADD: Toast for immediate feedback
+  showToast({
+    type: 'error',
+    title: 'Account Creation Failed',
+    message
+  })
+} finally {
+  setSubmitting(false)
+}
   }
 
   if (loading) {

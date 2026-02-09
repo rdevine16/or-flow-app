@@ -19,6 +19,7 @@ import DeviceRepSection from '@/components/cases/DeviceRepSection'
 import { runDetectionForCase } from '@/lib/dataQuality'
 import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWrapper'
 import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 // ============================================================================
@@ -163,7 +164,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const { id } = use(params)
   const router = useRouter()
   const supabase = createClient()
-
+  const { showToast } = useToast()
   // Core state
   const [caseData, setCaseData] = useState<CaseData | null>(null)
   const [milestoneTypes, setMilestoneTypes] = useState<FacilityMilestone[]>([])
@@ -534,7 +535,11 @@ cm => cm.facility_milestone_id === milestoneTypeId
                 validated_by: null
               })
               .eq('id', id)
-            console.log('✅ Case auto-validated (no issues)')
+            showToast({
+  type: 'info',
+  title: '✅ Case auto-validated (no issues)',
+  message: '✅ Case auto-validated (no issues)'
+})
           } else {
             await supabase
               .from('cases')
@@ -544,10 +549,18 @@ cm => cm.facility_milestone_id === milestoneTypeId
                 validated_by: null
               })
               .eq('id', id)
-            console.log(`⚠️ Case has ${issuesFound} quality issues - needs review`)
+            showToast({
+              type: 'warning',
+              title: `⚠️ Case has ${issuesFound} quality issues - needs review`,
+              message: `⚠️ Case has ${issuesFound} quality issues that require manual review.`
+            })
           }
         } catch (err) {
-          console.error('Detection error:', err)
+          showToast({
+            type: 'error',
+            title: 'Detection Error',
+            message: err instanceof Error ? err.message : 'An error occurred during detection.'
+          })
         }
       }
 

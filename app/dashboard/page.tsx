@@ -18,6 +18,7 @@ import { getLocalDateString, formatDateWithWeekday } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
 import { extractName } from '@/lib/formatters'
 import RoomOrderModal from '@/components/dashboard/RoomOrderModal'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { 
   RoomWithCase, 
   EnhancedCase, 
@@ -54,7 +55,7 @@ interface Room {
 export default function DashboardPage() {
   const router = useRouter()
   const { isGlobalAdmin, isImpersonating, loading: userLoading, isAdmin } = useUser()
-  
+  const { showToast } = useToast()
   // Redirect global admins (not impersonating) to admin page
   useEffect(() => {
     if (!userLoading && isGlobalAdmin && !isImpersonating) {
@@ -162,7 +163,11 @@ export default function DashboardPage() {
         await assignStaffToCase(staffId, targetCaseId, staff.role_id)
       }
     } catch (error) {
-      console.error('Error handling drop:', error)
+      showToast({
+        type: 'error',
+        title: 'Error handling drop:',
+        message: error instanceof Error ? error.message : 'Error handling drop'
+      })
     }
   }, [assignStaffToCase, moveStaffBetweenCases])
   
@@ -292,7 +297,11 @@ const { data: procStats } = await supabase
         currentMilestoneName
       }
     } catch (error) {
-      console.error('Error fetching pace data:', error)
+      showToast({
+  type: 'error',
+  title: 'Error fetching pace data:',
+  message: error instanceof Error ? error.message : 'Error fetching pace data:'
+})
       return null
     }
   }, [supabase])
@@ -451,7 +460,11 @@ const { data: milestones } = await supabase
         setRoomsWithCases(roomsWithCasesData)
 
       } catch (error) {
-        console.error('Error fetching data:', error)
+        showToast({
+  type: 'error',
+  title: 'Error fetching data:',
+  message: error instanceof Error ? error.message : 'Error fetching data:'
+})
       } finally {
         setLoading(false)
       }

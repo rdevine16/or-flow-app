@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { checkPasswordStrength } from '@/lib/passwords'
 import { authAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ORbit Logo - For light backgrounds
 const LogoFullDark = () => (
@@ -25,7 +26,7 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [validSession, setValidSession] = useState<boolean | null>(null)
-  
+  const { showToast } = useToast()
   const router = useRouter()
   const supabase = createClient()
   
@@ -100,7 +101,13 @@ export default function ResetPasswordPage() {
       }, 2000)
     } catch (err) {
       console.error('Error resetting password:', err)
-      setError(err instanceof Error ? err.message : 'Failed to reset password')
+      const message = err instanceof Error ? err.message : 'Failed to reset password'
+      setError(message)
+      showToast({
+        type: 'error',
+        title: 'Password Reset Failed',
+        message
+      })
     } finally {
       setLoading(false)
     }

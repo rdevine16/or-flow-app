@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { checkPasswordStrength } from '@/lib/passwords'
 import { authAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 export default function ChangePasswordPage() {
   const router = useRouter()
@@ -17,7 +18,7 @@ export default function ChangePasswordPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-
+  const { showToast } = useToast()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -128,7 +129,11 @@ export default function ChangePasswordPage() {
         router.push('/dashboard')
       }, 2000)
     } catch (err) {
-      console.error('Error changing password:', err)
+      showToast({
+  type: 'error',
+  title: 'Error changing password:',
+  message: err instanceof Error ? err.message : 'Error changing password:'
+})
       setError(err instanceof Error ? err.message : 'Failed to change password')
     } finally {
       setSubmitting(false)

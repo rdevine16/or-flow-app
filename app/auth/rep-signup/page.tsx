@@ -11,6 +11,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 function RepSignupForm() {
   const router = useRouter()
@@ -18,7 +19,7 @@ function RepSignupForm() {
   const token = searchParams.get('token')
   const prefillEmail = searchParams.get('email')
   const supabase = createClient()
-
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,8 +38,14 @@ function RepSignupForm() {
     if (token) {
       fetchInvite()
     } else {
-      setError('Invalid signup link. Please use the link from your invitation email.')
+      const message = 'Invalid signup link. Please use the link from your invitation email.'
+      setError(message)
       setLoading(false)
+      showToast({
+        type: 'error',
+        title: 'Invalid Link',
+        message
+      })
     }
   }, [token])
 
@@ -57,79 +64,115 @@ function RepSignupForm() {
       .eq('invite_token', token)
       .is('accepted_at', null)
       .single()
-    console.log('Raw invite data:', JSON.stringify(data, null, 2))
 
     if (error || !data) {
-      setError('This invite link is invalid or has already been used.')
+      const message = 'This invite link is invalid or has already been used.'
+      setError(message)
       setLoading(false)
+      showToast({
+        type: 'error',
+        title: 'Invalid Invite',
+        message
+      })
       return
     }
 
     if (new Date(data.expires_at) < new Date()) {
-      setError('This invite has expired. Please request a new invite.')
+      const message = 'This invite has expired. Please request a new invite.'
+      setError(message)
       setLoading(false)
+      showToast({
+        type: 'error',
+        title: 'Invite Expired',
+        message
+      })
       return
     }
 
-// Extract names from joined data (Supabase can return as array or object)
-const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
-const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
+    // Extract names from joined data (Supabase can return as array or object)
+    const facility = Array.isArray(data.facilities) ? data.facilities[0] : data.facilities
+    const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
 
-setInvite({
-  ...data,
-  facility_name: facility?.name || 'Unknown Facility',
-  company_name: company?.name || 'Unknown Company',
-})
-setFormData(prev => ({ ...prev, email: data.email }))
-setLoading(false)
+    setInvite({
+      ...data,
+      facility_name: facility?.name || 'Unknown Facility',
+      company_name: company?.name || 'Unknown Company',
+    })
+    setFormData(prev => ({ ...prev, email: data.email }))
+    setLoading(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  
-  if (formData.password !== formData.confirmPassword) {
-    setError('Passwords do not match')
-    return
-  }
-
-  if (formData.password.length < 8) {
-    setError('Password must be at least 8 characters')
-    return
-  }
-
-  setSubmitting(true)
-  setError(null)
-
-  try {
-    // Call API to create device rep with auto-confirmed email
-    const response = await fetch('/api/create-device-rep', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        inviteId: invite.id,
-        facilityId: invite.facility_id,
-        implantCompanyId: invite.implant_company_id,
-      }),
-    })
-
-    const result = await response.json()
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to create account')
+    e.preventDefault()
+    
+    if (formData.password !== formData.confirmPassword) {
+      const message = 'Passwords do not match'
+      setError(message)
+      showToast({
+        type: 'error',
+        title: 'Validation Error',
+        message
+      })
+      return
     }
 
-    // Redirect to success page
-    router.push('/invite/success')
-  } catch (err: any) {
-    setError(err.message || 'Failed to create account')
-    setSubmitting(false)
+    if (formData.password.length < 8) {
+      const message = 'Password must be at least 8 characters'
+      setError(message)
+      showToast({
+        type: 'error',
+        title: 'Validation Error',
+        message
+      })
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      // Call API to create device rep with auto-confirmed email
+      const response = await fetch('/api/create-device-rep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          inviteId: invite.id,
+          facilityId: invite.facility_id,
+          implantCompanyId: invite.implant_company_id,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create account')
+      }
+
+      // Success toast
+      showToast({
+        type: 'success',
+        title: 'Account Created',
+        message: 'Redirecting...'
+      })
+
+      // Redirect to success page
+      router.push('/invite/success')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create account'
+      setError(message)
+      setSubmitting(false)
+      showToast({
+        type: 'error',
+        title: 'Account Creation Failed',
+        message
+      })
+    }
   }
-}
 
   if (loading) {
     return (
@@ -163,10 +206,10 @@ setLoading(false)
     <>
       {/* Context Banner */}
       <div className="bg-blue-50 rounded-xl p-4 mb-6">
-<p className="text-sm text-blue-800">
-  Creating account for <span className="font-medium">{invite?.company_name}</span> rep 
-  at <span className="font-medium">{invite?.facility_name}</span>
-</p>
+        <p className="text-sm text-blue-800">
+          Creating account for <span className="font-medium">{invite?.company_name}</span> rep 
+          at <span className="font-medium">{invite?.facility_name}</span>
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

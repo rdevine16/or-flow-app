@@ -9,6 +9,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { caseAudit } from '@/lib/audit-logger'
 import { extractName } from '@/lib/formatters'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ============================================================================
 // TYPES
@@ -87,7 +88,7 @@ export default function CancelCasePage() {
   const caseId = params.id as string
   const supabase = createClient()
   const { loading: userLoading } = useUser()
-  
+  const { showToast } = useToast()
   // Data state
   const [caseData, setCaseData] = useState<CaseData | null>(null)
   const [milestones, setMilestones] = useState<CaseMilestone[]>([])
@@ -167,6 +168,11 @@ export default function CancelCasePage() {
     } catch (err) {
       console.error('Error:', err)
       setError('Failed to load case data')
+      showToast({
+        type: 'error',
+        title: 'Failed to Load Case',
+        message: 'An error occurred while loading case data.'
+      })
     }
     
     setLoading(false)
@@ -266,7 +272,11 @@ export default function CancelCasePage() {
       router.push('/cases?cancelled=true')
       
     } catch (err) {
-      console.error('Error:', err)
+      showToast({
+  type: 'error',
+  title: 'Error:',
+  message: err instanceof Error ? err.message : 'Error:'
+})
       setError('Failed to cancel case')
       setSubmitting(false)
     }
