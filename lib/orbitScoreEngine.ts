@@ -1,21 +1,161 @@
 // lib/orbitScoreEngine.ts
-// ORbit Score Calculation Engine v2.1
-// ─────────────────────────────────────────────────────────────
-// 4-pillar scoring system measuring only surgeon-controllable behaviors.
+// ═══════════════════════════════════════════════════════════════════
+// ORbit Score Calculation Engine v2.2
+// ═══════════════════════════════════════════════════════════════════
 //
-// Pillars:
-//   1. Profitability  (30%) — Margin per OR minute, cohort-relative scoring
-//   2. Consistency     (25%) — CV of case duration, cohort-relative scoring
-//   3. Sched Adherence (25%) — Graduated linear decay per case
-//   4. Availability    (20%) — Graduated linear decay per case
+// PURPOSE
+// ───────
+// Produces a single composite score (0-100) per surgeon per time period,
+// measuring ONLY surgeon-controllable operational behaviors. Designed to
+// be fair, explainable, and actionable for surgery centers with 3-20
+// surgeons doing overlapping procedure types.
 //
-// Continuous pillars (1 & 2) use median-anchored MAD scoring:
-//   score = 50 + (value - cohort_median) / MAD * 25
-//   Clamped 0-100. Works for any cohort size ≥ 2.
-//   Solo surgeon: compared against facility-wide benchmark.
+// The system deliberately avoids:
+//   • Clinical outcome measurement (not a quality score)
+//   • Peer speed comparison (doesn't penalize careful surgeons)
+//   • Uncontrollable delays (equipment failure, anesthesia delays)
 //
-// Graduated pillars (3 & 4) use linear decay:
-//   case_score = max(0, 1.0 - minutes_over_grace / floor)
+// ═══════════════════════════════════════════════════════════════════
+// 4-PILLAR MODEL
+// ═══════════════════════════════════════════════════════════════════
+//
+// ┌─────────────────────────────┬────────┬────────────────────────┐
+// │ Pillar                      │ Weight │ Scoring Method         │
+// ├─────────────────────────────┼────────┼────────────────────────┤
+// │ 1. Profitability            │  30%   │ MAD-relative to peers  │
+// │ 2. Consistency              │  25%   │ MAD-relative to peers  │
+// │ 3. Schedule Adherence       │  25%   │ Raw graduated decay    │
+// │ 4. Availability             │  20%   │ Raw graduated decay    │
+// └─────────────────────────────┴────────┴────────────────────────┘
+//
+// RELATIVE PILLARS (1 & 2) — "How do you compare to peers?"
+// ──────────────────────────────────────────────────────────
+// Use median-anchored MAD (Median Absolute Deviation) scoring:
+//
+//   score = 50 + (value - cohort_median) / effectiveMAD × 16.67
+//
+// Key parameters:
+//   • MAD_BAND = 3 — it takes 3 MADs from median to reach 0 or 100
+//   • MIN_MAD_PERCENT = 5% — percentage floor prevents noise amplification
+//     in tightly-clustered cohorts (e.g., all surgeons within $1/min)
+//   • MIN_ABSOLUTE_MAD_CV = 0.01 — absolute floor for CV scoring where
+//     percentage floors are ineffective (5% of 0.045 = 0.002, too small)
+//   • MIN_PILLAR_SCORE = 10 — no pillar scores below 10, prevents
+//     mathematically unrecoverable composites
+//
+// Scoring is done within procedure-type cohorts (THA vs THA, not THA vs
+// TKA), then volume-weighted across the surgeon's case mix. This ensures
+// surgeons are only compared against peers doing the same procedure.
+//
+// Why MAD over standard deviation?
+//   MAD is robust to outliers. One surgeon with an extreme value doesn't
+//   distort the entire cohort's spread measure. Critical for small ASC
+//   cohorts where n=5 is common.
+//
+// Why 3 MAD band instead of 2?
+//   With 5 surgeons, being 2 MADs from median just means you're the
+//   best or worst — not necessarily an outlier. 3 MAD gives:
+//     1 MAD from median → ~33 or ~67 (below/above average)
+//     2 MAD from median → ~17 or ~83 (poor/excellent)
+//     3 MAD from median →  10 or 100 (extreme outlier)
+//
+// GRADUATED PILLARS (3 & 4) — "How well do you perform against standards?"
+// ────────────────────────────────────────────────────────────────────────
+// Use raw graduated decay — NO peer comparison layer:
+//
+//   case_score = max(0, 1.0 - minutes_over_grace / floor_minutes)
+//   pillar_score = mean(all case_scores) × 100
+//
+// Design decision: The graduated decay already produces a meaningful
+// absolute score (77% = "77% on-time effectiveness"). Adding MAD scoring
+// on top would create a second relative layer that amplifies small
+// differences between peers and makes scores harder to explain.
+//
+// Schedule Adherence (25%):
+//   Measures how close actual case start times are to scheduled times.
+//   Each case gets a 0.0-1.0 score based on how far past the grace
+//   period it started. Cases within grace = 1.0 (perfect).
+//
+// Availability (20%):
+//   Two sub-metrics blended 50/50:
+//   A. Prep-to-Incision Gap — graduated decay of the time between
+//      prep/drape completion and incision (surgeon readiness)
+//   B. Surgeon Delay Rate — percentage of cases flagged with surgeon-
+//      caused delays. 0% delays = 100 score, linearly decays.
+//
+// ═══════════════════════════════════════════════════════════════════
+// GRADE THRESHOLDS
+// ═══════════════════════════════════════════════════════════════════
+//
+// ┌───────┬────────┬───────────────────────────────────────────────┐
+// │ Grade │ Score  │ Meaning                                       │
+// ├───────┼────────┼───────────────────────────────────────────────┤
+// │ A     │ ≥ 80   │ Elite — top performer, aspirational target    │
+// │ B     │ ≥ 65   │ Strong — above average, minor improvements    │
+// │ C     │ ≥ 50   │ Developing — meeting expectations, room to    │
+// │       │        │   grow in specific pillars                     │
+// │ D     │ < 50   │ Needs Improvement — clear action items needed │
+// └───────┴────────┴───────────────────────────────────────────────┘
+//
+// Score distribution rationale:
+//   Relative pillars center at 50 (median performer). Graduated
+//   pillars naturally sit higher (70-95 range for competent surgeons).
+//   With weights of 55% relative + 45% graduated, an average surgeon's
+//   composite lands around 61-68. This means:
+//     • A (≥80): Requires genuine excellence across multiple pillars
+//     • B (≥65): Solidly above the average composite
+//     • C (≥50): Average, meeting expectations
+//     • D (<50): Clear underperformance needing attention
+//
+// Realistic ceiling: ~89 (top of every cohort + perfect on-time)
+// Realistic floor: ~20 (bottom of every cohort + poor adherence)
+// This keeps grades meaningful and earned.
+//
+// ═══════════════════════════════════════════════════════════════════
+// DATA REQUIREMENTS
+// ═══════════════════════════════════════════════════════════════════
+//
+// Per case: patient_in_at, patient_out_at, incision_at, prep_drape_
+//   complete_at, closing_at, start_time (scheduled), scheduled_date,
+//   procedure_type_id, surgeon_id, or_room_id
+//
+// Per case financials: profit (null allowed = skipped, 0 = break-even)
+//
+// Settings: start_time_milestone, start_time_grace_minutes,
+//   start_time_floor_minutes, waiting_on_surgeon_minutes,
+//   waiting_on_surgeon_floor_minutes, min_procedure_cases
+//
+// Minimum cases: MIN_CASE_THRESHOLD (15) overall per surgeon.
+//   min_procedure_cases (facility setting) per procedure cohort.
+//
+// ═══════════════════════════════════════════════════════════════════
+// DIAGNOSTICS
+// ═══════════════════════════════════════════════════════════════════
+//
+// When enableDiagnostics: true, each scorecard includes per-pillar
+// diagnostic data showing intermediate calculations:
+//   • Profitability: per-procedure MPM, cohort median, MAD, effectiveMAD
+//   • Consistency: per-procedure CV, cohort median, MAD, effectiveMAD
+//   • Schedule Adherence: avgCaseScore, casesWithinGrace, casesAtZero
+//   • Availability: avgGapScore, delayRate, sub-metric scores
+//
+// ═══════════════════════════════════════════════════════════════════
+// VERSION HISTORY
+// ═══════════════════════════════════════════════════════════════════
+//
+// v2.2 — Graduated pillars use raw scores (no peer MAD layer).
+//         Absolute MAD floor (0.01) for CV consistency scoring.
+//         Grade thresholds recalibrated: A≥80, B≥65, C≥50, D<50.
+//         Comprehensive documentation added.
+//
+// v2.1 — 3 MAD scoring band (was 2). MIN_PILLAR_SCORE floor of 10.
+//         5% minimum MAD percentage floor for profitability.
+//
+// v2.0 — 4-pillar model with MAD-based scoring. Volume-weighted
+//         procedure cohorts. Graduated decay for adherence/availability.
+//         Fixed: profit === 0 treated as valid data (not missing).
+//         Fixed: data_validated filter, correct financials query.
+//
 
 // ─── TYPES ────────────────────────────────────────────────────
 
@@ -262,15 +402,26 @@ const MAD_BAND = 3
 const MAD_MULTIPLIER = 50 / MAD_BAND // ≈ 16.67 per MAD
 
 /**
- * Median-anchored MAD scoring with minimum MAD floor.
+ * Absolute minimum MAD for CV (consistency) scoring.
+ * CV values cluster tightly (0.04-0.06 typical), so the percentage floor
+ * (5% of 0.045 = 0.002) is useless. 0.01 means a CV difference of 0.01
+ * = 1 effective MAD = ~17 point score difference. Clinically meaningful
+ * threshold: "your 90-min case varies by ±0.9 more minutes than peers."
+ */
+const MIN_ABSOLUTE_MAD_CV = 0.01
+
+/**
+ * Median-anchored MAD scoring with minimum MAD floors.
  *
  * Maps a value to 0-100 based on its position relative to the cohort:
  *   - At median = 50
  *   - 1 effective MAD above/below = 50 ± 16.67
  *   - 3 effective MAD = 10 or 100 (floored at MIN_PILLAR_SCORE)
  *
- * Effective MAD = max(actualMAD, |cohortMedian| * MIN_MAD_PERCENT)
+ * Effective MAD = max(actualMAD, |cohortMedian| * MIN_MAD_PERCENT, absoluteMinMAD)
  * This prevents tiny MAD from amplifying noise in tightly-clustered cohorts.
+ * The absoluteMinMAD parameter handles domains like CV where percentage floors
+ * are ineffective (5% of 0.045 = 0.002 — too small to matter).
  *
  * All scores floored at MIN_PILLAR_SCORE (10) to keep composites recoverable.
  *
@@ -284,6 +435,7 @@ function madScore(
   value: number,
   cohortValues: number[],
   higherIsBetter: boolean = true,
+  absoluteMinMAD: number = 0,
 ): number {
   if (cohortValues.length === 0) return 50
   if (cohortValues.length === 1) {
@@ -303,9 +455,9 @@ function madScore(
   const cohortMed = median(cohortValues)
   const actualMAD = mad(cohortValues)
 
-  // Apply minimum MAD floor: at least 5% of the absolute cohort median
-  const madFloor = Math.abs(cohortMed) * MIN_MAD_PERCENT
-  const effectiveMAD = Math.max(actualMAD, madFloor)
+  // Apply minimum MAD floor: max of (actual MAD, percentage floor, absolute floor)
+  const percentFloor = Math.abs(cohortMed) * MIN_MAD_PERCENT
+  const effectiveMAD = Math.max(actualMAD, percentFloor, absoluteMinMAD)
 
   if (effectiveMAD === 0) {
     // Cohort median is 0 and MAD is 0 — try range interpolation
@@ -377,9 +529,9 @@ export function computeComposite(pillars: PillarScores): number {
 }
 
 export function getGrade(score: number): GradeInfo {
-  if (score >= 90) return { letter: 'A', label: 'Elite', text: '#059669', bg: '#ECFDF5' }
-  if (score >= 80) return { letter: 'B', label: 'Strong', text: '#2563EB', bg: '#EFF6FF' }
-  if (score >= 70) return { letter: 'C', label: 'Developing', text: '#D97706', bg: '#FFFBEB' }
+  if (score >= 80) return { letter: 'A', label: 'Elite', text: '#059669', bg: '#ECFDF5' }
+  if (score >= 65) return { letter: 'B', label: 'Strong', text: '#2563EB', bg: '#EFF6FF' }
+  if (score >= 50) return { letter: 'C', label: 'Developing', text: '#D97706', bg: '#FFFBEB' }
   return { letter: 'D', label: 'Needs Improvement', text: '#DC2626', bg: '#FEF2F2' }
 }
 
@@ -599,14 +751,14 @@ function calculateConsistency(
     const surgeonCV = coefficientOfVariation(durations)
     const peerCVs = getPeerCVs(allCases, procId, minProcCases)
 
-    // Score via MAD (lower CV = better)
-    const score = madScore(surgeonCV, peerCVs, false)
+    // Score via MAD (lower CV = better, with absolute MAD floor for CV values)
+    const score = madScore(surgeonCV, peerCVs, false, MIN_ABSOLUTE_MAD_CV)
     scores.push({ score, volume: durations.length })
 
     if (diag) {
       const peerMed = median(peerCVs)
       const peerActualMAD = mad(peerCVs)
-      const peerEffMAD = Math.max(peerActualMAD, Math.abs(peerMed) * MIN_MAD_PERCENT)
+      const peerEffMAD = Math.max(peerActualMAD, Math.abs(peerMed) * MIN_MAD_PERCENT, MIN_ABSOLUTE_MAD_CV)
       diag.procedureCohorts.push({
         procedureId: procId,
         procedureName: procName,
@@ -670,7 +822,8 @@ function getPeerCVs(
 // ═════════════════════════════════════════════════════════════
 // Graduated scoring for ALL cases (first and subsequent).
 // Each case scored 0.0-1.0 via linear decay.
-// Final pillar score: MAD-scored against peer raw scores.
+// Final pillar score: mean(case scores) * 100 — direct, no peer comparison.
+// The graduated decay already produces a meaningful absolute score.
 
 interface AdherenceDiag {
   totalCasesScored: number
@@ -682,14 +835,10 @@ interface AdherenceDiag {
 
 function calculateScheduleAdherence(
   surgeonCases: ScorecardCase[],
-  allCases: ScorecardCase[],
   settings: ScorecardSettings,
   timezone: string,
   diag?: AdherenceDiag,
 ): number {
-  const surgeonId = surgeonCases[0]?.surgeon_id
-  if (!surgeonId) return 50
-
   const caseScores = scoreCasesForAdherence(surgeonCases, settings, timezone)
 
   if (caseScores.length === 0) {
@@ -703,11 +852,8 @@ function calculateScheduleAdherence(
     return 50
   }
 
-  const surgeonRaw = mean(caseScores) * 100
-  const peerRawScores = getPeerAdherenceScores(allCases, settings, timezone)
-
-  // MAD-score against peers (higher raw = better)
-  const final = madScore(surgeonRaw, peerRawScores, true)
+  // Direct score: mean of per-case graduated scores, scaled to 0-100
+  const final = clamp(Math.round(mean(caseScores) * 100), MIN_PILLAR_SCORE, 100)
 
   if (diag) {
     diag.totalCasesScored = caseScores.length
@@ -745,33 +891,13 @@ function scoreCasesForAdherence(
   return scores
 }
 
-function getPeerAdherenceScores(
-  allCases: ScorecardCase[],
-  settings: ScorecardSettings,
-  timezone: string,
-): number[] {
-  const bySurgeon: Record<string, ScorecardCase[]> = {}
-  for (const c of allCases) {
-    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
-    bySurgeon[c.surgeon_id].push(c)
-  }
-
-  return Object.values(bySurgeon)
-    .map(surgeonCases => {
-      const scores = scoreCasesForAdherence(surgeonCases, settings, timezone)
-      if (scores.length === 0) return null
-      return mean(scores) * 100
-    })
-    .filter((v): v is number => v !== null)
-}
-
 
 // ═════════════════════════════════════════════════════════════
 // PILLAR 4: AVAILABILITY (20%)
 // ═════════════════════════════════════════════════════════════
 // Two sub-metrics blended 50/50:
-// A. Prep-to-Incision Gap (graduated, MAD-scored against peers)
-// B. Surgeon Delay Rate (MAD-scored against peers, lower = better)
+// A. Prep-to-Incision Gap (graduated, raw score — no peer comparison)
+// B. Surgeon Delay Rate (direct: 0% delays = 100, scaled linearly)
 
 interface AvailabilityDiag {
   gapCasesScored: number
@@ -784,7 +910,6 @@ interface AvailabilityDiag {
 
 function calculateAvailability(
   surgeonCases: ScorecardCase[],
-  allCases: ScorecardCase[],
   flags: ScorecardFlag[],
   settings: ScorecardSettings,
   diag?: AvailabilityDiag,
@@ -792,17 +917,15 @@ function calculateAvailability(
   const surgeonId = surgeonCases[0]?.surgeon_id
   if (!surgeonId) return 50
 
-  // ── Sub-Metric A: Prep-to-Incision Gap (graduated) ──
+  // ── Sub-Metric A: Prep-to-Incision Gap (graduated, direct) ──
   const gapScores = scoreCasesForAvailability(surgeonCases, settings)
 
   let gapPillarScore = 50
   if (gapScores.length >= 3) {
-    const surgeonRaw = mean(gapScores) * 100
-    const peerRawScores = getPeerAvailabilityScores(allCases, settings)
-    gapPillarScore = madScore(surgeonRaw, peerRawScores, true) // higher raw = better
+    gapPillarScore = clamp(Math.round(mean(gapScores) * 100), MIN_PILLAR_SCORE, 100)
   }
 
-  // ── Sub-Metric B: Delay Rate ──
+  // ── Sub-Metric B: Delay Rate (direct: lower rate = higher score) ──
   const surgeonCaseIds = new Set(surgeonCases.map(c => c.id))
   const surgeonDelayCount = flags.filter(f =>
     surgeonCaseIds.has(f.case_id) && f.flag_type === 'delay'
@@ -811,10 +934,11 @@ function calculateAvailability(
     ? (surgeonDelayCount / surgeonCases.length) * 100
     : 0
 
-  const peerDelayRates = getPeerDelayRates(allCases, flags)
-  const delayScore = madScore(delayRate, peerDelayRates, false) // lower rate = better
+  // Direct scoring: 0% delay = 100, 50%+ delay = 10 (floor)
+  // Linear: score = 100 - (delayRate * 2), clamped
+  const delayScore = clamp(Math.round(100 - delayRate * 2), MIN_PILLAR_SCORE, 100)
 
-  const final = Math.round(gapPillarScore * 0.5 + delayScore * 0.5)
+  const final = clamp(Math.round(gapPillarScore * 0.5 + delayScore * 0.5), MIN_PILLAR_SCORE, 100)
 
   if (diag) {
     diag.gapCasesScored = gapScores.length
@@ -845,41 +969,6 @@ function scoreCasesForAvailability(
   return scores
 }
 
-function getPeerAvailabilityScores(
-  allCases: ScorecardCase[],
-  settings: ScorecardSettings,
-): number[] {
-  const bySurgeon: Record<string, ScorecardCase[]> = {}
-  for (const c of allCases) {
-    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
-    bySurgeon[c.surgeon_id].push(c)
-  }
-
-  return Object.values(bySurgeon)
-    .map(surgeonCases => {
-      const scores = scoreCasesForAvailability(surgeonCases, settings)
-      if (scores.length < 3) return null
-      return mean(scores) * 100
-    })
-    .filter((v): v is number => v !== null)
-}
-
-function getPeerDelayRates(allCases: ScorecardCase[], flags: ScorecardFlag[]): number[] {
-  const bySurgeon: Record<string, { total: number; delayed: number }> = {}
-  const delaysByCaseId = new Set(
-    flags.filter(f => f.flag_type === 'delay').map(f => f.case_id)
-  )
-
-  for (const c of allCases) {
-    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = { total: 0, delayed: 0 }
-    bySurgeon[c.surgeon_id].total++
-    if (delaysByCaseId.has(c.id)) bySurgeon[c.surgeon_id].delayed++
-  }
-
-  return Object.values(bySurgeon)
-    .filter(s => s.total >= 5)
-    .map(s => (s.delayed / s.total) * 100)
-}
 
 
 // ═════════════════════════════════════════════════════════════
@@ -922,8 +1011,8 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
       const pillars: PillarScores = {
         profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap, minProcCases),
         consistency: calculateConsistency(surgeonCases, input.previousPeriodCases, minProcCases),
-        schedAdherence: calculateScheduleAdherence(surgeonCases, input.previousPeriodCases, settings, timezone),
-        availability: calculateAvailability(surgeonCases, input.previousPeriodCases, input.previousPeriodFlags || flags, settings),
+        schedAdherence: calculateScheduleAdherence(surgeonCases, settings, timezone),
+        availability: calculateAvailability(surgeonCases, input.previousPeriodFlags || flags, settings),
       }
       previousComposites.set(surgeonId, computeComposite(pillars))
     }
@@ -964,8 +1053,8 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
     const pillars: PillarScores = {
       profitability: calculateProfitability(surgeonCases, cases, financialsMap, minProcCases, profitDiag),
       consistency: calculateConsistency(surgeonCases, cases, minProcCases, consistDiag),
-      schedAdherence: calculateScheduleAdherence(surgeonCases, cases, settings, timezone, adhereDiag),
-      availability: calculateAvailability(surgeonCases, cases, flags, settings, availDiag),
+      schedAdherence: calculateScheduleAdherence(surgeonCases, settings, timezone, adhereDiag),
+      availability: calculateAvailability(surgeonCases, flags, settings, availDiag),
     }
 
     if (enableDiagnostics && profitDiag && consistDiag && adhereDiag && availDiag) {
@@ -1008,4 +1097,3 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
 
   return scorecards
 }
-
