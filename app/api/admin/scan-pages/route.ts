@@ -7,7 +7,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 // =============================================================================
@@ -205,7 +204,6 @@ function buildStats(files: DiscoveredFile[]) {
 // =============================================================================
 // POST — Scan a specific file
 // =============================================================================
-const { showToast } = useToast()
 export async function POST(req: NextRequest) {
   if (!(await verifyGlobalAdmin(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -248,11 +246,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ metadata })
   } catch (error: any) {
-    showToast({
-  type: 'error',
-  title: '[scan-pages] POST error:',
-  message: error instanceof Error ? error.message : '[scan-pages] POST error:'
-})
+console.error('Error description:', error)
+
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

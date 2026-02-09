@@ -5,9 +5,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 import { error } from 'console'
-const { showToast } = useToast()
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -45,11 +44,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (authError) {
-      showToast({
-  type: 'error',
-  title: 'Auth error:',
-  message: authError instanceof Error ? authError.message : 'Auth error:'
-})
+console.error('Error description:', authError)
+
       return NextResponse.json(
         { error: authError.message },
         { status: 400 }
@@ -73,11 +69,8 @@ export async function POST(request: NextRequest) {
     })
 
     if (profileError) {
-      showToast({
-  type: 'error',
-  title: 'Profile error:',
-  message: error instanceof Error ? error.message : 'Profile error:'
-})
+console.error('Error description:', profileError)
+
       // Try to clean up auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
       return NextResponse.json(
@@ -98,11 +91,8 @@ export async function POST(request: NextRequest) {
       })
 
     if (accessError) {
-      showToast({
-  type: 'error',
-  title: 'Access error:',
-  message: error instanceof Error ? error.message : 'Access error:'
-})
+console.error('Error description:', error)
+
       // Continue anyway - user can still log in
     }
 
@@ -118,11 +108,8 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error: any) {
-    showToast({
-  type: 'error',
-  title: 'Unexpected error:',
-  message: error instanceof Error ? error.message : 'Unexpected error:'
-})
+console.error('Error description:', error)
+
     return NextResponse.json(
       { error: error.message || 'An unexpected error occurred' },
       { status: 500 }

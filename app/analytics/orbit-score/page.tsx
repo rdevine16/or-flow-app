@@ -1,874 +1,850 @@
-// app/analytics/orbit-score/page.tsx
-'use client'
+// lib/orbitScoreEngine.ts
+// ORbit Score Calculation Engine
+// ─────────────────────────────────────────────────────────────
+// Computes 6 pillar scores for each surgeon based on operational metrics.
+// Each pillar: raw metric → percentile within procedure cohort → volume-weighted blend → clamped 0-100
+// Composite = weighted sum of all pillars.
 
-import { useState, useEffect, useCallback } from 'react'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import { createClient } from '@/lib/supabase'
-import { useUser } from '@/lib/UserContext'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
+// ─── TYPES ────────────────────────────────────────────────────
 
-import {
-  calculateORbitScores,
-  computeComposite,
-  getGrade,
-  PILLARS,
-  MIN_CASE_THRESHOLD,
-  type ORbitScorecard,
-  type ScorecardCase,
-  type ScorecardFinancials,
-  type ScorecardBlock,
-  type ScorecardFlag,
-  type ScorecardSettings,
-  type PillarScores,
-  type GradeInfo,
-  type PillarDefinition,
-} from '@/lib/orbitScoreEngine'
-
-// ─── DATA FETCHING ────────────────────────────────────────────
-const { showToast } = useToast()
-async function fetchScorecardData(
-  supabase: any,
-  facilityId: string,
-  startDate: string,
-  endDate: string,
-) {
-  // 1. Fetch completed cases with milestones
-  //    We need to join through facility_milestones to get milestone names
-  const { data: rawCases, error: casesError } = await supabase
-    .from('cases')
-    .select(`
-      id,
-      surgeon_id,
-      procedure_type_id,
-      or_room_id,
-      scheduled_date,
-      start_time,
-      procedure_types(id, name),
-      users!surgeon_id(id, first_name, last_name),
-      case_milestones(
-        facility_milestone_id,
-        recorded_at,
-        facility_milestones(name)
-      ),
-      case_statuses(name)
-    `)
-    .eq('facility_id', facilityId)
-    .gte('scheduled_date', startDate)
-    .lte('scheduled_date', endDate)
-
-  if (casesError) {
-    showToast({
-  type: 'error',
-  title: 'Error fetching cases:',
-  message: `Error fetching cases: ${casesError}`
-})
-    return null
-  }
-
-  // Filter to completed cases only
-  const completedCases = (rawCases || []).filter(
-    (c: any) => c.case_statuses?.name === 'completed'
-  )
-
-  // Transform into ScorecardCase format
-  const cases: ScorecardCase[] = completedCases.map((c: any) => {
-    const milestones: Record<string, string | null> = {}
-    for (const cm of (c.case_milestones || [])) {
-      const name = cm.facility_milestones?.name
-      if (name && cm.recorded_at) {
-        milestones[name] = cm.recorded_at
-      }
-    }
-
-    return {
-      id: c.id,
-      surgeon_id: c.surgeon_id,
-      surgeon_first_name: c.users?.first_name || '',
-      surgeon_last_name: c.users?.last_name || '',
-      procedure_type_id: c.procedure_type_id,
-      procedure_name: c.procedure_types?.name || 'Unknown',
-      or_room_id: c.or_room_id,
-      scheduled_date: c.scheduled_date,
-      start_time: c.start_time,
-      patient_in_at: milestones['patient_in'] || null,
-      incision_at: milestones['incision'] || null,
-      prep_drape_complete_at: milestones['prep_drape_complete'] || null,
-      closing_at: milestones['closing'] || milestones['closure_start'] || null,
-      patient_out_at: milestones['patient_out'] || null,
-    }
-  })
-
-  // 2. Fetch financials from case_completion_stats
-  const caseIds = cases.map(c => c.id)
-  let financials: ScorecardFinancials[] = []
-
-  if (caseIds.length > 0) {
-    // Batch fetch in chunks of 100 to avoid query limits
-    for (let i = 0; i < caseIds.length; i += 100) {
-      const chunk = caseIds.slice(i, i + 100)
-      const { data: finData } = await supabase
-        .from('case_completion_stats')
-        .select('case_id, profit, reimbursement, or_time_cost, total_case_minutes')
-        .in('case_id', chunk)
-
-      if (finData) financials = [...financials, ...finData]
-    }
-  }
-
-  // 3. Fetch block schedules
-  const { data: blocks } = await supabase
-    .from('block_schedules')
-    .select('id, surgeon_id, day_of_week, start_time, end_time, recurrence_type, effective_start, effective_end, or_room_id')
-    .eq('facility_id', facilityId)
-    .is('deleted_at', null)
-
-  // 4. Fetch case flags (delays)
-  let flags: ScorecardFlag[] = []
-  if (caseIds.length > 0) {
-    for (let i = 0; i < caseIds.length; i += 100) {
-      const chunk = caseIds.slice(i, i + 100)
-      const { data: flagData } = await supabase
-        .from('case_flags')
-        .select(`
-          case_id,
-          flag_type,
-          severity,
-          created_by,
-          delay_types(name)
-        `)
-        .in('case_id', chunk)
-
-      if (flagData) {
-        flags = [...flags, ...flagData.map((f: any) => ({
-          case_id: f.case_id,
-          flag_type: f.flag_type,
-          severity: f.severity,
-          delay_type_name: f.delay_types?.name || null,
-          created_by: f.created_by,
-        }))]
-      }
-    }
-  }
-
-  // 5. Fetch facility analytics settings
-  const { data: settingsData } = await supabase
-    .from('facility_analytics_settings')
-    .select('*')
-    .eq('facility_id', facilityId)
-    .single()
-
-  const settings: ScorecardSettings = {
-    fcots_milestone: settingsData?.fcots_milestone || 'patient_in',
-    fcots_grace_minutes: settingsData?.fcots_grace_minutes ?? 2,
-    fcots_target_percent: settingsData?.fcots_target_percent ?? 85,
-    turnover_target_same_surgeon: settingsData?.turnover_target_same_surgeon ?? 30,
-    turnover_target_flip_room: settingsData?.turnover_target_flip_room ?? 45,
-  }
-
-  return {
-    cases,
-    financials: financials as ScorecardFinancials[],
-    blocks: (blocks || []) as ScorecardBlock[],
-    flags,
-    settings,
-  }
+export interface PillarScores {
+  consistency: number
+  profitability: number
+  schedAccuracy: number
+  onTime: number
+  availability: number
+  blockSteward: number
 }
 
-// ─── DATE RANGE HELPERS ───────────────────────────────────────
-
-type DateRangeOption = '30d' | '90d' | '180d' | '1y'
-
-function getDateRange(option: DateRangeOption): { start: string; end: string } {
-  const end = new Date()
-  const start = new Date()
-
-  switch (option) {
-    case '30d': start.setDate(start.getDate() - 30); break
-    case '90d': start.setDate(start.getDate() - 90); break
-    case '180d': start.setDate(start.getDate() - 180); break
-    case '1y': start.setFullYear(start.getFullYear() - 1); break
-  }
-
-  return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
-  }
-}
-
-function getPreviousDateRange(option: DateRangeOption): { start: string; end: string } {
-  const currentRange = getDateRange(option)
-  const rangeMs = new Date(currentRange.end).getTime() - new Date(currentRange.start).getTime()
-  const prevEnd = new Date(new Date(currentRange.start).getTime() - 86400000) // day before current start
-  const prevStart = new Date(prevEnd.getTime() - rangeMs)
-
-  return {
-    start: prevStart.toISOString().split('T')[0],
-    end: prevEnd.toISOString().split('T')[0],
-  }
-}
-
-// ─── SVG SEGMENTED RING ──────────────────────────────────────
-
-function SegmentedRing({
-  pillars,
-  size = 180,
-  ringWidth = 14,
-  animated = true,
-}: {
+export interface ORbitScorecard {
+  surgeonId: string
+  surgeonName: string
+  firstName: string
+  lastName: string
+  caseCount: number
+  procedures: string[]          // unique procedure names
+  procedureBreakdown: { name: string; count: number }[]
+  flipRoom: boolean             // had cases in multiple rooms on same day
   pillars: PillarScores
-  size?: number
-  ringWidth?: number
-  animated?: boolean
-}) {
-  const [progress, setProgress] = useState(animated ? 0 : 1)
-  const center = size / 2
-  const radius = (size - ringWidth) / 2 - 2
-  const gapAngle = 5
-  const segmentAngle = (360 - gapAngle * PILLARS.length) / PILLARS.length
-
-  useEffect(() => {
-    if (!animated) return
-    let frame: number
-    let start: number | null = null
-    const animate = (ts: number) => {
-      if (!start) start = ts
-      const t = Math.min((ts - start) / 1000, 1)
-      setProgress(1 - Math.pow(1 - t, 3))
-      if (t < 1) frame = requestAnimationFrame(animate)
-    }
-    frame = requestAnimationFrame(animate)
-    return () => cancelAnimationFrame(frame)
-  }, [animated])
-
-  function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-    const rad = ((angleDeg - 90) * Math.PI) / 180
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
-  }
-
-  function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
-    if (endAngle - startAngle < 0.1) return ''
-    const s = polarToCartesian(cx, cy, r, endAngle)
-    const e = polarToCartesian(cx, cy, r, startAngle)
-    const large = endAngle - startAngle > 180 ? 1 : 0
-    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 0 ${e.x} ${e.y}`
-  }
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {PILLARS.map((pillar, i) => {
-        const startA = i * (segmentAngle + gapAngle)
-        const fullEnd = startA + segmentAngle
-        const value = (pillars[pillar.key] || 0) / 100
-        const filledEnd = startA + segmentAngle * value * progress
-        return (
-          <g key={pillar.key}>
-            <path
-              d={describeArc(center, center, radius, startA, fullEnd)}
-              fill="none" stroke={pillar.color} strokeOpacity={0.18}
-              strokeWidth={ringWidth} strokeLinecap="round"
-            />
-            {value * progress > 0.01 && (
-              <path
-                d={describeArc(center, center, radius, startA, filledEnd)}
-                fill="none" stroke={pillar.color}
-                strokeWidth={ringWidth} strokeLinecap="round"
-              />
-            )}
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
-// ─── TREND INDICATOR ──────────────────────────────────────────
-
-function TrendIndicator({ trend, current, previous }: {
+  composite: number
+  grade: GradeInfo
   trend: 'up' | 'down' | 'stable'
-  current: number
-  previous: number | null
-}) {
-  if (previous === null) return <span className="text-xs text-slate-500">New</span>
-  const delta = current - previous
-  const isUp = trend === 'up'
-  return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold font-mono ${isUp ? 'text-emerald-600' : trend === 'down' ? 'text-red-600' : 'text-slate-400'}`}>
-      {isUp ? '▲' : trend === 'down' ? '▼' : '–'} {isUp ? '+' : ''}{delta}
-    </span>
+  previousComposite: number | null
+}
+
+export interface GradeInfo {
+  letter: string
+  label: string
+  text: string   // color
+  bg: string     // background color
+}
+
+export interface PillarDefinition {
+  key: keyof PillarScores
+  label: string
+  weight: number
+  color: string
+  description: string
+}
+
+export const PILLARS: PillarDefinition[] = [
+  { key: 'consistency',   label: 'Consistency',   weight: 0.20, color: '#059669', description: 'Case duration predictability' },
+  { key: 'profitability', label: 'Profitability',  weight: 0.20, color: '#2563EB', description: 'Margin per OR minute' },
+  { key: 'schedAccuracy', label: 'Schedule Acc.',   weight: 0.15, color: '#DB2777', description: 'Actual vs scheduled time' },
+  { key: 'onTime',        label: 'On-Time',         weight: 0.15, color: '#D97706', description: 'Start time adherence' },
+  { key: 'availability',  label: 'Availability',    weight: 0.15, color: '#7C3AED', description: 'Ready when room is ready' },
+  { key: 'blockSteward',  label: 'Block Mgmt',      weight: 0.15, color: '#EA580C', description: 'Block utilization & release' },
+]
+
+export const MIN_CASE_THRESHOLD = 15
+
+// ─── INPUT TYPES (from Supabase queries) ──────────────────────
+
+export interface ScorecardCase {
+  id: string
+  surgeon_id: string
+  surgeon_first_name: string
+  surgeon_last_name: string
+  procedure_type_id: string
+  procedure_name: string
+  or_room_id: string
+  scheduled_date: string       // YYYY-MM-DD
+  start_time: string | null    // HH:MM scheduled start
+  // Milestone timestamps (UTC ISO strings, null if not recorded)
+  patient_in_at: string | null
+  incision_at: string | null
+  prep_drape_complete_at: string | null
+  closing_at: string | null
+  patient_out_at: string | null
+}
+
+export interface ScorecardFinancials {
+  case_id: string
+  profit: number | null
+  reimbursement: number | null
+  or_time_cost: number | null
+  total_case_minutes: number | null
+}
+
+export interface ScorecardBlock {
+  id: string
+  surgeon_id: string
+  day_of_week: number          // 0=Sun, 6=Sat
+  start_time: string           // HH:MM
+  end_time: string             // HH:MM
+  recurrence_type: string
+  effective_start: string
+  effective_end: string | null
+  or_room_id?: string | null
+}
+
+export interface ScorecardFlag {
+  case_id: string
+  flag_type: string            // 'threshold' | 'delay'
+  severity: string
+  delay_type_name: string | null
+  created_by: string | null    // null = auto, user_id = manual
+}
+
+export interface ScorecardSettings {
+  fcots_milestone: 'patient_in' | 'incision'
+  fcots_grace_minutes: number
+  fcots_target_percent: number
+  turnover_target_same_surgeon: number
+  turnover_target_flip_room: number
+}
+
+export interface ScorecardInput {
+  cases: ScorecardCase[]
+  financials: ScorecardFinancials[]
+  blocks: ScorecardBlock[]
+  flags: ScorecardFlag[]
+  settings: ScorecardSettings
+  dateRange: { start: string; end: string }
+  previousPeriodCases?: ScorecardCase[]
+  previousPeriodFinancials?: ScorecardFinancials[]
+  previousPeriodBlocks?: ScorecardBlock[]
+  previousPeriodFlags?: ScorecardFlag[]
+}
+
+// ─── UTILITY FUNCTIONS ────────────────────────────────────────
+
+function minutesBetween(a: string, b: string): number | null {
+  if (!a || !b) return null
+  const ta = new Date(a).getTime()
+  const tb = new Date(b).getTime()
+  if (isNaN(ta) || isNaN(tb)) return null
+  const mins = (tb - ta) / 60000
+  return mins > 0 ? mins : null
+}
+
+function timeToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+function mean(arr: number[]): number {
+  if (arr.length === 0) return 0
+  return arr.reduce((a, b) => a + b, 0) / arr.length
+}
+
+function stddev(arr: number[]): number {
+  if (arr.length < 2) return 0
+  const m = mean(arr)
+  const variance = arr.reduce((sum, v) => sum + (v - m) ** 2, 0) / (arr.length - 1)
+  return Math.sqrt(variance)
+}
+
+function coefficientOfVariation(arr: number[]): number {
+  if (arr.length < 2) return 0
+  const m = mean(arr)
+  if (m === 0) return 0
+  return stddev(arr) / m
+}
+
+function percentileRank(value: number, allValues: number[], lowerIsBetter: boolean = false): number {
+  if (allValues.length <= 1) return 50
+  const sorted = [...allValues].sort((a, b) => a - b)
+  let rank = 0
+  for (const v of sorted) {
+    if (lowerIsBetter ? v >= value : v <= value) rank++
+  }
+  return (rank / sorted.length) * 100
+}
+
+function clampScore(percentile: number, floor: number = 20, ceiling: number = 95): number {
+  // Maps percentile to 0-100 score with floor and ceiling
+  if (percentile <= floor) return 0
+  if (percentile >= ceiling) return 100
+  return Math.round(((percentile - floor) / (ceiling - floor)) * 100)
+}
+
+export function computeComposite(pillars: PillarScores): number {
+  return Math.round(
+    PILLARS.reduce((sum, p) => sum + (pillars[p.key] || 0) * p.weight, 0)
   )
 }
 
-// ─── SURGEON CARD ─────────────────────────────────────────────
-
-function SurgeonCard({
-  scorecard,
-  isSelected,
-  onSelect,
-}: {
-  scorecard: ORbitScorecard
-  isSelected: boolean
-  onSelect: () => void
-}) {
-  const { composite, grade, pillars } = scorecard
-
-  return (
-    <div
-      onClick={onSelect}
-      className={`rounded-xl p-6 cursor-pointer transition-all duration-200 ${
-        isSelected
-          ? 'bg-white border-2 shadow-md'
-          : 'bg-white border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300'
-      }`}
-      style={{ borderColor: isSelected ? `${grade.text}44` : undefined }}
-    >
-      <div className="flex items-center gap-5">
-        {/* Ring */}
-        <div className="relative flex-shrink-0">
-          <SegmentedRing pillars={pillars} size={140} ringWidth={12} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-            <div
-              className="text-4xl font-extrabold font-mono leading-none"
-              style={{ color: grade.text, letterSpacing: -2 }}
-            >
-              {composite}
-            </div>
-            <div
-              className="text-[9px] font-bold tracking-widest uppercase mt-1 opacity-70 font-mono"
-              style={{ color: grade.text }}
-            >
-              {grade.label}
-            </div>
-          </div>
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-base font-bold text-slate-900 truncate">
-              {scorecard.surgeonName}
-            </h3>
-            <span
-              className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded font-mono flex-shrink-0"
-              style={{ color: grade.text, background: grade.bg }}
-            >
-              {grade.letter}
-            </span>
-          </div>
-
-          <div className="text-xs text-slate-500 mb-2.5">
-            {scorecard.caseCount} cases
-            {scorecard.flipRoom && (
-              <span className="ml-2 text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                Flip
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2.5 mb-3">
-            <TrendIndicator
-              trend={scorecard.trend}
-              current={composite}
-              previous={scorecard.previousComposite}
-            />
-            <span className="text-[11px] text-slate-400">vs prior period</span>
-          </div>
-
-          {/* Pillar grid */}
-          <div className="grid grid-cols-3 gap-x-3 gap-y-1">
-            {PILLARS.map((p) => (
-              <div key={p.key} className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                    style={{ background: p.color }}
-                  />
-                  <span className="text-[10px] text-slate-400">{p.label}</span>
-                </div>
-                <span
-                  className="text-[11px] font-bold font-mono"
-                  style={{ color: p.color }}
-                >
-                  {pillars[p.key]}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+export function getGrade(score: number): GradeInfo {
+  if (score >= 90) return { letter: 'A', label: 'Elite', text: '#059669', bg: '#ECFDF5' }
+  if (score >= 80) return { letter: 'B', label: 'Strong', text: '#2563EB', bg: '#EFF6FF' }
+  if (score >= 70) return { letter: 'C', label: 'Developing', text: '#D97706', bg: '#FFFBEB' }
+  return { letter: 'D', label: 'Needs Improvement', text: '#DC2626', bg: '#FEF2F2' }
 }
 
-// ─── DETAIL PANEL ─────────────────────────────────────────────
+// ─── CASE DURATION EXTRACTION ─────────────────────────────────
 
-function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
-  const { composite, grade, pillars } = scorecard
-
-  return (
-    <div className="bg-white border border-slate-200/60 rounded-xl p-8 shadow-sm">
-      {/* Header with large ring */}
-      <div className="flex flex-col items-center mb-8 pb-7 border-b border-slate-100">
-        <div className="relative mb-4">
-          <SegmentedRing pillars={pillars} size={200} ringWidth={16} />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-            <div
-              className="text-5xl font-extrabold font-mono leading-none"
-              style={{ color: grade.text, letterSpacing: -3 }}
-            >
-              {composite}
-            </div>
-            <div
-              className="text-[11px] font-bold tracking-widest uppercase mt-1 opacity-70 font-mono"
-              style={{ color: grade.text }}
-            >
-              {grade.label}
-            </div>
-          </div>
-        </div>
-        <h2 className="text-xl font-bold text-slate-900">{scorecard.surgeonName}</h2>
-        <p className="text-sm text-slate-500 mt-1">
-          {scorecard.caseCount} cases · {scorecard.procedures.length} procedure types
-        </p>
-      </div>
-
-      {/* Pillar breakdown */}
-      <div className="space-y-5">
-        {PILLARS.map((pillar) => {
-          const value = pillars[pillar.key]
-          const weighted = (value * pillar.weight).toFixed(1)
-          return (
-            <div key={pillar.key}>
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ background: pillar.color }}
-                  />
-                  <span className="text-sm font-semibold text-slate-700">
-                    {pillar.label}
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    {pillar.description}
-                  </span>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {weighted} pts
-                  </span>
-                  <span
-                    className="text-lg font-extrabold font-mono"
-                    style={{ color: pillar.color }}
-                  >
-                    {value}
-                  </span>
-                </div>
-              </div>
-              <div
-                className="h-1.5 rounded-full overflow-hidden"
-                style={{ background: `${pillar.color}15` }}
-              >
-                <div
-                  className="h-full rounded-full transition-all duration-700 ease-out"
-                  style={{
-                    background: `linear-gradient(90deg, ${pillar.color}88, ${pillar.color})`,
-                    width: `${value}%`,
-                  }}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Composite bar */}
-      <div className="mt-7 pt-5 border-t border-slate-100">
-        <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase mb-3 font-mono">
-          Composite Breakdown
-        </div>
-        <div className="flex h-6 rounded-md overflow-hidden gap-0.5">
-          {PILLARS.map((pillar) => {
-            const contribution = pillars[pillar.key] * pillar.weight
-            return (
-              <div
-                key={pillar.key}
-                title={`${pillar.label}: ${contribution.toFixed(1)} pts`}
-                className="flex items-center justify-center text-[8px] font-bold font-mono text-white"
-                style={{
-                  width: `${contribution}%`,
-                  background: pillar.color,
-                }}
-              >
-                {contribution >= 8 ? Math.round(contribution) : ''}
-              </div>
-            )
-          })}
-        </div>
-        <div className="flex justify-end mt-1.5">
-          <span className="text-[11px] text-slate-400 font-mono">
-            {composite} / 100
-          </span>
-        </div>
-      </div>
-
-      {/* Procedures */}
-      <div className="mt-5 pt-5 border-t border-slate-100">
-        <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase mb-2.5 font-mono">
-          Procedure Mix
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {scorecard.procedureBreakdown.map(({ name, count }) => (
-            <span
-              key={name}
-              className="text-[11px] text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200"
-            >
-              {name}
-              <span className="text-slate-400 ml-1.5">×{count}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+function getCaseDuration(c: ScorecardCase): number | null {
+  return minutesBetween(c.patient_in_at!, c.patient_out_at!)
 }
 
-// ─── FACILITY SUMMARY ─────────────────────────────────────────
-
-function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
-  const composites = scorecards.map(s => s.composite)
-  const avg = composites.length > 0
-    ? Math.round(composites.reduce((a, b) => a + b, 0) / composites.length)
-    : 0
-  const dist = composites.reduce<Record<string, number>>((acc, s) => {
-    acc[getGrade(s).letter] = (acc[getGrade(s).letter] || 0) + 1
-    return acc
-  }, {})
-  const totalCases = scorecards.reduce((s, x) => s + x.caseCount, 0)
-
-  return (
-    <div className="flex gap-3 mb-7">
-      {[
-        { label: 'Facility Average', value: String(avg), color: getGrade(avg).text },
-        { label: 'Surgeons', value: String(scorecards.length), color: '#0F172A' },
-        { label: 'Total Cases', value: String(totalCases), color: '#0F172A' },
-      ].map((stat, i) => (
-        <div key={i} className="bg-white border border-slate-200/60 rounded-xl px-5 py-4 flex-1 shadow-sm">
-          <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">
-            {stat.label}
-          </div>
-          <div
-            className="text-3xl font-extrabold font-mono"
-            style={{ color: stat.color }}
-          >
-            {stat.value}
-          </div>
-        </div>
-      ))}
-      <div className="bg-white border border-slate-200/60 rounded-xl px-5 py-4 flex-1 shadow-sm">
-        <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">
-          Distribution
-        </div>
-        <div className="flex gap-3.5">
-          {['A', 'B', 'C', 'D'].map((g) => {
-            const gr = getGrade(g === 'A' ? 95 : g === 'B' ? 85 : g === 'C' ? 75 : 55)
-            return (
-              <div key={g} className="text-center">
-                <div className="text-xl font-extrabold font-mono leading-none" style={{ color: gr.text }}>
-                  {dist[g] || 0}
-                </div>
-                <div className="text-[10px] font-semibold font-mono mt-0.5 opacity-50" style={{ color: gr.text }}>
-                  {g}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    </div>
-  )
+function getSurgicalDuration(c: ScorecardCase): number | null {
+  return minutesBetween(c.incision_at!, c.closing_at!)
 }
 
-// ─── RING LEGEND ──────────────────────────────────────────────
-
-function RingLegend() {
-  return (
-    <div className="flex gap-4 flex-wrap py-3.5 mb-5 border-b border-slate-200">
-      {PILLARS.map((p) => (
-        <div key={p.key} className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
-          <span className="text-[11px] text-slate-500">
-            {p.label}
-            <span className="text-slate-400 ml-1">{(p.weight * 100).toFixed(0)}%</span>
-          </span>
-        </div>
-      ))}
-    </div>
-  )
+function getPrepToIncision(c: ScorecardCase): number | null {
+  return minutesBetween(c.prep_drape_complete_at!, c.incision_at!)
 }
 
-// ─── MAIN PAGE ────────────────────────────────────────────────
+// ─── PILLAR 1: SURGICAL CONSISTENCY (20%) ─────────────────────
+// CV of case duration within procedure type, volume-weighted
+// Lower CV = more predictable = better score
 
-export default function ORbitScorePage() {
-  const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+function calculateConsistency(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+): number {
+  // Group surgeon's cases by procedure type
+  const surgeonByProc = groupByProcedure(surgeonCases)
+  
+  // For each procedure type, compute CV and get peer CVs for percentile ranking
+  const scores: { score: number; volume: number }[] = []
 
-  const [scorecards, setScorecards] = useState<ORbitScorecard[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<string>('composite')
-  const [dateRange, setDateRange] = useState<DateRangeOption>('90d')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [insufficientSurgeons, setInsufficientSurgeons] = useState<{ name: string; count: number }[]>([])
+  for (const [procId, cases] of Object.entries(surgeonByProc)) {
+    const durations = cases
+      .map(c => getCaseDuration(c))
+      .filter((d): d is number => d !== null && d > 0)
 
-  const loadORbitScores = async () => {
-    if (!effectiveFacilityId) return
+    if (durations.length < 3) continue // need at least 3 cases for meaningful CV
 
-    setLoading(true)
-    setError(null)
+    const surgeonCV = coefficientOfVariation(durations)
 
-    try {
-      const range = getDateRange(dateRange)
-      const prevRange = getPreviousDateRange(dateRange)
+    // Get all surgeons' CVs for this procedure type (peer cohort)
+    const peerCVs = getPeerCVs(allCases, procId)
 
-      // Fetch current period data
-      const data = await fetchScorecardData(supabase, effectiveFacilityId, range.start, range.end)
-      if (!data) {
-        setError('Failed to load ORbit Score data')
-        setLoading(false)
-        return
-      }
+    // Percentile rank (lower CV is better)
+    const pctile = percentileRank(surgeonCV, peerCVs, true)
+    const score = clampScore(pctile)
+    scores.push({ score, volume: durations.length })
+  }
 
-      // Fetch previous period for trend comparison
-      const prevData = await fetchScorecardData(supabase, effectiveFacilityId, prevRange.start, prevRange.end)
+  if (scores.length === 0) return 50 // neutral if insufficient data
 
-      // Calculate scorecards
-      const results = calculateORbitScores({
-        ...data,
-        dateRange: range,
-        previousPeriodCases: prevData?.cases || [],
-        previousPeriodFinancials: prevData?.financials || [],
-        previousPeriodBlocks: prevData?.blocks || [],
-        previousPeriodFlags: prevData?.flags || [],
+  // Volume-weighted blend
+  const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
+  return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
+}
+
+function getPeerCVs(allCases: ScorecardCase[], procedureTypeId: string): number[] {
+  const bySurgeon: Record<string, ScorecardCase[]> = {}
+  for (const c of allCases) {
+    if (c.procedure_type_id !== procedureTypeId) continue
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(c)
+  }
+
+  const cvs: number[] = []
+  for (const cases of Object.values(bySurgeon)) {
+    const durations = cases
+      .map(c => getCaseDuration(c))
+      .filter((d): d is number => d !== null && d > 0)
+    if (durations.length >= 3) {
+      cvs.push(coefficientOfVariation(durations))
+    }
+  }
+  return cvs
+}
+
+// ─── PILLAR 2: CASE PROFITABILITY (20%) ───────────────────────
+// Contribution margin per OR minute, percentile-ranked within procedure type
+
+function calculateProfitability(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+  financialsMap: Map<string, ScorecardFinancials>,
+): number {
+  const surgeonByProc = groupByProcedure(surgeonCases)
+  const scores: { score: number; volume: number }[] = []
+
+  for (const [procId, cases] of Object.entries(surgeonByProc)) {
+    // Calculate margin per OR minute for this surgeon's cases of this type
+    const surgeonMPMs = cases
+      .map(c => {
+        const fin = financialsMap.get(c.id)
+        const duration = getCaseDuration(c)
+        if (!fin?.profit || !duration || duration <= 0) return null
+        return fin.profit / duration
       })
+      .filter((v): v is number => v !== null)
 
-      setScorecards(results)
-      if (results.length > 0 && !selectedId) {
-        setSelectedId(results[0].surgeonId)
-      }
+    if (surgeonMPMs.length < 2) continue
 
-      // Track surgeons below threshold
-      const allSurgeonCases: Record<string, { name: string; count: number }> = {}
-      for (const c of data.cases) {
-        if (!allSurgeonCases[c.surgeon_id]) {
-          allSurgeonCases[c.surgeon_id] = {
-            name: `Dr. ${c.surgeon_last_name}`,
-            count: 0,
-          }
+    const surgeonMedianMPM = median(surgeonMPMs)
+
+    // Get all surgeons' median MPMs for this procedure type
+    const peerMPMs = getPeerMarginPerMinute(allCases, financialsMap, procId)
+
+    const pctile = percentileRank(surgeonMedianMPM, peerMPMs)
+    const score = clampScore(pctile)
+    scores.push({ score, volume: surgeonMPMs.length })
+  }
+
+  if (scores.length === 0) return 50
+
+  const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
+  return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
+}
+
+function getPeerMarginPerMinute(
+  allCases: ScorecardCase[],
+  financialsMap: Map<string, ScorecardFinancials>,
+  procedureTypeId: string,
+): number[] {
+  const bySurgeon: Record<string, number[]> = {}
+
+  for (const c of allCases) {
+    if (c.procedure_type_id !== procedureTypeId) continue
+    const fin = financialsMap.get(c.id)
+    const duration = getCaseDuration(c)
+    if (!fin?.profit || !duration || duration <= 0) continue
+    const mpm = fin.profit / duration
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(mpm)
+  }
+
+  return Object.values(bySurgeon)
+    .filter(mpms => mpms.length >= 2)
+    .map(mpms => median(mpms))
+}
+
+// ─── PILLAR 3: SCHEDULE ACCURACY (15%) ────────────────────────
+// Ratio of actual case duration to expected duration
+// Expected = surgeon's own median for that procedure type (from surgeon_procedure_averages or computed)
+// Ratio close to 1.0 = accurate scheduling
+
+function calculateScheduleAccuracy(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+): number {
+  const surgeonByProc = groupByProcedure(surgeonCases)
+  const scores: { score: number; volume: number }[] = []
+
+  for (const [procId, cases] of Object.entries(surgeonByProc)) {
+    const durations = cases
+      .map(c => getCaseDuration(c))
+      .filter((d): d is number => d !== null && d > 0)
+
+    if (durations.length < 3) continue
+
+    // Surgeon's own median for this procedure type = their "expected" duration
+    const surgeonMedian = median(durations)
+
+    // Calculate how close each case is to their own median
+    // ratio = actual / median — closer to 1.0 is better
+    const ratios = durations.map(d => d / surgeonMedian)
+
+    // Score = how tight the ratios cluster around 1.0
+    // Use the mean absolute deviation from 1.0
+    const deviations = ratios.map(r => Math.abs(r - 1.0))
+    const surgeonMAD = mean(deviations)
+
+    // Get peer MADs for percentile ranking
+    const peerMADs = getPeerScheduleMADs(allCases, procId)
+
+    // Lower MAD is better
+    const pctile = percentileRank(surgeonMAD, peerMADs, true)
+    const score = clampScore(pctile)
+    scores.push({ score, volume: durations.length })
+  }
+
+  if (scores.length === 0) return 50
+
+  const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
+  return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
+}
+
+function getPeerScheduleMADs(allCases: ScorecardCase[], procedureTypeId: string): number[] {
+  const bySurgeon: Record<string, number[]> = {}
+  for (const c of allCases) {
+    if (c.procedure_type_id !== procedureTypeId) continue
+    const d = getCaseDuration(c)
+    if (d && d > 0) {
+      if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+      bySurgeon[c.surgeon_id].push(d)
+    }
+  }
+
+  return Object.values(bySurgeon)
+    .filter(ds => ds.length >= 3)
+    .map(ds => {
+      const med = median(ds)
+      const ratios = ds.map(d => d / med)
+      return mean(ratios.map(r => Math.abs(r - 1.0)))
+    })
+}
+
+// ─── PILLAR 4: ON-TIME PERFORMANCE (15%) ──────────────────────
+// FCOTS + start time adherence for non-first cases
+// Uses facility-configured start milestone (patient_in or incision)
+
+function calculateOnTimePerformance(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+  blocks: ScorecardBlock[],
+  settings: ScorecardSettings,
+): number {
+  const surgeonId = surgeonCases[0]?.surgeon_id
+  if (!surgeonId) return 50
+
+  // Group cases by date and room to identify first cases
+  const casesByDateRoom: Record<string, ScorecardCase[]> = {}
+  for (const c of allCases) {
+    const key = `${c.scheduled_date}|${c.or_room_id}`
+    if (!casesByDateRoom[key]) casesByDateRoom[key] = []
+    casesByDateRoom[key].push(c)
+  }
+
+  // Sort each group by start time
+  for (const cases of Object.values(casesByDateRoom)) {
+    cases.sort((a, b) => {
+      const ta = a.patient_in_at || a.start_time || ''
+      const tb = b.patient_in_at || b.start_time || ''
+      return ta.localeCompare(tb)
+    })
+  }
+
+  // FCOTS: Check surgeon's first cases
+  let fcotsOnTime = 0
+  let fcotsTotal = 0
+
+  // Start adherence: for non-first cases, how close to scheduled start
+  const startDeltas: number[] = [] // minutes late (positive = late)
+
+  for (const c of surgeonCases) {
+    const key = `${c.scheduled_date}|${c.or_room_id}`
+    const roomCases = casesByDateRoom[key] || []
+    const isFirst = roomCases.length > 0 && roomCases[0].id === c.id
+
+    // Get the relevant timestamp based on facility setting
+    const actualStart = settings.fcots_milestone === 'incision'
+      ? c.incision_at
+      : c.patient_in_at
+
+    if (!actualStart) continue
+
+    if (isFirst) {
+      // FCOTS check — compare against block start time
+      const surgeonBlocks = blocks.filter(b => b.surgeon_id === surgeonId)
+      const caseDate = new Date(c.scheduled_date)
+      const caseDow = caseDate.getUTCDay()
+      const block = surgeonBlocks.find(b => b.day_of_week === caseDow)
+
+      if (block) {
+        const blockStartMin = timeToMinutes(block.start_time)
+        const actualDate = new Date(actualStart)
+        const actualMin = actualDate.getHours() * 60 + actualDate.getMinutes()
+        const deltaMin = actualMin - blockStartMin
+
+        fcotsTotal++
+        if (deltaMin <= settings.fcots_grace_minutes) {
+          fcotsOnTime++
         }
-        allSurgeonCases[c.surgeon_id].count++
       }
-      setInsufficientSurgeons(
-        Object.values(allSurgeonCases).filter(s => s.count < MIN_CASE_THRESHOLD)
-      )
-    } catch (err) {
-      showToast({
-  type: 'error',
-  title: 'ORbit Score calculation error:',
-  message: err instanceof Error ? err.message : 'ORbit Score calculation error:'
-})
-      setError('Error calculating ORbit Scores')
+    } else {
+      // Non-first case: compare scheduled vs actual
+      if (c.start_time && actualStart) {
+        const scheduledMin = timeToMinutes(c.start_time)
+        const actualDate = new Date(actualStart)
+        const actualMin = actualDate.getHours() * 60 + actualDate.getMinutes()
+        startDeltas.push(actualMin - scheduledMin)
+      }
     }
-
-    setLoading(false)
   }
 
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      loadORbitScores()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId, dateRange])
+  // FCOTS score (50% weight within this pillar)
+  const fcotsRate = fcotsTotal > 0 ? (fcotsOnTime / fcotsTotal) * 100 : 50
 
-  const selectedScorecard = scorecards.find(s => s.surgeonId === selectedId) || null
+  // Start adherence score (50% weight)
+  // Median minutes late — lower is better
+  let adherenceScore = 50
+  if (startDeltas.length >= 3) {
+    const surgeonMedianLate = median(startDeltas)
 
-  const sorted = [...scorecards].sort((a, b) => {
-    if (sortBy === 'composite') return b.composite - a.composite
-    if (sortBy === 'name') return a.lastName.localeCompare(b.lastName)
-    if (sortBy === 'cases') return b.caseCount - a.caseCount
-    if (sortBy === 'trend') {
-      const aDelta = a.previousComposite !== null ? a.composite - a.previousComposite : 0
-      const bDelta = b.previousComposite !== null ? b.composite - b.previousComposite : 0
-      return bDelta - aDelta
-    }
-    // Sort by pillar
-    const pillar = PILLARS.find(p => p.key === sortBy)
-    if (pillar) {
-      return (b.pillars[pillar.key] || 0) - (a.pillars[pillar.key] || 0)
-    }
-    return 0
-  })
-
-  // ─── RENDER ───────────────────────────────────────────────
-
-  if (userLoading) {
-    return (
-      <DashboardLayout>
-        <Container>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </Container>
-      </DashboardLayout>
-    )
+    // Get peer median-late values for percentile ranking
+    const peerMedianLates = getPeerStartDeltas(allCases, blocks, settings)
+    const pctile = percentileRank(surgeonMedianLate, peerMedianLates, true) // lower is better
+    adherenceScore = clampScore(pctile)
   }
 
-  return (
-    <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-      <Container>
-        <div className="py-8">
-          {/* Header */}
-          <div className="flex justify-between items-end mb-2.5">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">
-                ORbit Score
-              </h1>
-              <p className="text-sm text-slate-500 mt-1 max-w-xl">
-                Composite scores based on controllable operational metrics.
-                Percentile-ranked within procedure cohort, volume-weighted across case mix.
-              </p>
-            </div>
+  // Blend: 50% FCOTS rate (as direct percentage), 50% adherence percentile
+  const fcotsScore = clampScore(fcotsRate, 50, 100) // 50% on-time = floor, 100% = ceiling
+  return Math.round(fcotsScore * 0.5 + adherenceScore * 0.5)
+}
 
-            {/* Date range selector */}
-            <div className="flex items-center gap-1.5">
-              {([
-                { key: '30d', label: '30 Days' },
-                { key: '90d', label: '90 Days' },
-                { key: '180d', label: '6 Months' },
-                { key: '1y', label: '1 Year' },
-              ] as { key: DateRangeOption; label: string }[]).map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setDateRange(opt.key)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-                    dateRange === opt.key
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
+function getPeerStartDeltas(
+  allCases: ScorecardCase[],
+  blocks: ScorecardBlock[],
+  settings: ScorecardSettings,
+): number[] {
+  const bySurgeon: Record<string, number[]> = {}
 
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-32">
-              <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-sm text-slate-500">Calculating ORbit Scores...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-20">
-              <p className="text-red-500 mb-2">{error}</p>
-              <button
-                onClick={loadORbitScores}
-                className="text-sm text-blue-600 hover:text-blue-700"
-              >
-                Retry
-              </button>
-            </div>
-          ) : scorecards.length === 0 ? (
-            <div className="text-center py-20">
-              <p className="text-slate-500 mb-2">
-                No surgeons met the minimum threshold of {MIN_CASE_THRESHOLD} cases.
-              </p>
-              {insufficientSurgeons.length > 0 && (
-                <div className="mt-4 text-sm text-slate-400">
-                  <p className="mb-2">Surgeons with insufficient data:</p>
-                  {insufficientSurgeons.map((s) => (
-                    <p key={s.name}>
-                      {s.name}: {s.count} cases (need {MIN_CASE_THRESHOLD})
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              <RingLegend />
-              <FacilitySummary scorecards={scorecards} />
+  for (const c of allCases) {
+    if (!c.start_time) continue
+    const actualStart = settings.fcots_milestone === 'incision' ? c.incision_at : c.patient_in_at
+    if (!actualStart) continue
 
-              {/* Insufficient data notice */}
-              {insufficientSurgeons.length > 0 && (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-xs text-amber-700">
-                    <span className="font-semibold">Insufficient data:</span>{' '}
-                    {insufficientSurgeons.map(s => `${s.name} (${s.count} cases)`).join(', ')}
-                    {' '}— minimum {MIN_CASE_THRESHOLD} cases required for scoring
-                  </p>
-                </div>
-              )}
+    const scheduledMin = timeToMinutes(c.start_time)
+    const actualDate = new Date(actualStart)
+    const actualMin = actualDate.getHours() * 60 + actualDate.getMinutes()
+    const delta = actualMin - scheduledMin
 
-              {/* Sort controls */}
-              <div className="flex items-center gap-1.5 mb-4">
-                <span className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase font-mono mr-1">
-                  Sort
-                </span>
-                {[
-                  { key: 'composite', label: 'Score' },
-                  { key: 'trend', label: 'Trend' },
-                  { key: 'cases', label: 'Volume' },
-                  { key: 'name', label: 'Name' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    onClick={() => setSortBy(opt.key)}
-                    className={`text-[11px] font-semibold px-3 py-1 rounded-md transition-all ${
-                      sortBy === opt.key
-                        ? 'bg-slate-900 text-white'
-                        : 'text-slate-500 border border-transparent hover:text-slate-700 hover:bg-slate-100'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(delta)
+  }
 
-              {/* Main layout */}
-              <div className="grid grid-cols-[1fr_380px] gap-6 items-start">
-                <div className="flex flex-col gap-3.5">
-                  {sorted.map((sc) => (
-                    <SurgeonCard
-                      key={sc.surgeonId}
-                      scorecard={sc}
-                      isSelected={selectedId === sc.surgeonId}
-                      onSelect={() => setSelectedId(sc.surgeonId)}
-                    />
-                  ))}
-                </div>
-                <div className="sticky top-6">
-                  {selectedScorecard && <DetailPanel scorecard={selectedScorecard} />}
-                </div>
-              </div>
-            </>
-          )}
+  return Object.values(bySurgeon)
+    .filter(ds => ds.length >= 3)
+    .map(ds => median(ds))
+}
 
-          {/* Methodology footer */}
-          {scorecards.length > 0 && (
-            <div className="mt-10 pt-5 border-t border-slate-200">
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                <span className="font-semibold text-slate-500">Methodology:</span> Each pillar is
-                percentile-ranked within procedure-type cohort, volume-weighted across case mix,
-                and clamped 0–100 (floor at 20th percentile, ceiling at 95th). Minimum {MIN_CASE_THRESHOLD} cases
-                required. Solo procedure types use self-consistency benchmarking (CV-based).
-                Trend compares current period against the equivalent prior period.
-              </p>
-            </div>
-          )}
-        </div>
-      </Container>
-      </div>
-    </DashboardLayout>
+// ─── PILLAR 5: SURGEON AVAILABILITY (15%) ─────────────────────
+// Prep-to-incision excess gap + surgeon-attributable delay flag rate
+
+const PREP_TO_INCISION_BASELINE_MINUTES = 7 // reasonable scrub + site marking time
+
+function calculateAvailability(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+  flags: ScorecardFlag[],
+): number {
+  const surgeonId = surgeonCases[0]?.surgeon_id
+  if (!surgeonId) return 50
+
+  // 1. Prep-to-incision excess gaps (50% of this pillar)
+  const surgeonExcessGaps = surgeonCases
+    .map(c => {
+      const gap = getPrepToIncision(c)
+      if (gap === null) return null
+      return Math.max(0, gap - PREP_TO_INCISION_BASELINE_MINUTES)
+    })
+    .filter((g): g is number => g !== null)
+
+  let gapScore = 50
+  if (surgeonExcessGaps.length >= 3) {
+    const surgeonMedianExcess = median(surgeonExcessGaps)
+
+    // Get peer median excess gaps
+    const peerExcessGaps = getPeerExcessGaps(allCases)
+    const pctile = percentileRank(surgeonMedianExcess, peerExcessGaps, true) // lower is better
+    gapScore = clampScore(pctile)
+  }
+
+  // 2. Surgeon-attributable delay rate (50% of this pillar)
+  const surgeonCaseIds = new Set(surgeonCases.map(c => c.id))
+  const surgeonFlags = flags.filter(f =>
+    surgeonCaseIds.has(f.case_id) && f.flag_type === 'delay'
   )
+  const delayRate = surgeonCases.length > 0
+    ? (surgeonFlags.length / surgeonCases.length) * 100
+    : 0
+
+  // Get peer delay rates
+  const peerDelayRates = getPeerDelayRates(allCases, flags)
+  const delayPctile = percentileRank(delayRate, peerDelayRates, true) // lower is better
+  const delayScore = clampScore(delayPctile)
+
+  return Math.round(gapScore * 0.5 + delayScore * 0.5)
+}
+
+function getPeerExcessGaps(allCases: ScorecardCase[]): number[] {
+  const bySurgeon: Record<string, number[]> = {}
+  for (const c of allCases) {
+    const gap = getPrepToIncision(c)
+    if (gap === null) continue
+    const excess = Math.max(0, gap - PREP_TO_INCISION_BASELINE_MINUTES)
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(excess)
+  }
+  return Object.values(bySurgeon)
+    .filter(gs => gs.length >= 3)
+    .map(gs => median(gs))
+}
+
+function getPeerDelayRates(allCases: ScorecardCase[], flags: ScorecardFlag[]): number[] {
+  const bySurgeon: Record<string, { total: number; delayed: number }> = {}
+  const delaysByCaseId = new Set(
+    flags.filter(f => f.flag_type === 'delay').map(f => f.case_id)
+  )
+
+  for (const c of allCases) {
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = { total: 0, delayed: 0 }
+    bySurgeon[c.surgeon_id].total++
+    if (delaysByCaseId.has(c.id)) bySurgeon[c.surgeon_id].delayed++
+  }
+
+  return Object.values(bySurgeon)
+    .filter(s => s.total >= 5)
+    .map(s => (s.delayed / s.total) * 100)
+}
+
+// ─── PILLAR 6: BLOCK STEWARDSHIP (15%) ────────────────────────
+// Block utilization percentage
+
+function calculateBlockStewardship(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+  blocks: ScorecardBlock[],
+  dateRange: { start: string; end: string },
+): number {
+  const surgeonId = surgeonCases[0]?.surgeon_id
+  if (!surgeonId) return 50
+
+  const surgeonBlocks = blocks.filter(b => b.surgeon_id === surgeonId)
+  if (surgeonBlocks.length === 0) return 50 // no blocks allocated
+
+  // Calculate total allocated block minutes in the date range
+  const startDate = new Date(dateRange.start)
+  const endDate = new Date(dateRange.end)
+  let totalAllocatedMinutes = 0
+  let totalUsedMinutes = 0
+
+  // Iterate through each day in the range
+  const current = new Date(startDate)
+  while (current <= endDate) {
+    const dow = current.getUTCDay()
+    const dateStr = current.toISOString().split('T')[0]
+
+    // Find active blocks for this day of week
+    for (const block of surgeonBlocks) {
+      if (block.day_of_week !== dow) continue
+      if (block.effective_start > dateStr) continue
+      if (block.effective_end && block.effective_end < dateStr) continue
+
+      const blockMinutes = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
+      if (blockMinutes <= 0) continue
+      totalAllocatedMinutes += blockMinutes
+
+      // Sum case durations on this date for this surgeon
+      const dayCases = surgeonCases.filter(c => c.scheduled_date === dateStr)
+      const dayUsed = dayCases.reduce((sum, c) => {
+        const d = getCaseDuration(c)
+        return sum + (d || 0)
+      }, 0)
+      totalUsedMinutes += Math.min(dayUsed, blockMinutes) // cap at block size
+    }
+
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  if (totalAllocatedMinutes === 0) return 50
+
+  const surgeonUtilization = (totalUsedMinutes / totalAllocatedMinutes) * 100
+
+  // Get peer utilization rates
+  const peerUtilizations = getPeerBlockUtilization(allCases, blocks, dateRange)
+
+  const pctile = percentileRank(surgeonUtilization, peerUtilizations)
+  return clampScore(pctile)
+}
+
+function getPeerBlockUtilization(
+  allCases: ScorecardCase[],
+  blocks: ScorecardBlock[],
+  dateRange: { start: string; end: string },
+): number[] {
+  // Group blocks by surgeon
+  const blocksBySurgeon: Record<string, ScorecardBlock[]> = {}
+  for (const b of blocks) {
+    if (!blocksBySurgeon[b.surgeon_id]) blocksBySurgeon[b.surgeon_id] = []
+    blocksBySurgeon[b.surgeon_id].push(b)
+  }
+
+  const casesBySurgeon: Record<string, ScorecardCase[]> = {}
+  for (const c of allCases) {
+    if (!casesBySurgeon[c.surgeon_id]) casesBySurgeon[c.surgeon_id] = []
+    casesBySurgeon[c.surgeon_id].push(c)
+  }
+
+  const utilizations: number[] = []
+
+  for (const [surgeonId, surgBlocks] of Object.entries(blocksBySurgeon)) {
+    const surgCases = casesBySurgeon[surgeonId] || []
+
+    const startDate = new Date(dateRange.start)
+    const endDate = new Date(dateRange.end)
+    let allocated = 0
+    let used = 0
+
+    const current = new Date(startDate)
+    while (current <= endDate) {
+      const dow = current.getUTCDay()
+      const dateStr = current.toISOString().split('T')[0]
+
+      for (const block of surgBlocks) {
+        if (block.day_of_week !== dow) continue
+        if (block.effective_start > dateStr) continue
+        if (block.effective_end && block.effective_end < dateStr) continue
+
+        const blockMin = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
+        if (blockMin <= 0) continue
+        allocated += blockMin
+
+        const dayCases = surgCases.filter(c => c.scheduled_date === dateStr)
+        const dayUsed = dayCases.reduce((sum, c) => sum + (getCaseDuration(c) || 0), 0)
+        used += Math.min(dayUsed, blockMin)
+      }
+
+      current.setUTCDate(current.getUTCDate() + 1)
+    }
+
+    if (allocated > 0) {
+      utilizations.push((used / allocated) * 100)
+    }
+  }
+
+  return utilizations
+}
+
+// ─── HELPER FUNCTIONS ─────────────────────────────────────────
+
+function groupByProcedure(cases: ScorecardCase[]): Record<string, ScorecardCase[]> {
+  const grouped: Record<string, ScorecardCase[]> = {}
+  for (const c of cases) {
+    if (!grouped[c.procedure_type_id]) grouped[c.procedure_type_id] = []
+    grouped[c.procedure_type_id].push(c)
+  }
+  return grouped
+}
+
+function median(arr: number[]): number {
+  if (arr.length === 0) return 0
+  const sorted = [...arr].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function detectFlipRoom(cases: ScorecardCase[]): boolean {
+  // Group by date, check if multiple rooms used
+  const byDate: Record<string, Set<string>> = {}
+  for (const c of cases) {
+    if (!byDate[c.scheduled_date]) byDate[c.scheduled_date] = new Set()
+    byDate[c.scheduled_date].add(c.or_room_id)
+  }
+  return Object.values(byDate).some(rooms => rooms.size > 1)
+}
+
+// ─── MAIN CALCULATION ─────────────────────────────────────────
+
+export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
+  const { cases, financials, blocks, flags, settings, dateRange } = input
+
+  // Build financials lookup
+  const financialsMap = new Map<string, ScorecardFinancials>()
+  for (const f of financials) {
+    financialsMap.set(f.case_id, f)
+  }
+
+  // Group cases by surgeon
+  const bySurgeon: Record<string, ScorecardCase[]> = {}
+  for (const c of cases) {
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(c)
+  }
+
+  // Calculate previous period composites if data available
+  const previousComposites = new Map<string, number>()
+  if (input.previousPeriodCases && input.previousPeriodCases.length > 0) {
+    const prevFinMap = new Map<string, ScorecardFinancials>()
+    for (const f of (input.previousPeriodFinancials || [])) {
+      prevFinMap.set(f.case_id, f)
+    }
+
+    const prevBySurgeon: Record<string, ScorecardCase[]> = {}
+    for (const c of input.previousPeriodCases) {
+      if (!prevBySurgeon[c.surgeon_id]) prevBySurgeon[c.surgeon_id] = []
+      prevBySurgeon[c.surgeon_id].push(c)
+    }
+
+    for (const [surgeonId, surgeonCases] of Object.entries(prevBySurgeon)) {
+      if (surgeonCases.length < MIN_CASE_THRESHOLD) continue
+      const pillars: PillarScores = {
+        consistency: calculateConsistency(surgeonCases, input.previousPeriodCases),
+        profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap),
+        schedAccuracy: calculateScheduleAccuracy(surgeonCases, input.previousPeriodCases),
+        onTime: calculateOnTimePerformance(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, settings),
+        availability: calculateAvailability(surgeonCases, input.previousPeriodCases, input.previousPeriodFlags || flags),
+        blockSteward: calculateBlockStewardship(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, dateRange),
+      }
+      previousComposites.set(surgeonId, computeComposite(pillars))
+    }
+  }
+
+  // Build scorecards
+  const scorecards: ORbitScorecard[] = []
+
+  for (const [surgeonId, surgeonCases] of Object.entries(bySurgeon)) {
+    if (surgeonCases.length < MIN_CASE_THRESHOLD) continue
+
+    const first = surgeonCases[0]
+
+    // Unique procedures
+    const procCounts: Record<string, number> = {}
+    for (const c of surgeonCases) {
+      procCounts[c.procedure_name] = (procCounts[c.procedure_name] || 0) + 1
+    }
+    const procedureBreakdown = Object.entries(procCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+
+    // Calculate each pillar
+    const pillars: PillarScores = {
+      consistency: calculateConsistency(surgeonCases, cases),
+      profitability: calculateProfitability(surgeonCases, cases, financialsMap),
+      schedAccuracy: calculateScheduleAccuracy(surgeonCases, cases),
+      onTime: calculateOnTimePerformance(surgeonCases, cases, blocks, settings),
+      availability: calculateAvailability(surgeonCases, cases, flags),
+      blockSteward: calculateBlockStewardship(surgeonCases, cases, blocks, dateRange),
+    }
+
+    const composite = computeComposite(pillars)
+    const prevComposite = previousComposites.get(surgeonId) ?? null
+    const trend: 'up' | 'down' | 'stable' = prevComposite === null
+      ? 'stable'
+      : composite > prevComposite ? 'up'
+      : composite < prevComposite ? 'down'
+      : 'stable'
+
+    scorecards.push({
+      surgeonId,
+      surgeonName: `Dr. ${first.surgeon_last_name}`,
+      firstName: first.surgeon_first_name,
+      lastName: first.surgeon_last_name,
+      caseCount: surgeonCases.length,
+      procedures: procedureBreakdown.map(p => p.name),
+      procedureBreakdown,
+      flipRoom: detectFlipRoom(surgeonCases),
+      pillars,
+      composite,
+      grade: getGrade(composite),
+      trend,
+      previousComposite: prevComposite,
+    })
+  }
+
+  // Sort by composite descending
+  scorecards.sort((a, b) => b.composite - a.composite)
+
+  return scorecards
 }

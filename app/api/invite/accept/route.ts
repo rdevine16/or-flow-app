@@ -7,9 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { error } from 'console'
-const { showToast } = useToast()
 // Admin client with service role key - can bypass email confirmation
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -110,23 +108,23 @@ export async function POST(request: NextRequest) {
     })
 
     if (authError) {
-      showToast({
-  type: 'error',
-  title: 'Auth user creation error:',
-  message: error instanceof Error ? error.message : 'Auth user creation error:'
-})
+console.error('Error description:', error)
+
       return NextResponse.json(
         { success: false, error: 'Failed to create account: ' + authError.message },
         { status: 500 }
       )
     }
 
-    if (!authData.user) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to create account' },
-        { status: 500 }
-      )
-    }
+if (!authData.user) {
+  return NextResponse.json(
+    { 
+      error: 'Authentication failed - no user created',
+      success: false 
+    },
+    { status: 500 }
+  )
+}
 
     // 4. Create user profile in public.users
     const { error: profileError } = await supabaseAdmin

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+import { error } from 'console'
 import { NextRequest, NextResponse } from 'next/server'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // Create admin client with service role key
 const supabaseAdmin = createClient(
@@ -13,7 +13,6 @@ const supabaseAdmin = createClient(
     },
   }
 )
-const { showToast } = useToast()
 export async function POST(request: NextRequest) {
   try {
     const { emails } = await request.json()
@@ -29,11 +28,8 @@ export async function POST(request: NextRequest) {
     const { data: authData, error: listError } = await supabaseAdmin.auth.admin.listUsers()
     
     if (listError) {
-      showToast({
-  type: 'error',
-  title: 'Error listing users:',
-  message: `Error listing users: ${listError}`
-})
+console.error('Error description:', listError)
+
       return NextResponse.json(
         { error: 'Failed to fetch user status' },
         { status: 500 }
@@ -53,11 +49,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ pendingUserIds })
 
   } catch (error) {
-    showToast({
-  type: 'error',
-  title: 'Check user status error:',
-  message: error instanceof Error ? error.message : 'Check user status error:'
-})
+console.error('Error description:', error)
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
