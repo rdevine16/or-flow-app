@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { RefactorIssue } from './page'
 import { CheckIcon, ClipboardIcon, XMarkIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
-import { ColorPickerSection } from '@/components/refactor/ColorPickerSection'
 
 interface IssueCardProps {
   issue: RefactorIssue
@@ -261,15 +260,6 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
                 ))}
               </div>
             </div>
-          )}
-          {/* ========================================
-              COLOR PICKER SECTION
-              ======================================== */}
-          {issue.metadata?.requiresColorSelection && (
-            <ColorPickerSection 
-              issue={issue} 
-              onFixed={() => onMarkFixed()}
-            />
           )}
           {/* Context */}
           {issue.context && (
