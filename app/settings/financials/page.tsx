@@ -11,6 +11,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 
 // Financial audit actions for filtering recent activity
 const FINANCIAL_AUDIT_ACTIONS = [
@@ -87,7 +89,7 @@ interface AuditEntry {
 export default function FinancialsOverviewPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
-
+  const { showToast } = useToast() 
   const [stats, setStats] = useState<Stats>({
     costCategories: { total: 0, debits: 0, credits: 0 },
     payers: 0,
@@ -104,12 +106,6 @@ export default function FinancialsOverviewPage() {
   const [savingRate, setSavingRate] = useState(false)
 
   // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -215,7 +211,11 @@ export default function FinancialsOverviewPage() {
       setRecentActivity(activityRes.data || [])
       setRateInput(facilityRes.data?.or_hourly_rate?.toString() || '')
     } catch (error) {
-      console.error('Error fetching financials data:', error)
+      showToast({
+        type: 'error',
+        title: 'Error Loading Financial Data',
+        message: error instanceof Error ? error.message : 'Failed to load financial data'
+      })
     } finally {
       setLoading(false)
     }
@@ -225,10 +225,14 @@ export default function FinancialsOverviewPage() {
     if (!effectiveFacilityId) return
 
     const newRate = parseFloat(rateInput)
-    if (isNaN(newRate) || newRate < 0) {
-      showToast('Please enter a valid rate', 'error')
-      return
-    }
+if (isNaN(newRate) || newRate < 0) {
+  showToast({
+    type: 'error',
+    title: 'Validation Error',
+    message: 'Please enter a valid rate'
+  })
+  return
+}
 
     setSavingRate(true)
     try {
@@ -249,15 +253,24 @@ export default function FinancialsOverviewPage() {
         facilityId: effectiveFacilityId,
       })
 
-      setStats(prev => ({ ...prev, orHourlyRate: newRate }))
-      setEditingRate(false)
-      showToast('OR hourly rate updated', 'success')
+setStats(prev => ({ ...prev, orHourlyRate: newRate }))
+setEditingRate(false)
+showToast({
+  type: 'success',
+  title: 'Rate Updated',
+  message: 'OR hourly rate has been updated successfully'
+})
 
       // Refresh activity
       fetchData()
-    } catch (error) {
-      console.error('Error updating OR rate:', error)
-      showToast('Failed to update rate', 'error')
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Updating Rate',
+    message: error instanceof Error ? error.message : 'Failed to update OR hourly rate'
+  })
+
+
     } finally {
       setSavingRate(false)
     }
@@ -689,27 +702,6 @@ export default function FinancialsOverviewPage() {
           )}
         </SettingsLayout>
       </Container>
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-2">
-          <div className={`
-            px-4 py-3 rounded-lg shadow-lg flex items-center gap-2
-            ${toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}
-          `}>
-            {toast.type === 'success' ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-            {toast.message}
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   )
 }

@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { deviceRepAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface DeviceRep {
   id: string
@@ -62,7 +63,7 @@ export default function DeviceRepsPage() {
   const [sending, setSending] = useState(false)
   const [actionConfirm, setActionConfirm] = useState<{ id: string; type: 'revoke' | 'cancel' } | null>(null)
   const [inviteLinkModal, setInviteLinkModal] = useState<{ isOpen: boolean; link: string; email: string }>({ isOpen: false, link: '', email: '' })
-
+  const { showToast } = useToast()
   useEffect(() => {
     fetchData()
   }, [])
@@ -243,10 +244,18 @@ export default function DeviceRepsPage() {
         })
 
         if (!emailResponse.ok) {
-          console.error('Failed to send invite email')
+          showToast({
+            type: 'error',
+            title: 'Failed to send invite email',
+            message: 'There was an error sending the invite email.'
+          })
         }
       } catch (emailError) {
-        console.error('Error sending invite email:', emailError)
+        showToast({
+          type: 'error',
+          title: 'Error sending invite email',
+          message: emailError instanceof Error ? emailError.message : 'Error sending invite email'
+        })
       }
 
       await deviceRepAudit.invited(

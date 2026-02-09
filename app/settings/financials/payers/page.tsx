@@ -10,6 +10,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface Payer {
   id: string
@@ -18,11 +19,10 @@ interface Payer {
   deleted_at: string | null
   deleted_by: string | null
 }
-
 export default function PayersPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
-
+  const { showToast } = useToast()
   const [payers, setPayers] = useState<Payer[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -39,7 +39,6 @@ export default function PayersPage() {
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   // Current user for deleted_by tracking
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -53,10 +52,6 @@ export default function PayersPage() {
     getCurrentUser()
   }, [])
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   // Fetch data
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -78,7 +73,13 @@ export default function PayersPage() {
 
 
     if (data) setPayers(data)
-    if (error) console.error('Error fetching payers:', error)
+    if (error) {
+      showToast({
+        type: 'error',
+        title: 'Error Fetching Payers',
+        message: error.message || 'Failed to fetch payers'
+      })
+    }
     setLoading(false)
   }
 
@@ -176,11 +177,15 @@ export default function PayersPage() {
 
       if (error) throw error
 
-      setPayers(payers.map(p =>
-        p.id === payerId ? { ...p, deleted_at: new Date().toISOString(), deleted_by: currentUserId } : p
-      ))
+setPayers(payers.map(p =>
+  p.id === payerId ? { ...p, deleted_at: new Date().toISOString(), deleted_by: currentUserId } : p
+))
 
-      showToast(`"${payer.name}" moved to archive`, 'success')
+showToast({
+  type: 'success',
+  title: 'Payer Archived',
+  message: `"${payer.name}" has been moved to archive`
+})
 
       await genericAuditLog(supabase, 'payer.deleted', {
         targetType: 'payer',
@@ -189,10 +194,14 @@ export default function PayersPage() {
         facilityId: effectiveFacilityId,
       })
 
-      setDeleteConfirm(null)
-    } catch (error) {
-      console.error('Error deleting payer:', error)
-    } finally {
+setDeleteConfirm(null)
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Archiving Payer',
+    message: error instanceof Error ? error.message : 'Failed to archive payer'
+  })
+} finally {
       setSaving(false)
     }
   }
@@ -211,20 +220,28 @@ const { error } = await supabase
 
       if (error) throw error
 
-      setPayers(payers.map(p =>
-        p.id === payerId ? { ...p, deleted_at: null, deleted_by: null } : p
-      ))
+setPayers(payers.map(p =>
+  p.id === payerId ? { ...p, deleted_at: null, deleted_by: null } : p
+))
 
-      showToast(`"${payer.name}" restored successfully`, 'success')
-      await genericAuditLog(supabase, 'payer.restored', {
-        targetType: 'payer',
-        targetId: payerId,
-        targetLabel: payer.name,
-        facilityId: effectiveFacilityId,
-      })
-    } catch (error) {
-      console.error('Error restoring payer:', error)
-    } finally {
+showToast({
+  type: 'success',
+  title: 'Payer Restored',
+  message: `"${payer.name}" has been restored successfully`
+})
+await genericAuditLog(supabase, 'payer.restored', {
+  targetType: 'payer',
+  targetId: payerId,
+  targetLabel: payer.name,
+  facilityId: effectiveFacilityId,
+})
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Restoring Payer',
+    message: error instanceof Error ? error.message : 'Failed to restore payer'
+  })
+} finally {
       setSaving(false)
     }
   }
@@ -461,23 +478,6 @@ const { error } = await supabase
               </button>
             </div>
           </div>
-        </div>
-      )}
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
         </div>
       )}
     </DashboardLayout>

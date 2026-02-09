@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit, procedureAudit, genericAuditLog } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -47,7 +48,7 @@ type SubTab = 'pricing' | 'payers'
 
 export default function FinancialsSettingsPage() {
   const supabase = createClient()
-  
+  const { showToast } = useToast()
   // Core state
   const [activeTab, setActiveTab] = useState<SubTab>('pricing')
   const [loading, setLoading] = useState(true)
@@ -200,13 +201,21 @@ export default function FinancialsSettingsPage() {
       .single()
 
     if (error) {
-      console.error('Error updating OR rate:', error)
+      showToast({
+        type: 'error',
+        title: 'Error updating OR rate',
+        message: error instanceof Error ? error.message : 'Error updating OR rate'
+      })
       setSaving(false)
       return
     }
 
     if (!data) {
-      console.error('Update returned no data - RLS may be blocking')
+      showToast({
+        type: 'error',
+        title: 'Error updating OR rate',
+        message: 'Update returned no data - RLS may be blocking'
+      })
       setSaving(false)
       return
     }
@@ -316,7 +325,11 @@ export default function FinancialsSettingsPage() {
       .eq('id', selectedProcedure.id)
 
     if (procedureError) {
-      console.error('Error updating procedure costs:', procedureError)
+      showToast({
+  type: 'error',
+  title: 'Error updating procedure costs:',
+  message: `Error updating procedure costs: ${procedureError}`
+})
       setSaving(false)
       return
     }

@@ -11,6 +11,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface CostCategory {
   id: string
@@ -37,7 +38,7 @@ interface DeleteModalState {
 export default function CostCategoriesPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading, isGlobalAdmin } = useUser()
-
+  const { showToast } = useToast() 
   const [categories, setCategories] = useState<CostCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -58,7 +59,6 @@ export default function CostCategoriesPage() {
 
   // Show/hide recently deleted section
   const [showDeleted, setShowDeleted] = useState(false)
-const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [deleteModalState, setDeleteModalState] = useState<DeleteModalState>({
     isOpen: false,
@@ -76,10 +76,7 @@ const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' 
     getCurrentUser()
   }, [])
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
+ 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchCategories()
@@ -88,16 +85,15 @@ const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' 
     }
   }, [userLoading, effectiveFacilityId])
 
-  const fetchCategories = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
+const fetchCategories = async () => {
+  if (!effectiveFacilityId) return
+  setLoading(true)
 
-    // Calculate 30 days ago for filtering deleted items in UI
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-    const { data, error } = await supabase
-      .from('cost_categories')
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  
+  const { data, error } = await supabase
+    .from('cost_categories')
       .select('*')
       .eq('facility_id', effectiveFacilityId)
       .or(`deleted_at.is.null,deleted_at.gte.${thirtyDaysAgo.toISOString()}`)
@@ -105,7 +101,13 @@ const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' 
       .order('display_order')
 
     if (data) setCategories(data)
-    if (error) console.error('Error fetching categories:', error)
+if (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Loading Categories',
+    message: error instanceof Error ? error.message : 'Failed to load cost categories'
+  })
+}
     setLoading(false)
   }
 
@@ -121,16 +123,26 @@ const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' 
       if (error) throw error
 
       await fetchCategories()
-      
+      showToast({
+  type: 'success',
+  title: 'Defaults Copied',
+  message: 'Default categories have been copied successfully'
+})
       await genericAuditLog(supabase, 'cost_category.copied_defaults', {
         targetType: 'facility',
         targetId: effectiveFacilityId,
         targetLabel: 'Cost Categories',
         facilityId: effectiveFacilityId,
       })
-    } catch (error) {
-      console.error('Error copying defaults:', error)
-    } finally {
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Copying Defaults',
+    message: error instanceof Error ? error.message : 'Failed to copy default categories'
+  })
+
+    } 
+    finally {
       setSaving(false)
     }
   }
@@ -226,7 +238,11 @@ const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' 
 
       closeModal()
     } catch (error) {
-      console.error('Error saving category:', error)
+      showToast({
+  type: 'error',
+  title: 'Error saving category:',
+  message: error instanceof Error ? error.message : 'Error saving category:'
+})
     } finally {
       setSaving(false)
     }
@@ -325,7 +341,11 @@ const openDeleteModal = async (category: CostCategory) => {
           : c
       ))
 
-      showToast(`"${category.name}" moved to archive`, 'success')
+      showToast({
+        type: 'success',
+        title: 'Category Archived',
+        message: `"${category.name}" has been moved to archive`
+      })
 
       await genericAuditLog(supabase, 'cost_category.deleted', {
         targetType: 'cost_category',
@@ -337,7 +357,11 @@ const openDeleteModal = async (category: CostCategory) => {
       closeDeleteModal()
     } catch (error) {
       console.error('Error archiving category:', error)
-      showToast('Failed to archive category', 'error')
+      showToast({
+        type: 'error',
+        title: 'Failed to Archive Category',
+        message: error instanceof Error ? error.message : 'Failed to archive category'
+      })
     } finally {
       setSaving(false)
     }
@@ -360,8 +384,11 @@ const handleRestore = async (category: CostCategory) => {
         c.id === category.id ? { ...c, deleted_at: null, deleted_by: null } : c
       ))
 
-      showToast(`"${category.name}" restored successfully`, 'success')
-
+showToast({
+  type: 'success',
+  title: 'Category Restored',
+  message: `"${category.name}" has been restored successfully`
+})
       await genericAuditLog(supabase, 'cost_category.restored', {
         targetType: 'cost_category',
         targetId: category.id,
@@ -370,7 +397,11 @@ const handleRestore = async (category: CostCategory) => {
       })
     } catch (error) {
       console.error('Error restoring category:', error)
-      showToast('Failed to restore category', 'error')
+      showToast({
+        type: 'error',
+        title: 'Failed to Restore Category',
+        message: error instanceof Error ? error.message : 'Failed to restore category'
+      })
     } finally {
       setSaving(false)
     }
@@ -807,23 +838,6 @@ const handleRestore = async (category: CostCategory) => {
               </button>
             </div>
           </div>
-        </div>
-      )}
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
         </div>
       )}
     </DashboardLayout>
