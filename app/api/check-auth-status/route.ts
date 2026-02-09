@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // This endpoint checks which user IDs have corresponding auth.users records
 // We check by matching emails since staff-only users have UUIDs not in auth.users
 // Used to determine account status (active vs no_account)
-
+const { showToast } = useToast()
 export async function POST(request: Request) {
   try {
     const { userIds } = await request.json()
@@ -27,7 +28,11 @@ export async function POST(request: Request) {
       .in('id', userIds)
 
     if (usersError) {
-      console.error('Error fetching users:', usersError)
+      showToast({
+  type: 'error',
+  title: 'Error fetching users:',
+  message: `Error fetching users: ${usersError}`
+})
       return NextResponse.json({ authUserIds: [] })
     }
 
@@ -44,7 +49,11 @@ export async function POST(request: Request) {
     })
 
     if (authError) {
-      console.error('Error fetching auth users:', authError)
+      showToast({
+  type: 'error',
+  title: 'Error fetching auth users:',
+  message: `Error fetching auth users: ${authError}`
+})
       return NextResponse.json({ authUserIds: [] })
     }
 
@@ -59,7 +68,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ authUserIds })
 
   } catch (error) {
-    console.error('Error in check-auth-status:', error)
+    showToast({
+  type: 'error',
+  title: 'Error in check-auth-status:',
+  message: error instanceof Error ? error.message : 'Error in check-auth-status:'
+})
     return NextResponse.json({ authUserIds: [] })
   }
 }

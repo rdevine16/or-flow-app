@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 // =============================================================================
@@ -175,11 +176,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ files, stats: buildStats(files) })
-  } catch (error: any) {
-    console.error('[scan-pages] GET error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+  return NextResponse.json({ files, stats: buildStats(files) })
+} catch (error: any) {
+  console.error('[scan-pages] GET error:', error instanceof Error ? error.message : error)
+  return NextResponse.json({ error: error.message }, { status: 500 })
+}
 }
 
 /** Root-level config/infra files to discover */
@@ -204,7 +205,7 @@ function buildStats(files: DiscoveredFile[]) {
 // =============================================================================
 // POST — Scan a specific file
 // =============================================================================
-
+const { showToast } = useToast()
 export async function POST(req: NextRequest) {
   if (!(await verifyGlobalAdmin(req))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
@@ -247,7 +248,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ metadata })
   } catch (error: any) {
-    console.error('[scan-pages] POST error:', error)
+    showToast({
+  type: 'error',
+  title: '[scan-pages] POST error:',
+  message: error instanceof Error ? error.message : '[scan-pages] POST error:'
+})
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

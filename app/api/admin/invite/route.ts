@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js'
 import { sendUserInviteEmail } from '@/lib/email'
 import crypto from 'crypto'
 
+
 // Create admin client for server-side operations
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -136,7 +137,6 @@ export async function POST(request: NextRequest) {
     // Generate invite token (like device rep flow)
     const inviteToken = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
-
     // Create invite record in user_invites table
     // Include existing_user_id if this is an upgrade for an existing staff member
     const { data: invite, error: inviteError } = await supabaseAdmin
@@ -156,13 +156,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (inviteError) {
-      console.error('Failed to create invite:', inviteError)
-      return NextResponse.json(
-        { success: false, error: 'Failed to create invite record' },
-        { status: 500 }
-      )
-    }
+if (inviteError) {
+  return NextResponse.json(
+    { success: false, error: 'Failed to create invite record' },
+    { status: 500 }
+  )
+}
 
     // Send invite email via Resend (using lib/email.ts)
     const emailResult = await sendUserInviteEmail(
@@ -174,17 +173,16 @@ export async function POST(request: NextRequest) {
       accessLevel
     )
 
-    if (!emailResult.success) {
-      console.error('Failed to send invite email:', emailResult.error)
-      // Don't fail the whole request - invite is created, they can resend
-      // But do let the caller know
-      return NextResponse.json({
-        success: true,
-        message: `Invite created but email failed to send. You can resend the invite.`,
-        inviteId: invite.id,
-        emailError: emailResult.error,
-      })
-    }
+if (!emailResult.success) {
+  // Don't fail the whole request - invite is created, they can resend
+  // But do let the caller know
+  return NextResponse.json({
+    success: true,
+    message: `Invite created but email failed to send. You can resend the invite.`,
+    inviteId: invite.id,
+    emailError: emailResult.error,
+  })
+}
 
     return NextResponse.json({
       success: true,
@@ -192,11 +190,10 @@ export async function POST(request: NextRequest) {
       inviteId: invite.id,
     })
 
-  } catch (error) {
-    console.error('Invite error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Failed to send invite' },
-      { status: 500 }
-    )
-  }
+} catch (error) {
+  return NextResponse.json(
+    { success: false, error: 'Failed to send invite' },
+    { status: 500 }
+  )
+}
 }

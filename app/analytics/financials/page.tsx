@@ -10,6 +10,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // Local components
 import { 
@@ -46,7 +47,7 @@ export default function FinancialsAnalyticsPage() {
   const [dateRange, setDateRange] = useState('mtd')
   const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
-
+  const { showToast } = useToast()
   // Calculate metrics using custom hook
   const metrics = useFinancialsMetrics(
     caseStats, 
@@ -155,16 +156,28 @@ export default function FinancialsAnalyticsPage() {
           .eq('facility_id', effectiveFacilityId),
       ])
 
-      // Handle errors
-      if (caseStatsRes.error) {
-        console.error('Error fetching case stats:', caseStatsRes.error)
-      }
-      if (surgeonStatsRes.error) {
-        console.error('Error fetching surgeon stats:', surgeonStatsRes.error)
-      }
-      if (facilityStatsRes.error) {
-        console.error('Error fetching facility stats:', facilityStatsRes.error)
-      }
+// Handle errors
+if (caseStatsRes.error) {
+  showToast({
+    type: 'error',
+    title: 'Error fetching case stats',
+    message: caseStatsRes.error.message  // ← Just .message, no instanceof!
+  })
+}
+if (surgeonStatsRes.error) {
+  showToast({
+    type: 'error',
+    title: 'Error fetching surgeon stats',
+    message: surgeonStatsRes.error.message
+  })
+}
+if (facilityStatsRes.error) {
+  showToast({
+    type: 'error',
+    title: 'Error fetching facility stats',
+    message: facilityStatsRes.error.message
+  })
+}
 
       // Build lookup maps from separately-fetched reference tables
       const procedureMap = new Map<string, { id: string; name: string }>()
@@ -202,7 +215,11 @@ export default function FinancialsAnalyticsPage() {
       setFacilityProcedureStats((facilityStatsRes.data as FacilityProcedureStats[]) || [])
       setFacilitySettings(facilityRes.data as FacilitySettings)
     } catch (error) {
-      console.error('Error fetching financial data:', error)
+      showToast({
+  type: 'error',
+  title: 'Error fetching facility stats:',
+  message: error instanceof Error ? error.message : 'Error fetching facility stats:'
+})
     }
     
     setLoading(false)

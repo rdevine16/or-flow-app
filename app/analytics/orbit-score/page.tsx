@@ -6,6 +6,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 import {
   calculateORbitScores,
   computeComposite,
@@ -24,7 +26,7 @@ import {
 } from '@/lib/orbitScoreEngine'
 
 // ─── DATA FETCHING ────────────────────────────────────────────
-
+const { showToast } = useToast()
 async function fetchScorecardData(
   supabase: any,
   facilityId: string,
@@ -56,7 +58,11 @@ async function fetchScorecardData(
     .lte('scheduled_date', endDate)
 
   if (casesError) {
-    console.error('Error fetching cases:', casesError)
+    showToast({
+  type: 'error',
+  title: 'Error fetching cases:',
+  message: `Error fetching cases: ${casesError}`
+})
     return null
   }
 
@@ -665,7 +671,11 @@ export default function ORbitScorePage() {
         Object.values(allSurgeonCases).filter(s => s.count < MIN_CASE_THRESHOLD)
       )
     } catch (err) {
-      console.error('ORbit Score calculation error:', err)
+      showToast({
+  type: 'error',
+  title: 'ORbit Score calculation error:',
+  message: err instanceof Error ? err.message : 'ORbit Score calculation error:'
+})
       setError('Error calculating ORbit Scores')
     }
 
