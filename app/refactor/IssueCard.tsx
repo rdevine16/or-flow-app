@@ -118,13 +118,7 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
     setCopiedStep(stepNumber)
     setTimeout(() => setCopiedStep(null), 2000)
   }
-                      {/* Color Picker Section */}
-{issue.metadata?.requiresColorSelection && (
-  <ColorPickerSection 
-    issue={issue} 
-    onFixed={() => onMarkFixed()}
-  />
-)}
+
   // ========================================
   // NEW: Separate step-by-step from other warnings
   // ========================================
@@ -268,7 +262,13 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
               </div>
             </div>
           )}
-
+                      {/* Color Picker Section */}
+{issue.metadata?.requiresColorSelection && (
+  <ColorPickerSection 
+    issue={issue} 
+    onFixed={() => onMarkFixed()}
+  />
+)}
           {/* Context */}
           {issue.context && (
             <div className="p-4 bg-slate-50 border-b border-slate-200">

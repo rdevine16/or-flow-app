@@ -483,8 +483,8 @@ function findHardcodedColors(
           isConditional,
           conditionVariable: conditionVar,
           currentColors: {
-            active: activeColor,
-            inactive: inactiveColor || null
+          active: activeColor,
+          inactive: inactiveColor || null
           },
           suggestedColors: {
             active: activeSuggestions,
