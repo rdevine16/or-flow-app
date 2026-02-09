@@ -262,13 +262,15 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
               </div>
             </div>
           )}
-                      {/* Color Picker Section */}
-{issue.metadata?.requiresColorSelection && (
-  <ColorPickerSection 
-    issue={issue} 
-    onFixed={() => onMarkFixed()}
-  />
-)}
+          {/* ========================================
+              COLOR PICKER SECTION
+              ======================================== */}
+          {issue.metadata?.requiresColorSelection && (
+            <ColorPickerSection 
+              issue={issue} 
+              onFixed={() => onMarkFixed()}
+            />
+          )}
           {/* Context */}
           {issue.context && (
             <div className="p-4 bg-slate-50 border-b border-slate-200">

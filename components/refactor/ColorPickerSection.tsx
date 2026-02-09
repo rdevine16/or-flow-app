@@ -123,7 +123,7 @@ export function ColorPickerSection({ issue, onFixed }: ColorPickerSectionProps) 
                     Aa
                   </span>
                 </div>
-                <span className="text-xs truncate w-full text-center">
+<span className="text-xs truncate w-full text-center text-slate-900 font-medium">
                   {color.displayName}
                 </span>
               </button>
@@ -172,7 +172,7 @@ export function ColorPickerSection({ issue, onFixed }: ColorPickerSectionProps) 
                       Aa
                     </span>
                   </div>
-                  <span className="text-xs truncate w-full text-center">
+<span className="text-xs truncate w-full text-center text-slate-900 font-medium">
                     {color.displayName}
                   </span>
                 </button>
