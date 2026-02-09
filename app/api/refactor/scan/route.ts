@@ -76,6 +76,11 @@ async function scanFile(
   const lines = content.split('\n')
   const relativePath = path.relative(projectRoot, filePath)
 
+  // ✅ Skip scanning the scanner itself!
+  if (relativePath.includes('api/refactor/scan/route.ts')) {
+    return
+  }
+
   // Pattern 1: console.log → Toast
   findConsoleLogs(relativePath, lines, issues)
 
