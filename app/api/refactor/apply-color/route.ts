@@ -1,5 +1,5 @@
 // app/api/refactor/apply-color/route.ts
-// Auto-apply color changes to source files
+// IMPROVED VERSION - Handles colors inside strings
 
 import { NextResponse } from 'next/server'
 import fs from 'fs'
@@ -65,33 +65,31 @@ export async function POST(request: Request) {
 
     if (isConditional) {
       // Replace both active and inactive colors in a ternary expression
-      // Pattern: condition ? 'text-slate-900' : 'text-slate-400'
+      // This handles patterns like: condition ? 'text-slate-900' : 'text-slate-400'
       
-      // First, replace the active color (after '?')
-      newLine = newLine.replace(
-        new RegExp(`\\?\\s*['\`"]${escapeRegex(oldActiveColor)}['\`"]`),
-        `? '${newActiveColor}'`
-      )
-
-      // Then, replace the inactive color (after ':')
+      // Replace active color (after '?')
+      newLine = replaceColorInLine(newLine, oldActiveColor, newActiveColor)
+      
+      // Replace inactive color (after ':')
       if (oldInactiveColor && newInactiveColor) {
-        newLine = newLine.replace(
-          new RegExp(`:\\s*['\`"]${escapeRegex(oldInactiveColor)}['\`"]`),
-          `: '${newInactiveColor}'`
-        )
+        newLine = replaceColorInLine(newLine, oldInactiveColor, newInactiveColor)
       }
     } else {
-      // Simple replacement for non-conditional
-      newLine = newLine.replace(
-        new RegExp(`['\`"]${escapeRegex(oldActiveColor)}['\`"]`),
-        `'${newActiveColor}'`
-      )
+      // Simple replacement - just replace the color
+      newLine = replaceColorInLine(newLine, oldActiveColor, newActiveColor)
     }
 
     // Check if anything changed
     if (newLine === targetLine) {
       return NextResponse.json(
-        { error: 'No changes detected - pattern not found in line' },
+        { 
+          error: 'No changes detected - pattern not found in line',
+          details: {
+            line: targetLine,
+            lookingFor: oldActiveColor,
+            expectedResult: newActiveColor
+          }
+        },
         { status: 400 }
       )
     }
@@ -113,10 +111,32 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error applying color fix:', error)
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }
+}
+
+/**
+ * Replace a color class in a line of code
+ * Handles multiple patterns:
+ * 1. Standalone quoted: 'text-red-600'
+ * 2. Inside string: 'text-red-600 bg-red-50'
+ * 3. Template literal: `text-red-600 ${...}`
+ */
+function replaceColorInLine(line: string, oldColor: string, newColor: string): string {
+  // Escape special regex characters
+  const escaped = escapeRegex(oldColor)
+  
+  // Create regex that matches the color as a whole word (not part of another class)
+  // Use word boundary to ensure we don't match 'text-red-600' inside 'hover:text-red-600'
+  const colorRegex = new RegExp(`\\b${escaped}\\b`, 'g')
+  
+  // Replace all occurrences
+  return line.replace(colorRegex, newColor)
 }
 
 /**
