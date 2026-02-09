@@ -34,6 +34,7 @@ export interface PillarDiagnostics {
       surgeonMedianMPM: number
       cohortMedian: number
       cohortMAD: number
+      effectiveMAD: number
       cohortSize: number
       validCases: number
       totalCases: number
@@ -50,6 +51,7 @@ export interface PillarDiagnostics {
       surgeonCV: number
       cohortMedian: number
       cohortMAD: number
+      effectiveMAD: number
       cohortSize: number
       validCases: number
       rawScore: number
@@ -239,15 +241,30 @@ function mad(arr: number[]): number {
 }
 
 /**
- * Median-anchored MAD scoring.
+ * Minimum MAD as percentage of cohort median.
+ * Prevents hyper-sensitivity when cohort values cluster tightly.
+ * 5% means: if median is $20/min, effective MAD is at least $1.00.
+ * A surgeon $0.50 below median scores 50 - (0.5/1.0)*25 = 37 (slightly below average)
+ * instead of 50 - (0.5/0.12)*25 = -54 → clamped to 0 (catastrophic).
+ */
+const MIN_MAD_PERCENT = 0.05
+
+/**
+ * Median-anchored MAD scoring with minimum MAD floor.
  *
  * Maps a value to 0-100 based on its position relative to the cohort:
  *   - At median = 50
- *   - 1 MAD above = 75 (if higherIsBetter) or 25 (if lowerIsBetter)
- *   - 2 MAD above = 100 or 0
+ *   - 1 effective MAD above = 75 (if higherIsBetter) or 25 (if lowerIsBetter)
+ *   - 2 effective MAD above = 100 or 0
  *
- * When MAD is 0 (all values identical or tiny cohort), falls back to
- * range-based interpolation: position within min-max range.
+ * Effective MAD = max(actualMAD, |cohortMedian| * MIN_MAD_PERCENT)
+ * This prevents tiny MAD from amplifying noise in tightly-clustered cohorts.
+ *
+ * Fallbacks:
+ *   - 0 peers → 50 (no data)
+ *   - 1 peer → ratio-based scaling from 50
+ *   - MAD=0 and range=0 → 50 (identical values)
+ *   - MAD=0 but range>0 → range interpolation
  */
 function madScore(
   value: number,
@@ -257,7 +274,6 @@ function madScore(
   if (cohortValues.length === 0) return 50
   if (cohortValues.length === 1) {
     // Solo: compare against the single value
-    // If equal, 50. Otherwise scale by ratio.
     const peer = cohortValues[0]
     if (peer === 0) return 50
     const ratio = value / peer
@@ -269,29 +285,30 @@ function madScore(
   }
 
   const cohortMed = median(cohortValues)
-  const cohortMAD = mad(cohortValues)
+  const actualMAD = mad(cohortValues)
 
-  if (cohortMAD === 0) {
-    // All peers have the same value (or very close) — use range interpolation
+  // Apply minimum MAD floor: at least 5% of the absolute cohort median
+  const madFloor = Math.abs(cohortMed) * MIN_MAD_PERCENT
+  const effectiveMAD = Math.max(actualMAD, madFloor)
+
+  if (effectiveMAD === 0) {
+    // Cohort median is 0 and MAD is 0 — try range interpolation
     const min = Math.min(...cohortValues)
     const max = Math.max(...cohortValues)
-    if (max === min) {
-      // Truly identical — surgeon matches peers exactly
-      return 50
-    }
-    const position = (value - min) / (max - min) // 0 to 1
+    if (max === min) return 50
+    const position = (value - min) / (max - min)
     return clamp(Math.round(higherIsBetter ? position * 100 : (1 - position) * 100), 0, 100)
   }
 
-  // Standard MAD scoring: 50 ± distance/MAD * 25
+  // MAD scoring: 50 ± distance/effectiveMAD * 25
   const distance = value - cohortMed
-  const normalizedDistance = distance / cohortMAD
+  const normalizedDistance = distance / effectiveMAD
 
   let score: number
   if (higherIsBetter) {
     score = 50 + normalizedDistance * 25
   } else {
-    score = 50 - normalizedDistance * 25 // lower value = higher score
+    score = 50 - normalizedDistance * 25
   }
 
   return clamp(Math.round(score), 0, 100)
@@ -367,6 +384,7 @@ interface ProfitabilityDiag {
     surgeonMedianMPM: number
     cohortMedian: number
     cohortMAD: number
+    effectiveMAD: number
     cohortSize: number
     validCases: number
     totalCases: number
@@ -420,6 +438,7 @@ function calculateProfitability(
           surgeonMedianMPM: 0,
           cohortMedian: 0,
           cohortMAD: 0,
+          effectiveMAD: 0,
           cohortSize: 0,
           validCases: surgeonMPMs.length,
           totalCases: cases.length,
@@ -441,12 +460,16 @@ function calculateProfitability(
     scores.push({ score, volume: surgeonMPMs.length })
 
     if (diag) {
+      const peerMed = median(peerMPMs)
+      const peerActualMAD = mad(peerMPMs)
+      const peerEffMAD = Math.max(peerActualMAD, Math.abs(peerMed) * MIN_MAD_PERCENT)
       diag.procedureCohorts.push({
         procedureId: procId,
         procedureName: procName,
         surgeonMedianMPM: Math.round(surgeonMedianMPM * 100) / 100,
         cohortMedian: Math.round(median(peerMPMs) * 100) / 100,
-        cohortMAD: Math.round(mad(peerMPMs) * 100) / 100,
+        cohortMAD: Math.round(peerActualMAD * 100) / 100,
+        effectiveMAD: Math.round(peerEffMAD * 100) / 100,
         cohortSize: peerMPMs.length,
         validCases: surgeonMPMs.length,
         totalCases: cases.length,
@@ -513,6 +536,7 @@ interface ConsistencyDiag {
     surgeonCV: number
     cohortMedian: number
     cohortMAD: number
+    effectiveMAD: number
     cohortSize: number
     validCases: number
     rawScore: number
@@ -545,6 +569,7 @@ function calculateConsistency(
           surgeonCV: 0,
           cohortMedian: 0,
           cohortMAD: 0,
+          effectiveMAD: 0,
           cohortSize: 0,
           validCases: durations.length,
           rawScore: 0,
@@ -562,12 +587,16 @@ function calculateConsistency(
     scores.push({ score, volume: durations.length })
 
     if (diag) {
+      const peerMed = median(peerCVs)
+      const peerActualMAD = mad(peerCVs)
+      const peerEffMAD = Math.max(peerActualMAD, Math.abs(peerMed) * MIN_MAD_PERCENT)
       diag.procedureCohorts.push({
         procedureId: procId,
         procedureName: procName,
         surgeonCV: Math.round(surgeonCV * 1000) / 1000,
-        cohortMedian: Math.round(median(peerCVs) * 1000) / 1000,
-        cohortMAD: Math.round(mad(peerCVs) * 1000) / 1000,
+        cohortMedian: Math.round(peerMed * 1000) / 1000,
+        cohortMAD: Math.round(peerActualMAD * 1000) / 1000,
+        effectiveMAD: Math.round(peerEffMAD * 1000) / 1000,
         cohortSize: peerCVs.length,
         validCases: durations.length,
         rawScore: score,
