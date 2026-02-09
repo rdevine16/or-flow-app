@@ -463,7 +463,24 @@ export default function ORbitScorePage() {
         previousPeriodCases: prevData?.cases || [],
         previousPeriodFinancials: prevData?.financials || [],
         previousPeriodFlags: prevData?.flags || [],
+        enableDiagnostics: true,
       })
+
+      // Log diagnostics for debugging
+      if (results.length > 0) {
+        console.group('🔬 ORbit Score Diagnostics')
+        for (const sc of results) {
+          console.group(`${sc.surgeonName} — Composite: ${sc.composite} (${sc.grade.letter})`)
+          if (sc.diagnostics) {
+            console.log('Profitability:', sc.diagnostics.profitability)
+            console.log('Consistency:', sc.diagnostics.consistency)
+            console.log('Schedule Adherence:', sc.diagnostics.schedAdherence)
+            console.log('Availability:', sc.diagnostics.availability)
+          }
+          console.groupEnd()
+        }
+        console.groupEnd()
+      }
 
       setScorecards(results)
 
