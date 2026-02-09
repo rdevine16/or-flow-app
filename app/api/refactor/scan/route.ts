@@ -257,11 +257,13 @@ function parseConsoleArgs(args: string, isInCatchBlock: boolean): { message: str
       hasErrorVar: true
     }
   } else {
-    // Not in catch block - assume it's an Error object
+    // Not in catch block - still use type guard for safety
+    const stringPart = args.split(',')[0].replace(/['"]/g, '')
+    const errorVarMatch = args.match(/\b(error|err|e)\b/)
+    const errorVar = errorVarMatch ? errorVarMatch[1] : 'error'
+    
     return {
-      message: args.includes(',') 
-        ? `\`${args.split(',')[0].replace(/['"]/g, '')}: \${error.message || error}\``
-        : `error.message || 'An error occurred'`,
+      message: `${errorVar} instanceof Error ? ${errorVar}.message : '${stringPart}'`,
       hasErrorVar: true
     }
   }

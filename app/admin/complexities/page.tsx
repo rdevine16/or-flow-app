@@ -150,7 +150,12 @@ const { data, error } = await supabase
       setShowModal(false)
     } catch (error) {
       console.error('Error:', error)
-      alert('Error saving')
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      showToast({
+        type: 'error',
+        title: 'Error saving complexity',
+        message: `Error saving complexity: ${errorMessage}`
+      })
     } finally {
       setSaving(false)
     }
@@ -164,7 +169,12 @@ const { data, error } = await supabase
       setComplexities(complexities.filter(c => c.id !== id))
       setDeleteConfirm(null)
     } catch (error) {
-      console.error('Error:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      showToast({
+  type: 'error',
+  title: 'Error:',
+  message: `Error: ${errorMessage}`
+})
       alert('Error deleting')
     } finally {
       setSaving(false)

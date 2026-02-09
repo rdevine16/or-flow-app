@@ -428,7 +428,11 @@ export default function ChecklistTemplatesPage() {
       const { data, error } = await query
 
       if (error) {
-        console.error('Error fetching templates:', error)
+        showToast({
+  type: 'error',
+  title: 'Error fetching templates:',
+  message: `Error fetching templates:: ${error.message || error}`
+})
       } else {
         setFields(data || [])
       }
@@ -482,7 +486,11 @@ if (error) {
         .eq('id', editingField.id)
 
       if (error) {
-        console.error('Error updating template:', error)
+        showToast({
+  type: 'error',
+  title: 'Error updating template:',
+  message: `Error updating template:: ${error.message || error}`
+})
       } else {
         setFields(prev =>
           prev.map(f =>
