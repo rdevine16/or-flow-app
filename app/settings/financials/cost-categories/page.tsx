@@ -237,12 +237,12 @@ if (error) {
       }
 
       closeModal()
-    } catch (error) {
-      showToast({
-  type: 'error',
-  title: 'Error saving category:',
-  message: error instanceof Error ? error.message : 'Error saving category:'
-})
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Saving Category',
+    message: error instanceof Error ? error.message : 'Failed to save category'
+  })
     } finally {
       setSaving(false)
     }
@@ -270,8 +270,12 @@ if (error) {
         targetLabel: category.name,
         facilityId: effectiveFacilityId,
       })
-    } catch (error) {
-      console.error('Error toggling category:', error)
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Toggling Category',
+    message: error instanceof Error ? error.message : 'Failed to toggle category status'
+  })
     } finally {
       setSaving(false)
     }
@@ -354,14 +358,13 @@ const openDeleteModal = async (category: CostCategory) => {
         facilityId: effectiveFacilityId,
       })
 
-      closeDeleteModal()
-    } catch (error) {
-      console.error('Error archiving category:', error)
-      showToast({
-        type: 'error',
-        title: 'Failed to Archive Category',
-        message: error instanceof Error ? error.message : 'Failed to archive category'
-      })
+closeDeleteModal()
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Failed to Archive Category',
+    message: error instanceof Error ? error.message : 'Failed to archive category'
+  })
     } finally {
       setSaving(false)
     }
@@ -389,20 +392,19 @@ showToast({
   title: 'Category Restored',
   message: `"${category.name}" has been restored successfully`
 })
-      await genericAuditLog(supabase, 'cost_category.restored', {
-        targetType: 'cost_category',
-        targetId: category.id,
-        targetLabel: category.name,
-        facilityId: effectiveFacilityId,
-      })
-    } catch (error) {
-      console.error('Error restoring category:', error)
-      showToast({
-        type: 'error',
-        title: 'Failed to Restore Category',
-        message: error instanceof Error ? error.message : 'Failed to restore category'
-      })
-    } finally {
+await genericAuditLog(supabase, 'cost_category.restored', {
+  targetType: 'cost_category',
+  targetId: category.id,
+  targetLabel: category.name,
+  facilityId: effectiveFacilityId,
+})
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Failed to Restore Category',
+    message: error instanceof Error ? error.message : 'Failed to restore category'
+  })
+} finally {
       setSaving(false)
     }
   }

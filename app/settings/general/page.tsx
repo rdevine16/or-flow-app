@@ -10,6 +10,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -177,7 +178,7 @@ const icons = {
 export default function GeneralOverviewPage() {
   const supabase = createClient()
   const { effectiveFacilityId, isFacilityAdmin, isGlobalAdmin, loading: userLoading } = useUser()
-
+  const { showToast } = useToast() 
   // State
   const [facility, setFacility] = useState<Facility | null>(null)
   const [stats, setStats] = useState<FacilityStats | null>(null)
@@ -185,7 +186,6 @@ export default function GeneralOverviewPage() {
   const [saving, setSaving] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -259,8 +259,11 @@ export default function GeneralOverviewPage() {
         casesThisMonth: casesThisMonthRes.count || 0,
       })
     } catch (error) {
-      console.error('Error fetching data:', error)
-      showToast('Failed to load facility data', 'error')
+      showToast({
+        type: 'error',
+        title: 'Failed to load facility data',
+        message: error instanceof Error ? error.message : 'Failed to load facility data'
+      })
     } finally {
       setLoading(false)
     }
@@ -278,10 +281,6 @@ export default function GeneralOverviewPage() {
   // HANDLERS
   // =====================================================
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 
   const handleSave = async () => {
     if (!facility || !effectiveFacilityId) return
@@ -335,12 +334,19 @@ export default function GeneralOverviewPage() {
         updated_at: new Date().toISOString(),
       })
 
-      setEditMode(false)
-      showToast('Facility details updated', 'success')
-    } catch (error) {
-      console.error('Error saving:', error)
-      showToast('Failed to save changes', 'error')
-    } finally {
+setEditMode(false)
+showToast({
+  type: 'success',
+  title: 'Facility Updated',
+  message: 'Facility details have been updated successfully'
+})
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error Saving Changes',
+    message: error instanceof Error ? error.message : 'Failed to save changes'
+  })
+} finally {
       setSaving(false)
     }
   }
@@ -716,24 +722,6 @@ export default function GeneralOverviewPage() {
           )}
         </SettingsLayout>
       </Container>
-
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg ${
-            toast.type === 'success' 
-              ? 'bg-emerald-600 text-white' 
-              : 'bg-red-600 text-white'
-          }`}>
-            {toast.type === 'success' ? icons.check : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-            <span className="font-medium">{toast.message}</span>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   )
 }

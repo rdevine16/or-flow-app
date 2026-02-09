@@ -11,7 +11,9 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useProcedureTypes, usePayers } from '@/hooks'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
+const { showToast } = useToast()
 
 // Types
 interface CostCategory {
@@ -268,7 +270,11 @@ export default function ProcedurePricingPage() {
       await fetchData()
       closePanel()
     } catch (error) {
-      console.error('Error saving procedure pricing:', error)
+      showToast({
+  type: 'error',
+  title: 'Error saving procedure pricing:',
+  message: error instanceof Error ? error.message : 'Error saving procedure pricing:'
+})
     } finally {
       setSaving(false)
     }
@@ -297,7 +303,11 @@ export default function ProcedurePricingPage() {
         facilityId: effectiveFacilityId,
       })
     } catch (error) {
-      console.error('Error saving OR rate:', error)
+      showToast({
+        type: 'error',
+        title: 'Error saving OR rate:',
+        message: error instanceof Error ? error.message : 'Error saving OR rate:'
+      })
     } finally {
       setSaving(false)
     }

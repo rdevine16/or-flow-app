@@ -153,7 +153,11 @@ export default function PayersPage() {
 
       closeModal()
     } catch (error) {
-      console.error('Error saving payer:', error)
+      showToast({
+  type: 'error',
+  title: 'Error saving payer:',
+  message: error instanceof Error ? error.message : 'Error saving payer:'
+})
     } finally {
       setSaving(false)
     }

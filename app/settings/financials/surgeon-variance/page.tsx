@@ -15,7 +15,9 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import { genericAuditLog } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
+const { showToast } = useToast()
 interface Surgeon {
   id: string
   first_name: string
@@ -308,8 +310,11 @@ export default function SurgeonVariancePage() {
       await fetchData()
       closePanel()
     } catch (error) {
-      console.error('Error saving:', error)
-      alert('Error saving overrides')
+      showToast({
+        type: 'error',
+        title: 'Error saving overrides',
+        message: error instanceof Error ? error.message : 'Error saving overrides'
+      })
     } finally {
       setSaving(false)
     }
@@ -347,7 +352,11 @@ export default function SurgeonVariancePage() {
       await fetchData()
       setDeleteConfirm(null)
     } catch (error) {
-      console.error('Error deleting:', error)
+      showToast({
+  type: 'error',
+  title: 'Error deleting:',
+  message: error instanceof Error ? error.message : 'Error deleting:'
+})
     } finally {
       setSaving(false)
     }
