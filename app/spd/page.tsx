@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import SurgeonAvatar from '@/components/ui/SurgeonAvatar'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -472,7 +473,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
 export default function SPDDashboardPage() {
   const router = useRouter()
   const supabase = createClient()
-  
+  const { showToast } = useToast()
   // State
   const [cases, setCases] = useState<SPDCase[]>([])
   const [loading, setLoading] = useState(true)
@@ -554,7 +555,11 @@ export default function SPDDashboardPage() {
       .order('start_time', { ascending: true })
 
     if (error) {
-      console.error('Error fetching SPD cases:', error)
+      showToast({
+        type: 'error',
+        title: 'Error fetching SPD cases',
+        message: error instanceof Error ? error.message : 'Failed to fetch SPD cases'
+      })
     } else {
       setCases((data as unknown as SPDCase[]) || [])
     }
@@ -583,7 +588,11 @@ export default function SPDDashboardPage() {
       .limit(20)
 
     if (error) {
-      console.error('Error fetching activities:', error)
+      showToast({
+  type: 'error',
+  title: 'Error fetching activities:',
+  message: error instanceof Error ? error.message : 'Error fetching activities:'
+})
       setActivities([])
     } else {
       setActivities(data || [])
@@ -628,12 +637,16 @@ export default function SPDDashboardPage() {
   }
 
   // Handle remind rep (placeholder for now)
-  const handleRemindRep = async (caseId: string, companyId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent row click
-    // TODO: Implement push notification to rep
-    console.log('Remind rep for case:', caseId, 'company:', companyId)
-    alert('Reminder sent to device rep')
-  }
+const handleRemindRep = async (caseId: string, companyId: string, e: React.MouseEvent) => {
+  e.stopPropagation() // Prevent row click
+  
+  // TODO: Implement push notification to rep
+  showToast({
+    type: 'success',
+    title: 'Reminder Sent',
+    message: 'Device rep has been notified'
+  })
+}
 
   // =====================================================
   // RENDER

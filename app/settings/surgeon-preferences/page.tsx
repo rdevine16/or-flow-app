@@ -7,6 +7,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
 import { useSurgeons, useProcedureTypes, useImplantCompanies } from '@/hooks'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 
@@ -31,7 +32,7 @@ function getFirst<T>(arr: T[] | T | null | undefined): T | null {
 
 export default function SurgeonPreferencesPage() {
   const supabase = createClient()
-  
+  const { showToast } = useToast()
   // Use the context - this automatically handles impersonation!
   const { effectiveFacilityId, loading: userLoading } = useUser()
   
@@ -153,7 +154,11 @@ export default function SurgeonPreferencesPage() {
         .single()
 
       if (prefError || !prefData) {
-        console.error('Error creating preference:', prefError)
+        showToast({
+  type: 'error',
+  title: 'Error creating preference:',
+  message: `Error creating preference: ${prefError}`
+})
         setSaving(false)
         return
       }

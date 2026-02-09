@@ -9,6 +9,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -109,7 +110,7 @@ function SubscriptionSkeleton() {
 export default function SubscriptionPage() {
   const supabase = createClient()
   const { effectiveFacilityId, isGlobalAdmin, loading: userLoading } = useUser()
-
+  const { showToast } = useToast()
   const [stats, setStats] = useState<UsageStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -152,7 +153,11 @@ export default function SubscriptionPage() {
         storageUsedMB: 124, // Placeholder
       })
     } catch (error) {
-      console.error('Error fetching usage stats:', error)
+      showToast({
+        type: 'error',
+        title: 'Error Fetching Usage Stats',
+        message: error instanceof Error ? error.message : 'Failed to fetch usage statistics'
+      })
     } finally {
       setLoading(false)
     }

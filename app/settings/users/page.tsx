@@ -9,6 +9,7 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import Badge from '@/components/ui/Badge'
 import InviteUserModal from '@/components/InviteUserModal'
 import { userAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface User {
   id: string
@@ -67,7 +68,7 @@ export default function UsersSettingsPage() {
   const [sendingInvite, setSendingInvite] = useState<string | null>(null)
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set())
   const [authUserIds, setAuthUserIds] = useState<Set<string>>(new Set())
-  
+  const { showToast } = useToast()
   // NEW: Show archived users toggle
   const [showArchived, setShowArchived] = useState(false)
   
@@ -156,7 +157,11 @@ export default function UsersSettingsPage() {
         setPendingUserIds(new Set(data.pendingUserIds || []))
       }
     } catch (error) {
-      console.error('Error fetching pending status:', error)
+      showToast({
+        type: 'error',
+        title: 'Error fetching pending status',
+        message: error instanceof Error ? error.message : 'Failed to fetch pending status'
+      })
     }
   }
 
@@ -173,7 +178,11 @@ export default function UsersSettingsPage() {
         setAuthUserIds(new Set(data.authUserIds || []))
       }
     } catch (error) {
-      console.error('Error fetching auth status:', error)
+      showToast({
+        type: 'error',
+        title: 'Error fetching auth status',
+        message: error instanceof Error ? error.message : 'Failed to fetch auth status'
+      })
     }
   }
 
