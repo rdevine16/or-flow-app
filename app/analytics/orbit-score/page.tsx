@@ -379,7 +379,7 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
         </div>
         <div className="flex gap-3.5">
           {['A', 'B', 'C', 'D'].map((g) => {
-            const gr = getGrade(g === 'A' ? 95 : g === 'B' ? 85 : g === 'C' ? 75 : 55)
+            const gr = getGrade(g === 'A' ? 80 : g === 'B' ? 65 : g === 'C' ? 50 : 40)
             return (
               <div key={g} className="text-center">
                 <div className="text-lg font-extrabold font-mono leading-none" style={{ color: gr.text }}>
