@@ -33,13 +33,13 @@ export interface RefactorIssue {
   description: string
   beforeCode: string
   afterCode: string
-  context: string // Surrounding lines
+  context: string
   imports?: string[]
   warnings?: string[]
   metadata?: any
 }
 
-export default function RefactorDashboard() {
+export default function RefactorPage() {
   const [scanning, setScanning] = useState(false)
   const [issues, setIssues] = useState<RefactorIssue[]>([])
   const [fixedIssues, setFixedIssues] = useState<Set<string>>(new Set())
@@ -49,6 +49,12 @@ export default function RefactorDashboard() {
     file?: string
     showFixed: boolean
   }>({ showFixed: false })
+
+  // ============================================
+  // NEW: Pagination State
+  // ============================================
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 50
 
   // Load fixed issues from localStorage
   useEffect(() => {
@@ -82,6 +88,7 @@ export default function RefactorDashboard() {
       })
       const data = await response.json()
       setIssues(data.issues || [])
+      setCurrentPage(1) // Reset to first page on new scan
     } catch (error) {
       console.error('Scan failed:', error)
       alert('Scan failed. See console for details.')
@@ -98,6 +105,14 @@ export default function RefactorDashboard() {
     if (filter.file && !issue.file.includes(filter.file)) return false
     return true
   })
+
+  // ============================================
+  // NEW: Pagination Logic
+  // ============================================
+  const totalPages = Math.ceil(filteredIssues.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentIssues = filteredIssues.slice(startIndex, endIndex)
 
   // Calculate stats
   const stats = {
@@ -221,16 +236,65 @@ export default function RefactorDashboard() {
                 stats={stats}
               />
 
+              {/* ============================================
+                  NEW: Pagination Controls (Top)
+                  ============================================ */}
+              {filteredIssues.length > itemsPerPage && (
+                <div className="bg-white rounded-lg p-4 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-slate-600">
+                      Showing {startIndex + 1}-{Math.min(endIndex, filteredIssues.length)} of {filteredIssues.length}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        First
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      
+                      <span className="text-sm text-slate-600 px-3">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Last
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Issues List */}
               <div className="space-y-4">
-                {filteredIssues.length === 0 ? (
+                {currentIssues.length === 0 ? (
                   <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-12 text-center">
                     <p className="text-slate-600">
                       No issues match your filters
                     </p>
                   </div>
                 ) : (
-                  filteredIssues.map(issue => (
+                  currentIssues.map(issue => (
                     <IssueCard
                       key={issue.id}
                       issue={issue}
@@ -241,6 +305,67 @@ export default function RefactorDashboard() {
                   ))
                 )}
               </div>
+
+              {/* ============================================
+                  NEW: Pagination Controls (Bottom)
+                  ============================================ */}
+              {filteredIssues.length > itemsPerPage && (
+                <div className="bg-white rounded-lg p-4 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-slate-600">
+                      Showing {startIndex + 1}-{Math.min(endIndex, filteredIssues.length)} of {filteredIssues.length}
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setCurrentPage(1)
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        First
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCurrentPage(p => Math.max(1, p - 1))
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      
+                      <span className="text-sm text-slate-600 px-3">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      
+                      <button
+                        onClick={() => {
+                          setCurrentPage(p => Math.min(totalPages, p + 1))
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCurrentPage(totalPages)
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                        }}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 text-sm border border-slate-300 rounded hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Last
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
