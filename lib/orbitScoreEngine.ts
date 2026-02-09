@@ -244,21 +244,35 @@ function mad(arr: number[]): number {
  * Minimum MAD as percentage of cohort median.
  * Prevents hyper-sensitivity when cohort values cluster tightly.
  * 5% means: if median is $20/min, effective MAD is at least $1.00.
- * A surgeon $0.50 below median scores 50 - (0.5/1.0)*25 = 37 (slightly below average)
- * instead of 50 - (0.5/0.12)*25 = -54 → clamped to 0 (catastrophic).
  */
 const MIN_MAD_PERCENT = 0.05
+
+/** Minimum pillar score — prevents mathematically unrecoverable composites */
+const MIN_PILLAR_SCORE = 10
+
+/**
+ * Scoring band: how many MADs from median = full range (0 or 100).
+ * 3 MAD = forgiving, appropriate for small ASC cohorts (5-15 surgeons).
+ *
+ *   1 MAD from median → ~33 or ~67
+ *   2 MAD from median → ~17 or ~83
+ *   3 MAD from median →  10 or 100  (floored at MIN_PILLAR_SCORE)
+ */
+const MAD_BAND = 3
+const MAD_MULTIPLIER = 50 / MAD_BAND // ≈ 16.67 per MAD
 
 /**
  * Median-anchored MAD scoring with minimum MAD floor.
  *
  * Maps a value to 0-100 based on its position relative to the cohort:
  *   - At median = 50
- *   - 1 effective MAD above = 75 (if higherIsBetter) or 25 (if lowerIsBetter)
- *   - 2 effective MAD above = 100 or 0
+ *   - 1 effective MAD above/below = 50 ± 16.67
+ *   - 3 effective MAD = 10 or 100 (floored at MIN_PILLAR_SCORE)
  *
  * Effective MAD = max(actualMAD, |cohortMedian| * MIN_MAD_PERCENT)
  * This prevents tiny MAD from amplifying noise in tightly-clustered cohorts.
+ *
+ * All scores floored at MIN_PILLAR_SCORE (10) to keep composites recoverable.
  *
  * Fallbacks:
  *   - 0 peers → 50 (no data)
@@ -277,11 +291,13 @@ function madScore(
     const peer = cohortValues[0]
     if (peer === 0) return 50
     const ratio = value / peer
+    let score: number
     if (higherIsBetter) {
-      return clamp(50 + (ratio - 1) * 100, 0, 100)
+      score = 50 + (ratio - 1) * 100
     } else {
-      return clamp(50 - (ratio - 1) * 100, 0, 100)
+      score = 50 - (ratio - 1) * 100
     }
+    return clamp(Math.round(score), MIN_PILLAR_SCORE, 100)
   }
 
   const cohortMed = median(cohortValues)
@@ -297,21 +313,22 @@ function madScore(
     const max = Math.max(...cohortValues)
     if (max === min) return 50
     const position = (value - min) / (max - min)
-    return clamp(Math.round(higherIsBetter ? position * 100 : (1 - position) * 100), 0, 100)
+    const score = higherIsBetter ? position * 100 : (1 - position) * 100
+    return clamp(Math.round(score), MIN_PILLAR_SCORE, 100)
   }
 
-  // MAD scoring: 50 ± distance/effectiveMAD * 25
+  // MAD scoring: 50 ± distance/effectiveMAD * MAD_MULTIPLIER
   const distance = value - cohortMed
   const normalizedDistance = distance / effectiveMAD
 
   let score: number
   if (higherIsBetter) {
-    score = 50 + normalizedDistance * 25
+    score = 50 + normalizedDistance * MAD_MULTIPLIER
   } else {
-    score = 50 - normalizedDistance * 25
+    score = 50 - normalizedDistance * MAD_MULTIPLIER
   }
 
-  return clamp(Math.round(score), 0, 100)
+  return clamp(Math.round(score), MIN_PILLAR_SCORE, 100)
 }
 
 function clamp(value: number, min: number, max: number): number {

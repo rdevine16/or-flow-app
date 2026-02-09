@@ -492,7 +492,7 @@ export default function ORbitScorePage() {
 
       // Log diagnostics for debugging
       if (results.length > 0) {
-        console.group('🔬 ORbit Score Diagnostics')
+        console.group('🔬 ORbit Score Diagnostics (v2.1 — 3 MAD band, floor 10)')
         for (const sc of results) {
           console.group(`${sc.surgeonName} — Composite: ${sc.composite} (${sc.grade.letter})`)
           if (sc.diagnostics) {
@@ -658,11 +658,12 @@ export default function ORbitScorePage() {
           {scorecards.length > 0 && (
             <div className="mt-10 pt-5 border-t border-slate-200">
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                <span className="font-semibold text-slate-500">Methodology v2:</span> 4 pillars measuring
-                surgeon-controllable behaviors. Profitability (30%) and Consistency (25%) use percentile ranking
-                within procedure-type cohorts, volume-weighted across case mix.
+                <span className="font-semibold text-slate-500">Methodology v2.1:</span> 4 pillars measuring
+                surgeon-controllable behaviors. Profitability (30%) and Consistency (25%) use median-anchored
+                MAD scoring within procedure-type cohorts, volume-weighted across case mix — with a 3 MAD
+                scoring band and 5% minimum MAD floor to prevent noise sensitivity.
                 Schedule Adherence (25%) and Availability (20%) use graduated scoring with linear decay curves —
-                each minute past grace costs a fixed amount. All scores clamped 0–100.
+                each minute past grace costs a fixed amount. All pillar scores floored at 10, capped at 100.
                 Minimum {MIN_CASE_THRESHOLD} cases required. Trend compares current period against the equivalent prior period.
               </p>
             </div>
