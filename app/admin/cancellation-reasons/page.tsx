@@ -1,3 +1,4 @@
+// This is the main page for managing cancellation reason templates. These templates are copied to new facilities during onboarding and can be customized by each facility without affecting others. Only accessible by global admins.
 'use client'
 
 import { useState, useEffect } from 'react'

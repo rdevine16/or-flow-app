@@ -1,3 +1,4 @@
+// This is the main page for the global audit log. It displays a list of all audit log entries across all facilities, with filters and pagination. Only accessible by global admins.
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
