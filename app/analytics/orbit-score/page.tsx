@@ -133,11 +133,12 @@ async function fetchScorecardData(
     .single()
 
   const settings: ScorecardSettings = {
-    fcots_milestone: settingsData?.fcots_milestone || 'patient_in',
-    fcots_grace_minutes: settingsData?.fcots_grace_minutes ?? 2,
-    fcots_target_percent: settingsData?.fcots_target_percent ?? 85,
-    turnover_target_same_surgeon: settingsData?.turnover_target_same_surgeon ?? 30,
-    turnover_target_flip_room: settingsData?.turnover_target_flip_room ?? 45,
+    start_time_milestone: settingsData?.start_time_milestone || settingsData?.fcots_milestone || 'patient_in',
+    start_time_grace_minutes: settingsData?.start_time_grace_minutes ?? settingsData?.fcots_grace_minutes ?? 3,
+    start_time_floor_minutes: settingsData?.start_time_floor_minutes ?? 20,
+    waiting_on_surgeon_minutes: settingsData?.waiting_on_surgeon_minutes ?? 3,
+    waiting_on_surgeon_floor_minutes: settingsData?.waiting_on_surgeon_floor_minutes ?? 10,
+    min_procedure_cases: settingsData?.min_procedure_cases ?? 3,
   }
 
   return {
@@ -290,8 +291,8 @@ function SurgeonCard({ scorecard }: { scorecard: ORbitScorecard }) {
             <span className="text-[10px] text-slate-400">vs prior</span>
           </div>
 
-          {/* 3×2 Pillar grid */}
-          <div className="grid grid-cols-3 gap-x-5 gap-y-3">
+          {/* 2×2 Pillar grid */}
+          <div className="grid grid-cols-2 gap-x-5 gap-y-3">
             {PILLARS.map((p) => (
               <PillarBar key={p.key} pillar={p} value={pillars[p.key]} />
             ))}
@@ -616,11 +617,12 @@ export default function ORbitScorePage() {
           {scorecards.length > 0 && (
             <div className="mt-10 pt-5 border-t border-slate-200">
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                <span className="font-semibold text-slate-500">Methodology:</span> Each pillar is
-                percentile-ranked within procedure-type cohort, volume-weighted across case mix,
-                and clamped 0–100 (floor at 20th percentile, ceiling at 95th). Minimum {MIN_CASE_THRESHOLD} cases
-                required. Solo procedure types use self-consistency benchmarking (CV-based).
-                Trend compares current period against the equivalent prior period.
+                <span className="font-semibold text-slate-500">Methodology v2:</span> 4 pillars measuring
+                surgeon-controllable behaviors. Profitability (30%) and Consistency (25%) use percentile ranking
+                within procedure-type cohorts, volume-weighted across case mix.
+                Schedule Adherence (25%) and Availability (20%) use graduated scoring with linear decay curves —
+                each minute past grace costs a fixed amount. All scores clamped 0–100.
+                Minimum {MIN_CASE_THRESHOLD} cases required. Trend compares current period against the equivalent prior period.
               </p>
             </div>
           )}

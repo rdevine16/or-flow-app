@@ -1,17 +1,25 @@
 // lib/orbitScoreEngine.ts
-// ORbit Score Calculation Engine
+// ORbit Score Calculation Engine v2
 // ─────────────────────────────────────────────────────────────
-// Computes 5 pillar scores for each surgeon based on operational metrics.
-// Each pillar: raw metric → percentile within procedure cohort → volume-weighted blend → clamped 0-100
-// Composite = weighted sum of all pillars.
+// 4-pillar scoring system measuring only surgeon-controllable behaviors.
+//
+// Pillars:
+//   1. Profitability  (30%) — Margin per OR minute, peer-ranked within procedure cohort
+//   2. Consistency     (25%) — CV of case duration, peer-ranked within procedure cohort
+//   3. Sched Adherence (25%) — Graduated: did cases start on/before scheduled time?
+//   4. Availability    (20%) — Graduated: was surgeon ready when room was ready?
+//
+// Graduated pillars use linear decay:
+//   case_score = max(0, 1.0 - minutes_over_grace / floor)
+//
+// Continuous pillars use percentile ranking within procedure cohorts.
 
 // ─── TYPES ────────────────────────────────────────────────────
 
 export interface PillarScores {
-  consistency: number
   profitability: number
-  schedAccuracy: number
-  onTime: number
+  consistency: number
+  schedAdherence: number
   availability: number
 }
 
@@ -21,9 +29,9 @@ export interface ORbitScorecard {
   firstName: string
   lastName: string
   caseCount: number
-  procedures: string[]          // unique procedure names
+  procedures: string[]
   procedureBreakdown: { name: string; count: number }[]
-  flipRoom: boolean             // had cases in multiple rooms on same day
+  flipRoom: boolean
   pillars: PillarScores
   composite: number
   grade: GradeInfo
@@ -47,16 +55,15 @@ export interface PillarDefinition {
 }
 
 export const PILLARS: PillarDefinition[] = [
-  { key: 'consistency',   label: 'Consistency',    weight: 0.20, color: '#059669', description: 'Case duration predictability' },
-  { key: 'profitability', label: 'Profitability',   weight: 0.20, color: '#2563EB', description: 'Margin per OR minute' },
-  { key: 'schedAccuracy', label: 'Schedule Acc.',    weight: 0.20, color: '#DB2777', description: 'Actual vs scheduled time' },
-  { key: 'onTime',        label: 'On-Time',          weight: 0.20, color: '#D97706', description: 'Start time adherence' },
-  { key: 'availability',  label: 'Availability',     weight: 0.20, color: '#7C3AED', description: 'Ready when room is ready' },
+  { key: 'profitability',  label: 'Profitability',      weight: 0.30, color: '#2563EB', description: 'Margin per OR minute' },
+  { key: 'consistency',    label: 'Consistency',         weight: 0.25, color: '#059669', description: 'Case duration predictability' },
+  { key: 'schedAdherence', label: 'Schedule Adherence',  weight: 0.25, color: '#DB2777', description: 'Cases starting on time' },
+  { key: 'availability',   label: 'Availability',        weight: 0.20, color: '#7C3AED', description: 'Surgeon readiness' },
 ]
 
 export const MIN_CASE_THRESHOLD = 15
 
-// ─── INPUT TYPES (from Supabase queries) ──────────────────────
+// ─── INPUT TYPES ─────────────────────────────────────────────
 
 export interface ScorecardCase {
   id: string
@@ -93,11 +100,17 @@ export interface ScorecardFlag {
 }
 
 export interface ScorecardSettings {
-  fcots_milestone: 'patient_in' | 'incision'
-  fcots_grace_minutes: number
-  fcots_target_percent: number
-  turnover_target_same_surgeon: number
-  turnover_target_flip_room: number
+  // Schedule Adherence
+  start_time_milestone: 'patient_in' | 'incision'
+  start_time_grace_minutes: number       // default 3
+  start_time_floor_minutes: number       // default 20 — minutes over grace until score = 0
+
+  // Availability
+  waiting_on_surgeon_minutes: number     // default 3 — expected prep-to-incision gap
+  waiting_on_surgeon_floor_minutes: number // default 10 — minutes over threshold until score = 0
+
+  // Cohort
+  min_procedure_cases: number            // default 3
 }
 
 export interface ScorecardInput {
@@ -112,7 +125,7 @@ export interface ScorecardInput {
   previousPeriodFlags?: ScorecardFlag[]
 }
 
-// ─── UTILITY FUNCTIONS ────────────────────────────────────────
+// ─── UTILITY FUNCTIONS ───────────────────────────────────────
 
 function minutesBetween(a: string, b: string): number | null {
   if (!a || !b) return null
@@ -132,7 +145,6 @@ function timeToMinutes(t: string): number {
 function utcToLocalMinutes(utcIso: string, timezone: string): number {
   const d = new Date(utcIso)
   if (isNaN(d.getTime())) return 0
-  // Intl.DateTimeFormat gives us the local hour/minute in the target timezone
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     hour: 'numeric',
@@ -163,6 +175,15 @@ function coefficientOfVariation(arr: number[]): number {
   return stddev(arr) / m
 }
 
+function median(arr: number[]): number {
+  if (arr.length === 0) return 0
+  const sorted = [...arr].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
 function percentileRank(value: number, allValues: number[], lowerIsBetter: boolean = false): number {
   if (allValues.length <= 1) return 50
   const sorted = [...allValues].sort((a, b) => a - b)
@@ -174,11 +195,47 @@ function percentileRank(value: number, allValues: number[], lowerIsBetter: boole
 }
 
 function clampScore(percentile: number, floor: number = 20, ceiling: number = 95): number {
-  // Maps percentile to 0-100 score with floor and ceiling
   if (percentile <= floor) return 0
   if (percentile >= ceiling) return 100
   return Math.round(((percentile - floor) / (ceiling - floor)) * 100)
 }
+
+/** Linear decay: 1.0 within grace, then lose (1/floor) per minute over grace, min 0 */
+function graduatedCaseScore(minutesOver: number, floorMinutes: number): number {
+  if (minutesOver <= 0) return 1.0
+  if (minutesOver >= floorMinutes) return 0.0
+  return 1.0 - (minutesOver / floorMinutes)
+}
+
+function groupByProcedure(cases: ScorecardCase[]): Record<string, ScorecardCase[]> {
+  const grouped: Record<string, ScorecardCase[]> = {}
+  for (const c of cases) {
+    if (!grouped[c.procedure_type_id]) grouped[c.procedure_type_id] = []
+    grouped[c.procedure_type_id].push(c)
+  }
+  return grouped
+}
+
+function detectFlipRoom(cases: ScorecardCase[]): boolean {
+  const byDate: Record<string, Set<string>> = {}
+  for (const c of cases) {
+    if (!byDate[c.scheduled_date]) byDate[c.scheduled_date] = new Set()
+    byDate[c.scheduled_date].add(c.or_room_id)
+  }
+  return Object.values(byDate).some(rooms => rooms.size > 1)
+}
+
+// ─── CASE DURATION EXTRACTION ────────────────────────────────
+
+function getCaseDuration(c: ScorecardCase): number | null {
+  return minutesBetween(c.patient_in_at!, c.patient_out_at!)
+}
+
+function getPrepToIncision(c: ScorecardCase): number | null {
+  return minutesBetween(c.prep_drape_complete_at!, c.incision_at!)
+}
+
+// ─── COMPOSITE & GRADE ───────────────────────────────────────
 
 export function computeComposite(pillars: PillarScores): number {
   return Math.round(
@@ -193,32 +250,80 @@ export function getGrade(score: number): GradeInfo {
   return { letter: 'D', label: 'Needs Improvement', text: '#DC2626', bg: '#FEF2F2' }
 }
 
-// ─── CASE DURATION EXTRACTION ─────────────────────────────────
 
-function getCaseDuration(c: ScorecardCase): number | null {
-  return minutesBetween(c.patient_in_at!, c.patient_out_at!)
+// ═════════════════════════════════════════════════════════════
+// PILLAR 1: PROFITABILITY (30%)
+// ═════════════════════════════════════════════════════════════
+// Median margin per OR minute, percentile-ranked within procedure type cohort.
+// Higher MPM = better. Volume-weighted across procedure types.
+
+function calculateProfitability(
+  surgeonCases: ScorecardCase[],
+  allCases: ScorecardCase[],
+  financialsMap: Map<string, ScorecardFinancials>,
+  minProcCases: number,
+): number {
+  const surgeonByProc = groupByProcedure(surgeonCases)
+  const scores: { score: number; volume: number }[] = []
+
+  for (const [procId, cases] of Object.entries(surgeonByProc)) {
+    const surgeonMPMs = cases
+      .map(c => {
+        const fin = financialsMap.get(c.id)
+        const duration = getCaseDuration(c)
+        if (!fin?.profit || !duration || duration <= 0) return null
+        return fin.profit / duration
+      })
+      .filter((v): v is number => v !== null)
+
+    if (surgeonMPMs.length < minProcCases) continue
+
+    const surgeonMedianMPM = median(surgeonMPMs)
+    const peerMPMs = getPeerMedianMPMs(allCases, financialsMap, procId, minProcCases)
+    const pctile = percentileRank(surgeonMedianMPM, peerMPMs)
+    scores.push({ score: clampScore(pctile), volume: surgeonMPMs.length })
+  }
+
+  if (scores.length === 0) return 50
+  const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
+  return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
 }
 
-function getSurgicalDuration(c: ScorecardCase): number | null {
-  return minutesBetween(c.incision_at!, c.closing_at!)
+function getPeerMedianMPMs(
+  allCases: ScorecardCase[],
+  financialsMap: Map<string, ScorecardFinancials>,
+  procedureTypeId: string,
+  minCases: number,
+): number[] {
+  const bySurgeon: Record<string, number[]> = {}
+
+  for (const c of allCases) {
+    if (c.procedure_type_id !== procedureTypeId) continue
+    const fin = financialsMap.get(c.id)
+    const duration = getCaseDuration(c)
+    if (!fin?.profit || !duration || duration <= 0) continue
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(fin.profit / duration)
+  }
+
+  return Object.values(bySurgeon)
+    .filter(mpms => mpms.length >= minCases)
+    .map(mpms => median(mpms))
 }
 
-function getPrepToIncision(c: ScorecardCase): number | null {
-  return minutesBetween(c.prep_drape_complete_at!, c.incision_at!)
-}
 
-// ─── PILLAR 1: SURGICAL CONSISTENCY (20%) ─────────────────────
-// CV of case duration within procedure type, volume-weighted
-// Lower CV = more predictable = better score
+// ═════════════════════════════════════════════════════════════
+// PILLAR 2: CONSISTENCY (25%)
+// ═════════════════════════════════════════════════════════════
+// CV of case duration within procedure type, percentile-ranked.
+// Lower CV = more predictable = better. Volume-weighted across procedure types.
 
 function calculateConsistency(
   surgeonCases: ScorecardCase[],
   allCases: ScorecardCase[],
+  minProcCases: number,
 ): number {
-  // Group surgeon's cases by procedure type
   const surgeonByProc = groupByProcedure(surgeonCases)
-  
-  // For each procedure type, compute CV and get peer CVs for percentile ranking
   const scores: { score: number; volume: number }[] = []
 
   for (const [procId, cases] of Object.entries(surgeonByProc)) {
@@ -226,27 +331,24 @@ function calculateConsistency(
       .map(c => getCaseDuration(c))
       .filter((d): d is number => d !== null && d > 0)
 
-    if (durations.length < 3) continue // need at least 3 cases for meaningful CV
+    if (durations.length < minProcCases) continue
 
     const surgeonCV = coefficientOfVariation(durations)
-
-    // Get all surgeons' CVs for this procedure type (peer cohort)
-    const peerCVs = getPeerCVs(allCases, procId)
-
-    // Percentile rank (lower CV is better)
-    const pctile = percentileRank(surgeonCV, peerCVs, true)
-    const score = clampScore(pctile)
-    scores.push({ score, volume: durations.length })
+    const peerCVs = getPeerCVs(allCases, procId, minProcCases)
+    const pctile = percentileRank(surgeonCV, peerCVs, true) // lower CV is better
+    scores.push({ score: clampScore(pctile), volume: durations.length })
   }
 
-  if (scores.length === 0) return 50 // neutral if insufficient data
-
-  // Volume-weighted blend
+  if (scores.length === 0) return 50
   const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
   return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
 }
 
-function getPeerCVs(allCases: ScorecardCase[], procedureTypeId: string): number[] {
+function getPeerCVs(
+  allCases: ScorecardCase[],
+  procedureTypeId: string,
+  minCases: number,
+): number[] {
   const bySurgeon: Record<string, ScorecardCase[]> = {}
   for (const c of allCases) {
     if (c.procedure_type_id !== procedureTypeId) continue
@@ -259,147 +361,26 @@ function getPeerCVs(allCases: ScorecardCase[], procedureTypeId: string): number[
     const durations = cases
       .map(c => getCaseDuration(c))
       .filter((d): d is number => d !== null && d > 0)
-    if (durations.length >= 3) {
+    if (durations.length >= minCases) {
       cvs.push(coefficientOfVariation(durations))
     }
   }
   return cvs
 }
 
-// ─── PILLAR 2: CASE PROFITABILITY (20%) ───────────────────────
-// Contribution margin per OR minute, percentile-ranked within procedure type
 
-function calculateProfitability(
-  surgeonCases: ScorecardCase[],
-  allCases: ScorecardCase[],
-  financialsMap: Map<string, ScorecardFinancials>,
-): number {
-  const surgeonByProc = groupByProcedure(surgeonCases)
-  const scores: { score: number; volume: number }[] = []
+// ═════════════════════════════════════════════════════════════
+// PILLAR 3: SCHEDULE ADHERENCE (25%)
+// ═════════════════════════════════════════════════════════════
+// Graduated scoring for ALL cases (first and subsequent).
+// Each case scored 0.0-1.0 via linear decay:
+//   - Early or within grace → 1.0
+//   - Each minute over grace costs 1/floor points
+//   - At or beyond floor → 0.0
+//
+// Absorbs FCOTS — first cases are evaluated identically to all others.
 
-  for (const [procId, cases] of Object.entries(surgeonByProc)) {
-    // Calculate margin per OR minute for this surgeon's cases of this type
-    const surgeonMPMs = cases
-      .map(c => {
-        const fin = financialsMap.get(c.id)
-        const duration = getCaseDuration(c)
-        if (!fin?.profit || !duration || duration <= 0) return null
-        return fin.profit / duration
-      })
-      .filter((v): v is number => v !== null)
-
-    if (surgeonMPMs.length < 2) continue
-
-    const surgeonMedianMPM = median(surgeonMPMs)
-
-    // Get all surgeons' median MPMs for this procedure type
-    const peerMPMs = getPeerMarginPerMinute(allCases, financialsMap, procId)
-
-    const pctile = percentileRank(surgeonMedianMPM, peerMPMs)
-    const score = clampScore(pctile)
-    scores.push({ score, volume: surgeonMPMs.length })
-  }
-
-  if (scores.length === 0) return 50
-
-  const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
-  return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
-}
-
-function getPeerMarginPerMinute(
-  allCases: ScorecardCase[],
-  financialsMap: Map<string, ScorecardFinancials>,
-  procedureTypeId: string,
-): number[] {
-  const bySurgeon: Record<string, number[]> = {}
-
-  for (const c of allCases) {
-    if (c.procedure_type_id !== procedureTypeId) continue
-    const fin = financialsMap.get(c.id)
-    const duration = getCaseDuration(c)
-    if (!fin?.profit || !duration || duration <= 0) continue
-    const mpm = fin.profit / duration
-    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
-    bySurgeon[c.surgeon_id].push(mpm)
-  }
-
-  return Object.values(bySurgeon)
-    .filter(mpms => mpms.length >= 2)
-    .map(mpms => median(mpms))
-}
-
-// ─── PILLAR 3: SCHEDULE ACCURACY (15%) ────────────────────────
-// Ratio of actual case duration to expected duration
-// Expected = surgeon's own median for that procedure type (from surgeon_procedure_averages or computed)
-// Ratio close to 1.0 = accurate scheduling
-
-function calculateScheduleAccuracy(
-  surgeonCases: ScorecardCase[],
-  allCases: ScorecardCase[],
-): number {
-  const surgeonByProc = groupByProcedure(surgeonCases)
-  const scores: { score: number; volume: number }[] = []
-
-  for (const [procId, cases] of Object.entries(surgeonByProc)) {
-    const durations = cases
-      .map(c => getCaseDuration(c))
-      .filter((d): d is number => d !== null && d > 0)
-
-    if (durations.length < 3) continue
-
-    // Surgeon's own median for this procedure type = their "expected" duration
-    const surgeonMedian = median(durations)
-
-    // Calculate how close each case is to their own median
-    // ratio = actual / median — closer to 1.0 is better
-    const ratios = durations.map(d => d / surgeonMedian)
-
-    // Score = how tight the ratios cluster around 1.0
-    // Use the mean absolute deviation from 1.0
-    const deviations = ratios.map(r => Math.abs(r - 1.0))
-    const surgeonMAD = mean(deviations)
-
-    // Get peer MADs for percentile ranking
-    const peerMADs = getPeerScheduleMADs(allCases, procId)
-
-    // Lower MAD is better
-    const pctile = percentileRank(surgeonMAD, peerMADs, true)
-    const score = clampScore(pctile)
-    scores.push({ score, volume: durations.length })
-  }
-
-  if (scores.length === 0) return 50
-
-  const totalVolume = scores.reduce((s, x) => s + x.volume, 0)
-  return Math.round(scores.reduce((s, x) => s + x.score * (x.volume / totalVolume), 0))
-}
-
-function getPeerScheduleMADs(allCases: ScorecardCase[], procedureTypeId: string): number[] {
-  const bySurgeon: Record<string, number[]> = {}
-  for (const c of allCases) {
-    if (c.procedure_type_id !== procedureTypeId) continue
-    const d = getCaseDuration(c)
-    if (d && d > 0) {
-      if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
-      bySurgeon[c.surgeon_id].push(d)
-    }
-  }
-
-  return Object.values(bySurgeon)
-    .filter(ds => ds.length >= 3)
-    .map(ds => {
-      const med = median(ds)
-      const ratios = ds.map(d => d / med)
-      return mean(ratios.map(r => Math.abs(r - 1.0)))
-    })
-}
-
-// ─── PILLAR 4: ON-TIME PERFORMANCE (15%) ──────────────────────
-// FCOTS + start time adherence for non-first cases
-// Uses facility-configured start milestone (patient_in or incision)
-// FCOTS compares against scheduled case start time, NOT block start time
-
-function calculateOnTimePerformance(
+function calculateScheduleAdherence(
   surgeonCases: ScorecardCase[],
   allCases: ScorecardCase[],
   settings: ScorecardSettings,
@@ -408,37 +389,28 @@ function calculateOnTimePerformance(
   const surgeonId = surgeonCases[0]?.surgeon_id
   if (!surgeonId) return 50
 
-  // Group cases by date and room to identify first cases
-  const casesByDateRoom: Record<string, ScorecardCase[]> = {}
-  for (const c of allCases) {
-    const key = `${c.scheduled_date}|${c.or_room_id}`
-    if (!casesByDateRoom[key]) casesByDateRoom[key] = []
-    casesByDateRoom[key].push(c)
-  }
+  const caseScores = scoreCasesForAdherence(surgeonCases, settings, timezone)
 
-  // Sort each group by start time
-  for (const cases of Object.values(casesByDateRoom)) {
-    cases.sort((a, b) => {
-      const ta = a.patient_in_at || a.start_time || ''
-      const tb = b.patient_in_at || b.start_time || ''
-      return ta.localeCompare(tb)
-    })
-  }
+  if (caseScores.length === 0) return 50
 
-  // FCOTS: Check surgeon's first cases against scheduled start time
-  let fcotsOnTime = 0
-  let fcotsTotal = 0
+  // Surgeon's raw score = mean of graduated case scores, scaled to 0-100
+  const surgeonRaw = mean(caseScores) * 100
 
-  // Start adherence: for non-first cases, how close to scheduled start
-  const startDeltas: number[] = [] // minutes late (positive = late)
+  // Percentile rank against peers
+  const peerRawScores = getPeerAdherenceScores(allCases, settings, timezone)
+  const pctile = percentileRank(surgeonRaw, peerRawScores) // higher is better
+  return clampScore(pctile)
+}
 
-  for (const c of surgeonCases) {
-    const key = `${c.scheduled_date}|${c.or_room_id}`
-    const roomCases = casesByDateRoom[key] || []
-    const isFirst = roomCases.length > 0 && roomCases[0].id === c.id
+function scoreCasesForAdherence(
+  cases: ScorecardCase[],
+  settings: ScorecardSettings,
+  timezone: string,
+): number[] {
+  const scores: number[] = []
 
-    // Get the relevant timestamp based on facility setting
-    const actualStart = settings.fcots_milestone === 'incision'
+  for (const c of cases) {
+    const actualStart = settings.start_time_milestone === 'incision'
       ? c.incision_at
       : c.patient_in_at
 
@@ -446,126 +418,120 @@ function calculateOnTimePerformance(
 
     const scheduledMin = timeToMinutes(c.start_time)
     const actualMin = utcToLocalMinutes(actualStart, timezone)
-    const deltaMin = actualMin - scheduledMin
+    const deltaMin = actualMin - scheduledMin // negative = early, positive = late
 
-    if (isFirst) {
-      // FCOTS: compare actual milestone against the case's own scheduled start
-      fcotsTotal++
-      if (deltaMin <= settings.fcots_grace_minutes) {
-        fcotsOnTime++
-      }
-    } else {
-      // Non-first case: same delta calculation for adherence
-      startDeltas.push(deltaMin)
-    }
+    // Minutes over grace (0 if early or within grace)
+    const minutesOver = Math.max(0, deltaMin - settings.start_time_grace_minutes)
+    scores.push(graduatedCaseScore(minutesOver, settings.start_time_floor_minutes))
   }
 
-  // FCOTS score (50% weight within this pillar)
-  const fcotsRate = fcotsTotal > 0 ? (fcotsOnTime / fcotsTotal) * 100 : 50
-
-  // Start adherence score (50% weight)
-  // Median minutes late — lower is better
-  let adherenceScore = 50
-  if (startDeltas.length >= 3) {
-    const surgeonMedianLate = median(startDeltas)
-
-    // Get peer median-late values for percentile ranking
-    const peerMedianLates = getPeerStartDeltas(allCases, settings, timezone)
-    const pctile = percentileRank(surgeonMedianLate, peerMedianLates, true) // lower is better
-    adherenceScore = clampScore(pctile)
-  }
-
-  // Blend: 50% FCOTS rate (as direct percentage), 50% adherence percentile
-  const fcotsScore = clampScore(fcotsRate, 50, 100) // 50% on-time = floor, 100% = ceiling
-  return Math.round(fcotsScore * 0.5 + adherenceScore * 0.5)
+  return scores
 }
 
-function getPeerStartDeltas(
+function getPeerAdherenceScores(
   allCases: ScorecardCase[],
   settings: ScorecardSettings,
   timezone: string,
 ): number[] {
-  const bySurgeon: Record<string, number[]> = {}
-
+  const bySurgeon: Record<string, ScorecardCase[]> = {}
   for (const c of allCases) {
-    if (!c.start_time) continue
-    const actualStart = settings.fcots_milestone === 'incision' ? c.incision_at : c.patient_in_at
-    if (!actualStart) continue
-
-    const scheduledMin = timeToMinutes(c.start_time)
-    const actualMin = utcToLocalMinutes(actualStart, timezone)
-    const delta = actualMin - scheduledMin
-
     if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
-    bySurgeon[c.surgeon_id].push(delta)
+    bySurgeon[c.surgeon_id].push(c)
   }
 
   return Object.values(bySurgeon)
-    .filter(ds => ds.length >= 3)
-    .map(ds => median(ds))
+    .map(surgeonCases => {
+      const scores = scoreCasesForAdherence(surgeonCases, settings, timezone)
+      if (scores.length === 0) return null
+      return mean(scores) * 100
+    })
+    .filter((v): v is number => v !== null)
 }
 
-// ─── PILLAR 5: SURGEON AVAILABILITY (15%) ─────────────────────
-// Prep-to-incision excess gap + surgeon-attributable delay flag rate
 
-const PREP_TO_INCISION_BASELINE_MINUTES = 7 // reasonable scrub + site marking time
+// ═════════════════════════════════════════════════════════════
+// PILLAR 4: AVAILABILITY (20%)
+// ═════════════════════════════════════════════════════════════
+// Two sub-metrics blended 50/50:
+//
+// A. Prep-to-Incision Gap (50%) — Graduated scoring
+//    How long did the team wait after prep/drape for surgeon to begin?
+//    Linear decay: within threshold → 1.0, each minute over costs 1/floor.
+//
+// B. Surgeon Delay Rate (50%) — Percentile ranked
+//    % of cases with a delay flag attributed to the surgeon.
 
 function calculateAvailability(
   surgeonCases: ScorecardCase[],
   allCases: ScorecardCase[],
   flags: ScorecardFlag[],
+  settings: ScorecardSettings,
 ): number {
   const surgeonId = surgeonCases[0]?.surgeon_id
   if (!surgeonId) return 50
 
-  // 1. Prep-to-incision excess gaps (50% of this pillar)
-  const surgeonExcessGaps = surgeonCases
-    .map(c => {
-      const gap = getPrepToIncision(c)
-      if (gap === null) return null
-      return Math.max(0, gap - PREP_TO_INCISION_BASELINE_MINUTES)
-    })
-    .filter((g): g is number => g !== null)
+  // ── Sub-Metric A: Prep-to-Incision Gap (graduated) ──
+  const gapScores = scoreCasesForAvailability(surgeonCases, settings)
 
-  let gapScore = 50
-  if (surgeonExcessGaps.length >= 3) {
-    const surgeonMedianExcess = median(surgeonExcessGaps)
-
-    // Get peer median excess gaps
-    const peerExcessGaps = getPeerExcessGaps(allCases)
-    const pctile = percentileRank(surgeonMedianExcess, peerExcessGaps, true) // lower is better
-    gapScore = clampScore(pctile)
+  let gapPillarScore = 50
+  if (gapScores.length >= 3) {
+    const surgeonRaw = mean(gapScores) * 100
+    const peerRawScores = getPeerAvailabilityScores(allCases, settings)
+    const pctile = percentileRank(surgeonRaw, peerRawScores) // higher is better
+    gapPillarScore = clampScore(pctile)
   }
 
-  // 2. Surgeon-attributable delay rate (50% of this pillar)
+  // ── Sub-Metric B: Delay Rate (percentile) ──
   const surgeonCaseIds = new Set(surgeonCases.map(c => c.id))
-  const surgeonFlags = flags.filter(f =>
+  const surgeonDelayCount = flags.filter(f =>
     surgeonCaseIds.has(f.case_id) && f.flag_type === 'delay'
-  )
+  ).length
   const delayRate = surgeonCases.length > 0
-    ? (surgeonFlags.length / surgeonCases.length) * 100
+    ? (surgeonDelayCount / surgeonCases.length) * 100
     : 0
 
-  // Get peer delay rates
   const peerDelayRates = getPeerDelayRates(allCases, flags)
   const delayPctile = percentileRank(delayRate, peerDelayRates, true) // lower is better
   const delayScore = clampScore(delayPctile)
 
-  return Math.round(gapScore * 0.5 + delayScore * 0.5)
+  // Blend 50/50
+  return Math.round(gapPillarScore * 0.5 + delayScore * 0.5)
 }
 
-function getPeerExcessGaps(allCases: ScorecardCase[]): number[] {
-  const bySurgeon: Record<string, number[]> = {}
-  for (const c of allCases) {
+function scoreCasesForAvailability(
+  cases: ScorecardCase[],
+  settings: ScorecardSettings,
+): number[] {
+  const scores: number[] = []
+
+  for (const c of cases) {
     const gap = getPrepToIncision(c)
     if (gap === null) continue
-    const excess = Math.max(0, gap - PREP_TO_INCISION_BASELINE_MINUTES)
-    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
-    bySurgeon[c.surgeon_id].push(excess)
+
+    const minutesOver = Math.max(0, gap - settings.waiting_on_surgeon_minutes)
+    scores.push(graduatedCaseScore(minutesOver, settings.waiting_on_surgeon_floor_minutes))
   }
+
+  return scores
+}
+
+function getPeerAvailabilityScores(
+  allCases: ScorecardCase[],
+  settings: ScorecardSettings,
+): number[] {
+  const bySurgeon: Record<string, ScorecardCase[]> = {}
+  for (const c of allCases) {
+    if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
+    bySurgeon[c.surgeon_id].push(c)
+  }
+
   return Object.values(bySurgeon)
-    .filter(gs => gs.length >= 3)
-    .map(gs => median(gs))
+    .map(surgeonCases => {
+      const scores = scoreCasesForAvailability(surgeonCases, settings)
+      if (scores.length < 3) return null
+      return mean(scores) * 100
+    })
+    .filter((v): v is number => v !== null)
 }
 
 function getPeerDelayRates(allCases: ScorecardCase[], flags: ScorecardFlag[]): number[] {
@@ -585,40 +551,14 @@ function getPeerDelayRates(allCases: ScorecardCase[], flags: ScorecardFlag[]): n
     .map(s => (s.delayed / s.total) * 100)
 }
 
-// ─── HELPER FUNCTIONS ─────────────────────────────────────────
 
-function groupByProcedure(cases: ScorecardCase[]): Record<string, ScorecardCase[]> {
-  const grouped: Record<string, ScorecardCase[]> = {}
-  for (const c of cases) {
-    if (!grouped[c.procedure_type_id]) grouped[c.procedure_type_id] = []
-    grouped[c.procedure_type_id].push(c)
-  }
-  return grouped
-}
-
-function median(arr: number[]): number {
-  if (arr.length === 0) return 0
-  const sorted = [...arr].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : (sorted[mid - 1] + sorted[mid]) / 2
-}
-
-function detectFlipRoom(cases: ScorecardCase[]): boolean {
-  // Group by date, check if multiple rooms used
-  const byDate: Record<string, Set<string>> = {}
-  for (const c of cases) {
-    if (!byDate[c.scheduled_date]) byDate[c.scheduled_date] = new Set()
-    byDate[c.scheduled_date].add(c.or_room_id)
-  }
-  return Object.values(byDate).some(rooms => rooms.size > 1)
-}
-
-// ─── MAIN CALCULATION ─────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// MAIN CALCULATION
+// ═════════════════════════════════════════════════════════════
 
 export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
-  const { cases, financials, flags, settings, dateRange, timezone } = input
+  const { cases, financials, flags, settings, timezone } = input
+  const minProcCases = settings.min_procedure_cases || 3
 
   // Build financials lookup
   const financialsMap = new Map<string, ScorecardFinancials>()
@@ -650,11 +590,10 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
     for (const [surgeonId, surgeonCases] of Object.entries(prevBySurgeon)) {
       if (surgeonCases.length < MIN_CASE_THRESHOLD) continue
       const pillars: PillarScores = {
-        consistency: calculateConsistency(surgeonCases, input.previousPeriodCases),
-        profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap),
-        schedAccuracy: calculateScheduleAccuracy(surgeonCases, input.previousPeriodCases),
-        onTime: calculateOnTimePerformance(surgeonCases, input.previousPeriodCases, settings, timezone),
-        availability: calculateAvailability(surgeonCases, input.previousPeriodCases, input.previousPeriodFlags || flags),
+        profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap, minProcCases),
+        consistency: calculateConsistency(surgeonCases, input.previousPeriodCases, minProcCases),
+        schedAdherence: calculateScheduleAdherence(surgeonCases, input.previousPeriodCases, settings, timezone),
+        availability: calculateAvailability(surgeonCases, input.previousPeriodCases, input.previousPeriodFlags || flags, settings),
       }
       previousComposites.set(surgeonId, computeComposite(pillars))
     }
@@ -679,11 +618,10 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
 
     // Calculate each pillar
     const pillars: PillarScores = {
-      consistency: calculateConsistency(surgeonCases, cases),
-      profitability: calculateProfitability(surgeonCases, cases, financialsMap),
-      schedAccuracy: calculateScheduleAccuracy(surgeonCases, cases),
-      onTime: calculateOnTimePerformance(surgeonCases, cases, settings, timezone),
-      availability: calculateAvailability(surgeonCases, cases, flags),
+      profitability: calculateProfitability(surgeonCases, cases, financialsMap, minProcCases),
+      consistency: calculateConsistency(surgeonCases, cases, minProcCases),
+      schedAdherence: calculateScheduleAdherence(surgeonCases, cases, settings, timezone),
+      availability: calculateAvailability(surgeonCases, cases, flags, settings),
     }
 
     const composite = computeComposite(pillars)
