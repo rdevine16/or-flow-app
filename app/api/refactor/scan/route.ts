@@ -320,18 +320,13 @@ function findConsoleLogs(
 }
 
 function isApiRoute(filePath: string): boolean {
-  // Match patterns:
-  // - app/api/**/route.ts
-  // - app/api/**/route.js
-  // - pages/api/** (Next.js pages router)
-  
   const normalized = filePath.replace(/\\/g, '/')
   
   return (
-    // App router API routes
-    (normalized.includes('/api/') && normalized.endsWith('/route.ts')) ||
-    (normalized.includes('/api/') && normalized.endsWith('/route.js')) ||
-    // Pages router API routes
+    // App router: ANY route.ts/route.js in app directory is a server route
+    (normalized.includes('/app/') && normalized.endsWith('/route.ts')) ||
+    (normalized.includes('/app/') && normalized.endsWith('/route.js')) ||
+    // Pages router: files in pages/api
     (normalized.startsWith('pages/api/') || normalized.includes('/pages/api/'))
   )
 }
