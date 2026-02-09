@@ -166,7 +166,6 @@ export default function CancelCasePage() {
       await calculateMetrics(caseResult as CaseData)
       
     } catch (err) {
-      console.error('Error:', err)
       setError('Failed to load case data')
       showToast({
         type: 'error',
