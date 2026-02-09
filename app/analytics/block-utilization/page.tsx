@@ -15,6 +15,8 @@ import { CalendarDaysIcon } from '@heroicons/react/24/outline'
 import { useSurgeons } from '@/hooks'
 import { AreaChart, BarChart } from '@tremor/react'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 import {
   CalendarDays,
   Clock,
@@ -1294,7 +1296,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
   const [facilityMilestoneNames, setFacilityMilestoneNames] = useState<Map<string, string>>(new Map())
   const [rooms, setRooms] = useState<ORRoomRow[]>([])
   const [roomSchedules, setRoomSchedules] = useState<RoomScheduleRow[]>([])
-
+  const { showToast } = useToast()
   const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
   setDateRange(range)
   setDateStart(startDate)
@@ -1444,7 +1446,11 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
         setRooms((roomsRes.data || []) as ORRoomRow[])
         setRoomSchedules((roomSchedulesRes.data || []) as RoomScheduleRow[])
       } catch (err) {
-        console.error('Error loading block utilization data:', err)
+        showToast({
+  type: 'error',
+  title: 'Error loading block utilization data:',
+  message: err instanceof Error ? err.message : 'Error loading block utilization data:'
+})
       }
 
       setLoading(false)

@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { facilityAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ============================================================================
 // INTERFACES
@@ -266,6 +267,7 @@ export default function CreateFacilityPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const toast = useToast()
 
   // Form state
   const [step, setStep] = useState(1)
@@ -764,13 +766,18 @@ const toggleAll = () => {
             is_active: true,
           }))
 
-          const { error: insertError } = await supabase
-            .from('cancellation_reasons')
-            .insert(cancellationReasons)
+const { error: insertError } = await supabase
+  .from('cancellation_reasons')
+  .insert(cancellationReasons)
 
-          if (insertError) {
-            console.error('Error copying cancellation reasons:', insertError)
-          }
+if (insertError) {
+  showToast({
+    type: 'error',
+    title: 'Error',
+    message: insertError.message
+  })
+  return
+}
         }
       }
             // 10. Copy checklist fields if selected
@@ -803,7 +810,11 @@ const toggleAll = () => {
             .insert(checklistFields)
 
           if (insertError) {
-            console.error('Error copying checklist fields:', insertError)
+            showToast({
+  type: 'error',
+  title: 'Error copying checklist fields:',
+  message: `Error copying checklist fields: ${insertError.message || insertError}`
+})
           }
         }
       }
@@ -830,7 +841,11 @@ const toggleAll = () => {
 
         if (!inviteResponse.ok) {
           const result = await inviteResponse.json()
-          console.error('Invite failed:', result.error)
+          showToast({
+  type: 'error',
+  title: 'Invite failed:',
+  message: result instanceof Error ? result.message : 'Invite failed:'
+})
         }
       }
 
@@ -840,7 +855,11 @@ const toggleAll = () => {
       // Success! Redirect to facility detail page
       router.push(`/admin/facilities/${facility.id}`)
     } catch (err) {
-      console.error('Error creating facility:', err)
+      showToast({
+  type: 'error',
+  title: 'Error creating facility:',
+  message: err instanceof Error ? err.message : 'Error creating facility:'
+})
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setSubmitting(false)
@@ -1562,4 +1581,8 @@ const toggleAll = () => {
       </div>
     </DashboardLayout>
   )
+}
+
+function showToast(arg0: { type: string; title: string; message: string }) {
+  throw new Error('Function not implemented.')
 }

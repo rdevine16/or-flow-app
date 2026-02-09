@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 type TimeRange = '24h' | '7d' | '30d'
 type ViewMode = 'aggregate' | 'facility' | 'comparison'
@@ -64,7 +65,7 @@ export default function GlobalSecurityDashboard() {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
   const [viewMode, setViewMode] = useState<ViewMode>('aggregate')
   const [selectedFacility, setSelectedFacility] = useState<string | 'all'>('all')
-  
+  const { showToast } = useToast()
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -165,7 +166,11 @@ export default function GlobalSecurityDashboard() {
       setActiveSessions(sessions || [])
       setFacilityStats(stats)
     } catch (error) {
-      console.error('Failed to load dashboard data:', error)
+      showToast({
+  type: 'error',
+  title: 'Failed to load dashboard data:',
+  message: error instanceof Error ? error.message : 'Failed to load dashboard data:'
+})
     } finally {
       setLoading(false)
     }

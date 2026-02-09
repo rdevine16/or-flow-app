@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { formatAuditAction } from '@/lib/audit'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface FacilityMetrics {
   total: number
@@ -42,7 +43,7 @@ export default function AdminDashboardPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
-
+const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
   const [facilityMetrics, setFacilityMetrics] = useState<FacilityMetrics>({
     total: 0,
@@ -124,7 +125,11 @@ export default function AdminDashboardPage() {
           setRecentActivity(auditData as unknown as AuditEntry[])
         }
       } catch (error) {
-        console.error('Error fetching admin dashboard data:', error)
+        showToast({
+  type: 'error',
+  title: 'Error fetching admin dashboard data:',
+  message: error instanceof Error ? error.message : 'Error fetching admin dashboard data:'
+})
       } finally {
         setLoading(false)
       }

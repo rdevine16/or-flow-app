@@ -17,6 +17,7 @@ import { generateInvitationToken } from '@/lib/passwords'
 import { sendInvitationEmail } from '@/lib/email'
 import { formatLastLogin } from '@/lib/auth-helpers'
 import FacilityLogoUpload from '@/components/FacilityLogoUpload'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -246,7 +247,7 @@ export default function FacilityDetailPage() {
   const facilityId = params.id as string
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
-
+  const { showToast } = useToast()
   // State
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [loading, setLoading] = useState(true)
@@ -386,9 +387,13 @@ export default function FacilityDetailPage() {
         dataQualityScore,
         openIssues: issues,
       })
-    } catch (error) {
-      console.error('Error fetching facility stats:', error)
-    } finally {
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Error fetching facility stats:',
+    message: error instanceof Error ? error.message : 'Error fetching facility stats:',
+  })
+} finally {
       setStatsLoading(false)
     }
   }, [facilityId, supabase])
@@ -467,7 +472,12 @@ export default function FacilityDetailPage() {
           }
         }
       } catch (error) {
-        console.error('Error fetching facility data:', error)
+        showToast({
+  type: 'error',
+  title: 'Error fetching facility data:',
+  message: error instanceof Error ? error.message : 'Error fetching facility data:'
+})
+
       } finally {
         setLoading(false)
       }
@@ -509,7 +519,11 @@ export default function FacilityDetailPage() {
       setFacility({ ...facility, ...updates })
       alert('Facility updated successfully!')
     } catch (error) {
-      console.error('Error updating facility:', error)
+      showToast({
+  type: 'error',
+  title: 'Error updating facility:',
+  message: error instanceof Error ? error.message : 'Error updating facility:'
+})
       alert('Failed to update facility')
     } finally {
       setSaving(false)
@@ -576,7 +590,11 @@ export default function FacilityDetailPage() {
 
       alert('Invitation sent!')
     } catch (error) {
-      console.error('Error inviting user:', error)
+      showToast({
+  type: 'error',
+  title: 'Error inviting user:',
+  message: error instanceof Error ? error.message : 'Error inviting user:'
+})
       alert('Failed to invite user: ' + (error as Error).message)
     } finally {
       setSaving(false)
@@ -605,7 +623,11 @@ export default function FacilityDetailPage() {
       setNewRoomName('')
       setShowRoomModal(false)
     } catch (error) {
-      console.error('Error adding room:', error)
+      showToast({
+  type: 'error',
+  title: 'Error adding room:',
+  message: error instanceof Error ? error.message : 'Error adding room:'
+})
       alert('Failed to add room')
     } finally {
       setSaving(false)
@@ -626,7 +648,11 @@ export default function FacilityDetailPage() {
 
       setRooms(rooms.filter(r => r.id !== roomId))
     } catch (error) {
-      console.error('Error deleting room:', error)
+      showToast({
+  type: 'error',
+  title: 'Error deleting room:',
+  message: error instanceof Error ? error.message : 'Error deleting room:'
+})
       alert('Failed to delete room')
     }
   }
@@ -653,7 +679,11 @@ export default function FacilityDetailPage() {
       setNewProcedureName('')
       setShowProcedureModal(false)
     } catch (error) {
-      console.error('Error adding procedure:', error)
+      showToast({
+  type: 'error',
+  title: 'Error adding procedure:',
+  message: error instanceof Error ? error.message : 'Error adding procedure:'
+})
       alert('Failed to add procedure')
     } finally {
       setSaving(false)
@@ -674,7 +704,11 @@ export default function FacilityDetailPage() {
 
       setProcedures(procedures.filter(p => p.id !== procedureId))
     } catch (error) {
-      console.error('Error deleting procedure:', error)
+      showToast({
+  type: 'error',
+  title: 'Error deleting procedure:',
+  message: error instanceof Error ? error.message : 'Error deleting procedure:'
+})
       alert('Failed to delete procedure')
     }
   }
@@ -708,7 +742,11 @@ export default function FacilityDetailPage() {
         await userAudit.deactivated(supabase, userName, user.email, user.id)
       }
     } catch (error) {
-      console.error('Error updating user status:', error)
+      showToast({
+  type: 'error',
+  title: 'Error updating user status:',
+  message: error instanceof Error ? error.message : 'Error updating user status:'
+})
       alert('Failed to update user status')
     }
   }

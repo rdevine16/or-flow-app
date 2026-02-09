@@ -203,7 +203,11 @@ const { data, error } = await supabase
         c.id === complexityId ? { ...c, procedure_category_ids: newIds } : c
       ))
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }
@@ -223,7 +227,11 @@ const { data, error } = await supabase
         c.id === complexity.id ? { ...c, is_active: !c.is_active } : c
       ))
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }

@@ -8,6 +8,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ============================================================================
 // TYPES
@@ -92,6 +93,7 @@ async function apiCall(action: string, extra: Record<string, any> = {}) {
 
 export default function DemoDataWizard() {
   // State
+  const { showToast } = useToast()
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [selectedFacilityId, setSelectedFacilityId] = useState<string | null>(null)
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
@@ -159,7 +161,11 @@ export default function DemoDataWizard() {
       setProfiles(newProfiles)
       if (s.length > 0) setExpanded(s[0].id)
     } catch (e) {
-      console.error('Error loading facility:', e)
+      showToast({
+  type: 'error',
+  title: 'Error loading facility:',
+  message: e instanceof Error ? e.message : 'Error loading facility:'
+})
     }
     setLoadingFacility(false)
   }

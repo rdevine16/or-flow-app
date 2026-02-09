@@ -12,6 +12,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { startImpersonation } from '@/lib/impersonation'
 import { adminAudit } from '@/lib/audit-logger'
 import DeleteFacilityModal from '@/components/modals/DeleteFacilityModal'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 interface Facility {
@@ -32,6 +33,7 @@ export default function FacilitiesListPage() {
   const router = useRouter()
   const supabase = createClient()
   const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
+  const { showToast } = useToast()
 
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
@@ -90,7 +92,11 @@ export default function FacilitiesListPage() {
 
       setFacilities(facilitiesWithCounts)
     } catch (error) {
-      console.error('Error fetching facilities:', error)
+      showToast({
+  type: 'error',
+  title: 'Error fetching facilities:',
+  message: error instanceof Error ? error.message : 'Error fetching facilities:'
+})
     } finally {
       setLoading(false)
     }

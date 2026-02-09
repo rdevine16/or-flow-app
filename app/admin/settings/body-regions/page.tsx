@@ -10,6 +10,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { adminAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface BodyRegion {
   id: string
@@ -217,18 +218,17 @@ const fetchData = async () => {
       .select()
       .single()
 
-    if (!error && data) {
-      // Audit log
-      await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
+if (!error && data) {
+  // Audit log
+  await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
 
-      setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
-      resetForm()
-      setShowAddModal(false)
-    } else if (error) {
-      console.error('Error adding body region:', error)
-      alert('Failed to add body region. The name might already exist.')
-    }
-    setSaving(false)
+  setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
+  resetForm()
+  setShowAddModal(false)
+} else if (error) {
+  showToast(error.message || 'The name might already exist', 'error')
+}
+setSaving(false)
   }
 
   const handleEdit = async () => {
@@ -261,10 +261,9 @@ const fetchData = async () => {
       setShowEditModal(false)
       setEditingRegion(null)
       resetForm()
-    } else if (error) {
-      console.error('Error updating body region:', error)
-      alert('Failed to update body region.')
-    }
+} else if (error) {
+  showToast(error instanceof Error ? error.message : 'Error updating body region:', 'error')
+}
     setSaving(false)
   }
 
@@ -294,15 +293,14 @@ const handleDelete = (region: BodyRegion) => {
           .eq('id', region.id)
 
         if (!error) {
-          await adminAudit.bodyRegionDeleted(supabase, region.display_name, region.id)
-          setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
-          setArchivedCount(prev => prev + 1)
-          closeConfirmModal()
-          showToast(`"${region.display_name}" moved to archive`, 'success')
-        } else {
-          console.error('Error archiving body region:', error)
-          showToast('Failed to archive body region', 'error')
-        }
+  await adminAudit.bodyRegionDeleted(supabase, region.display_name, region.id)
+  setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
+  setArchivedCount(prev => prev + 1)
+  closeConfirmModal()
+  showToast(`"${region.display_name}" moved to archive`, 'success')
+} else {
+  showToast(error.message || 'Error archiving body region', 'error')
+}
         setSaving(false)
       },
     })

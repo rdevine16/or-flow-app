@@ -10,6 +10,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { costCategoryAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface DefaultCostCategory {
   id: string
@@ -33,7 +34,7 @@ export default function DefaultCostCategoriesPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
-
+ 
   const [categories, setCategories] = useState<DefaultCostCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -115,8 +116,10 @@ useEffect(() => {
 
       const { data, error } = await query
 
-      if (data) setCategories(data)
-      if (error) console.error('Error fetching categories:', error)
+if (error) {
+  showToast(error instanceof Error ? error.message : 'Error fetching categories:', 'error')
+}
+if (data) setCategories(data)
 
       // Get archived count
       const { count } = await supabase
@@ -211,7 +214,7 @@ useEffect(() => {
 
       setShowModal(false)
     } catch (error) {
-      console.error('Error saving category:', error)
+showToast(error instanceof Error ? error.message : 'Error saving category:', 'error')
     } finally {
       setSaving(false)
     }
@@ -233,36 +236,47 @@ useEffect(() => {
     })
   }
 
-  const handleDelete = async () => {
-    if (!deleteModal.category || !currentUserId) return
-    setSaving(true)
+const handleDelete = async () => {
+  if (!deleteModal.category || !currentUserId) return
+  setSaving(true)
 
-    const category = deleteModal.category
+  const category = deleteModal.category
 
-    try {
-      const { error } = await supabase
-        .from('cost_category_templates')
-        .update({
-          deleted_at: new Date().toISOString(),
-          deleted_by: currentUserId
-        })
-        .eq('id', category.id)
+  try {
+    const { error: templateError } = await supabase
+      .from('cost_category_templates')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId
+      })
+      .eq('id', category.id)
 
-      if (error) throw error
+    if (templateError) throw templateError
 
-      await costCategoryAudit.adminDeleted(supabase, category.name, category.id)
+    const { error: categoryError } = await supabase
+      .from('cost_categories')
+      .update({ 
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId 
+      })
+      .eq('id', category.id)
 
-      setCategories(categories.filter(c => c.id !== category.id))
-      setArchivedCount(prev => prev + 1)
-      showToast(`"${category.name}" moved to archive`, 'success')
-      closeDeleteModal()
-    } catch (error) {
-      console.error('Error archiving category:', error)
-      showToast('Failed to archive category', 'error')
-    } finally {
-      setSaving(false)
-    }
+    if (categoryError) throw categoryError
+
+    await costCategoryAudit.adminDeleted(supabase, category.name, category.id)
+
+    setCategories(categories.filter(c => c.id !== category.id))
+    setArchivedCount(prev => prev + 1)
+    
+    showToast(`"${category.name}" moved to archive`, 'success')
+    
+    closeDeleteModal()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Error archiving category', 'error')
+  } finally {
+    setSaving(false)
   }
+}
 
   const handleRestore = async (category: DefaultCostCategory) => {
     setSaving(true)
@@ -313,7 +327,7 @@ useEffect(() => {
         c.id === category.id ? { ...c, is_active: newActiveState } : c
       ))
     } catch (error) {
-      console.error('Error toggling active state:', error)
+showToast(error instanceof Error ? error.message : 'Error toggling active state:', 'error')
     } finally {
       setSaving(false)
     }

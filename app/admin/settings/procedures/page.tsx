@@ -11,6 +11,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { adminAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface DefaultProcedure {
   id: string
@@ -83,7 +84,7 @@ export default function DefaultProceduresPage() {
   const [formProcedureCategory, setFormProcedureCategory] = useState<string>('')
   const [formImplantCategory, setFormImplantCategory] = useState<string>('')
   const [formIsActive, setFormIsActive] = useState(true)
-
+  const { showToast } = useToast()
   // Filter state
   const [filterRegion, setFilterRegion] = useState<string>('all')
   const [filterActive, setFilterActive] = useState<string>('all')
@@ -134,7 +135,11 @@ export default function DefaultProceduresPage() {
       if (milestonesRes.data) setMilestoneTypes(milestonesRes.data)
       if (procMilestonesRes.data) setProcedureMilestones(procMilestonesRes.data)
     } catch (error) {
-      console.error('Error fetching data:', error)
+      showToast({
+  type: 'error',
+  title: 'Error fetching data:',
+  message: error instanceof Error ? error.message : 'Error fetching data:'
+})
     } finally {
       setLoading(false)
     }
@@ -221,7 +226,11 @@ export default function DefaultProceduresPage() {
 
       setShowModal(false)
     } catch (error) {
-      console.error('Error saving procedure:', error)
+      showToast({
+  type: 'error',
+  title: 'Error saving procedure:',
+  message: error instanceof Error ? error.message : 'Error saving procedure:'
+})
     } finally {
       setSaving(false)
     }
@@ -246,7 +255,11 @@ export default function DefaultProceduresPage() {
 
       setProcedures(procedures.filter(p => p.id !== procedure.id))
     } catch (error) {
-      console.error('Error deleting procedure:', error)
+      showToast({
+  type: 'error',
+  title: 'Error deleting procedure:',
+  message: error instanceof Error ? error.message : 'Error deleting procedure:'
+})
     } finally {
       setSaving(false)
     }
@@ -269,7 +282,11 @@ export default function DefaultProceduresPage() {
         p.id === procedure.id ? { ...p, is_active: !p.is_active } : p
       ))
     } catch (error) {
-      console.error('Error toggling procedure:', error)
+      showToast({
+  type: 'error',
+  title: 'Error toggling procedure:',
+  message: error instanceof Error ? error.message : 'Error toggling procedure:'
+})
     } finally {
       setSaving(false)
     }
@@ -313,7 +330,11 @@ export default function DefaultProceduresPage() {
         }
       }
     } catch (error) {
-      console.error('Error toggling milestone:', error)
+      showToast({
+  type: 'error',
+  title: 'Error toggling milestone:',
+  message: error instanceof Error ? error.message : 'Error toggling milestone:'
+})
     } finally {
       setSaving(false)
     }
@@ -364,7 +385,11 @@ export default function DefaultProceduresPage() {
         }
       }
     } catch (error) {
-      console.error('Error toggling paired milestone:', error)
+      showToast({
+  type: 'error',
+  title: 'Error toggling paired milestone:',
+  message: error instanceof Error ? error.message : 'Error toggling paired milestone:'
+})
     } finally {
       setSaving(false)
     }
@@ -393,7 +418,11 @@ export default function DefaultProceduresPage() {
         }
       }
     } catch (error) {
-      console.error('Error enabling all milestones:', error)
+      showToast({
+  type: 'error',
+  title: 'Error enabling all milestones:',
+  message: error instanceof Error ? error.message : 'Error enabling all milestones:'
+})
     } finally {
       setSaving(false)
     }
@@ -411,7 +440,11 @@ export default function DefaultProceduresPage() {
 
       setProcedureMilestones(procedureMilestones.filter(pm => pm.procedure_type_template_id !== procedureId))
     } catch (error) {
-      console.error('Error disabling all milestones:', error)
+      showToast({
+  type: 'error',
+  title: 'Error disabling all milestones:',
+  message: error instanceof Error ? error.message : 'Error disabling all milestones:'
+})
     } finally {
       setSaving(false)
     }
