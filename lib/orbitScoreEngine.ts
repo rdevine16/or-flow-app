@@ -1097,3 +1097,282 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
 
   return scorecards
 }
+
+
+// ═════════════════════════════════════════════════════════════
+// IMPROVEMENT PLAN GENERATOR
+// ═════════════════════════════════════════════════════════════
+
+export interface ImprovementRecommendation {
+  pillar: keyof PillarScores
+  pillarLabel: string
+  pillarColor: string
+  priority: number
+  currentScore: number
+  targetScore: number
+  compositeImpact: number
+
+  // Human-readable
+  headline: string
+  insight: string
+  actions: string[]
+
+  // Quantified impact
+  projectedMinutesSaved: number
+  projectedAnnualHours: number
+  projectedAnnualDollars: number
+}
+
+export interface ImprovementPlan {
+  surgeonName: string
+  currentComposite: number
+  currentGrade: GradeInfo
+  projectedComposite: number
+  projectedGrade: GradeInfo
+  totalProjectedHours: number
+  totalProjectedDollars: number
+  recommendations: ImprovementRecommendation[]
+  strengths: { pillarLabel: string; score: number; message: string }[]
+}
+
+interface ImprovementConfig {
+  orCostPerMinute?: number
+  annualCaseMultiplier?: number  // how many periods per year (e.g., 4 for quarterly)
+  improvementThreshold?: number  // pillars below this get recommendations
+}
+
+/**
+ * Generate an actionable improvement plan from a scorecard.
+ *
+ * For each pillar below the threshold, produces:
+ *   - A data-driven insight explaining *why* the score is low
+ *   - 2-4 specific actions the surgeon can take
+ *   - Projected time and dollar impact of improvement
+ *
+ * Impact calculations assume facility-standard OR cost per minute
+ * and annualize based on the scoring period.
+ */
+export function generateImprovementPlan(
+  scorecard: ORbitScorecard,
+  settings: ScorecardSettings,
+  config: ImprovementConfig = {},
+): ImprovementPlan {
+  const {
+    orCostPerMinute = 60,
+    annualCaseMultiplier = 4,  // default: quarterly data → multiply by 4
+    improvementThreshold = 65, // below B = needs improvement
+  } = config
+
+  const annualCases = scorecard.caseCount * annualCaseMultiplier
+  const diag = scorecard.diagnostics
+  const recommendations: ImprovementRecommendation[] = []
+  const strengths: { pillarLabel: string; score: number; message: string }[] = []
+
+  // ── Evaluate each pillar ──
+
+  for (const p of PILLARS) {
+    const score = scorecard.pillars[p.key]
+
+    if (score >= improvementThreshold) {
+      // This is a strength
+      if (score >= 75) {
+        strengths.push({
+          pillarLabel: p.label,
+          score,
+          message: score >= 85
+            ? `Top-tier ${p.label.toLowerCase()} — a model for peers`
+            : `Strong ${p.label.toLowerCase()} — above facility average`,
+        })
+      }
+      continue
+    }
+
+    // Target: get to B threshold, or if close, aim for 75
+    const targetScore = score >= 55 ? 75 : improvementThreshold
+    const weight = p.weight
+    const compositeImpact = Math.round((targetScore - score) * weight)
+
+    let headline = ''
+    let insight = ''
+    let actions: string[] = []
+    let projectedMinutesSaved = 0
+
+    // ── Pillar-specific analysis ──
+
+    if (p.key === 'profitability' && diag?.profitability) {
+      const scoredCohorts = diag.profitability.procedureCohorts.filter(c => !c.skippedReason)
+      const worstCohort = scoredCohorts.sort((a, b) => a.rawScore - b.rawScore)[0]
+
+      if (worstCohort) {
+        const mpmGap = worstCohort.cohortMedian - worstCohort.surgeonMedianMPM
+        const avgCaseMins = 90 // reasonable OR time estimate
+        const potentialPerCase = mpmGap * avgCaseMins
+
+        headline = mpmGap > 0
+          ? `$${mpmGap.toFixed(0)}/min below peers on ${worstCohort.procedureName}`
+          : `Close to peer median — small optimizations add up`
+
+        insight = worstCohort.surgeonMedianMPM > 0
+          ? `Your ${worstCohort.procedureName} cases generate $${worstCohort.surgeonMedianMPM.toFixed(2)}/min vs the peer median of $${worstCohort.cohortMedian.toFixed(2)}/min. ${mpmGap > 5 ? 'This suggests longer OR times are diluting per-minute revenue.' : 'The gap is modest — focus on consistency to maximize scheduling.'}`
+          : `Your ${worstCohort.procedureName} cases are operating at a loss ($${worstCohort.surgeonMedianMPM.toFixed(2)}/min). Reducing OR time is the most direct path to profitability.`
+
+        actions = [
+          'Review case setup and equipment positioning protocols to reduce non-cutting time',
+          'Identify the 10% longest cases — look for common patterns (equipment, team, time of day)',
+          'Work with OR coordinator to ensure preferred instrument trays are pre-staged',
+        ]
+        if (mpmGap > 10) {
+          actions.push('Consider a focused OR time reduction initiative with a target of reducing average case time by 10-15 minutes')
+        }
+
+        // Impact: closing half the MPM gap over annualized cases
+        const casesInCohort = worstCohort.validCases * annualCaseMultiplier
+        projectedMinutesSaved = Math.round((mpmGap > 0 ? mpmGap * 0.5 : 2) * casesInCohort)
+      }
+    }
+
+    else if (p.key === 'consistency' && diag?.consistency) {
+      const scoredCohorts = diag.consistency.procedureCohorts.filter(c => !c.skippedReason)
+      const worstCohort = scoredCohorts.sort((a, b) => b.surgeonCV - a.surgeonCV)[0]
+
+      if (worstCohort) {
+        const cvPercent = (worstCohort.surgeonCV * 100).toFixed(1)
+        const peerCVPercent = (worstCohort.cohortMedian * 100).toFixed(1)
+        const avgDuration = 90 // estimate
+        const variabilityMins = Math.round(worstCohort.surgeonCV * avgDuration)
+        const peerVariabilityMins = Math.round(worstCohort.cohortMedian * avgDuration)
+
+        headline = `±${variabilityMins} min variability on ${worstCohort.procedureName} (peers: ±${peerVariabilityMins} min)`
+
+        insight = `Your ${worstCohort.procedureName} CV is ${cvPercent}% vs the peer median of ${peerCVPercent}%. This means your case durations vary by approximately ±${variabilityMins} minutes around your average — making it harder for schedulers to plan accurately.`
+
+        actions = [
+          'Request consistent OR team assignments — familiar teams reduce variability',
+          'Standardize your pre-incision checklist to eliminate variable setup time',
+          'Track cases that run 20%+ over your average and identify the root cause',
+          'Consider dictating expected duration to the scheduler per case rather than using defaults',
+        ]
+
+        // Impact: reducing variability improves scheduling accuracy
+        const cohortCases = worstCohort.validCases * annualCaseMultiplier
+        const excessVariability = Math.max(0, variabilityMins - peerVariabilityMins)
+        projectedMinutesSaved = Math.round(excessVariability * 0.5 * cohortCases)
+      }
+    }
+
+    else if (p.key === 'schedAdherence' && diag?.schedAdherence) {
+      const { avgCaseScore, casesAtZero, totalCasesScored } = diag.schedAdherence
+      const currentPercent = Math.round(avgCaseScore * 100)
+      const targetPercent = targetScore
+      const floor = settings.start_time_floor_minutes
+      const grace = settings.start_time_grace_minutes
+
+      // Estimate average minutes late from the decay score
+      // Score of X means (1-X) × floor minutes past grace
+      const avgMinutesLate = Math.round((1 - avgCaseScore) * floor)
+      const targetMinutesLate = Math.round((1 - targetPercent / 100) * floor)
+
+      headline = `Starting ~${avgMinutesLate} min late on average (${casesAtZero} cases severely late)`
+
+      insight = `Your average on-time score is ${currentPercent}% across ${totalCasesScored} cases. ${casesAtZero} cases scored zero (${Math.round(casesAtZero / totalCasesScored * 100)}%), meaning they started ${floor}+ minutes late. Late starts cascade through the schedule, pushing every subsequent case later.`
+
+      actions = [
+        `Arrive to pre-op ${grace + 5} minutes before scheduled start to complete assessments within the grace window`,
+        casesAtZero > 3
+          ? `Investigate the ${casesAtZero} severely late cases — are they clustered on certain days, rooms, or case positions?`
+          : 'Maintain awareness of the scheduled start time for each case position',
+        'Coordinate with the OR front desk to receive 15-minute pre-start alerts',
+        'For first cases of the day, verify that pre-op assessment is complete before scheduled OR time',
+      ]
+
+      // Impact: average minutes saved per case × annual cases
+      const minutesSavedPerCase = Math.max(0, avgMinutesLate - targetMinutesLate)
+      projectedMinutesSaved = minutesSavedPerCase * annualCases
+    }
+
+    else if (p.key === 'availability' && diag?.availability) {
+      const { avgGapScore, delayRate, gapCasesScored } = diag.availability
+      const gapFloor = settings.waiting_on_surgeon_floor_minutes
+      const gapGrace = settings.waiting_on_surgeon_minutes
+
+      // Estimate average gap from the decay score
+      const avgExcessGap = Math.round((1 - avgGapScore) * gapFloor)
+
+      headline = avgExcessGap > 0
+        ? `OR team waiting ~${avgExcessGap} min per case for surgeon`
+        : delayRate > 0
+        ? `${delayRate.toFixed(0)}% of cases have surgeon-caused delays`
+        : `Availability score below target`
+
+      insight = avgExcessGap > 0
+        ? `Your average prep-to-incision gap score is ${Math.round(avgGapScore * 100)}% across ${gapCasesScored} cases. The team completes patient prep and waits approximately ${avgExcessGap} minutes for you beyond the expected ${gapGrace}-minute window. This is idle OR time with full staff standing by.`
+        : `Your delay rate of ${delayRate.toFixed(1)}% indicates surgeon-caused delays are impacting the schedule.`
+
+      actions = [
+        'Scrub in during patient prep — be present in the OR before draping is complete',
+        `Target being gowned and gloved within ${gapGrace} minutes of the patient entering the room`,
+        'Use the callback system to time your arrival precisely with prep completion',
+        'For flip-room setups, transition to the next room immediately after closing',
+      ]
+
+      // Impact: reducing gap minutes
+      const targetGapScore = targetScore / 100
+      const targetExcessGap = Math.round((1 - targetGapScore) * gapFloor)
+      const minutesSavedPerCase = Math.max(0, avgExcessGap - targetExcessGap)
+      projectedMinutesSaved = minutesSavedPerCase * annualCases
+    }
+
+    // Fallback if no diagnostics
+    if (!headline) {
+      headline = `${p.label} at ${score} — below the facility target of ${improvementThreshold}`
+      insight = `This pillar is scoring below the facility B threshold. Review the detailed diagnostics for specific areas to address.`
+      actions = ['Review pillar diagnostics with your OR director', 'Identify the top 2-3 cases that scored lowest']
+      projectedMinutesSaved = Math.round(annualCases * 2) // conservative 2 min/case estimate
+    }
+
+    const projectedAnnualHours = Math.round(projectedMinutesSaved / 60 * 10) / 10
+    const projectedAnnualDollars = Math.round(projectedMinutesSaved * orCostPerMinute)
+
+    recommendations.push({
+      pillar: p.key,
+      pillarLabel: p.label,
+      pillarColor: p.color,
+      priority: 0, // set below
+      currentScore: score,
+      targetScore,
+      compositeImpact,
+      headline,
+      insight,
+      actions,
+      projectedMinutesSaved,
+      projectedAnnualHours,
+      projectedAnnualDollars,
+    })
+  }
+
+  // Priority: sort by composite impact (highest first)
+  recommendations.sort((a, b) => b.compositeImpact - a.compositeImpact)
+  recommendations.forEach((r, i) => { r.priority = i + 1 })
+
+  // Projected composite if all improvements achieved
+  const projectedPillars = { ...scorecard.pillars }
+  for (const r of recommendations) {
+    projectedPillars[r.pillar] = r.targetScore
+  }
+  const projectedComposite = computeComposite(projectedPillars)
+
+  const totalProjectedHours = Math.round(recommendations.reduce((s, r) => s + r.projectedAnnualHours, 0) * 10) / 10
+  const totalProjectedDollars = recommendations.reduce((s, r) => s + r.projectedAnnualDollars, 0)
+
+  return {
+    surgeonName: scorecard.surgeonName,
+    currentComposite: scorecard.composite,
+    currentGrade: scorecard.grade,
+    projectedComposite,
+    projectedGrade: getGrade(projectedComposite),
+    totalProjectedHours,
+    totalProjectedDollars,
+    recommendations,
+    strengths,
+  }
+}

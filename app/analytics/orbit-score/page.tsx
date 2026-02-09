@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import {
   calculateORbitScores,
+  generateImprovementPlan,
   getGrade,
   PILLARS,
   MIN_CASE_THRESHOLD,
@@ -18,6 +19,8 @@ import {
   type ScorecardFlag,
   type ScorecardSettings,
   type PillarScores,
+  type ImprovementPlan,
+  type ImprovementRecommendation,
 } from '@/lib/orbitScoreEngine'
 
 // ─── DATA FETCHING ────────────────────────────────────────────
@@ -273,71 +276,203 @@ function PillarBar({ pillar, value }: { pillar: typeof PILLARS[number]; value: n
 
 // ─── SURGEON CARD ─────────────────────────────────────────────
 
-function SurgeonCard({ scorecard }: { scorecard: ORbitScorecard }) {
+function SurgeonCard({ scorecard, settings }: { scorecard: ORbitScorecard; settings: ScorecardSettings | null }) {
   const { composite, grade, pillars } = scorecard
+  const [expanded, setExpanded] = useState(false)
+
+  const plan = settings ? generateImprovementPlan(scorecard, settings) : null
+  const hasRecommendations = plan && plan.recommendations.length > 0
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-200 p-6">
-      <div className="flex items-start gap-6">
-        {/* Ring */}
-        <div className="flex-shrink-0">
-          <ScoreRing score={composite} size={110} ringWidth={9} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Name row */}
-          <div className="flex items-center gap-2 mb-0.5">
-            <h3 className="text-base font-bold text-slate-900 truncate">
-              {scorecard.surgeonName}
-            </h3>
-            <span
-              className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded font-mono flex-shrink-0"
-              style={{ color: grade.text, background: grade.bg }}
-            >
-              {grade.letter}
-            </span>
+    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-200">
+      <div className="p-6">
+        <div className="flex items-start gap-6">
+          {/* Ring */}
+          <div className="flex-shrink-0">
+            <ScoreRing score={composite} size={110} ringWidth={9} />
           </div>
 
-          {/* Meta row */}
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-xs text-slate-500">{scorecard.caseCount} cases</span>
-            {scorecard.flipRoom && (
-              <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                Flip Room
-              </span>
-            )}
-            <TrendIndicator
-              trend={scorecard.trend}
-              current={composite}
-              previous={scorecard.previousComposite}
-            />
-            <span className="text-[10px] text-slate-400">vs prior</span>
-          </div>
-
-          {/* 2×2 Pillar grid */}
-          <div className="grid grid-cols-2 gap-x-5 gap-y-3">
-            {PILLARS.map((p) => (
-              <PillarBar key={p.key} pillar={p} value={pillars[p.key]} />
-            ))}
-          </div>
-
-          {/* Procedure tags */}
-          <div className="flex gap-1.5 flex-wrap mt-4 pt-3 border-t border-slate-100">
-            {scorecard.procedureBreakdown.slice(0, 5).map(({ name, count }) => (
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            {/* Name row */}
+            <div className="flex items-center gap-2 mb-0.5">
+              <h3 className="text-base font-bold text-slate-900 truncate">
+                {scorecard.surgeonName}
+              </h3>
               <span
-                key={name}
-                className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200"
+                className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded font-mono flex-shrink-0"
+                style={{ color: grade.text, background: grade.bg }}
               >
-                {name} <span className="text-slate-400">×{count}</span>
+                {grade.letter}
               </span>
-            ))}
-            {scorecard.procedureBreakdown.length > 5 && (
-              <span className="text-[10px] text-slate-400 px-2 py-0.5">
-                +{scorecard.procedureBreakdown.length - 5} more
-              </span>
-            )}
+            </div>
+
+            {/* Meta row */}
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-xs text-slate-500">{scorecard.caseCount} cases</span>
+              {scorecard.flipRoom && (
+                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                  Flip Room
+                </span>
+              )}
+              <TrendIndicator
+                trend={scorecard.trend}
+                current={composite}
+                previous={scorecard.previousComposite}
+              />
+              <span className="text-[10px] text-slate-400">vs prior</span>
+            </div>
+
+            {/* 2×2 Pillar grid */}
+            <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+              {PILLARS.map((p) => (
+                <PillarBar key={p.key} pillar={p} value={pillars[p.key]} />
+              ))}
+            </div>
+
+            {/* Procedure tags */}
+            <div className="flex gap-1.5 flex-wrap mt-4 pt-3 border-t border-slate-100">
+              {scorecard.procedureBreakdown.slice(0, 5).map(({ name, count }) => (
+                <span
+                  key={name}
+                  className="text-[10px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200"
+                >
+                  {name} <span className="text-slate-400">×{count}</span>
+                </span>
+              ))}
+              {scorecard.procedureBreakdown.length > 5 && (
+                <span className="text-[10px] text-slate-400 px-2 py-0.5">
+                  +{scorecard.procedureBreakdown.length - 5} more
+                </span>
+              )}
+            </div>
           </div>
+        </div>
+      </div>
+
+      {/* Improvement Plan Toggle */}
+      {hasRecommendations && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full px-6 py-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50/50 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-amber-500">📋</span>
+            Improvement Plan
+            <span className="text-[10px] font-normal text-slate-400">
+              {plan!.recommendations.length} {plan!.recommendations.length === 1 ? 'area' : 'areas'} · +{plan!.projectedComposite - plan!.currentComposite} pts potential
+            </span>
+          </span>
+          <svg
+            className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+
+      {/* Expanded Improvement Plan */}
+      {expanded && plan && (
+        <div className="border-t border-slate-100 bg-slate-50/30">
+          {/* Summary bar */}
+          <div className="px-6 py-4 flex items-center gap-6 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="text-center">
+                <div className="text-lg font-bold" style={{ color: plan.currentGrade.text }}>
+                  {plan.currentComposite}
+                </div>
+                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Current</div>
+              </div>
+              <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              <div className="text-center">
+                <div className="text-lg font-bold" style={{ color: plan.projectedGrade.text }}>
+                  {plan.projectedComposite}
+                </div>
+                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Projected</div>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-slate-200" />
+            <div className="text-center">
+              <div className="text-sm font-bold text-slate-700">{plan.totalProjectedHours} hrs</div>
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider">Annual Time Saved</div>
+            </div>
+            <div className="text-center">
+              <div className="text-sm font-bold text-emerald-600">${plan.totalProjectedDollars.toLocaleString()}</div>
+              <div className="text-[9px] text-slate-400 uppercase tracking-wider">Annual Value</div>
+            </div>
+          </div>
+
+          {/* Strengths */}
+          {plan.strengths.length > 0 && (
+            <div className="px-6 py-3 border-b border-slate-100">
+              <div className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider mb-1.5">Strengths</div>
+              <div className="flex flex-wrap gap-2">
+                {plan.strengths.map((s) => (
+                  <span key={s.pillarLabel} className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
+                    {s.pillarLabel} ({s.score}) — {s.message}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommendations */}
+          <div className="px-6 py-4 space-y-4">
+            {plan.recommendations.map((rec) => (
+              <RecommendationCard key={rec.pillar} rec={rec} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RecommendationCard({ rec }: { rec: ImprovementRecommendation }) {
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-1.5 h-8 rounded-full"
+            style={{ backgroundColor: rec.pillarColor }}
+          />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">{rec.pillarLabel}</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                {rec.currentScore} → {rec.targetScore}
+              </span>
+              <span className="text-[10px] text-slate-400">+{rec.compositeImpact} composite pts</span>
+            </div>
+            <div className="text-xs text-slate-600 mt-0.5">{rec.headline}</div>
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0 ml-4">
+          <div className="text-xs font-bold text-emerald-600">{rec.projectedAnnualHours} hrs</div>
+          <div className="text-[10px] text-slate-400">${rec.projectedAnnualDollars.toLocaleString()}/yr</div>
+        </div>
+      </div>
+
+      {/* Insight */}
+      <div className="px-4 pb-2">
+        <p className="text-[11px] text-slate-500 leading-relaxed">{rec.insight}</p>
+      </div>
+
+      {/* Actions */}
+      <div className="px-4 pb-3">
+        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Actions</div>
+        <div className="space-y-1">
+          {rec.actions.map((action, i) => (
+            <div key={i} className="flex gap-2 text-[11px] text-slate-600">
+              <span className="text-slate-300 flex-shrink-0">{i + 1}.</span>
+              <span>{action}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -422,6 +557,7 @@ export default function ORbitScorePage() {
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
   const [scorecards, setScorecards] = useState<ORbitScorecard[]>([])
+  const [facilitySettings, setFacilitySettings] = useState<ScorecardSettings | null>(null)
   const [sortBy, setSortBy] = useState<string>('composite')
   const [dateFilter, setDateFilter] = useState('last_90')
   const [currentStartDate, setCurrentStartDate] = useState('')
@@ -507,6 +643,7 @@ export default function ORbitScorePage() {
       }
 
       setScorecards(results)
+      setFacilitySettings(data.settings)
 
       // Track surgeons below threshold
       const allSurgeonCases: Record<string, { name: string; count: number }> = {}
@@ -648,7 +785,7 @@ export default function ORbitScorePage() {
               {/* Surgeon Cards — single column, full width */}
               <div className="flex flex-col gap-3">
                 {sorted.map((sc) => (
-                  <SurgeonCard key={sc.surgeonId} scorecard={sc} />
+                  <SurgeonCard key={sc.surgeonId} scorecard={sc} settings={facilitySettings} />
                 ))}
               </div>
             </>
