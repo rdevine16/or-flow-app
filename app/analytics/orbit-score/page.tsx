@@ -37,6 +37,7 @@ async function fetchScorecardData(
       or_room_id,
       scheduled_date,
       start_time,
+      data_validated,
       procedure_types(id, name),
       users!surgeon_id(id, first_name, last_name),
       case_milestones(
@@ -47,6 +48,7 @@ async function fetchScorecardData(
       case_statuses(name)
     `)
     .eq('facility_id', facilityId)
+    .eq('data_validated', true)
     .gte('scheduled_date', startDate)
     .lte('scheduled_date', endDate)
 
