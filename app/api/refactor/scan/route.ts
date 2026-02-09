@@ -323,11 +323,11 @@ function isApiRoute(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, '/')
   
   return (
-    // App router: ANY route.ts/route.js in app directory is a server route
-    (normalized.includes('/app/') && normalized.endsWith('/route.ts')) ||
-    (normalized.includes('/app/') && normalized.endsWith('/route.js')) ||
+    // App router: ANY route.ts/route.js in app directory
+    (normalized.startsWith('app/') && normalized.endsWith('/route.ts')) ||
+    (normalized.startsWith('app/') && normalized.endsWith('/route.js')) ||
     // Pages router: files in pages/api
-    (normalized.startsWith('pages/api/') || normalized.includes('/pages/api/'))
+    (normalized.startsWith('pages/api/'))
   )
 }
 
