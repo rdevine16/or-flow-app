@@ -193,7 +193,7 @@ function ScoreRing({
       />
       {/* Score text */}
       <text
-        x={center} y={center - 4}
+        x={center} y={center}
         textAnchor="middle" dominantBaseline="central"
         fill={grade.text}
         fontSize={size * 0.3}
@@ -201,18 +201,6 @@ function ScoreRing({
         fontFamily="ui-monospace, SFMono-Regular, monospace"
       >
         {score}
-      </text>
-      <text
-        x={center} y={center + size * 0.15}
-        textAnchor="middle" dominantBaseline="central"
-        fill={grade.text}
-        fontSize={size * 0.085}
-        fontWeight="700"
-        opacity={0.7}
-        fontFamily="ui-monospace, SFMono-Regular, monospace"
-        letterSpacing="1.5"
-      >
-        {grade.label.toUpperCase()}
       </text>
     </svg>
   )
