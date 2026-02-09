@@ -12,6 +12,7 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -378,7 +379,7 @@ export default function ChecklistBuilderPage() {
   const supabase = createClient()
   const { userData, isAdmin, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
-
+  const { showToast } = useToast()
   const [fields, setFields] = useState<ChecklistField[]>([])
   const [loading, setLoading] = useState(true)
   const [editingField, setEditingField] = useState<ChecklistField | null>(null)
@@ -410,7 +411,11 @@ export default function ChecklistBuilderPage() {
         .order('display_order')
 
       if (error) {
-        console.error('Error fetching fields:', error)
+        showToast({
+          type: 'error',
+          title: 'Error fetching checklist fields',
+          message: error.message
+        })
       } else {
         setFields(data || [])
       }
@@ -441,7 +446,11 @@ export default function ChecklistBuilderPage() {
         .single()
 
       if (error) {
-        console.error('Error creating field:', error)
+        showToast({
+  type: 'error',
+  title: 'Error creating field:',
+  message: error instanceof Error ? error.message : 'Error creating field:'
+})
       } else {
         setFields(prev => [...prev, data])
         setSuccessMessage('Field added')
@@ -463,7 +472,11 @@ export default function ChecklistBuilderPage() {
         .eq('id', editingField.id)
 
       if (error) {
-        console.error('Error updating field:', error)
+        showToast({
+  type: 'error',
+  title: 'Error updating field:',
+  message: error instanceof Error ? error.message : 'Error updating field:'
+})
       } else {
         setFields(prev => prev.map(f => 
           f.id === editingField.id ? { ...f, ...fieldData } as ChecklistField : f
@@ -499,7 +512,11 @@ export default function ChecklistBuilderPage() {
       .eq('id', field.id)
 
     if (error) {
-      console.error('Error deleting field:', error)
+      showToast({
+        type: 'error',
+        title: 'Error deleting field',
+        message: error.message
+      })
     } else {
       setFields(prev => prev.filter(f => f.id !== field.id))
       setSuccessMessage('Field deleted')
@@ -527,7 +544,11 @@ export default function ChecklistBuilderPage() {
       .eq('id', field.id)
 
     if (error) {
-      console.error('Error toggling field:', error)
+      showToast({
+        type: 'error',
+        title: 'Error toggling field',
+        message: error.message
+      })
     } else {
       setFields(prev => prev.map(f => 
         f.id === field.id ? { ...f, is_active: newIsActive } : f

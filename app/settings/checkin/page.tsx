@@ -13,6 +13,7 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { FeatureGate, TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -39,7 +40,7 @@ export default function CheckInSettingsPage() {
   const supabase = createClient()
   const { userData, isAdmin, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
-
+  const { showToast } = useToast()
   const [facility, setFacility] = useState<Facility | null>(null)
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [loading, setLoading] = useState(true)
@@ -108,7 +109,11 @@ export default function CheckInSettingsPage() {
       .eq('id', facility.id)
 
     if (error) {
-      console.error('Error saving:', error)
+      showToast({
+        type: 'error',
+        title: 'Error saving default arrival time',
+        message: error.message
+      })
     } else {
       setFacility({ ...facility, default_arrival_lead_time_minutes: defaultLeadTime })
       setSuccessMessage('Default arrival time saved')
@@ -136,7 +141,11 @@ export default function CheckInSettingsPage() {
       .eq('id', procedureId)
 
     if (error) {
-      console.error('Error saving procedure override:', error)
+      showToast({
+        type: 'error',
+        title: 'Error saving procedure override',
+        message: error.message
+      })
     } else {
       setProcedureOverrides(prev => {
         if (minutes === null) {

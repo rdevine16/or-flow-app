@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { IssueCard } from './IssueCard'
 import type { RefactorIssue } from './page'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface RefactorDashboardProps {
   initialIssues: RefactorIssue[]
@@ -12,7 +13,7 @@ export function RefactorDashboard({ initialIssues }: RefactorDashboardProps) {
   const [issues, setIssues] = useState<RefactorIssue[]>(initialIssues)
   const [loading, setLoading] = useState(false)
   const [fixedIssues, setFixedIssues] = useState<Set<string>>(new Set())
-  
+  const { showToast } = useToast()
   // Filtering state
   const [selectedType, setSelectedType] = useState<string>('all')
   const [selectedRisk, setSelectedRisk] = useState<string>('all')
@@ -32,7 +33,11 @@ export function RefactorDashboard({ initialIssues }: RefactorDashboardProps) {
       setIssues(data.issues || [])
       setCurrentPage(1) // Reset to first page
     } catch (error) {
-      console.error('Scan failed:', error)
+      showToast({
+  type: 'error',
+  title: 'Scan failed:',
+  message: error instanceof Error ? error.message : 'Scan failed:'
+})
     } finally {
       setLoading(false)
     }

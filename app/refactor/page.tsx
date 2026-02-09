@@ -5,6 +5,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { IssueCard } from './IssueCard'
 import { ProgressBar, FilterBar } from './components'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 export type RiskLevel = 'safe' | 'review' | 'manual'
@@ -42,6 +43,7 @@ export interface RefactorIssue {
 
 export default function RefactorPage() {
   const [scanning, setScanning] = useState(false)
+  const { showToast } = useToast()
   const [issues, setIssues] = useState<RefactorIssue[]>([])
   const [fixedIssues, setFixedIssues] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<{
@@ -83,19 +85,33 @@ export default function RefactorPage() {
   const handleScan = async () => {
     setScanning(true)
     
-    try {
-      const response = await fetch('/api/refactor/scan', {
-        method: 'POST',
-      })
-      const data = await response.json()
-      setIssues(data.issues || [])
-      setCurrentPage(1) // Reset to first page on new scan
-    } catch (error) {
-      console.error('Scan failed:', error)
-      alert('Scan failed. See console for details.')
-    } finally {
-      setScanning(false)
-    }
+try {
+  const response = await fetch('/api/refactor/scan', {
+    method: 'POST',
+  })
+  const data = await response.json()
+  setIssues(data.issues || [])
+  setCurrentPage(1) // Reset to first page on new scan
+  
+  // ✅ Success toast
+  showToast({
+    type: 'success',
+    title: 'Scan Complete',
+    message: `Found ${data.issues?.length || 0} issues`
+  })
+  
+} catch (error) {
+  
+  // ✅ Error toast
+  showToast({
+    type: 'error',
+    title: 'Scan Failed',
+    message: error instanceof Error ? error.message : 'Failed to scan codebase'
+  })
+  
+} finally {
+  setScanning(false)
+}
   }
 
   // Filter issues

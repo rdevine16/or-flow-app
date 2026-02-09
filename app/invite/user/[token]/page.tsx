@@ -165,9 +165,7 @@ try {
   // Success! Redirect to login page with success message
   router.push('/login?registered=true')
 
-} catch (error) {
-  // ❌ REMOVE: console.error('Error creating account:', err)
-  
+} catch (error) {  
   const message = error instanceof Error ? error.message : 'Failed to create account. Please try again.'
   setError(message)
   

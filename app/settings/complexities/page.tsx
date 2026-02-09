@@ -9,6 +9,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface Complexity {
   id: string
@@ -31,7 +32,7 @@ interface ProcedureCategory {
 export default function FacilityComplexitiesPage() {
   const supabase = createClient()
   const { effectiveFacilityId, isFacilityAdmin, isGlobalAdmin, loading: userLoading } = useUser()
-
+  const { showToast } = useToast()
   const [complexities, setComplexities] = useState<Complexity[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -76,7 +77,11 @@ export default function FacilityComplexitiesPage() {
       if (complexitiesRes.data) setComplexities(complexitiesRes.data)
       if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+        type: 'error',
+        title: 'Error fetching complexities',
+        message: error instanceof Error ? error.message : 'Error fetching complexities'
+      })
     } finally {
       setLoading(false)
     }
@@ -92,7 +97,11 @@ const fetchArchivedComplexities = async () => {
         .order('deleted_at', { ascending: false })
       if (data) setArchivedComplexities(data)
     } catch (error) {
-      console.error('Error fetching archived:', error)
+      showToast({
+        type: 'error',
+        title: 'Error fetching archived complexities',
+        message: error instanceof Error ? error.message : 'Error fetching archived complexities'
+      })
     }
   }
 
@@ -161,7 +170,11 @@ const fetchArchivedComplexities = async () => {
 
       setShowModal(false)
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+  type: 'error',
+  title: 'Error saving complexity',
+  message: error instanceof Error ? error.message : 'Error saving complexity'
+})
       alert('Error saving')
     } finally {
       setSaving(false)
@@ -179,7 +192,11 @@ const fetchArchivedComplexities = async () => {
       setComplexities(complexities.filter(c => c.id !== id))
       setArchiveConfirm(null)
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+  type: 'error',
+  title: 'Error archiving complexity',
+  message: error instanceof Error ? error.message : 'Error archiving complexity'
+})
       alert('Error archiving')
     } finally {
       setSaving(false)
@@ -201,7 +218,11 @@ const fetchArchivedComplexities = async () => {
         setArchivedComplexities(archivedComplexities.filter(c => c.id !== id))
       }
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error restoring complexity'
+})
       alert('Error restoring')
     } finally {
       setSaving(false)
@@ -232,7 +253,11 @@ const fetchArchivedComplexities = async () => {
         c.id === complexityId ? { ...c, procedure_category_ids: newIds } : c
       ))
     } catch (error) {
-      console.error('Error:', error)
+      showToast({
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }

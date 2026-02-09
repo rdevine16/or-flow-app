@@ -118,7 +118,6 @@ try {
   setMessage({ type: 'success', text: 'Profile updated successfully' })
   
 } catch (error) {
-  // ❌ REMOVE: console.error('Error updating profile:', error)
   
   const message = error instanceof Error ? error.message : 'Failed to update profile'
   
