@@ -17,6 +17,13 @@ interface AnalyticsSettings {
   turnover_target_flip_room: number
   utilization_target_percent: number
   cancellation_target_percent: number
+  // ORbit Score v2
+  start_time_milestone: 'patient_in' | 'incision'
+  start_time_grace_minutes: number
+  start_time_floor_minutes: number
+  waiting_on_surgeon_minutes: number
+  waiting_on_surgeon_floor_minutes: number
+  min_procedure_cases: number
 }
 
 const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
@@ -27,6 +34,13 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
   turnover_target_flip_room: 45,
   utilization_target_percent: 80,
   cancellation_target_percent: 5,
+  // ORbit Score v2
+  start_time_milestone: 'patient_in',
+  start_time_grace_minutes: 3,
+  start_time_floor_minutes: 20,
+  waiting_on_surgeon_minutes: 3,
+  waiting_on_surgeon_floor_minutes: 10,
+  min_procedure_cases: 3,
 }
 
 export default function AnalyticsSettingsPage() {
@@ -47,6 +61,13 @@ export default function AnalyticsSettingsPage() {
     turnover_target_flip_room: '45',
     utilization_target_percent: '80',
     cancellation_target_percent: '5',
+    // ORbit Score v2
+    start_time_milestone: 'patient_in' as 'patient_in' | 'incision',
+    start_time_grace_minutes: '3',
+    start_time_floor_minutes: '20',
+    waiting_on_surgeon_minutes: '3',
+    waiting_on_surgeon_floor_minutes: '10',
+    min_procedure_cases: '3',
   })
 
   useEffect(() => {
@@ -77,6 +98,13 @@ export default function AnalyticsSettingsPage() {
         turnover_target_flip_room: String(data.turnover_target_flip_room ?? 45),
         utilization_target_percent: String(data.utilization_target_percent ?? 80),
         cancellation_target_percent: String(data.cancellation_target_percent ?? 5),
+        // ORbit Score v2
+        start_time_milestone: data.start_time_milestone || data.fcots_milestone || 'patient_in',
+        start_time_grace_minutes: String(data.start_time_grace_minutes ?? data.fcots_grace_minutes ?? 3),
+        start_time_floor_minutes: String(data.start_time_floor_minutes ?? 20),
+        waiting_on_surgeon_minutes: String(data.waiting_on_surgeon_minutes ?? 3),
+        waiting_on_surgeon_floor_minutes: String(data.waiting_on_surgeon_floor_minutes ?? 10),
+        min_procedure_cases: String(data.min_procedure_cases ?? 3),
       })
     } else if (error?.code === 'PGRST116') {
       // No settings row yet — will insert on save
@@ -99,6 +127,13 @@ export default function AnalyticsSettingsPage() {
       turnover_target_flip_room: parseFloat(form.turnover_target_flip_room) || 45,
       utilization_target_percent: parseFloat(form.utilization_target_percent) || 80,
       cancellation_target_percent: parseFloat(form.cancellation_target_percent) || 5,
+      // ORbit Score v2
+      start_time_milestone: form.start_time_milestone,
+      start_time_grace_minutes: parseInt(form.start_time_grace_minutes) || 3,
+      start_time_floor_minutes: parseInt(form.start_time_floor_minutes) || 20,
+      waiting_on_surgeon_minutes: parseInt(form.waiting_on_surgeon_minutes) || 3,
+      waiting_on_surgeon_floor_minutes: parseInt(form.waiting_on_surgeon_floor_minutes) || 10,
+      min_procedure_cases: parseInt(form.min_procedure_cases) || 3,
     }
 
     let error
@@ -135,6 +170,13 @@ export default function AnalyticsSettingsPage() {
       turnover_target_flip_room: String(DEFAULT_SETTINGS.turnover_target_flip_room),
       utilization_target_percent: String(DEFAULT_SETTINGS.utilization_target_percent),
       cancellation_target_percent: String(DEFAULT_SETTINGS.cancellation_target_percent),
+      // ORbit Score v2
+      start_time_milestone: DEFAULT_SETTINGS.start_time_milestone,
+      start_time_grace_minutes: String(DEFAULT_SETTINGS.start_time_grace_minutes),
+      start_time_floor_minutes: String(DEFAULT_SETTINGS.start_time_floor_minutes),
+      waiting_on_surgeon_minutes: String(DEFAULT_SETTINGS.waiting_on_surgeon_minutes),
+      waiting_on_surgeon_floor_minutes: String(DEFAULT_SETTINGS.waiting_on_surgeon_floor_minutes),
+      min_procedure_cases: String(DEFAULT_SETTINGS.min_procedure_cases),
     })
   }
 
@@ -355,6 +397,220 @@ export default function AnalyticsSettingsPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* ORbit Score Configuration */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">ORbit Score</h3>
+                  <span className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                    v2
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">Surgeon scorecard thresholds — graduated scoring with linear decay</p>
+              </div>
+              <div className="p-6 space-y-6">
+
+                {/* Schedule Adherence */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-pink-500" />
+                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Schedule Adherence</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">25% weight</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Measures whether cases start at or before their scheduled time. All cases (first and subsequent) are scored identically using graduated decay.
+                  </p>
+
+                  {/* Milestone Selection */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Start Milestone
+                    </label>
+                    <div className="flex gap-3">
+                      <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                        form.start_time_milestone === 'patient_in'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="start_time_milestone"
+                          value="patient_in"
+                          checked={form.start_time_milestone === 'patient_in'}
+                          onChange={(e) => setForm({ ...form, start_time_milestone: e.target.value as 'patient_in' | 'incision' })}
+                          className="text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">Patient In</div>
+                          <div className="text-xs text-slate-500">When patient enters OR</div>
+                        </div>
+                      </label>
+                      <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                        form.start_time_milestone === 'incision'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="start_time_milestone"
+                          value="incision"
+                          checked={form.start_time_milestone === 'incision'}
+                          onChange={(e) => setForm({ ...form, start_time_milestone: e.target.value as 'patient_in' | 'incision' })}
+                          className="text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">Incision</div>
+                          <div className="text-xs text-slate-500">Cut time / procedure start</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Grace Period (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.start_time_grace_minutes}
+                        onChange={(e) => setForm({ ...form, start_time_grace_minutes: e.target.value })}
+                        min="0"
+                        max="15"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Minutes after scheduled start before score begins to decay
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Decay Floor (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.start_time_floor_minutes}
+                        onChange={(e) => setForm({ ...form, start_time_floor_minutes: e.target.value })}
+                        min="5"
+                        max="60"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Minutes over grace until case score reaches 0.
+                        {' '}Cost: <span className="font-mono font-semibold text-slate-600">
+                          {(1 / (parseInt(form.start_time_floor_minutes) || 20)).toFixed(2)}
+                        </span>/min
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual preview */}
+                  <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <span className="font-semibold text-slate-600">Example:</span>{' '}
+                      Case scheduled 7:00 AM → within {form.start_time_grace_minutes} min grace = score 1.0.{' '}
+                      At {parseInt(form.start_time_grace_minutes || '3') + Math.round((parseInt(form.start_time_floor_minutes || '20')) / 2)} min late = score 0.50.{' '}
+                      At {parseInt(form.start_time_grace_minutes || '3') + parseInt(form.start_time_floor_minutes || '20')} min late = score 0.0.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* Availability */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-violet-500" />
+                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Surgeon Availability</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">20% weight</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Measures time between prep/drape complete and incision. Steeper decay because a full surgical team is standing idle.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Expected Gap (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.waiting_on_surgeon_minutes}
+                        onChange={(e) => setForm({ ...form, waiting_on_surgeon_minutes: e.target.value })}
+                        min="0"
+                        max="15"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Normal prep-to-incision gap (scrub + site marking)
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Decay Floor (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.waiting_on_surgeon_floor_minutes}
+                        onChange={(e) => setForm({ ...form, waiting_on_surgeon_floor_minutes: e.target.value })}
+                        min="3"
+                        max="30"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Minutes over threshold until case score reaches 0.
+                        {' '}Cost: <span className="font-mono font-semibold text-slate-600">
+                          {(1 / (parseInt(form.waiting_on_surgeon_floor_minutes) || 10)).toFixed(2)}
+                        </span>/min
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual preview */}
+                  <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <span className="font-semibold text-slate-600">Example:</span>{' '}
+                      Prep/drape done → within {form.waiting_on_surgeon_minutes} min = score 1.0.{' '}
+                      At {parseInt(form.waiting_on_surgeon_minutes || '3') + Math.round((parseInt(form.waiting_on_surgeon_floor_minutes || '10')) / 2)} min gap = score 0.50.{' '}
+                      At {parseInt(form.waiting_on_surgeon_minutes || '3') + parseInt(form.waiting_on_surgeon_floor_minutes || '10')} min gap = score 0.0.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* Cohort Threshold */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-slate-400" />
+                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Scoring Thresholds</h4>
+                  </div>
+                  <div className="max-w-xs">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Min Cases per Procedure Type
+                    </label>
+                    <input
+                      type="number"
+                      value={form.min_procedure_cases}
+                      onChange={(e) => setForm({ ...form, min_procedure_cases: e.target.value })}
+                      min="1"
+                      max="10"
+                      step="1"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Minimum cases of a procedure type to include in peer comparison cohort
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </div>
 
