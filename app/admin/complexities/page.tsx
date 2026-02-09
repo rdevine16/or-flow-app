@@ -148,17 +148,16 @@ const { data, error } = await supabase
       }
 
       setShowModal(false)
-    } catch (error) {
-      console.error('Error:', error)
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      showToast({
-        type: 'error',
-        title: 'Error saving complexity',
-        message: `Error saving complexity: ${errorMessage}`
-      })
-    } finally {
-      setSaving(false)
-    }
+} catch (error) {
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  showToast({
+    type: 'error',
+    title: 'Error saving complexity',
+    message: errorMessage  // ✅ Just the error message!
+  })
+} finally {
+  setSaving(false)
+}
   }
 
   const handleDelete = async (id: string) => {
