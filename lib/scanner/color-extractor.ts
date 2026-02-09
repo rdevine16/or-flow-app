@@ -139,12 +139,12 @@ export function getSuggestedColors(
   
   // 1. Same family, appropriate shades
   const sameFamily = allColors.filter(c => c.family === currentFamily)
-  if (state === 'active') {
-    // Darker shades for active (700-950)
-    suggestions.push(...sameFamily.filter(c => 
-      parseInt(c.shade) >= 700 || c.shade === ''
-    ))
-  } else {
+if (state === 'active') {
+  // Darker shades for active (600-950)
+  suggestions.push(...sameFamily.filter(c => 
+    parseInt(c.shade) >= 600  // ← Now includes 600!
+  ))
+} else {
     // Lighter shades for inactive (50-400)
     suggestions.push(...sameFamily.filter(c => 
       parseInt(c.shade) <= 400 || c.shade === ''
