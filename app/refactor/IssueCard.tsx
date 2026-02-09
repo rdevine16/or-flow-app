@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { RefactorIssue } from './page'
 import { CheckIcon, ClipboardIcon, XMarkIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
+import { ColorPickerSection } from '@/components/refactor/ColorPickerSection'
 
 interface IssueCardProps {
   issue: RefactorIssue
@@ -117,7 +118,13 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
     setCopiedStep(stepNumber)
     setTimeout(() => setCopiedStep(null), 2000)
   }
-
+                      {/* Color Picker Section */}
+{issue.metadata?.requiresColorSelection && (
+  <ColorPickerSection 
+    issue={issue} 
+    onFixed={() => onMarkFixed()}
+  />
+)}
   // ========================================
   // NEW: Separate step-by-step from other warnings
   // ========================================
@@ -229,7 +236,6 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
                           )}
                         </div>
                       </div>
-                      
                       {/* Copy button for this step */}
                       <button
                         onClick={() => handleCopyStep(step.code, step.number)}
@@ -362,5 +368,6 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
         </div>
       )}
     </div>
+    
   )
 }

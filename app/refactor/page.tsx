@@ -6,6 +6,7 @@ import Container from '@/components/ui/Container'
 import { IssueCard } from './IssueCard'
 import { ProgressBar, FilterBar } from './components'
 
+
 export type RiskLevel = 'safe' | 'review' | 'manual'
 export type IssueType = 
   | 'console-log' 
