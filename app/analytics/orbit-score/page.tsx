@@ -259,7 +259,7 @@ function SegmentedRing({
           <g key={pillar.key}>
             <path
               d={describeArc(center, center, radius, startA, fullEnd)}
-              fill="none" stroke={pillar.color} strokeOpacity={0.12}
+              fill="none" stroke={pillar.color} strokeOpacity={0.18}
               strokeWidth={ringWidth} strokeLinecap="round"
             />
             {value * progress > 0.01 && (
@@ -287,7 +287,7 @@ function TrendIndicator({ trend, current, previous }: {
   const delta = current - previous
   const isUp = trend === 'up'
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold font-mono ${isUp ? 'text-emerald-400' : trend === 'down' ? 'text-red-400' : 'text-slate-500'}`}>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold font-mono ${isUp ? 'text-emerald-600' : trend === 'down' ? 'text-red-600' : 'text-slate-400'}`}>
       {isUp ? '▲' : trend === 'down' ? '▼' : '–'} {isUp ? '+' : ''}{delta}
     </span>
   )
@@ -309,12 +309,12 @@ function SurgeonCard({
   return (
     <div
       onClick={onSelect}
-      className={`rounded-2xl p-6 cursor-pointer transition-all duration-200 ${
+      className={`rounded-xl p-6 cursor-pointer transition-all duration-200 ${
         isSelected
-          ? 'bg-gradient-to-br from-slate-800/80 to-slate-800/40 border'
-          : 'bg-slate-900/60 border border-slate-800/60 hover:border-slate-700/60'
+          ? 'bg-white border-2 shadow-md'
+          : 'bg-white border border-slate-200/60 shadow-sm hover:shadow-md hover:border-slate-300'
       }`}
-      style={{ borderColor: isSelected ? `${grade.text}33` : undefined }}
+      style={{ borderColor: isSelected ? `${grade.text}44` : undefined }}
     >
       <div className="flex items-center gap-5">
         {/* Ring */}
@@ -328,7 +328,7 @@ function SurgeonCard({
               {composite}
             </div>
             <div
-              className="text-[9px] font-bold tracking-widest uppercase mt-1 opacity-60 font-mono"
+              className="text-[9px] font-bold tracking-widest uppercase mt-1 opacity-70 font-mono"
               style={{ color: grade.text }}
             >
               {grade.label}
@@ -339,7 +339,7 @@ function SurgeonCard({
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-base font-bold text-slate-200 truncate">
+            <h3 className="text-base font-bold text-slate-900 truncate">
               {scorecard.surgeonName}
             </h3>
             <span
@@ -350,10 +350,10 @@ function SurgeonCard({
             </span>
           </div>
 
-          <div className="text-xs text-slate-400 mb-2.5">
+          <div className="text-xs text-slate-500 mb-2.5">
             {scorecard.caseCount} cases
             {scorecard.flipRoom && (
-              <span className="ml-2 text-[10px] text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+              <span className="ml-2 text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
                 Flip
               </span>
             )}
@@ -365,7 +365,7 @@ function SurgeonCard({
               current={composite}
               previous={scorecard.previousComposite}
             />
-            <span className="text-[11px] text-slate-600">vs prior period</span>
+            <span className="text-[11px] text-slate-400">vs prior period</span>
           </div>
 
           {/* Pillar grid */}
@@ -377,7 +377,7 @@ function SurgeonCard({
                     className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                     style={{ background: p.color }}
                   />
-                  <span className="text-[10px] text-slate-500">{p.label}</span>
+                  <span className="text-[10px] text-slate-400">{p.label}</span>
                 </div>
                 <span
                   className="text-[11px] font-bold font-mono"
@@ -400,9 +400,9 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
   const { composite, grade, pillars } = scorecard
 
   return (
-    <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-8">
+    <div className="bg-white border border-slate-200/60 rounded-xl p-8 shadow-sm">
       {/* Header with large ring */}
-      <div className="flex flex-col items-center mb-8 pb-7 border-b border-slate-800/60">
+      <div className="flex flex-col items-center mb-8 pb-7 border-b border-slate-100">
         <div className="relative mb-4">
           <SegmentedRing pillars={pillars} size={200} ringWidth={16} />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
@@ -413,14 +413,14 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
               {composite}
             </div>
             <div
-              className="text-[11px] font-bold tracking-widest uppercase mt-1 opacity-60 font-mono"
+              className="text-[11px] font-bold tracking-widest uppercase mt-1 opacity-70 font-mono"
               style={{ color: grade.text }}
             >
               {grade.label}
             </div>
           </div>
         </div>
-        <h2 className="text-xl font-bold text-slate-200">{scorecard.surgeonName}</h2>
+        <h2 className="text-xl font-bold text-slate-900">{scorecard.surgeonName}</h2>
         <p className="text-sm text-slate-500 mt-1">
           {scorecard.caseCount} cases · {scorecard.procedures.length} procedure types
         </p>
@@ -439,15 +439,15 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
                     className="w-2 h-2 rounded-full"
                     style={{ background: pillar.color }}
                   />
-                  <span className="text-sm font-semibold text-slate-300">
+                  <span className="text-sm font-semibold text-slate-700">
                     {pillar.label}
                   </span>
-                  <span className="text-[11px] text-slate-600">
+                  <span className="text-[11px] text-slate-400">
                     {pillar.description}
                   </span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-[10px] text-slate-600 font-mono">
+                  <span className="text-[10px] text-slate-400 font-mono">
                     {weighted} pts
                   </span>
                   <span
@@ -460,12 +460,12 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
               </div>
               <div
                 className="h-1.5 rounded-full overflow-hidden"
-                style={{ background: `${pillar.color}12` }}
+                style={{ background: `${pillar.color}15` }}
               >
                 <div
                   className="h-full rounded-full transition-all duration-700 ease-out"
                   style={{
-                    background: `linear-gradient(90deg, ${pillar.color}99, ${pillar.color})`,
+                    background: `linear-gradient(90deg, ${pillar.color}88, ${pillar.color})`,
                     width: `${value}%`,
                   }}
                 />
@@ -476,8 +476,8 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
       </div>
 
       {/* Composite bar */}
-      <div className="mt-7 pt-5 border-t border-slate-800/60">
-        <div className="text-[10px] font-semibold text-slate-600 tracking-wider uppercase mb-3 font-mono">
+      <div className="mt-7 pt-5 border-t border-slate-100">
+        <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase mb-3 font-mono">
           Composite Breakdown
         </div>
         <div className="flex h-6 rounded-md overflow-hidden gap-0.5">
@@ -487,11 +487,10 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
               <div
                 key={pillar.key}
                 title={`${pillar.label}: ${contribution.toFixed(1)} pts`}
-                className="flex items-center justify-center text-[8px] font-bold font-mono"
+                className="flex items-center justify-center text-[8px] font-bold font-mono text-white"
                 style={{
                   width: `${contribution}%`,
                   background: pillar.color,
-                  color: '#0B0F19',
                 }}
               >
                 {contribution >= 8 ? Math.round(contribution) : ''}
@@ -500,25 +499,25 @@ function DetailPanel({ scorecard }: { scorecard: ORbitScorecard }) {
           })}
         </div>
         <div className="flex justify-end mt-1.5">
-          <span className="text-[11px] text-slate-500 font-mono">
+          <span className="text-[11px] text-slate-400 font-mono">
             {composite} / 100
           </span>
         </div>
       </div>
 
       {/* Procedures */}
-      <div className="mt-5 pt-5 border-t border-slate-800/60">
-        <div className="text-[10px] font-semibold text-slate-600 tracking-wider uppercase mb-2.5 font-mono">
+      <div className="mt-5 pt-5 border-t border-slate-100">
+        <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase mb-2.5 font-mono">
           Procedure Mix
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {scorecard.procedureBreakdown.map(({ name, count }) => (
             <span
               key={name}
-              className="text-[11px] text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-md border border-slate-700/50"
+              className="text-[11px] text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200"
             >
               {name}
-              <span className="text-slate-600 ml-1.5">×{count}</span>
+              <span className="text-slate-400 ml-1.5">×{count}</span>
             </span>
           ))}
         </div>
@@ -544,11 +543,11 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
     <div className="flex gap-3 mb-7">
       {[
         { label: 'Facility Average', value: String(avg), color: getGrade(avg).text },
-        { label: 'Surgeons', value: String(scorecards.length), color: '#E2E8F0' },
-        { label: 'Total Cases', value: String(totalCases), color: '#E2E8F0' },
+        { label: 'Surgeons', value: String(scorecards.length), color: '#0F172A' },
+        { label: 'Total Cases', value: String(totalCases), color: '#0F172A' },
       ].map((stat, i) => (
-        <div key={i} className="bg-slate-900/60 border border-slate-800/60 rounded-xl px-5 py-4 flex-1">
-          <div className="text-[10px] font-semibold text-slate-600 tracking-wider uppercase font-mono mb-1.5">
+        <div key={i} className="bg-white border border-slate-200/60 rounded-xl px-5 py-4 flex-1 shadow-sm">
+          <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">
             {stat.label}
           </div>
           <div
@@ -559,8 +558,8 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
           </div>
         </div>
       ))}
-      <div className="bg-slate-900/60 border border-slate-800/60 rounded-xl px-5 py-4 flex-1">
-        <div className="text-[10px] font-semibold text-slate-600 tracking-wider uppercase font-mono mb-1.5">
+      <div className="bg-white border border-slate-200/60 rounded-xl px-5 py-4 flex-1 shadow-sm">
+        <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">
           Distribution
         </div>
         <div className="flex gap-3.5">
@@ -587,13 +586,13 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
 
 function RingLegend() {
   return (
-    <div className="flex gap-4 flex-wrap py-3.5 mb-5 border-b border-slate-800/60">
+    <div className="flex gap-4 flex-wrap py-3.5 mb-5 border-b border-slate-200">
       {PILLARS.map((p) => (
         <div key={p.key} className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-slate-500">
             {p.label}
-            <span className="text-slate-600 ml-1">{(p.weight * 100).toFixed(0)}%</span>
+            <span className="text-slate-400 ml-1">{(p.weight * 100).toFixed(0)}%</span>
           </span>
         </div>
       ))}
@@ -716,12 +715,13 @@ export default function ORbitScorePage() {
 
   return (
     <DashboardLayout>
+      <div className="min-h-screen bg-slate-50/50">
       <Container>
         <div className="py-8">
           {/* Header */}
           <div className="flex justify-between items-end mb-2.5">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              <h1 className="text-2xl font-semibold text-slate-900">
                 ORbit Score
               </h1>
               <p className="text-sm text-slate-500 mt-1 max-w-xl">
@@ -744,7 +744,7 @@ export default function ORbitScorePage() {
                   className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
                     dateRange === opt.key
                       ? 'bg-blue-600 text-white'
-                      : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      : 'text-slate-500 hover:bg-slate-100'
                   }`}
                 >
                   {opt.label}
@@ -791,8 +791,8 @@ export default function ORbitScorePage() {
 
               {/* Insufficient data notice */}
               {insufficientSurgeons.length > 0 && (
-                <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg">
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-700">
                     <span className="font-semibold">Insufficient data:</span>{' '}
                     {insufficientSurgeons.map(s => `${s.name} (${s.count} cases)`).join(', ')}
                     {' '}— minimum {MIN_CASE_THRESHOLD} cases required for scoring
@@ -816,8 +816,8 @@ export default function ORbitScorePage() {
                     onClick={() => setSortBy(opt.key)}
                     className={`text-[11px] font-semibold px-3 py-1 rounded-md transition-all ${
                       sortBy === opt.key
-                        ? 'bg-slate-800 text-slate-200 border border-slate-700'
-                        : 'text-slate-500 border border-transparent hover:text-slate-300'
+                        ? 'bg-slate-900 text-white'
+                        : 'text-slate-500 border border-transparent hover:text-slate-700 hover:bg-slate-100'
                     }`}
                   >
                     {opt.label}
@@ -846,7 +846,7 @@ export default function ORbitScorePage() {
 
           {/* Methodology footer */}
           {scorecards.length > 0 && (
-            <div className="mt-10 pt-5 border-t border-slate-200 dark:border-slate-800">
+            <div className="mt-10 pt-5 border-t border-slate-200">
               <p className="text-[11px] text-slate-400 leading-relaxed">
                 <span className="font-semibold text-slate-500">Methodology:</span> Each pillar is
                 percentile-ranked within procedure-type cohort, volume-weighted across case mix,
@@ -858,6 +858,7 @@ export default function ORbitScorePage() {
           )}
         </div>
       </Container>
+      </div>
     </DashboardLayout>
   )
 }

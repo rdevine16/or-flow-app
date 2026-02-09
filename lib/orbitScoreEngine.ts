@@ -48,12 +48,12 @@ export interface PillarDefinition {
 }
 
 export const PILLARS: PillarDefinition[] = [
-  { key: 'consistency',   label: 'Consistency',   weight: 0.20, color: '#34D399', description: 'Case duration predictability' },
-  { key: 'profitability', label: 'Profitability',  weight: 0.20, color: '#60A5FA', description: 'Margin per OR minute' },
-  { key: 'schedAccuracy', label: 'Schedule Acc.',   weight: 0.15, color: '#F472B6', description: 'Actual vs scheduled time' },
-  { key: 'onTime',        label: 'On-Time',         weight: 0.15, color: '#FBBF24', description: 'Start time adherence' },
-  { key: 'availability',  label: 'Availability',    weight: 0.15, color: '#A78BFA', description: 'Ready when room is ready' },
-  { key: 'blockSteward',  label: 'Block Mgmt',      weight: 0.15, color: '#FB923C', description: 'Block utilization & release' },
+  { key: 'consistency',   label: 'Consistency',   weight: 0.20, color: '#059669', description: 'Case duration predictability' },
+  { key: 'profitability', label: 'Profitability',  weight: 0.20, color: '#2563EB', description: 'Margin per OR minute' },
+  { key: 'schedAccuracy', label: 'Schedule Acc.',   weight: 0.15, color: '#DB2777', description: 'Actual vs scheduled time' },
+  { key: 'onTime',        label: 'On-Time',         weight: 0.15, color: '#D97706', description: 'Start time adherence' },
+  { key: 'availability',  label: 'Availability',    weight: 0.15, color: '#7C3AED', description: 'Ready when room is ready' },
+  { key: 'blockSteward',  label: 'Block Mgmt',      weight: 0.15, color: '#EA580C', description: 'Block utilization & release' },
 ]
 
 export const MIN_CASE_THRESHOLD = 15
@@ -186,10 +186,10 @@ export function computeComposite(pillars: PillarScores): number {
 }
 
 export function getGrade(score: number): GradeInfo {
-  if (score >= 90) return { letter: 'A', label: 'Elite', text: '#34D399', bg: '#065F46' }
-  if (score >= 80) return { letter: 'B', label: 'Strong', text: '#60A5FA', bg: '#1E3A5F' }
-  if (score >= 70) return { letter: 'C', label: 'Developing', text: '#FBBF24', bg: '#713F12' }
-  return { letter: 'D', label: 'Needs Improvement', text: '#F87171', bg: '#7F1D1D' }
+  if (score >= 90) return { letter: 'A', label: 'Elite', text: '#059669', bg: '#ECFDF5' }
+  if (score >= 80) return { letter: 'B', label: 'Strong', text: '#2563EB', bg: '#EFF6FF' }
+  if (score >= 70) return { letter: 'C', label: 'Developing', text: '#D97706', bg: '#FFFBEB' }
+  return { letter: 'D', label: 'Needs Improvement', text: '#DC2626', bg: '#FEF2F2' }
 }
 
 // ─── CASE DURATION EXTRACTION ─────────────────────────────────
