@@ -1,7 +1,7 @@
 // lib/orbitScoreEngine.ts
 // ORbit Score Calculation Engine
 // ─────────────────────────────────────────────────────────────
-// Computes 6 pillar scores for each surgeon based on operational metrics.
+// Computes 5 pillar scores for each surgeon based on operational metrics.
 // Each pillar: raw metric → percentile within procedure cohort → volume-weighted blend → clamped 0-100
 // Composite = weighted sum of all pillars.
 
@@ -13,7 +13,6 @@ export interface PillarScores {
   schedAccuracy: number
   onTime: number
   availability: number
-  blockSteward: number
 }
 
 export interface ORbitScorecard {
@@ -48,12 +47,11 @@ export interface PillarDefinition {
 }
 
 export const PILLARS: PillarDefinition[] = [
-  { key: 'consistency',   label: 'Consistency',   weight: 0.20, color: '#059669', description: 'Case duration predictability' },
-  { key: 'profitability', label: 'Profitability',  weight: 0.20, color: '#2563EB', description: 'Margin per OR minute' },
-  { key: 'schedAccuracy', label: 'Schedule Acc.',   weight: 0.15, color: '#DB2777', description: 'Actual vs scheduled time' },
-  { key: 'onTime',        label: 'On-Time',         weight: 0.15, color: '#D97706', description: 'Start time adherence' },
-  { key: 'availability',  label: 'Availability',    weight: 0.15, color: '#7C3AED', description: 'Ready when room is ready' },
-  { key: 'blockSteward',  label: 'Block Mgmt',      weight: 0.15, color: '#EA580C', description: 'Block utilization & release' },
+  { key: 'consistency',   label: 'Consistency',    weight: 0.20, color: '#059669', description: 'Case duration predictability' },
+  { key: 'profitability', label: 'Profitability',   weight: 0.20, color: '#2563EB', description: 'Margin per OR minute' },
+  { key: 'schedAccuracy', label: 'Schedule Acc.',    weight: 0.20, color: '#DB2777', description: 'Actual vs scheduled time' },
+  { key: 'onTime',        label: 'On-Time',          weight: 0.20, color: '#D97706', description: 'Start time adherence' },
+  { key: 'availability',  label: 'Availability',     weight: 0.20, color: '#7C3AED', description: 'Ready when room is ready' },
 ]
 
 export const MIN_CASE_THRESHOLD = 15
@@ -86,18 +84,6 @@ export interface ScorecardFinancials {
   total_case_minutes: number | null
 }
 
-export interface ScorecardBlock {
-  id: string
-  surgeon_id: string
-  day_of_week: number          // 0=Sun, 6=Sat
-  start_time: string           // HH:MM
-  end_time: string             // HH:MM
-  recurrence_type: string
-  effective_start: string
-  effective_end: string | null
-  or_room_id?: string | null
-}
-
 export interface ScorecardFlag {
   case_id: string
   flag_type: string            // 'threshold' | 'delay'
@@ -117,14 +103,12 @@ export interface ScorecardSettings {
 export interface ScorecardInput {
   cases: ScorecardCase[]
   financials: ScorecardFinancials[]
-  blocks: ScorecardBlock[]
   flags: ScorecardFlag[]
   settings: ScorecardSettings
   dateRange: { start: string; end: string }
   timezone: string                        // IANA timezone e.g. 'America/New_York'
   previousPeriodCases?: ScorecardCase[]
   previousPeriodFinancials?: ScorecardFinancials[]
-  previousPeriodBlocks?: ScorecardBlock[]
   previousPeriodFlags?: ScorecardFlag[]
 }
 
@@ -413,11 +397,11 @@ function getPeerScheduleMADs(allCases: ScorecardCase[], procedureTypeId: string)
 // ─── PILLAR 4: ON-TIME PERFORMANCE (15%) ──────────────────────
 // FCOTS + start time adherence for non-first cases
 // Uses facility-configured start milestone (patient_in or incision)
+// FCOTS compares against scheduled case start time, NOT block start time
 
 function calculateOnTimePerformance(
   surgeonCases: ScorecardCase[],
   allCases: ScorecardCase[],
-  blocks: ScorecardBlock[],
   settings: ScorecardSettings,
   timezone: string,
 ): number {
@@ -441,7 +425,7 @@ function calculateOnTimePerformance(
     })
   }
 
-  // FCOTS: Check surgeon's first cases
+  // FCOTS: Check surgeon's first cases against scheduled start time
   let fcotsOnTime = 0
   let fcotsTotal = 0
 
@@ -458,32 +442,21 @@ function calculateOnTimePerformance(
       ? c.incision_at
       : c.patient_in_at
 
-    if (!actualStart) continue
+    if (!actualStart || !c.start_time) continue
+
+    const scheduledMin = timeToMinutes(c.start_time)
+    const actualMin = utcToLocalMinutes(actualStart, timezone)
+    const deltaMin = actualMin - scheduledMin
 
     if (isFirst) {
-      // FCOTS check — compare against block start time
-      const surgeonBlocks = blocks.filter(b => b.surgeon_id === surgeonId)
-      const caseDate = new Date(c.scheduled_date)
-      const caseDow = caseDate.getUTCDay()
-      const block = surgeonBlocks.find(b => b.day_of_week === caseDow)
-
-      if (block) {
-        const blockStartMin = timeToMinutes(block.start_time)
-        const actualMin = utcToLocalMinutes(actualStart, timezone)
-        const deltaMin = actualMin - blockStartMin
-
-        fcotsTotal++
-        if (deltaMin <= settings.fcots_grace_minutes) {
-          fcotsOnTime++
-        }
+      // FCOTS: compare actual milestone against the case's own scheduled start
+      fcotsTotal++
+      if (deltaMin <= settings.fcots_grace_minutes) {
+        fcotsOnTime++
       }
     } else {
-      // Non-first case: compare scheduled vs actual
-      if (c.start_time && actualStart) {
-        const scheduledMin = timeToMinutes(c.start_time)
-        const actualMin = utcToLocalMinutes(actualStart, timezone)
-        startDeltas.push(actualMin - scheduledMin)
-      }
+      // Non-first case: same delta calculation for adherence
+      startDeltas.push(deltaMin)
     }
   }
 
@@ -497,7 +470,7 @@ function calculateOnTimePerformance(
     const surgeonMedianLate = median(startDeltas)
 
     // Get peer median-late values for percentile ranking
-    const peerMedianLates = getPeerStartDeltas(allCases, blocks, settings, timezone)
+    const peerMedianLates = getPeerStartDeltas(allCases, settings, timezone)
     const pctile = percentileRank(surgeonMedianLate, peerMedianLates, true) // lower is better
     adherenceScore = clampScore(pctile)
   }
@@ -509,7 +482,6 @@ function calculateOnTimePerformance(
 
 function getPeerStartDeltas(
   allCases: ScorecardCase[],
-  blocks: ScorecardBlock[],
   settings: ScorecardSettings,
   timezone: string,
 ): number[] {
@@ -613,124 +585,6 @@ function getPeerDelayRates(allCases: ScorecardCase[], flags: ScorecardFlag[]): n
     .map(s => (s.delayed / s.total) * 100)
 }
 
-// ─── PILLAR 6: BLOCK STEWARDSHIP (15%) ────────────────────────
-// Block utilization percentage
-
-function calculateBlockStewardship(
-  surgeonCases: ScorecardCase[],
-  allCases: ScorecardCase[],
-  blocks: ScorecardBlock[],
-  dateRange: { start: string; end: string },
-): number {
-  const surgeonId = surgeonCases[0]?.surgeon_id
-  if (!surgeonId) return 50
-
-  const surgeonBlocks = blocks.filter(b => b.surgeon_id === surgeonId)
-  if (surgeonBlocks.length === 0) return 50 // no blocks allocated
-
-  // Calculate total allocated block minutes in the date range
-  const startDate = new Date(dateRange.start)
-  const endDate = new Date(dateRange.end)
-  let totalAllocatedMinutes = 0
-  let totalUsedMinutes = 0
-
-  // Iterate through each day in the range
-  const current = new Date(startDate)
-  while (current <= endDate) {
-    const dow = current.getUTCDay()
-    const dateStr = current.toISOString().split('T')[0]
-
-    // Find active blocks for this day of week
-    for (const block of surgeonBlocks) {
-      if (block.day_of_week !== dow) continue
-      if (block.effective_start > dateStr) continue
-      if (block.effective_end && block.effective_end < dateStr) continue
-
-      const blockMinutes = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
-      if (blockMinutes <= 0) continue
-      totalAllocatedMinutes += blockMinutes
-
-      // Sum case durations on this date for this surgeon
-      const dayCases = surgeonCases.filter(c => c.scheduled_date === dateStr)
-      const dayUsed = dayCases.reduce((sum, c) => {
-        const d = getCaseDuration(c)
-        return sum + (d || 0)
-      }, 0)
-      totalUsedMinutes += Math.min(dayUsed, blockMinutes) // cap at block size
-    }
-
-    current.setUTCDate(current.getUTCDate() + 1)
-  }
-
-  if (totalAllocatedMinutes === 0) return 50
-
-  const surgeonUtilization = (totalUsedMinutes / totalAllocatedMinutes) * 100
-
-  // Get peer utilization rates
-  const peerUtilizations = getPeerBlockUtilization(allCases, blocks, dateRange)
-
-  const pctile = percentileRank(surgeonUtilization, peerUtilizations)
-  return clampScore(pctile)
-}
-
-function getPeerBlockUtilization(
-  allCases: ScorecardCase[],
-  blocks: ScorecardBlock[],
-  dateRange: { start: string; end: string },
-): number[] {
-  // Group blocks by surgeon
-  const blocksBySurgeon: Record<string, ScorecardBlock[]> = {}
-  for (const b of blocks) {
-    if (!blocksBySurgeon[b.surgeon_id]) blocksBySurgeon[b.surgeon_id] = []
-    blocksBySurgeon[b.surgeon_id].push(b)
-  }
-
-  const casesBySurgeon: Record<string, ScorecardCase[]> = {}
-  for (const c of allCases) {
-    if (!casesBySurgeon[c.surgeon_id]) casesBySurgeon[c.surgeon_id] = []
-    casesBySurgeon[c.surgeon_id].push(c)
-  }
-
-  const utilizations: number[] = []
-
-  for (const [surgeonId, surgBlocks] of Object.entries(blocksBySurgeon)) {
-    const surgCases = casesBySurgeon[surgeonId] || []
-
-    const startDate = new Date(dateRange.start)
-    const endDate = new Date(dateRange.end)
-    let allocated = 0
-    let used = 0
-
-    const current = new Date(startDate)
-    while (current <= endDate) {
-      const dow = current.getUTCDay()
-      const dateStr = current.toISOString().split('T')[0]
-
-      for (const block of surgBlocks) {
-        if (block.day_of_week !== dow) continue
-        if (block.effective_start > dateStr) continue
-        if (block.effective_end && block.effective_end < dateStr) continue
-
-        const blockMin = timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
-        if (blockMin <= 0) continue
-        allocated += blockMin
-
-        const dayCases = surgCases.filter(c => c.scheduled_date === dateStr)
-        const dayUsed = dayCases.reduce((sum, c) => sum + (getCaseDuration(c) || 0), 0)
-        used += Math.min(dayUsed, blockMin)
-      }
-
-      current.setUTCDate(current.getUTCDate() + 1)
-    }
-
-    if (allocated > 0) {
-      utilizations.push((used / allocated) * 100)
-    }
-  }
-
-  return utilizations
-}
-
 // ─── HELPER FUNCTIONS ─────────────────────────────────────────
 
 function groupByProcedure(cases: ScorecardCase[]): Record<string, ScorecardCase[]> {
@@ -764,7 +618,7 @@ function detectFlipRoom(cases: ScorecardCase[]): boolean {
 // ─── MAIN CALCULATION ─────────────────────────────────────────
 
 export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
-  const { cases, financials, blocks, flags, settings, dateRange, timezone } = input
+  const { cases, financials, flags, settings, dateRange, timezone } = input
 
   // Build financials lookup
   const financialsMap = new Map<string, ScorecardFinancials>()
@@ -799,9 +653,8 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
         consistency: calculateConsistency(surgeonCases, input.previousPeriodCases),
         profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap),
         schedAccuracy: calculateScheduleAccuracy(surgeonCases, input.previousPeriodCases),
-        onTime: calculateOnTimePerformance(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, settings, timezone),
+        onTime: calculateOnTimePerformance(surgeonCases, input.previousPeriodCases, settings, timezone),
         availability: calculateAvailability(surgeonCases, input.previousPeriodCases, input.previousPeriodFlags || flags),
-        blockSteward: calculateBlockStewardship(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, dateRange),
       }
       previousComposites.set(surgeonId, computeComposite(pillars))
     }
@@ -829,9 +682,8 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
       consistency: calculateConsistency(surgeonCases, cases),
       profitability: calculateProfitability(surgeonCases, cases, financialsMap),
       schedAccuracy: calculateScheduleAccuracy(surgeonCases, cases),
-      onTime: calculateOnTimePerformance(surgeonCases, cases, blocks, settings, timezone),
+      onTime: calculateOnTimePerformance(surgeonCases, cases, settings, timezone),
       availability: calculateAvailability(surgeonCases, cases, flags),
-      blockSteward: calculateBlockStewardship(surgeonCases, cases, blocks, dateRange),
     }
 
     const composite = computeComposite(pillars)

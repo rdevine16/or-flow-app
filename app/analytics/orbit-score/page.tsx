@@ -15,7 +15,6 @@ import {
   type ORbitScorecard,
   type ScorecardCase,
   type ScorecardFinancials,
-  type ScorecardBlock,
   type ScorecardFlag,
   type ScorecardSettings,
   type PillarScores,
@@ -101,12 +100,6 @@ async function fetchScorecardData(
     }
   }
 
-  const { data: blocks } = await supabase
-    .from('block_schedules')
-    .select('id, surgeon_id, day_of_week, start_time, end_time, recurrence_type, effective_start, effective_end, or_room_id')
-    .eq('facility_id', facilityId)
-    .is('deleted_at', null)
-
   let flags: ScorecardFlag[] = []
   if (caseIds.length > 0) {
     for (let i = 0; i < caseIds.length; i += 100) {
@@ -150,7 +143,6 @@ async function fetchScorecardData(
   return {
     cases,
     financials: financials as ScorecardFinancials[],
-    blocks: (blocks || []) as ScorecardBlock[],
     flags,
     settings,
   }
@@ -469,7 +461,6 @@ export default function ORbitScorePage() {
         timezone: facilityTimezone,
         previousPeriodCases: prevData?.cases || [],
         previousPeriodFinancials: prevData?.financials || [],
-        previousPeriodBlocks: prevData?.blocks || [],
         previousPeriodFlags: prevData?.flags || [],
       })
 
