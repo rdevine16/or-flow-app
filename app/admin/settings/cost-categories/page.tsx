@@ -128,9 +128,9 @@ if (data) setCategories(data)
         .not('deleted_at', 'is', null)
 
       setArchivedCount(count || 0)
-    } catch (error) {
-      console.error('Error:', error)
-    } finally {
+} catch (error) {
+  showToast(error instanceof Error ? error.message : 'Error fetching categories', 'error')
+} finally {
       setLoading(false)
     }
   }
@@ -278,32 +278,32 @@ const handleDelete = async () => {
   }
 }
 
-  const handleRestore = async (category: DefaultCostCategory) => {
-    setSaving(true)
+const handleRestore = async (category: DefaultCostCategory) => {
+  setSaving(true)
 
-    try {
-      const { error } = await supabase
-        .from('cost_category_templates')
-        .update({
-          deleted_at: null,
-          deleted_by: null
-        })
-        .eq('id', category.id)
+  try {
+    const { error } = await supabase
+      .from('cost_category_templates')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', category.id)
 
-      if (error) throw error
+    if (error) throw error
 
-      setCategories(categories.filter(c => c.id !== category.id))
-      setArchivedCount(prev => prev - 1)
-      showToast(`"${category.name}" restored successfully`, 'success')
-    } catch (error) {
-      console.error('Error restoring category:', error)
-      showToast('Failed to restore category', 'error')
-    } finally {
-      setSaving(false)
-    }
+    setCategories(categories.filter(c => c.id !== category.id))
+    setArchivedCount(prev => prev - 1)
+    
+    showToast(`"${category.name}" restored successfully`, 'success')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'Failed to restore category', 'error')
+  } finally {
+    setSaving(false)
   }
+}
 
-  const toggleActive = async (category: DefaultCostCategory) => {
+const toggleActive = async (category: DefaultCostCategory) => {
     setSaving(true)
 
     try {

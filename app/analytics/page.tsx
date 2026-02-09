@@ -45,6 +45,7 @@ import {
   PresentationChartLineIcon,
   CurrencyDollarIcon,
   FlagIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline'
 
 // ============================================
@@ -756,6 +757,14 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
 
   // Report cards configuration
   const reportCards: ReportCardProps[] = [
+    {
+      title: 'ORbit Score',
+      description: 'Composite surgeon performance scores based on controllable operational metrics',
+      href: '/analytics/orbit-score',
+      icon: StarIcon,
+      accentColor: 'violet',
+      badge: 'New',
+    },
     {
       title: 'KPI Overview',
       description: 'Complete dashboard with all key performance indicators, targets, and daily trends',
