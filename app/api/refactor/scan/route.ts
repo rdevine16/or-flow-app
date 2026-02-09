@@ -82,7 +82,7 @@ async function scanFile(
   // Pattern 2: Inline delete confirmations
   findInlineDeleteConfirms(relativePath, lines, issues)
 
-  // Pattern 3: Hardcoded colors
+  findIncorrectApiRoutes(relativePath, lines, issues)
 
   // Pattern 4: Inline spinners
   findInlineSpinners(relativePath, lines, issues)
@@ -120,16 +120,136 @@ async function scanFile(
   // Pattern 15: Table with sorting
   findSortableTables(relativePath, lines, issues)
 }
+function detectCatchBlock(lines: string[], currentIndex: number): boolean {
+  // Look backwards up to 20 lines for "} catch"
+  for (let i = Math.max(0, currentIndex - 20); i < currentIndex; i++) {
+    if (lines[i].includes('} catch') || lines[i].includes('catch (')) {
+      // Make sure we haven't exited the catch block
+      let braceCount = 0
+      for (let j = i; j <= currentIndex; j++) {
+        braceCount += (lines[j].match(/{/g) || []).length
+        braceCount -= (lines[j].match(/}/g) || []).length
+      }
+      // If braceCount > 0, we're still inside the catch block
+      return braceCount > 0
+    }
+  }
+  return false
+}
+function parseConsoleArgs(args: string, isInCatchBlock: boolean): { message: string, hasErrorVar: boolean } {
+  // Check if args contain an error variable
+  const hasErrorVar = /\b(error|err|e)\b/.test(args)
+  
+  if (!hasErrorVar) {
+    // No error variable - simple string interpolation
+    // Handle patterns like: 'Error:', someVar
+    const parts = args.split(',').map(s => s.trim())
+    if (parts.length === 1) {
+      // Single argument
+      return { message: parts[0], hasErrorVar: false }
+    } else {
+      // Multiple arguments - combine into template literal
+      const combined = parts.map(p => {
+        // If it's a string literal, extract the content
+        const stringMatch = p.match(/^['"`](.+)['"`]$/)
+        if (stringMatch) return stringMatch[1]
+        return `\${${p}}`
+      }).join(' ')
+      return { message: `\`${combined}\``, hasErrorVar: false }
+    }
+  }
+  
+  // Has error variable - need TypeScript-safe handling
+  if (isInCatchBlock) {
+    // In catch block - use type guard
+    const stringPart = args.split(',')[0].replace(/['"]/g, '')
+    
+    // Check which error variable name is used
+    const errorVarMatch = args.match(/\b(error|err|e)\b/)
+    const errorVar = errorVarMatch ? errorVarMatch[1] : 'error'
+    
+    return {
+      message: `${errorVar} instanceof Error ? ${errorVar}.message : '${stringPart}'`,
+      hasErrorVar: true
+    }
+  } else {
+    // Not in catch block - still use type guard for safety
+    const stringPart = args.split(',')[0].replace(/['"]/g, '')
+    const errorVarMatch = args.match(/\b(error|err|e)\b/)
+    const errorVar = errorVarMatch ? errorVarMatch[1] : 'error'
+    
+    return {
+      message: `${errorVar} instanceof Error ? ${errorVar}.message : '${stringPart}'`,
+      hasErrorVar: true
+    }
+  }
+}
+function findInlineDeleteConfirms(
+  file: string,
+  lines: string[],
+  issues: RefactorIssue[]
+) {
+  const deletePattern = /deleteConfirm|confirmDelete|showDeleteConfirm/
 
-// ============================================
-// PATTERN DETECTORS
-// ============================================
+  lines.forEach((line, index) => {
+    if (deletePattern.test(line)) {
+      const lineNum = index + 1
+      const context = getContext(lines, index, 10)
 
+      // Look for the pattern with conditional rendering
+      if (context.includes('?') && context.includes(':')) {
+        issues.push({
+          id: `${file}-${lineNum}-delete`,
+          file,
+          line: lineNum,
+          type: 'delete-confirm',
+          risk: 'manual',
+          description: 'Replace inline delete confirmation with ConfirmDialog component',
+          beforeCode: context.slice(0, 300) + '...',
+          afterCode: `const { confirmDialog, showConfirm } = useConfirmDialog()
+
+<button onClick={() => showConfirm({
+  variant: 'danger',
+  title: 'Delete item?',
+  message: 'This cannot be undone',
+  onConfirm: async () => {
+    await handleDelete(id)
+    showToast({ type: 'success', title: 'Deleted' })
+  }
+})}>
+  Delete
+</button>
+
+{/* Add at bottom of component */}
+{confirmDialog}`,
+          context,
+          imports: [
+            "import { useConfirmDialog } from '@/components/ui/ConfirmDialog'",
+            "import { useToast } from '@/components/ui/Toast/ToastProvider'",
+          ],
+          warnings: [
+            'Manual refactoring required - review surrounding code',
+            'Remove old deleteConfirm state and conditional rendering',
+          ],
+        })
+      }
+    }
+  })
+}
 function findConsoleLogs(
   file: string,
   lines: string[],
   issues: RefactorIssue[]
 ) {
+  // ========================================
+  // NEW: Skip API routes (server-side code)
+  // ========================================
+  if (isApiRoute(file)) {
+    // API routes should keep console.error for server-side logging
+    // Don't suggest toast conversions for server-side code
+    return
+  }
+  
   lines.forEach((line, index) => {
     // Match console.log, console.error, console.warn
     if (line.includes('console.log') || line.includes('console.error') || line.includes('console.warn')) {
@@ -194,130 +314,24 @@ function findConsoleLogs(
   })
 }
 
-/**
- * Detect if line is inside a catch block
- */
-function detectCatchBlock(lines: string[], currentIndex: number): boolean {
-  // Look backwards up to 20 lines for "} catch"
-  for (let i = Math.max(0, currentIndex - 20); i < currentIndex; i++) {
-    if (lines[i].includes('} catch') || lines[i].includes('catch (')) {
-      // Make sure we haven't exited the catch block
-      let braceCount = 0
-      for (let j = i; j <= currentIndex; j++) {
-        braceCount += (lines[j].match(/{/g) || []).length
-        braceCount -= (lines[j].match(/}/g) || []).length
-      }
-      // If braceCount > 0, we're still inside the catch block
-      return braceCount > 0
-    }
-  }
-  return false
-}
-
-/**
- * Parse console arguments and generate TypeScript-safe message code
- */
-function parseConsoleArgs(args: string, isInCatchBlock: boolean): { message: string, hasErrorVar: boolean } {
-  // Check if args contain an error variable
-  const hasErrorVar = /\b(error|err|e)\b/.test(args)
+function isApiRoute(filePath: string): boolean {
+  // Match patterns:
+  // - app/api/**/route.ts
+  // - app/api/**/route.js
+  // - pages/api/** (Next.js pages router)
   
-  if (!hasErrorVar) {
-    // No error variable - simple string interpolation
-    // Handle patterns like: 'Error:', someVar
-    const parts = args.split(',').map(s => s.trim())
-    if (parts.length === 1) {
-      // Single argument
-      return { message: parts[0], hasErrorVar: false }
-    } else {
-      // Multiple arguments - combine into template literal
-      const combined = parts.map(p => {
-        // If it's a string literal, extract the content
-        const stringMatch = p.match(/^['"`](.+)['"`]$/)
-        if (stringMatch) return stringMatch[1]
-        return `\${${p}}`
-      }).join(' ')
-      return { message: `\`${combined}\``, hasErrorVar: false }
-    }
-  }
+  const normalized = filePath.replace(/\\/g, '/')
   
-  // Has error variable - need TypeScript-safe handling
-  if (isInCatchBlock) {
-    // In catch block - use type guard
-    const stringPart = args.split(',')[0].replace(/['"]/g, '')
-    
-    // Check which error variable name is used
-    const errorVarMatch = args.match(/\b(error|err|e)\b/)
-    const errorVar = errorVarMatch ? errorVarMatch[1] : 'error'
-    
-    return {
-      message: `${errorVar} instanceof Error ? ${errorVar}.message : '${stringPart}'`,
-      hasErrorVar: true
-    }
-  } else {
-    // Not in catch block - still use type guard for safety
-    const stringPart = args.split(',')[0].replace(/['"]/g, '')
-    const errorVarMatch = args.match(/\b(error|err|e)\b/)
-    const errorVar = errorVarMatch ? errorVarMatch[1] : 'error'
-    
-    return {
-      message: `${errorVar} instanceof Error ? ${errorVar}.message : '${stringPart}'`,
-      hasErrorVar: true
-    }
-  }
+  return (
+    // App router API routes
+    (normalized.includes('/api/') && normalized.endsWith('/route.ts')) ||
+    (normalized.includes('/api/') && normalized.endsWith('/route.js')) ||
+    // Pages router API routes
+    (normalized.startsWith('pages/api/') || normalized.includes('/pages/api/'))
+  )
 }
 
-function findInlineDeleteConfirms(
-  file: string,
-  lines: string[],
-  issues: RefactorIssue[]
-) {
-  const deletePattern = /deleteConfirm|confirmDelete|showDeleteConfirm/
 
-  lines.forEach((line, index) => {
-    if (deletePattern.test(line)) {
-      const lineNum = index + 1
-      const context = getContext(lines, index, 10)
-
-      // Look for the pattern with conditional rendering
-      if (context.includes('?') && context.includes(':')) {
-        issues.push({
-          id: `${file}-${lineNum}-delete`,
-          file,
-          line: lineNum,
-          type: 'delete-confirm',
-          risk: 'manual',
-          description: 'Replace inline delete confirmation with ConfirmDialog component',
-          beforeCode: context.slice(0, 300) + '...',
-          afterCode: `const { confirmDialog, showConfirm } = useConfirmDialog()
-
-<button onClick={() => showConfirm({
-  variant: 'danger',
-  title: 'Delete item?',
-  message: 'This cannot be undone',
-  onConfirm: async () => {
-    await handleDelete(id)
-    showToast({ type: 'success', title: 'Deleted' })
-  }
-})}>
-  Delete
-</button>
-
-{/* Add at bottom of component */}
-{confirmDialog}`,
-          context,
-          imports: [
-            "import { useConfirmDialog } from '@/components/ui/ConfirmDialog'",
-            "import { useToast } from '@/components/ui/Toast/ToastProvider'",
-          ],
-          warnings: [
-            'Manual refactoring required - review surrounding code',
-            'Remove old deleteConfirm state and conditional rendering',
-          ],
-        })
-      }
-    }
-  })
-}
 
 function detectConditionVariableInline(line: string): string {
   const patterns = [
@@ -700,6 +714,71 @@ const currentItems = items.slice(pagination.startIndex, pagination.endIndex)`
       }
     }
   })
+}
+function findIncorrectApiRoutes(
+  file: string,
+  lines: string[],
+  issues: RefactorIssue[]
+) {
+  // Only scan API routes
+  if (!isApiRoute(file)) {
+    return
+  }
+  
+  // Check if this API route is using useToast (bad!)
+  let hasUseToastImport = false
+  let importLine = -1
+  let hasShowToastCall = false
+  let showToastLines: number[] = []
+  
+  lines.forEach((line, index) => {
+    // Check for useToast import
+    if (line.includes("import { useToast }") || line.includes("from '@/components/ui/Toast/ToastProvider'")) {
+      hasUseToastImport = true
+      importLine = index + 1
+    }
+    
+    // Check for useToast() call
+    if (line.includes('useToast()')) {
+      hasUseToastImport = true
+      importLine = index + 1
+    }
+    
+    // Check for showToast calls
+    if (line.includes('showToast(')) {
+      hasShowToastCall = true
+      showToastLines.push(index + 1)
+    }
+  })
+  
+  // If API route is using toasts, flag it!
+  if (hasUseToastImport || hasShowToastCall) {
+    const lineNum = importLine > 0 ? importLine : showToastLines[0] || 1
+    
+    issues.push({
+      id: `${file}-${lineNum}-api-route-toast`,
+      file,
+      line: lineNum,
+      type: 'console-log', // Keep same type for filtering
+      risk: 'manual',
+      description: `⚠️ API route incorrectly uses React hooks (will crash!)`,
+      beforeCode: hasUseToastImport 
+        ? "import { useToast } from '@/components/ui/Toast/ToastProvider'"
+        : "showToast({ ... })",
+      afterCode: "// API routes should use console.error() instead of toasts\nconsole.error('Error:', error)",
+      context: getContext(lines, importLine > 0 ? importLine - 1 : 0, 10),
+      warnings: [
+        '🚨 CRITICAL: API routes run on the SERVER and cannot use React hooks!',
+        `Found useToast import or showToast() calls in this API route`,
+        `This will cause runtime error: "Hooks can only be called inside of a component"`,
+        `Remove all useToast imports and showToast() calls`,
+        `Use console.error() for server-side logging instead`,
+        showToastLines.length > 0 
+          ? `Found ${showToastLines.length} showToast() calls at lines: ${showToastLines.join(', ')}`
+          : 'Found useToast import'
+      ],
+    })
+  }
 }
 
 function findFormValidation(
