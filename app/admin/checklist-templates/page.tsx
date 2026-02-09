@@ -513,7 +513,11 @@ if (error) {
       .eq('id', field.id)
 
     if (error) {
-      console.error('Error deleting template:', error)
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: `Error deleting template: ${error.message || error}`
+      })
     } else {
       setFields(prev => prev.filter(f => f.id !== field.id))
       setSuccessMessage('Template deleted')
@@ -534,7 +538,11 @@ if (error) {
       .eq('id', field.id)
 
     if (error) {
-      console.error('Error toggling template:', error)
+      showToast({
+        type: 'error',
+        title: 'Error',
+        message: `Error toggling template: ${error.message || error}`
+      })
     } else {
       if (!showInactive && !newActiveState) {
         // Remove from list if we're not showing inactive

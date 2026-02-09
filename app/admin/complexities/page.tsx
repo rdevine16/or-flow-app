@@ -9,6 +9,8 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 
 interface Complexity {
   id: string
@@ -26,6 +28,7 @@ interface ProcedureCategory {
   name: string
   display_name: string
 }
+const { showToast } = useToast()
 
 export default function ComplexitiesAdminPage() {
   const router = useRouter()
@@ -71,8 +74,15 @@ const [complexitiesRes, categoriesRes] = await Promise.all([
 
       if (complexitiesRes.data) setComplexities(complexitiesRes.data)
       if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
-    } catch (error) {
-      console.error('Error:', error)
+} catch (error) {
+  const message = error instanceof Error 
+    ? error.message 
+    : 'An error occurred'
+  showToast({
+    type: 'error',
+    title: 'Error',
+    message: `Error fetching complexities: ${message}`
+  })
     } finally {
       setLoading(false)
     }

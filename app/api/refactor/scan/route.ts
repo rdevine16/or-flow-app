@@ -133,206 +133,138 @@ function findConsoleLogs(
   lines: string[],
   issues: RefactorIssue[]
 ) {
-  const consolePattern = /console\.(log|error|warn|info)\(/
-
   lines.forEach((line, index) => {
-    if (consolePattern.test(line)) {
+    // Match console.log, console.error, console.warn
+    if (line.includes('console.log') || line.includes('console.error') || line.includes('console.warn')) {
       const lineNum = index + 1
-      const trimmed = line.trim()
-
-      // Skip if it's a comment
-      if (trimmed.startsWith('//') || trimmed.startsWith('/*')) {
-        return
-      }
-
-      // Extract the message
-      const match = line.match(/console\.(log|error|warn|info)\((.*)\)/)
-      if (!match) return
-
-      const type = match[1]
-      const rawMessage = match[2].trim()
-
-      // Determine risk level
-      let risk: RiskLevel = 'safe'
-      let warnings: string[] = []
-
-      // Check context for risk factors
-      const context = getContext(lines, index, 3)
-
-      if (context.toLowerCase().includes('for') || 
-          context.toLowerCase().includes('foreach') ||
-          context.toLowerCase().includes('map')) {
-        risk = 'review'
-        warnings.push('Inside a loop - may cause multiple toasts')
-      }
-
-      if (context.includes('try') && context.includes('catch')) {
-        risk = 'review'
-        warnings.push('Inside try/catch - verify error handling')
-      }
-
-      // ========================================
-      // ENHANCED: Find where to add imports and hooks
-      // ========================================
-      const relatedLocations: Array<{ line: number; code: string; type: string; instruction: string }> = []
       
-      // Find import location (first import or top of file)
-      let importLine = 1
-      for (let i = 0; i < Math.min(50, lines.length); i++) {
-        if (lines[i].includes('import ') && lines[i].includes('from')) {
-          importLine = i + 1
-        }
-        if (lines[i].includes('export') && (lines[i].includes('function') || lines[i].includes('const'))) {
-          break // Stop at first export
-        }
-      }
+      // Determine toast type based on console method
+      let toastType = 'info'
+      if (line.includes('console.error')) toastType = 'error'
+      else if (line.includes('console.warn')) toastType = 'warning'
       
-      relatedLocations.push({
-        line: importLine,
-        code: "import { useToast } from '@/components/ui/Toast/ToastProvider'",
-        type: 'import',
-        instruction: 'Add this import with your other imports at the top'
-      })
+      // Extract the console call
+      const consoleMatch = line.match(/console\.(log|error|warn)\((.*)\)/)
+      if (!consoleMatch) return
       
-      // Find where to add the hook (inside component/function)
-      let hookLine = lineNum
-      for (let i = index; i >= 0; i--) {
-        // Look for function declarations
-        if (lines[i].match(/^export\s+(default\s+)?function/) || 
-            lines[i].match(/^(export\s+)?(const|function)\s+\w+\s*=/) ||
-            lines[i].includes('export default function')) {
-          // Found the function, hook goes right after the opening brace
-          for (let j = i; j < Math.min(i + 10, lines.length); j++) {
-            if (lines[j].includes('{')) {
-              hookLine = j + 2 // Skip opening brace and add on next line
-              break
-            }
-          }
-          break
-        }
-      }
+      const args = consoleMatch[2]
       
-      relatedLocations.push({
-        line: hookLine,
-        code: "const { showToast } = useToast()",
-        type: 'hook',
-        instruction: 'Add this hook at the top of your component (after the function declaration)'
-      })
+      // Check if this is in a catch block by looking at surrounding context
+      const isInCatchBlock = detectCatchBlock(lines, index)
       
-      relatedLocations.push({
-        line: lineNum,
-        code: trimmed,
-        type: 'console-statement',
-        instruction: 'Replace this console statement with the toast call'
-      })
-
-      // ========================================
-      // FIXED: Generate proper message syntax
-      // ========================================
-      
-      // Parse the message to handle different formats
+      // Parse the arguments
+      let title = 'Notification'
       let messageCode = ''
       
-      // Check if message contains an error variable (e.g., "error", "err", "e")
-      const hasErrorVar = /,\s*(error|err|e)\s*\)?\s*$/.test(rawMessage)
+      // Enhanced message parsing with TypeScript safety
+      const { message, hasErrorVar } = parseConsoleArgs(args, isInCatchBlock)
+      messageCode = message
       
-      if (hasErrorVar) {
-        // Extract the string part and error variable
-        const parts = rawMessage.split(',').map(p => p.trim())
-        const errorVar = parts[parts.length - 1].replace(/\)$/, '').trim()
-        const stringParts = parts.slice(0, -1)
-        
-        if (stringParts.length > 0) {
-          // Has both string and error variable
-          const stringPart = stringParts.join(', ').replace(/^['"`]|['"`]$/g, '')
-          messageCode = `\`${stringPart} \${${errorVar}.message || ${errorVar}}\``
-        } else {
-          // Just error variable
-          messageCode = `${errorVar}.message || String(${errorVar})`
-        }
-      } else {
-        // Just a string message
-        messageCode = rawMessage
+      // If first arg is a string, use it as title
+      const titleMatch = args.match(/^['"`]([^'"`]+)['"`]/)
+      if (titleMatch) {
+        title = titleMatch[1]
       }
-
-      // Generate suggested fix
-      let toastType = 'info'
-      let afterCode = ''
-      let toastTitle = 'Notification'
-
-      if (type === 'error') {
-        toastType = 'error'
-        toastTitle = 'Error'
-        afterCode = `showToast({
-  type: 'error',
-  title: 'Error',
-  message: ${messageCode}
-})`
-      } else if (type === 'warn') {
-        toastType = 'warning'
-        toastTitle = 'Warning'
-        afterCode = `showToast({
-  type: 'warning',
-  title: 'Warning',
-  message: ${messageCode}
-})`
-      } else {
-        // Infer from message content
-        const lowerMessage = rawMessage.toLowerCase()
-        if (lowerMessage.includes('success') || 
-            lowerMessage.includes('saved') ||
-            lowerMessage.includes('deleted') ||
-            lowerMessage.includes('created')) {
-          toastType = 'success'
-          toastTitle = 'Success'
-        }
-        afterCode = `showToast({
+      
+      // Generate TypeScript-safe afterCode
+      const afterCode = `showToast({
   type: '${toastType}',
-  title: '${toastTitle}',
+  title: '${title}',
   message: ${messageCode}
 })`
-      }
 
-      // ========================================
-      // ENHANCED: Add helpful step-by-step instructions
-      // ========================================
-      const stepByStep = `STEP-BY-STEP FIX:
-
-1. ADD IMPORT (Line ${importLine}):
-   ${relatedLocations[0].code}
-
-2. ADD HOOK (Line ${hookLine}, inside your component):
-   ${relatedLocations[1].code}
-
-3. REPLACE CONSOLE (Line ${lineNum}):
-   BEFORE: ${trimmed}
-   AFTER: ${afterCode}`
-
-      warnings.push(stepByStep)
-      warnings.push(`Found ${relatedLocations.length} code locations to update`)
+      const context = getContext(lines, index, 5)
 
       issues.push({
-        id: `${file}-${lineNum}-console`,
+        id: `${file}-${lineNum}-console-log`,
         file,
         line: lineNum,
         type: 'console-log',
-        risk,
-        description: `Replace console.${type} with user-visible toast notification`,
-        beforeCode: trimmed,
+        risk: 'safe',
+        description: `Replace console.${consoleMatch[1]} with toast notification`,
+        beforeCode: line.trim(),
         afterCode,
-        context: getContext(lines, index, 5),
-        warnings,
-        // ENHANCED: Add metadata with exact locations
-        metadata: {
-          relatedLocations,
-          importLine,
-          hookLine,
-          autoFixable: true,
-          stepByStep
-        }
+        context,
+        imports: ["import { useToast } from '@/components/ui/Toast/ToastProvider'"],
+        warnings: [
+          'Add useToast hook: const { showToast } = useToast()',
+          hasErrorVar 
+            ? '✅ Generated TypeScript-safe error handling'
+            : 'Remember to wrap in try-catch if showing errors'
+        ],
       })
     }
   })
+}
+
+/**
+ * Detect if line is inside a catch block
+ */
+function detectCatchBlock(lines: string[], currentIndex: number): boolean {
+  // Look backwards up to 20 lines for "} catch"
+  for (let i = Math.max(0, currentIndex - 20); i < currentIndex; i++) {
+    if (lines[i].includes('} catch') || lines[i].includes('catch (')) {
+      // Make sure we haven't exited the catch block
+      let braceCount = 0
+      for (let j = i; j <= currentIndex; j++) {
+        braceCount += (lines[j].match(/{/g) || []).length
+        braceCount -= (lines[j].match(/}/g) || []).length
+      }
+      // If braceCount > 0, we're still inside the catch block
+      return braceCount > 0
+    }
+  }
+  return false
+}
+
+/**
+ * Parse console arguments and generate TypeScript-safe message code
+ */
+function parseConsoleArgs(args: string, isInCatchBlock: boolean): { message: string, hasErrorVar: boolean } {
+  // Check if args contain an error variable
+  const hasErrorVar = /\b(error|err|e)\b/.test(args)
+  
+  if (!hasErrorVar) {
+    // No error variable - simple string interpolation
+    // Handle patterns like: 'Error:', someVar
+    const parts = args.split(',').map(s => s.trim())
+    if (parts.length === 1) {
+      // Single argument
+      return { message: parts[0], hasErrorVar: false }
+    } else {
+      // Multiple arguments - combine into template literal
+      const combined = parts.map(p => {
+        // If it's a string literal, extract the content
+        const stringMatch = p.match(/^['"`](.+)['"`]$/)
+        if (stringMatch) return stringMatch[1]
+        return `\${${p}}`
+      }).join(' ')
+      return { message: `\`${combined}\``, hasErrorVar: false }
+    }
+  }
+  
+  // Has error variable - need TypeScript-safe handling
+  if (isInCatchBlock) {
+    // In catch block - use type guard
+    const stringPart = args.split(',')[0].replace(/['"]/g, '')
+    
+    // Check which error variable name is used
+    const errorVarMatch = args.match(/\b(error|err|e)\b/)
+    const errorVar = errorVarMatch ? errorVarMatch[1] : 'error'
+    
+    return {
+      message: `${errorVar} instanceof Error ? ${errorVar}.message : '${stringPart}'`,
+      hasErrorVar: true
+    }
+  } else {
+    // Not in catch block - assume it's an Error object
+    return {
+      message: args.includes(',') 
+        ? `\`${args.split(',')[0].replace(/['"]/g, '')}: \${error.message || error}\``
+        : `error.message || 'An error occurred'`,
+      hasErrorVar: true
+    }
+  }
 }
 
 function findInlineDeleteConfirms(
