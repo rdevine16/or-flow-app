@@ -140,7 +140,6 @@ export interface ScorecardFinancials {
   profit: number | null
   reimbursement: number | null
   or_time_cost: number | null
-  total_case_minutes: number | null
 }
 
 export interface ScorecardFlag {

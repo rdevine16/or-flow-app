@@ -88,19 +88,41 @@ async function fetchScorecardData(
     }
   })
 
+  // Debug: log milestone coverage
+  if (cases.length > 0) {
+    const sampleCase = completedCases[0]
+    const sampleMapped = cases[0]
+    console.log(`🏥 ${cases.length} validated+completed cases`)
+    console.log('📋 Raw milestone keys from first case:', (sampleCase.case_milestones || []).map((cm: any) => cm.facility_milestones?.name))
+    console.log('📋 Mapped milestones on first case:', {
+      patient_in_at: sampleMapped.patient_in_at,
+      patient_out_at: sampleMapped.patient_out_at,
+      incision_at: sampleMapped.incision_at,
+      prep_drape_complete_at: sampleMapped.prep_drape_complete_at,
+    })
+    const withDuration = cases.filter(c => c.patient_in_at && c.patient_out_at).length
+    console.log(`⏱️ Cases with both patient_in + patient_out: ${withDuration}/${cases.length}`)
+  }
+
   const caseIds = cases.map(c => c.id)
   let financials: ScorecardFinancials[] = []
 
   if (caseIds.length > 0) {
     for (let i = 0; i < caseIds.length; i += 100) {
       const chunk = caseIds.slice(i, i + 100)
-      const { data: finData } = await supabase
+      const { data: finData, error: finError } = await supabase
         .from('case_completion_stats')
-        .select('case_id, profit, reimbursement, or_time_cost, total_case_minutes')
+        .select('case_id, profit, reimbursement, or_time_cost')
         .in('case_id', chunk)
+      if (finError) {
+        console.error('⚠️ Financials query error:', finError)
+      }
       if (finData) financials = [...financials, ...finData]
     }
   }
+
+  // Debug: log financials coverage
+  console.log(`📊 Financials: ${financials.length} rows for ${caseIds.length} cases. Sample:`, financials.slice(0, 3))
 
   let flags: ScorecardFlag[] = []
   if (caseIds.length > 0) {
