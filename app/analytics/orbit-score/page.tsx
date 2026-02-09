@@ -440,6 +440,14 @@ export default function ORbitScorePage() {
         return
       }
 
+      // Fetch facility timezone for accurate time-of-day comparisons
+      const { data: facilityData } = await supabase
+        .from('facilities')
+        .select('timezone')
+        .eq('id', effectiveFacilityId)
+        .single()
+      const facilityTimezone = facilityData?.timezone || 'America/New_York'
+
       // Compute previous period for trend
       const periodMs = new Date(currentEndDate).getTime() - new Date(currentStartDate).getTime()
       const periodDays = Math.ceil(periodMs / (1000 * 60 * 60 * 24))
@@ -458,6 +466,7 @@ export default function ORbitScorePage() {
       const results = calculateORbitScores({
         ...data,
         dateRange: { start: currentStartDate, end: currentEndDate },
+        timezone: facilityTimezone,
         previousPeriodCases: prevData?.cases || [],
         previousPeriodFinancials: prevData?.financials || [],
         previousPeriodBlocks: prevData?.blocks || [],

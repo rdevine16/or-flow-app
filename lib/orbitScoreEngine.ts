@@ -121,6 +121,7 @@ export interface ScorecardInput {
   flags: ScorecardFlag[]
   settings: ScorecardSettings
   dateRange: { start: string; end: string }
+  timezone: string                        // IANA timezone e.g. 'America/New_York'
   previousPeriodCases?: ScorecardCase[]
   previousPeriodFinancials?: ScorecardFinancials[]
   previousPeriodBlocks?: ScorecardBlock[]
@@ -141,6 +142,22 @@ function minutesBetween(a: string, b: string): number | null {
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number)
   return h * 60 + (m || 0)
+}
+
+/** Convert a UTC ISO timestamp to minutes-since-midnight in the facility's local timezone */
+function utcToLocalMinutes(utcIso: string, timezone: string): number {
+  const d = new Date(utcIso)
+  if (isNaN(d.getTime())) return 0
+  // Intl.DateTimeFormat gives us the local hour/minute in the target timezone
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(d)
+  const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10)
+  const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10)
+  return hour * 60 + minute
 }
 
 function mean(arr: number[]): number {
@@ -402,6 +419,7 @@ function calculateOnTimePerformance(
   allCases: ScorecardCase[],
   blocks: ScorecardBlock[],
   settings: ScorecardSettings,
+  timezone: string,
 ): number {
   const surgeonId = surgeonCases[0]?.surgeon_id
   if (!surgeonId) return 50
@@ -451,8 +469,7 @@ function calculateOnTimePerformance(
 
       if (block) {
         const blockStartMin = timeToMinutes(block.start_time)
-        const actualDate = new Date(actualStart)
-        const actualMin = actualDate.getHours() * 60 + actualDate.getMinutes()
+        const actualMin = utcToLocalMinutes(actualStart, timezone)
         const deltaMin = actualMin - blockStartMin
 
         fcotsTotal++
@@ -464,8 +481,7 @@ function calculateOnTimePerformance(
       // Non-first case: compare scheduled vs actual
       if (c.start_time && actualStart) {
         const scheduledMin = timeToMinutes(c.start_time)
-        const actualDate = new Date(actualStart)
-        const actualMin = actualDate.getHours() * 60 + actualDate.getMinutes()
+        const actualMin = utcToLocalMinutes(actualStart, timezone)
         startDeltas.push(actualMin - scheduledMin)
       }
     }
@@ -481,7 +497,7 @@ function calculateOnTimePerformance(
     const surgeonMedianLate = median(startDeltas)
 
     // Get peer median-late values for percentile ranking
-    const peerMedianLates = getPeerStartDeltas(allCases, blocks, settings)
+    const peerMedianLates = getPeerStartDeltas(allCases, blocks, settings, timezone)
     const pctile = percentileRank(surgeonMedianLate, peerMedianLates, true) // lower is better
     adherenceScore = clampScore(pctile)
   }
@@ -495,6 +511,7 @@ function getPeerStartDeltas(
   allCases: ScorecardCase[],
   blocks: ScorecardBlock[],
   settings: ScorecardSettings,
+  timezone: string,
 ): number[] {
   const bySurgeon: Record<string, number[]> = {}
 
@@ -504,8 +521,7 @@ function getPeerStartDeltas(
     if (!actualStart) continue
 
     const scheduledMin = timeToMinutes(c.start_time)
-    const actualDate = new Date(actualStart)
-    const actualMin = actualDate.getHours() * 60 + actualDate.getMinutes()
+    const actualMin = utcToLocalMinutes(actualStart, timezone)
     const delta = actualMin - scheduledMin
 
     if (!bySurgeon[c.surgeon_id]) bySurgeon[c.surgeon_id] = []
@@ -748,7 +764,7 @@ function detectFlipRoom(cases: ScorecardCase[]): boolean {
 // ─── MAIN CALCULATION ─────────────────────────────────────────
 
 export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
-  const { cases, financials, blocks, flags, settings, dateRange } = input
+  const { cases, financials, blocks, flags, settings, dateRange, timezone } = input
 
   // Build financials lookup
   const financialsMap = new Map<string, ScorecardFinancials>()
@@ -783,7 +799,7 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
         consistency: calculateConsistency(surgeonCases, input.previousPeriodCases),
         profitability: calculateProfitability(surgeonCases, input.previousPeriodCases, prevFinMap),
         schedAccuracy: calculateScheduleAccuracy(surgeonCases, input.previousPeriodCases),
-        onTime: calculateOnTimePerformance(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, settings),
+        onTime: calculateOnTimePerformance(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, settings, timezone),
         availability: calculateAvailability(surgeonCases, input.previousPeriodCases, input.previousPeriodFlags || flags),
         blockSteward: calculateBlockStewardship(surgeonCases, input.previousPeriodCases, input.previousPeriodBlocks || blocks, dateRange),
       }
@@ -813,7 +829,7 @@ export function calculateORbitScores(input: ScorecardInput): ORbitScorecard[] {
       consistency: calculateConsistency(surgeonCases, cases),
       profitability: calculateProfitability(surgeonCases, cases, financialsMap),
       schedAccuracy: calculateScheduleAccuracy(surgeonCases, cases),
-      onTime: calculateOnTimePerformance(surgeonCases, cases, blocks, settings),
+      onTime: calculateOnTimePerformance(surgeonCases, cases, blocks, settings, timezone),
       availability: calculateAvailability(surgeonCases, cases, flags),
       blockSteward: calculateBlockStewardship(surgeonCases, cases, blocks, dateRange),
     }
