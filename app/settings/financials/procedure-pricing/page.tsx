@@ -13,7 +13,6 @@ import { genericAuditLog } from '@/lib/audit-logger'
 import { useProcedureTypes, usePayers } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 
-const { showToast } = useToast()
 
 // Types
 interface CostCategory {
@@ -56,6 +55,7 @@ interface FacilitySettings {
 }
 
 export default function ProcedurePricingPage() {
+  const { showToast } = useToast() 
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
