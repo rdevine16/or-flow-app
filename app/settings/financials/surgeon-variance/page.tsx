@@ -17,7 +17,6 @@ import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 
-const { showToast } = useToast()
 interface Surgeon {
   id: string
   first_name: string
@@ -75,6 +74,7 @@ const getYesterdayDate = () => {
 export default function SurgeonVariancePage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { showToast } = useToast()
 
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
