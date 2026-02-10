@@ -1,6 +1,7 @@
 'use client'
 
 import { extractName } from '@/lib/formatters'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface Case {
   id: string
@@ -190,14 +191,15 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
 
               {/* Empty State */}
               {!activeCase && upNextCases.length === 0 && (
-                <div className="text-center py-4">
-                  <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                <EmptyState
+                  icon={
                     <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 12H4" />
                     </svg>
-                  </div>
-                  <p className="text-sm text-slate-500">No cases scheduled</p>
-                </div>
+                  }
+                  title="No cases scheduled"
+                  className="py-4"
+                />
               )}
 
               {/* Completed Summary */}
@@ -215,17 +217,20 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
 
       {/* Empty Rooms State */}
       {rooms.length === 0 && (
-        <div className="col-span-full text-center py-12">
-          <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+        <EmptyState
+          icon={
             <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
-          </div>
-          <p className="text-sm text-slate-500">No OR rooms configured</p>
-          <a href="/settings/rooms" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-            Add rooms in Settings →
-          </a>
-        </div>
+          }
+          title="No OR rooms configured"
+          action={
+            <a href="/settings/rooms" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+              Add rooms in Settings →
+            </a>
+          }
+          className="col-span-full"
+        />
       )}
     </div>
   )

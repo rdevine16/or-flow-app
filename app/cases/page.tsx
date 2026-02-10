@@ -1,4 +1,3 @@
-// app/cases/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
@@ -13,8 +12,8 @@ import CasesFilterBar, { FilterState } from '@/components/filters/CaseFilterBar'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
 import { extractName } from '@/lib/formatters'
-import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState'
 
 
 // ============================================================================
@@ -194,7 +193,7 @@ function CasesPageContent() {
   // Core state
   const [cases, setCases] = useState<Case[]>([])
   const [loading, setLoading] = useState(true)
-  const [deleteTarget, setDeleteTarget] = useState<Case | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   
@@ -420,7 +419,7 @@ function CasesPageContent() {
   const handleDelete = async (id: string) => {
     await supabase.from('cases').delete().eq('id', id)
     setCases(cases.filter(c => c.id !== id))
-    setDeleteTarget(null)
+    setDeleteConfirm(null)
   }
 
   // ============================================================================
@@ -504,15 +503,12 @@ function CasesPageContent() {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : cases.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">No cases found</h3>
-            <p className="text-slate-500 text-sm mb-4">Try adjusting your filters or create a new case</p>
-          </div>
+          <EmptyState
+            icon={EmptyStateIcons.Clipboard}
+            title="No cases found"
+            description="Try adjusting your filters or create a new case"
+            className="py-20"
+          />
         ) : (
           <>
             {/* Table Header */}
@@ -626,9 +622,31 @@ function CasesPageContent() {
                               </svg>
                             </button>
                             
-                            {/* Delete button */}
+                            {/* Delete button with confirmation */}
+                            {deleteConfirm === c.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleDelete(c.id)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                                  title="Confirm Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(null)}
+                                  className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-all duration-200"
+                                  title="Cancel"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
                               <button
-                                onClick={() => setDeleteTarget(c)}
+                                onClick={() => setDeleteConfirm(c.id)}
                                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
                                 title="Delete"
                               >
@@ -636,6 +654,7 @@ function CasesPageContent() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -767,16 +786,6 @@ function CasesPageContent() {
           userEmail={userEmail}
         />
       )}
-
-      <DeleteConfirm
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={async () => {
-          if (deleteTarget) await handleDelete(deleteTarget.id)
-        }}
-        itemName={deleteTarget ? `Case #${deleteTarget.case_number}` : ''}
-        itemType="case"
-      />
     </DashboardLayout>
   )
 }

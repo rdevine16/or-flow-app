@@ -9,6 +9,7 @@ import SurgeonAvatar from '@/components/ui/SurgeonAvatar'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 // =====================================================
 // TYPES
@@ -773,15 +774,15 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
             </div>
           </div>
         ) : filteredCases.length === 0 ? (
-          <div className="px-6 py-12 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <EmptyState
+            icon={
               <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-1">No cases found</h3>
-            <p className="text-slate-500">No cases match the selected filters.</p>
-          </div>
+            }
+            title="No cases found"
+            description="No cases match the selected filters."
+          />
         ) : (
           /* Case Rows */
           <div className="divide-y divide-slate-100">

@@ -9,6 +9,7 @@ import {
 import { formatCurrency } from './utils'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { 
   InformationCircleIcon, 
   ChevronRightIcon,
@@ -1121,13 +1122,11 @@ showToast({
         </div>
 
         {dayCases.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900">No cases on this day</h3>
-            <p className="text-slate-500 mt-1">Select a different date to view cases</p>
-          </div>
+          <EmptyState
+            icon={<CalendarDaysIcon className="w-8 h-8 text-slate-400" />}
+            title="No cases on this day"
+            description="Select a different date to view cases"
+          />
         ) : (
           <div className="divide-y divide-slate-100">
             {dayCases.map((caseData, idx) => {

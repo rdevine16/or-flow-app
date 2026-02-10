@@ -13,12 +13,12 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { startImpersonation } from '@/lib/impersonation'
 import { formatAuditAction } from '@/lib/audit'
 import { facilityAudit, userAudit, adminAudit } from '@/lib/audit-logger'
-import { Modal } from '@/components/ui/Modal'
 import { generateInvitationToken } from '@/lib/passwords'
 import { sendInvitationEmail } from '@/lib/email'
 import { formatLastLogin } from '@/lib/auth-helpers'
 import FacilityLogoUpload from '@/components/FacilityLogoUpload'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -1290,15 +1290,11 @@ export default function FacilityDetailPage() {
               </table>
             </div>
             {users.length === 0 && (
-              <div className="p-12 text-center">
-                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
-                </div>
-                <p className="text-slate-600 font-medium">No users yet</p>
-                <p className="text-sm text-slate-400 mt-1">Invite someone to get started</p>
-              </div>
+              <EmptyState
+                icon={EmptyStateIcons.Users}
+                title="No users yet"
+                description="Invite someone to get started"
+              />
             )}
           </div>
         )}
@@ -1573,11 +1569,18 @@ export default function FacilityDetailPage() {
       {/* ===== MODALS ===== */}
 
       {/* Invite User Modal */}
-      <Modal
-        open={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        title="Invite User"
-      >
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-semibold text-slate-900">Invite User</h3>
+              <button onClick={() => setShowInviteModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
@@ -1630,26 +1633,39 @@ export default function FacilityDetailPage() {
                   <option value="facility_admin">Facility Admin</option>
                 </select>
               </div>
-
-        <Modal.Footer>
-          <Modal.Cancel onClick={() => setShowInviteModal(false)} />
-          <Modal.Action
-            onClick={handleInviteUser}
-            loading={saving}
-            disabled={!inviteEmail || !inviteFirstName || !inviteLastName}
-          >
-            Send Invitation
-          </Modal.Action>
-        </Modal.Footer>
-      </Modal>
+            </div>
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInviteUser}
+                disabled={saving || !inviteEmail || !inviteFirstName || !inviteLastName}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
+              >
+                {saving ? 'Sending...' : 'Send Invitation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Room Modal */}
-      <Modal
-        open={showRoomModal}
-        onClose={() => setShowRoomModal(false)}
-        title="Add Room"
-        size="sm"
-      >
+      {showRoomModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-semibold text-slate-900">Add Room</h3>
+              <button onClick={() => setShowRoomModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
               <label className="block text-sm font-medium text-slate-700 mb-1">Room Name</label>
               <input
                 type="text"
@@ -1658,22 +1674,36 @@ export default function FacilityDetailPage() {
                 placeholder="e.g., OR 4"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
-
-        <Modal.Footer>
-          <Modal.Cancel onClick={() => setShowRoomModal(false)} />
-          <Modal.Action onClick={handleAddRoom} loading={saving} disabled={!newRoomName.trim()}>
-            Add Room
-          </Modal.Action>
-        </Modal.Footer>
-      </Modal>
+            </div>
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={() => setShowRoomModal(false)} className="px-4 py-2 text-slate-600 font-medium">
+                Cancel
+              </button>
+              <button
+                onClick={handleAddRoom}
+                disabled={saving || !newRoomName.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium"
+              >
+                Add Room
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Procedure Modal */}
-      <Modal
-        open={showProcedureModal}
-        onClose={() => setShowProcedureModal(false)}
-        title="Add Procedure"
-        size="sm"
-      >
+      {showProcedureModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+              <h3 className="font-semibold text-slate-900">Add Procedure</h3>
+              <button onClick={() => setShowProcedureModal(false)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
               <label className="block text-sm font-medium text-slate-700 mb-1">Procedure Name</label>
               <input
                 type="text"
@@ -1682,14 +1712,22 @@ export default function FacilityDetailPage() {
                 placeholder="e.g., Total Hip Replacement"
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
-
-        <Modal.Footer>
-          <Modal.Cancel onClick={() => setShowProcedureModal(false)} />
-          <Modal.Action onClick={handleAddProcedure} loading={saving} disabled={!newProcedureName.trim()}>
-            Add Procedure
-          </Modal.Action>
-        </Modal.Footer>
-      </Modal>
+            </div>
+            <div className="p-4 border-t border-slate-200 flex justify-end gap-3">
+              <button onClick={() => setShowProcedureModal(false)} className="px-4 py-2 text-slate-600 font-medium">
+                Cancel
+              </button>
+              <button
+                onClick={handleAddProcedure}
+                disabled={saving || !newProcedureName.trim()}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium"
+              >
+                Add Procedure
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   )
 }

@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 // ============================================================================
 // TYPES
@@ -366,7 +367,16 @@ export default function DemoDataWizard() {
               <p className="text-sm text-slate-500 mt-1">Choose which facility to generate demo data for</p>
             </div>
             {facilities.length === 0 ? (
-              <EmptyState icon="building" title="No demo facilities found" description="Set is_demo = true on facilities to enable them here." />
+              <EmptyState
+                icon={
+                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                }
+                title="No demo facilities found"
+                description="Set is_demo = true on facilities to enable them here."
+                className="bg-white rounded-xl border border-slate-200"
+              />
             ) : (
               <div className="grid gap-4">
                 {facilities.map(f => (
@@ -417,7 +427,16 @@ export default function DemoDataWizard() {
                 <p className="text-sm text-slate-500">Loading facility data...</p>
               </div>
             ) : surgeons.length === 0 ? (
-              <EmptyState icon="warning" title="No surgeons found" description="Add surgeons via Staff Management first." />
+              <EmptyState
+                icon={
+                  <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                }
+                title="No surgeons found"
+                description="Add surgeons via Staff Management first."
+                className="bg-white rounded-xl border border-slate-200"
+              />
             ) : (
               <div className="space-y-3">
                 {/* ── Weekly Schedule Grid ── */}
@@ -1036,27 +1055,6 @@ function ResultBanner({ result, onDismiss }: { result: GenerationResult; onDismi
   )
 }
 
-function EmptyState({ icon, title, description }: { icon: 'building' | 'warning'; title: string; description: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 ${
-        icon === 'warning' ? 'bg-amber-50' : 'bg-slate-100'
-      }`}>
-        {icon === 'warning' ? (
-          <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        ) : (
-          <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
-        )}
-      </div>
-      <p className="text-slate-700 font-medium">{title}</p>
-      <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">{description}</p>
-    </div>
-  )
-}
 
 // ============================================================================
 // HELPERS
