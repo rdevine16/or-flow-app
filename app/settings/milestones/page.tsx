@@ -1,3 +1,4 @@
+// app/settings/milestones/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 interface FacilityMilestone {
@@ -81,6 +83,7 @@ function ConfirmModal({
 
 export default function MilestonesSettingsPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   
   // Use the context - this automatically handles impersonation!
   const { effectiveFacilityId, loading: userLoading } = useUser()
@@ -128,7 +131,6 @@ export default function MilestonesSettingsPage() {
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
 // Toast and user ID
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Get current user ID on mount
@@ -139,11 +141,6 @@ export default function MilestonesSettingsPage() {
     }
     getCurrentUser()
   }, [])
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchMilestones()
@@ -409,7 +406,7 @@ setMilestones(milestones.map(m => {
             }
             return m
           }))
-          showToast(`"${milestone.display_name}" moved to archive`, 'success')
+          showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
         }
 
         closeConfirmModal()
@@ -441,9 +438,9 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         ? { ...m, deleted_at: null, deleted_by: null, is_active: true } 
         : m
     ))
-    showToast(`"${milestone.display_name}" restored successfully`, 'success')
+    showToast({ type: 'success', title: `"${milestone.display_name}" restored successfully` })
   } else {
-    showToast('Failed to restore milestone', 'error')
+    showToast({ type: 'error', title: 'Failed to restore milestone' })
   }
   setSaving(false)
 }
@@ -1262,23 +1259,6 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         onCancel={closeConfirmModal}
         isLoading={saving}
       />
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
-        </div>
-      )}
     </DashboardLayout>
   )
 }

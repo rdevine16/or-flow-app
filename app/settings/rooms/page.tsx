@@ -1,4 +1,5 @@
 // app/settings/rooms/page.tsx
+// app/settings/rooms/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -16,6 +17,7 @@ import {
   getDefaultWeekSchedule,
 } from '@/hooks/useRoomSchedules'
 import { formatTime12Hour } from '@/types/block-scheduling'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ============================================
 // TYPES
@@ -216,6 +218,7 @@ function RoomScheduleEditor({
 
 export default function RoomsSettingsPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
   const [rooms, setRooms] = useState<ORRoom[]>([])
@@ -225,7 +228,6 @@ export default function RoomsSettingsPage() {
   const [formData, setFormData] = useState({ name: '' })
   const [formSchedule, setFormSchedule] = useState<RoomDaySchedule[]>(getDefaultWeekSchedule())
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
     isOpen: false,
@@ -271,10 +273,6 @@ export default function RoomsSettingsPage() {
   }
 
   // Show toast with auto-dismiss
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }, [])
 
   const openAddModal = () => {
     setFormData({ name: '' })
@@ -328,10 +326,10 @@ export default function RoomsSettingsPage() {
 
         setRooms([...rooms, data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
-        showToast(`${data.name} created`, 'success')
+        showToast({ type: 'success', title: `${data.name} created` })
         await roomAudit.created(supabase, formData.name.trim(), data.id)
       } else {
-        showToast('Failed to create room', 'error')
+        showToast({ type: 'error', title: 'Failed to create room' })
       }
     } else if (modal.mode === 'edit' && modal.room) {
       const oldName = modal.room.name
@@ -366,13 +364,13 @@ export default function RoomsSettingsPage() {
             .sort((a, b) => a.name.localeCompare(b.name))
         )
         closeModal()
-        showToast(`${formData.name.trim()} updated`, 'success')
+        showToast({ type: 'success', title: `${formData.name.trim()} updated` })
 
         if (oldName !== formData.name.trim()) {
           await roomAudit.updated(supabase, modal.room.id, oldName, formData.name.trim())
         }
       } else {
-        showToast('Failed to update room', 'error')
+        showToast({ type: 'error', title: 'Failed to update room' })
       }
     }
 
@@ -436,7 +434,7 @@ export default function RoomsSettingsPage() {
           : r
       ))
       closeDeleteModal()
-      showToast(`${deleteModal.room.name} archived`, 'success')
+      showToast({ type: 'success', title: `${deleteModal.room.name} archived` })
       await roomAudit.deleted(supabase, deleteModal.room.id, deleteModal.room.name)
     }
     setSaving(false)
@@ -452,7 +450,7 @@ export default function RoomsSettingsPage() {
       setRooms(rooms.map(r =>
         r.id === room.id ? { ...r, deleted_at: null, deleted_by: null } : r
       ))
-      showToast(`${room.name} restored`, 'success')
+      showToast({ type: 'success', title: `${room.name} restored` })
       await roomAudit.restored(supabase, room.id, room.name)
     }
   }
@@ -709,24 +707,6 @@ export default function RoomsSettingsPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Toast */}
-          {toast && (
-            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-              toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-            }`}>
-              {toast.type === 'success' ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              )}
-              {toast.message}
             </div>
           )}
         </SettingsLayout>

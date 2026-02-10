@@ -1,3 +1,4 @@
+// app/settings/procedures/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { procedureAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -78,6 +80,7 @@ const IMPLANT_CATEGORIES = [
 
 export default function ProceduresSettingsPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   
   // User context - handles impersonation automatically
 const { effectiveFacilityId, loading: userLoading } = useUser()
@@ -114,7 +117,6 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
   })
 
   // Toast notification (you can replace with your toast system)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   // Get current user ID on mount
   useEffect(() => {
@@ -257,12 +259,12 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
       if (!error && data) {
         setProcedures([...procedures, data as ProcedureType].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
-        showToast('Procedure created successfully', 'success')
+        showToast({ type: 'success', title: 'Procedure created successfully' })
         
         // Audit log
         await procedureAudit.created(supabase, formData.name.trim(), data.id)
       } else {
-        showToast('Failed to create procedure', 'error')
+        showToast({ type: 'error', title: 'Failed to create procedure' })
       }
     } else if (modal.mode === 'edit' && modal.procedure) {
       const oldName = modal.procedure.name
@@ -300,14 +302,14 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
             .sort((a, b) => a.name.localeCompare(b.name))
         )
         closeModal()
-        showToast('Procedure updated successfully', 'success')
+        showToast({ type: 'success', title: 'Procedure updated successfully' })
         
         // Audit log if name changed
         if (oldName !== formData.name.trim()) {
           await procedureAudit.updated(supabase, modal.procedure.id, oldName, formData.name.trim())
         }
       } else {
-        showToast('Failed to update procedure', 'error')
+        showToast({ type: 'error', title: 'Failed to update procedure' })
       }
     }
 
@@ -374,12 +376,12 @@ deleted_by: currentUserId
     if (!error) {
       setProcedures(procedures.filter(p => p.id !== deleteModal.procedure!.id))
       setArchivedCount(prev => prev + 1)
-      showToast(`"${deleteModal.procedure.name}" moved to archive`, 'success')
+      showToast({ type: 'success', title: `"${deleteModal.procedure.name}" moved to archive` })
       
       // Audit log
       await procedureAudit.deleted(supabase, deleteModal.procedure.name, deleteModal.procedure.id)
     } else {
-      showToast('Failed to archive procedure', 'error')
+      showToast({ type: 'error', title: 'Failed to archive procedure' })
     }
 
     setSaving(false)
@@ -404,12 +406,12 @@ deleted_by: currentUserId
     if (!error) {
       setProcedures(procedures.filter(p => p.id !== procedure.id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${procedure.name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${procedure.name}" restored successfully` })
       
       // Audit log
       await procedureAudit.restored(supabase, procedure.name, procedure.id)
     } else {
-      showToast('Failed to restore procedure', 'error')
+      showToast({ type: 'error', title: 'Failed to restore procedure' })
     }
 
     setSaving(false)
@@ -418,11 +420,6 @@ deleted_by: currentUserId
   // =====================================================
   // HELPER FUNCTIONS
   // =====================================================
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 
   const getRegionName = (procedure: ProcedureType): string => {
     if (!procedure.body_regions) return '—'
@@ -912,24 +909,6 @@ deleted_by: currentUserId
           {/* =====================================================
               TOAST NOTIFICATION
               ===================================================== */}
-          {toast && (
-            <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-              toast.type === 'success' 
-                ? 'bg-emerald-500 text-white' 
-                : 'bg-red-500 text-white'
-            }`}>
-              {toast.type === 'success' ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              )}
-              {toast.message}
-            </div>
-          )}
         </SettingsLayout>
       </Container>
     </DashboardLayout>

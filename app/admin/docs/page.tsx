@@ -1,8 +1,10 @@
+// app/admin/docs/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import {
   fetchPages,
@@ -122,31 +124,6 @@ const TABS: { id: DetailTab; label: string; icon: string }[] = [
 ]
 
 // =============================================================================
-// Toast
-// =============================================================================
-
-interface Toast {
-  id: number
-  message: string
-  type: 'success' | 'error'
-}
-
-function ToastContainer({ toasts }: { toasts: Toast[] }) {
-  return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
-      {toasts.map(t => (
-        <div
-          key={t.id}
-          className={`px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all duration-200
-            ${t.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}
-        >
-          {t.message}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 // =============================================================================
 // Main Page
 // =============================================================================
@@ -154,6 +131,12 @@ function ToastContainer({ toasts }: { toasts: Toast[] }) {
 export default function AdminDocsPage() {
   const supabase = createClient()
   const { isGlobalAdmin } = useUser()
+  const { showToast } = useToast()
+
+  // Wrapper for child components that still use positional (msg, type) signature
+  const addToast = useCallback((message: string, type: 'success' | 'error') => {
+    showToast({ type, title: message })
+  }, [showToast])
 
   // Data state
   const [pages, setPages] = useState<PageEntry[]>([])
@@ -167,7 +150,6 @@ export default function AdminDocsPage() {
   // UI state
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [searchQuery, setSearchQuery] = useState('')
-  const [toasts, setToasts] = useState<Toast[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingPage, setEditingPage] = useState<PageEntryInsert | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -176,8 +158,6 @@ export default function AdminDocsPage() {
   const [showScanner, setShowScanner] = useState(false)
   const [showCategoryManager, setShowCategoryManager] = useState(false)
   const [showHealth, setShowHealth] = useState(false)
-
-  const toastIdRef = useRef(0)
 
   // Derived
   const selectedPage = useMemo(
@@ -205,16 +185,6 @@ export default function AdminDocsPage() {
     }
     return result
   }, [grouped, searchQuery, categories])
-
-  // ============================================
-  // Toast helper
-  // ============================================
-
-  const addToast = useCallback((message: string, type: 'success' | 'error') => {
-    const id = ++toastIdRef.current
-    setToasts(prev => [...prev, { id, message, type }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
-  }, [])
 
   // ============================================
   // Data loading
@@ -463,9 +433,6 @@ export default function AdminDocsPage() {
 
   return (
     <DashboardLayout>
-      {/* Animations handled via Tailwind animate classes */}
-
-      <ToastContainer toasts={toasts} />
 
       {/* Delete Confirmation */}
       {showDeleteConfirm && selectedPage && (

@@ -1,4 +1,5 @@
 // app/settings/flags/page.tsx
+// app/settings/flags/page.tsx
 // ORbit Flag System Settings — Phase 2
 // Threshold Flag Rules — auto-detection rules with adjustable thresholds
 // Delay types are managed on the dedicated delay types settings page.
@@ -11,6 +12,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -40,11 +42,6 @@ interface FlagRule {
 
 type Severity = 'info' | 'warning' | 'critical'
 type ThresholdType = 'median_plus_sd' | 'absolute'
-
-interface Toast {
-  message: string
-  type: 'success' | 'error'
-}
 
 // =====================================================
 // CONSTANTS
@@ -79,6 +76,7 @@ const THRESHOLD_TYPE_LABELS: Record<string, string> = {
 
 export default function FlagsSettingsPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
   // State
@@ -86,8 +84,6 @@ export default function FlagsSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<string | null>(null) // rule ID being saved
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
-  const [toast, setToast] = useState<Toast | null>(null)
-
   // =====================================================
   // DATA FETCHING
   // =====================================================
@@ -115,14 +111,6 @@ export default function FlagsSettingsPage() {
     setLoading(false)
   }
 
-  // Toast auto-dismiss
-  useEffect(() => {
-    if (toast) {
-      const t = setTimeout(() => setToast(null), 3000)
-      return () => clearTimeout(t)
-    }
-  }, [toast])
-
   // =====================================================
   // FLAG RULE HANDLERS
   // =====================================================
@@ -141,9 +129,9 @@ export default function FlagsSettingsPage() {
     if (error) {
       // Revert
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_enabled: !newEnabled } : r))
-      setToast({ message: 'Failed to update rule', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to update rule' })
     } else {
-      setToast({ message: `${rule.name} ${newEnabled ? 'enabled' : 'disabled'}`, type: 'success' })
+      showToast({ type: 'success', title: `${rule.name} ${newEnabled ? 'enabled' : 'disabled'}` })
     }
     setSaving(null)
   }
@@ -159,9 +147,9 @@ export default function FlagsSettingsPage() {
 
     if (error) {
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, severity: rule.severity } : r))
-      setToast({ message: 'Failed to update severity', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to update severity' })
     } else {
-      setToast({ message: `Severity updated to ${severity}`, type: 'success' })
+      showToast({ type: 'success', title: `Severity updated to ${severity}` })
     }
     setSaving(null)
   }
@@ -177,9 +165,9 @@ export default function FlagsSettingsPage() {
 
     if (error) {
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, threshold_type: rule.threshold_type, threshold_value: rule.threshold_value } : r))
-      setToast({ message: 'Failed to update threshold', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to update threshold' })
     } else {
-      setToast({ message: 'Threshold updated', type: 'success' })
+      showToast({ type: 'success', title: 'Threshold updated' })
     }
     setSaving(null)
   }
@@ -483,17 +471,6 @@ export default function FlagsSettingsPage() {
             </section>
 
           </div>
-
-          {/* Toast */}
-          {toast && (
-            <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 transition-all ${
-              toast.type === 'success'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}>
-              {toast.message}
-            </div>
-          )}
         </SettingsLayout>
       </Container>
     </DashboardLayout>

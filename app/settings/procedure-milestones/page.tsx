@@ -1,8 +1,10 @@
+// app/settings/procedure-milestones/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
@@ -30,22 +32,16 @@ interface ProcedureMilestoneConfig {
   facility_milestone_id: string
 }
 
-interface Toast {
-  id: string
-  message: string
-  type: 'error' | 'success'
-}
-
 export default function ProcedureMilestonesSettingsPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { showToast } = useToast()
 
   const [loading, setLoading] = useState(true)
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
   const [configs, setConfigs] = useState<ProcedureMilestoneConfig[]>([])
   const [expandedProcedure, setExpandedProcedure] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<Toast[]>([])
 
   // Track which individual milestones are currently saving
   // Key format: `${procedureId}:${milestoneId}`
@@ -53,19 +49,6 @@ export default function ProcedureMilestonesSettingsPage() {
 
   // Prevent concurrent operations on the same milestone
   const pendingOps = useRef<Set<string>>(new Set())
-
-  // --- Toast helpers ---
-  const showToast = useCallback((message: string, type: 'error' | 'success' = 'error') => {
-    const id = crypto.randomUUID()
-    setToasts(prev => [...prev, { id, message, type }])
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-    }, 4000)
-  }, [])
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }, [])
 
   // --- Saving key helpers ---
   const markSaving = useCallback((procedureId: string, milestoneIds: string[]) => {
@@ -162,7 +145,7 @@ export default function ProcedureMilestonesSettingsPage() {
       const results = await Promise.all(deletePromises)
 
       if (results.some(r => r.error)) {
-        showToast('Failed to remove milestone. Reverting change.')
+        showToast({ type: 'error', title: 'Failed to remove milestone. Reverting change.' })
         await fetchData()
       }
     } else {
@@ -201,7 +184,7 @@ export default function ProcedureMilestonesSettingsPage() {
         .select()
 
       if (error || !data) {
-        showToast('Failed to add milestone. Reverting change.')
+        showToast({ type: 'error', title: 'Failed to add milestone. Reverting change.' })
         await fetchData()
       } else {
         // Replace optimistic placeholders with real rows
@@ -266,7 +249,7 @@ export default function ProcedureMilestonesSettingsPage() {
       .select()
 
     if (error || !data) {
-      showToast('Failed to enable all milestones. Reverting.')
+      showToast({ type: 'error', title: 'Failed to enable all milestones. Reverting.' })
       await fetchData()
     } else {
       setConfigs(prev => {
@@ -300,7 +283,7 @@ export default function ProcedureMilestonesSettingsPage() {
       .eq('procedure_type_id', procedureId)
 
     if (error) {
-      showToast('Failed to clear milestones. Reverting.')
+      showToast({ type: 'error', title: 'Failed to clear milestones. Reverting.' })
       await fetchData()
     }
 
@@ -516,40 +499,6 @@ export default function ProcedureMilestonesSettingsPage() {
           )}
         </SettingsLayout>
 
-        {/* Toast notifications */}
-        {toasts.length > 0 && (
-          <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
-            {toasts.map(toast => (
-              <div
-                key={toast.id}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
-                  toast.type === 'error'
-                    ? 'bg-red-50 text-red-800 border border-red-200'
-                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                }`}
-              >
-                {toast.type === 'error' ? (
-                  <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-                <span>{toast.message}</span>
-                <button
-                  onClick={() => dismissToast(toast.id)}
-                  className="ml-2 text-current opacity-50 hover:opacity-100"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
       </Container>
     </DashboardLayout>
   )

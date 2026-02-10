@@ -1,3 +1,4 @@
+// app/settings/analytics/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,6 +7,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface AnalyticsSettings {
   id: string
@@ -45,13 +47,12 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
 
 export default function AnalyticsSettingsPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
   const [settings, setSettings] = useState<AnalyticsSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
   // Form state (strings for controlled inputs)
   const [form, setForm] = useState({
     fcots_milestone: 'patient_in' as 'patient_in' | 'incision',
@@ -151,15 +152,14 @@ export default function AnalyticsSettingsPage() {
     }
 
     if (error) {
-      setToast({ message: 'Failed to save settings', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to save settings' })
     } else {
-      setToast({ message: 'Analytics settings saved', type: 'success' })
+      showToast({ type: 'success', title: 'Analytics settings saved' })
       fetchSettings()
     }
 
     setSaving(false)
-    setTimeout(() => setToast(null), 3000)
-  }
+}
 
   const handleReset = () => {
     setForm({
@@ -630,17 +630,6 @@ export default function AnalyticsSettingsPage() {
                 {saving ? 'Saving...' : 'Save Settings'}
               </button>
             </div>
-
-            {/* Toast */}
-            {toast && (
-              <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 ${
-                toast.type === 'success' 
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                  : 'bg-red-50 text-red-700 border border-red-200'
-              }`}>
-                {toast.message}
-              </div>
-            )}
           </div>
         </SettingsLayout>
       </Container>

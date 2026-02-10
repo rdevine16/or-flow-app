@@ -1,3 +1,4 @@
+// app/settings/implant-companies/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,6 +7,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { implantCompanyAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface ImplantCompany {
   id: string
@@ -24,6 +26,7 @@ interface ModalState {
 
 export default function ImplantCompaniesPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   const [companies, setCompanies] = useState<ImplantCompany[]>([])
   const [loading, setLoading] = useState(true)
   const [facilityId, setFacilityId] = useState<string | null>(null)
@@ -36,16 +39,8 @@ export default function ImplantCompaniesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
   // Current user for deleted_by tracking
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   useEffect(() => {
     fetchData()
   }, [showArchived])
@@ -180,7 +175,7 @@ const handleDelete = async (id: string) => {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
       setDeleteConfirm(null)
-      showToast(`"${company.name}" moved to archive`, 'success')
+      showToast({ type: 'success', title: `"${company.name}" moved to archive` })
       
       // Audit log
       await implantCompanyAudit.deleted(supabase, company.name, id, facilityId)
@@ -202,7 +197,7 @@ const handleDelete = async (id: string) => {
     if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${company.name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${company.name}" restored successfully` })
       
       // Audit log (you may want to add a restored method)
       await implantCompanyAudit.deleted(supabase, `${company.name} (restored)`, id, facilityId)
@@ -467,23 +462,6 @@ const handleDelete = async (id: string) => {
           )}
         </SettingsLayout>
       </Container>
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
-        </div>
-      )}
     </DashboardLayout>
   )
 }
