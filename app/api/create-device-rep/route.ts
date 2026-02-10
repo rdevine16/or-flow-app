@@ -1,118 +1,95 @@
-// ============================================
-// FILE: app/api/create-device-rep/route.ts
-// PURPOSE: Create device rep account with auto-confirmed email
-// ============================================
-
+// app/api/create-device-rep/route.ts
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { withErrorHandler, ValidationError } from '@/lib/errorHandling'
+import { validate } from '@/lib/validationSchemas'
+import { nowUTC } from '@/lib/dateFactory'
 
-import { error } from 'console'
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
-    const { email, password, firstName, lastName, phone, inviteId, facilityId, implantCompanyId } = body
+// Validation schema
+const createDeviceRepSchema = z.object({
+  email: z.string().email('Invalid email'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  firstName: z.string().min(1, 'First name required').max(50),
+  lastName: z.string().min(1, 'Last name required').max(50),
+  phone: z.string().optional(),
+  inviteId: z.string().uuid('Invalid invite ID'),
+  facilityId: z.string().uuid('Invalid facility ID'),
+  implantCompanyId: z.string().uuid('Invalid company ID'),
+})
 
-    // Validate required fields
-    if (!email || !password || !firstName || !lastName || !inviteId || !facilityId || !implantCompanyId) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
+export const POST = withErrorHandler(async (request: NextRequest) => {
+  // Validate input
+  const body = await request.json()
+  const validated = validate(createDeviceRepSchema, body)
 
-    // Create admin client with service role (can bypass email confirmation)
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
-    )
-
-    // 1. Create auth user with email auto-confirmed
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true, // Auto-confirm email
-      user_metadata: {
-        first_name: firstName,
-        last_name: lastName,
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
-    })
-
-    if (authError) {
-console.error('Error description:', authError)
-
-      return NextResponse.json(
-        { error: authError.message },
-        { status: 400 }
-      )
     }
+  )
 
-    if (!authData.user) {
-      return NextResponse.json(
-        { error: 'Failed to create user' },
-        { status: 500 }
-      )
-    }
+  // 1. Create auth user
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: validated.email,
+    password: validated.password,
+    email_confirm: true,
+    user_metadata: {
+      first_name: validated.firstName,
+      last_name: validated.lastName,
+    },
+  })
 
-    // 2. Create user profile using the database function
-    const { error: profileError } = await supabaseAdmin.rpc('create_device_rep_profile', {
-      user_id: authData.user.id,
-      user_email: email,
-      first_name: firstName,
-      last_name: lastName,
-      phone_number: phone || null,
-    })
-
-    if (profileError) {
-console.error('Error description:', profileError)
-
-      // Try to clean up auth user if profile creation fails
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-      return NextResponse.json(
-        { error: 'Failed to create user profile: ' + profileError.message },
-        { status: 500 }
-      )
-    }
-
-    // 3. Grant access to the facility
-    const { error: accessError } = await supabaseAdmin
-      .from('facility_device_reps')
-      .insert({
-        facility_id: facilityId,
-        user_id: authData.user.id,
-        implant_company_id: implantCompanyId,
-        status: 'active',
-        accepted_at: new Date().toISOString(),
-      })
-
-    if (accessError) {
-console.error('Error description:', error)
-
-      // Continue anyway - user can still log in
-    }
-
-    // 4. Mark invite as accepted
-    await supabaseAdmin
-      .from('device_rep_invites')
-      .update({ accepted_at: new Date().toISOString() })
-      .eq('id', inviteId)
-
-    return NextResponse.json({
-      success: true,
-      userId: authData.user.id,
-    })
-
-  } catch (error: any) {
-console.error('Error description:', error)
-
-    return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
-      { status: 500 }
-    )
+  if (authError) {
+    throw new ValidationError(`Failed to create user: ${authError.message}`)
   }
-}
+
+  if (!authData.user) {
+    throw new Error('User creation failed')
+  }
+
+  // 2. Create user profile
+  const { error: profileError } = await supabaseAdmin.rpc('create_device_rep_profile', {
+    user_id: authData.user.id,
+    user_email: validated.email,
+    first_name: validated.firstName,
+    last_name: validated.lastName,
+    phone_number: validated.phone || null,
+  })
+
+  if (profileError) {
+    await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+    throw new Error(`Failed to create profile: ${profileError.message}`)
+  }
+
+  // 3. Grant facility access
+  const { error: accessError } = await supabaseAdmin
+    .from('facility_device_reps')
+    .insert({
+      facility_id: validated.facilityId,
+      user_id: authData.user.id,
+      implant_company_id: validated.implantCompanyId,
+      status: 'active',
+      accepted_at: nowUTC(), // ✅ Timezone-safe!
+    })
+
+  if (accessError) {
+    throw new Error(`Failed to grant access: ${accessError.message}`)
+  }
+
+  // 4. Mark invite as accepted
+  await supabaseAdmin
+    .from('device_rep_invites')
+    .update({ accepted_at: nowUTC() }) // ✅ Timezone-safe!
+    .eq('id', validated.inviteId)
+
+  return NextResponse.json({
+    success: true,
+    userId: authData.user.id,
+  }, { status: 201 })
+})
