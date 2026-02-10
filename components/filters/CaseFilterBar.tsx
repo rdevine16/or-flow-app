@@ -552,25 +552,25 @@ export default function CasesFilterBar({
   }))
 
   // Sync URL when filters change
-  useEffect(() => {
-    const params = new URLSearchParams()
-    
-    if (filters.dateRange !== 'week') params.set('date', filters.dateRange)
-    filters.status.forEach(s => params.append('status', s))
-    filters.surgeonIds.forEach(s => params.append('surgeon', s))
-    filters.roomIds.forEach(r => params.append('room', r))
-    filters.procedureIds.forEach(p => params.append('procedure', p))
-    if (filters.search) params.set('q', filters.search)
-    
-    const queryString = params.toString()
-    const newUrl = queryString ? `/cases?${queryString}` : '/cases'
-    
-    // Use replace to avoid polluting browser history
-    router.replace(newUrl, { scroll: false })
-    
-    // Notify parent
-    onFiltersChange(filters)
-  }, [filters, router, onFiltersChange])
+useEffect(() => {
+  const params = new URLSearchParams()
+  
+  if (filters.dateRange !== 'week') params.set('date', filters.dateRange)
+  filters.status.forEach(s => params.append('status', s))
+  filters.surgeonIds.forEach(s => params.append('surgeon', s))
+  filters.roomIds.forEach(r => params.append('room', r))
+  filters.procedureIds.forEach(p => params.append('procedure', p))
+  if (filters.search) params.set('q', filters.search)
+  
+  const queryString = params.toString()
+  const newUrl = queryString ? `/cases?${queryString}` : '/cases'
+  
+  // Use History API to update URL without triggering server navigation
+  window.history.replaceState(null, '', newUrl)
+  
+  // Notify parent
+  onFiltersChange(filters)
+}, [filters, onFiltersChange])
 
   // Initialize search input from URL
   useEffect(() => {
