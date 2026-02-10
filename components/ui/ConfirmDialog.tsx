@@ -6,6 +6,7 @@
 
 import { ReactNode, useEffect } from 'react'
 import { tokens } from '@/lib/design-tokens'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 /**
  * USAGE:
@@ -297,7 +298,7 @@ export function useConfirmDialog() {
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [options, setOptions] = useState<UseConfirmDialogOptions | null>(null)
-
+const { showToast } = useToast()
   const showConfirm = useCallback((opts: UseConfirmDialogOptions) => {
     setOptions(opts)
     setIsOpen(true)
@@ -311,7 +312,11 @@ export function useConfirmDialog() {
       await options.onConfirm()
       setIsOpen(false)
     } catch (error) {
-      console.error('Confirm dialog error:', error)
+      showToast({
+        type: 'error',
+        title: 'Confirm Dialog Error',
+        message: error instanceof Error ? error.message : 'An error occurred in the confirm dialog'
+      })
     } finally {
       setLoading(false)
     }

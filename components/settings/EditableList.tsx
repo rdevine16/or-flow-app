@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface Item {
   id: string
@@ -30,7 +31,7 @@ export default function EditableList({
   const [editValue, setEditValue] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-
+const { showToast } = useToast()
   const handleAdd = async () => {
     if (!newName.trim()) return
     setLoading(true)
@@ -38,7 +39,11 @@ export default function EditableList({
       await onAdd(newName.trim())
       setNewName('')
     } catch (error) {
-      console.error('Error adding item:', error)
+      showToast({
+        type: 'error',
+        title: 'Failed to add item',
+        message: error instanceof Error ? error.message : 'Failed to add item'
+      })
     }
     setLoading(false)
   }
@@ -51,7 +56,11 @@ export default function EditableList({
       setEditingId(null)
       setEditValue('')
     } catch (error) {
-      console.error('Error updating item:', error)
+      showToast({
+        type: 'error',
+        title: 'Error updating item:',
+        message: error instanceof Error ? error.message : 'Error updating item:'
+      })
     }
     setLoading(false)
   }
@@ -62,7 +71,11 @@ export default function EditableList({
       await onDelete(id)
       setDeleteConfirm(null)
     } catch (error) {
-      console.error('Error deleting item:', error)
+      showToast({
+        type: 'error',
+        title: 'Error deleting item:',
+        message: error instanceof Error ? error.message : 'Error deleting item:'
+      })
       alert('Cannot delete: This item may be in use by existing cases.')
     }
     setLoading(false)

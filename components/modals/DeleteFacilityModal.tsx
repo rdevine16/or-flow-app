@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { adminAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface DeleteFacilityModalProps {
   facility: {
@@ -25,7 +26,7 @@ export default function DeleteFacilityModal({
   const [confirmText, setConfirmText] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
+  const { showToast } = useToast()
   const isConfirmed = confirmText === facility.name
 
   const handleDelete = async () => {
@@ -43,7 +44,11 @@ export default function DeleteFacilityModal({
         .eq('viewing_facility_id', facility.id)
 
       if (sessionError) {
-        console.warn('Could not clear admin sessions:', sessionError)
+        showToast({
+          type: 'error',
+          title: 'Failed to clear admin sessions',
+          message: sessionError.message || 'Could not clear admin sessions for this facility'
+        })
         // Continue anyway - might not have any sessions
       }
 
@@ -62,10 +67,14 @@ export default function DeleteFacilityModal({
 
       // Success - notify parent
       onDeleted()
-    } catch (err: any) {
-      console.error('Error deleting facility:', err)
-      setError(err.message || 'Failed to delete facility. Please try again.')
-    } finally {
+} catch (err: any) {
+  showToast({
+    type: 'error',
+    title: 'Delete Failed',
+    message: err.message || 'Failed to delete facility. Please try again.'
+  })
+  setError(err.message || 'Failed to delete facility. Please try again.')
+} finally {
       setIsDeleting(false)
     }
   }

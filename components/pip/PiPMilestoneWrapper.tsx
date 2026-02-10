@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import PiPMilestonePanel from './PiPMilestonePanel'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface Milestone {
   id: string
@@ -51,7 +52,7 @@ export default function PiPMilestoneWrapper({
   const [pipWindow, setPipWindow] = useState<Window | null>(null)
   const [pipContainer, setPipContainer] = useState<HTMLElement | null>(null)
   const openingRef = useRef(false)
-
+const { showToast } = useToast()
   const isSupported = typeof window !== 'undefined' && 
     'documentPictureInPicture' in window
 
@@ -91,7 +92,11 @@ export default function PiPMilestoneWrapper({
       setPipWindow(pip)
       setPipContainer(container)
     } catch (error) {
-      console.error('Failed to open Picture-in-Picture:', error)
+      showToast({
+        type: 'error',
+        title: 'Failed to open Picture-in-Picture',
+        message: error instanceof Error ? error.message : 'Failed to open Picture-in-Picture window'
+      })
       onOpenChange(false)
       openingRef.current = false
     }
