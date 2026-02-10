@@ -16,6 +16,7 @@ import { useSurgeons } from '@/hooks'
 import { AreaChart, BarChart } from '@tremor/react'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 import {
   CalendarDays,
@@ -1278,6 +1279,7 @@ export default function BlockUtilizationPage() {
 
   // State
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedSurgeonId, setSelectedSurgeonId] = useState<string>('all')
 const [dateRange, setDateRange] = useState('last_30')
 const [dateStart, setDateStart] = useState(() => {
@@ -1348,6 +1350,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
     async function loadData() {
       setLoading(true)
+      setError(null)
       const startStr = dateStart
       const endStr = dateEnd
 
@@ -1446,11 +1449,12 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
         setRooms((roomsRes.data || []) as ORRoomRow[])
         setRoomSchedules((roomSchedulesRes.data || []) as RoomScheduleRow[])
       } catch (err) {
+        setError('Failed to load block utilization data. Please try again.')
         showToast({
-  type: 'error',
-  title: 'Error loading block utilization data:',
-  message: err instanceof Error ? err.message : 'Error loading block utilization data:'
-})
+          type: 'error',
+          title: 'Failed to load data',
+          message: err instanceof Error ? err.message : 'Please try again'
+        })
       }
 
       setLoading(false)
@@ -1647,6 +1651,8 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
         <div className="space-y-8 pb-12">
 
+          {/* Error Banner */}
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           {/* HEADER */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">

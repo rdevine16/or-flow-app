@@ -2,8 +2,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useBlockSchedules } from '@/hooks/useBlockSchedules'
 import { useSurgeons } from '@/hooks'
@@ -14,7 +14,10 @@ import { WeekCalendar } from '@/components/block-schedule/WeekCalendar'
 import { BlockSidebar } from '@/components/block-schedule/BlockSidebar'
 import { BlockPopover } from '@/components/block-schedule/BlockPopover'
 import { DeleteBlockModal } from '@/components/block-schedule/DeleteBlockModal'
-import { ChevronLeft, ChevronRight, Loader2, Undo2, X } from 'lucide-react'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 
 // =====================================================
 // UNDO TOAST COMPONENT
@@ -69,15 +72,13 @@ function getWeekStart(date: Date): Date {
 // PAGE COMPONENT
 // =====================================================
 export default function BlockSchedulePage() {
-  const router = useRouter()
   const supabase = createClient()
-
-  // Auth & facility
-  const [facilityId, setFacilityId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { loading: userLoading, effectiveFacilityId: facilityId } = useUser()
+  const { showToast } = useToast()
 
   // Calendar state
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => getWeekStart(new Date()))
+  const [error, setError] = useState<string | null>(null)
 
   // Surgeons
   const [selectedSurgeonIds, setSelectedSurgeonIds] = useState<Set<string>>(new Set())
@@ -135,24 +136,6 @@ export default function BlockSchedulePage() {
     if (undoAction?.timer) clearTimeout(undoAction.timer)
     setUndoAction(null)
   }, [undoAction])
-
-  // Load user and facility
-  useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.facility_id) setFacilityId(userData.facility_id)
-      setLoading(false)
-    }
-    loadUser()
-  }, [supabase, router])
 
   // Initialize selected surgeons and colors
   useEffect(() => {
@@ -233,17 +216,27 @@ export default function BlockSchedulePage() {
 
   // Handle block click (edit)
   const handleBlockClick = async (block: ExpandedBlock, position?: { x: number; y: number }) => {
-    const { data } = await supabase
-      .from('block_schedules')
-      .select('*')
-      .eq('id', block.block_id)
-      .single()
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('block_schedules')
+        .select('*')
+        .eq('id', block.block_id)
+        .single()
 
-    if (data) {
-      setEditingBlock(data)
-      setDragSelection(null)
-      setClickPosition(position)
-      setPopoverOpen(true)
+      if (fetchError) throw fetchError
+
+      if (data) {
+        setEditingBlock(data)
+        setDragSelection(null)
+        setClickPosition(position)
+        setPopoverOpen(true)
+      }
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Failed to load block details',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
     }
   }
 
@@ -364,15 +357,20 @@ export default function BlockSchedulePage() {
   // =====================================================
   return (
     <DashboardLayout>
-      {loading ? (
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
+      {userLoading || surgeonsLoading ? (
+        <PageLoader message="Loading block schedule..." />
       ) : (
         <div
           className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex"
           style={{ height: 'calc(100vh - 140px)' }}
         >
+          {/* Error Banner */}
+          {error && (
+            <ErrorBanner
+              message={error}
+              onDismiss={() => setError(null)}
+            />
+          )}
           {/* Sidebar */}
           <BlockSidebar
             surgeons={surgeons}

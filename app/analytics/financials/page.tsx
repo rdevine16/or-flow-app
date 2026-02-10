@@ -5,12 +5,13 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
 
 // Local components
 import { 
@@ -28,12 +29,7 @@ import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
-  
-  // Facility handling
-  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
-  const [noFacilitySelected, setNoFacilitySelected] = useState(false)
-  const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
+  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
   
   // Data state - Using view data
   const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
@@ -41,6 +37,7 @@ export default function FinancialsAnalyticsPage() {
   const [facilityProcedureStats, setFacilityProcedureStats] = useState<FacilityProcedureStats[]>([])
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   
   // UI state
   const [activeTab, setActiveTab] = useState<SubTab>('overview')
@@ -56,30 +53,12 @@ export default function FinancialsAnalyticsPage() {
     facilitySettings
   )
 
-  // Determine effective facility ID
-  useEffect(() => {
-    if (userLoading) return
-    
-    if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
-      const impersonation = getImpersonationState()
-      if (impersonation?.facilityId) {
-        setEffectiveFacilityId(impersonation.facilityId)
-      } else {
-        setNoFacilitySelected(true)
-      }
-    } else if (userData.facilityId) {
-      setEffectiveFacilityId(userData.facilityId)
-    }
-    
-    setFacilityCheckComplete(true)
-  }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
-
   // Fetch data from views
   const fetchData = async (startDate?: string, endDate?: string) => {
     if (!effectiveFacilityId) return
     
     setLoading(true)
-
+    setError(null)
     // Get date range
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -214,12 +193,13 @@ if (facilityStatsRes.error) {
       setSurgeonProcedureStats((surgeonStatsRes.data as SurgeonProcedureStats[]) || [])
       setFacilityProcedureStats((facilityStatsRes.data as FacilityProcedureStats[]) || [])
       setFacilitySettings(facilityRes.data as FacilitySettings)
-    } catch (error) {
+    } catch (err) {
+      setError('Failed to load financial data. Please try again.')
       showToast({
-  type: 'error',
-  title: 'Error fetching facility stats:',
-  message: error instanceof Error ? error.message : 'Error fetching facility stats:'
-})
+        type: 'error',
+        title: 'Failed to load financial data',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
     }
     
     setLoading(false)
@@ -248,21 +228,16 @@ if (facilityStatsRes.error) {
   }
 
   // Loading state
-  if (userLoading || !facilityCheckComplete) {
+  if (userLoading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center py-24">
-          <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-        </div>
+        <PageLoader message="Loading financial analytics..." />
       </DashboardLayout>
     )
   }
 
   // No facility selected (global admin)
-  if (noFacilitySelected) {
+  if (!effectiveFacilityId && isGlobalAdmin) {
     return (
       <DashboardLayout>
         <Container className="py-8">
@@ -340,13 +315,9 @@ if (facilityStatsRes.error) {
             <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
           }
         />
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
         {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-          </div>
+          <PageLoader message="Loading financial data..." />
         ) : (
           <>
             {/* Sub-tabs */}

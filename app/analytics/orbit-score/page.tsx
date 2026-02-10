@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import DateRangeSelector, { getPresetDates } from '@/components/ui/DateRangeSelector'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import {
@@ -56,7 +58,6 @@ async function fetchScorecardData(
     .lte('scheduled_date', endDate)
 
   if (casesError) {
-    console.error('Error fetching cases:', casesError)
     return null
   }
 
@@ -91,22 +92,6 @@ async function fetchScorecardData(
     }
   })
 
-  // Debug: log milestone coverage
-  if (cases.length > 0) {
-    const sampleCase = completedCases[0]
-    const sampleMapped = cases[0]
-    console.log(`🏥 ${cases.length} validated+completed cases`)
-    console.log('📋 Raw milestone keys from first case:', (sampleCase.case_milestones || []).map((cm: any) => cm.facility_milestones?.name))
-    console.log('📋 Mapped milestones on first case:', {
-      patient_in_at: sampleMapped.patient_in_at,
-      patient_out_at: sampleMapped.patient_out_at,
-      incision_at: sampleMapped.incision_at,
-      prep_drape_complete_at: sampleMapped.prep_drape_complete_at,
-    })
-    const withDuration = cases.filter(c => c.patient_in_at && c.patient_out_at).length
-    console.log(`⏱️ Cases with both patient_in + patient_out: ${withDuration}/${cases.length}`)
-  }
-
   const caseIds = cases.map(c => c.id)
   let financials: ScorecardFinancials[] = []
 
@@ -118,14 +103,11 @@ async function fetchScorecardData(
         .select('case_id, profit, reimbursement, or_time_cost')
         .in('case_id', chunk)
       if (finError) {
-        console.error('⚠️ Financials query error:', finError)
+        // financials query error — non-fatal, continue
       }
       if (finData) financials = [...financials, ...finData]
     }
   }
-
-  // Debug: log financials coverage
-  console.log(`📊 Financials: ${financials.length} rows for ${caseIds.length} cases. Sample:`, financials.slice(0, 3))
 
   let flags: ScorecardFlag[] = []
   if (caseIds.length > 0) {
@@ -626,22 +608,6 @@ export default function ORbitScorePage() {
         enableDiagnostics: true,
       })
 
-      // Log diagnostics for debugging
-      if (results.length > 0) {
-        console.group('🔬 ORbit Score Diagnostics (v2.2 — 3 MAD band, floor 10, raw graduated pillars)')
-        for (const sc of results) {
-          console.group(`${sc.surgeonName} — Composite: ${sc.composite} (${sc.grade.letter})`)
-          if (sc.diagnostics) {
-            console.log('Profitability:', sc.diagnostics.profitability)
-            console.log('Consistency:', sc.diagnostics.consistency)
-            console.log('Schedule Adherence:', sc.diagnostics.schedAdherence)
-            console.log('Availability:', sc.diagnostics.availability)
-          }
-          console.groupEnd()
-        }
-        console.groupEnd()
-      }
-
       setScorecards(results)
       setFacilitySettings(data.settings)
 
@@ -657,8 +623,7 @@ export default function ORbitScorePage() {
         Object.values(allSurgeonCases).filter(s => s.count < MIN_CASE_THRESHOLD)
       )
     } catch (err) {
-      console.error('ORbit Score calculation error:', err)
-      setError('Error calculating ORbit Scores')
+      setError('Failed to calculate ORbit Scores')
     }
 
     setLoading(false)
@@ -691,11 +656,7 @@ export default function ORbitScorePage() {
   if (userLoading) {
     return (
       <DashboardLayout>
-        <Container>
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </Container>
+        <PageLoader message="Loading ORbit Scores..." />
       </DashboardLayout>
     )
   }
@@ -715,18 +676,10 @@ export default function ORbitScorePage() {
             <DateRangeSelector value={dateFilter} onChange={handleFilterChange} />
           </div>
 
+          <ErrorBanner message={error} onRetry={loadORbitScores} onDismiss={() => setError(null)} />
+
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-32">
-              <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-sm text-slate-500">Calculating ORbit Scores...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-20">
-              <p className="text-red-500 mb-2">{error}</p>
-              <button onClick={loadORbitScores} className="text-sm text-blue-600 hover:text-blue-700">
-                Retry
-              </button>
-            </div>
+            <PageLoader message="Calculating ORbit Scores..." />
           ) : scorecards.length === 0 ? (
             <div className="text-center py-20">
               <p className="text-slate-500 mb-2">
