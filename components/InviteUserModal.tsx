@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { userAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface UserRole {
   id: string
@@ -30,7 +31,7 @@ export default function InviteUserModal({
   roles 
 }: InviteUserModalProps) {
   const supabase = createClient()
-  
+  const { showToast } = useToast()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -131,11 +132,15 @@ export default function InviteUserModal({
             is_active: true,
           })
 
-        if (insertError) {
-          console.error('Insert error:', insertError)
-          setError(insertError.message || 'Failed to add staff member')
-          return
-        }
+if (insertError) {
+  showToast({
+    type: 'error',
+    title: 'Insert Failed',
+    message: insertError.message || 'Failed to add staff member'
+  })
+  setError(insertError.message || 'Failed to add staff member')
+  return
+}
 
         // Audit log the staff creation (no email)
         await userAudit.created(

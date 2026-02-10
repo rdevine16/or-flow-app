@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface Complexity {
   id: string
@@ -30,7 +31,7 @@ export default function CaseComplexitySelector({
   const supabase = createClient()
   const [allComplexities, setAllComplexities] = useState<Complexity[]>([])
   const [loading, setLoading] = useState(true)
-
+  const { showToast } = useToast()
   useEffect(() => {
     fetchComplexities()
   }, [facilityId])
@@ -48,7 +49,11 @@ export default function CaseComplexitySelector({
       if (error) throw error
       setAllComplexities(data || [])
     } catch (error) {
-      console.error('Error fetching complexities:', error)
+      showToast({
+        type: 'error',
+        title: 'Failed to Fetch Complexities',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+      })
     } finally {
       setLoading(false)
     }

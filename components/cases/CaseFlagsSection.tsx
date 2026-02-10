@@ -17,7 +17,7 @@
 //   />
 
 'use client'
-
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useState, useEffect, useCallback } from 'react'
 import {
   ExclamationCircleIcon,
@@ -220,7 +220,7 @@ export default function CaseFlagsSection({
 
     const duration = delayDuration ? parseInt(delayDuration) : null
     const note = delayNote.trim() || null
-
+    const { showToast } = useToast()
     try {
       // 1. Write to case_flags (new system)
       await supabase.from('case_flags').insert({
@@ -253,7 +253,11 @@ export default function CaseFlagsSection({
       // Re-fetch flags
       await fetchFlags()
     } catch (err) {
-      console.error('Failed to report delay:', err)
+      showToast({
+        type: 'error',
+        title: 'Failed to Report Delay',
+        message: err instanceof Error ? err.message : 'An unexpected error occurred'
+      })
     }
 
     setSaving(false)

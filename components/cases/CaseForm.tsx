@@ -16,6 +16,7 @@ import { caseAudit, caseDeviceAudit } from '@/lib/audit-logger'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 import CaseComplexitySelector from '../cases/CaseComplexitySelector'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface CaseFormProps {
   caseId?: string
@@ -299,6 +300,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // for all enabled milestones in the procedure type
   // ============================================
   const initializeCaseMilestones = async (caseId: string, procedureTypeId: string, facilityId: string) => {
+    const { showToast } = useToast()
     // Get all enabled milestones for this procedure type
     const { data: procedureMilestones, error: pmError } = await supabase
       .from('procedure_milestone_config')
@@ -309,13 +311,21 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       .order('display_order')
 
     if (pmError) {
-      console.error('Error fetching procedure milestones:', pmError)
+      showToast({
+        type: 'error',
+        title: 'Failed to Fetch Procedure Milestones',
+        message: pmError instanceof Error ? pmError.message : 'An unexpected error occurred'
+      })
       return
     }
 
     if (!procedureMilestones || procedureMilestones.length === 0) {
-      console.log('No milestones configured for this procedure type')
-      return
+showToast({
+  type: 'info',
+  title: 'No milestones configured for this procedure type',
+  message: 'No milestones configured for this procedure type'
+})      
+return
     }
 
     // Build the case_milestones insert data
@@ -332,10 +342,16 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       .insert(caseMilestonesData)
 
     if (insertError) {
-      console.error('Error initializing case milestones:', insertError)
-    } else {
-      console.log(`Initialized ${caseMilestonesData.length} milestones for case ${caseId}`)
-    }
+showToast({
+  type: 'error',
+  title: 'Error initializing case milestones:',
+  message: `Error initializing case milestones: ${insertError}`
+})    } else {
+showToast({
+  type: 'info',
+  title: `Initialized ${caseMilestonesData.length} milestones for case ${caseId}`,
+  message: `Initialized ${caseMilestonesData.length} milestones for case ${caseId}`
+})    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

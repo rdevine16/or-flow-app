@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { extractName } from '@/lib/formatters'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // ============================================================================
 // TYPES
@@ -155,7 +156,7 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
   const supabase = createClient()
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  
+  const { showToast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -254,8 +255,11 @@ export default function GlobalSearch({ facilityId }: GlobalSearchProps) {
       setRooms((roomsRes.data as Room[]) || [])
       setDataLoaded(true)
     } catch (error) {
-      console.error('Error loading search data:', error)
-    }
+showToast({
+  type: 'error',
+  title: 'Error loading search data:',
+  message: error instanceof Error ? error.message : 'Error loading search data:'
+})    }
     
     setIsLoading(false)
   }

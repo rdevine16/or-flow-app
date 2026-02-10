@@ -12,6 +12,8 @@ import { useSubNav } from '@/lib/SubNavContext'
 import { getImpersonationState, endImpersonation } from '@/lib/impersonation'
 import { authAudit, adminAudit } from '@/lib/audit-logger'
 import ErrorBoundary from '../ErrorBoundary'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 
 // Layout components
 import Sidebar, { useSidebarWidth } from './Sidebar'
@@ -48,7 +50,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Sub-nav from context
   const { items: subNavItems, title: subNavTitle, isVisible: hasSubNav } = useSubNav()
-
+  const { showToast } = useToast() 
   // Local state
   const [mounted, setMounted] = useState(false)
   const [sidebarExpanded, setSidebarExpanded] = useState(false)
@@ -64,13 +66,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navigation = isAdminMode ? [] : getFilteredNavigation(userData.accessLevel)
   const sidebarWidth = sidebarExpanded ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED
   const contentMarginLeft = sidebarWidth + (hasSubNav ? SUBNAV_WIDTH : 0)
-
   // ============================================
   // Effects
   // ============================================
 
   // Check facility access
   useEffect(() => {
+    
     async function checkFacilityAccess() {
       try {
         const { data: { user } } = await supabase.auth.getUser()
@@ -115,10 +117,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           })
         }
         setCheckingAccess(false)
-      } catch (error) {
-        console.error('Error checking facility access:', error)
-        setCheckingAccess(false)
-      }
+} catch (error) {
+  showToast({
+    type: 'error',
+    title: 'Access Check Failed',
+    message: error instanceof Error ? error.message : 'Unable to verify facility access'
+  })
+  setCheckingAccess(false)
+}
     }
     if (!loading) checkFacilityAccess()
   }, [loading, supabase])

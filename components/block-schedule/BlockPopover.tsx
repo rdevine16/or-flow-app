@@ -3,6 +3,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Trash2, Loader2, Clock, User, Calendar, Repeat, GripHorizontal, ChevronDown, Copy, FileText, AlertTriangle } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
 import {
   BlockSchedule,
   ExpandedBlock,
@@ -282,6 +284,7 @@ export function BlockPopover({
   }, [open, onClose])
 
   // Save delegates to hook
+  const { showToast } = useToast()
   const handleSave = async () => {
     if (!facilityId || !surgeonId) return
     setSaving(true)
@@ -324,7 +327,11 @@ export function BlockPopover({
       }
       onSave()
     } catch (error) {
-      console.error('Error saving block:', error)
+      showToast({
+        type: 'error',
+        title: 'Failed to Save Block',
+        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+      })
     } finally {
       setSaving(false)
     }

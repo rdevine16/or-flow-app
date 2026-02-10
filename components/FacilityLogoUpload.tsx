@@ -5,6 +5,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface FacilityLogoUploadProps {
   facilityId: string
@@ -19,6 +20,7 @@ export default function FacilityLogoUpload({
 }: FacilityLogoUploadProps) {
   const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { showToast } = useToast()
   
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -82,7 +84,11 @@ export default function FacilityLogoUpload({
 
       onLogoChange(publicUrl)
     } catch (err) {
-      console.error('Upload error:', err)
+      showToast({
+        type: 'error',
+        title: 'Upload Failed',
+        message: err instanceof Error ? err.message : 'Failed to upload logo'
+      })
       setError('Failed to upload logo')
     } finally {
       setUploading(false)
@@ -114,7 +120,11 @@ export default function FacilityLogoUpload({
 
       onLogoChange(null)
     } catch (err) {
-      console.error('Delete error:', err)
+      showToast({
+        type: 'error',
+        title: 'Delete Failed',
+        message: err instanceof Error ? err.message : 'Failed to remove logo'
+      })
       setError('Failed to remove logo')
     } finally {
       setDeleting(false)

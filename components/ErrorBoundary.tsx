@@ -5,6 +5,14 @@
 'use client'
 
 import { Component, ReactNode } from 'react'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
+interface ErrorBoundaryInnerProps {
+  children: ReactNode
+  fallback?: ReactNode
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void
+  showToast: (toast: { type: 'error' | 'success' | 'info'; title: string; message?: string }) => void
+}
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -20,7 +28,54 @@ interface ErrorBoundaryState {
 }
 
 /**
+ * Inner class component that receives showToast as a prop.
+ * Class components are required for React error boundaries.
+ */
+class ErrorBoundaryInner extends Component<ErrorBoundaryInnerProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryInnerProps) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    this.props.showToast({
+      type: 'error',
+      title: 'Something went wrong',
+      message: error.message || 'An unexpected error occurred'
+    })
+
+    this.props.onError?.(error, errorInfo)
+  }
+
+  handleReset = (): void => {
+    this.setState({ hasError: false, error: null })
+  }
+
+  render(): ReactNode {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback
+      }
+
+      return (
+        <DefaultErrorFallback 
+          error={this.state.error} 
+          onReset={this.handleReset} 
+        />
+      )
+    }
+
+    return this.props.children
+  }
+}
+
+/**
  * Error Boundary component that catches JavaScript errors in child components.
+ * Wraps the class-based boundary with a functional component to access useToast.
  * 
  * Usage:
  * ```tsx
@@ -39,47 +94,18 @@ interface ErrorBoundaryState {
  * </ErrorBoundary>
  * ```
  */
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
+export function ErrorBoundary({ children, fallback, onError }: ErrorBoundaryProps) {
+  const { showToast } = useToast()
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // Update state so the next render shows the fallback UI
-    return { hasError: true, error }
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // Log error to console in development
-    console.error('ErrorBoundary caught an error:', error, errorInfo)
-    
-    // Call optional error handler
-    this.props.onError?.(error, errorInfo)
-  }
-
-  handleReset = (): void => {
-    this.setState({ hasError: false, error: null })
-  }
-
-  render(): ReactNode {
-    if (this.state.hasError) {
-      // Custom fallback if provided
-      if (this.props.fallback) {
-        return this.props.fallback
-      }
-
-      // Default fallback UI
-      return (
-        <DefaultErrorFallback 
-          error={this.state.error} 
-          onReset={this.handleReset} 
-        />
-      )
-    }
-
-    return this.props.children
-  }
+  return (
+    <ErrorBoundaryInner
+      fallback={fallback}
+      onError={onError}
+      showToast={showToast}
+    >
+      {children}
+    </ErrorBoundaryInner>
+  )
 }
 
 /**

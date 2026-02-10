@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getLocalDateString } from '@/lib/date-utils'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 interface Room {
@@ -66,8 +67,7 @@ export default function CallNextPatientModal({
   const [isSending, setIsSending] = useState(false)
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [duplicateMinutesAgo, setDuplicateMinutesAgo] = useState(0)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
+  const { showToast } = useToast()
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
     const now = new Date()
@@ -94,7 +94,11 @@ export default function CallNextPatientModal({
       // Fetch recent calls (last 30 minutes)
       await loadRecentCalls()
     } catch (error) {
-      console.error('Error loading initial data:', error)
+      showToast({
+        type: 'error',
+        title: 'Error loading initial data',
+        message: error instanceof Error ? error.message : 'Failed to load initial data'
+      })
     } finally {
       setIsLoading(false)
     }
@@ -289,7 +293,6 @@ await supabase
 
       // 3. Trigger push notifications via edge function
       try {
-        console.log('Triggering push notification:', { facilityId, title, message, excludeUserId: userId })
         await supabase.functions.invoke('send-push-notification', {
           body: {
             facility_id: facilityId,  // snake_case to match edge function
@@ -299,7 +302,11 @@ await supabase
           }
         })
       } catch (pushError) {
-        console.error('Push notification failed (non-critical):', pushError)
+        showToast({
+          type: 'error',
+          title: 'Push Notification Failed',
+          message: 'The call was recorded but push notifications could not be sent.'
+        })
       }
 
       // 4. HIPAA Audit Log - matches iOS format
@@ -325,7 +332,7 @@ await supabase
         success: true
       })
 
-      setToast({ message: 'Patient call sent!', type: 'success' })
+      showToast({ type: 'success', title: 'Patient call sent!' })
       
       // Refresh recent calls
       await loadRecentCalls()
@@ -341,8 +348,7 @@ await supabase
       }, 1000)
 
     } catch (error) {
-      console.error('Error sending call:', error)
-      setToast({ message: 'Failed to send call', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to send call', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
     } finally {
       setIsSending(false)
     }
@@ -365,7 +371,7 @@ await supabase
         .single()
 
       if (!caseData) {
-        setToast({ message: 'Case no longer exists', type: 'error' })
+        showToast({ type: 'error', title: 'Case no longer exists' })
         return
       }
 
@@ -400,7 +406,7 @@ await supabase
           }
         })
       } catch (pushError) {
-        console.error('Push notification failed:', pushError)
+        showToast({ type: 'error', title: 'Push notification failed', message: 'The call was resent but push notifications could not be delivered.' })
       }
 
       // Audit log
@@ -424,12 +430,11 @@ await supabase
         success: true
       })
 
-      setToast({ message: 'Call resent!', type: 'success' })
+      showToast({ type: 'success', title: 'Call resent!' })
       await loadRecentCalls()
 
     } catch (error) {
-      console.error('Error resending call:', error)
-      setToast({ message: 'Failed to resend', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to resend', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
     } finally {
       setIsSending(false)
     }
@@ -466,7 +471,7 @@ await supabase
         .gte('created_at', thirtyMinutesAgo)
 
       if (deleteError) {
-        console.error('Error deleting notifications:', deleteError)
+        showToast({ type: 'error', title: 'Error removing notifications', message: deleteError.message })
       }
 
       // Clear call_time from the case that has called_next_case_id pointing to this case
@@ -489,7 +494,7 @@ await supabase
       })
       
       if (pushError) {
-        console.error('Push notification error:', pushError)
+        showToast({ type: 'error', title: 'Push notification failed', message: 'Cancellation was recorded but push notifications could not be sent.' })
       }
 
       // Audit log - matches iOS format with old_values for cancelled actions
@@ -514,14 +519,13 @@ await supabase
         success: true
       })
 
-      setToast({ message: 'Call cancelled', type: 'success' })
+      showToast({ type: 'success', title: 'Call cancelled' })
       
       // Refresh the recent calls list
       await loadRecentCalls()
 
     } catch (error) {
-      console.error('Error undoing call:', error)
-      setToast({ message: 'Failed to cancel', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to cancel', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
     } finally {
       setIsSending(false)
     }
@@ -536,7 +540,6 @@ await supabase
       setSelectedRoom(null)
       setNextCase(null)
       setCurrentCase(null)
-      setToast(null)
     }
   }, [isOpen, loadInitialData])
 
@@ -546,14 +549,6 @@ await supabase
       fetchCasesForRoom(selectedRoom)
     }
   }, [selectedRoom])
-
-  // Auto-hide toast
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [toast])
 
   // Format time ago
   const formatTimeAgo = (dateString: string) => {
@@ -806,28 +801,6 @@ await supabase
         </>
       )}
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70]">
-          <div className={`px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in
-            ${toast.type === 'success' 
-              ? 'bg-emerald-600 text-white' 
-              : 'bg-red-600 text-white'
-            }`}
-          >
-            {toast.type === 'success' ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            )}
-            {toast.message}
-          </div>
-        </div>
-      )}
     </>
   )
 }

@@ -8,6 +8,7 @@ import {
 } from './types'
 import { formatCurrency } from './utils'
 import { createClient } from '@/lib/supabase'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { 
   InformationCircleIcon, 
   ChevronRightIcon,
@@ -137,7 +138,7 @@ export default function SurgeonTab({
   onSurgeonSelect 
 }: SurgeonTabProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  
+
   const currentView = selectedDate ? 'day' : selectedSurgeon ? 'detail' : 'list'
   
   const selectedSurgeonData = metrics.surgeonStats.find(s => s.surgeonId === selectedSurgeon)
@@ -257,6 +258,7 @@ function AllSurgeonsOverview({
   metrics: FinancialsMetrics
   onSurgeonSelect: (surgeonId: string) => void 
 }) {
+  const { showToast } = useToast()
   const [sortKey, setSortKey] = useState<LeaderboardSortKey>('totalProfit')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -902,7 +904,7 @@ function SurgeonDayView({
       .filter(c => c.case_date === selectedDate)
       .sort((a, b) => (a.actual_start_time || '').localeCompare(b.actual_start_time || ''))
   }, [surgeonCases, selectedDate])
-
+const { showToast } = useToast()
   const fetchMilestones = useCallback(async (caseIds: string[]) => {
     if (caseIds.length === 0) {
       setMilestoneMap({})
@@ -923,11 +925,15 @@ function SurgeonDayView({
         .in('case_id', caseIds)
         .order('recorded_at', { ascending: true })
 
-      if (error) {
-        console.error('Error fetching milestones:', error)
-        setMilestoneMap({})
-        return
-      }
+if (error) {
+  showToast({
+    type: 'error',
+    title: 'Failed to Fetch Milestones',
+    message: error.message || 'An unexpected error occurred'
+  })
+  setMilestoneMap({})
+  return
+}
 
       const phaseMap: Record<string, CasePhases> = {}
       const byCaseId: Record<string, Array<{ name: string; recorded_at: string }>> = {}
@@ -965,8 +971,11 @@ function SurgeonDayView({
 
       setMilestoneMap(phaseMap)
     } catch (err) {
-      console.error('Error fetching milestones:', err)
-    } finally {
+showToast({
+  type: 'error',
+  title: 'Error fetching milestones:',
+  message: err instanceof Error ? err.message : 'Error fetching milestones:'
+})    } finally {
       setLoadingMilestones(false)
     }
   }, [])

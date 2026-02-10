@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // =====================================================
 // TYPES
@@ -269,7 +270,7 @@ function ErrorState({ message }: { message: string }) {
 export default function EscortStatusPage() {
   const params = useParams()
   const token = params.token as string
-
+  const { showToast } = useToast()
   const [data, setData] = useState<StatusData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -284,8 +285,11 @@ export default function EscortStatusPage() {
     })
 
     if (fetchError) {
-      console.error('Error fetching status:', fetchError)
-      setError('Unable to load status. The link may have expired.')
+      showToast({
+        type: 'error',
+        title: 'Error fetching status',
+        message: fetchError.message || 'Failed to fetch status information'
+      })
       setLoading(false)
       return
     }
