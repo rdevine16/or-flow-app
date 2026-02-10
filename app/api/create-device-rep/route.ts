@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withErrorHandler, ValidationError } from '@/lib/errorHandling'
-import { validate } from '@/lib/validationSchemas'
+import { validate } from '@/lib/validation/schemas'
 import { nowUTC } from '@/lib/dateFactory'
 
 // Validation schema

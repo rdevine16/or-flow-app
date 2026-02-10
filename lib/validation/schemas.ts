@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod'
-import { ValidationError } from './errorHandling'
+import { ValidationError } from '../errorHandling'
 
 // ============================================
 // BASE VALIDATORS
@@ -151,12 +151,12 @@ export function validate<T>(
 /**
  * Validate partial updates (only provided fields)
  */
-export function validatePartial<T>(
-  schema: z.ZodSchema<T>,
+export function validatePartial<T extends Record<string, any>>(
+  schema: z.ZodObject<any>,
   data: unknown
 ): Partial<T> {
   const partialSchema = schema.partial()
-  return validate(partialSchema, data)
+  return validate(partialSchema, data) as Partial<T>
 }
 
 // ============================================
