@@ -1,6 +1,8 @@
+// components/settings/SortableList.tsx
 'use client'
 
 import { useState } from 'react'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import {
   DndContext,
   closestCenter,
@@ -35,9 +37,7 @@ interface SortableItemProps {
   onSaveEdit: (id: string) => void
   onCancelEdit: () => void
   onEditingNameChange: (name: string) => void
-  onDelete: (id: string) => void
-  deleteConfirm: string | null
-  setDeleteConfirm: (id: string | null) => void
+  onDelete: (item: Item) => void
   showDisplayName?: boolean
 }
 
@@ -51,8 +51,6 @@ function SortableItem({
   onCancelEdit,
   onEditingNameChange,
   onDelete,
-  deleteConfirm,
-  setDeleteConfirm,
   showDisplayName = false,
 }: SortableItemProps) {
   const {
@@ -137,28 +135,6 @@ function SortableItem({
 
           {/* Actions */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {deleteConfirm === item.id ? (
-              <>
-                <span className="text-xs text-slate-500 mr-2">Delete?</span>
-                <button
-                  onClick={() => onDelete(item.id)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </>
-            ) : (
-              <>
                 <button
                   onClick={() => onStartEdit(item)}
                   className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -168,15 +144,13 @@ function SortableItem({
                   </svg>
                 </button>
                 <button
-                  onClick={() => setDeleteConfirm(item.id)}
+                  onClick={() => onDelete(item)}
                   className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
                 </button>
-              </>
-            )}
           </div>
         </>
       )}
@@ -210,7 +184,7 @@ export default function SortableList({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [addLoading, setAddLoading] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -258,12 +232,12 @@ export default function SortableList({
   const startEditing = (item: Item) => {
     setEditingId(item.id)
     setEditingName(showDisplayName ? item.display_name || item.name : item.name)
-    setDeleteConfirm(null)
+    setDeleteTarget(null)
   }
 
   const handleDelete = async (id: string) => {
     await onDelete(id)
-    setDeleteConfirm(null)
+    setDeleteTarget(null)
   }
 
   return (
@@ -360,9 +334,7 @@ export default function SortableList({
                     setEditingName('')
                   }}
                   onEditingNameChange={setEditingName}
-                  onDelete={handleDelete}
-                  deleteConfirm={deleteConfirm}
-                  setDeleteConfirm={setDeleteConfirm}
+                  onDelete={(item) => setDeleteTarget(item)}
                   showDisplayName={showDisplayName}
                 />
               ))}
@@ -377,6 +349,16 @@ export default function SortableList({
           {items.length} {itemLabel.toLowerCase()}{items.length !== 1 ? 's' : ''} total
         </p>
       )}
+
+      <DeleteConfirm
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget) await handleDelete(deleteTarget.id)
+        }}
+        itemName={deleteTarget?.display_name || deleteTarget?.name || ''}
+        itemType={itemLabel.toLowerCase()}
+      />
     </div>
   )
 }

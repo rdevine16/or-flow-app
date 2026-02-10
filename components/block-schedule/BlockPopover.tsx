@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Trash2, Loader2, Clock, User, Calendar, Repeat, GripHorizontal, ChevronDown, Copy, FileText, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 import {
   BlockSchedule,
@@ -129,7 +130,7 @@ export function BlockPopover({
 }: BlockPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
   const [showMoreOptions, setShowMoreOptions] = useState(false)
   const [position, setPosition] = useState({ top: 100, left: 100 })
 
@@ -225,7 +226,7 @@ export function BlockPopover({
         setIsCustom(false)
         setCustomRecurrence(null)
       }
-      setShowDeleteConfirm(false)
+      setShowDelete(false)
       setOverlapWarning(null)
     }
     if (!open) hasInitialized.current = false
@@ -540,17 +541,7 @@ export function BlockPopover({
         <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
           {isEditing ? (
             <div className="flex items-center gap-1">
-              {showDeleteConfirm ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-600 font-medium">Delete?</span>
-                  <button onClick={handleDelete} disabled={loading}
-                    className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors">Yes</button>
-                  <button onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800">No</button>
-                </div>
-              ) : (
-                <>
-                  <button onClick={() => setShowDeleteConfirm(true)}
+                  <button onClick={() => setShowDelete(true)}
                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete block">
                     <Trash2 className="h-5 w-5" />
                   </button>
@@ -560,8 +551,6 @@ export function BlockPopover({
                       <Copy className="h-5 w-5" />
                     </button>
                   )}
-                </>
-              )}
             </div>
           ) : <div />}
 
@@ -587,6 +576,14 @@ export function BlockPopover({
         }}
         initialConfig={customRecurrence || undefined}
         initialDayOfWeek={dayOfWeek}
+      />
+
+      <DeleteConfirm
+        open={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDelete}
+        itemName={editingBlock ? `${DAY_OF_WEEK_LABELS[editingBlock.day_of_week]} block` : ''}
+        itemType="block"
       />
     </>
   )

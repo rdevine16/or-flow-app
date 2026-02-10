@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { X, Trash2, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { blockScheduleAudit } from '@/lib/audit-logger'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import {
   BlockSchedule,
   RecurrenceType,
@@ -53,7 +54,7 @@ export function BlockDialog({
 }: BlockDialogProps) {
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
 
   // Form state
   const [surgeonId, setSurgeonId] = useState<string>('')
@@ -91,7 +92,7 @@ export function BlockDialog({
         setEffectiveEnd('')
         setHasEndDate(false)
       }
-      setShowDeleteConfirm(false)
+      setShowDelete(false)
     }
   }, [open, editingBlock, surgeons, initialDayOfWeek, initialStartTime, initialEndTime])
 
@@ -353,32 +354,13 @@ export function BlockDialog({
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
           {isEditing ? (
             <div>
-              {showDeleteConfirm ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-red-600">Delete this block?</span>
-                  <button
-                    onClick={handleDelete}
-                    disabled={loading}
-                    className="px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Yes, delete
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
                 <button
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => setShowDelete(true)}
                   className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete
                 </button>
-              )}
             </div>
           ) : (
             <div />
@@ -402,6 +384,14 @@ export function BlockDialog({
           </div>
         </div>
       </div>
+
+      <DeleteConfirm
+        open={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={handleDelete}
+        itemName={editingBlock ? `${DAY_OF_WEEK_LABELS[editingBlock.day_of_week]} block` : ''}
+        itemType="block"
+      />
     </div>
   )
 }
