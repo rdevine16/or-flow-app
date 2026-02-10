@@ -15,6 +15,7 @@ import { extractName } from '@/lib/formatters'
 import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 // ============================================================================
@@ -194,6 +195,8 @@ function CasesPageContent() {
   // Core state
   const [cases, setCases] = useState<Case[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { showToast } = useToast()
   const [deleteTarget, setDeleteTarget] = useState<Case | null>(null)
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
@@ -272,60 +275,66 @@ function CasesPageContent() {
   // FACILITY INITIALIZATION
   // ============================================================================
 
-  useEffect(() => {
-    async function fetchUserFacility() {
-      const { data: { user } } = await supabase.auth.getUser()
+useEffect(() => {
+  async function fetchUserFacility() {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      
+      if (authError) throw authError
       
       if (!user) {
         setLoading(false)
         return
       }
 
-      // Store user info for modal
       setUserId(user.id)
       setUserEmail(user.email || null)
 
-      const { data: userData } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('facility_id, access_level')
         .eq('id', user.id)
         .single()
 
-      // Check if global admin
+      if (userError) throw userError
+
       if (userData?.access_level === 'global_admin') {
-        // Check for impersonation
         const impersonation = getImpersonationState()
         if (impersonation?.facilityId) {
           setEffectiveFacilityId(impersonation.facilityId)
         } else {
-          // Global admin not viewing a facility
           setNoFacilitySelected(true)
           setLoading(false)
         }
         return
       }
 
-      // Regular user - use their facility_id
       if (userData?.facility_id) {
         setEffectiveFacilityId(userData.facility_id)
       } else {
         setLoading(false)
       }
+    } catch (err) {
+      setError('Failed to load user information. Please refresh the page.')
+      showToast({
+        type: 'error',
+        title: 'Failed to load user',
+        message: 'Please refresh the page'
+      })
+      setLoading(false)
     }
+  }
 
-    fetchUserFacility()
-  }, [supabase])
-
-  // ============================================================================
-  // FETCH CASES (with filters applied)
-  // ============================================================================
+  fetchUserFacility()  // ← YOU MUST CALL THE FUNCTION HERE!
+}, [supabase])
 
   const fetchCases = useCallback(async (filters: FilterState) => {
-    if (!effectiveFacilityId) return
-    
+  if (!effectiveFacilityId) return
+  
+  try {
     setLoading(true)
+    setError(null)
 
-    // Build base query
     let query = supabase
       .from('cases')
       .select(`
@@ -343,43 +352,42 @@ function CasesPageContent() {
       .order('scheduled_date', { ascending: false })
       .order('start_time', { ascending: true })
 
-    // Apply date range
     const dateRange = getDateRange(filters.dateRange)
     if (dateRange.start && dateRange.end) {
       query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
     }
 
-    // Apply status filter
     if (filters.status.length > 0) {
-      const { data: statusData } = await supabase
+      const { data: statusData, error: statusError } = await supabase
         .from('case_statuses')
         .select('id, name')
         .in('name', filters.status)
+      
+      if (statusError) throw statusError
       
       if (statusData && statusData.length > 0) {
         query = query.in('status_id', statusData.map(s => s.id))
       }
     }
 
-    // Apply surgeon filter
     if (filters.surgeonIds.length > 0) {
       query = query.in('surgeon_id', filters.surgeonIds)
     }
 
-    // Apply room filter
     if (filters.roomIds.length > 0) {
       query = query.in('or_room_id', filters.roomIds)
     }
 
-    // Apply procedure filter
     if (filters.procedureIds.length > 0) {
       query = query.in('procedure_type_id', filters.procedureIds)
     }
 
-    const { data } = await query
+    const { data, error: casesError } = await query
+    
+    if (casesError) throw casesError
+    
     let filteredData = (data as unknown as Case[]) || []
 
-    // Apply text search (client-side for flexibility)
     if (filters.search) {
       const searchLower = filters.search.toLowerCase()
       filteredData = filteredData.filter(c => {
@@ -398,15 +406,17 @@ function CasesPageContent() {
     }
 
     setCases(filteredData)
+  } catch (err) {
+    setError('Failed to load cases. Please try again.')
+    showToast({
+      type: 'error',
+      title: 'Failed to load cases',
+      message: 'Please try again or contact support'
+    })
+  } finally {
     setLoading(false)
-  }, [effectiveFacilityId, supabase])
-
-  // Fetch cases when facility or filters change
-  useEffect(() => {
-    if (effectiveFacilityId) {
-      fetchCases(currentFilters)
-    }
-  }, [effectiveFacilityId, currentFilters, fetchCases])
+  }
+}, [effectiveFacilityId, supabase, showToast])
 
   // ============================================================================
   // HANDLERS
@@ -417,11 +427,31 @@ function CasesPageContent() {
     setCurrentPage(1) // Reset to first page on filter change
   }, [])
 
-  const handleDelete = async (id: string) => {
-    await supabase.from('cases').delete().eq('id', id)
+const handleDelete = async (id: string) => {
+  try {
+    const { error: deleteError } = await supabase
+      .from('cases')
+      .delete()
+      .eq('id', id)
+    
+    if (deleteError) throw deleteError
+    
     setCases(cases.filter(c => c.id !== id))
     setDeleteTarget(null)
+    
+    showToast({
+      type: 'success',
+      title: 'Case deleted',
+      message: 'The case has been removed successfully'
+    })
+  } catch (err) {
+    showToast({
+      type: 'error',
+      title: 'Failed to delete case',
+      message: 'Please try again'
+    })
   }
+}
 
   // ============================================================================
   // RENDER - NO FACILITY SELECTED STATE
@@ -460,6 +490,34 @@ function CasesPageContent() {
 
   return (
     <DashboardLayout>
+      {/* Error Banner - ADD THIS ENTIRE SECTION */}
+    {error && (
+      <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+        <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div className="flex-1">
+          <p className="text-sm font-medium text-red-800">{error}</p>
+          <button
+            onClick={() => {
+              setError(null)
+              fetchCases(currentFilters)
+            }}
+            className="mt-2 text-sm text-red-600 underline hover:text-red-700"
+          >
+            Try again
+          </button>
+        </div>
+        <button
+          onClick={() => setError(null)}
+          className="text-red-400 hover:text-red-600"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    )}
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
