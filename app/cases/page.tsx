@@ -319,10 +319,12 @@ function CasesPageContent() {
   // FETCH CASES (with filters applied)
   // ============================================================================
 
-  const fetchCases = useCallback(async (filters: FilterState) => {
-    if (!effectiveFacilityId) return
-    
-    try {
+const fetchCases = useCallback(async (filters: FilterState) => {
+  if (!effectiveFacilityId) return
+  
+  console.log('🔵 fetchCases called with filters:', filters) // ADD THIS
+  
+  try {
       setLoading(true)
       setError(null)
 
