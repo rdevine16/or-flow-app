@@ -1,4 +1,3 @@
-// app/settings/milestones/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -8,7 +7,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 
 interface FacilityMilestone {
@@ -29,61 +29,8 @@ interface FacilityMilestone {
   validation_type: 'duration' | 'sequence_gap' | null
 }
 
-// Confirmation Modal Component
-function ConfirmModal({
-  isOpen,
-  title,
-  message,
-  confirmLabel,
-  confirmVariant = 'danger',
-  onConfirm,
-  onCancel,
-  isLoading,
-}: {
-  isOpen: boolean
-  title: string
-  message: React.ReactNode
-  confirmLabel: string
-  confirmVariant?: 'danger' | 'primary'
-  onConfirm: () => void
-  onCancel: () => void
-  isLoading?: boolean
-}) {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
-        <div className="text-sm text-slate-600 mb-6">{message}</div>
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
-              confirmVariant === 'danger'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {isLoading ? 'Processing...' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function MilestonesSettingsPage() {
   const supabase = createClient()
-  const { showToast } = useToast()
   
   // Use the context - this automatically handles impersonation!
   const { effectiveFacilityId, loading: userLoading } = useUser()
@@ -131,6 +78,7 @@ export default function MilestonesSettingsPage() {
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
 // Toast and user ID
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Get current user ID on mount
@@ -141,6 +89,11 @@ export default function MilestonesSettingsPage() {
     }
     getCurrentUser()
   }, [])
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
       fetchMilestones()
@@ -406,7 +359,7 @@ setMilestones(milestones.map(m => {
             }
             return m
           }))
-          showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
+          showToast(`"${milestone.display_name}" moved to archive`, 'success')
         }
 
         closeConfirmModal()
@@ -438,9 +391,9 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         ? { ...m, deleted_at: null, deleted_by: null, is_active: true } 
         : m
     ))
-    showToast({ type: 'success', title: `"${milestone.display_name}" restored successfully` })
+    showToast(`"${milestone.display_name}" restored successfully`, 'success')
   } else {
-    showToast({ type: 'error', title: 'Failed to restore milestone' })
+    showToast('Failed to restore milestone', 'error')
   }
   setSaving(false)
 }
@@ -936,12 +889,11 @@ const handleRestore = async (milestone: FacilityMilestone) => {
       </Container>
 
       {/* Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Custom Milestone</h3>
-            
-            <div className="space-y-4">
+      <Modal
+        open={showAddModal}
+        onClose={() => { setShowAddModal(false); setNewName(''); setNewDisplayName('') }}
+        title="Add Custom Milestone"
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Display Name <span className="text-red-500">*</span>
@@ -968,38 +920,23 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                 />
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowAddModal(false)
-                  setNewName('')
-                  setNewDisplayName('')
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={!newDisplayName.trim() || saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Adding...' : 'Add Milestone'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowAddModal(false); setNewName(''); setNewDisplayName('') }} />
+          <Modal.Action onClick={handleAdd} loading={saving} disabled={!newDisplayName.trim()}>
+            Add Milestone
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
 
       {/* Edit Modal - PHASE 2: Added validation range inputs */}
-      {showEditModal && editingMilestone && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Edit Milestone</h3>
-            
-            <div className="space-y-4">
+      <Modal
+        open={showEditModal && !!editingMilestone}
+        onClose={() => { setShowEditModal(false); setEditingMilestone(null) }}
+        title="Edit Milestone"
+      >
+            {editingMilestone && (
+            <>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Display Name <span className="text-red-500">*</span>
@@ -1022,8 +959,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                 </div>
               )}
 
-              {/* Phase 2: Validation Range Section */}
-             {/* Info banner for global milestones */}
+              {/* Info banner for global milestones */}
               {editingMilestone.source_milestone_type_id && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
                   <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1087,15 +1023,16 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                   Milestones outside this range will be flagged for review in Data Quality.
                 </p>
               </div>
-            </div>
+            </>
+            )}
 
-<div className="mt-6 flex justify-between">
-              {/* Delete button - only for custom milestones */}
-{!editingMilestone.source_milestone_type_id ? (
+        {/* Custom footer: Archive left, Cancel/Save right */}
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-between">
+              {editingMilestone && !editingMilestone.source_milestone_type_id ? (
                 <button
                   onClick={() => handleDelete(editingMilestone)}
                   disabled={saving}
-                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                 >
                   Archive
                 </button>
@@ -1103,36 +1040,23 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                 <div />
               )}
               <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false)
-                    setEditingMilestone(null)
-                  }}
-                  className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEdit}
-                  disabled={!editDisplayName.trim() || saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
+                <Modal.Cancel onClick={() => { setShowEditModal(false); setEditingMilestone(null) }} />
+                <Modal.Action onClick={handleEdit} loading={saving} disabled={!editDisplayName.trim()}>
+                  Save Changes
+                </Modal.Action>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
 {/* Pair/Unlink Modal */}
-      {showPairModal && pairingMilestone && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              {pairingMilestone.pair_with_id ? 'Manage Pairing' : 'Set Up Pairing'}
-            </h3>
-            <p className="text-sm text-slate-600 mb-4">
+      <Modal
+        open={showPairModal && !!pairingMilestone}
+        onClose={() => { setShowPairModal(false); setPairingMilestone(null); setSelectedPairId('') }}
+        title={pairingMilestone?.pair_with_id ? 'Manage Pairing' : 'Set Up Pairing'}
+      >
+          {pairingMilestone && (
+          <>
+            <p className="text-sm text-slate-600">
               {pairingMilestone.pair_with_id 
                 ? `"${pairingMilestone.display_name}" is paired with "${getPairedName(pairingMilestone.pair_with_id)}".`
                 : `Pair "${pairingMilestone.display_name}" with another milestone.`
@@ -1140,10 +1064,9 @@ const handleRestore = async (milestone: FacilityMilestone) => {
             </p>
             
             {pairingMilestone.pair_with_id && (
-              <div className="mb-4 p-4 bg-slate-50 rounded-xl">
+              <div className="p-4 bg-slate-50 rounded-xl">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-slate-700">Current Pairing</span>
-                  {/* Unlink button - only for custom milestones */}
                   {!pairingMilestone.source_milestone_type_id && (
                     <button
                       onClick={() => handleUnlink(pairingMilestone)}
@@ -1180,9 +1103,8 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               </div>
             )}
 
-            {/* Global milestone restriction message */}
             {pairingMilestone.source_milestone_type_id && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
                 <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -1192,7 +1114,6 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               </div>
             )}
 
-            {/* Only show pairing controls for custom milestones */}
             {!pairingMilestone.source_milestone_type_id && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1222,43 +1143,49 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                 )}
               </div>
             )}
+          </>
+          )}
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowPairModal(false)
-                  setPairingMilestone(null)
-                  setSelectedPairId('')
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                {pairingMilestone.source_milestone_type_id || pairingMilestone.pair_with_id ? 'Close' : 'Cancel'}
-              </button>
-              {!pairingMilestone.source_milestone_type_id && selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
-                <button
-                  onClick={handleSetPair}
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? 'Saving...' : pairingMilestone.pair_with_id ? 'Change Pairing' : 'Create Pairing'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowPairModal(false); setPairingMilestone(null); setSelectedPairId('') }}>
+            {pairingMilestone?.source_milestone_type_id || pairingMilestone?.pair_with_id ? 'Close' : 'Cancel'}
+          </Modal.Cancel>
+          {pairingMilestone && !pairingMilestone.source_milestone_type_id && selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
+            <Modal.Action onClick={handleSetPair} loading={saving}>
+              {pairingMilestone.pair_with_id ? 'Change Pairing' : 'Create Pairing'}
+            </Modal.Action>
+          )}
+        </Modal.Footer>
+      </Modal>
 
       {/* Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
+      <ConfirmDialog
+        open={confirmModal.isOpen}
+        onClose={closeConfirmModal}
+        onConfirm={confirmModal.onConfirm}
+        variant={confirmModal.confirmVariant === 'primary' ? 'info' : 'danger'}
         title={confirmModal.title}
         message={confirmModal.message}
-        confirmLabel={confirmModal.confirmLabel}
-        confirmVariant={confirmModal.confirmVariant}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={closeConfirmModal}
-        isLoading={saving}
+        confirmText={confirmModal.confirmLabel}
+        loading={saving}
       />
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
     </DashboardLayout>
   )
 }
