@@ -144,57 +144,64 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
-    // Build procedure query based on archive toggle
-    let procedureQuery = supabase
-      .from('procedure_types')
-      .select(`
-        id, 
-        name, 
-        body_region_id,
-        technique_id,
-        procedure_category_id,
-        implant_category,
-        is_active,
-        deleted_at,
-        deleted_by,
-        body_regions (id, name, display_name),
-        procedure_techniques (id, name, display_name),
-        procedure_categories (id, name, display_name, body_region_id)
-      `)
-      .eq('facility_id', effectiveFacilityId)
+    try {
+      // Build procedure query based on archive toggle
+      let procedureQuery = supabase
+        .from('procedure_types')
+        .select(`
+          id, 
+          name, 
+          body_region_id,
+          technique_id,
+          procedure_category_id,
+          implant_category,
+          is_active,
+          deleted_at,
+          deleted_by,
+          body_regions (id, name, display_name),
+          procedure_techniques (id, name, display_name),
+          procedure_categories (id, name, display_name, body_region_id)
+        `)
+        .eq('facility_id', effectiveFacilityId)
 
-    if (showArchived) {
-      // Show only archived
-      procedureQuery = procedureQuery.not('deleted_at', 'is', null)
-    } else {
-      // Show only active (not deleted)
-      procedureQuery = procedureQuery.is('deleted_at', null)
+      if (showArchived) {
+        procedureQuery = procedureQuery.not('deleted_at', 'is', null)
+      } else {
+        procedureQuery = procedureQuery.is('deleted_at', null)
+      }
+
+      procedureQuery = procedureQuery.order('name')
+
+      // Fetch archived count separately
+      const archivedCountQuery = supabase
+        .from('procedure_types')
+        .select('id', { count: 'exact', head: true })
+        .eq('facility_id', effectiveFacilityId)
+        .not('deleted_at', 'is', null)
+
+      const [proceduresResult, regionsResult, techniquesResult, categoriesResult, archivedResult] = await Promise.all([
+        procedureQuery,
+        supabase.from('body_regions').select('id, name, display_name').order('display_name'),
+        supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
+        supabase.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
+        archivedCountQuery
+      ])
+
+      if (proceduresResult.error) throw proceduresResult.error
+
+      setProcedures(proceduresResult.data as ProcedureType[] || [])
+      setBodyRegions(regionsResult.data || [])
+      setTechniques(techniquesResult.data || [])
+      setProcedureCategories(categoriesResult.data || [])
+      setArchivedCount(archivedResult.count || 0)
+    } catch (err) {
+      setError('Failed to load procedures. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load procedures', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
     }
-
-    procedureQuery = procedureQuery.order('name')
-
-    // Fetch archived count separately
-    const archivedCountQuery = supabase
-      .from('procedure_types')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', effectiveFacilityId)
-      .not('deleted_at', 'is', null)
-
-    const [proceduresResult, regionsResult, techniquesResult, categoriesResult, archivedResult] = await Promise.all([
-      procedureQuery,
-      supabase.from('body_regions').select('id, name, display_name').order('display_name'),
-      supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
-      supabase.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
-      archivedCountQuery
-    ])
-
-    setProcedures(proceduresResult.data as ProcedureType[] || [])
-    setBodyRegions(regionsResult.data || [])
-    setTechniques(techniquesResult.data || [])
-    setProcedureCategories(categoriesResult.data || [])
-    setArchivedCount(archivedResult.count || 0)
-    setLoading(false)
   }
 
   // =====================================================
@@ -231,74 +238,73 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
     
     setSaving(true)
 
-    if (modal.mode === 'add') {
-      const { data, error } = await supabase
-        .from('procedure_types')
-        .insert({
-          name: formData.name.trim(),
-          facility_id: effectiveFacilityId,
-          body_region_id: formData.body_region_id || null,
-          technique_id: formData.technique_id || null,
-          procedure_category_id: formData.procedure_category_id || null,
-          implant_category: formData.implant_category || null,
-          is_active: true,
-        })
-        .select(`
-          id, 
-          name, 
-          body_region_id,
-          technique_id,
-          procedure_category_id,
-          implant_category,
-          is_active,
-          deleted_at,
-          deleted_by,
-          body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name),
-          procedure_categories (id, name, display_name, body_region_id)
-        `)
-        .single()
+    try {
+      if (modal.mode === 'add') {
+        const { data, error } = await supabase
+          .from('procedure_types')
+          .insert({
+            name: formData.name.trim(),
+            facility_id: effectiveFacilityId,
+            body_region_id: formData.body_region_id || null,
+            technique_id: formData.technique_id || null,
+            procedure_category_id: formData.procedure_category_id || null,
+            implant_category: formData.implant_category || null,
+            is_active: true,
+          })
+          .select(`
+            id, 
+            name, 
+            body_region_id,
+            technique_id,
+            procedure_category_id,
+            implant_category,
+            is_active,
+            deleted_at,
+            deleted_by,
+            body_regions (id, name, display_name),
+            procedure_techniques (id, name, display_name),
+            procedure_categories (id, name, display_name, body_region_id)
+          `)
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setProcedures([...procedures, data as ProcedureType].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
         showToast({ type: 'success', title: 'Procedure created successfully' })
         
-        // Audit log
         await procedureAudit.created(supabase, formData.name.trim(), data.id)
-      } else {
-        showToast({ type: 'error', title: 'Failed to create procedure' })
-      }
-    } else if (modal.mode === 'edit' && modal.procedure) {
-      const oldName = modal.procedure.name
-      
-      const { data, error } = await supabase
-        .from('procedure_types')
-        .update({
-          name: formData.name.trim(),
-          body_region_id: formData.body_region_id || null,
-          technique_id: formData.technique_id || null,
-          procedure_category_id: formData.procedure_category_id || null,
-          implant_category: formData.implant_category || null,
-        })
-        .eq('id', modal.procedure.id)
-        .select(`
-          id, 
-          name, 
-          body_region_id,
-          technique_id,
-          procedure_category_id,
-          implant_category,
-          is_active,
-          deleted_at,
-          deleted_by,
-          body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name),
-          procedure_categories (id, name, display_name, body_region_id)
-        `)
-        .single()
+      } else if (modal.mode === 'edit' && modal.procedure) {
+        const oldName = modal.procedure.name
+        
+        const { data, error } = await supabase
+          .from('procedure_types')
+          .update({
+            name: formData.name.trim(),
+            body_region_id: formData.body_region_id || null,
+            technique_id: formData.technique_id || null,
+            procedure_category_id: formData.procedure_category_id || null,
+            implant_category: formData.implant_category || null,
+          })
+          .eq('id', modal.procedure.id)
+          .select(`
+            id, 
+            name, 
+            body_region_id,
+            technique_id,
+            procedure_category_id,
+            implant_category,
+            is_active,
+            deleted_at,
+            deleted_by,
+            body_regions (id, name, display_name),
+            procedure_techniques (id, name, display_name),
+            procedure_categories (id, name, display_name, body_region_id)
+          `)
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setProcedures(
           procedures
             .map(p => p.id === modal.procedure!.id ? data as ProcedureType : p)
@@ -307,16 +313,15 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
         closeModal()
         showToast({ type: 'success', title: 'Procedure updated successfully' })
         
-        // Audit log if name changed
         if (oldName !== formData.name.trim()) {
           await procedureAudit.updated(supabase, modal.procedure.id, oldName, formData.name.trim())
         }
-      } else {
-        showToast({ type: 'error', title: 'Failed to update procedure' })
       }
+    } catch (err) {
+      showToast({ type: 'error', title: modal.mode === 'add' ? 'Failed to create procedure' : 'Failed to update procedure', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   // =====================================================
@@ -331,26 +336,30 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
       loading: true
     })
 
-    // Check dependencies
-    const [casesResult, configsResult] = await Promise.all([
-      supabase
-        .from('cases')
-        .select('id', { count: 'exact', head: true })
-        .eq('procedure_type_id', procedure.id),
-      supabase
-        .from('procedure_milestone_config')
-        .select('id', { count: 'exact', head: true })
-        .eq('procedure_type_id', procedure.id)
-    ])
+    try {
+      const [casesResult, configsResult] = await Promise.all([
+        supabase
+          .from('cases')
+          .select('id', { count: 'exact', head: true })
+          .eq('procedure_type_id', procedure.id),
+        supabase
+          .from('procedure_milestone_config')
+          .select('id', { count: 'exact', head: true })
+          .eq('procedure_type_id', procedure.id)
+      ])
 
-    setDeleteModal(prev => ({
-      ...prev,
-      dependencies: {
-        cases: casesResult.count || 0,
-        milestoneConfigs: configsResult.count || 0
-      },
-      loading: false
-    }))
+      setDeleteModal(prev => ({
+        ...prev,
+        dependencies: {
+          cases: casesResult.count || 0,
+          milestoneConfigs: configsResult.count || 0
+        },
+        loading: false
+      }))
+    } catch (err) {
+      setDeleteModal(prev => ({ ...prev, loading: false }))
+      showToast({ type: 'error', title: 'Failed to check dependencies' })
+    }
   }
 
   const closeDeleteModal = () => {
@@ -367,28 +376,28 @@ if (!deleteModal.procedure || !currentUserId) return
     
     setSaving(true)
 
-    // Soft delete: set deleted_at and deleted_by
-    const { error } = await supabase
-      .from('procedure_types')
-      .update({
-        deleted_at: new Date().toISOString(),
+    try {
+      const { error } = await supabase
+        .from('procedure_types')
+        .update({
+          deleted_at: new Date().toISOString(),
 deleted_by: currentUserId
-      })
-      .eq('id', deleteModal.procedure.id)
+        })
+        .eq('id', deleteModal.procedure.id)
 
-    if (!error) {
+      if (error) throw error
+
       setProcedures(procedures.filter(p => p.id !== deleteModal.procedure!.id))
       setArchivedCount(prev => prev + 1)
       showToast({ type: 'success', title: `"${deleteModal.procedure.name}" moved to archive` })
       
-      // Audit log
       await procedureAudit.deleted(supabase, deleteModal.procedure.name, deleteModal.procedure.id)
-    } else {
-      showToast({ type: 'error', title: 'Failed to archive procedure' })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to archive procedure', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
+      closeDeleteModal()
     }
-
-    setSaving(false)
-    closeDeleteModal()
   }
 
   // =====================================================
@@ -398,26 +407,27 @@ deleted_by: currentUserId
   const handleRestore = async (procedure: ProcedureType) => {
     setSaving(true)
 
-    const { error } = await supabase
-      .from('procedure_types')
-      .update({
-        deleted_at: null,
-        deleted_by: null
-      })
-      .eq('id', procedure.id)
+    try {
+      const { error } = await supabase
+        .from('procedure_types')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', procedure.id)
 
-    if (!error) {
+      if (error) throw error
+
       setProcedures(procedures.filter(p => p.id !== procedure.id))
       setArchivedCount(prev => prev - 1)
       showToast({ type: 'success', title: `"${procedure.name}" restored successfully` })
       
-      // Audit log
       await procedureAudit.restored(supabase, procedure.name, procedure.id)
-    } else {
-      showToast({ type: 'error', title: 'Failed to restore procedure' })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to restore procedure', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   // =====================================================
@@ -485,12 +495,7 @@ deleted_by: currentUserId
           description="Manage the procedure types available at your facility."
         >
           {loading || userLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading procedures..." />
           ) : !effectiveFacilityId ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
               <p className="text-slate-500">No facility selected</p>

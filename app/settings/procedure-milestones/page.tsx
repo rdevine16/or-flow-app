@@ -86,29 +86,40 @@ export default function ProcedureMilestonesSettingsPage() {
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
-    const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
-      supabase
-        .from('procedure_types')
-        .select('id, name, implant_category, source_template_id')
-        .eq('facility_id', effectiveFacilityId)
-        .order('name'),
-      supabase
-        .from('facility_milestones')
-        .select('id, name, display_name, display_order, pair_position, pair_with_id, source_milestone_type_id')
-        .eq('facility_id', effectiveFacilityId)
-        .eq('is_active', true)
-        .order('display_order'),
-      supabase
-        .from('procedure_milestone_config')
-        .select('id, procedure_type_id, facility_milestone_id')
-        .eq('facility_id', effectiveFacilityId)
-    ])
+    try {
+      const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
+        supabase
+          .from('procedure_types')
+          .select('id, name, implant_category, source_template_id')
+          .eq('facility_id', effectiveFacilityId)
+          .order('name'),
+        supabase
+          .from('facility_milestones')
+          .select('id, name, display_name, display_order, pair_position, pair_with_id, source_milestone_type_id')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('is_active', true)
+          .order('display_order'),
+        supabase
+          .from('procedure_milestone_config')
+          .select('id, procedure_type_id, facility_milestone_id')
+          .eq('facility_id', effectiveFacilityId)
+      ])
 
-    setProcedures(proceduresRes.data || [])
-    setMilestones(milestonesRes.data || [])
-    setConfigs(configsRes.data || [])
-    setLoading(false)
+      if (proceduresRes.error) throw proceduresRes.error
+      if (milestonesRes.error) throw milestonesRes.error
+      if (configsRes.error) throw configsRes.error
+
+      setProcedures(proceduresRes.data || [])
+      setMilestones(milestonesRes.data || [])
+      setConfigs(configsRes.data || [])
+    } catch (err) {
+      setError('Failed to load procedure milestones. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load data', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Check if milestone is enabled for procedure
@@ -318,9 +329,7 @@ export default function ProcedureMilestonesSettingsPage() {
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <PageLoader message="Loading procedure milestones..." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>

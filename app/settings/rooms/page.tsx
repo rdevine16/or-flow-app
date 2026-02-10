@@ -1,4 +1,5 @@
 // app/settings/rooms/page.tsx
+// app/settings/rooms/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -264,14 +265,22 @@ export default function RoomsSettingsPage() {
   const fetchRooms = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
-    const { data } = await supabase
-      .from('or_rooms')
-      .select('id, name, available_hours, deleted_at, deleted_by')
-      .eq('facility_id', effectiveFacilityId)
-      .order('name')
+    setError(null)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('or_rooms')
+        .select('id, name, available_hours, deleted_at, deleted_by')
+        .eq('facility_id', effectiveFacilityId)
+        .order('name')
 
-    setRooms(data || [])
-    setLoading(false)
+      if (fetchError) throw fetchError
+      setRooms(data || [])
+    } catch (err) {
+      setError('Failed to load rooms. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load rooms', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Show toast with auto-dismiss
@@ -301,28 +310,30 @@ export default function RoomsSettingsPage() {
 
     setSaving(true)
 
-    if (modal.mode === 'add') {
-      // Calculate legacy available_hours from schedule
-      const openDays = formSchedule.filter(d => !d.isClosed)
-      const avgHours = openDays.length > 0
-        ? openDays.reduce((sum, d) => {
-            const [oh, om] = d.openTime.split(':').map(Number)
-            const [ch, cm] = d.closeTime.split(':').map(Number)
-            return sum + (ch + cm / 60) - (oh + om / 60)
-          }, 0) / openDays.length
-        : 10
+    try {
+      if (modal.mode === 'add') {
+        // Calculate legacy available_hours from schedule
+        const openDays = formSchedule.filter(d => !d.isClosed)
+        const avgHours = openDays.length > 0
+          ? openDays.reduce((sum, d) => {
+              const [oh, om] = d.openTime.split(':').map(Number)
+              const [ch, cm] = d.closeTime.split(':').map(Number)
+              return sum + (ch + cm / 60) - (oh + om / 60)
+            }, 0) / openDays.length
+          : 10
 
-      const { data, error } = await supabase
-        .from('or_rooms')
-        .insert({
-          name: formData.name.trim(),
-          facility_id: effectiveFacilityId,
-          available_hours: Math.round(avgHours * 10) / 10,
-        })
-        .select('id, name, available_hours, deleted_at, deleted_by')
-        .single()
+        const { data, error } = await supabase
+          .from('or_rooms')
+          .insert({
+            name: formData.name.trim(),
+            facility_id: effectiveFacilityId,
+            available_hours: Math.round(avgHours * 10) / 10,
+          })
+          .select('id, name, available_hours, deleted_at, deleted_by')
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         // Save room schedule
         await saveRoomSchedule(data.id, formSchedule, undefined, data.name)
 
@@ -330,30 +341,28 @@ export default function RoomsSettingsPage() {
         closeModal()
         showToast({ type: 'success', title: `${data.name} created` })
         await roomAudit.created(supabase, formData.name.trim(), data.id)
-      } else {
-        showToast({ type: 'error', title: 'Failed to create room' })
-      }
-    } else if (modal.mode === 'edit' && modal.room) {
-      const oldName = modal.room.name
+      } else if (modal.mode === 'edit' && modal.room) {
+        const oldName = modal.room.name
 
-      const openDays = formSchedule.filter(d => !d.isClosed)
-      const avgHours = openDays.length > 0
-        ? openDays.reduce((sum, d) => {
-            const [oh, om] = d.openTime.split(':').map(Number)
-            const [ch, cm] = d.closeTime.split(':').map(Number)
-            return sum + (ch + cm / 60) - (oh + om / 60)
-          }, 0) / openDays.length
-        : 10
+        const openDays = formSchedule.filter(d => !d.isClosed)
+        const avgHours = openDays.length > 0
+          ? openDays.reduce((sum, d) => {
+              const [oh, om] = d.openTime.split(':').map(Number)
+              const [ch, cm] = d.closeTime.split(':').map(Number)
+              return sum + (ch + cm / 60) - (oh + om / 60)
+            }, 0) / openDays.length
+          : 10
 
-      const { error } = await supabase
-        .from('or_rooms')
-        .update({
-          name: formData.name.trim(),
-          available_hours: Math.round(avgHours * 10) / 10,
-        })
-        .eq('id', modal.room.id)
+        const { error } = await supabase
+          .from('or_rooms')
+          .update({
+            name: formData.name.trim(),
+            available_hours: Math.round(avgHours * 10) / 10,
+          })
+          .eq('id', modal.room.id)
 
-      if (!error) {
+        if (error) throw error
+
         // Save room schedule
         await saveRoomSchedule(modal.room.id, formSchedule, undefined, formData.name.trim())
 
@@ -371,12 +380,12 @@ export default function RoomsSettingsPage() {
         if (oldName !== formData.name.trim()) {
           await roomAudit.updated(supabase, modal.room.id, oldName, formData.name.trim())
         }
-      } else {
-        showToast({ type: 'error', title: 'Failed to update room' })
       }
+    } catch (err) {
+      showToast({ type: 'error', title: modal.mode === 'add' ? 'Failed to create room' : 'Failed to update room', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   const openDeleteModal = async (room: ORRoom) => {
@@ -387,25 +396,30 @@ export default function RoomsSettingsPage() {
       loading: true,
     })
 
-    const [casesResult, blocksResult] = await Promise.all([
-      supabase
-        .from('cases')
-        .select('id', { count: 'exact', head: true })
-        .eq('or_room_id', room.id),
-      supabase
-        .from('block_schedules')
-        .select('id', { count: 'exact', head: true })
-        .eq('or_room_id', room.id),
-    ])
+    try {
+      const [casesResult, blocksResult] = await Promise.all([
+        supabase
+          .from('cases')
+          .select('id', { count: 'exact', head: true })
+          .eq('or_room_id', room.id),
+        supabase
+          .from('block_schedules')
+          .select('id', { count: 'exact', head: true })
+          .eq('or_room_id', room.id),
+      ])
 
-    setDeleteModal(prev => ({
-      ...prev,
-      dependencies: {
-        cases: casesResult.count || 0,
-        blockSchedules: blocksResult.count || 0,
-      },
-      loading: false,
-    }))
+      setDeleteModal(prev => ({
+        ...prev,
+        dependencies: {
+          cases: casesResult.count || 0,
+          blockSchedules: blocksResult.count || 0,
+        },
+        loading: false,
+      }))
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to check dependencies', message: err instanceof Error ? err.message : 'Please try again' })
+      closeDeleteModal()
+    }
   }
 
   const closeDeleteModal = () => {
@@ -421,15 +435,17 @@ export default function RoomsSettingsPage() {
     if (!deleteModal.room || !currentUserId) return
 
     setSaving(true)
-    const { error } = await supabase
-      .from('or_rooms')
-      .update({
-        deleted_at: new Date().toISOString(),
-        deleted_by: currentUserId,
-      })
-      .eq('id', deleteModal.room.id)
+    try {
+      const { error } = await supabase
+        .from('or_rooms')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId,
+        })
+        .eq('id', deleteModal.room.id)
 
-    if (!error) {
+      if (error) throw error
+
       setRooms(rooms.map(r =>
         r.id === deleteModal.room!.id
           ? { ...r, deleted_at: new Date().toISOString(), deleted_by: currentUserId }
@@ -438,22 +454,29 @@ export default function RoomsSettingsPage() {
       closeDeleteModal()
       showToast({ type: 'success', title: `${deleteModal.room.name} archived` })
       await roomAudit.deleted(supabase, deleteModal.room.id, deleteModal.room.name)
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to archive room', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const handleRestore = async (room: ORRoom) => {
-    const { error } = await supabase
-      .from('or_rooms')
-      .update({ deleted_at: null, deleted_by: null })
-      .eq('id', room.id)
+    try {
+      const { error } = await supabase
+        .from('or_rooms')
+        .update({ deleted_at: null, deleted_by: null })
+        .eq('id', room.id)
 
-    if (!error) {
+      if (error) throw error
+
       setRooms(rooms.map(r =>
         r.id === room.id ? { ...r, deleted_at: null, deleted_by: null } : r
       ))
       showToast({ type: 'success', title: `${room.name} restored` })
       await roomAudit.restored(supabase, room.id, room.name)
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to restore room', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
@@ -470,12 +493,7 @@ export default function RoomsSettingsPage() {
           description="Manage the operating rooms and their daily schedules at your facility."
         >
           {loading || userLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading rooms..." />
           ) : (
             <div className="max-w-3xl">
               {/* Add Room button */}

@@ -73,115 +73,123 @@ export default function DeviceRepsPage() {
   }, [])
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
+      const { data: userData, error: userErr } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
 
-    if (!userData) return
-    setFacilityId(userData.facility_id)
+      if (userErr) throw userErr
+      if (!userData) return
+      setFacilityId(userData.facility_id)
 
-    // Get facility name
-    const { data: facilityData } = await supabase
-      .from('facilities')
-      .select('name')
-      .eq('id', userData.facility_id)
-      .single()
+      // Get facility name
+      const { data: facilityData } = await supabase
+        .from('facilities')
+        .select('name')
+        .eq('id', userData.facility_id)
+        .single()
 
-    if (facilityData) {
-      setFacilityName(facilityData.name)
-    }
+      if (facilityData) {
+        setFacilityName(facilityData.name)
+      }
 
-    // Fetch device reps with access to this facility
-    const { data: repsData } = await supabase
-      .from('facility_device_reps')
-      .select(`
-        id,
-        user_id,
-        facility_id,
-        status,
-        created_at,
-        accepted_at,
-        users!facility_device_reps_user_id_fkey (
+      // Fetch device reps with access to this facility
+      const { data: repsData, error: repsErr } = await supabase
+        .from('facility_device_reps')
+        .select(`
           id,
-          first_name,
-          last_name,
+          user_id,
+          facility_id,
+          status,
+          created_at,
+          accepted_at,
+          users!facility_device_reps_user_id_fkey (
+            id,
+            first_name,
+            last_name,
+            email,
+            phone,
+            implant_companies!users_implant_company_id_fkey (name)
+          )
+        `)
+        .eq('facility_id', userData.facility_id)
+        .neq('status', 'revoked')
+        .order('created_at', { ascending: false })
+
+      if (repsErr) throw repsErr
+
+      // Transform reps data
+      const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
+        const user = getFirst(rep.users)
+        const company = user ? getFirst(user.implant_companies) : null
+        return {
+          id: rep.id,
+          user_id: rep.user_id,
+          facility_id: rep.facility_id,
+          status: rep.status,
+          created_at: rep.created_at,
+          accepted_at: rep.accepted_at,
+          user_first_name: user?.first_name || '',
+          user_last_name: user?.last_name || '',
+          user_email: user?.email || '',
+          user_phone: user?.phone || null,
+          company_name: company?.name || 'Unknown Company',
+          type: 'rep' as const,
+        }
+      })
+
+      setReps(transformedReps)
+
+      // Fetch pending invites
+      const { data: invitesData } = await supabase
+        .from('device_rep_invites')
+        .select(`
+          id,
           email,
-          phone,
-          implant_companies!users_implant_company_id_fkey (name)
-        )
-      `)
-      .eq('facility_id', userData.facility_id)
-      .neq('status', 'revoked')
-      .order('created_at', { ascending: false })
+          facility_id,
+          created_at,
+          expires_at,
+          implant_companies (name)
+        `)
+        .eq('facility_id', userData.facility_id)
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
 
-    // Transform reps data
-    const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
-      const user = getFirst(rep.users)
-      const company = user ? getFirst(user.implant_companies) : null
-      return {
-        id: rep.id,
-        user_id: rep.user_id,
-        facility_id: rep.facility_id,
-        status: rep.status,
-        created_at: rep.created_at,
-        accepted_at: rep.accepted_at,
-        user_first_name: user?.first_name || '',
-        user_last_name: user?.last_name || '',
-        user_email: user?.email || '',
-        user_phone: user?.phone || null,
-        company_name: company?.name || 'Unknown Company',
-        type: 'rep' as const,
-      }
-    })
+      // Transform invites data
+      const transformedInvites: PendingInvite[] = (invitesData || []).map((invite: any) => {
+        const company = getFirst(invite.implant_companies)
+        return {
+          id: invite.id,
+          email: invite.email,
+          facility_id: invite.facility_id,
+          created_at: invite.created_at,
+          expires_at: invite.expires_at,
+          company_name: company?.name || 'Unknown Company',
+          type: 'invite' as const,
+        }
+      })
 
-    setReps(transformedReps)
+      setPendingInvites(transformedInvites)
 
-    // Fetch pending invites
-    const { data: invitesData } = await supabase
-      .from('device_rep_invites')
-      .select(`
-        id,
-        email,
-        facility_id,
-        created_at,
-        expires_at,
-        implant_companies (name)
-      `)
-      .eq('facility_id', userData.facility_id)
-      .is('accepted_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
+      // Fetch implant companies for invite dropdown
+      const { data: companiesData } = await supabase
+        .from('implant_companies')
+        .select('id, name')
+        .or(`facility_id.is.null,facility_id.eq.${userData.facility_id}`)
+        .order('name')
 
-    // Transform invites data
-    const transformedInvites: PendingInvite[] = (invitesData || []).map((invite: any) => {
-      const company = getFirst(invite.implant_companies)
-      return {
-        id: invite.id,
-        email: invite.email,
-        facility_id: invite.facility_id,
-        created_at: invite.created_at,
-        expires_at: invite.expires_at,
-        company_name: company?.name || 'Unknown Company',
-        type: 'invite' as const,
-      }
-    })
-
-    setPendingInvites(transformedInvites)
-
-    // Fetch implant companies for invite dropdown
-    const { data: companiesData } = await supabase
-      .from('implant_companies')
-      .select('id, name')
-      .or(`facility_id.is.null,facility_id.eq.${userData.facility_id}`)
-      .order('name')
-
-    setCompanies(companiesData || [])
-    setLoading(false)
+      setCompanies(companiesData || [])
+    } catch (err) {
+      setError('Failed to load device reps. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openInviteModal = () => {
@@ -199,29 +207,31 @@ export default function DeviceRepsPage() {
     
     setSending(true)
 
-    const inviteToken = crypto.randomUUID()
-    const companyName = companies.find(c => c.id === inviteForm.implant_company_id)?.name || 'Unknown'
+    try {
+      const inviteToken = crypto.randomUUID()
+      const companyName = companies.find(c => c.id === inviteForm.implant_company_id)?.name || 'Unknown'
 
-    const { data, error } = await supabase
-      .from('device_rep_invites')
-      .insert({
-        facility_id: facilityId,
-        email: inviteForm.email.trim().toLowerCase(),
-        implant_company_id: inviteForm.implant_company_id,
-        invite_token: inviteToken,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .select(`
-        id,
-        email,
-        facility_id,
-        created_at,
-        expires_at,
-        implant_companies (name)
-      `)
-      .single()
+      const { data, error } = await supabase
+        .from('device_rep_invites')
+        .insert({
+          facility_id: facilityId,
+          email: inviteForm.email.trim().toLowerCase(),
+          implant_company_id: inviteForm.implant_company_id,
+          invite_token: inviteToken,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select(`
+          id,
+          email,
+          facility_id,
+          created_at,
+          expires_at,
+          implant_companies (name)
+        `)
+        .single()
 
-    if (!error && data) {
+      if (error) throw error
+
       const company = getFirst((data as any).implant_companies)
       const newInvite: PendingInvite = {
         id: data.id,
@@ -248,18 +258,10 @@ export default function DeviceRepsPage() {
         })
 
         if (!emailResponse.ok) {
-          showToast({
-            type: 'error',
-            title: 'Failed to send invite email',
-            message: 'There was an error sending the invite email.'
-          })
+          showToast({ type: 'error', title: 'Failed to send invite email', message: 'The invite was created but the email could not be sent' })
         }
       } catch (emailError) {
-        showToast({
-          type: 'error',
-          title: 'Error sending invite email',
-          message: emailError instanceof Error ? emailError.message : 'Error sending invite email'
-        })
+        showToast({ type: 'error', title: 'Failed to send invite email', message: emailError instanceof Error ? emailError.message : 'The invite was created but the email could not be sent' })
       }
 
       await deviceRepAudit.invited(
@@ -275,20 +277,24 @@ export default function DeviceRepsPage() {
         link: `${window.location.origin}/invite/accept/${inviteToken}`,
         email: inviteForm.email.trim().toLowerCase()
       })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to create invite', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSending(false)
     }
-
-    setSending(false)
   }
 
   const handleRevokeAccess = async (rep: DeviceRep) => {
     if (!facilityId) return
 
-    const { error } = await supabase
-      .from('facility_device_reps')
-      .update({ status: 'revoked' })
-      .eq('id', rep.id)
+    try {
+      const { error } = await supabase
+        .from('facility_device_reps')
+        .update({ status: 'revoked' })
+        .eq('id', rep.id)
 
-    if (!error) {
+      if (error) throw error
+
       setReps(reps.filter(r => r.id !== rep.id))
       setActionConfirm(null)
 
@@ -300,18 +306,24 @@ export default function DeviceRepsPage() {
         rep.company_name,
         facilityId
       )
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to revoke access', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
   const handleCancelInvite = async (inviteId: string) => {
-    const { error } = await supabase
-      .from('device_rep_invites')
-      .delete()
-      .eq('id', inviteId)
+    try {
+      const { error } = await supabase
+        .from('device_rep_invites')
+        .delete()
+        .eq('id', inviteId)
 
-    if (!error) {
+      if (error) throw error
+
       setPendingInvites(pendingInvites.filter(i => i.id !== inviteId))
       setActionConfirm(null)
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to cancel invite', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
@@ -342,12 +354,7 @@ export default function DeviceRepsPage() {
           description="Manage implant company representative access to your cases."
         >
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading device reps..." />
           ) : (
             <div className="space-y-6">
               {/* Main Card */}

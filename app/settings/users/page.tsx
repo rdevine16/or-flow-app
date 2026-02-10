@@ -1,4 +1,5 @@
 // app/settings/users/page.tsx
+// This page allows facility admins and global admins to manage cancellation reasons that staff can select when cancelling a surgical case. Reasons can be categorized, and archived if no longer relevant. Auditing is implemented for all create, update, delete, and restore actions to maintain a history of changes for compliance and accountability purposes.
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -108,46 +109,54 @@ export default function UsersSettingsPage() {
 
   const fetchData = async () => {
     setLoading(true)
+    setError(null)
 
-    let usersQuery = supabase
-      .from('users')
-      .select('id, first_name, last_name, email, role_id, access_level, facility_id, is_active, deleted_at, last_login_at, user_roles(name), facilities(name)')
-      .order('last_name')
+    try {
+      let usersQuery = supabase
+        .from('users')
+        .select('id, first_name, last_name, email, role_id, access_level, facility_id, is_active, deleted_at, last_login_at, user_roles(name), facilities(name)')
+        .order('last_name')
 
-    const showAllUsers = isGlobalAdmin && !isImpersonating
+      const showAllUsers = isGlobalAdmin && !isImpersonating
 
-    if (!showAllUsers && effectiveFacilityId) {
-      usersQuery = usersQuery
-        .eq('facility_id', effectiveFacilityId)
-        .in('access_level', ['user', 'facility_admin'])
+      if (!showAllUsers && effectiveFacilityId) {
+        usersQuery = usersQuery
+          .eq('facility_id', effectiveFacilityId)
+          .in('access_level', ['user', 'facility_admin'])
+      }
+
+      // Filter by active status
+      if (!showArchived) {
+        usersQuery = usersQuery.eq('is_active', true)
+      }
+
+      const [usersRes, rolesRes, facilitiesRes] = await Promise.all([
+        usersQuery,
+        supabase.from('user_roles').select('id, name').order('name'),
+        showAllUsers
+          ? supabase.from('facilities').select('id, name').order('name')
+          : Promise.resolve({ data: [] }),
+      ])
+
+      if (usersRes.error) throw usersRes.error
+      if (rolesRes.error) throw rolesRes.error
+
+      const usersData = (usersRes.data as unknown as User[]) || []
+      setUsers(usersData)
+      setRoles(rolesRes.data || [])
+      setFacilities(facilitiesRes.data || [])
+
+      const emailsToCheck = usersData.filter(u => u.email).map(u => u.email as string)
+      if (emailsToCheck.length > 0) {
+        await fetchPendingStatus(emailsToCheck)
+      }
+
+      await fetchAuthStatus(usersData.map(u => u.id))
+    } catch (err) {
+      setError('Failed to load users. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    // Filter by active status
-    if (!showArchived) {
-      usersQuery = usersQuery.eq('is_active', true)
-    }
-
-    const [usersRes, rolesRes, facilitiesRes] = await Promise.all([
-      usersQuery,
-      supabase.from('user_roles').select('id, name').order('name'),
-      showAllUsers
-        ? supabase.from('facilities').select('id, name').order('name')
-        : Promise.resolve({ data: [] }),
-    ])
-
-    const usersData = (usersRes.data as unknown as User[]) || []
-    setUsers(usersData)
-    setRoles(rolesRes.data || [])
-    setFacilities(facilitiesRes.data || [])
-
-    const emailsToCheck = usersData.filter(u => u.email).map(u => u.email as string)
-    if (emailsToCheck.length > 0) {
-      await fetchPendingStatus(emailsToCheck)
-    }
-
-    await fetchAuthStatus(usersData.map(u => u.id))
-
-    setLoading(false)
   }
 
   const fetchPendingStatus = async (emails: string[]) => {
@@ -523,12 +532,7 @@ export default function UsersSettingsPage() {
           description="Manage staff members at your facility."
         >
           {loading || userLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading users..." />
           ) : !effectiveFacilityId && !showAllUsers ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
               <p className="text-slate-500">No facility selected</p>

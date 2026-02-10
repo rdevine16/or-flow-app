@@ -214,10 +214,11 @@ export default function FinancialsOverviewPage() {
       setRecentActivity(activityRes.data || [])
       setRateInput(facilityRes.data?.or_hourly_rate?.toString() || '')
     } catch (error) {
+      setError('Failed to load financial data. Please try again.')
       showToast({
         type: 'error',
-        title: 'Error Loading Financial Data',
-        message: error instanceof Error ? error.message : 'Failed to load financial data'
+        title: 'Failed to load financial data',
+        message: error instanceof Error ? error.message : 'Please try again'
       })
     } finally {
       setLoading(false)
@@ -334,9 +335,7 @@ showToast({
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading financials..." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>
@@ -362,9 +361,7 @@ showToast({
       <Container>
         <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
           {loading ? (
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading financial data..." />
           ) : (
             <div className="space-y-8">
               {/* OR Hourly Rate + Quick Actions */}

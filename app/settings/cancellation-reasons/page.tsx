@@ -78,26 +78,30 @@ export default function CancellationReasonsSettingsPage() {
   const fetchReasons = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
     
-    let query = supabase
-      .from('cancellation_reasons')
-      .select('*')
-      .eq('facility_id', effectiveFacilityId)
-      .order('category')
-      .order('display_order')
-    
-    if (!showArchived) {
-      query = query.eq('is_active', true).is('deleted_at', null)
-    }
-    
-    const { data, error } = await query
-    
-    if (error) {
-      setErrorMessage('Failed to load cancellation reasons')
-    } else {
+    try {
+      let query = supabase
+        .from('cancellation_reasons')
+        .select('*')
+        .eq('facility_id', effectiveFacilityId)
+        .order('category')
+        .order('display_order')
+      
+      if (!showArchived) {
+        query = query.eq('is_active', true).is('deleted_at', null)
+      }
+      
+      const { data, error: fetchErr } = await query
+      
+      if (fetchErr) throw fetchErr
       setReasons(data || [])
+    } catch (err) {
+      setError('Failed to load cancellation reasons. Please try again.')
+      setErrorMessage('Failed to load cancellation reasons')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   // ============================================================================
@@ -134,46 +138,49 @@ export default function CancellationReasonsSettingsPage() {
 
     const name = generateName(formData.display_name)
 
-    if (editingReason) {
-      const { error } = await supabase
-        .from('cancellation_reasons')
-        .update({
-          name,
-          display_name: formData.display_name.trim(),
-          category: formData.category,
-        })
-        .eq('id', editingReason.id)
+    try {
+      if (editingReason) {
+        const { error } = await supabase
+          .from('cancellation_reasons')
+          .update({
+            name,
+            display_name: formData.display_name.trim(),
+            category: formData.category,
+          })
+          .eq('id', editingReason.id)
 
-      if (error) {
-        setErrorMessage(error.message)
-      } else {
+        if (error) throw error
+
         await cancellationReasonAudit.updated(supabase, editingReason.id, editingReason.display_name, formData.display_name.trim(), effectiveFacilityId)
         setSuccessMessage('Cancellation reason updated')
         closeModal()
         fetchReasons()
-      }
-    } else {
-      const { data, error } = await supabase
-        .from('cancellation_reasons')
-        .insert({
-          facility_id: effectiveFacilityId,
-          name,
-          display_name: formData.display_name.trim(),
-          category: formData.category,
-          display_order: reasons.length * 10,
-          is_active: true,
-        })
-        .select()
-        .single()
-
-      if (error) {
-        setErrorMessage(error.code === '23505' ? 'This reason already exists' : error.message)
       } else {
+        const { data, error } = await supabase
+          .from('cancellation_reasons')
+          .insert({
+            facility_id: effectiveFacilityId,
+            name,
+            display_name: formData.display_name.trim(),
+            category: formData.category,
+            display_order: reasons.length * 10,
+            is_active: true,
+          })
+          .select()
+          .single()
+
+        if (error) {
+          setErrorMessage(error.code === '23505' ? 'This reason already exists' : error.message)
+          return
+        }
+
         await cancellationReasonAudit.created(supabase, formData.display_name.trim(), data.id, formData.category, effectiveFacilityId)
         setSuccessMessage('Cancellation reason created')
         closeModal()
         fetchReasons()
       }
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to save reason')
     }
 
     setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
@@ -181,20 +188,23 @@ export default function CancellationReasonsSettingsPage() {
 
   const handleDelete = async (reason: CancellationReason) => {
     if (!effectiveFacilityId) return
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    const { error } = await supabase
-      .from('cancellation_reasons')
-      .update({ is_active: false, deleted_at: new Date().toISOString(), deleted_by: user?.id })
-      .eq('id', reason.id)
 
-    if (!error) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const { error } = await supabase
+        .from('cancellation_reasons')
+        .update({ is_active: false, deleted_at: new Date().toISOString(), deleted_by: user?.id })
+        .eq('id', reason.id)
+
+      if (error) throw error
+
       await cancellationReasonAudit.deleted(supabase, reason.display_name, reason.id, effectiveFacilityId)
       setSuccessMessage(`"${reason.display_name}" archived`)
       setArchiveTarget(null)
       fetchReasons()
-    } else {
-      setErrorMessage(error.message)
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to archive reason')
     }
     setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
@@ -202,15 +212,19 @@ export default function CancellationReasonsSettingsPage() {
   const handleRestore = async (reason: CancellationReason) => {
     if (!effectiveFacilityId) return
     
-    const { error } = await supabase
-      .from('cancellation_reasons')
-      .update({ is_active: true, deleted_at: null, deleted_by: null })
-      .eq('id', reason.id)
+    try {
+      const { error } = await supabase
+        .from('cancellation_reasons')
+        .update({ is_active: true, deleted_at: null, deleted_by: null })
+        .eq('id', reason.id)
 
-    if (!error) {
+      if (error) throw error
+
       await cancellationReasonAudit.restored(supabase, reason.display_name, reason.id, effectiveFacilityId)
       setSuccessMessage(`"${reason.display_name}" restored`)
       fetchReasons()
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to restore reason')
     }
     setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
@@ -241,12 +255,7 @@ export default function CancellationReasonsSettingsPage() {
           description="Manage the reasons staff can select when cancelling a surgical case."
         >
           {loading || userLoading ? (
-            <div className="flex justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading cancellation reasons..." />
           ) : !effectiveFacilityId ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
               <p className="text-slate-500">No facility selected</p>

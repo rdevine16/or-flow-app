@@ -56,50 +56,54 @@ export default function ImplantCompaniesPage() {
   }, [showArchived])
 
 const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    setCurrentUserId(user.id)
+      setCurrentUserId(user.id)
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
+      const { data: userData, error: userErr } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
 
-    if (userData) {
-      setFacilityId(userData.facility_id)
-    }
+      if (userErr) throw userErr
 
-    // Fetch implant companies based on archive toggle
-    let query = supabase
-      .from('implant_companies')
-      .select('*')
+      if (userData) {
+        setFacilityId(userData.facility_id)
+      }
 
-    if (showArchived) {
-      // Show only archived custom companies (facility-specific)
-      query = query
+      let query = supabase
+        .from('implant_companies')
+        .select('*')
+
+      if (showArchived) {
+        query = query
+          .eq('facility_id', userData?.facility_id)
+          .not('deleted_at', 'is', null)
+      } else {
+        query = query
+          .or(`facility_id.is.null,facility_id.eq.${userData?.facility_id}`)
+          .is('deleted_at', null)
+      }
+
+      const { data, error: fetchErr } = await query.order('name')
+      if (fetchErr) throw fetchErr
+      setCompanies(data || [])
+
+      const { count } = await supabase
+        .from('implant_companies')
+        .select('id', { count: 'exact', head: true })
         .eq('facility_id', userData?.facility_id)
         .not('deleted_at', 'is', null)
-    } else {
-      // Show active: global (always) + facility-specific (not deleted)
-      query = query
-        .or(`facility_id.is.null,facility_id.eq.${userData?.facility_id}`)
-        .is('deleted_at', null)
+
+      setArchivedCount(count || 0)
+    } catch (err) {
+      setError('Failed to load implant companies. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query.order('name')
-    setCompanies(data || [])
-
-    // Get archived count
-    const { count } = await supabase
-      .from('implant_companies')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', userData?.facility_id)
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
   }
 
   // Filter companies by search
@@ -130,65 +134,67 @@ const fetchData = async () => {
     
     setSaving(true)
 
-    if (modal.mode === 'add') {
-      const { data, error } = await supabase
-        .from('implant_companies')
-        .insert({
-          name: formData.name.trim(),
-          facility_id: facilityId,
-        })
-        .select()
-        .single()
+    try {
+      if (modal.mode === 'add') {
+        const { data, error } = await supabase
+          .from('implant_companies')
+          .insert({
+            name: formData.name.trim(),
+            facility_id: facilityId,
+          })
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setCompanies([...companies, data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
-        
-        // Audit log
         await implantCompanyAudit.created(supabase, data.name, data.id, facilityId)
-      }
-    } else if (modal.mode === 'edit' && modal.company) {
-      const oldName = modal.company.name
-      
-      const { data, error } = await supabase
-        .from('implant_companies')
-        .update({ name: formData.name.trim() })
-        .eq('id', modal.company.id)
-        .select()
-        .single()
+      } else if (modal.mode === 'edit' && modal.company) {
+        const oldName = modal.company.name
+        
+        const { data, error } = await supabase
+          .from('implant_companies')
+          .update({ name: formData.name.trim() })
+          .eq('id', modal.company.id)
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setCompanies(companies.map(c => c.id === data.id ? data : c).sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
-        
-        // Audit log
         await implantCompanyAudit.updated(supabase, data.id, oldName, data.name, facilityId)
       }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save company', 'error')
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
 const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company || !facilityId) return
 
-    const { error } = await supabase
-      .from('implant_companies')
-      .update({
-        deleted_at: new Date().toISOString(),
-        deleted_by: currentUserId
-      })
-      .eq('id', id)
+    try {
+      const { error } = await supabase
+        .from('implant_companies')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId
+        })
+        .eq('id', id)
 
-    if (!error) {
+      if (error) throw error
+
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
       setArchiveTarget(null)
       showToast(`"${company.name}" moved to archive`, 'success')
-      
-      // Audit log
       await implantCompanyAudit.deleted(supabase, company.name, id, facilityId)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to archive company', 'error')
     }
   }
 
@@ -196,21 +202,23 @@ const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company || !facilityId) return
 
-    const { error } = await supabase
-      .from('implant_companies')
-      .update({
-        deleted_at: null,
-        deleted_by: null
-      })
-      .eq('id', id)
+    try {
+      const { error } = await supabase
+        .from('implant_companies')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', id)
 
-    if (!error) {
+      if (error) throw error
+
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${company.name}" restored successfully`, 'success')
-      
-      // Audit log (you may want to add a restored method)
       await implantCompanyAudit.deleted(supabase, `${company.name} (restored)`, id, facilityId)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to restore company', 'error')
     }
   }
 
@@ -223,12 +231,7 @@ const handleDelete = async (id: string) => {
           description="Manage surgical implant vendors for case assignments."
         >
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading implant companies..." />
           ) : (
             <div className="space-y-6">
               {/* Main Card */}

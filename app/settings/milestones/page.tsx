@@ -111,31 +111,43 @@ export default function MilestonesSettingsPage() {
   const fetchMilestones = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
-    const { data } = await supabase
-      .from('facility_milestones')
-      .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, deleted_by, min_minutes, max_minutes, validation_type')
-      .eq('facility_id', effectiveFacilityId)
-      .order('display_order')
+    setError(null)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('facility_milestones')
+        .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, deleted_by, min_minutes, max_minutes, validation_type')
+        .eq('facility_id', effectiveFacilityId)
+        .order('display_order')
 
-    setMilestones(data || [])
-    setLoading(false)
+      if (fetchError) throw fetchError
+      setMilestones(data || [])
+    } catch (err) {
+      setError('Failed to load milestones. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Check how many cases use each milestone
   const fetchUsageCounts = async () => {
-    const { data } = await supabase
-      .from('case_milestones')
-      .select('facility_milestone_id')
-      .not('facility_milestone_id', 'is', null)
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('case_milestones')
+        .select('facility_milestone_id')
+        .not('facility_milestone_id', 'is', null)
 
-    if (data) {
-      const counts: Record<string, number> = {}
-      data.forEach(row => {
-        if (row.facility_milestone_id) {
-          counts[row.facility_milestone_id] = (counts[row.facility_milestone_id] || 0) + 1
-        }
-      })
-      setUsageCounts(counts)
+      if (fetchError) throw fetchError
+      if (data) {
+        const counts: Record<string, number> = {}
+        data.forEach(row => {
+          if (row.facility_milestone_id) {
+            counts[row.facility_milestone_id] = (counts[row.facility_milestone_id] || 0) + 1
+          }
+        })
+        setUsageCounts(counts)
+      }
+    } catch {
+      // Non-critical - usage counts are informational
     }
   }
 
@@ -155,35 +167,40 @@ export default function MilestonesSettingsPage() {
     if (!newDisplayName.trim() || !effectiveFacilityId) return
     
     setSaving(true)
-    const name = newName.trim() || generateName(newDisplayName)
-    const maxOrder = milestones.length > 0 
-      ? Math.max(...milestones.map(m => m.display_order)) 
-      : 0
+    try {
+      const name = newName.trim() || generateName(newDisplayName)
+      const maxOrder = milestones.length > 0 
+        ? Math.max(...milestones.map(m => m.display_order)) 
+        : 0
 
-    const { data, error } = await supabase
-      .from('facility_milestones')
-      .insert({
-        facility_id: effectiveFacilityId,
-        name,
-        display_name: newDisplayName.trim(),
-        display_order: maxOrder + 1,
-        source_milestone_type_id: null,
-        is_active: true,
-        min_minutes: 1,
-        max_minutes: 90,
-        validation_type: 'sequence_gap',
-      })
-      .select()
-      .single()
+      const { data, error } = await supabase
+        .from('facility_milestones')
+        .insert({
+          facility_id: effectiveFacilityId,
+          name,
+          display_name: newDisplayName.trim(),
+          display_order: maxOrder + 1,
+          source_milestone_type_id: null,
+          is_active: true,
+          min_minutes: 1,
+          max_minutes: 90,
+          validation_type: 'sequence_gap',
+        })
+        .select()
+        .single()
 
-    if (!error && data) {
+      if (error) throw error
+
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
       setMilestones([...milestones, { ...data, deleted_at: null }])
       setNewName('')
       setNewDisplayName('')
       setShowAddModal(false)
+    } catch (err) {
+      showToast('Failed to create milestone', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   // Phase 2: Updated edit handler to save validation ranges
@@ -191,18 +208,20 @@ export default function MilestonesSettingsPage() {
     if (!editingMilestone || !editDisplayName.trim()) return
     
     setSaving(true)
-    const oldDisplayName = editingMilestone.display_name
+    try {
+      const oldDisplayName = editingMilestone.display_name
 
-    const { error } = await supabase
-      .from('facility_milestones')
-      .update({ 
-        display_name: editDisplayName.trim(),
-        min_minutes: editMinMinutes,
-        max_minutes: editMaxMinutes,
-      })
-      .eq('id', editingMilestone.id)
+      const { error } = await supabase
+        .from('facility_milestones')
+        .update({ 
+          display_name: editDisplayName.trim(),
+          min_minutes: editMinMinutes,
+          max_minutes: editMaxMinutes,
+        })
+        .eq('id', editingMilestone.id)
 
-    if (!error) {
+      if (error) throw error
+
       if (oldDisplayName !== editDisplayName.trim()) {
         await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, editDisplayName.trim())
       }
@@ -215,8 +234,11 @@ export default function MilestonesSettingsPage() {
       )
       setShowEditModal(false)
       setEditingMilestone(null)
+    } catch (err) {
+      showToast('Failed to update milestone', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   // Toggle active/inactive
@@ -242,45 +264,54 @@ export default function MilestonesSettingsPage() {
         confirmVariant: 'danger',
         onConfirm: async () => {
           setSaving(true)
-          
-          await supabase
-            .from('facility_milestones')
-            .update({ is_active: false })
-            .eq('id', milestone.id)
-
-          if (partner) {
+          try {
             await supabase
               .from('facility_milestones')
               .update({ is_active: false })
-              .eq('id', partner.id)
-          }
+              .eq('id', milestone.id)
 
-          setMilestones(milestones.map(m => {
-            if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-              return { ...m, is_active: false }
+            if (partner) {
+              await supabase
+                .from('facility_milestones')
+                .update({ is_active: false })
+                .eq('id', partner.id)
             }
-            return m
-          }))
 
-          closeConfirmModal()
-          setSaving(false)
+            setMilestones(milestones.map(m => {
+              if (m.id === milestone.id || m.id === milestone.pair_with_id) {
+                return { ...m, is_active: false }
+              }
+              return m
+            }))
+
+            closeConfirmModal()
+          } catch (err) {
+            showToast('Failed to deactivate milestones', 'error')
+          } finally {
+            setSaving(false)
+          }
         },
       })
       return
     }
 
     setSaving(true)
-    const { error } = await supabase
-      .from('facility_milestones')
-      .update({ is_active: newActiveState })
-      .eq('id', milestone.id)
+    try {
+      const { error } = await supabase
+        .from('facility_milestones')
+        .update({ is_active: newActiveState })
+        .eq('id', milestone.id)
 
-    if (!error) {
+      if (error) throw error
+
       setMilestones(milestones.map(m => 
         m.id === milestone.id ? { ...m, is_active: newActiveState } : m
       ))
+    } catch (err) {
+      showToast('Failed to update milestone', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   // Soft delete (move to deleted bucket)
@@ -326,35 +357,38 @@ export default function MilestonesSettingsPage() {
       onConfirm: async () => {
         setSaving(true)
 
-        // If paired, unlink partner first
-        if (milestone.pair_with_id) {
-          await supabase
+        try {
+          // If paired, unlink partner first
+          if (milestone.pair_with_id) {
+            const { error: unlinkErr } = await supabase
+              .from('facility_milestones')
+              .update({ pair_with_id: null, pair_position: null })
+              .eq('id', milestone.pair_with_id)
+            if (unlinkErr) throw unlinkErr
+
+            await milestoneTypeAudit.unlinked(
+              supabase,
+              milestone.display_name,
+              partner?.display_name || 'Unknown'
+            )
+          }
+          // Soft delete - set deleted_at and deleted_by
+          const { error } = await supabase
             .from('facility_milestones')
-            .update({ pair_with_id: null, pair_position: null })
-            .eq('id', milestone.pair_with_id)
+            .update({ 
+              deleted_at: new Date().toISOString(),
+              deleted_by: currentUserId,
+              is_active: false,
+              pair_with_id: null,
+              pair_position: null,
+            })
+            .eq('id', milestone.id)
 
-          await milestoneTypeAudit.unlinked(
-            supabase,
-            milestone.display_name,
-            partner?.display_name || 'Unknown'
-          )
-        }
-// Soft delete - set deleted_at and deleted_by
-        const { error } = await supabase
-          .from('facility_milestones')
-          .update({ 
-            deleted_at: new Date().toISOString(),
-            deleted_by: currentUserId,
-            is_active: false,
-            pair_with_id: null,
-            pair_position: null,
-          })
-          .eq('id', milestone.id)
+          if (error) throw error
 
-        if (!error) {
           await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
           
-setMilestones(milestones.map(m => {
+          setMilestones(milestones.map(m => {
             if (m.id === milestone.id) {
               return { ...m, deleted_at: new Date().toISOString(), deleted_by: currentUserId, is_active: false, pair_with_id: null, pair_position: null }
             }
@@ -364,6 +398,8 @@ setMilestones(milestones.map(m => {
             return m
           }))
           showToast(`"${milestone.display_name}" moved to archive`, 'success')
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : 'Failed to delete milestone', 'error')
         }
 
         closeConfirmModal()
@@ -377,17 +413,18 @@ setMilestones(milestones.map(m => {
   // Restore deleted milestone
 const handleRestore = async (milestone: FacilityMilestone) => {
   setSaving(true)
-  
-  const { error } = await supabase
-    .from('facility_milestones')
-    .update({ 
-      deleted_at: null,
-      deleted_by: null,
-      is_active: true,
-    })
-    .eq('id', milestone.id)
+  try {
+    const { error } = await supabase
+      .from('facility_milestones')
+      .update({ 
+        deleted_at: null,
+        deleted_by: null,
+        is_active: true,
+      })
+      .eq('id', milestone.id)
 
-  if (!error) {
+    if (error) throw error
+
     await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
     
     setMilestones(milestones.map(m => 
@@ -396,9 +433,12 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         : m
     ))
     showToast(`"${milestone.display_name}" restored successfully`, 'success')
-  } else {
+  } catch (err) {
     showToast('Failed to restore milestone', 'error')
+  } finally {
+    setSaving(false)
   }
+}
   setSaving(false)
 }
 
@@ -432,28 +472,34 @@ const handleRestore = async (milestone: FacilityMilestone) => {
       onConfirm: async () => {
         setSaving(true)
 
-        await supabase
-          .from('facility_milestones')
-          .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
-          .eq('id', milestone.id)
+        try {
+          const { error: err1 } = await supabase
+            .from('facility_milestones')
+            .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
+            .eq('id', milestone.id)
+          if (err1) throw err1
 
-        await supabase
-          .from('facility_milestones')
-          .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
-          .eq('id', milestone.pair_with_id)
+          const { error: err2 } = await supabase
+            .from('facility_milestones')
+            .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
+            .eq('id', milestone.pair_with_id)
+          if (err2) throw err2
 
-        await milestoneTypeAudit.unlinked(
-          supabase,
-          milestone.display_name,
-          partner?.display_name || 'Unknown'
-        )
+          await milestoneTypeAudit.unlinked(
+            supabase,
+            milestone.display_name,
+            partner?.display_name || 'Unknown'
+          )
 
-        setMilestones(milestones.map(m => {
-          if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-            return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
-          }
-          return m
-        }))
+          setMilestones(milestones.map(m => {
+            if (m.id === milestone.id || m.id === milestone.pair_with_id) {
+              return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
+            }
+            return m
+          }))
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : 'Failed to unlink milestones', 'error')
+        }
 
         closeConfirmModal()
         setShowPairModal(false)
@@ -471,62 +517,66 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     if (!partner) return
 
     setSaving(true)
+    try {
+      // If either was previously paired, unlink first
+      if (pairingMilestone.pair_with_id && pairingMilestone.pair_with_id !== selectedPairId) {
+        await supabase
+          .from('facility_milestones')
+          .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
+          .eq('id', pairingMilestone.pair_with_id)
+      }
 
-    // If either was previously paired, unlink first
-    if (pairingMilestone.pair_with_id && pairingMilestone.pair_with_id !== selectedPairId) {
+      if (partner.pair_with_id && partner.pair_with_id !== pairingMilestone.id) {
+        await supabase
+          .from('facility_milestones')
+          .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
+          .eq('id', partner.pair_with_id)
+      }
+
+      // Set the pairing: first selected is start, second is end
+      // The START milestone gets validation_type = 'duration'
       await supabase
         .from('facility_milestones')
-        .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
-        .eq('id', pairingMilestone.pair_with_id)
-    }
+        .update({ pair_with_id: selectedPairId, pair_position: 'start', validation_type: 'duration' })
+        .eq('id', pairingMilestone.id)
 
-    if (partner.pair_with_id && partner.pair_with_id !== pairingMilestone.id) {
       await supabase
         .from('facility_milestones')
-        .update({ pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' })
-        .eq('id', partner.pair_with_id)
-    }
+        .update({ pair_with_id: pairingMilestone.id, pair_position: 'end', validation_type: 'sequence_gap' })
+        .eq('id', selectedPairId)
 
-    // Set the pairing: first selected is start, second is end
-    // The START milestone gets validation_type = 'duration'
-    await supabase
-      .from('facility_milestones')
-      .update({ pair_with_id: selectedPairId, pair_position: 'start', validation_type: 'duration' })
-      .eq('id', pairingMilestone.id)
+      await milestoneTypeAudit.linked(
+        supabase,
+        pairingMilestone.display_name,
+        partner.display_name
+      )
 
-    await supabase
-      .from('facility_milestones')
-      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end', validation_type: 'sequence_gap' })
-      .eq('id', selectedPairId)
-
-    await milestoneTypeAudit.linked(
-      supabase,
-      pairingMilestone.display_name,
-      partner.display_name
-    )
-
-    // Update local state
-    setMilestones(milestones.map(m => {
-      // Clear old pairings
-      if (m.id === pairingMilestone.pair_with_id || m.id === partner.pair_with_id) {
-        if (m.id !== pairingMilestone.id && m.id !== selectedPairId) {
-          return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
+      // Update local state
+      setMilestones(milestones.map(m => {
+        // Clear old pairings
+        if (m.id === pairingMilestone.pair_with_id || m.id === partner.pair_with_id) {
+          if (m.id !== pairingMilestone.id && m.id !== selectedPairId) {
+            return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
+          }
         }
-      }
-      // Set new pairing
-      if (m.id === pairingMilestone.id) {
-        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' as const, validation_type: 'duration' as const }
-      }
-      if (m.id === selectedPairId) {
-        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' as const, validation_type: 'sequence_gap' as const }
-      }
-      return m
-    }))
+        // Set new pairing
+        if (m.id === pairingMilestone.id) {
+          return { ...m, pair_with_id: selectedPairId, pair_position: 'start' as const, validation_type: 'duration' as const }
+        }
+        if (m.id === selectedPairId) {
+          return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' as const, validation_type: 'sequence_gap' as const }
+        }
+        return m
+      }))
 
-    setShowPairModal(false)
-    setPairingMilestone(null)
-    setSelectedPairId('')
-    setSaving(false)
+      setShowPairModal(false)
+      setPairingMilestone(null)
+      setSelectedPairId('')
+    } catch (err) {
+      showToast('Failed to set milestone pairing', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Get paired milestone name
@@ -592,12 +642,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
           description="Configure the surgical milestones tracked during cases."
         >
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading milestones..." />
           ) : (
             <>
               {/* Info Banner */}

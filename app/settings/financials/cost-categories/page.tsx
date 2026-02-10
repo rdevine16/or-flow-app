@@ -91,28 +91,33 @@ export default function CostCategoriesPage() {
 const fetchCategories = async () => {
   if (!effectiveFacilityId) return
   setLoading(true)
+  setError(null)
 
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-  
-  const { data, error } = await supabase
-    .from('cost_categories')
-      .select('*')
-      .eq('facility_id', effectiveFacilityId)
-      .or(`deleted_at.is.null,deleted_at.gte.${thirtyDaysAgo.toISOString()}`)
-      .order('type')
-      .order('display_order')
+  try {
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    
+    const { data, error: fetchErr } = await supabase
+      .from('cost_categories')
+        .select('*')
+        .eq('facility_id', effectiveFacilityId)
+        .or(`deleted_at.is.null,deleted_at.gte.${thirtyDaysAgo.toISOString()}`)
+        .order('type')
+        .order('display_order')
 
+    if (fetchErr) throw fetchErr
     if (data) setCategories(data)
-if (error) {
-  showToast({
-    type: 'error',
-    title: 'Error Loading Categories',
-    message: error instanceof Error ? error.message : 'Failed to load cost categories'
-  })
-}
+  } catch (err) {
+    setError('Failed to load cost categories. Please try again.')
+    showToast({
+      type: 'error',
+      title: 'Failed to load categories',
+      message: err instanceof Error ? err.message : 'Please try again'
+    })
+  } finally {
     setLoading(false)
   }
+}
 
   const copyFromDefaults = async () => {
     if (!effectiveFacilityId) return
@@ -293,26 +298,30 @@ const openDeleteModal = async (category: CostCategory) => {
       loading: true
     })
 
-    // Check dependencies
-    const [procResult, surgResult] = await Promise.all([
-      supabase
-        .from('procedure_cost_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('cost_category_id', category.id),
-      supabase
-        .from('surgeon_cost_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('cost_category_id', category.id)
-    ])
+    try {
+      const [procResult, surgResult] = await Promise.all([
+        supabase
+          .from('procedure_cost_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('cost_category_id', category.id),
+        supabase
+          .from('surgeon_cost_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('cost_category_id', category.id)
+      ])
 
-    setDeleteModalState(prev => ({
-      ...prev,
-      dependencies: {
-        procedureCostItems: procResult.count || 0,
-        surgeonCostItems: surgResult.count || 0
-      },
-      loading: false
-    }))
+      setDeleteModalState(prev => ({
+        ...prev,
+        dependencies: {
+          procedureCostItems: procResult.count || 0,
+          surgeonCostItems: surgResult.count || 0
+        },
+        loading: false
+      }))
+    } catch (err) {
+      setDeleteModalState(prev => ({ ...prev, loading: false }))
+      showToast({ type: 'error', title: 'Failed to check dependencies' })
+    }
   }
 
   const closeDeleteModal = () => {
@@ -434,9 +443,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Cost Categories" description="Manage debit and credit categories for financial tracking">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading cost categories..." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>
@@ -462,9 +469,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
       <Container>
         <SettingsLayout title="Cost Categories" description="Manage debit and credit categories for financial tracking">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading categories..." />
           ) : activeCategories.length === 0 && deletedCategories.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
               <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

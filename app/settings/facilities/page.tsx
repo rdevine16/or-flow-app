@@ -102,79 +102,99 @@ export default function FinancialsSettingsPage() {
   }, [])
 
   const fetchCurrentUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id, access_level')
-        .eq('id', user.id)
-        .single()
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: userData, error: userErr } = await supabase
+          .from('users')
+          .select('facility_id, access_level')
+          .eq('id', user.id)
+          .single()
 
-      if (userData) {
-        const isGlobal = userData.access_level === 'global_admin'
-        setIsGlobalAdmin(isGlobal)
+        if (userErr) throw userErr
 
-        if (isGlobal) {
-          const { data: facilitiesData } = await supabase
-            .from('facilities')
-            .select('id, name, or_hourly_rate')
-            .order('name')
+        if (userData) {
+          const isGlobal = userData.access_level === 'global_admin'
+          setIsGlobalAdmin(isGlobal)
 
-          if (facilitiesData && facilitiesData.length > 0) {
-            setFacilities(facilitiesData)
-            setSelectedFacilityId(facilitiesData[0].id)
-            setCurrentFacility(facilitiesData[0])
-            setOrHourlyRate(facilitiesData[0].or_hourly_rate?.toString() || '')
-            fetchData(facilitiesData[0].id)
+          if (isGlobal) {
+            const { data: facilitiesData, error: facErr } = await supabase
+              .from('facilities')
+              .select('id, name, or_hourly_rate')
+              .order('name')
+
+            if (facErr) throw facErr
+
+            if (facilitiesData && facilitiesData.length > 0) {
+              setFacilities(facilitiesData)
+              setSelectedFacilityId(facilitiesData[0].id)
+              setCurrentFacility(facilitiesData[0])
+              setOrHourlyRate(facilitiesData[0].or_hourly_rate?.toString() || '')
+              fetchData(facilitiesData[0].id)
+            } else {
+              setLoading(false)
+            }
           } else {
-            setLoading(false)
-          }
-        } else {
-          const { data: facilityData } = await supabase
-            .from('facilities')
-            .select('id, name, or_hourly_rate')
-            .eq('id', userData.facility_id)
-            .single()
+            const { data: facilityData, error: facErr } = await supabase
+              .from('facilities')
+              .select('id, name, or_hourly_rate')
+              .eq('id', userData.facility_id)
+              .single()
 
-          if (facilityData) {
-            setSelectedFacilityId(facilityData.id)
-            setCurrentFacility(facilityData)
-            setOrHourlyRate(facilityData.or_hourly_rate?.toString() || '')
-            fetchData(facilityData.id)
-          } else {
-            setLoading(false)
+            if (facErr) throw facErr
+
+            if (facilityData) {
+              setSelectedFacilityId(facilityData.id)
+              setCurrentFacility(facilityData)
+              setOrHourlyRate(facilityData.or_hourly_rate?.toString() || '')
+              fetchData(facilityData.id)
+            } else {
+              setLoading(false)
+            }
           }
         }
       }
+    } catch (err) {
+      setError('Failed to load facility data. Please try again.')
+      setLoading(false)
     }
   }
 
   const fetchData = async (facilityId: string) => {
     setLoading(true)
+    setError(null)
 
-    const [proceduresResult, reimbursementsResult, payersResult] = await Promise.all([
-      supabase
-        .from('procedure_types')
-        .select('id, name, soft_goods_cost, hard_goods_cost')
-        .eq('facility_id', facilityId)
-        .order('name'),
-      supabase
-        .from('procedure_reimbursements')
-        .select('id, procedure_type_id, payer_id, reimbursement, effective_date')
-        .in('procedure_type_id', 
-          (await supabase.from('procedure_types').select('id').eq('facility_id', facilityId)).data?.map(p => p.id) || []
-        ),
-      supabase
-        .from('payers')
-        .select('id, name, facility_id, deleted_at')
-        .eq('facility_id', facilityId)
-        .order('name'),
-    ])
+    try {
+      const [proceduresResult, reimbursementsResult, payersResult] = await Promise.all([
+        supabase
+          .from('procedure_types')
+          .select('id, name, soft_goods_cost, hard_goods_cost')
+          .eq('facility_id', facilityId)
+          .order('name'),
+        supabase
+          .from('procedure_reimbursements')
+          .select('id, procedure_type_id, payer_id, reimbursement, effective_date')
+          .in('procedure_type_id', 
+            (await supabase.from('procedure_types').select('id').eq('facility_id', facilityId)).data?.map(p => p.id) || []
+          ),
+        supabase
+          .from('payers')
+          .select('id, name, facility_id, deleted_at')
+          .eq('facility_id', facilityId)
+          .order('name'),
+      ])
 
-    setProcedures(proceduresResult.data || [])
-    setReimbursements(reimbursementsResult.data || [])
-    setPayers(payersResult.data || [])
-    setLoading(false)
+      if (proceduresResult.error) throw proceduresResult.error
+
+      setProcedures(proceduresResult.data || [])
+      setReimbursements(reimbursementsResult.data || [])
+      setPayers(payersResult.data || [])
+    } catch (err) {
+      setError('Failed to load facility data. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load data', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleFacilityChange = (facilityId: string) => {
@@ -193,62 +213,49 @@ export default function FinancialsSettingsPage() {
     if (!selectedFacilityId) return
     setSaving(true)
 
-    const oldRate = currentFacility?.or_hourly_rate
-    const newRate = orHourlyRate ? parseFloat(orHourlyRate) : null
+    try {
+      const oldRate = currentFacility?.or_hourly_rate
+      const newRate = orHourlyRate ? parseFloat(orHourlyRate) : null
 
-    // Use .select() to verify the update actually happened
-    const { data, error } = await supabase
-      .from('facilities')
-      .update({ or_hourly_rate: newRate })
-      .eq('id', selectedFacilityId)
-      .select('id, name, or_hourly_rate')
-      .single()
+      const { data, error } = await supabase
+        .from('facilities')
+        .update({ or_hourly_rate: newRate })
+        .eq('id', selectedFacilityId)
+        .select('id, name, or_hourly_rate')
+        .single()
 
-    if (error) {
-      showToast({
-        type: 'error',
-        title: 'Error updating OR rate',
-        message: error instanceof Error ? error.message : 'Error updating OR rate'
+      if (error) throw error
+
+      if (!data) {
+        showToast({ type: 'error', title: 'Failed to update OR rate', message: 'Update returned no data - RLS may be blocking' })
+        return
+      }
+
+      setCurrentFacility(prev => prev ? { ...prev, or_hourly_rate: data.or_hourly_rate } : null)
+      
+      if (isGlobalAdmin) {
+        setFacilities(prev => prev.map(f => 
+          f.id === selectedFacilityId 
+            ? { ...f, or_hourly_rate: data.or_hourly_rate }
+            : f
+        ))
+      }
+      
+      setEditingOrRate(false)
+
+      await genericAuditLog(supabase, 'facility.or_rate_updated', {
+        targetType: 'facility',
+        targetId: selectedFacilityId,
+        targetLabel: currentFacility?.name || '',
+        oldValues: { or_hourly_rate: oldRate },
+        newValues: { or_hourly_rate: data.or_hourly_rate },
+        facilityId: selectedFacilityId,
       })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to update OR rate', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
       setSaving(false)
-      return
     }
-
-    if (!data) {
-      showToast({
-        type: 'error',
-        title: 'Error updating OR rate',
-        message: 'Update returned no data - RLS may be blocking'
-      })
-      setSaving(false)
-      return
-    }
-
-    // Update local state with the actual returned value
-    setCurrentFacility(prev => prev ? { ...prev, or_hourly_rate: data.or_hourly_rate } : null)
-    
-    // Also update the facilities array (for global admins)
-    if (isGlobalAdmin) {
-      setFacilities(prev => prev.map(f => 
-        f.id === selectedFacilityId 
-          ? { ...f, or_hourly_rate: data.or_hourly_rate }
-          : f
-      ))
-    }
-    
-    setEditingOrRate(false)
-
-    // Audit log
-    await genericAuditLog(supabase, 'facility.or_rate_updated', {
-      targetType: 'facility',
-      targetId: selectedFacilityId,
-      targetLabel: currentFacility?.name || '',
-      oldValues: { or_hourly_rate: oldRate },
-      newValues: { or_hourly_rate: data.or_hourly_rate },
-      facilityId: selectedFacilityId,
-    })
-
-    setSaving(false)
   }
 
   // =====================================================
@@ -315,111 +322,111 @@ export default function FinancialsSettingsPage() {
     if (!selectedProcedure || !selectedFacilityId) return
     setSaving(true)
 
-    const softGoodsCost = procedureForm.soft_goods_cost ? parseFloat(procedureForm.soft_goods_cost) : null
-    const hardGoodsCost = procedureForm.hard_goods_cost ? parseFloat(procedureForm.hard_goods_cost) : null
-    const defaultReimbursement = procedureForm.default_reimbursement ? parseFloat(procedureForm.default_reimbursement) : null
+    try {
+      const softGoodsCost = procedureForm.soft_goods_cost ? parseFloat(procedureForm.soft_goods_cost) : null
+      const hardGoodsCost = procedureForm.hard_goods_cost ? parseFloat(procedureForm.hard_goods_cost) : null
+      const defaultReimbursement = procedureForm.default_reimbursement ? parseFloat(procedureForm.default_reimbursement) : null
 
-    // Update procedure costs
-    const { error: procedureError } = await supabase
-      .from('procedure_types')
-      .update({
-        soft_goods_cost: softGoodsCost,
-        hard_goods_cost: hardGoodsCost,
+      // Update procedure costs
+      const { error: procedureError } = await supabase
+        .from('procedure_types')
+        .update({
+          soft_goods_cost: softGoodsCost,
+          hard_goods_cost: hardGoodsCost,
+        })
+        .eq('id', selectedProcedure.id)
+
+      if (procedureError) throw procedureError
+
+      // Audit log for costs
+      await genericAuditLog(supabase, 'procedure_type.costs_updated', {
+        targetType: 'procedure_type',
+        targetId: selectedProcedure.id,
+        targetLabel: selectedProcedure.name,
+        oldValues: {
+          soft_goods_cost: selectedProcedure.soft_goods_cost,
+          hard_goods_cost: selectedProcedure.hard_goods_cost,
+        },
+        newValues: {
+          soft_goods_cost: softGoodsCost,
+          hard_goods_cost: hardGoodsCost,
+        },
+        facilityId: selectedFacilityId,
       })
-      .eq('id', selectedProcedure.id)
 
-    if (procedureError) {
-      showToast({
-  type: 'error',
-  title: 'Error updating procedure costs:',
-  message: `Error updating procedure costs: ${procedureError}`
-})
-      setSaving(false)
-      return
-    }
-
-    // Audit log for costs
-    await genericAuditLog(supabase, 'procedure_type.costs_updated', {
-      targetType: 'procedure_type',
-      targetId: selectedProcedure.id,
-      targetLabel: selectedProcedure.name,
-      oldValues: {
-        soft_goods_cost: selectedProcedure.soft_goods_cost,
-        hard_goods_cost: selectedProcedure.hard_goods_cost,
-      },
-      newValues: {
-        soft_goods_cost: softGoodsCost,
-        hard_goods_cost: hardGoodsCost,
-      },
-      facilityId: selectedFacilityId,
-    })
-
-    // Handle default reimbursement
-    const existingDefault = reimbursements.find(
-      r => r.procedure_type_id === selectedProcedure.id && r.payer_id === null
-    )
-
-    if (defaultReimbursement !== null) {
-      if (existingDefault) {
-        // Update existing
-        await supabase
-          .from('procedure_reimbursements')
-          .update({ reimbursement: defaultReimbursement, effective_date: new Date().toISOString().split('T')[0] })
-          .eq('id', existingDefault.id)
-      } else {
-        // Insert new
-        await supabase
-          .from('procedure_reimbursements')
-          .insert({
-            procedure_type_id: selectedProcedure.id,
-            payer_id: null,
-            reimbursement: defaultReimbursement,
-            effective_date: new Date().toISOString().split('T')[0],
-          })
-      }
-    } else if (existingDefault) {
-      // Remove if cleared
-      await supabase
-        .from('procedure_reimbursements')
-        .delete()
-        .eq('id', existingDefault.id)
-    }
-
-    // Handle payer-specific reimbursements
-    for (const payerRate of payerReimbursements) {
-      const existingPayerRate = reimbursements.find(
-        r => r.procedure_type_id === selectedProcedure.id && r.payer_id === payerRate.payer_id
+      // Handle default reimbursement
+      const existingDefault = reimbursements.find(
+        r => r.procedure_type_id === selectedProcedure.id && r.payer_id === null
       )
-      const reimbursementValue = payerRate.reimbursement ? parseFloat(payerRate.reimbursement) : null
 
-      if (reimbursementValue !== null) {
-        if (existingPayerRate) {
-          await supabase
+      if (defaultReimbursement !== null) {
+        if (existingDefault) {
+          const { error: updateErr } = await supabase
             .from('procedure_reimbursements')
-            .update({ reimbursement: reimbursementValue, effective_date: new Date().toISOString().split('T')[0] })
-            .eq('id', existingPayerRate.id)
+            .update({ reimbursement: defaultReimbursement, effective_date: new Date().toISOString().split('T')[0] })
+            .eq('id', existingDefault.id)
+          if (updateErr) throw updateErr
         } else {
-          await supabase
+          const { error: insertErr } = await supabase
             .from('procedure_reimbursements')
             .insert({
               procedure_type_id: selectedProcedure.id,
-              payer_id: payerRate.payer_id,
-              reimbursement: reimbursementValue,
+              payer_id: null,
+              reimbursement: defaultReimbursement,
               effective_date: new Date().toISOString().split('T')[0],
             })
+          if (insertErr) throw insertErr
         }
-      } else if (existingPayerRate) {
-        await supabase
+      } else if (existingDefault) {
+        const { error: delErr } = await supabase
           .from('procedure_reimbursements')
           .delete()
-          .eq('id', existingPayerRate.id)
+          .eq('id', existingDefault.id)
+        if (delErr) throw delErr
       }
-    }
 
-    // Refresh data
-    await fetchData(selectedFacilityId)
-    closeProcedureSlideOut()
-    setSaving(false)
+      // Handle payer-specific reimbursements
+      for (const payerRate of payerReimbursements) {
+        const existingPayerRate = reimbursements.find(
+          r => r.procedure_type_id === selectedProcedure.id && r.payer_id === payerRate.payer_id
+        )
+        const reimbursementValue = payerRate.reimbursement ? parseFloat(payerRate.reimbursement) : null
+
+        if (reimbursementValue !== null) {
+          if (existingPayerRate) {
+            const { error: updateErr } = await supabase
+              .from('procedure_reimbursements')
+              .update({ reimbursement: reimbursementValue, effective_date: new Date().toISOString().split('T')[0] })
+              .eq('id', existingPayerRate.id)
+            if (updateErr) throw updateErr
+          } else {
+            const { error: insertErr } = await supabase
+              .from('procedure_reimbursements')
+              .insert({
+                procedure_type_id: selectedProcedure.id,
+                payer_id: payerRate.payer_id,
+                reimbursement: reimbursementValue,
+                effective_date: new Date().toISOString().split('T')[0],
+              })
+            if (insertErr) throw insertErr
+          }
+        } else if (existingPayerRate) {
+          const { error: delErr } = await supabase
+            .from('procedure_reimbursements')
+            .delete()
+            .eq('id', existingPayerRate.id)
+          if (delErr) throw delErr
+        }
+      }
+
+      // Refresh data
+      await fetchData(selectedFacilityId)
+      closeProcedureSlideOut()
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to save procedure financials', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const addPayerReimbursement = () => {
@@ -467,17 +474,19 @@ export default function FinancialsSettingsPage() {
     if (!payerName.trim() || !selectedFacilityId) return
     setSaving(true)
 
-    if (payerModalMode === 'add') {
-      const { data, error } = await supabase
-        .from('payers')
-        .insert({
-          name: payerName.trim(),
-          facility_id: selectedFacilityId,
-        })
-        .select()
-        .single()
+    try {
+      if (payerModalMode === 'add') {
+        const { data, error } = await supabase
+          .from('payers')
+          .insert({
+            name: payerName.trim(),
+            facility_id: selectedFacilityId,
+          })
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setPayers([...payers, data].sort((a, b) => a.name.localeCompare(b.name)))
         
         await genericAuditLog(supabase, 'payer.created', {
@@ -487,14 +496,14 @@ export default function FinancialsSettingsPage() {
           newValues: { name: payerName.trim() },
           facilityId: selectedFacilityId,
         })
-      }
-    } else if (selectedPayer) {
-      const { error } = await supabase
-        .from('payers')
-        .update({ name: payerName.trim() })
-        .eq('id', selectedPayer.id)
+      } else if (selectedPayer) {
+        const { error } = await supabase
+          .from('payers')
+          .update({ name: payerName.trim() })
+          .eq('id', selectedPayer.id)
 
-      if (!error) {
+        if (error) throw error
+
         setPayers(payers.map(p => 
           p.id === selectedPayer.id ? { ...p, name: payerName.trim() } : p
         ).sort((a, b) => a.name.localeCompare(b.name)))
@@ -508,23 +517,27 @@ export default function FinancialsSettingsPage() {
           facilityId: selectedFacilityId,
         })
       }
-    }
 
-    closePayerModal()
-    setSaving(false)
+      closePayerModal()
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to save payer', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleDeletePayer = async (payerId: string) => {
     const payer = payers.find(p => p.id === payerId)
     if (!payer || !selectedFacilityId) return
 
-    // Soft delete
-    const { error } = await supabase
-      .from('payers')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', payerId)
+    try {
+      const { error } = await supabase
+        .from('payers')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', payerId)
 
-    if (!error) {
+      if (error) throw error
+
       setPayers(payers.map(p => 
         p.id === payerId ? { ...p, deleted_at: new Date().toISOString() } : p
       ))
@@ -535,21 +548,25 @@ export default function FinancialsSettingsPage() {
         targetLabel: payer.name,
         facilityId: selectedFacilityId,
       })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to delete payer', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setDeletePayerConfirm(null)
     }
-
-    setDeletePayerConfirm(null)
   }
 
   const handleRestorePayer = async (payerId: string) => {
     const payer = payers.find(p => p.id === payerId)
     if (!payer || !selectedFacilityId) return
 
-    const { error } = await supabase
-      .from('payers')
-      .update({ deleted_at: null })
-      .eq('id', payerId)
+    try {
+      const { error } = await supabase
+        .from('payers')
+        .update({ deleted_at: null })
+        .eq('id', payerId)
 
-    if (!error) {
+      if (error) throw error
+
       setPayers(payers.map(p => 
         p.id === payerId ? { ...p, deleted_at: null } : p
       ))
@@ -560,6 +577,8 @@ export default function FinancialsSettingsPage() {
         targetLabel: payer.name,
         facilityId: selectedFacilityId,
       })
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to restore payer', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
@@ -643,12 +662,7 @@ export default function FinancialsSettingsPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading facility data..." />
           ) : !selectedFacilityId ? (
             <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
               <p className="text-slate-500">No facility selected</p>

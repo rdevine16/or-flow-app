@@ -210,6 +210,7 @@ export default function GeneralOverviewPage() {
   const fetchData = useCallback(async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
     try {
       // Fetch facility details
@@ -262,10 +263,12 @@ export default function GeneralOverviewPage() {
         casesThisMonth: casesThisMonthRes.count || 0,
       })
     } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Failed to load facility data'
+      setError('Failed to load facility data. Please try again.')
       showToast({
         type: 'error',
         title: 'Failed to load facility data',
-        message: error instanceof Error ? error.message : 'Failed to load facility data'
+        message: msg
       })
     } finally {
       setLoading(false)

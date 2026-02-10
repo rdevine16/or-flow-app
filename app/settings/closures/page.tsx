@@ -75,24 +75,31 @@ export default function FacilityClosuresPage() {
   // Load user and facility
   useEffect(() => {
     async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
-      }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/login')
+          return
+        }
 
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id, facilities(name)')
-        .eq('id', user.id)
-        .single()
+        const { data: userData, error: userErr } = await supabase
+          .from('users')
+          .select('facility_id, facilities(name)')
+          .eq('id', user.id)
+          .single()
 
-      if (userData?.facility_id) {
-        setFacilityId(userData.facility_id)
-        const facilityData = userData.facilities as any
-        setFacilityName(facilityData?.name || '')
+        if (userErr) throw userErr
+
+        if (userData?.facility_id) {
+          setFacilityId(userData.facility_id)
+          const facilityData = userData.facilities as any
+          setFacilityName(facilityData?.name || '')
+        }
+      } catch (err) {
+        console.error('Failed to load user:', err)
+      } finally {
+        setPageLoading(false)
       }
-      setPageLoading(false)
     }
     loadUser()
   }, [supabase, router])
@@ -199,9 +206,7 @@ export default function FacilityClosuresPage() {
   return (
     <DashboardLayout>
       {pageLoading ? (
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
+        <PageLoader message="Loading closures..." />
       ) : (
         <div className="space-y-6">
           {/* Page Header */}

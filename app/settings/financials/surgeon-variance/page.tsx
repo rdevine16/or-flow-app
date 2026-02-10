@@ -112,49 +112,56 @@ export default function SurgeonVariancePage() {
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
-    const today = getTodayDate()
+    try {
+      const today = getTodayDate()
 
-    const [surgeonsRes, proceduresRes, categoriesRes, surgeonItemsRes, procedureItemsRes] = await Promise.all([
-      supabase
-        .from('users')
-        .select('id, first_name, last_name')
-        .eq('facility_id', effectiveFacilityId)
-        .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id)
-        .order('last_name'),
-      supabase
-        .from('procedure_types')
-        .select('id, name')
-        .eq('facility_id', effectiveFacilityId)
-        .is('deleted_at', null)
-        .order('name'),
-      supabase
-        .from('cost_categories')
-        .select('id, name, type')
-        .eq('facility_id', effectiveFacilityId)
-        .eq('is_active', true)
-        .is('deleted_at', null) 
-        .order('type')
-        .order('display_order'),
-      // CHANGED: Only fetch ACTIVE records (effective_to IS NULL or in future)
-      supabase
-        .from('surgeon_cost_items')
-        .select('id, surgeon_id, procedure_type_id, cost_category_id, amount, effective_from, effective_to')
-        .eq('facility_id', effectiveFacilityId)
-        .or(`effective_to.is.null,effective_to.gt.${today}`),
-      supabase
-        .from('procedure_cost_items')
-        .select('id, procedure_type_id, cost_category_id, amount')
-        .eq('facility_id', effectiveFacilityId),
-    ])
+      const [surgeonsRes, proceduresRes, categoriesRes, surgeonItemsRes, procedureItemsRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, first_name, last_name')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('role_id', (await supabase.from('user_roles').select('id').eq('name', 'surgeon').single()).data?.id)
+          .order('last_name'),
+        supabase
+          .from('procedure_types')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId)
+          .is('deleted_at', null)
+          .order('name'),
+        supabase
+          .from('cost_categories')
+          .select('id, name, type')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('is_active', true)
+          .is('deleted_at', null) 
+          .order('type')
+          .order('display_order'),
+        supabase
+          .from('surgeon_cost_items')
+          .select('id, surgeon_id, procedure_type_id, cost_category_id, amount, effective_from, effective_to')
+          .eq('facility_id', effectiveFacilityId)
+          .or(`effective_to.is.null,effective_to.gt.${today}`),
+        supabase
+          .from('procedure_cost_items')
+          .select('id, procedure_type_id, cost_category_id, amount')
+          .eq('facility_id', effectiveFacilityId),
+      ])
 
-    if (surgeonsRes.data) setSurgeons(surgeonsRes.data)
-    if (proceduresRes.data) setProcedures(proceduresRes.data)
-    if (categoriesRes.data) setCostCategories(categoriesRes.data)
-    if (surgeonItemsRes.data) setSurgeonCostItems(surgeonItemsRes.data)
-    if (procedureItemsRes.data) setProcedureCostItems(procedureItemsRes.data)
+      if (surgeonsRes.error) throw surgeonsRes.error
 
-    setLoading(false)
+      if (surgeonsRes.data) setSurgeons(surgeonsRes.data)
+      if (proceduresRes.data) setProcedures(proceduresRes.data)
+      if (categoriesRes.data) setCostCategories(categoriesRes.data)
+      if (surgeonItemsRes.data) setSurgeonCostItems(surgeonItemsRes.data)
+      if (procedureItemsRes.data) setProcedureCostItems(procedureItemsRes.data)
+    } catch (err) {
+      setError('Failed to load surgeon variance data. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load data', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Group surgeon cost items by surgeon+procedure
@@ -392,12 +399,7 @@ export default function SurgeonVariancePage() {
           description="Configure surgeon-specific cost overrides"
         >
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading surgeon variance data..." />
           ) : costCategories.length === 0 ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
               <h3 className="text-lg font-medium text-amber-900 mb-2">Set Up Cost Categories First</h3>

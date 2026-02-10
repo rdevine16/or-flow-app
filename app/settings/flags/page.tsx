@@ -1,4 +1,5 @@
 // app/settings/flags/page.tsx
+// app/settings/flags/page.tsx
 // ORbit Flag System Settings — Phase 2
 // Threshold Flag Rules — auto-detection rules with adjustable thresholds
 // Delay types are managed on the dedicated delay types settings page.
@@ -101,16 +102,23 @@ export default function FlagsSettingsPage() {
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
-    const { data } = await supabase
-      .from('flag_rules')
-      .select('*')
-      .eq('facility_id', effectiveFacilityId)
-      .order('display_order', { ascending: true })
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('flag_rules')
+        .select('*')
+        .eq('facility_id', effectiveFacilityId)
+        .order('display_order', { ascending: true })
 
-    if (data) setRules(data)
-
-    setLoading(false)
+      if (fetchErr) throw fetchErr
+      if (data) setRules(data)
+    } catch (err) {
+      setError('Failed to load flag rules. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load flag rules', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   // =====================================================
@@ -119,59 +127,63 @@ export default function FlagsSettingsPage() {
 
   const toggleRuleEnabled = async (rule: FlagRule) => {
     const newEnabled = !rule.is_enabled
-    // Optimistic update
     setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_enabled: newEnabled } : r))
     setSaving(rule.id)
 
-    const { error } = await supabase
-      .from('flag_rules')
-      .update({ is_enabled: newEnabled })
-      .eq('id', rule.id)
+    try {
+      const { error } = await supabase
+        .from('flag_rules')
+        .update({ is_enabled: newEnabled })
+        .eq('id', rule.id)
 
-    if (error) {
-      // Revert
+      if (error) throw error
+      showToast({ type: 'success', title: `${rule.name} ${newEnabled ? 'enabled' : 'disabled'}` })
+    } catch (err) {
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_enabled: !newEnabled } : r))
       showToast({ type: 'error', title: 'Failed to update rule' })
-    } else {
-      showToast({ type: 'success', title: `${rule.name} ${newEnabled ? 'enabled' : 'disabled'}` })
+    } finally {
+      setSaving(null)
     }
-    setSaving(null)
   }
 
   const updateRuleSeverity = async (rule: FlagRule, severity: Severity) => {
     setRules(prev => prev.map(r => r.id === rule.id ? { ...r, severity } : r))
     setSaving(rule.id)
 
-    const { error } = await supabase
-      .from('flag_rules')
-      .update({ severity })
-      .eq('id', rule.id)
+    try {
+      const { error } = await supabase
+        .from('flag_rules')
+        .update({ severity })
+        .eq('id', rule.id)
 
-    if (error) {
+      if (error) throw error
+      showToast({ type: 'success', title: `Severity updated to ${severity}` })
+    } catch (err) {
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, severity: rule.severity } : r))
       showToast({ type: 'error', title: 'Failed to update severity' })
-    } else {
-      showToast({ type: 'success', title: `Severity updated to ${severity}` })
+    } finally {
+      setSaving(null)
     }
-    setSaving(null)
   }
 
   const updateRuleThreshold = async (rule: FlagRule, thresholdType: ThresholdType, thresholdValue: number) => {
     setRules(prev => prev.map(r => r.id === rule.id ? { ...r, threshold_type: thresholdType, threshold_value: thresholdValue } : r))
     setSaving(rule.id)
 
-    const { error } = await supabase
-      .from('flag_rules')
-      .update({ threshold_type: thresholdType, threshold_value: thresholdValue })
-      .eq('id', rule.id)
+    try {
+      const { error } = await supabase
+        .from('flag_rules')
+        .update({ threshold_type: thresholdType, threshold_value: thresholdValue })
+        .eq('id', rule.id)
 
-    if (error) {
+      if (error) throw error
+      showToast({ type: 'success', title: 'Threshold updated' })
+    } catch (err) {
       setRules(prev => prev.map(r => r.id === rule.id ? { ...r, threshold_type: rule.threshold_type, threshold_value: rule.threshold_value } : r))
       showToast({ type: 'error', title: 'Failed to update threshold' })
-    } else {
-      showToast({ type: 'success', title: 'Threshold updated' })
+    } finally {
+      setSaving(null)
     }
-    setSaving(null)
   }
 
   // =====================================================
@@ -213,9 +225,7 @@ export default function FlagsSettingsPage() {
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
-            <div className="flex items-center justify-center py-16">
-              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
+            <PageLoader message="Loading flag rules..." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>

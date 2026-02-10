@@ -68,23 +68,23 @@ export default function PayersPage() {
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
-    const { data, error } = await supabase
-      .from('payers')
-      .select('id, name, facility_id, deleted_at, deleted_by')
-      .eq('facility_id', effectiveFacilityId)
-      .order('name')
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('payers')
+        .select('id, name, facility_id, deleted_at, deleted_by')
+        .eq('facility_id', effectiveFacilityId)
+        .order('name')
 
-
-    if (data) setPayers(data)
-    if (error) {
-      showToast({
-        type: 'error',
-        title: 'Error Fetching Payers',
-        message: error.message || 'Failed to fetch payers'
-      })
+      if (fetchErr) throw fetchErr
+      if (data) setPayers(data)
+    } catch (err) {
+      setError('Failed to load payers. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load payers', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const openAddModal = () => {
@@ -263,9 +263,7 @@ await genericAuditLog(supabase, 'payer.restored', {
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading payers..." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>
@@ -321,9 +319,7 @@ await genericAuditLog(supabase, 'payer.restored', {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading payer data..." />
           ) : activePayers.length === 0 && inactivePayers.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
               <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

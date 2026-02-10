@@ -97,52 +97,60 @@ export default function ProcedurePricingPage() {
   const fetchData = async () => {
     if (!effectiveFacilityId) return
     setLoading(true)
+    setError(null)
 
-    const [proceduresRes, categoriesRes, costItemsRes, reimbursementsRes, payersRes, facilityRes] = await Promise.all([
-      supabase
-        .from('procedure_types')
-        .select('id, name, facility_id')
-        .eq('facility_id', effectiveFacilityId)
-        .order('name'),
-      supabase
-        .from('cost_categories')
-        .select('id, name, type, description')
-        .eq('facility_id', effectiveFacilityId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('type')
-        .order('display_order'),
-      supabase
-        .from('procedure_cost_items')
-        .select('*, cost_category:cost_categories(id, name, type)')
-        .eq('facility_id', effectiveFacilityId),
-      supabase
-        .from('procedure_reimbursements')
-        .select('*, payer:payers(id, name)')
-        .eq('facility_id', effectiveFacilityId),
-      supabase
-        .from('payers')
-        .select('id, name')
-        .eq('facility_id', effectiveFacilityId)
-        .order('name'),
-      supabase
-        .from('facilities')
-        .select('or_hourly_rate')
-        .eq('id', effectiveFacilityId)
-        .single(),
-    ])
+    try {
+      const [proceduresRes, categoriesRes, costItemsRes, reimbursementsRes, payersRes, facilityRes] = await Promise.all([
+        supabase
+          .from('procedure_types')
+          .select('id, name, facility_id')
+          .eq('facility_id', effectiveFacilityId)
+          .order('name'),
+        supabase
+          .from('cost_categories')
+          .select('id, name, type, description')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('is_active', true)
+          .is('deleted_at', null)
+          .order('type')
+          .order('display_order'),
+        supabase
+          .from('procedure_cost_items')
+          .select('*, cost_category:cost_categories(id, name, type)')
+          .eq('facility_id', effectiveFacilityId),
+        supabase
+          .from('procedure_reimbursements')
+          .select('*, payer:payers(id, name)')
+          .eq('facility_id', effectiveFacilityId),
+        supabase
+          .from('payers')
+          .select('id, name')
+          .eq('facility_id', effectiveFacilityId)
+          .order('name'),
+        supabase
+          .from('facilities')
+          .select('or_hourly_rate')
+          .eq('id', effectiveFacilityId)
+          .single(),
+      ])
 
-    if (proceduresRes.data) setProcedures(proceduresRes.data)
-    if (categoriesRes.data) setCostCategories(categoriesRes.data)
-    if (costItemsRes.data) setProcedureCostItems(costItemsRes.data)
-    if (reimbursementsRes.data) setProcedureReimbursements(reimbursementsRes.data)
-    if (payersRes.data) setPayers(payersRes.data)
-    if (facilityRes.data) {
-      setFacilitySettings(facilityRes.data)
-      setOrRateValue(facilityRes.data.or_hourly_rate?.toString() || '')
+      if (proceduresRes.error) throw proceduresRes.error
+
+      if (proceduresRes.data) setProcedures(proceduresRes.data)
+      if (categoriesRes.data) setCostCategories(categoriesRes.data)
+      if (costItemsRes.data) setProcedureCostItems(costItemsRes.data)
+      if (reimbursementsRes.data) setProcedureReimbursements(reimbursementsRes.data)
+      if (payersRes.data) setPayers(payersRes.data)
+      if (facilityRes.data) {
+        setFacilitySettings(facilityRes.data)
+        setOrRateValue(facilityRes.data.or_hourly_rate?.toString() || '')
+      }
+    } catch (err) {
+      setError('Failed to load procedure pricing. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load pricing data', message: err instanceof Error ? err.message : 'Please try again' })
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const openProcedurePanel = (procedure: ProcedureType) => {
@@ -374,9 +382,7 @@ export default function ProcedurePricingPage() {
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Procedure Pricing" description="Configure costs and reimbursements for each procedure type">
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading procedure pricing..." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>
@@ -402,9 +408,7 @@ export default function ProcedurePricingPage() {
       <Container>
         <SettingsLayout title="Procedure Pricing" description="Configure costs and reimbursements for each procedure type">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading pricing data..." />
           ) : (
             <div className="space-y-6">
               {/* OR Hourly Rate Card */}
