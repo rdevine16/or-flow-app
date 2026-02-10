@@ -220,6 +220,75 @@ export function formatDuration(
 }
 
 // ========================================
+// Timestamp Formatters
+// ========================================
+
+/**
+ * Format an ISO timestamp to 12-hour display.
+ * @example formatTimestamp('2025-01-15T14:30:00Z') => "2:30 PM"
+ */
+export function formatTimestamp(
+  isoString: string | null | undefined,
+  options: { fallback?: string } = {}
+): string {
+  const { fallback = '--:--' } = options
+  if (!isoString) return fallback
+  try {
+    return new Date(isoString).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Format an ISO timestamp to 24-hour short display.
+ * @example formatTimestamp24('2025-01-15T14:30:00Z') => "14:30"
+ */
+export function formatTimestamp24(
+  isoString: string | null | undefined,
+  options: { fallback?: string } = {}
+): string {
+  const { fallback = '--:--' } = options
+  if (!isoString) return fallback
+  try {
+    return new Date(isoString).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: false,
+    })
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Format milliseconds to elapsed time display (H:MM:SS).
+ * @example formatElapsedMs(3661000) => "1:01:01"
+ */
+export function formatElapsedMs(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+/**
+ * Format minutes to H:MM:SS display (for averages/targets).
+ * @example formatMinutesHMS(95) => "1:35:00"
+ */
+export function formatMinutesHMS(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = Math.round(mins % 60)
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:00`
+  return `0:${m.toString().padStart(2, '0')}:00`
+}
+
+// ========================================
 // Case Status Helpers
 // ========================================
 

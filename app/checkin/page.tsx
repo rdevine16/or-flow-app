@@ -11,7 +11,9 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { formatDisplayTime, formatTimestamp } from '@/lib/formatters'
 
 // =====================================================
 // TYPES
@@ -66,21 +68,6 @@ type FilterStatus = 'all' | 'expected' | 'checked_in' | 'in_pre_op' | 'ready_for
 // =====================================================
 // HELPER FUNCTIONS
 // =====================================================
-
-function formatTime(timeString: string | null): string {
-  if (!timeString) return '--:--'
-  const [hours, minutes] = timeString.split(':')
-  const hour = parseInt(hours)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour % 12 || 12
-  return `${displayHour}:${minutes} ${ampm}`
-}
-
-function formatDateTime(isoString: string | null): string {
-  if (!isoString) return '--:--'
-  const date = new Date(isoString)
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-}
 
 function getStatusColor(statusName: string): string {
   const colors: Record<string, string> = {
@@ -155,7 +142,7 @@ function CheckInRow({ checkin, statuses, onStatusChange, onOpenDetail }: CheckIn
           {/* Time Column */}
           <div className="w-20 text-center">
             <div className="text-lg font-semibold text-slate-900">
-              {formatTime(checkin.case.start_time)}
+              {formatDisplayTime(checkin.case.start_time, { fallback: '--:--' })}
             </div>
             <div className={`text-xs ${isLate && checkin.patient_status.name === 'expected' ? 'text-red-600 font-medium' : 'text-slate-400'}`}>
               {checkin.case.or_room?.name || 'No Room'}
@@ -193,13 +180,13 @@ function CheckInRow({ checkin, statuses, onStatusChange, onOpenDetail }: CheckIn
           {/* Expected/Actual Arrival */}
           {checkin.patient_status.name === 'expected' && checkin.expected_arrival_time && (
             <div className={`text-xs px-2 py-1 rounded ${isLate ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-500'}`}>
-              {isLate ? 'Late' : 'Expected'}: {formatDateTime(checkin.expected_arrival_time)}
+              {isLate ? 'Late' : 'Expected'}: {formatTimestamp(checkin.expected_arrival_time)}
             </div>
           )}
 
           {checkin.actual_arrival_time && (
             <div className="text-xs px-2 py-1 rounded bg-green-50 text-green-600">
-              Arrived: {formatDateTime(checkin.actual_arrival_time)}
+              Arrived: {formatTimestamp(checkin.actual_arrival_time)}
             </div>
           )}
 
@@ -374,14 +361,14 @@ function CheckInDetailModal({
             <div className="p-4 bg-slate-50 rounded-xl">
               <div className="text-sm text-slate-500 mb-1">Surgery Time</div>
               <div className="text-lg font-semibold text-slate-900">
-                {formatTime(checkin.case.start_time)}
+                {formatDisplayTime(checkin.case.start_time, { fallback: '--:--' })}
               </div>
             </div>
             <div className="p-4 bg-slate-50 rounded-xl">
               <div className="text-sm text-slate-500 mb-1">Expected Arrival</div>
               <div className="text-lg font-semibold text-slate-900">
                 {checkin.expected_arrival_time
-                  ? formatDateTime(checkin.expected_arrival_time)
+                  ? formatTimestamp(checkin.expected_arrival_time)
                   : '--:--'}
               </div>
             </div>
@@ -522,13 +509,14 @@ function CheckInDetailModal({
 export default function CheckInPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, loading: userLoading } = useUser()
+  const { userData, loading: userLoading, effectiveFacilityId } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
   const [checkins, setCheckins] = useState<CheckinRecord[]>([])
   const [statuses, setStatuses] = useState<PatientStatus[]>([])
   const [checklistFields, setChecklistFields] = useState<ChecklistField[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const today = new Date()
     return today.toISOString().split('T')[0]
@@ -538,9 +526,10 @@ export default function CheckInPage() {
 
   // Fetch data
   const fetchData = useCallback(async () => {
-    if (!userData?.facilityId) return
+    if (!effectiveFacilityId) return
 
     setLoading(true)
+    setError(null)
     try {
       // Fetch patient statuses
       const { data: statusData } = await supabase
@@ -555,7 +544,7 @@ export default function CheckInPage() {
       const { data: fieldData } = await supabase
         .from('preop_checklist_fields')
         .select('*')
-        .eq('facility_id', userData.facilityId)
+        .eq('facility_id', effectiveFacilityId)
         .eq('is_active', true)
         .is('deleted_at', null)
         .order('display_order')
@@ -565,12 +554,12 @@ export default function CheckInPage() {
       // IMPORTANT: Ensure checkin records exist for today's cases
       // This creates records for any cases that don't have one yet
       await supabase.rpc('ensure_checkin_records', {
-        p_facility_id: userData.facilityId,
+        p_facility_id: effectiveFacilityId,
         p_date: selectedDate
       })
 
       // Fetch checkins for the selected date
-      const { data: checkinData, error } = await supabase
+      const { data: checkinData, error: fetchError } = await supabase
         .from('patient_checkins')
         .select(`
           *,
@@ -586,38 +575,33 @@ export default function CheckInPage() {
             patient:patients(id, identifier, first_name, last_name)
           )
         `)
-        .eq('facility_id', userData.facilityId)
+        .eq('facility_id', effectiveFacilityId)
         .eq('case.scheduled_date', selectedDate)
         .not('case', 'is', null)
         .order('case(start_time)', { ascending: true })
 
-      if (error) {
-showToast({
-  type: 'error',
-  title: 'Error fetching checkins:',
-  message: error instanceof Error ? error.message : 'Error fetching checkins:'
-})
-      } else {
-        // Filter out any null cases (shouldn't happen but safety)
-        const validCheckins = (checkinData || []).filter(c => c.case !== null)
-        setCheckins(validCheckins as CheckinRecord[])
-      }
+      if (fetchError) throw fetchError
+
+      // Filter out any null cases (shouldn't happen but safety)
+      const validCheckins = (checkinData || []).filter(c => c.case !== null)
+      setCheckins(validCheckins as CheckinRecord[])
     } catch (err) {
+      setError('Failed to load check-in data. Please try again.')
       showToast({
-  type: 'error',
-  title: 'Error fetching data:',
-  message: err instanceof Error ? err.message : 'Error fetching data:'
-})
+        type: 'error',
+        title: 'Failed to load check-ins',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
     } finally {
       setLoading(false)
     }
-  }, [userData?.facilityId, selectedDate, supabase])
+  }, [effectiveFacilityId, selectedDate, supabase, showToast])
 
   useEffect(() => {
-    if (!userLoading && userData?.facilityId) {
+    if (!userLoading && effectiveFacilityId) {
       fetchData()
     }
-  }, [userLoading, userData?.facilityId, fetchData])
+  }, [userLoading, effectiveFacilityId, fetchData])
 
   // Handle status change
   const handleStatusChange = async (checkinId: string, newStatusId: string) => {
@@ -655,10 +639,10 @@ showToast({
 
     if (error) {
       showToast({
-  type: 'error',
-  title: 'Error updating status:',
-  message: error instanceof Error ? error.message : 'Error updating status:'
-})
+        type: 'error',
+        title: 'Failed to update status',
+        message: error instanceof Error ? error.message : 'Please try again'
+      })
       // Revert on error
       setCheckins(prev => prev.map(c =>
         c.id === checkinId ? checkin : c
@@ -671,7 +655,7 @@ showToast({
         checkinId,
         oldStatus.display_name,
         newStatus.display_name,
-        userData?.facilityId || ''
+        effectiveFacilityId || ''
       )
     }
   }
@@ -689,8 +673,8 @@ showToast({
     if (error) {
       showToast({
         type: 'error',
-        title: 'Error updating checklist:',
-        message: error instanceof Error ? error.message : 'Error updating checklist:'
+        title: 'Failed to update checklist',
+        message: error instanceof Error ? error.message : 'Please try again'
       })
     }
   }
@@ -706,8 +690,8 @@ showToast({
       if (error) {
         showToast({
           type: 'error',
-          title: 'Error generating escort link:',
-          message: error instanceof Error ? error.message : 'Error generating escort link:'
+          title: 'Failed to generate escort link',
+          message: error instanceof Error ? error.message : 'Please try again'
         })
         return null
       }
@@ -723,7 +707,7 @@ showToast({
           checkin.case.case_number,
           checkinId,
           token,
-          userData?.facilityId || '',
+          effectiveFacilityId || '',
           24
         )
       }
@@ -731,10 +715,10 @@ showToast({
       return fullUrl
     } catch (err) {
       showToast({
-  type: 'error',
-  title: 'Error generating escort link:',
-  message: err instanceof Error ? err.message : 'Error generating escort link:'
-})
+        type: 'error',
+        title: 'Failed to generate escort link',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
       return null
     }
   }
@@ -754,8 +738,8 @@ showToast({
     if (error) {
       showToast({
         type: 'error',
-        title: 'Error updating escort info:',
-        message: error instanceof Error ? error.message : 'Error updating escort info:'
+        title: 'Failed to update escort info',
+        message: error instanceof Error ? error.message : 'Please try again'
       })
     }
   }
@@ -831,6 +815,13 @@ showToast({
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Error Banner */}
+        <ErrorBanner
+          message={error}
+          onRetry={fetchData}
+          onDismiss={() => setError(null)}
+        />
+
         {/* Trial Banner */}
         <TrialBanner feature={FEATURES.PATIENT_CHECKIN} />
 
