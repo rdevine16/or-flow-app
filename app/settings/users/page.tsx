@@ -1,3 +1,4 @@
+// This page allows facility admins and global admins to manage cancellation reasons that staff can select when cancelling a surgical case. Reasons can be categorized, and archived if no longer relevant. Auditing is implemented for all create, update, delete, and restore actions to maintain a history of changes for compliance and accountability purposes.
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -10,6 +11,8 @@ import Badge from '@/components/ui/Badge'
 import InviteUserModal from '@/components/InviteUserModal'
 import { userAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface User {
   id: string
@@ -833,15 +836,15 @@ export default function UsersSettingsPage() {
       />
 
       {/* Edit User Modal */}
-      {editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Edit Staff Member</h3>
-              <p className="text-sm text-slate-500">{editingUser.email || 'No email on file'}</p>
-            </div>
+      <Modal
+        open={!!editingUser}
+        onClose={closeEditModal}
+        title="Edit Staff Member"
+      >
+            {editingUser && (
+            <>
+              <p className="text-sm text-slate-500 -mt-2 mb-2">{editingUser.email || 'No email on file'}</p>
 
-            <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">First Name</label>
@@ -943,59 +946,36 @@ export default function UsersSettingsPage() {
                   <p className="text-xs text-slate-500 mt-1.5">Move this user to a different facility</p>
                 </div>
               )}
-            </div>
+            </>
+            )}
 
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={closeEditModal}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEdit}
-                disabled={!editFormData.first_name || !editFormData.last_name || !editFormData.role_id}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={closeEditModal} />
+          <Modal.Action
+            onClick={handleEdit}
+            disabled={!editFormData.first_name || !editFormData.last_name || !editFormData.role_id}
+          >
+            Save Changes
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
 
       {/* Invite Prompt Modal */}
-      {showInvitePrompt && pendingInviteUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
-            <div className="p-6">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 text-center mb-2">Email Added</h3>
-              <p className="text-sm text-slate-500 text-center mb-6">
-                Would you like to send {pendingInviteUser.first_name} an invitation to access the app?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleInvitePromptSkip}
-                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg transition-colors"
-                >
-                  Not Now
-                </button>
-                <button
-                  onClick={handleInvitePromptSend}
-                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-                >
-                  Send Invite
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showInvitePrompt && !!pendingInviteUser}
+        onClose={handleInvitePromptSkip}
+        onConfirm={handleInvitePromptSend}
+        variant="info"
+        title="Email Added"
+        message={`Would you like to send ${pendingInviteUser?.first_name} an invitation to access the app?`}
+        confirmText="Send Invite"
+        cancelText="Not Now"
+        icon={
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        }
+      />
     </DashboardLayout>
   )
 }

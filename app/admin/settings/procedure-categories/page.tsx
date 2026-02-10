@@ -1,4 +1,3 @@
-// app/admin/settings/procedure-categories/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,7 +5,8 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { procedureCategoryAudit } from '@/lib/audit-logger'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 interface BodyRegion {
   id: string
@@ -35,61 +35,8 @@ function getBodyRegion(category: ProcedureCategory): BodyRegion | null {
   return category.body_regions
 }
 
-// Confirmation Modal Component
-function ConfirmModal({
-  isOpen,
-  title,
-  message,
-  confirmLabel,
-  confirmVariant = 'danger',
-  onConfirm,
-  onCancel,
-  isLoading,
-}: {
-  isOpen: boolean
-  title: string
-  message: React.ReactNode
-  confirmLabel: string
-  confirmVariant?: 'danger' | 'primary'
-  onConfirm: () => void
-  onCancel: () => void
-  isLoading?: boolean
-}) {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
-        <div className="text-sm text-slate-600 mb-6">{message}</div>
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
-              confirmVariant === 'danger'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {isLoading ? 'Processing...' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function AdminProcedureCategoriesPage() {
   const supabase = createClient()
-  const { showToast } = useToast()
   const [categories, setCategories] = useState<ProcedureCategory[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,8 +72,16 @@ export default function AdminProcedureCategoriesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
   // Current user for deleted_by tracking
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 useEffect(() => {
     fetchData()
   }, [showArchived])
@@ -316,9 +271,9 @@ await procedureCategoryAudit.updated(
           await procedureCategoryAudit.deleted(supabase, category.display_name, category.id)
           setCategories(categories.filter(c => c.id !== category.id))
           setArchivedCount(prev => prev + 1)
-          showToast({ type: 'success', title: `"${category.display_name}" moved to archive` })
+          showToast(`"${category.display_name}" moved to archive`, 'success')
         } else {
-          showToast({ type: 'error', title: 'Archive Failed', message: 'Failed to archive category' })
+          showToast('Failed to archive category', 'error')
         }
         setSaving(false)
         closeConfirmModal()
@@ -339,9 +294,9 @@ await procedureCategoryAudit.updated(
     if (!error) {
       setCategories(categories.filter(c => c.id !== category.id))
       setArchivedCount(prev => prev - 1)
-      showToast({ type: 'success', title: `"${category.display_name}" restored successfully` })
+      showToast(`"${category.display_name}" restored successfully`, 'success')
     } else {
-      showToast({ type: 'error', title: 'Restore Failed', message: 'Failed to restore category' })
+      showToast('Failed to restore category', 'error')
     }
     setSaving(false)
   }
@@ -550,12 +505,11 @@ await procedureCategoryAudit.updated(
       </Container>
 
       {/* Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Category</h3>
-
-            <div className="space-y-4">
+      <Modal
+        open={showAddModal}
+        onClose={() => { setShowAddModal(false); resetForm() }}
+        title="Add Category"
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Display Name <span className="text-red-500">*</span>
@@ -598,44 +552,28 @@ await procedureCategoryAudit.updated(
                   ))}
                 </select>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowAddModal(false)
-                  resetForm()
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={!formDisplayName.trim() || saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Adding...' : 'Add Category'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowAddModal(false); resetForm() }} />
+          <Modal.Action onClick={handleAdd} loading={saving} disabled={!formDisplayName.trim()}>
+            Add Category
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
 
       {/* Edit Modal */}
-      {showEditModal && editingCategory && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Edit Category</h3>
-
-            <div className="space-y-4">
+      <Modal
+        open={showEditModal && !!editingCategory}
+        onClose={() => { setShowEditModal(false); setEditingCategory(null); resetForm() }}
+        title="Edit Category"
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Internal Name <span className="text-slate-400 font-normal">(read-only)</span>
                 </label>
                 <input
                   type="text"
-                  value={editingCategory.name}
+                  value={editingCategory?.name ?? ''}
                   disabled
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
                 />
@@ -669,40 +607,41 @@ await procedureCategoryAudit.updated(
                   ))}
                 </select>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingCategory(null)
-                  resetForm()
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEdit}
-                disabled={!formDisplayName.trim() || saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowEditModal(false); setEditingCategory(null); resetForm() }} />
+          <Modal.Action onClick={handleEdit} loading={saving} disabled={!formDisplayName.trim()}>
+            Save Changes
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
+{/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
         </div>
       )}
       {/* Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
+      <ConfirmDialog
+        open={confirmModal.isOpen}
+        onClose={closeConfirmModal}
+        onConfirm={confirmModal.onConfirm}
+        variant={confirmModal.confirmVariant === 'primary' ? 'info' : 'danger'}
         title={confirmModal.title}
         message={confirmModal.message}
-        confirmLabel={confirmModal.confirmLabel}
-        confirmVariant={confirmModal.confirmVariant}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={closeConfirmModal}
-        isLoading={saving}
+        confirmText={confirmModal.confirmLabel}
+        loading={saving}
       />
     </DashboardLayout>
   )

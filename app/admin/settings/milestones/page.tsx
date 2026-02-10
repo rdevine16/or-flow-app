@@ -1,4 +1,3 @@
-// app/admin/settings/milestones/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -6,7 +5,8 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 
 interface MilestoneType {
@@ -21,61 +21,8 @@ interface MilestoneType {
   deleted_by: string | null
 }
 
-// Confirmation Modal Component
-function ConfirmModal({
-  isOpen,
-  title,
-  message,
-  confirmLabel,
-  confirmVariant = 'danger',
-  onConfirm,
-  onCancel,
-  isLoading,
-}: {
-  isOpen: boolean
-  title: string
-  message: React.ReactNode
-  confirmLabel: string
-  confirmVariant?: 'danger' | 'primary'
-  onConfirm: () => void
-  onCancel: () => void
-  isLoading?: boolean
-}) {
-  if (!isOpen) return null
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-        <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
-        <div className="text-sm text-slate-600 mb-6">{message}</div>
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
-              confirmVariant === 'danger'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
-          >
-            {isLoading ? 'Processing...' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function AdminMilestonesSettingsPage() {
   const supabase = createClient()
-  const { showToast } = useToast()
   const [milestones, setMilestones] = useState<MilestoneType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -114,6 +61,9 @@ export default function AdminMilestonesSettingsPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
   // Current user
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -125,6 +75,11 @@ export default function AdminMilestonesSettingsPage() {
     }
     getCurrentUser()
   }, [])
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 useEffect(() => {
     fetchMilestones()
   }, [showArchived])
@@ -436,7 +391,7 @@ const fetchMilestones = async () => {
             await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
             setMilestones(milestones.filter(m => m.id !== milestone.id))
             setArchivedCount(prev => prev + 1)
-            showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
+            showToast(`"${milestone.display_name}" moved to archive`, 'success')
           }
 
           closeConfirmModal()
@@ -470,7 +425,7 @@ const fetchMilestones = async () => {
           await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
           setMilestones(milestones.filter(m => m.id !== milestone.id))
           setArchivedCount(prev => prev + 1)
-          showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
+          showToast(`"${milestone.display_name}" moved to archive`, 'success')
         }
 
         closeConfirmModal()
@@ -495,9 +450,9 @@ const fetchMilestones = async () => {
       await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
       setMilestones(milestones.filter(m => m.id !== milestone.id))
       setArchivedCount(prev => prev - 1)
-      showToast({ type: 'success', title: `"${milestone.display_name}" restored successfully` })
+      showToast(`"${milestone.display_name}" restored successfully`, 'success')
     } else {
-      showToast({ type: 'error', title: 'Failed to restore milestone' })
+      showToast('Failed to restore milestone', 'error')
     }
 
     setSaving(false)
@@ -753,12 +708,11 @@ const fetchMilestones = async () => {
       </Container>
 
       {/* Add Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Add Milestone</h3>
-            
-            <div className="space-y-4">
+      <Modal
+        open={showAddModal}
+        onClose={() => { setShowAddModal(false); setNewName(''); setNewDisplayName('') }}
+        title="Add Milestone"
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Display Name <span className="text-red-500">*</span>
@@ -786,45 +740,28 @@ const fetchMilestones = async () => {
                 />
                 <p className="text-xs text-slate-500 mt-1">Used for code references. Lowercase, underscores only.</p>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowAddModal(false)
-                  setNewName('')
-                  setNewDisplayName('')
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={!newDisplayName.trim() || saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Adding...' : 'Add Milestone'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowAddModal(false); setNewName(''); setNewDisplayName('') }} />
+          <Modal.Action onClick={handleAdd} loading={saving} disabled={!newDisplayName.trim()}>
+            Add Milestone
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
 
       {/* Edit Modal */}
-      {showEditModal && editingMilestone && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">Edit Milestone</h3>
-            
-            <div className="space-y-4">
+      <Modal
+        open={showEditModal && !!editingMilestone}
+        onClose={() => { setShowEditModal(false); setEditingMilestone(null) }}
+        title="Edit Milestone"
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Internal Name <span className="text-slate-400 font-normal">(read-only)</span>
                 </label>
                 <input
                   type="text"
-                  value={editingMilestone.name}
+                  value={editingMilestone?.name ?? ''}
                   disabled
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
                 />
@@ -843,7 +780,7 @@ const fetchMilestones = async () => {
                 />
               </div>
 
-              {editingMilestone.pair_with_id && (
+              {editingMilestone?.pair_with_id && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm font-medium text-blue-900">Paired Milestone</p>
                   <p className="text-sm text-blue-700 mt-1">
@@ -851,50 +788,34 @@ const fetchMilestones = async () => {
                   </p>
                 </div>
               )}
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowEditModal(false)
-                  setEditingMilestone(null)
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEdit}
-                disabled={!editDisplayName.trim() || saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowEditModal(false); setEditingMilestone(null) }} />
+          <Modal.Action onClick={handleEdit} loading={saving} disabled={!editDisplayName.trim()}>
+            Save Changes
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
 
       {/* Pair/Unlink Modal */}
-      {showPairModal && pairingMilestone && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              {pairingMilestone.pair_with_id ? 'Manage Pairing' : 'Set Up Pairing'}
-            </h3>
-            <p className="text-sm text-slate-600 mb-4">
-              {pairingMilestone.pair_with_id 
+      <Modal
+        open={showPairModal && !!pairingMilestone}
+        onClose={() => { setShowPairModal(false); setPairingMilestone(null); setSelectedPairId('') }}
+        title={pairingMilestone?.pair_with_id ? 'Manage Pairing' : 'Set Up Pairing'}
+      >
+            <p className="text-sm text-slate-600">
+              {pairingMilestone?.pair_with_id 
                 ? `"${pairingMilestone.display_name}" is paired with "${getPairedName(pairingMilestone.pair_with_id)}".`
-                : `Pair "${pairingMilestone.display_name}" with another milestone to create a Start/End pair.`
+                : `Pair "${pairingMilestone?.display_name}" with another milestone to create a Start/End pair.`
               }
             </p>
             
-            {pairingMilestone.pair_with_id && (
-              <div className="mb-4 p-4 bg-slate-50 rounded-xl">
+            {pairingMilestone?.pair_with_id && (
+              <div className="p-4 bg-slate-50 rounded-xl">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm font-medium text-slate-700">Current Pairing</span>
                   <button
-                    onClick={() => handleUnlink(pairingMilestone)}
+                    onClick={() => pairingMilestone && handleUnlink(pairingMilestone)}
                     className="text-sm font-medium text-red-600 hover:text-red-700"
                   >
                     Unlink
@@ -919,7 +840,7 @@ const fetchMilestones = async () => {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                {pairingMilestone.pair_with_id ? 'Change pairing to:' : 'Pair with:'}
+                {pairingMilestone?.pair_with_id ? 'Change pairing to:' : 'Pair with:'}
               </label>
               <select
                 value={selectedPairId}
@@ -927,12 +848,12 @@ const fetchMilestones = async () => {
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">Select a milestone...</option>
-                {getAvailableForPairing(pairingMilestone.id).map(m => (
+                {pairingMilestone && getAvailableForPairing(pairingMilestone.id).map(m => (
                   <option key={m.id} value={m.id}>{m.display_name}</option>
                 ))}
               </select>
               
-              {selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
+              {selectedPairId && pairingMilestone && selectedPairId !== pairingMilestone.pair_with_id && (
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm font-medium text-blue-800 mb-2">New pairing:</p>
                   <p className="text-sm text-blue-700">
@@ -945,42 +866,46 @@ const fetchMilestones = async () => {
               )}
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowPairModal(false)
-                  setPairingMilestone(null)
-                  setSelectedPairId('')
-                }}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                {pairingMilestone.pair_with_id ? 'Close' : 'Cancel'}
-              </button>
-              {selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
-                <button
-                  onClick={handleSetPair}
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {saving ? 'Saving...' : pairingMilestone.pair_with_id ? 'Change Pairing' : 'Create Pairing'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => { setShowPairModal(false); setPairingMilestone(null); setSelectedPairId('') }}>
+            {pairingMilestone?.pair_with_id ? 'Close' : 'Cancel'}
+          </Modal.Cancel>
+          {selectedPairId && pairingMilestone && selectedPairId !== pairingMilestone.pair_with_id && (
+            <Modal.Action onClick={handleSetPair} loading={saving}>
+              {pairingMilestone.pair_with_id ? 'Change Pairing' : 'Create Pairing'}
+            </Modal.Action>
+          )}
+        </Modal.Footer>
+      </Modal>
 
       {/* Confirmation Modal */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
+      <ConfirmDialog
+        open={confirmModal.isOpen}
+        onClose={closeConfirmModal}
+        onConfirm={confirmModal.onConfirm}
+        variant={confirmModal.confirmVariant === 'primary' ? 'info' : 'danger'}
         title={confirmModal.title}
         message={confirmModal.message}
-        confirmLabel={confirmModal.confirmLabel}
-        confirmVariant={confirmModal.confirmVariant}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={closeConfirmModal}
-        isLoading={saving}
+        confirmText={confirmModal.confirmLabel}
+        loading={saving}
       />
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
+      )}
     </DashboardLayout>
   )
 }

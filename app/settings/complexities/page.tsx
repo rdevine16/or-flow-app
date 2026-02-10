@@ -10,6 +10,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
 
 interface Complexity {
   id: string
@@ -505,13 +506,11 @@ const fetchArchivedComplexities = async () => {
                 </div>
               )}
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">{editingComplexity ? 'Edit' : 'Add'} Complexity</h3>
-            </div>
-            <div className="p-6 space-y-4">
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={`${editingComplexity ? 'Edit' : 'Add'} Complexity`}
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Display Name *</label>
                 <input
@@ -533,25 +532,14 @@ const fetchArchivedComplexities = async () => {
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
                 />
               </div>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formDisplayName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => setShowModal(false)} />
+          <Modal.Action onClick={handleSave} loading={saving} disabled={!formDisplayName.trim()}>
+            Save
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
     </DashboardLayout>
   )
 }
