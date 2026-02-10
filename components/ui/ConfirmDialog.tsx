@@ -1,4 +1,5 @@
 // components/ui/ConfirmDialog.tsx
+// components/ui/ConfirmDialog.tsx
 // Standardized confirmation dialog for destructive actions
 // Replaces inline delete confirmations with professional modals
 
@@ -414,6 +415,61 @@ export function LeaveConfirm({ open, onClose, onConfirm }: LeaveConfirmProps) {
       message="You have unsaved changes. Are you sure you want to leave? All changes will be lost."
       confirmText="Leave"
       cancelText="Stay"
+    />
+  )
+}
+
+/**
+ * Pre-configured archive confirmation
+ * For soft-delete / archive actions (recoverable)
+ * 
+ * @example
+ * <ArchiveConfirm
+ *   open={showArchiveConfirm}
+ *   onClose={() => setShowArchiveConfirm(false)}
+ *   onConfirm={() => archiveItem(id)}
+ *   itemName="Knee Replacement"
+ *   itemType="procedure"
+ * />
+ */
+interface ArchiveConfirmProps {
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void | Promise<void>
+  itemName: string
+  itemType?: string
+  loading?: boolean
+}
+
+export function ArchiveConfirm({
+  open,
+  onClose,
+  onConfirm,
+  itemName,
+  itemType = 'item',
+  loading,
+}: ArchiveConfirmProps) {
+  return (
+    <ConfirmDialog
+      open={open}
+      onClose={onClose}
+      onConfirm={onConfirm}
+      variant="warning"
+      title={`Archive ${itemType}?`}
+      message={
+        <>
+          <strong>{itemName}</strong> will be moved to the archive and hidden from active views.
+          You can restore it at any time from the archived items list.
+        </>
+      }
+      confirmText="Archive"
+      cancelText="Keep Active"
+      loading={loading}
+      icon={
+        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+        </svg>
+      }
     />
   )
 }
