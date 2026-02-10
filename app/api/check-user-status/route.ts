@@ -1,59 +1,30 @@
-import { createClient } from '@supabase/supabase-js'
-import { error } from 'console'
 import { NextRequest, NextResponse } from 'next/server'
+import { withErrorHandler, handleSupabaseError } from '@/lib/errorHandling'
+import { createClient } from '@/lib/supabase-server'
 
-// Create admin client with service role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-)
-export async function POST(request: NextRequest) {
-  try {
-    const { emails } = await request.json()
-
-    if (!emails || !Array.isArray(emails)) {
-      return NextResponse.json(
-        { error: 'Emails array is required' },
-        { status: 400 }
-      )
-    }
-
-    // Get all auth users
-    const { data: authData, error: listError } = await supabaseAdmin.auth.admin.listUsers()
-    
-    if (listError) {
-console.error('Error description:', listError)
-
-      return NextResponse.json(
-        { error: 'Failed to fetch user status' },
-        { status: 500 }
-      )
-    }
-
-    // Find users who haven't confirmed their email (pending)
-    const pendingUserIds: string[] = []
-    
-    for (const email of emails) {
-      const authUser = authData.users.find(u => u.email === email)
-      if (authUser && !authUser.email_confirmed_at) {
-        pendingUserIds.push(authUser.id)
-      }
-    }
-
-    return NextResponse.json({ pendingUserIds })
-
-  } catch (error) {
-console.error('Error description:', error)
-
+export const GET = withErrorHandler(async (req: NextRequest) => {
+  const supabase = await createClient()
+  
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  if (authError || !user) {
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: 'Not authenticated' },
+      { status: 401 }
     )
   }
-}
+
+  // Get user profile
+  const { data: profile, error: profileError } = await supabase
+    .from('users')
+    .select('id, email, access_level, blocked, facility_id, facilities(name, timezone)')
+    .eq('id', user.id)
+    .single()
+
+  if (profileError) handleSupabaseError(profileError)
+
+  return NextResponse.json({
+    user: profile,
+    authenticated: true,
+  })
+})

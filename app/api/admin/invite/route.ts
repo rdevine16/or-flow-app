@@ -1,199 +1,100 @@
-// app/api/admin/invite/route.ts
-// 
-// REPLACEMENT: Uses custom tokens + Resend emails via lib/email.ts
-// NO MORE Supabase inviteUserByEmail() - that sends generic emails
-//
-// This creates an invite record in user_invites table and sends
-// a professional email via Resend with a link to /invite/user/[token]
-//
-// UPDATED: Now handles inviting existing staff members who have email
-// but no auth account yet (staff-only records that got email added)
-
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { sendUserInviteEmail } from '@/lib/email'
-import crypto from 'crypto'
+import { z } from 'zod'
+import { withErrorHandler, handleSupabaseError, AuthorizationError } from '@/lib/errorHandling'
+import { validate } from '@/lib/validation/schemas'
+import { createClient } from '@/lib/supabase-server'
+import { nowUTC } from '@/lib/dateFactory'
+import { Resend } from 'resend'
 
+// Validation schema
+const createInviteSchema = z.object({
+  email: z.string().email('Invalid email'),
+  facilityId: z.string().uuid('Invalid facility ID'),
+  role: z.enum(['user', 'facility_admin', 'global_admin']),
+})
 
-// Create admin client for server-side operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+export const POST = withErrorHandler(async (req: NextRequest) => {
+  const supabase = await createClient()
+
+  // Check if user is admin
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    throw new AuthorizationError('Must be logged in')
   }
-)
 
-interface InviteRequest {
-  email: string
-  firstName: string
-  lastName: string
-  accessLevel: 'facility_admin' | 'user'
-  facilityId: string
-  roleId: string  // The user_roles id (surgeon, nurse, etc.)
-  existingUserId?: string  // If inviting an existing staff member
-}
+  const { data: userProfile } = await supabase
+    .from('users')
+    .select('access_level')
+    .eq('id', user.id)
+    .single()
 
-export async function POST(request: NextRequest) {
-  try {
-    const body: InviteRequest = await request.json()
-    const { email, firstName, lastName, accessLevel, facilityId, roleId, existingUserId } = body
+  if (!userProfile || !['facility_admin', 'global_admin'].includes(userProfile.access_level)) {
+    throw new AuthorizationError('Only admins can send invitations')
+  }
 
-    // Validation
-    if (!email || !firstName || !lastName || !accessLevel || !facilityId || !roleId) {
-      return NextResponse.json(
-        { success: false, error: 'All fields are required' },
-        { status: 400 }
-      )
-    }
+  // Validate input
+  const body = await req.json()
+  const validated = validate(createInviteSchema, body)
 
-    const normalizedEmail = email.trim().toLowerCase()
+  // Check if user already exists
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', validated.email)
+    .single()
 
-    // Check if user already exists in public.users
-    const { data: existingUser } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('email', normalizedEmail)
-      .single()
-
-    // If user exists and we're NOT explicitly inviting them (existingUserId), that's an error
-    // If user exists and we ARE explicitly inviting them, that's fine (they're a staff-only record getting upgraded)
-    if (existingUser && !existingUserId) {
-      return NextResponse.json(
-        { success: false, error: 'A user with this email already exists' },
-        { status: 400 }
-      )
-    }
-
-    // If existingUserId provided, verify it matches the found user
-    if (existingUserId && existingUser && existingUser.id !== existingUserId) {
-      return NextResponse.json(
-        { success: false, error: 'Email is already associated with a different user' },
-        { status: 400 }
-      )
-    }
-
-    // Check if this email already has an auth account
-    const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
-    const existingAuthUser = authData?.users?.find(u => u.email?.toLowerCase() === normalizedEmail)
-    
-    if (existingAuthUser) {
-      return NextResponse.json(
-        { success: false, error: 'This email already has an account. They can log in directly.' },
-        { status: 400 }
-      )
-    }
-
-    // Check if there's already a pending invite for this email at this facility
-    const { data: existingInvite } = await supabaseAdmin
-      .from('user_invites')
-      .select('id, expires_at')
-      .eq('email', normalizedEmail)
-      .eq('facility_id', facilityId)
-      .is('accepted_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .single()
-
-    if (existingInvite) {
-      return NextResponse.json(
-        { success: false, error: 'An invite is already pending for this email' },
-        { status: 400 }
-      )
-    }
-
-    // Get facility name for the email
-    const { data: facility } = await supabaseAdmin
-      .from('facilities')
-      .select('name')
-      .eq('id', facilityId)
-      .single()
-
-    const facilityName = facility?.name || 'your facility'
-
-    // Get the inviting user's name (from auth header)
-    let invitedByName = 'Your administrator'
-    let invitedById: string | null = null
-    
-    const authHeader = request.headers.get('Authorization')
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token)
-      if (user) {
-        invitedById = user.id
-        const { data: inviter } = await supabaseAdmin
-          .from('users')
-          .select('first_name, last_name')
-          .eq('id', user.id)
-          .single()
-        if (inviter) {
-          invitedByName = `${inviter.first_name} ${inviter.last_name}`
-        }
-      }
-    }
-
-    // Generate invite token (like device rep flow)
-    const inviteToken = crypto.randomUUID()
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
-    // Create invite record in user_invites table
-    // Include existing_user_id if this is an upgrade for an existing staff member
-    const { data: invite, error: inviteError } = await supabaseAdmin
-      .from('user_invites')
-      .insert({
-        email: normalizedEmail,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        facility_id: facilityId,
-        role_id: roleId,
-        access_level: accessLevel,
-        invite_token: inviteToken,
-        expires_at: expiresAt,
-        invited_by: invitedById,
-        existing_user_id: existingUserId || null,  // Track if upgrading existing staff
-      })
-      .select()
-      .single()
-
-if (inviteError) {
-  return NextResponse.json(
-    { success: false, error: 'Failed to create invite record' },
-    { status: 500 }
-  )
-}
-
-    // Send invite email via Resend (using lib/email.ts)
-    const emailResult = await sendUserInviteEmail(
-      normalizedEmail,
-      firstName.trim(),
-      facilityName,
-      invitedByName,
-      inviteToken,
-      accessLevel
+  if (existingUser) {
+    return NextResponse.json(
+      { error: 'User with this email already exists' },
+      { status: 400 }
     )
+  }
 
-if (!emailResult.success) {
-  // Don't fail the whole request - invite is created, they can resend
-  // But do let the caller know
+  // Generate token
+  const token = crypto.randomUUID()
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 7)
+
+  // Create invite
+  const { data: invite, error: inviteError } = await supabase
+    .from('invites')
+    .insert({
+      email: validated.email,
+      facility_id: validated.facilityId,
+      role: validated.role,
+      token,
+      invited_by: user.id,
+      expires_at: expiresAt.toISOString(),
+      created_at: nowUTC(),
+    })
+    .select('id, facilities(name)')
+    .single()
+
+  if (inviteError) handleSupabaseError(inviteError)
+
+  // Send email
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/accept/${token}`
+
+  try {
+    await resend.emails.send({
+      from: 'ORbit <noreply@yourdomain.com>',
+      to: validated.email,
+      subject: `Invitation to join ${invite.facilities?.[0]?.name || 'ORbit'}`,
+      html: `
+        <h2>You've been invited to ORbit</h2>
+        <p>You've been invited as a ${validated.role.replace('_', ' ')}.</p>
+        <p>Click the link below to accept your invitation:</p>
+        <a href="${inviteUrl}">${inviteUrl}</a>
+        <p>This invitation expires in 7 days.</p>
+      `,
+    })
+  } catch (emailError: any) {
+    throw new Error(`Failed to send email: ${emailError.message}`)
+  }
+
   return NextResponse.json({
     success: true,
-    message: `Invite created but email failed to send. You can resend the invite.`,
     inviteId: invite.id,
-    emailError: emailResult.error,
-  })
-}
-
-    return NextResponse.json({
-      success: true,
-      message: `Invitation sent to ${normalizedEmail}`,
-      inviteId: invite.id,
-    })
-
-} catch (error) {
-  return NextResponse.json(
-    { success: false, error: 'Failed to send invite' },
-    { status: 500 }
-  )
-}
-}
+  }, { status: 201 })
+})
