@@ -267,7 +267,7 @@ export default function CreateFacilityPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
-  const toast = useToast()
+  const { showToast } = useToast()
 
   // Form state
   const [step, setStep] = useState(1)
@@ -773,7 +773,7 @@ const { error: insertError } = await supabase
 if (insertError) {
   showToast({
     type: 'error',
-    title: 'Error',
+    title: 'Setup Failed',
     message: insertError.message
   })
   return
@@ -811,10 +811,10 @@ if (insertError) {
 
           if (insertError) {
             showToast({
-  type: 'error',
-  title: 'Error copying checklist fields:',
-  message: `Error copying checklist fields: ${insertError.message || insertError}`
-})
+              type: 'error',
+              title: 'Checklist Copy Failed',
+              message: insertError.message || 'Failed to copy checklist fields'
+            })
           }
         }
       }
@@ -842,10 +842,10 @@ if (insertError) {
         if (!inviteResponse.ok) {
           const result = await inviteResponse.json()
           showToast({
-  type: 'error',
-  title: 'Invite failed:',
-  message: result instanceof Error ? result.message : 'Invite failed:'
-})
+            type: 'error',
+            title: 'Invite Failed',
+            message: result?.error || result?.message || 'Failed to send invitation'
+          })
         }
       }
 
@@ -856,10 +856,10 @@ if (insertError) {
       router.push(`/admin/facilities/${facility.id}`)
     } catch (err) {
       showToast({
-  type: 'error',
-  title: 'Error creating facility:',
-  message: err instanceof Error ? err.message : 'Error creating facility:'
-})
+        type: 'error',
+        title: 'Create Facility Failed',
+        message: err instanceof Error ? err.message : 'An unexpected error occurred'
+      })
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setSubmitting(false)
@@ -1581,8 +1581,4 @@ if (insertError) {
       </div>
     </DashboardLayout>
   )
-}
-
-function showToast(arg0: { type: string; title: string; message: string }) {
-  throw new Error('Function not implemented.')
 }

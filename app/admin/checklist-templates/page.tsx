@@ -377,11 +377,11 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
 // =====================================================
 // MAIN COMPONENT
 // =====================================================
-const { showToast } = useToast()
 
 export default function ChecklistTemplatesPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { showToast } = useToast()
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
   const [fields, setFields] = useState<ChecklistFieldTemplate[]>([])
@@ -429,10 +429,10 @@ export default function ChecklistTemplatesPage() {
 
       if (error) {
         showToast({
-  type: 'error',
-  title: 'Error fetching templates:',
-  message: `Error fetching templates:: ${error.message || error}`
-})
+          type: 'error',
+          title: 'Failed to Load Templates',
+          message: error.message || 'An unexpected error occurred'
+        })
       } else {
         setFields(data || [])
       }
@@ -462,8 +462,8 @@ export default function ChecklistTemplatesPage() {
 if (error) {
   showToast({
     type: 'error',
-    title: 'Error',
-    message: `Error creating template: ${error.message || error}`
+    title: 'Create Failed',
+    message: error.message || 'Failed to create template'
   })
 } else {
   setFields(prev => [...prev, data])
@@ -487,10 +487,10 @@ if (error) {
 
       if (error) {
         showToast({
-  type: 'error',
-  title: 'Error updating template:',
-  message: `Error updating template:: ${error.message || error}`
-})
+          type: 'error',
+          title: 'Update Failed',
+          message: error.message || 'Failed to update template'
+        })
       } else {
         setFields(prev =>
           prev.map(f =>
@@ -523,8 +523,8 @@ if (error) {
     if (error) {
       showToast({
         type: 'error',
-        title: 'Error',
-        message: `Error deleting template: ${error.message || error}`
+        title: 'Delete Failed',
+        message: error.message || 'Failed to delete template'
       })
     } else {
       setFields(prev => prev.filter(f => f.id !== field.id))
@@ -548,8 +548,8 @@ if (error) {
     if (error) {
       showToast({
         type: 'error',
-        title: 'Error',
-        message: `Error toggling template: ${error.message || error}`
+        title: 'Toggle Failed',
+        message: error.message || 'Failed to update template status'
       })
     } else {
       if (!showInactive && !newActiveState) {

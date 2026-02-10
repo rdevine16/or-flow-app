@@ -28,11 +28,10 @@ interface ProcedureCategory {
   name: string
   display_name: string
 }
-const { showToast } = useToast()
-
 export default function ComplexitiesAdminPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { showToast } = useToast()
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
   const [complexities, setComplexities] = useState<Complexity[]>([])
@@ -80,8 +79,8 @@ const [complexitiesRes, categoriesRes] = await Promise.all([
     : 'An error occurred'
   showToast({
     type: 'error',
-    title: 'Error',
-    message: `Error fetching complexities: ${message}`
+    title: 'Failed to Load Complexities',
+    message: message
   })
     } finally {
       setLoading(false)
@@ -170,11 +169,10 @@ const { data, error } = await supabase
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       showToast({
-  type: 'error',
-  title: 'Error:',
-  message: `Error: ${errorMessage}`
-})
-      alert('Error deleting')
+        type: 'error',
+        title: 'Delete Failed',
+        message: errorMessage
+      })
     } finally {
       setSaving(false)
     }
@@ -203,10 +201,10 @@ const { data, error } = await supabase
       ))
     } catch (error) {
       showToast({
-  type: 'error',
-  title: 'Error:',
-  message: error instanceof Error ? error.message : 'Error:'
-})
+        type: 'error',
+        title: 'Update Failed',
+        message: error instanceof Error ? error.message : 'Failed to update category assignment'
+      })
     } finally {
       setSaving(false)
     }
@@ -227,10 +225,10 @@ const { data, error } = await supabase
       ))
     } catch (error) {
       showToast({
-  type: 'error',
-  title: 'Error:',
-  message: error instanceof Error ? error.message : 'Error:'
-})
+        type: 'error',
+        title: 'Toggle Failed',
+        message: error instanceof Error ? error.message : 'Failed to update active status'
+      })
     } finally {
       setSaving(false)
     }
