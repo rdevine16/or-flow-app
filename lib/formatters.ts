@@ -153,6 +153,48 @@ export function formatDisplayTime(
 }
 
 /**
+ * Format a date string with relative labels (Today, Yesterday, Tomorrow).
+ * Falls back to a short formatted date for other dates.
+ * 
+ * @example
+ * formatRelativeDate('2025-02-10')  // "Today" (if today is 2/10)
+ * formatRelativeDate('2025-02-09')  // "Yesterday"
+ * formatRelativeDate('2025-02-05')  // "Wed, Feb 5"
+ */
+export function formatRelativeDate(
+  dateString: string | null | undefined,
+  options: { fallback?: string } = {}
+): string {
+  const { fallback = '' } = options
+
+  if (!dateString) return fallback
+
+  try {
+    const [year, month, day] = dateString.split('-').map(Number)
+    const caseDate = new Date(year, month - 1, day)
+    caseDate.setHours(0, 0, 0, 0)
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const diffMs = caseDate.getTime() - today.getTime()
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays === 0) return 'Today'
+    if (diffDays === -1) return 'Yesterday'
+    if (diffDays === 1) return 'Tomorrow'
+
+    return caseDate.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    })
+  } catch {
+    return fallback || dateString
+  }
+}
+
+/**
  * Format duration in minutes to human-readable string.
  * 
  * @example

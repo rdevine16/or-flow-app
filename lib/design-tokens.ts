@@ -345,6 +345,19 @@ export function getStatusColors(status: string) {
 }
 
 /**
+ * Get a human-readable label for a case status
+ * @example getStatusLabel('in_progress') => 'In Progress'
+ * @example getStatusLabel(null) => 'Scheduled'
+ */
+export function getStatusLabel(status: string | null): string {
+  if (!status) return 'Scheduled'
+  return status
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
  * Get alert color classes by variant
  * @example getAlertColors('error') => { bg: 'bg-red-50', ... }
  */

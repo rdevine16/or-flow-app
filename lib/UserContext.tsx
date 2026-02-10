@@ -7,6 +7,8 @@ import { createClient } from './supabase'
 import { getImpersonationState } from './impersonation'
 
 interface UserData {
+  userId: string | null
+  userEmail: string | null
   firstName: string
   lastName: string
   accessLevel: 'global_admin' | 'facility_admin' | 'user'
@@ -29,6 +31,8 @@ interface UserContextType {
 }
 
 const defaultUserData: UserData = {
+  userId: null,
+  userEmail: null,
   firstName: '',
   lastName: '',
   accessLevel: 'user',
@@ -73,21 +77,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let isMounted = true
 
     const fetchUser = async () => {
-      console.log('UserContext: Starting fetchUser')
-      
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
-        
-        console.log('UserContext: Auth result', { user: user?.id, authError })
         
         if (!isMounted) return
         
         if (!user) {
-          console.log('UserContext: No user, setting defaults')
           setUserData(defaultUserData)
           setLoading(false)
           return
         }
+
+        // Store auth user info immediately
+        const authUserId = user.id
+        const authUserEmail = user.email || null
 
         const { data: userRecord, error: dbError } = await supabase
           .from('users')
@@ -100,8 +103,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
           `)
           .eq('id', user.id)
           .single()
-
-        console.log('UserContext: DB result', { userRecord, dbError })
 
         if (!isMounted) return
 
@@ -117,6 +118,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
           }
 
           setUserData({
+            userId: authUserId,
+            userEmail: authUserEmail,
             firstName: userRecord.first_name || '',
             lastName: userRecord.last_name || '',
             accessLevel: userRecord.access_level || 'user',
@@ -124,13 +127,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
             facilityName: facility?.name || null,
             facilityTimezone: facility?.timezone || 'America/New_York',
           })
-          console.log('UserContext: User data set', userRecord.first_name, userRecord.last_name)
         }
       } catch (error) {
         console.error('UserContext: Error', error)
       } finally {
         if (isMounted) {
-          console.log('UserContext: Setting loading = false')
           setLoading(false)
         }
       }
@@ -141,8 +142,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('UserContext: Auth state changed', event)
-        
         if (event === 'SIGNED_OUT') {
           setUserData(defaultUserData)
           setImpersonatedFacilityId(null)

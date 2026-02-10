@@ -2,13 +2,33 @@
 // Central export file for all UI components
 
 // Loading components
-export { Spinner, PageLoader, Skeleton, LoadingOverlay } from './Loading'
+export { Spinner, PageLoader, LoadingOverlay } from './Loading'
+
+// Skeleton loading (consolidated — single source in Skeleton.tsx)
+export {
+  Skeleton,
+  SkeletonText,
+  SkeletonMetricCard,
+  SkeletonMetricGrid,
+  SkeletonTableRow,
+  SkeletonTable,
+  SkeletonCaseCard,
+  SkeletonCaseList,
+  SkeletonChart,
+  SkeletonProfile,
+  SkeletonPage,
+  ErrorState,
+} from './Skeleton'
 
 // Status components
 export { StatusBadge, StatusBadgeDot } from './StatusBadge'
 
-// Empty state
+// Error handling
+export { ErrorBanner } from '@/components/ui/ErrorBanner'
+
+// Empty states
 export { EmptyState, EmptyStateIcons } from './EmptyState'
+export { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 
 // Alerts
 export { Alert } from './Alert'
@@ -22,11 +42,11 @@ export { TableActions } from './TableActions'
 // Tooltips
 export { Tooltip } from './Tooltip'
 
-// Cards (if you're using CardEnhanced)
+// Cards
 export { default as Card, StatsCard, ListCard, ProfileCard } from './CardEnhanced'
 
-// Toast (if you have it)
-// export { ToastProvider, useToast } from './Toast/ToastProvider'
+// Confirm Dialog
+export { ConfirmDialog, DeleteConfirm } from './ConfirmDialog'
 
-// Confirm Dialog (if you have it)
-// export { ConfirmDialog } from './ConfirmDialog'
+// Modal
+export { Modal } from './Modal'
