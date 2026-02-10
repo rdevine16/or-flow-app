@@ -1,3 +1,4 @@
+// app/admin/cancellation-reasons/page.tsx
 // This is the main page for managing cancellation reason templates. These templates are copied to new facilities during onboarding and can be customized by each facility without affecting others. Only accessible by global admins.
 'use client'
 
@@ -8,6 +9,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 
 // ============================================================================
@@ -62,7 +64,7 @@ export default function AdminCancellationReasonsPage() {
   // Feedback state
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<CancellationReasonTemplate | null>(null)
   // Toast
   const { showToast } = useToast()
 
@@ -229,7 +231,7 @@ const fetchReasons = async () => {
     } else {
       await cancellationReasonAudit.adminDeleted(supabase, reason.display_name, reason.id)
       setSuccessMessage(`"${reason.display_name}" archived`)
-      setDeleteConfirm(null)
+      setArchiveTarget(null)
       fetchReasons()
     }
 
@@ -431,22 +433,6 @@ const fetchReasons = async () => {
 
                           <div className="flex items-center gap-1">
                             {reason.is_active ? (
-                              deleteConfirm === reason.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDelete(reason)}
-                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
                                 <>
                                   <button
                                     onClick={() => openEditModal(reason)}
@@ -458,7 +444,7 @@ const fetchReasons = async () => {
                                     </svg>
                                   </button>
                                   <button
-                                    onClick={() => setDeleteConfirm(reason.id)}
+                                    onClick={() => setArchiveTarget(reason)}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Archive"
                                   >
@@ -467,7 +453,6 @@ const fetchReasons = async () => {
                                     </svg>
                                   </button>
                                 </>
-                              )
                             ) : (
                               <button
                                 onClick={() => handleRestore(reason)}
@@ -588,6 +573,16 @@ const fetchReasons = async () => {
           </div>
         </div>
       )}
+
+      <ArchiveConfirm
+        open={!!archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => {
+          if (archiveTarget) await handleDelete(archiveTarget)
+        }}
+        itemName={archiveTarget?.display_name || ''}
+        itemType="cancellation reason"
+      />
     </DashboardLayout>
   )
 }

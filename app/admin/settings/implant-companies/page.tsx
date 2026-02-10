@@ -1,3 +1,4 @@
+// app/admin/settings/implant-companies/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -8,6 +9,7 @@ import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 interface ImplantCompany {
   id: string
@@ -34,7 +36,7 @@ export default function AdminImplantCompaniesPage() {
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', company: null })
   const [formData, setFormData] = useState({ name: '' })
   const [saving, setSaving] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<ImplantCompany | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 // Archive toggle
   const [showArchived, setShowArchived] = useState(false)
@@ -171,7 +173,7 @@ const handleDelete = async (id: string) => {
     if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
-      setDeleteConfirm(null)
+      setArchiveTarget(null)
       showToast({ type: 'success', title: `"${company.name}" moved to archive` })
       await genericAuditLog(supabase, 'admin.implant_company_deleted', {
         targetType: 'implant_company',
@@ -342,21 +344,6 @@ const handleDelete = async (id: string) => {
                           >
                             Restore
                           </button>
-                        ) : deleteConfirm === company.id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleDelete(company.id)}
-                              className="px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="px-2 py-1 bg-slate-200 text-slate-700 text-xs font-medium rounded hover:bg-slate-300 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          </div>
                         ) : (
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
@@ -369,7 +356,7 @@ const handleDelete = async (id: string) => {
                               </svg>
                             </button>
                             <button
-                              onClick={() => setDeleteConfirm(company.id)}
+                              onClick={() => setArchiveTarget(company)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Archive"
                             >
@@ -448,6 +435,16 @@ const handleDelete = async (id: string) => {
           </div>
         </div>
       )}
+
+      <ArchiveConfirm
+        open={!!archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => {
+          if (archiveTarget) await handleDelete(archiveTarget.id)
+        }}
+        itemName={archiveTarget?.name || ''}
+        itemType="implant company"
+      />
     </DashboardLayout>
   )
 }

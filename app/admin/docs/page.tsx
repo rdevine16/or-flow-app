@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import {
   fetchPages,
@@ -435,30 +436,13 @@ export default function AdminDocsPage() {
     <DashboardLayout>
 
       {/* Delete Confirmation */}
-      {showDeleteConfirm && selectedPage && (
-        <Overlay onClose={() => setShowDeleteConfirm(false)}>
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-slate-800 mb-2">Delete Page</h3>
-            <p className="text-sm text-slate-500 mb-6">
-              Remove <strong>{selectedPage.name}</strong> from the registry? This cannot be undone.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </Overlay>
-      )}
+      <DeleteConfirm
+        open={showDeleteConfirm && !!selectedPage}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        itemName={selectedPage?.name || ''}
+        itemType="page"
+      />
 
       {/* Add/Edit Form Modal */}
       {showForm && editingPage && (

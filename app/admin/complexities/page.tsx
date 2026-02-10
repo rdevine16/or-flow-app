@@ -10,6 +10,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 
 interface Complexity {
@@ -45,7 +46,7 @@ export default function ComplexitiesAdminPage() {
   const [formDisplayName, setFormDisplayName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formIsActive, setFormIsActive] = useState(true)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Complexity | null>(null)
 
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -165,7 +166,7 @@ const { data, error } = await supabase
       const { error } = await supabase.from('complexity_templates').delete().eq('id', id)
       if (error) throw error
       setComplexities(complexities.filter(c => c.id !== id))
-      setDeleteConfirm(null)
+      setDeleteTarget(null)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       showToast({
@@ -374,18 +375,8 @@ const { data, error } = await supabase
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
-                              {deleteConfirm === complexity.id ? (
-                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                  <button onClick={() => handleDelete(complexity.id)} className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
-                                    Confirm
-                                  </button>
-                                  <button onClick={() => setDeleteConfirm(null)} className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setDeleteConfirm(complexity.id) }}
+                              <button
+                                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(complexity) }}
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
@@ -393,7 +384,6 @@ const { data, error } = await supabase
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
-                              )}
                               <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
@@ -516,6 +506,16 @@ const { data, error } = await supabase
           </div>
         </div>
       )}
+
+      <DeleteConfirm
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget) await handleDelete(deleteTarget.id)
+        }}
+        itemName={deleteTarget?.display_name || ''}
+        itemType="complexity"
+      />
     </DashboardLayout>
   )
 }
