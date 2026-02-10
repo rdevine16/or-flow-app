@@ -14,8 +14,9 @@ import CaseListView from '@/components/dashboard/CaseListView'
 import EnhancedRoomGridView from '@/components/dashboard/EnhancedRoomGridView'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
 import { getLocalDateString, formatDateWithWeekday } from '@/lib/date-utils'
-import { getImpersonationState } from '@/lib/impersonation'
 import { extractName } from '@/lib/formatters'
 import RoomOrderModal from '@/components/dashboard/RoomOrderModal'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -24,7 +25,6 @@ import {
   EnhancedCase, 
   CasePaceData, 
   CasePhase,
-  MilestoneWithType,
   getJoinedValue
 } from '@/types/pace'
 import { determinePhase, parseISODate, parseScheduledStartTime } from '@/lib/pace-utils'
@@ -54,8 +54,19 @@ interface Room {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { isGlobalAdmin, isImpersonating, loading: userLoading, isAdmin } = useUser()
+  const supabase = createClient()
   const { showToast } = useToast()
+
+  // User context — replaces manual fetchCurrentUser + facility init
+  const {
+    userData,
+    loading: userLoading,
+    effectiveFacilityId,
+    isGlobalAdmin,
+    isImpersonating,
+    isAdmin,
+  } = useUser()
+
   // Redirect global admins (not impersonating) to admin page
   useEffect(() => {
     if (!userLoading && isGlobalAdmin && !isImpersonating) {
@@ -63,28 +74,23 @@ export default function DashboardPage() {
     }
   }, [userLoading, isGlobalAdmin, isImpersonating, router])
 
+  // Core state
   const [cases, setCases] = useState<EnhancedCase[]>([])
   const [roomsWithCases, setRoomsWithCases] = useState<RoomWithCase[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedDate, setSelectedDate] = useState('')
   const [todayDate, setTodayDate] = useState('')
-  const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
   const [roomsCollapsed, setRoomsCollapsed] = useState(false)
-  
-  // User info for Call Next Patient modal
-  const [userId, setUserId] = useState<string | null>(null)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
   
   // Call Next Patient modal state
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
   
-  // NEW: Hide completed cases toggle (default: checked = hide completed)
+  // Hide completed cases toggle (default: checked = hide completed)
   const [hideCompleted, setHideCompleted] = useState(true)
   
   // Room reorder modal state
   const [showRoomOrderModal, setShowRoomOrderModal] = useState(false)
-  
-  const supabase = createClient()
 
   // Staff Assignment State
   const [showStaffPanel, setShowStaffPanel] = useState(false)
@@ -94,9 +100,7 @@ export default function DashboardPage() {
   const canManageStaff = isAdmin
   
   // Get all case IDs for the staff assignment hook
-  const allCaseIds = useMemo(() => {
-    return cases.map(c => c.id)
-  }, [cases])
+  const allCaseIds = useMemo(() => cases.map(c => c.id), [cases])
   
   // Staff assignment hook
   const {
@@ -108,27 +112,25 @@ export default function DashboardPage() {
     permanentlyRemoveStaff,
     moveStaffBetweenCases
   } = useStaffAssignment({
-    facilityId: userFacilityId,
+    facilityId: effectiveFacilityId,
     caseIds: allCaseIds
   })
   
   // DnD Kit Sensors Configuration
   const mouseSensor = useSensor(MouseSensor, {
-    activationConstraint: {
-      distance: 8,
-    },
+    activationConstraint: { distance: 8 },
   })
   
   const touchSensor = useSensor(TouchSensor, {
-    activationConstraint: {
-      delay: 200,
-      tolerance: 8,
-    },
+    activationConstraint: { delay: 200, tolerance: 8 },
   })
   
   const sensors = useSensors(mouseSensor, touchSensor)
   
-  // Drag Event Handlers
+  // ============================================================================
+  // DRAG & DROP HANDLERS
+  // ============================================================================
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as DragData
     if (data?.type === 'staff-avatar') {
@@ -145,16 +147,12 @@ export default function DashboardPage() {
     const dragData = active.data.current as DragData
     const dropData = over.data.current as DropData
     
-    if (dragData?.type !== 'staff-avatar' || dropData?.type !== 'case-row') {
-      return
-    }
+    if (dragData?.type !== 'staff-avatar' || dropData?.type !== 'case-row') return
     
     const { staffId, staff, sourceType, sourceCaseId } = dragData
     const { caseId: targetCaseId } = dropData
     
-    if (sourceType === 'case' && sourceCaseId === targetCaseId) {
-      return
-    }
+    if (sourceType === 'case' && sourceCaseId === targetCaseId) return
     
     try {
       if (sourceType === 'case' && sourceCaseId) {
@@ -165,11 +163,11 @@ export default function DashboardPage() {
     } catch (error) {
       showToast({
         type: 'error',
-        title: 'Error handling drop:',
-        message: error instanceof Error ? error.message : 'Error handling drop'
+        title: 'Staff assignment failed',
+        message: error instanceof Error ? error.message : 'Please try again'
       })
     }
-  }, [assignStaffToCase, moveStaffBetweenCases])
+  }, [assignStaffToCase, moveStaffBetweenCases, showToast])
   
   // Staff Removal Handler
   const handleRemoveStaff = useCallback(async (
@@ -185,45 +183,22 @@ export default function DashboardPage() {
     }
   }, [permanentlyRemoveStaff, removeStaffFromCase])
 
-  // Initialize with today's date and fetch user's facility
+  // ============================================================================
+  // INITIALIZE DATE
+  // ============================================================================
+
   useEffect(() => {
     const today = getLocalDateString()
     setTodayDate(today)
     setSelectedDate(today)
-    fetchCurrentUser()
   }, [])
 
-  const fetchCurrentUser = async () => {
-    const impersonation = getImpersonationState()
-    if (impersonation) {
-      setUserFacilityId(impersonation.facilityId)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setUserId(user.id)
-        setUserEmail(user.email || null)
-      }
-      return
-    }
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      setUserId(user.id)
-      setUserEmail(user.email || null)
-      
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.facility_id) {
-        setUserFacilityId(userData.facility_id)
-      }
-    }
-  }
+  // ============================================================================
+  // FETCH PACE DATA
+  // ============================================================================
 
   // Fetch pace data for a specific case
-  // UPDATED: Now uses median-based statistics from surgeon_procedure_stats and surgeon_milestone_stats
+  // Uses median-based statistics from surgeon_procedure_stats and surgeon_milestone_stats
   const fetchPaceData = useCallback(async (
     surgeonId: string,
     procedureTypeId: string,
@@ -232,20 +207,17 @@ export default function DashboardPage() {
     facilityId: string
   ): Promise<CasePaceData | null> => {
     try {
-      // Query median-based procedure stats (always needed for total duration)
-const { data: procStats } = await supabase
-  .from('surgeon_procedure_stats')
-  .select('median_duration, p25_duration, p75_duration, sample_size')
-  .eq('surgeon_id', surgeonId)
-  .eq('procedure_type_id', procedureTypeId)
-  .eq('facility_id', facilityId)
-  .maybeSingle()
-
+      const { data: procStats } = await supabase
+        .from('surgeon_procedure_stats')
+        .select('median_duration, p25_duration, p75_duration, sample_size')
+        .eq('surgeon_id', surgeonId)
+        .eq('procedure_type_id', procedureTypeId)
+        .eq('facility_id', facilityId)
+        .maybeSingle()
       
       if (!procStats) return null
       
-      // Special case: patient_in is the START of the case
-      // Progress = 0%, but we still show expected total duration
+      // patient_in is the START of the case — progress = 0%
       if (currentMilestoneName === 'patient_in') {
         return {
           scheduledStart,
@@ -260,20 +232,16 @@ const { data: procStats } = await supabase
         }
       }
       
-// For all other milestones, get the milestone stats
-      // Get the milestone type ID via facility_milestones
+      // For all other milestones, get the milestone stats
       const { data: facilityMilestone } = await supabase
         .from('facility_milestones')
         .select('id, name, source_milestone_type_id')
         .eq('facility_id', facilityId)
         .eq('name', currentMilestoneName)
         .maybeSingle()
-
       
-      // If no source_milestone_type_id, this is a custom milestone without stats
       if (!facilityMilestone?.source_milestone_type_id) return null
       
-      // Query median-based milestone stats using the source milestone type
       const { data: msStats } = await supabase
         .from('surgeon_milestone_stats')
         .select('median_minutes_from_start, p25_minutes_from_start, p75_minutes_from_start, sample_size')
@@ -297,118 +265,118 @@ const { data: procStats } = await supabase
         currentMilestoneName
       }
     } catch (error) {
-      showToast({
-  type: 'error',
-  title: 'Error fetching pace data:',
-  message: error instanceof Error ? error.message : 'Error fetching pace data:'
-})
+      // Pace data is non-critical — log but don't show error banner
+      console.error('Error fetching pace data:', error)
       return null
     }
   }, [supabase])
 
-  // Main data fetch
-  useEffect(() => {
-    async function fetchData() {
-      if (!selectedDate || !userFacilityId) return
+  // ============================================================================
+  // MAIN DATA FETCH
+  // ============================================================================
 
-      setLoading(true)
+  const fetchData = useCallback(async () => {
+    if (!selectedDate || !effectiveFacilityId) return
 
-      try {
-        const { data: casesData } = await supabase
-          .from('cases')
-          .select(`
-            id,
-            case_number,
-            scheduled_date,
-            start_time,
-            operative_side,
-            facility_id,
-            or_room_id,
-            procedure_type_id,
-            surgeon_id,
-            called_back_at,
-            or_rooms (name),
-            procedure_types (name),
-            case_statuses (name),
-            surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-          `)
-          .eq('facility_id', userFacilityId)
-          .eq('scheduled_date', selectedDate)
-          .order('start_time', { ascending: true, nullsFirst: false })
+    setLoading(true)
+    setError(null)
 
-        const { data: roomsData } = await supabase
-          .from('or_rooms')
-          .select('id, name, display_order')
-          .eq('facility_id', userFacilityId)
-          .is('deleted_at', null)
-          .order('display_order', { ascending: true })
+    try {
+      const { data: casesData, error: casesError } = await supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          scheduled_date,
+          start_time,
+          operative_side,
+          facility_id,
+          or_room_id,
+          procedure_type_id,
+          surgeon_id,
+          called_back_at,
+          or_rooms (name),
+          procedure_types (name),
+          case_statuses (name),
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+        `)
+        .eq('facility_id', effectiveFacilityId)
+        .eq('scheduled_date', selectedDate)
+        .order('start_time', { ascending: true, nullsFirst: false })
 
-        const fetchedCases = (casesData as unknown as EnhancedCase[]) || []
-        const rooms = (roomsData as unknown as Room[]) || []
+      if (casesError) throw casesError
 
-        setCases(fetchedCases)
+      const { data: roomsData, error: roomsError } = await supabase
+        .from('or_rooms')
+        .select('id, name, display_order')
+        .eq('facility_id', effectiveFacilityId)
+        .is('deleted_at', null)
+        .order('display_order', { ascending: true })
 
-        const allCaseIds = fetchedCases.map(c => c.id)
-        
-        const caseStartTimes: Record<string, Date> = {}
-        const casePhases: Record<string, CasePhase> = {}
-        const caseMilestoneNames: Record<string, string[]> = {}
-        const caseCurrentMilestone: Record<string, string> = {}
+      if (roomsError) throw roomsError
 
-if (allCaseIds.length > 0) {
-// Fetch case milestones (only ones with actual timestamps)
-const { data: milestones } = await supabase
-  .from('case_milestones')
-  .select('case_id, recorded_at, facility_milestone_id')
-  .in('case_id', allCaseIds)
-  .not('recorded_at', 'is', null)
-  .order('recorded_at', { ascending: true })
+      const fetchedCases = (casesData as unknown as EnhancedCase[]) || []
+      const rooms = (roomsData as unknown as Room[]) || []
 
-          // Fetch facility milestones for name lookup
-          const { data: facilityMilestones } = await supabase
-            .from('facility_milestones')
-            .select('id, name, source_milestone_type_id')
-            .eq('facility_id', userFacilityId)
+      setCases(fetchedCases)
 
-          // Build lookup map
-          const milestoneMap = new Map<string, { name: string; source_milestone_type_id: string | null }>()
-          if (facilityMilestones) {
-            for (const fm of facilityMilestones) {
-              milestoneMap.set(fm.id, { name: fm.name, source_milestone_type_id: fm.source_milestone_type_id })
-            }
-          }
+      // Build milestone/phase maps for pace tracking
+      const allCaseIds = fetchedCases.map(c => c.id)
+      const caseStartTimes: Record<string, Date> = {}
+      const casePhases: Record<string, CasePhase> = {}
+      const caseMilestoneNames: Record<string, string[]> = {}
+      const caseCurrentMilestone: Record<string, string> = {}
 
-          if (milestones) {
-            for (const milestone of milestones) {
-              const caseId = milestone.case_id
-              
-              if (!caseStartTimes[caseId]) {
-                const date = parseISODate(milestone.recorded_at)
-                if (date) {
-                  caseStartTimes[caseId] = date
-                }
-              }
-              
-              const facilityMilestone = milestone.facility_milestone_id 
-                ? milestoneMap.get(milestone.facility_milestone_id) 
-                : null
-              if (facilityMilestone?.name) {
-                const name = facilityMilestone.name.toLowerCase()
-                if (!caseMilestoneNames[caseId]) {
-                  caseMilestoneNames[caseId] = []
-                }
-                caseMilestoneNames[caseId].push(name)
-                caseCurrentMilestone[caseId] = name
-              }
-            }
-            
-            for (const [caseId, names] of Object.entries(caseMilestoneNames)) {
-              casePhases[caseId] = determinePhase(names)
-            }
+      if (allCaseIds.length > 0) {
+        const { data: milestones } = await supabase
+          .from('case_milestones')
+          .select('case_id, recorded_at, facility_milestone_id')
+          .in('case_id', allCaseIds)
+          .not('recorded_at', 'is', null)
+          .order('recorded_at', { ascending: true })
+
+        const { data: facilityMilestones } = await supabase
+          .from('facility_milestones')
+          .select('id, name, source_milestone_type_id')
+          .eq('facility_id', effectiveFacilityId)
+
+        // Build lookup map
+        const milestoneMap = new Map<string, { name: string; source_milestone_type_id: string | null }>()
+        if (facilityMilestones) {
+          for (const fm of facilityMilestones) {
+            milestoneMap.set(fm.id, { name: fm.name, source_milestone_type_id: fm.source_milestone_type_id })
           }
         }
 
-        const roomsWithCasesPromises = rooms.map(async (room) => {
+        if (milestones) {
+          for (const milestone of milestones) {
+            const caseId = milestone.case_id
+            
+            if (!caseStartTimes[caseId]) {
+              const date = parseISODate(milestone.recorded_at)
+              if (date) caseStartTimes[caseId] = date
+            }
+            
+            const fm = milestone.facility_milestone_id 
+              ? milestoneMap.get(milestone.facility_milestone_id) 
+              : null
+            if (fm?.name) {
+              const name = fm.name.toLowerCase()
+              if (!caseMilestoneNames[caseId]) caseMilestoneNames[caseId] = []
+              caseMilestoneNames[caseId].push(name)
+              caseCurrentMilestone[caseId] = name
+            }
+          }
+          
+          for (const [caseId, names] of Object.entries(caseMilestoneNames)) {
+            casePhases[caseId] = determinePhase(names)
+          }
+        }
+      }
+
+      // Build rooms with cases + pace data
+      const roomsWithCasesData = await Promise.all(
+        rooms.map(async (room) => {
           const roomCases = fetchedCases.filter(c => {
             const orRoom = getJoinedValue(c.or_rooms)
             return orRoom?.name === room.name
@@ -434,13 +402,12 @@ const { data: milestones } = await supabase
             )
             
             if (currentMilestone && scheduledStart) {
-              // UPDATED: Now passing facilityId to fetchPaceData
               paceData = await fetchPaceData(
                 currentCase.surgeon_id,
                 currentCase.procedure_type_id,
                 currentMilestone,
                 scheduledStart,
-                userFacilityId
+                effectiveFacilityId
               )
             }
           }
@@ -455,23 +422,32 @@ const { data: milestones } = await supabase
             paceData
           } as RoomWithCase
         })
+      )
 
-        const roomsWithCasesData = await Promise.all(roomsWithCasesPromises)
-        setRoomsWithCases(roomsWithCasesData)
-
-      } catch (error) {
-        showToast({
-  type: 'error',
-  title: 'Error fetching data:',
-  message: error instanceof Error ? error.message : 'Error fetching data:'
-})
-      } finally {
-        setLoading(false)
-      }
+      setRoomsWithCases(roomsWithCasesData)
+    } catch (err) {
+      setError('Failed to load dashboard data. Please try again.')
+      showToast({
+        type: 'error',
+        title: 'Failed to load dashboard',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
+    } finally {
+      setLoading(false)
     }
+  }, [selectedDate, effectiveFacilityId, supabase, fetchPaceData, showToast])
 
-    fetchData()
-  }, [selectedDate, userFacilityId, supabase, fetchPaceData])
+  useEffect(() => {
+    if (selectedDate && effectiveFacilityId) {
+      fetchData()
+    } else if (!userLoading && !effectiveFacilityId) {
+      setLoading(false)
+    }
+  }, [selectedDate, effectiveFacilityId, fetchData, userLoading])
+
+  // ============================================================================
+  // DATE NAVIGATION
+  // ============================================================================
 
   const activeCount = roomsWithCases.filter(r => r.currentCase !== null).length
 
@@ -489,25 +465,36 @@ const { data: milestones } = await supabase
     setSelectedDate(getLocalDateString(date))
   }
 
-  const goToToday = () => {
-    setSelectedDate(todayDate)
-  }
+  const goToToday = () => setSelectedDate(todayDate)
 
   const isToday = selectedDate === todayDate
 
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
+
   if (userLoading || (isGlobalAdmin && !isImpersonating)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-500">Loading...</p>
-        </div>
-      </div>
+      <DashboardLayout>
+        <PageLoader message="Loading dashboard..." />
+      </DashboardLayout>
     )
   }
 
+  // ============================================================================
+  // MAIN RENDER
+  // ============================================================================
+
   return (
     <DashboardLayout>
+      {/* Error Banner */}
+      <ErrorBanner
+        message={error}
+        onRetry={() => { setError(null); fetchData() }}
+        onDismiss={() => setError(null)}
+        className="mb-6"
+      />
+
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
@@ -725,7 +712,7 @@ const { data: milestones } = await supabase
       </DndContext>
 
       {/* Floating Action Button */}
-      {userFacilityId && (
+      {effectiveFacilityId && (
         <FloatingActionButton 
           actions={[
             {
@@ -738,14 +725,14 @@ const { data: milestones } = await supabase
         />
       )}
 
-{/* Call Next Patient Modal */}
-      {userFacilityId && userId && userEmail && (
+      {/* Call Next Patient Modal */}
+      {effectiveFacilityId && userData.userId && userData.userEmail && (
         <CallNextPatientModal
           isOpen={showCallNextPatient}
           onClose={() => setShowCallNextPatient(false)}
-          facilityId={userFacilityId}
-          userId={userId}
-          userEmail={userEmail}
+          facilityId={effectiveFacilityId}
+          userId={userData.userId}
+          userEmail={userData.userEmail}
         />
       )}
 
@@ -753,7 +740,7 @@ const { data: milestones } = await supabase
       <RoomOrderModal
         isOpen={showRoomOrderModal}
         onClose={() => setShowRoomOrderModal(false)}
-        facilityId={userFacilityId}
+        facilityId={effectiveFacilityId}
         onSaved={() => window.location.reload()}
       />
     </DashboardLayout>
