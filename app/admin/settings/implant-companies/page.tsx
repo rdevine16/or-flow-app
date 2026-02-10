@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface ImplantCompany {
   id: string
@@ -39,16 +40,11 @@ export default function AdminImplantCompaniesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { showToast } = useToast()
 
   // Current user for deleted_by tracking
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -176,7 +172,7 @@ const handleDelete = async (id: string) => {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
       setDeleteConfirm(null)
-      showToast(`"${company.name}" moved to archive`, 'success')
+      showToast({ type: 'success', title: `"${company.name}" moved to archive` })
       await genericAuditLog(supabase, 'admin.implant_company_deleted', {
         targetType: 'implant_company',
         targetId: id,
@@ -200,7 +196,7 @@ const handleDelete = async (id: string) => {
     if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${company.name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${company.name}" restored successfully` })
       await genericAuditLog(supabase, 'admin.implant_company_restored', {
         targetType: 'implant_company',
         targetId: id,
@@ -450,23 +446,6 @@ const handleDelete = async (id: string) => {
               </button>
             </div>
           </div>
-        </div>
-      )}
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
         </div>
       )}
     </DashboardLayout>

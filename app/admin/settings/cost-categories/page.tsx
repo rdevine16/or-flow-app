@@ -1,4 +1,5 @@
 // app/admin/settings/cost-categories/page.tsx
+// app/admin/settings/cost-categories/page.tsx
 // Manage default cost category templates that get copied to new facilities
 
 'use client'
@@ -34,6 +35,7 @@ export default function DefaultCostCategoriesPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
  
   const [categories, setCategories] = useState<DefaultCostCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,9 +67,6 @@ export default function DefaultCostCategoriesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
   // Current user
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -79,11 +78,6 @@ export default function DefaultCostCategoriesPage() {
     }
     getCurrentUser()
   }, [])
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -117,7 +111,7 @@ useEffect(() => {
       const { data, error } = await query
 
 if (error) {
-  showToast(error instanceof Error ? error.message : 'Error fetching categories:', 'error')
+  showToast({ type: 'error', title: 'Failed to Load Categories', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
 }
 if (data) setCategories(data)
 
@@ -129,7 +123,7 @@ if (data) setCategories(data)
 
       setArchivedCount(count || 0)
 } catch (error) {
-  showToast(error instanceof Error ? error.message : 'Error fetching categories', 'error')
+  showToast({ type: 'error', title: 'Failed to Load Categories', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
 } finally {
       setLoading(false)
     }
@@ -214,7 +208,7 @@ if (data) setCategories(data)
 
       setShowModal(false)
     } catch (error) {
-showToast(error instanceof Error ? error.message : 'Error saving category:', 'error')
+showToast({ type: 'error', title: 'Save Failed', message: error instanceof Error ? error.message : 'Failed to save category' })
     } finally {
       setSaving(false)
     }
@@ -268,11 +262,11 @@ const handleDelete = async () => {
     setCategories(categories.filter(c => c.id !== category.id))
     setArchivedCount(prev => prev + 1)
     
-    showToast(`"${category.name}" moved to archive`, 'success')
+    showToast({ type: 'success', title: `"${category.name}" moved to archive` })
     
     closeDeleteModal()
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'Error archiving category', 'error')
+    showToast({ type: 'error', title: 'Archive Failed', message: error instanceof Error ? error.message : 'Failed to archive category' })
   } finally {
     setSaving(false)
   }
@@ -295,9 +289,9 @@ const handleRestore = async (category: DefaultCostCategory) => {
     setCategories(categories.filter(c => c.id !== category.id))
     setArchivedCount(prev => prev - 1)
     
-    showToast(`"${category.name}" restored successfully`, 'success')
+    showToast({ type: 'success', title: `"${category.name}" restored successfully` })
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'Failed to restore category', 'error')
+    showToast({ type: 'error', title: 'Restore Failed', message: error instanceof Error ? error.message : 'Failed to restore category' })
   } finally {
     setSaving(false)
   }
@@ -327,7 +321,7 @@ const toggleActive = async (category: DefaultCostCategory) => {
         c.id === category.id ? { ...c, is_active: newActiveState } : c
       ))
     } catch (error) {
-showToast(error instanceof Error ? error.message : 'Error toggling active state:', 'error')
+showToast({ type: 'error', title: 'Toggle Failed', message: error instanceof Error ? error.message : 'Failed to update active state' })
     } finally {
       setSaving(false)
     }
@@ -753,24 +747,6 @@ showToast(error instanceof Error ? error.message : 'Error toggling active state:
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
         </div>
       )}
     </DashboardLayout>

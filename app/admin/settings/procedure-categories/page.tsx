@@ -1,3 +1,4 @@
+// app/admin/settings/procedure-categories/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -5,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { procedureCategoryAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 interface BodyRegion {
   id: string
@@ -87,6 +89,7 @@ function ConfirmModal({
 
 export default function AdminProcedureCategoriesPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   const [categories, setCategories] = useState<ProcedureCategory[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [loading, setLoading] = useState(true)
@@ -122,16 +125,8 @@ export default function AdminProcedureCategoriesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
   // Current user for deleted_by tracking
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 useEffect(() => {
     fetchData()
   }, [showArchived])
@@ -321,9 +316,9 @@ await procedureCategoryAudit.updated(
           await procedureCategoryAudit.deleted(supabase, category.display_name, category.id)
           setCategories(categories.filter(c => c.id !== category.id))
           setArchivedCount(prev => prev + 1)
-          showToast(`"${category.display_name}" moved to archive`, 'success')
+          showToast({ type: 'success', title: `"${category.display_name}" moved to archive` })
         } else {
-          showToast('Failed to archive category', 'error')
+          showToast({ type: 'error', title: 'Archive Failed', message: 'Failed to archive category' })
         }
         setSaving(false)
         closeConfirmModal()
@@ -344,9 +339,9 @@ await procedureCategoryAudit.updated(
     if (!error) {
       setCategories(categories.filter(c => c.id !== category.id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${category.display_name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${category.display_name}" restored successfully` })
     } else {
-      showToast('Failed to restore category', 'error')
+      showToast({ type: 'error', title: 'Restore Failed', message: 'Failed to restore category' })
     }
     setSaving(false)
   }
@@ -696,23 +691,6 @@ await procedureCategoryAudit.updated(
               </button>
             </div>
           </div>
-        </div>
-      )}
-{/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
         </div>
       )}
       {/* Confirmation Modal */}

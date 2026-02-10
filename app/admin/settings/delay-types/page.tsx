@@ -1,19 +1,28 @@
+// app/settings/delay-types/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
-import { useUser } from '@/lib/UserContext'
+import SettingsLayout from '@/components/settings/SettingsLayout'
 import { delayTypeAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+
+// =====================================================
+// TYPES
+// =====================================================
 
 interface DelayType {
   id: string
   name: string
   display_name: string
+  facility_id: string | null
   display_order: number
-  created_at: string
+  is_active: boolean
+  deleted_at: string | null
+  deleted_by: string | null
 }
 
 interface ModalState {
@@ -22,67 +31,137 @@ interface ModalState {
   delayType: DelayType | null
 }
 
-export default function AdminDelayTypesPage() {
-  const router = useRouter()
-  const supabase = createClient()
-  const { isGlobalAdmin, loading: userLoading } = useUser()
+interface DeleteModalState {
+  isOpen: boolean
+  delayType: DelayType | null
+  dependencies: {
+    caseDelays: number
+  }
+  loading: boolean
+}
 
+// =====================================================
+// COMPONENT
+// =====================================================
+
+export default function DelayTypesPage() {
+  const supabase = createClient()
+  const { showToast } = useToast()
+  
+  // Use context - handles impersonation automatically
+  const { effectiveFacilityId, loading: userLoading } = useUser()
+  
+  // Data state
   const [delayTypes, setDelayTypes] = useState<DelayType[]>([])
   const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', delayType: null })
-  const [formData, setFormData] = useState({ name: '', display_name: '', display_order: 0 })
+  
+  // UI state
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedCount, setArchivedCount] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  
+  // Modal state
+  const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', delayType: null })
+  const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
+    isOpen: false,
+    delayType: null,
+    dependencies: { caseDelays: 0 },
+    loading: false
+  })
+  
+  // Form state
+  const [formData, setFormData] = useState({ name: '', display_name: '' })
 
-  // Redirect non-admins
+  // =====================================================
+  // DATA FETCHING
+  // =====================================================
+
+  // Get current user ID on mount
   useEffect(() => {
-    if (!userLoading && !isGlobalAdmin) {
-      router.push('/dashboard')
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserId(user?.id || null)
     }
-  }, [userLoading, isGlobalAdmin, router])
+    getCurrentUser()
+  }, [])
 
   useEffect(() => {
-    if (isGlobalAdmin) {
+    if (!userLoading && effectiveFacilityId) {
       fetchData()
+    } else if (!userLoading && !effectiveFacilityId) {
+      setLoading(false)
     }
-  }, [isGlobalAdmin])
+  }, [userLoading, effectiveFacilityId, showArchived])
 
   const fetchData = async () => {
-    const { data } = await supabase
+    if (!effectiveFacilityId) return
+    setLoading(true)
+
+    // Build query based on archive toggle
+    let query = supabase
       .from('delay_types')
       .select('*')
-      .is('facility_id', null)
-      .order('display_order')
+      .or(`facility_id.is.null,facility_id.eq.${effectiveFacilityId}`)
 
-    setDelayTypes(data || [])
+    if (showArchived) {
+      // Show only archived (custom only - global can't be archived)
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      // Show only active
+      query = query.is('deleted_at', null)
+    }
+
+    query = query.order('display_order')
+
+    // Fetch archived count separately (custom only)
+    const archivedCountQuery = supabase
+      .from('delay_types')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', effectiveFacilityId)
+      .not('deleted_at', 'is', null)
+
+    const [dataResult, archivedResult] = await Promise.all([query, archivedCountQuery])
+
+    setDelayTypes(dataResult.data || [])
+    setArchivedCount(archivedResult.count || 0)
     setLoading(false)
   }
 
+  // Computed counts
+  const globalCount = delayTypes.filter(dt => dt.facility_id === null).length
+  const customCount = delayTypes.filter(dt => dt.facility_id !== null).length
+
+  // =====================================================
+  // MODAL HANDLERS
+  // =====================================================
+
   const openAddModal = () => {
-    const maxOrder = Math.max(...delayTypes.map(dt => dt.display_order), 0)
-    setFormData({ name: '', display_name: '', display_order: maxOrder + 1 })
+    setFormData({ name: '', display_name: '' })
     setModal({ isOpen: true, mode: 'add', delayType: null })
   }
 
   const openEditModal = (delayType: DelayType) => {
-    setFormData({ 
-      name: delayType.name, 
-      display_name: delayType.display_name,
-      display_order: delayType.display_order 
-    })
+    setFormData({ name: delayType.name, display_name: delayType.display_name })
     setModal({ isOpen: true, mode: 'edit', delayType })
   }
 
   const closeModal = () => {
     setModal({ isOpen: false, mode: 'add', delayType: null })
-    setFormData({ name: '', display_name: '', display_order: 0 })
+    setFormData({ name: '', display_name: '' })
   }
 
+  // =====================================================
+  // SAVE HANDLER
+  // =====================================================
+
   const handleSave = async () => {
-    if (!formData.display_name.trim()) return
+    if (!formData.display_name.trim() || !effectiveFacilityId) return
     
     setSaving(true)
-    const nameValue = formData.name.trim() || formData.display_name.trim().toLowerCase().replace(/\s+/g, '_')
+
+    // Convert display_name to snake_case for name field
+    const nameValue = formData.display_name.trim().toLowerCase().replace(/\s+/g, '_')
 
     if (modal.mode === 'add') {
       const { data, error } = await supabase
@@ -90,8 +169,9 @@ export default function AdminDelayTypesPage() {
         .insert({
           name: nameValue,
           display_name: formData.display_name.trim(),
-          display_order: formData.display_order,
-          facility_id: null,
+          facility_id: effectiveFacilityId,
+          display_order: 100,
+          is_active: true,
         })
         .select()
         .single()
@@ -99,7 +179,10 @@ export default function AdminDelayTypesPage() {
       if (!error && data) {
         setDelayTypes([...delayTypes, data].sort((a, b) => a.display_order - b.display_order))
         closeModal()
-        await delayTypeAudit.adminCreated(supabase, data.display_name, data.id)
+        showToast({ type: 'success', title: 'Delay type created successfully' })
+        await delayTypeAudit.created(supabase, data.display_name, data.id, effectiveFacilityId)
+      } else {
+        showToast({ type: 'error', title: 'Failed to create delay type' })
       }
     } else if (modal.mode === 'edit' && modal.delayType) {
       const oldName = modal.delayType.display_name
@@ -109,266 +192,468 @@ export default function AdminDelayTypesPage() {
         .update({
           name: nameValue,
           display_name: formData.display_name.trim(),
-          display_order: formData.display_order,
         })
         .eq('id', modal.delayType.id)
         .select()
         .single()
 
       if (!error && data) {
-        setDelayTypes(delayTypes.map(dt => dt.id === data.id ? data : dt).sort((a, b) => a.display_order - b.display_order))
+        setDelayTypes(delayTypes.map(dt => dt.id === data.id ? data : dt))
         closeModal()
-        await delayTypeAudit.adminUpdated(supabase, data.id, oldName, data.display_name)
+        showToast({ type: 'success', title: 'Delay type updated successfully' })
+        if (oldName !== data.display_name) {
+          await delayTypeAudit.updated(supabase, data.id, oldName, data.display_name, effectiveFacilityId)
+        }
+      } else {
+        showToast({ type: 'error', title: 'Failed to update delay type' })
       }
     }
 
     setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
-    const delayType = delayTypes.find(dt => dt.id === id)
-    if (!delayType) return
+  // =====================================================
+  // DELETE HANDLERS (SOFT DELETE)
+  // =====================================================
+
+  const openDeleteModal = async (delayType: DelayType) => {
+    setDeleteModal({
+      isOpen: true,
+      delayType,
+      dependencies: { caseDelays: 0 },
+      loading: true
+    })
+
+    // Check dependencies - case_delays table
+    const { count } = await supabase
+      .from('case_delays')
+      .select('id', { count: 'exact', head: true })
+      .eq('delay_type_id', delayType.id)
+
+    setDeleteModal(prev => ({
+      ...prev,
+      dependencies: { caseDelays: count || 0 },
+      loading: false
+    }))
+  }
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      delayType: null,
+      dependencies: { caseDelays: 0 },
+      loading: false
+    })
+  }
+
+  const handleDelete = async () => {
+    if (!deleteModal.delayType || !currentUserId || !effectiveFacilityId) return
+
+    setSaving(true)
+    const delayType = deleteModal.delayType
 
     const { error } = await supabase
       .from('delay_types')
-      .delete()
-      .eq('id', id)
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId
+      })
+      .eq('id', delayType.id)
 
     if (!error) {
-      setDelayTypes(delayTypes.filter(dt => dt.id !== id))
-      setDeleteConfirm(null)
-      await delayTypeAudit.adminDeleted(supabase, delayType.display_name, id)
+      setDelayTypes(delayTypes.filter(dt => dt.id !== delayType.id))
+      setArchivedCount(prev => prev + 1)
+      showToast({ type: 'success', title: `"${delayType.display_name}" moved to archive` })
+      await delayTypeAudit.deleted(supabase, delayType.display_name, delayType.id, effectiveFacilityId)
+    } else {
+      showToast({ type: 'error', title: 'Failed to archive delay type' })
     }
+
+    setSaving(false)
+    closeDeleteModal()
   }
 
-  if (userLoading || loading) {
-    return (
-      <DashboardLayout>
-        <Container className="py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        </Container>
-      </DashboardLayout>
-    )
+  // =====================================================
+  // RESTORE HANDLER
+  // =====================================================
+
+  const handleRestore = async (delayType: DelayType) => {
+    if (!effectiveFacilityId) return
+    
+    setSaving(true)
+
+    const { error } = await supabase
+      .from('delay_types')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', delayType.id)
+
+    if (!error) {
+      setDelayTypes(delayTypes.filter(dt => dt.id !== delayType.id))
+      setArchivedCount(prev => prev - 1)
+      showToast({ type: 'success', title: `"${delayType.display_name}" restored successfully` })
+      // Add restored audit if you have it
+      // await delayTypeAudit.restored(supabase, delayType.display_name, delayType.id, effectiveFacilityId)
+    } else {
+      showToast({ type: 'error', title: 'Failed to restore delay type' })
+    }
+
+    setSaving(false)
   }
 
-  if (!isGlobalAdmin) {
-    return null
+  // =====================================================
+  // HELPER FUNCTIONS
+  // =====================================================
+
+  const formatRelativeTime = (dateString: string): string => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return 'today'
+    if (diffDays === 1) return 'yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+    return `${Math.floor(diffDays / 30)} months ago`
   }
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Global Delay Types</h1>
-              <p className="text-slate-500 mt-1">
-                Standard delay reasons available to all facilities as templates.
-              </p>
-            </div>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        <SettingsLayout
+          title="Delay Types"
+          description="Categorize and track reasons for surgical delays."
+        >
+          {loading || userLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
-              Add Delay Type
-            </button>
-          </div>
+            </div>
+          ) : !effectiveFacilityId ? (
+            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+              <p className="text-slate-500">No facility selected</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-slate-900">
+                      {showArchived ? 'Archived Delay Types' : 'Delay Types'}
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      {showArchived 
+                        ? `${delayTypes.length} archived`
+                        : `${globalCount} global · ${customCount} custom`
+                      }
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {/* Archive Toggle */}
+                    <button
+                      onClick={() => setShowArchived(!showArchived)}
+                      className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        showArchived
+                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                      </svg>
+                      {showArchived ? 'View Active' : `Archive (${archivedCount})`}
+                    </button>
 
-          {/* Stats Bar */}
-          <div className="flex items-center gap-4 mb-4">
-            <span className="text-sm text-slate-500">
-              {delayTypes.length} delay type{delayTypes.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {/* Table */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            {delayTypes.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <p>No delay types defined</p>
-                <button
-                  onClick={openAddModal}
-                  className="mt-2 text-blue-600 hover:text-blue-700 font-medium text-sm"
-                >
-                  Add your first delay type
-                </button>
+                    {/* Add Button (only when viewing active) */}
+                    {!showArchived && (
+                      <button
+                        onClick={openAddModal}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Delay Type
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-12">#</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Display Name</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Internal Name</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider w-24">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {delayTypes.map((delayType) => (
-                    <tr key={delayType.id} className="group hover:bg-slate-50 transition-colors">
-                      {/* Order */}
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-slate-400 font-medium">{delayType.display_order}</span>
-                      </td>
 
-                      {/* Display Name */}
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-medium text-slate-900">{delayType.display_name}</span>
-                      </td>
+              {/* Table */}
+              {delayTypes.length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-slate-500">
+                    {showArchived ? 'No archived delay types.' : 'No delay types configured.'}
+                  </p>
+                  {!showArchived && (
+                    <button
+                      onClick={openAddModal}
+                      className="mt-2 text-blue-600 hover:underline text-sm"
+                    >
+                      Add your first delay type
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  {/* Table Header */}
+                  <div className={`grid gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider ${
+                    showArchived ? 'grid-cols-10' : 'grid-cols-12'
+                  }`}>
+                    <div className={showArchived ? 'col-span-4' : 'col-span-5'}>Display Name</div>
+                    <div className="col-span-3">System Name</div>
+                    <div className="col-span-2">Type</div>
+                    {showArchived && <div className="col-span-2">Archived</div>}
+                    <div className={showArchived ? 'col-span-1' : 'col-span-2'} style={{ textAlign: 'right' }}>Actions</div>
+                  </div>
 
-                      {/* Internal Name */}
-                      <td className="px-4 py-3">
-                        <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                          {delayType.name}
-                        </code>
-                      </td>
+                  {/* Table Body */}
+                  <div className="divide-y divide-slate-100">
+                    {delayTypes.map((delayType) => {
+                      const isGlobal = delayType.facility_id === null
+                      const isArchived = !!delayType.deleted_at
 
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        {deleteConfirm === delayType.id ? (
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleDelete(delayType.id)}
-                              className="px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="px-2 py-1 bg-slate-200 text-slate-700 text-xs font-medium rounded hover:bg-slate-300 transition-colors"
-                            >
-                              Cancel
-                            </button>
+                      return (
+                        <div 
+                          key={delayType.id} 
+                          className={`grid gap-4 px-6 py-4 items-center transition-colors ${
+                            showArchived 
+                              ? 'grid-cols-10 bg-amber-50/50' 
+                              : 'grid-cols-12 hover:bg-slate-50'
+                          }`}
+                        >
+                          {/* Display Name */}
+                          <div className={showArchived ? 'col-span-4' : 'col-span-5'}>
+                            <p className={`font-medium ${isArchived ? 'text-slate-500' : 'text-slate-900'}`}>
+                              {delayType.display_name}
+                            </p>
+                            {isArchived && (
+                              <span className="inline-flex items-center mt-1 px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">
+                                Archived
+                              </span>
+                            )}
                           </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => openEditModal(delayType)}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Edit"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(delayType.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Delete"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
 
-          {/* Info Box */}
-          <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="text-sm text-slate-600">
-                <p className="font-medium text-slate-700 mb-1">About delay types</p>
-                <p>
-                  These are global templates copied to new facilities. Each facility can customize 
-                  their own delay types. Changes here don't affect existing facilities.
-                </p>
+                          {/* System Name */}
+                          <div className="col-span-3">
+                            <span className={`text-sm font-mono ${isArchived ? 'text-slate-400' : 'text-slate-500'}`}>
+                              {delayType.name}
+                            </span>
+                          </div>
+
+                          {/* Type Badge */}
+                          <div className="col-span-2">
+                            {isGlobal ? (
+                              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                                isArchived ? 'bg-slate-100 text-slate-400' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                Global
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
+                                isArchived ? 'bg-slate-100 text-slate-400' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                Custom
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Archived Date */}
+                          {showArchived && delayType.deleted_at && (
+                            <div className="col-span-2">
+                              <span className="text-sm text-slate-400">
+                                {formatRelativeTime(delayType.deleted_at)}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className={`${showArchived ? 'col-span-1' : 'col-span-2'} flex items-center justify-end gap-1`}>
+                            {isGlobal ? (
+                              <span className="text-xs text-slate-400">Read-only</span>
+                            ) : showArchived ? (
+                              <button
+                                onClick={() => handleRestore(delayType)}
+                                disabled={saving}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                                Restore
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openEditModal(delayType)}
+                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Edit"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => openDeleteModal(delayType)}
+                                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Archive"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                  </svg>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* =====================================================
+              ADD/EDIT MODAL
+              ===================================================== */}
+          {modal.isOpen && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {modal.mode === 'add' ? 'Add Delay Type' : 'Edit Delay Type'}
+                  </h3>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Display Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.display_name}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        display_name: e.target.value,
+                        name: e.target.value.toLowerCase().replace(/\s+/g, '_')
+                      })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      placeholder="e.g., Waiting for Interpreter"
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      System Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      readOnly
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
+                      placeholder="waiting_for_interpreter"
+                    />
+                    <p className="mt-1.5 text-xs text-slate-500">Auto-generated from display name</p>
+                  </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button
+                    onClick={closeModal}
+                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !formData.display_name.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Delay Type' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          )}
+
+          {/* =====================================================
+              DELETE CONFIRMATION MODAL
+              ===================================================== */}
+          {deleteModal.isOpen && deleteModal.delayType && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+                <div className="px-6 py-4 border-b border-slate-200">
+                  <h3 className="text-lg font-semibold text-slate-900">Archive Delay Type</h3>
+                </div>
+                <div className="p-6">
+                  {deleteModal.loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-slate-600 mb-4">
+                        Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.delayType.display_name}"</span>?
+                      </p>
+                      {deleteModal.dependencies.caseDelays > 0 && (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
+                          <div className="flex gap-3">
+                            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div>
+                              <p className="font-medium text-amber-800">This delay type is in use:</p>
+                              <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
+                                <li>{deleteModal.dependencies.caseDelays} recorded delay{deleteModal.dependencies.caseDelays !== 1 ? 's' : ''}</li>
+                              </ul>
+                              <p className="mt-2 text-sm text-amber-700">
+                                Archiving will hide it from new delays but existing data will be preserved.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-sm text-slate-500">You can restore archived delay types at any time.</p>
+                    </>
+                  )}
+                </div>
+                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                  <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={saving || deleteModal.loading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? 'Archiving...' : 'Archive Delay Type'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </SettingsLayout>
       </Container>
-
-      {/* Modal */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {modal.mode === 'add' ? 'Add Delay Type' : 'Edit Delay Type'}
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.display_name}
-                  onChange={(e) => setFormData({ 
-                    ...formData, 
-                    display_name: e.target.value,
-                    name: e.target.value.toLowerCase().replace(/\s+/g, '_')
-                  })}
-                  placeholder="e.g., Waiting for Surgeon"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  autoFocus
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Internal Name <span className="text-slate-400 font-normal">(auto-generated)</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name || formData.display_name.toLowerCase().replace(/\s+/g, '_')}
-                  disabled
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Order
-                </label>
-                <input
-                  type="number"
-                  value={formData.display_order}
-                  onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  min={1}
-                />
-                <p className="text-xs text-slate-500 mt-1">Lower numbers appear first in lists</p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formData.display_name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Delay Type' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </DashboardLayout>
   )
 }

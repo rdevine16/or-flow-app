@@ -1,3 +1,4 @@
+// app/admin/settings/milestones/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -5,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 interface MilestoneType {
@@ -73,6 +75,7 @@ function ConfirmModal({
 
 export default function AdminMilestonesSettingsPage() {
   const supabase = createClient()
+  const { showToast } = useToast()
   const [milestones, setMilestones] = useState<MilestoneType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -111,9 +114,6 @@ export default function AdminMilestonesSettingsPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
   // Current user
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -125,11 +125,6 @@ export default function AdminMilestonesSettingsPage() {
     }
     getCurrentUser()
   }, [])
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
 useEffect(() => {
     fetchMilestones()
   }, [showArchived])
@@ -441,7 +436,7 @@ const fetchMilestones = async () => {
             await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
             setMilestones(milestones.filter(m => m.id !== milestone.id))
             setArchivedCount(prev => prev + 1)
-            showToast(`"${milestone.display_name}" moved to archive`, 'success')
+            showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
           }
 
           closeConfirmModal()
@@ -475,7 +470,7 @@ const fetchMilestones = async () => {
           await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
           setMilestones(milestones.filter(m => m.id !== milestone.id))
           setArchivedCount(prev => prev + 1)
-          showToast(`"${milestone.display_name}" moved to archive`, 'success')
+          showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
         }
 
         closeConfirmModal()
@@ -500,9 +495,9 @@ const fetchMilestones = async () => {
       await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
       setMilestones(milestones.filter(m => m.id !== milestone.id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${milestone.display_name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${milestone.display_name}" restored successfully` })
     } else {
-      showToast('Failed to restore milestone', 'error')
+      showToast({ type: 'error', title: 'Failed to restore milestone' })
     }
 
     setSaving(false)
@@ -986,23 +981,6 @@ const fetchMilestones = async () => {
         onCancel={closeConfirmModal}
         isLoading={saving}
       />
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
-        </div>
-      )}
     </DashboardLayout>
   )
 }

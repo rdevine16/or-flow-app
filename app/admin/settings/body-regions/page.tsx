@@ -1,4 +1,5 @@
 // app/admin/settings/body-regions/page.tsx
+// app/admin/settings/body-regions/page.tsx
 // Manage body regions for procedure categorization
 
 'use client'
@@ -78,6 +79,7 @@ export default function AdminBodyRegionsPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
 
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [loading, setLoading] = useState(true)
@@ -113,16 +115,8 @@ export default function AdminBodyRegionsPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
   // Current user for deleted_by tracking
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -226,7 +220,7 @@ if (!error && data) {
   resetForm()
   setShowAddModal(false)
 } else if (error) {
-  showToast(error.message || 'The name might already exist', 'error')
+  showToast({ type: 'error', title: 'Create Failed', message: error.message || 'The name might already exist' })
 }
 setSaving(false)
   }
@@ -262,7 +256,7 @@ setSaving(false)
       setEditingRegion(null)
       resetForm()
 } else if (error) {
-  showToast(error instanceof Error ? error.message : 'Error updating body region:', 'error')
+  showToast({ type: 'error', title: 'Update Failed', message: error instanceof Error ? error.message : 'Failed to update body region' })
 }
     setSaving(false)
   }
@@ -297,9 +291,9 @@ const handleDelete = (region: BodyRegion) => {
   setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
   setArchivedCount(prev => prev + 1)
   closeConfirmModal()
-  showToast(`"${region.display_name}" moved to archive`, 'success')
+  showToast({ type: 'success', title: `"${region.display_name}" moved to archive` })
 } else {
-  showToast(error.message || 'Error archiving body region', 'error')
+  showToast({ type: 'error', title: 'Archive Failed', message: error.message || 'Failed to archive body region' })
 }
         setSaving(false)
       },
@@ -319,9 +313,9 @@ const handleDelete = (region: BodyRegion) => {
     if (!error) {
       setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${region.display_name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${region.display_name}" restored successfully` })
     } else {
-      showToast('Failed to restore body region', 'error')
+      showToast({ type: 'error', title: 'Restore Failed', message: 'Failed to restore body region' })
     }
     setSaving(false)
   }
@@ -647,23 +641,6 @@ const handleDelete = (region: BodyRegion) => {
               </button>
             </div>
           </div>
-        </div>
-      )}
-{/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          )}
-          {toast.message}
         </div>
       )}
       {/* Confirmation Modal */}
