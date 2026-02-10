@@ -1,4 +1,3 @@
-// app/settings/cancellation-reasons/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -8,6 +7,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
+import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 // ============================================================================
@@ -410,16 +410,11 @@ export default function CancellationReasonsSettingsPage() {
       </Container>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {editingReason ? 'Edit Cancellation Reason' : 'Add Cancellation Reason'}
-              </h3>
-            </div>
-
-            <div className="p-6 space-y-4">
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title={editingReason ? 'Edit Cancellation Reason' : 'Add Cancellation Reason'}
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Display Name <span className="text-red-500">*</span>
@@ -457,24 +452,17 @@ export default function CancellationReasonsSettingsPage() {
                   ))}
                 </div>
               </div>
-            </div>
 
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={closeModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg">
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!formData.display_name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {editingReason ? 'Save Changes' : 'Add Reason'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+        <Modal.Footer>
+          <Modal.Cancel onClick={closeModal} />
+          <Modal.Action
+            onClick={handleSubmit}
+            disabled={!formData.display_name.trim()}
+          >
+            {editingReason ? 'Save Changes' : 'Add Reason'}
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
       <ArchiveConfirm
         open={!!archiveTarget}
         onClose={() => setArchiveTarget(null)}

@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import {
   FacilityHoliday,
@@ -25,8 +24,11 @@ import {
   X,
   Loader2,
   AlertCircle,
+  Check,
   ChevronRight,
 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 // Week options for dynamic holidays
 const WEEK_OPTIONS = [
@@ -402,9 +404,9 @@ export default function FacilityClosuresPage() {
             onSave={handleCreateClosure}
             loading={loading}
           />
-
-          {/* Delete Confirmation */}
-          <DeleteConfirm
+        </div>
+      )}
+      <DeleteConfirm
             open={!!deleteTarget}
             onClose={() => setDeleteTarget(null)}
             onConfirm={async () => {
@@ -418,8 +420,6 @@ export default function FacilityClosuresPage() {
             itemName={deleteTarget?.name || ''}
             itemType={deleteTarget?.type === 'holiday' ? 'holiday' : 'closure date'}
           />
-        </div>
-      )}
     </DashboardLayout>
   )
 }
@@ -447,6 +447,7 @@ function HolidayRow({
   loading,
   inactive,
 }: HolidayRowProps) {
+
   return (
     <div className={`px-6 py-4 ${inactive ? 'bg-slate-50/50' : ''}`}>
       <div className="flex items-center justify-between">
@@ -487,18 +488,20 @@ function HolidayRow({
 
         {/* Actions */}
         <div className="flex items-center gap-1 ml-4">
-          <button
-            onClick={onEdit}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <Edit2 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+            <>
+              <button
+                onClick={onEdit}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+              <button
+                onClick={onDelete}
+                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </>
         </div>
       </div>
     </div>
@@ -586,12 +589,12 @@ function ClosureRow({
 
         {/* Actions */}
         <div className="flex items-center gap-1 ml-4">
-          <button
-            onClick={onDelete}
-            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+            <button
+              onClick={onDelete}
+              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
         </div>
       </div>
     </div>
@@ -666,27 +669,14 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
     ? `${MONTH_LABELS[month]} ${day}`
     : `${WEEK_OPTIONS.find(w => w.value === weekOfMonth)?.label} ${DAY_OF_WEEK_LABELS[dayOfWeek]} of ${MONTH_LABELS[month]}`
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {editingHoliday ? 'Edit Holiday' : 'Add Holiday'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <X className="h-5 w-5 text-slate-500" />
-          </button>
-        </div>
-
-        {/* Form */}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={editingHoliday ? 'Edit Holiday' : 'Add Holiday'}
+    >
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4 space-y-4">
+          <div className="space-y-4">
             {/* Name */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -807,7 +797,7 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl -mx-6 -mb-6 mt-6">
             <button
               type="button"
               onClick={onClose}
@@ -825,8 +815,7 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -863,25 +852,10 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
     })
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">Add Closure</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <X className="h-5 w-5 text-slate-500" />
-          </button>
-        </div>
-
-        {/* Form */}
+    <Modal open={open} onClose={onClose} title="Add Closure">
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4 space-y-4">
+          <div className="space-y-4">
             {/* Date */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -913,7 +887,7 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl -mx-6 -mb-6 mt-6">
             <button
               type="button"
               onClick={onClose}
@@ -931,7 +905,6 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -10,6 +10,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 
@@ -29,10 +30,11 @@ interface ProcedureCategory {
   name: string
   display_name: string
 }
+const { showToast } = useToast()
+
 export default function ComplexitiesAdminPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { showToast } = useToast()
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
   const [complexities, setComplexities] = useState<Complexity[]>([])
@@ -80,8 +82,8 @@ const [complexitiesRes, categoriesRes] = await Promise.all([
     : 'An error occurred'
   showToast({
     type: 'error',
-    title: 'Failed to Load Complexities',
-    message: message
+    title: 'Error',
+    message: `Error fetching complexities: ${message}`
   })
     } finally {
       setLoading(false)
@@ -170,10 +172,11 @@ const { data, error } = await supabase
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       showToast({
-        type: 'error',
-        title: 'Delete Failed',
-        message: errorMessage
-      })
+  type: 'error',
+  title: 'Error:',
+  message: `Error: ${errorMessage}`
+})
+      alert('Error deleting')
     } finally {
       setSaving(false)
     }
@@ -202,10 +205,10 @@ const { data, error } = await supabase
       ))
     } catch (error) {
       showToast({
-        type: 'error',
-        title: 'Update Failed',
-        message: error instanceof Error ? error.message : 'Failed to update category assignment'
-      })
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }
@@ -226,10 +229,10 @@ const { data, error } = await supabase
       ))
     } catch (error) {
       showToast({
-        type: 'error',
-        title: 'Toggle Failed',
-        message: error instanceof Error ? error.message : 'Failed to update active status'
-      })
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }
@@ -450,13 +453,11 @@ const { data, error } = await supabase
       </Container>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">{editingComplexity ? 'Edit' : 'Add'} Template</h3>
-            </div>
-            <div className="p-6 space-y-4">
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={`${editingComplexity ? 'Edit' : 'Add'} Template`}
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Display Name *</label>
                 <input
@@ -487,26 +488,18 @@ const { data, error } = await supabase
                 />
                 <span className="text-sm text-slate-700">Active (included when copying to new facilities)</span>
               </label>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formDisplayName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => setShowModal(false)} />
+          <Modal.Action
+            onClick={handleSave}
+            loading={saving}
+            disabled={!formDisplayName.trim()}
+          >
+            Save
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
       <DeleteConfirm
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}

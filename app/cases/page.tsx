@@ -1,4 +1,3 @@
-// app/cases/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
@@ -13,8 +12,9 @@ import CasesFilterBar, { FilterState } from '@/components/filters/CaseFilterBar'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
 import { extractName } from '@/lib/formatters'
-import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 
 // ============================================================================
@@ -504,15 +504,12 @@ function CasesPageContent() {
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : cases.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">No cases found</h3>
-            <p className="text-slate-500 text-sm mb-4">Try adjusting your filters or create a new case</p>
-          </div>
+          <EmptyState
+            icon={EmptyStateIcons.Clipboard}
+            title="No cases found"
+            description="Try adjusting your filters or create a new case"
+            className="py-20"
+          />
         ) : (
           <>
             {/* Table Header */}
@@ -626,8 +623,7 @@ function CasesPageContent() {
                               </svg>
                             </button>
                             
-                            {/* Delete button */}
-                              <button
+                            <button
                                 onClick={() => setDeleteTarget(c)}
                                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
                                 title="Delete"
@@ -767,7 +763,6 @@ function CasesPageContent() {
           userEmail={userEmail}
         />
       )}
-
       <DeleteConfirm
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
