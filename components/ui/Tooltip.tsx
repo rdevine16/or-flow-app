@@ -356,3 +356,150 @@ export function TooltipTruncate({ text, maxLength, className = '' }: TooltipTrun
   )
 }
 
+
+// ============================================
+// INFO TOOLTIP — Click-to-toggle (i) icon with
+// fixed-position popover that escapes overflow-hidden
+// ============================================
+
+interface InfoTooltipProps {
+  /** Tooltip body — string or JSX */
+  text: ReactNode
+  /** Max width in pixels */
+  maxWidth?: number
+  /** Icon size class */
+  iconSize?: string
+}
+
+export function InfoTooltip({ text, maxWidth = 280, iconSize = 'w-3.5 h-3.5' }: InfoTooltipProps) {
+  const [open, setOpen] = useState(false)
+  const [position, setPosition] = useState<'above' | 'below'>('below')
+  const [coords, setCoords] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
+
+  // Calculate position when opened
+  useEffect(() => {
+    if (!open || !triggerRef.current) return
+
+    const rect = triggerRef.current.getBoundingClientRect()
+    const gap = 8
+    const estimatedHeight = 80 // rough estimate; recalculated after render
+
+    // Prefer below; flip above if near viewport bottom
+    const showAbove = rect.bottom + estimatedHeight + gap > window.innerHeight
+    setPosition(showAbove ? 'above' : 'below')
+
+    setCoords({
+      top: showAbove
+        ? rect.top + window.scrollY - gap
+        : rect.bottom + window.scrollY + gap,
+      left: rect.left + rect.width / 2 + window.scrollX,
+    })
+  }, [open])
+
+  // Refine position after popover renders (actual height now known)
+  useEffect(() => {
+    if (!open || !popoverRef.current || !triggerRef.current) return
+
+    const rect = triggerRef.current.getBoundingClientRect()
+    const popRect = popoverRef.current.getBoundingClientRect()
+    const gap = 8
+
+    // Check if it overflows viewport bottom
+    if (position === 'below' && popRect.bottom > window.innerHeight - 10) {
+      setPosition('above')
+      setCoords(prev => ({
+        ...prev,
+        top: rect.top + window.scrollY - gap,
+      }))
+    }
+
+    // Clamp horizontal so it doesn't overflow viewport edges
+    const halfWidth = popRect.width / 2
+    const centerX = rect.left + rect.width / 2
+    if (centerX - halfWidth < 10) {
+      setCoords(prev => ({ ...prev, left: halfWidth + 10 }))
+    } else if (centerX + halfWidth > window.innerWidth - 10) {
+      setCoords(prev => ({ ...prev, left: window.innerWidth - halfWidth - 10 }))
+    }
+  }, [open, position])
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
+        popoverRef.current && !popoverRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open])
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        onClick={() => setOpen(!open)}
+        className="text-slate-300 hover:text-slate-500 transition-colors focus:outline-none"
+        aria-label="More info"
+        type="button"
+      >
+        <svg className={iconSize} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          ref={popoverRef}
+          className={`fixed z-[100] -translate-x-1/2 ${
+            position === 'above' ? '-translate-y-full' : ''
+          }`}
+          style={{
+            top: coords.top,
+            left: coords.left,
+            maxWidth: `${maxWidth}px`,
+          }}
+        >
+          <div className="relative">
+            <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3.5 py-2.5 text-[12px] leading-relaxed text-slate-600">
+              {text}
+            </div>
+            {/* Arrow */}
+            <div
+              className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 ${
+                position === 'above'
+                  ? 'bottom-[-5px] border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-200'
+                  : 'top-[-5px] border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent border-b-slate-200'
+              }`}
+              style={{ borderStyle: 'solid' }}
+            />
+            <div
+              className={`absolute left-1/2 -translate-x-1/2 w-0 h-0 ${
+                position === 'above'
+                  ? 'bottom-[-4px] border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-white'
+                  : 'top-[-4px] border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent border-b-white'
+              }`}
+              style={{ borderStyle: 'solid' }}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
