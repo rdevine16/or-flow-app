@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import {
   FacilityHoliday,
@@ -24,10 +25,8 @@ import {
   X,
   Loader2,
   AlertCircle,
-  Check,
   ChevronRight,
 } from 'lucide-react'
-import { Modal } from '@/components/ui/Modal'
 
 // Week options for dynamic holidays
 const WEEK_OPTIONS = [
@@ -51,7 +50,7 @@ export default function FacilityClosuresPage() {
   const [holidayDialogOpen, setHolidayDialogOpen] = useState(false)
   const [closureDialogOpen, setClosureDialogOpen] = useState(false)
   const [editingHoliday, setEditingHoliday] = useState<FacilityHoliday | null>(null)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'holiday' | 'closure', id: string, name: string } | null>(null)
 
   // Hook
   const {
@@ -121,7 +120,7 @@ export default function FacilityClosuresPage() {
 
   const handleDeleteHoliday = async (id: string, name: string) => {
     await deleteHoliday(id, name)
-    setDeleteConfirmId(null)
+    setDeleteTarget(null)
   }
 
   const handleCreateClosure = async (input: CreateClosureInput) => {
@@ -133,7 +132,7 @@ export default function FacilityClosuresPage() {
 
   const handleDeleteClosure = async (id: string, date: string) => {
     await deleteClosure(id, date)
-    setDeleteConfirmId(null)
+    setDeleteTarget(null)
   }
 
   // Get next occurrence of a holiday
@@ -272,10 +271,7 @@ export default function FacilityClosuresPage() {
                           setHolidayDialogOpen(true)
                         }}
                         onToggle={() => toggleHoliday(holiday.id, holiday.name, false)}
-                        onDelete={() => setDeleteConfirmId(holiday.id)}
-                        deleteConfirmId={deleteConfirmId}
-                        onConfirmDelete={() => handleDeleteHoliday(holiday.id, holiday.name)}
-                        onCancelDelete={() => setDeleteConfirmId(null)}
+                        onDelete={() => setDeleteTarget({ type: 'holiday', id: holiday.id, name: holiday.name })}
                         loading={loading}
                       />
                     ))}
@@ -298,10 +294,7 @@ export default function FacilityClosuresPage() {
                               setHolidayDialogOpen(true)
                             }}
                             onToggle={() => toggleHoliday(holiday.id, holiday.name, true)}
-                            onDelete={() => setDeleteConfirmId(holiday.id)}
-                            deleteConfirmId={deleteConfirmId}
-                            onConfirmDelete={() => handleDeleteHoliday(holiday.id, holiday.name)}
-                            onCancelDelete={() => setDeleteConfirmId(null)}
+                            onDelete={() => setDeleteTarget({ type: 'holiday', id: holiday.id, name: holiday.name })}
                             loading={loading}
                             inactive
                           />
@@ -353,10 +346,7 @@ export default function FacilityClosuresPage() {
                       <ClosureRow
                         key={closure.id}
                         closure={closure}
-                        onDelete={() => setDeleteConfirmId(closure.id)}
-                        deleteConfirmId={deleteConfirmId}
-                        onConfirmDelete={() => handleDeleteClosure(closure.id, closure.closure_date)}
-                        onCancelDelete={() => setDeleteConfirmId(null)}
+                        onDelete={() => setDeleteTarget({ type: 'closure', id: closure.id, name: closure.closure_date })}
                         loading={loading}
                       />
                     ))}
@@ -373,10 +363,7 @@ export default function FacilityClosuresPage() {
                           <ClosureRow
                             key={closure.id}
                             closure={closure}
-                            onDelete={() => setDeleteConfirmId(closure.id)}
-                            deleteConfirmId={deleteConfirmId}
-                            onConfirmDelete={() => handleDeleteClosure(closure.id, closure.closure_date)}
-                            onCancelDelete={() => setDeleteConfirmId(null)}
+                            onDelete={() => setDeleteTarget({ type: 'closure', id: closure.id, name: closure.closure_date })}
                             loading={loading}
                             past
                           />
@@ -415,6 +402,22 @@ export default function FacilityClosuresPage() {
             onSave={handleCreateClosure}
             loading={loading}
           />
+
+          {/* Delete Confirmation */}
+          <DeleteConfirm
+            open={!!deleteTarget}
+            onClose={() => setDeleteTarget(null)}
+            onConfirm={async () => {
+              if (!deleteTarget) return
+              if (deleteTarget.type === 'holiday') {
+                await handleDeleteHoliday(deleteTarget.id, deleteTarget.name)
+              } else {
+                await handleDeleteClosure(deleteTarget.id, deleteTarget.name)
+              }
+            }}
+            itemName={deleteTarget?.name || ''}
+            itemType={deleteTarget?.type === 'holiday' ? 'holiday' : 'closure date'}
+          />
         </div>
       )}
     </DashboardLayout>
@@ -431,9 +434,6 @@ interface HolidayRowProps {
   onEdit: () => void
   onToggle: () => void
   onDelete: () => void
-  deleteConfirmId: string | null
-  onConfirmDelete: () => void
-  onCancelDelete: () => void
   loading: boolean
   inactive?: boolean
 }
@@ -444,14 +444,9 @@ function HolidayRow({
   onEdit,
   onToggle,
   onDelete,
-  deleteConfirmId,
-  onConfirmDelete,
-  onCancelDelete,
   loading,
   inactive,
 }: HolidayRowProps) {
-  const isDeleting = deleteConfirmId === holiday.id
-
   return (
     <div className={`px-6 py-4 ${inactive ? 'bg-slate-50/50' : ''}`}>
       <div className="flex items-center justify-between">
@@ -492,39 +487,18 @@ function HolidayRow({
 
         {/* Actions */}
         <div className="flex items-center gap-1 ml-4">
-          {isDeleting ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-red-600">Delete?</span>
-              <button
-                onClick={onConfirmDelete}
-                disabled={loading}
-                className="p-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                <Check className="h-4 w-4" />
-              </button>
-              <button
-                onClick={onCancelDelete}
-                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <>
-              <button
-                onClick={onEdit}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <Edit2 className="h-4 w-4" />
-              </button>
-              <button
-                onClick={onDelete}
-                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </>
-          )}
+          <button
+            onClick={onEdit}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <Edit2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -538,9 +512,6 @@ function HolidayRow({
 interface ClosureRowProps {
   closure: FacilityClosure
   onDelete: () => void
-  deleteConfirmId: string | null
-  onConfirmDelete: () => void
-  onCancelDelete: () => void
   loading: boolean
   past?: boolean
 }
@@ -548,13 +519,9 @@ interface ClosureRowProps {
 function ClosureRow({
   closure,
   onDelete,
-  deleteConfirmId,
-  onConfirmDelete,
-  onCancelDelete,
   loading,
   past,
 }: ClosureRowProps) {
-  const isDeleting = deleteConfirmId === closure.id
   const date = new Date(closure.closure_date + 'T00:00:00')
   const formattedDate = date.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -619,31 +586,12 @@ function ClosureRow({
 
         {/* Actions */}
         <div className="flex items-center gap-1 ml-4">
-          {isDeleting ? (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-red-600">Delete?</span>
-              <button
-                onClick={onConfirmDelete}
-                disabled={loading}
-                className="p-2 text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                <Check className="h-4 w-4" />
-              </button>
-              <button
-                onClick={onCancelDelete}
-                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={onDelete}
-              className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
+          <button
+            onClick={onDelete}
+            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -718,14 +666,27 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
     ? `${MONTH_LABELS[month]} ${day}`
     : `${WEEK_OPTIONS.find(w => w.value === weekOfMonth)?.label} ${DAY_OF_WEEK_LABELS[dayOfWeek]} of ${MONTH_LABELS[month]}`
 
+  if (!open) return null
+
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={editingHoliday ? 'Edit Holiday' : 'Add Holiday'}
-    >
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {editingHoliday ? 'Edit Holiday' : 'Add Holiday'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+
+        {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
+          <div className="px-6 py-4 space-y-4">
             {/* Name */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -846,7 +807,7 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl -mx-6 -mb-6 mt-6">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
             <button
               type="button"
               onClick={onClose}
@@ -864,7 +825,8 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
             </button>
           </div>
         </form>
-    </Modal>
+      </div>
+    </div>
   )
 }
 
@@ -901,10 +863,25 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
     })
   }
 
+  if (!open) return null
+
   return (
-    <Modal open={open} onClose={onClose} title="Add Closure">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 className="text-lg font-semibold text-slate-900">Add Closure</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+
+        {/* Form */}
         <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
+          <div className="px-6 py-4 space-y-4">
             {/* Date */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -936,7 +913,7 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl -mx-6 -mb-6 mt-6">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
             <button
               type="button"
               onClick={onClose}
@@ -954,6 +931,7 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
             </button>
           </div>
         </form>
-    </Modal>
+      </div>
+    </div>
   )
 }
