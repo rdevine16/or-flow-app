@@ -12,6 +12,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { adminAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
 
 interface DefaultProcedure {
   id: string
@@ -799,14 +800,11 @@ export default function DefaultProceduresPage() {
       </Container>
 
       {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {editingProcedure ? 'Edit Procedure' : 'Add Procedure'}
-            </h3>
-            
-            <div className="space-y-4">
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingProcedure ? 'Edit Procedure' : 'Add Procedure'}
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Procedure Name <span className="text-red-500">*</span>
@@ -888,26 +886,18 @@ export default function DefaultProceduresPage() {
                 />
                 <span className="text-sm text-slate-700">Active (included when copying to new facilities)</span>
               </label>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : editingProcedure ? 'Save Changes' : 'Add Procedure'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => setShowModal(false)} />
+          <Modal.Action
+            onClick={handleSave}
+            loading={saving}
+            disabled={!formName.trim()}
+          >
+            {editingProcedure ? 'Save Changes' : 'Add Procedure'}
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
     </DashboardLayout>
   )
 }

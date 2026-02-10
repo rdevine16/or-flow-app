@@ -10,7 +10,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
+import { Modal } from '@/components/ui/Modal'
 
 
 interface Complexity {
@@ -29,10 +29,11 @@ interface ProcedureCategory {
   name: string
   display_name: string
 }
+const { showToast } = useToast()
+
 export default function ComplexitiesAdminPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { showToast } = useToast()
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
   const [complexities, setComplexities] = useState<Complexity[]>([])
@@ -46,7 +47,7 @@ export default function ComplexitiesAdminPage() {
   const [formDisplayName, setFormDisplayName] = useState('')
   const [formDescription, setFormDescription] = useState('')
   const [formIsActive, setFormIsActive] = useState(true)
-  const [deleteTarget, setDeleteTarget] = useState<Complexity | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -80,8 +81,8 @@ const [complexitiesRes, categoriesRes] = await Promise.all([
     : 'An error occurred'
   showToast({
     type: 'error',
-    title: 'Failed to Load Complexities',
-    message: message
+    title: 'Error',
+    message: `Error fetching complexities: ${message}`
   })
     } finally {
       setLoading(false)
@@ -166,14 +167,15 @@ const { data, error } = await supabase
       const { error } = await supabase.from('complexity_templates').delete().eq('id', id)
       if (error) throw error
       setComplexities(complexities.filter(c => c.id !== id))
-      setDeleteTarget(null)
+      setDeleteConfirm(null)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       showToast({
-        type: 'error',
-        title: 'Delete Failed',
-        message: errorMessage
-      })
+  type: 'error',
+  title: 'Error:',
+  message: `Error: ${errorMessage}`
+})
+      alert('Error deleting')
     } finally {
       setSaving(false)
     }
@@ -202,10 +204,10 @@ const { data, error } = await supabase
       ))
     } catch (error) {
       showToast({
-        type: 'error',
-        title: 'Update Failed',
-        message: error instanceof Error ? error.message : 'Failed to update category assignment'
-      })
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }
@@ -226,10 +228,10 @@ const { data, error } = await supabase
       ))
     } catch (error) {
       showToast({
-        type: 'error',
-        title: 'Toggle Failed',
-        message: error instanceof Error ? error.message : 'Failed to update active status'
-      })
+  type: 'error',
+  title: 'Error:',
+  message: error instanceof Error ? error.message : 'Error:'
+})
     } finally {
       setSaving(false)
     }
@@ -375,8 +377,18 @@ const { data, error } = await supabase
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
-                              <button
-                                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(complexity) }}
+                              {deleteConfirm === complexity.id ? (
+                                <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                  <button onClick={() => handleDelete(complexity.id)} className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
+                                    Confirm
+                                  </button>
+                                  <button onClick={() => setDeleteConfirm(null)} className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setDeleteConfirm(complexity.id) }}
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
@@ -384,6 +396,7 @@ const { data, error } = await supabase
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
+                              )}
                               <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                               </svg>
@@ -450,13 +463,11 @@ const { data, error } = await supabase
       </Container>
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">{editingComplexity ? 'Edit' : 'Add'} Template</h3>
-            </div>
-            <div className="p-6 space-y-4">
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={`${editingComplexity ? 'Edit' : 'Add'} Template`}
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Display Name *</label>
                 <input
@@ -487,35 +498,18 @@ const { data, error } = await supabase
                 />
                 <span className="text-sm text-slate-700">Active (included when copying to new facilities)</span>
               </label>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formDisplayName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <DeleteConfirm
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={async () => {
-          if (deleteTarget) await handleDelete(deleteTarget.id)
-        }}
-        itemName={deleteTarget?.display_name || ''}
-        itemType="complexity"
-      />
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => setShowModal(false)} />
+          <Modal.Action
+            onClick={handleSave}
+            loading={saving}
+            disabled={!formDisplayName.trim()}
+          >
+            Save
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
     </DashboardLayout>
   )
 }

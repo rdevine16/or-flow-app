@@ -1,5 +1,4 @@
 // app/admin/settings/cost-categories/page.tsx
-// app/admin/settings/cost-categories/page.tsx
 // Manage default cost category templates that get copied to new facilities
 
 'use client'
@@ -12,6 +11,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { costCategoryAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Modal } from '@/components/ui/Modal'
+import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 interface DefaultCostCategory {
   id: string
@@ -35,7 +36,6 @@ export default function DefaultCostCategoriesPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
-  const { showToast } = useToast()
  
   const [categories, setCategories] = useState<DefaultCostCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +67,9 @@ export default function DefaultCostCategoriesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedCount, setArchivedCount] = useState(0)
 
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
   // Current user
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -78,6 +81,11 @@ export default function DefaultCostCategoriesPage() {
     }
     getCurrentUser()
   }, [])
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -111,7 +119,7 @@ useEffect(() => {
       const { data, error } = await query
 
 if (error) {
-  showToast({ type: 'error', title: 'Failed to Load Categories', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
+  showToast(error instanceof Error ? error.message : 'Error fetching categories:', 'error')
 }
 if (data) setCategories(data)
 
@@ -123,7 +131,7 @@ if (data) setCategories(data)
 
       setArchivedCount(count || 0)
 } catch (error) {
-  showToast({ type: 'error', title: 'Failed to Load Categories', message: error instanceof Error ? error.message : 'An unexpected error occurred' })
+  showToast(error instanceof Error ? error.message : 'Error fetching categories', 'error')
 } finally {
       setLoading(false)
     }
@@ -208,7 +216,7 @@ if (data) setCategories(data)
 
       setShowModal(false)
     } catch (error) {
-showToast({ type: 'error', title: 'Save Failed', message: error instanceof Error ? error.message : 'Failed to save category' })
+showToast(error instanceof Error ? error.message : 'Error saving category:', 'error')
     } finally {
       setSaving(false)
     }
@@ -262,11 +270,11 @@ const handleDelete = async () => {
     setCategories(categories.filter(c => c.id !== category.id))
     setArchivedCount(prev => prev + 1)
     
-    showToast({ type: 'success', title: `"${category.name}" moved to archive` })
+    showToast(`"${category.name}" moved to archive`, 'success')
     
     closeDeleteModal()
   } catch (error) {
-    showToast({ type: 'error', title: 'Archive Failed', message: error instanceof Error ? error.message : 'Failed to archive category' })
+    showToast(error instanceof Error ? error.message : 'Error archiving category', 'error')
   } finally {
     setSaving(false)
   }
@@ -289,9 +297,9 @@ const handleRestore = async (category: DefaultCostCategory) => {
     setCategories(categories.filter(c => c.id !== category.id))
     setArchivedCount(prev => prev - 1)
     
-    showToast({ type: 'success', title: `"${category.name}" restored successfully` })
+    showToast(`"${category.name}" restored successfully`, 'success')
   } catch (error) {
-    showToast({ type: 'error', title: 'Restore Failed', message: error instanceof Error ? error.message : 'Failed to restore category' })
+    showToast(error instanceof Error ? error.message : 'Failed to restore category', 'error')
   } finally {
     setSaving(false)
   }
@@ -321,7 +329,7 @@ const toggleActive = async (category: DefaultCostCategory) => {
         c.id === category.id ? { ...c, is_active: newActiveState } : c
       ))
     } catch (error) {
-showToast({ type: 'error', title: 'Toggle Failed', message: error instanceof Error ? error.message : 'Failed to update active state' })
+showToast(error instanceof Error ? error.message : 'Error toggling active state:', 'error')
     } finally {
       setSaving(false)
     }
@@ -622,14 +630,11 @@ showToast({ type: 'error', title: 'Toggle Failed', message: error instanceof Err
       </Container>
 
       {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {editingCategory ? 'Edit Cost Category' : 'Add Cost Category'}
-            </h3>
-            
-            <div className="space-y-4">
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingCategory ? 'Edit Cost Category' : 'Add Cost Category'}
+      >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Category Name <span className="text-red-500">*</span>
@@ -699,54 +704,44 @@ showToast({ type: 'error', title: 'Toggle Failed', message: error instanceof Err
                 />
                 <span className="text-sm text-slate-700">Active (included when copying to new facilities)</span>
               </label>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : editingCategory ? 'Save Changes' : 'Add Category'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <Modal.Footer>
+          <Modal.Cancel onClick={() => setShowModal(false)} />
+          <Modal.Action
+            onClick={handleSave}
+            loading={saving}
+            disabled={!formName.trim()}
+          >
+            {editingCategory ? 'Save Changes' : 'Add Category'}
+          </Modal.Action>
+        </Modal.Footer>
+      </Modal>
+
       {/* Archive Confirmation Modal */}
-      {deleteModal.isOpen && deleteModal.category && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Archive Cost Category Template</h3>
-            </div>
-            <div className="p-6">
-              <p className="text-slate-600 mb-4">
-                Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.category.name}"</span>?
-              </p>
-              <p className="text-sm text-slate-500">
-                Archived templates won't be copied to new facilities. You can restore it anytime.
-              </p>
-            </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={saving}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Archiving...' : 'Archive Template'}
-              </button>
-            </div>
-          </div>
+      <ArchiveConfirm
+        open={deleteModal.isOpen && !!deleteModal.category}
+        onClose={closeDeleteModal}
+        onConfirm={handleDelete}
+        itemName={deleteModal.category?.name || ''}
+        itemType="cost category template"
+        loading={saving}
+      />
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
+          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {toast.type === 'success' ? (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
         </div>
       )}
     </DashboardLayout>
