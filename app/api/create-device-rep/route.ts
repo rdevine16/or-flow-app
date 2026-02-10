@@ -1,4 +1,8 @@
-// app/api/create-device-rep/route.ts
+// ============================================
+// FILE: app/api/create-device-rep/route.ts
+// PURPOSE: Create device rep account with auto-confirmed email
+// ============================================
+
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -23,6 +27,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   const body = await request.json()
   const validated = validate(createDeviceRepSchema, body)
 
+  // Create admin client
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -34,7 +39,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
     }
   )
 
-  // 1. Create auth user
+  // 1. Create auth user with email auto-confirmed
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: validated.email,
     password: validated.password,
@@ -50,10 +55,10 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   }
 
   if (!authData.user) {
-    throw new Error('User creation failed')
+    throw new Error('User creation failed - no user returned')
   }
 
-  // 2. Create user profile
+  // 2. Create user profile using the database function
   const { error: profileError } = await supabaseAdmin.rpc('create_device_rep_profile', {
     user_id: authData.user.id,
     user_email: validated.email,
@@ -63,11 +68,12 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
   })
 
   if (profileError) {
+    // Try to clean up auth user if profile creation fails
     await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
-    throw new Error(`Failed to create profile: ${profileError.message}`)
+    throw new Error(`Failed to create user profile: ${profileError.message}`)
   }
 
-  // 3. Grant facility access
+  // 3. Grant access to the facility
   const { error: accessError } = await supabaseAdmin
     .from('facility_device_reps')
     .insert({
@@ -75,18 +81,23 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
       user_id: authData.user.id,
       implant_company_id: validated.implantCompanyId,
       status: 'active',
-      accepted_at: nowUTC(), // ✅ Timezone-safe!
+      accepted_at: nowUTC(), // ✅ Timezone-safe timestamp
     })
 
   if (accessError) {
-    throw new Error(`Failed to grant access: ${accessError.message}`)
+    throw new Error(`Failed to grant facility access: ${accessError.message}`)
   }
 
   // 4. Mark invite as accepted
-  await supabaseAdmin
+  const { error: inviteError } = await supabaseAdmin
     .from('device_rep_invites')
-    .update({ accepted_at: nowUTC() }) // ✅ Timezone-safe!
+    .update({ accepted_at: nowUTC() }) // ✅ Timezone-safe timestamp
     .eq('id', validated.inviteId)
+
+  if (inviteError) {
+    // Log but don't fail - user is already created
+    console.error('Failed to update invite status:', inviteError)
+  }
 
   return NextResponse.json({
     success: true,
