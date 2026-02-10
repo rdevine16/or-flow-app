@@ -12,6 +12,8 @@ import Container from '@/components/ui/Container'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 interface Complexity {
@@ -40,6 +42,7 @@ export default function ComplexitiesAdminPage() {
   const [complexities, setComplexities] = useState<Complexity[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -246,6 +249,7 @@ const { data, error } = await supabase
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>

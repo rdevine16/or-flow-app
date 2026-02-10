@@ -9,6 +9,8 @@ import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { delayTypeAudit } from '@/lib/audit-logger'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface DelayType {
   id: string
@@ -31,6 +33,7 @@ export default function AdminDelayTypesPage() {
 
   const [delayTypes, setDelayTypes] = useState<DelayType[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', delayType: null })
   const [formData, setFormData] = useState({ name: '', display_name: '', display_order: 0 })
   const [saving, setSaving] = useState(false)
@@ -147,6 +150,7 @@ export default function AdminDelayTypesPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>

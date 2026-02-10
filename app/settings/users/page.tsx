@@ -1,4 +1,4 @@
-// This page allows facility admins and global admins to manage cancellation reasons that staff can select when cancelling a surgical case. Reasons can be categorized, and archived if no longer relevant. Auditing is implemented for all create, update, delete, and restore actions to maintain a history of changes for compliance and accountability purposes.
+// app/settings/users/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -13,6 +13,8 @@ import { userAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface User {
   id: string
@@ -61,6 +63,7 @@ export default function UsersSettingsPage() {
   const [roles, setRoles] = useState<UserRole[]>([])
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deactivateConfirm, setDeactivateConfirm] = useState<string | null>(null)
@@ -514,6 +517,7 @@ export default function UsersSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Users & Roles"
           description="Manage staff members at your facility."

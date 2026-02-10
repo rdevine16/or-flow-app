@@ -13,6 +13,8 @@ import { startImpersonation } from '@/lib/impersonation'
 import { adminAudit } from '@/lib/audit-logger'
 import DeleteFacilityModal from '@/components/modals/DeleteFacilityModal'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 interface Facility {
@@ -37,6 +39,7 @@ export default function FacilitiesListPage() {
 
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   
@@ -243,6 +246,7 @@ export default function FacilitiesListPage() {
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

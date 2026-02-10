@@ -1,3 +1,4 @@
+// app/admin/cancellation-reasons/page.tsx
 // This is the main page for managing cancellation reason templates. These templates are copied to new facilities during onboarding and can be customized by each facility without affecting others. Only accessible by global admins.
 'use client'
 
@@ -10,6 +11,8 @@ import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 // ============================================================================
@@ -49,6 +52,7 @@ export default function AdminCancellationReasonsPage() {
   // Data state
   const [reasons, setReasons] = useState<CancellationReasonTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   
   // Modal state
@@ -275,6 +279,7 @@ const fetchReasons = async () => {
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
             <p className="text-slate-500 mt-2">You need global admin privileges to access this page.</p>

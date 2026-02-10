@@ -1,3 +1,4 @@
+// app/settings/milestones/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,6 +10,8 @@ import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 interface FacilityMilestone {
@@ -37,6 +40,7 @@ export default function MilestonesSettingsPage() {
   
   const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
@@ -582,6 +586,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Milestones"
           description="Configure the surgical milestones tracked during cases."

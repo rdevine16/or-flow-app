@@ -1,5 +1,4 @@
 // app/settings/rooms/page.tsx
-// app/settings/rooms/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -18,6 +17,8 @@ import {
 } from '@/hooks/useRoomSchedules'
 import { formatTime12Hour } from '@/types/block-scheduling'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // ============================================
 // TYPES
@@ -223,6 +224,7 @@ export default function RoomsSettingsPage() {
 
   const [rooms, setRooms] = useState<ORRoom[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [showDeleted, setShowDeleted] = useState(false)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', room: null })
   const [formData, setFormData] = useState({ name: '' })
@@ -462,6 +464,7 @@ export default function RoomsSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="OR Rooms"
           description="Manage the operating rooms and their daily schedules at your facility."

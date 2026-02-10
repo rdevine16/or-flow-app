@@ -20,6 +20,8 @@ import { sendInvitationEmail } from '@/lib/email'
 import { formatLastLogin } from '@/lib/auth-helpers'
 import FacilityLogoUpload from '@/components/FacilityLogoUpload'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -253,6 +255,7 @@ export default function FacilityDetailPage() {
   // State
   const [activeTab, setActiveTab] = useState<TabType>('overview')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [facility, setFacility] = useState<Facility | null>(null)
@@ -846,6 +849,7 @@ export default function FacilityDetailPage() {
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-4">

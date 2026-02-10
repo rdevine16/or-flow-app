@@ -10,6 +10,8 @@ import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface ImplantCompany {
   id: string
@@ -33,6 +35,7 @@ export default function AdminImplantCompaniesPage() {
 
   const [companies, setCompanies] = useState<ImplantCompany[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', company: null })
   const [formData, setFormData] = useState({ name: '' })
   const [saving, setSaving] = useState(false)
@@ -215,6 +218,7 @@ const handleDelete = async (id: string) => {
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>

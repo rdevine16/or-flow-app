@@ -1,3 +1,4 @@
+// app/settings/facilities/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -7,6 +8,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit, procedureAudit, genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // =====================================================
 // TYPES
@@ -52,6 +55,7 @@ export default function FinancialsSettingsPage() {
   // Core state
   const [activeTab, setActiveTab] = useState<SubTab>('pricing')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   
   // User/Facility state
@@ -584,6 +588,7 @@ export default function FinancialsSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Financials"
           description="Manage procedure costs, reimbursement rates, and payers."

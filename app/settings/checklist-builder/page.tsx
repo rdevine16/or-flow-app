@@ -13,6 +13,8 @@ import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // =====================================================
 // TYPES
@@ -382,6 +384,7 @@ export default function ChecklistBuilderPage() {
   const { showToast } = useToast()
   const [fields, setFields] = useState<ChecklistField[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<ChecklistField | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -564,6 +567,7 @@ export default function ChecklistBuilderPage() {
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <SettingsLayout 
         title="Checklist Builder" 
         description="Customize pre-op checklist fields"

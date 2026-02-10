@@ -1,3 +1,4 @@
+// app/settings/cancellation-reasons/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,6 +10,8 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // ============================================================================
 // TYPES
@@ -48,8 +51,8 @@ export default function CancellationReasonsSettingsPage() {
   // Data state
   const [reasons, setReasons] = useState<CancellationReason[]>([])
   const [loading, setLoading] = useState(true)
-  const [showArchived, setShowArchived] = useState(false)
-  
+  const [error, setError] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)  
   // Modal state
   const [showModal, setShowModal] = useState(false)
   const [editingReason, setEditingReason] = useState<CancellationReason | null>(null)
@@ -232,6 +235,7 @@ export default function CancellationReasonsSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Cancellation Reasons"
           description="Manage the reasons staff can select when cancelling a surgical case."

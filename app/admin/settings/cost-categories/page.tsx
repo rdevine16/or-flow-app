@@ -13,6 +13,8 @@ import { costCategoryAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface DefaultCostCategory {
   id: string
@@ -39,6 +41,7 @@ export default function DefaultCostCategoriesPage() {
  
   const [categories, setCategories] = useState<DefaultCostCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Modal state
@@ -350,6 +353,7 @@ showToast(error instanceof Error ? error.message : 'Error toggling active state:
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>

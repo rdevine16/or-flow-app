@@ -10,6 +10,8 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 // =====================================================
@@ -386,6 +388,7 @@ export default function ChecklistTemplatesPage() {
 
   const [fields, setFields] = useState<ChecklistFieldTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<ChecklistFieldTemplate | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -596,6 +599,7 @@ if (error) {
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <div className="p-6 max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">

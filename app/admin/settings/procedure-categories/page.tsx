@@ -1,3 +1,4 @@
+// app/admin/settings/procedure-categories/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,8 @@ import Container from '@/components/ui/Container'
 import { procedureCategoryAudit } from '@/lib/audit-logger'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface BodyRegion {
   id: string
@@ -40,6 +43,7 @@ export default function AdminProcedureCategoriesPage() {
   const [categories, setCategories] = useState<ProcedureCategory[]>([])
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Modal states
@@ -335,6 +339,7 @@ await procedureCategoryAudit.updated(
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <div className="max-w-4xl mx-auto">
           {/* Header */}
  <div className="flex items-start justify-between mb-6">

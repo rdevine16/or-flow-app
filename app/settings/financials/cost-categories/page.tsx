@@ -12,6 +12,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface CostCategory {
   id: string
@@ -41,6 +43,7 @@ export default function CostCategoriesPage() {
   const { showToast } = useToast() 
   const [categories, setCategories] = useState<CostCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Modal state
@@ -429,6 +432,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Cost Categories" description="Manage debit and credit categories for financial tracking">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />

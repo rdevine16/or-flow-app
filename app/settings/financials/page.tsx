@@ -12,6 +12,8 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 // Financial audit actions for filtering recent activity
@@ -99,6 +101,7 @@ export default function FinancialsOverviewPage() {
   })
   const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // OR Rate editing
   const [editingRate, setEditingRate] = useState(false)
@@ -329,6 +332,7 @@ showToast({
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />

@@ -13,6 +13,8 @@ import Container from '@/components/ui/Container'
 import { adminAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface DefaultProcedure {
   id: string
@@ -70,6 +72,7 @@ export default function DefaultProceduresPage() {
   const [milestoneTypes, setMilestoneTypes] = useState<MilestoneType[]>([])
   const [procedureMilestones, setProcedureMilestones] = useState<DefaultProcedureMilestone[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Expanded procedure for milestone config
@@ -472,6 +475,7 @@ export default function DefaultProceduresPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>

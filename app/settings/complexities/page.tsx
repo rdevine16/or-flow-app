@@ -11,6 +11,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface Complexity {
   id: string
@@ -37,6 +39,7 @@ export default function FacilityComplexitiesPage() {
   const [complexities, setComplexities] = useState<Complexity[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -272,6 +275,7 @@ const fetchArchivedComplexities = async () => {
   return (
     <DashboardLayout>
       <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout title="Case Complexities" description="Complexity factors that can be tagged on cases">
           {loading ? (
             <div className="flex justify-center py-12">

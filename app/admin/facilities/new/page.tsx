@@ -11,6 +11,8 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { facilityAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // ============================================================================
 // INTERFACES
@@ -893,6 +895,7 @@ if (insertError) {
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <div className="max-w-3xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="mb-8">

@@ -13,6 +13,8 @@ import { adminAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface BodyRegion {
   id: string
@@ -31,6 +33,7 @@ export default function AdminBodyRegionsPage() {
 
   const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Modal states
@@ -280,6 +283,7 @@ const handleDelete = (region: BodyRegion) => {
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>

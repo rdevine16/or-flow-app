@@ -12,6 +12,8 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useProcedureTypes, usePayers } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 // Types
@@ -68,6 +70,7 @@ export default function ProcedurePricingPage() {
   const [facilitySettings, setFacilitySettings] = useState<FacilitySettings | null>(null)
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Panel state
@@ -369,6 +372,7 @@ export default function ProcedurePricingPage() {
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Procedure Pricing" description="Configure costs and reimbursements for each procedure type">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />

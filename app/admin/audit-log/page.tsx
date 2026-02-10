@@ -1,3 +1,4 @@
+// app/admin/audit-log/page.tsx
 // This is the main page for the global audit log. It displays a list of all audit log entries across all facilities, with filters and pagination. Only accessible by global admins.
 'use client'
 
@@ -10,6 +11,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { Spinner } from '@/components/ui/Loading'
 import { usePagination } from '@/hooks/usePagination'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface AuditLogEntry {
   id: string
@@ -97,6 +100,7 @@ export default function GlobalAuditLogPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([])
   const [facilities, setFacilities] = useState<Facility[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   
@@ -246,6 +250,7 @@ const csvContent = [
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center h-64">
 <Spinner size="md" />
           </div>

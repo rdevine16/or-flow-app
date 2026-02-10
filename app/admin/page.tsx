@@ -11,6 +11,8 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { formatAuditAction } from '@/lib/audit'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface FacilityMetrics {
   total: number
@@ -45,6 +47,7 @@ export default function AdminDashboardPage() {
   const { isGlobalAdmin, loading: userLoading } = useUser()
 const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [facilityMetrics, setFacilityMetrics] = useState<FacilityMetrics>({
     total: 0,
     active: 0,
@@ -175,6 +178,7 @@ const { showToast } = useToast()
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div>

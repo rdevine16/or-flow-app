@@ -1,3 +1,4 @@
+// app/profile/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { checkPasswordStrength } from '@/lib/passwords'
 import { authAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface UserProfile {
   id: string
@@ -32,6 +35,7 @@ export default function ProfilePage() {
   // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -288,6 +292,7 @@ const handleChangePassword = async () => {
 
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <div className="max-w-4xl mx-auto py-8 px-4">
         <h1 className="text-2xl font-bold text-slate-900 mb-8">Profile Settings</h1>
 

@@ -29,6 +29,8 @@ import {
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // Week options for dynamic holidays
 const WEEK_OPTIONS = [

@@ -1,15 +1,18 @@
+// app/spd/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import SurgeonAvatar from '@/components/ui/SurgeonAvatar'
 import { getLocalDateString } from '@/lib/date-utils'
-import { getImpersonationState } from '@/lib/impersonation'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
 
 // =====================================================
 // TYPES
@@ -475,13 +478,13 @@ export default function SPDDashboardPage() {
   const router = useRouter()
   const supabase = createClient()
   const { showToast } = useToast()
+  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
   // State
   const [cases, setCases] = useState<SPDCase[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState<DateFilter>('3days')
   const [statusFilter, setStatusFilter] = useState<TrayStatusFilter>('all')
-  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
-  const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   
   // Slideout state
   const [selectedCase, setSelectedCase] = useState<SPDCase | null>(null)
@@ -489,82 +492,59 @@ export default function SPDDashboardPage() {
   const [activities, setActivities] = useState<TrayActivity[]>([])
   const [loadingActivities, setLoadingActivities] = useState(false)
 
-  // Get effective facility ID (handles impersonation)
-  useEffect(() => {
-    async function getFacilityId() {
-      const impersonation = getImpersonationState()
-      if (impersonation?.facilityId) {
-        setEffectiveFacilityId(impersonation.facilityId)
-        return
-      }
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('facility_id, access_level')
-        .eq('id', user.id)
-        .single()
-
-      if (userData?.access_level === 'global_admin' && !userData?.facility_id) {
-        setNoFacilitySelected(true)
-      } else if (userData?.facility_id) {
-        setEffectiveFacilityId(userData.facility_id)
-      }
-    }
-    getFacilityId()
-  }, [supabase])
-
   // Fetch cases
   const fetchCases = useCallback(async () => {
     if (!effectiveFacilityId) return
 
     setLoading(true)
+    setError(null)
     const { start, end } = getDateRange(dateFilter)
 
-    const { data, error } = await supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        scheduled_date,
-        start_time,
-        operative_side,
-        rep_required_override,
-        or_rooms(name),
-        procedure_types(name, requires_rep),
-        case_statuses(name),
-        surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
-        case_device_companies(
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('cases')
+        .select(`
           id,
-          implant_company_id,
-          tray_status,
-          loaner_tray_count,
-          delivered_tray_count,
-          confirmed_at,
-          delivered_at,
-          rep_notes,
-          implant_companies(name)
-        )
-      `)
-      .eq('facility_id', effectiveFacilityId)
-      .gte('scheduled_date', start)
-      .lte('scheduled_date', end)
-      .neq('case_statuses.name', 'cancelled')
-      .order('scheduled_date', { ascending: true })
-      .order('start_time', { ascending: true })
+          case_number,
+          scheduled_date,
+          start_time,
+          operative_side,
+          rep_required_override,
+          or_rooms(name),
+          procedure_types(name, requires_rep),
+          case_statuses(name),
+          surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
+          case_device_companies(
+            id,
+            implant_company_id,
+            tray_status,
+            loaner_tray_count,
+            delivered_tray_count,
+            confirmed_at,
+            delivered_at,
+            rep_notes,
+            implant_companies(name)
+          )
+        `)
+        .eq('facility_id', effectiveFacilityId)
+        .gte('scheduled_date', start)
+        .lte('scheduled_date', end)
+        .neq('case_statuses.name', 'cancelled')
+        .order('scheduled_date', { ascending: true })
+        .order('start_time', { ascending: true })
 
-    if (error) {
+      if (fetchError) throw fetchError
+      setCases((data as unknown as SPDCase[]) || [])
+    } catch (err) {
+      setError('Failed to load SPD cases. Please try again.')
       showToast({
         type: 'error',
-        title: 'Error fetching SPD cases',
-        message: error instanceof Error ? error.message : 'Failed to fetch SPD cases'
+        title: 'Failed to load SPD cases',
+        message: err instanceof Error ? err.message : 'Please try again'
       })
-    } else {
-      setCases((data as unknown as SPDCase[]) || [])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [supabase, effectiveFacilityId, dateFilter])
 
   useEffect(() => {
@@ -654,7 +634,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
   // =====================================================
 
   // No facility selected (global admin without impersonation)
-  if (noFacilitySelected) {
+  if (!effectiveFacilityId && isGlobalAdmin && !userLoading) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
@@ -672,8 +652,17 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
     )
   }
 
+  if (userLoading) {
+    return (
+      <DashboardLayout>
+        <PageLoader message="Loading SPD dashboard..." />
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
+      <ErrorBanner message={error} onRetry={fetchCases} onDismiss={() => setError(null)} />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

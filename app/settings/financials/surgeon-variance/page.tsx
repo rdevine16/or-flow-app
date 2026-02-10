@@ -17,6 +17,8 @@ import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface Surgeon {
   id: string
@@ -83,6 +85,7 @@ export default function SurgeonVariancePage() {
   const [surgeonCostItems, setSurgeonCostItems] = useState<SurgeonCostItem[]>([])
   const [procedureCostItems, setProcedureCostItems] = useState<ProcedureCostItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Filter state
@@ -383,6 +386,7 @@ export default function SurgeonVariancePage() {
   return (
     <DashboardLayout>
       <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout 
           title="Surgeon Variance" 
           description="Configure surgeon-specific cost overrides"

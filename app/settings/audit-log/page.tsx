@@ -1,3 +1,4 @@
+// app/settings/audit-log/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -5,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface AuditLogEntry {
   id: string
@@ -77,6 +80,7 @@ export default function AuditLogPage() {
   const supabase = createClient()
   const [logs, setLogs] = useState<AuditLogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
@@ -217,6 +221,7 @@ export default function AuditLogPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Audit Log"
           description="View a history of all actions taken in the system."

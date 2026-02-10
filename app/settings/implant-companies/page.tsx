@@ -8,6 +8,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { implantCompanyAudit } from '@/lib/audit-logger'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface ImplantCompany {
   id: string
@@ -28,6 +30,7 @@ export default function ImplantCompaniesPage() {
   const supabase = createClient()
   const [companies, setCompanies] = useState<ImplantCompany[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [facilityId, setFacilityId] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', company: null })
   const [formData, setFormData] = useState({ name: '' })
@@ -214,6 +217,7 @@ const handleDelete = async (id: string) => {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Implant Companies"
           description="Manage surgical implant vendors for case assignments."

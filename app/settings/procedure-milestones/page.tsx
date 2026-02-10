@@ -8,6 +8,8 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface ProcedureType {
   id: string
@@ -38,6 +40,7 @@ export default function ProcedureMilestonesSettingsPage() {
   const { showToast } = useToast()
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
   const [configs, setConfigs] = useState<ProcedureMilestoneConfig[]>([])
@@ -313,6 +316,7 @@ export default function ProcedureMilestonesSettingsPage() {
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />

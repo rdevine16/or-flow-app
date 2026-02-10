@@ -1,3 +1,4 @@
+// app/settings/device-reps/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { deviceRepAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface DeviceRep {
   id: string
@@ -56,6 +59,7 @@ export default function DeviceRepsPage() {
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [companies, setCompanies] = useState<ImplantCompany[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [facilityId, setFacilityId] = useState<string | null>(null)
   const [facilityName, setFacilityName] = useState<string>('')
   const [inviteModal, setInviteModal] = useState<InviteModalState>({ isOpen: false })
@@ -332,6 +336,7 @@ export default function DeviceRepsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout
           title="Device Rep Access"
           description="Manage implant company representative access to your cases."

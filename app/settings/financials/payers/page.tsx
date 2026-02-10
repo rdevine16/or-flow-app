@@ -12,6 +12,8 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 interface Payer {
   id: string
@@ -26,6 +28,7 @@ export default function PayersPage() {
   const { showToast } = useToast()
   const [payers, setPayers] = useState<Payer[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Show inactive payers toggle
@@ -258,6 +261,7 @@ await genericAuditLog(supabase, 'payer.restored', {
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
             <div className="flex items-center justify-center min-h-[400px]">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />

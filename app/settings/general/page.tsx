@@ -11,6 +11,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // =====================================================
 // TYPES
@@ -183,6 +185,7 @@ export default function GeneralOverviewPage() {
   const [facility, setFacility] = useState<Facility | null>(null)
   const [stats, setStats] = useState<FacilityStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -391,6 +394,7 @@ showToast({
   return (
     <DashboardLayout>
       <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout title="General" description="Manage your facility's basic information and settings">
           {loading ? (
             <OverviewSkeleton />

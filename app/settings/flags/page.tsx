@@ -1,5 +1,4 @@
 // app/settings/flags/page.tsx
-// app/settings/flags/page.tsx
 // ORbit Flag System Settings — Phase 2
 // Threshold Flag Rules — auto-detection rules with adjustable thresholds
 // Delay types are managed on the dedicated delay types settings page.
@@ -13,6 +12,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // =====================================================
 // TYPES
@@ -82,6 +83,7 @@ export default function FlagsSettingsPage() {
   // State
   const [rules, setRules] = useState<FlagRule[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null) // rule ID being saved
   const [expandedRule, setExpandedRule] = useState<string | null>(null)
   // =====================================================
@@ -209,6 +211,7 @@ export default function FlagsSettingsPage() {
     return (
       <DashboardLayout>
         <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />

@@ -10,6 +10,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // =====================================================
 // TYPES
@@ -113,6 +115,7 @@ export default function SubscriptionPage() {
   const { showToast } = useToast()
   const [stats, setStats] = useState<UsageStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Simulated current plan (would come from database in production)
   const currentPlan = plans[1] // Professional
@@ -184,6 +187,7 @@ export default function SubscriptionPage() {
   return (
     <DashboardLayout>
       <Container>
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <SettingsLayout title="Subscription" description="Manage your plan, view usage, and billing details">
           {/* Coming Soon Banner */}
           <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">

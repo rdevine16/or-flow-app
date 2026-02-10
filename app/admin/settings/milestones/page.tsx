@@ -1,3 +1,4 @@
+// app/admin/settings/milestones/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,8 @@ import Container from '@/components/ui/Container'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 
 interface MilestoneType {
@@ -25,6 +28,7 @@ export default function AdminMilestonesSettingsPage() {
   const supabase = createClient()
   const [milestones, setMilestones] = useState<MilestoneType[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
   
@@ -468,6 +472,7 @@ const fetchMilestones = async () => {
   return (
     <DashboardLayout>
       <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
 <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-start justify-between mb-6">

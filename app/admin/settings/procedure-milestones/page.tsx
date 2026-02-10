@@ -10,6 +10,8 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import { PageLoader } from '@/components/ui/Loading'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
 // Types
 interface DefaultProcedureType {
@@ -45,6 +47,7 @@ export default function AdminProcedureMilestonesPage() {
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [procedures, setProcedures] = useState<DefaultProcedureType[]>([])
   const [milestones, setMilestones] = useState<MilestoneType[]>([])
@@ -261,6 +264,7 @@ export default function AdminProcedureMilestonesPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
+          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <div className="flex items-center justify-center py-12">
             <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
