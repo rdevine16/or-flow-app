@@ -1,13 +1,8 @@
 /**
- * ENTERPRISE ERROR HANDLING
- * 
- * Drop-in replacement for production error handling.
- * Works with your existing Supabase setup.
+ * ERROR HANDLING FOR API ROUTES (Server-side)
  */
 
-'use client'
-
-import { useState, useCallback } from 'react'
+import { NextRequest, NextResponse } from 'next/server'
 import { PostgrestError } from '@supabase/supabase-js'
 
 // ============================================
@@ -73,19 +68,10 @@ export async function logError(
     ...context,
   }
 
-  // Log to console in development
+  // Log to console
   if (process.env.NODE_ENV === 'development') {
-    console.error('❌ Error logged:', errorLog)
-  }
-
-  // In production, you could log to:
-  // - Supabase error_logs table
-  // - Sentry
-  // - DataDog
-  // - CloudWatch
-  
-  // For now, just console.error in production too
-  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ Error:', errorLog)
+  } else {
     console.error('Error:', error.message, context)
   }
 }
@@ -133,70 +119,8 @@ export function handleSupabaseError(error: PostgrestError | null): never {
 }
 
 // ============================================
-// ASYNC HANDLER HOOK (Client Components)
+// API ROUTE ERROR HANDLER
 // ============================================
-
-interface AsyncHandlerOptions<T> {
-  onSuccess?: (data: T) => void
-  onError?: (error: Error) => void | string
-  showToast?: boolean
-}
-
-export function useAsyncHandler<T = any>(
-  options: AsyncHandlerOptions<T> = {}
-) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-
-  const execute = useCallback(
-    async (fn: () => Promise<T>): Promise<T | null> => {
-      setLoading(true)
-      setError(null)
-
-      try {
-        const result = await fn()
-        
-        if (options.onSuccess) {
-          options.onSuccess(result)
-        }
-        
-        return result
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err))
-        setError(error)
-
-        // Log error
-        await logError(error)
-
-        // Call custom error handler
-        if (options.onError) {
-          options.onError(error)
-        }
-
-        // You can integrate with your toast system here
-        // toast.error(error.message)
-
-        return null
-      } finally {
-        setLoading(false)
-      }
-    },
-    [options]
-  )
-
-  const reset = useCallback(() => {
-    setLoading(false)
-    setError(null)
-  }, [])
-
-  return { execute, loading, error, reset }
-}
-
-// ============================================
-// API ROUTE ERROR HANDLER (Server)
-// ============================================
-
-import { NextRequest, NextResponse } from 'next/server'
 
 export function withErrorHandler<T>(
   handler: (req: NextRequest, ...args: any[]) => Promise<T>
@@ -241,60 +165,3 @@ export function withErrorHandler<T>(
     }
   }
 }
-
-// ============================================
-// EXAMPLE USAGE
-// ============================================
-
-/*
-// Example 1: In a client component
-import { useAsyncHandler, handleSupabaseError } from '@/lib/errorHandling'
-import { createClient } from '@/lib/supabase'
-
-function MyComponent() {
-  const { execute, loading, error } = useAsyncHandler({
-    onSuccess: (data) => {
-      console.log('Success!', data)
-    },
-  })
-
-  async function handleSubmit() {
-    await execute(async () => {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('cases')
-        .insert({ ... })
-        .select()
-        .single()
-      
-      if (error) handleSupabaseError(error)
-      return data
-    })
-  }
-
-  if (loading) return <div>Loading...</div>
-  if (error) return <div>Error: {error.message}</div>
-
-  return <button onClick={handleSubmit}>Submit</button>
-}
-
-// Example 2: In an API route
-import { withErrorHandler, handleSupabaseError } from '@/lib/errorHandling'
-import { createClient } from '@/lib/supabase-server'
-
-export const POST = withErrorHandler(async (req) => {
-  const supabase = await createClient()
-  
-  const body = await req.json()
-  
-  const { data, error } = await supabase
-    .from('cases')
-    .insert(body)
-    .select()
-    .single()
-  
-  if (error) handleSupabaseError(error)
-  
-  return NextResponse.json(data, { status: 201 })
-})
-*/
