@@ -149,34 +149,21 @@ function getDateRange(filter: string): { start?: string; end?: string } {
     case 'yesterday': {
       const yesterday = new Date(todayDate)
       yesterday.setDate(yesterday.getDate() - 1)
-      const yd = yesterday.toISOString().split('T')[0]
-      return { start: yd, end: yd }
+      const yesterdayStr = getLocalDateString(yesterday)
+      return { start: yesterdayStr, end: yesterdayStr }
     }
     case 'week': {
       const weekStart = new Date(todayDate)
-      weekStart.setDate(todayDate.getDate() - todayDate.getDay())
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      return {
-        start: weekStart.toISOString().split('T')[0],
-        end: weekEnd.toISOString().split('T')[0]
-      }
+      weekStart.setDate(weekStart.getDate() - 7)
+      return { start: getLocalDateString(weekStart), end: today }
     }
     case 'month': {
       const monthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)
-      const monthEnd = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0)
-      return {
-        start: monthStart.toISOString().split('T')[0],
-        end: monthEnd.toISOString().split('T')[0]
-      }
+      return { start: getLocalDateString(monthStart), end: today }
     }
     case 'quarter': {
       const quarterStart = new Date(todayDate.getFullYear(), Math.floor(todayDate.getMonth() / 3) * 3, 1)
-      const quarterEnd = new Date(todayDate.getFullYear(), Math.floor(todayDate.getMonth() / 3) * 3 + 3, 0)
-      return {
-        start: quarterStart.toISOString().split('T')[0],
-        end: quarterEnd.toISOString().split('T')[0]
-      }
+      return { start: getLocalDateString(quarterStart), end: today }
     }
     case 'all':
     default:
@@ -275,148 +262,166 @@ function CasesPageContent() {
   // FACILITY INITIALIZATION
   // ============================================================================
 
-useEffect(() => {
-  async function fetchUserFacility() {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      
-      if (authError) throw authError
-      
-      if (!user) {
-        setLoading(false)
-        return
-      }
+  useEffect(() => {
+    async function fetchUserFacility() {
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        
+        if (authError) throw authError
+        
+        if (!user) {
+          setLoading(false)
+          return
+        }
 
-      setUserId(user.id)
-      setUserEmail(user.email || null)
+        setUserId(user.id)
+        setUserEmail(user.email || null)
 
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('facility_id, access_level')
-        .eq('id', user.id)
-        .single()
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('facility_id, access_level')
+          .eq('id', user.id)
+          .single()
 
-      if (userError) throw userError
+        if (userError) throw userError
 
-      if (userData?.access_level === 'global_admin') {
-        const impersonation = getImpersonationState()
-        if (impersonation?.facilityId) {
-          setEffectiveFacilityId(impersonation.facilityId)
+        if (userData?.access_level === 'global_admin') {
+          const impersonation = getImpersonationState()
+          if (impersonation?.facilityId) {
+            setEffectiveFacilityId(impersonation.facilityId)
+          } else {
+            setNoFacilitySelected(true)
+            setLoading(false)
+          }
+          return
+        }
+
+        if (userData?.facility_id) {
+          setEffectiveFacilityId(userData.facility_id)
         } else {
-          setNoFacilitySelected(true)
           setLoading(false)
         }
-        return
-      }
-
-      if (userData?.facility_id) {
-        setEffectiveFacilityId(userData.facility_id)
-      } else {
+      } catch (err) {
+        setError('Failed to load user information. Please refresh the page.')
+        showToast({
+          type: 'error',
+          title: 'Failed to load user',
+          message: 'Please refresh the page'
+        })
         setLoading(false)
       }
-    } catch (err) {
-      setError('Failed to load user information. Please refresh the page.')
-      showToast({
-        type: 'error',
-        title: 'Failed to load user',
-        message: 'Please refresh the page'
-      })
-      setLoading(false)
     }
-  }
 
-  fetchUserFacility()  // ← YOU MUST CALL THE FUNCTION HERE!
-}, [supabase])
+    fetchUserFacility()
+  }, [supabase, showToast])
+
+  // ============================================================================
+  // FETCH CASES (with filters applied)
+  // ============================================================================
 
   const fetchCases = useCallback(async (filters: FilterState) => {
-  if (!effectiveFacilityId) return
-  
-  try {
-    setLoading(true)
-    setError(null)
+    if (!effectiveFacilityId) return
+    
+    try {
+      setLoading(true)
+      setError(null)
 
-    let query = supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        scheduled_date,
-        start_time,
-        operative_side,
-        or_rooms (name),
-        procedure_types (name),
-        case_statuses (name),
-        surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-      `)
-      .eq('facility_id', effectiveFacilityId)
-      .order('scheduled_date', { ascending: false })
-      .order('start_time', { ascending: true })
+      // Build base query
+      let query = supabase
+        .from('cases')
+        .select(`
+          id,
+          case_number,
+          scheduled_date,
+          start_time,
+          operative_side,
+          or_rooms (name),
+          procedure_types (name),
+          case_statuses (name),
+          surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
+        `)
+        .eq('facility_id', effectiveFacilityId)
+        .order('scheduled_date', { ascending: false })
+        .order('start_time', { ascending: true })
 
-    const dateRange = getDateRange(filters.dateRange)
-    if (dateRange.start && dateRange.end) {
-      query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
-    }
-
-    if (filters.status.length > 0) {
-      const { data: statusData, error: statusError } = await supabase
-        .from('case_statuses')
-        .select('id, name')
-        .in('name', filters.status)
-      
-      if (statusError) throw statusError
-      
-      if (statusData && statusData.length > 0) {
-        query = query.in('status_id', statusData.map(s => s.id))
+      // Apply date range
+      const dateRange = getDateRange(filters.dateRange)
+      if (dateRange.start && dateRange.end) {
+        query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
       }
-    }
 
-    if (filters.surgeonIds.length > 0) {
-      query = query.in('surgeon_id', filters.surgeonIds)
-    }
-
-    if (filters.roomIds.length > 0) {
-      query = query.in('or_room_id', filters.roomIds)
-    }
-
-    if (filters.procedureIds.length > 0) {
-      query = query.in('procedure_type_id', filters.procedureIds)
-    }
-
-    const { data, error: casesError } = await query
-    
-    if (casesError) throw casesError
-    
-    let filteredData = (data as unknown as Case[]) || []
-
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      filteredData = filteredData.filter(c => {
-        const caseNumber = c.case_number.toLowerCase()
-        const procedure = extractName(c.procedure_types)?.toLowerCase() || ''
-        const surgeon = getSurgeon(c.surgeon).fullName.toLowerCase()
-        const room = extractName(c.or_rooms)?.toLowerCase() || ''
+      // Apply status filter
+      if (filters.status.length > 0) {
+        const { data: statusData, error: statusError } = await supabase
+          .from('case_statuses')
+          .select('id, name')
+          .in('name', filters.status)
         
-        return (
-          caseNumber.includes(searchLower) ||
-          procedure.includes(searchLower) ||
-          surgeon.includes(searchLower) ||
-          room.includes(searchLower)
-        )
-      })
-    }
+        if (statusError) throw statusError
+        
+        if (statusData && statusData.length > 0) {
+          query = query.in('status_id', statusData.map(s => s.id))
+        }
+      }
 
-    setCases(filteredData)
-  } catch (err) {
-    setError('Failed to load cases. Please try again.')
-    showToast({
-      type: 'error',
-      title: 'Failed to load cases',
-      message: 'Please try again or contact support'
-    })
-  } finally {
-    setLoading(false)
-  }
-}, [effectiveFacilityId, supabase, showToast])
+      // Apply surgeon filter
+      if (filters.surgeonIds.length > 0) {
+        query = query.in('surgeon_id', filters.surgeonIds)
+      }
+
+      // Apply room filter
+      if (filters.roomIds.length > 0) {
+        query = query.in('or_room_id', filters.roomIds)
+      }
+
+      // Apply procedure filter
+      if (filters.procedureIds.length > 0) {
+        query = query.in('procedure_type_id', filters.procedureIds)
+      }
+
+      const { data, error: casesError } = await query
+      
+      if (casesError) throw casesError
+      
+      let filteredData = (data as unknown as Case[]) || []
+
+      // Apply text search (client-side for flexibility)
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase()
+        filteredData = filteredData.filter(c => {
+          const caseNumber = c.case_number.toLowerCase()
+          const procedure = extractName(c.procedure_types)?.toLowerCase() || ''
+          const surgeon = getSurgeon(c.surgeon).fullName.toLowerCase()
+          const room = extractName(c.or_rooms)?.toLowerCase() || ''
+          
+          return (
+            caseNumber.includes(searchLower) ||
+            procedure.includes(searchLower) ||
+            surgeon.includes(searchLower) ||
+            room.includes(searchLower)
+          )
+        })
+      }
+
+      setCases(filteredData)
+    } catch (err) {
+      setError('Failed to load cases. Please try again.')
+      showToast({
+        type: 'error',
+        title: 'Failed to load cases',
+        message: 'Please try again or contact support'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [effectiveFacilityId, supabase, showToast])
+
+  // Fetch cases when facility or filters change
+  useEffect(() => {
+    if (effectiveFacilityId) {
+      fetchCases(currentFilters)
+    }
+  }, [effectiveFacilityId, currentFilters, fetchCases])
 
   // ============================================================================
   // HANDLERS
@@ -427,31 +432,31 @@ useEffect(() => {
     setCurrentPage(1) // Reset to first page on filter change
   }, [])
 
-const handleDelete = async (id: string) => {
-  try {
-    const { error: deleteError } = await supabase
-      .from('cases')
-      .delete()
-      .eq('id', id)
-    
-    if (deleteError) throw deleteError
-    
-    setCases(cases.filter(c => c.id !== id))
-    setDeleteTarget(null)
-    
-    showToast({
-      type: 'success',
-      title: 'Case deleted',
-      message: 'The case has been removed successfully'
-    })
-  } catch (err) {
-    showToast({
-      type: 'error',
-      title: 'Failed to delete case',
-      message: 'Please try again'
-    })
+  const handleDelete = async (id: string) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('cases')
+        .delete()
+        .eq('id', id)
+      
+      if (deleteError) throw deleteError
+      
+      setCases(cases.filter(c => c.id !== id))
+      setDeleteTarget(null)
+      
+      showToast({
+        type: 'success',
+        title: 'Case deleted',
+        message: 'The case has been removed successfully'
+      })
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Failed to delete case',
+        message: 'Please try again'
+      })
+    }
   }
-}
 
   // ============================================================================
   // RENDER - NO FACILITY SELECTED STATE
@@ -490,34 +495,35 @@ const handleDelete = async (id: string) => {
 
   return (
     <DashboardLayout>
-      {/* Error Banner - ADD THIS ENTIRE SECTION */}
-    {error && (
-      <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-        <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div className="flex-1">
-          <p className="text-sm font-medium text-red-800">{error}</p>
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800">{error}</p>
+            <button
+              onClick={() => {
+                setError(null)
+                fetchCases(currentFilters)
+              }}
+              className="mt-2 text-sm text-red-600 underline hover:text-red-700"
+            >
+              Try again
+            </button>
+          </div>
           <button
-            onClick={() => {
-              setError(null)
-              fetchCases(currentFilters)
-            }}
-            className="mt-2 text-sm text-red-600 underline hover:text-red-700"
+            onClick={() => setError(null)}
+            className="text-red-400 hover:text-red-600"
           >
-            Try again
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
-        <button
-          onClick={() => setError(null)}
-          className="text-red-400 hover:text-red-600"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-    )}
+      )}
+
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -606,200 +612,134 @@ const handleDelete = async (id: string) => {
                     
                     {/* Time */}
                     <div className="col-span-1">
-                      <span className="text-sm font-semibold text-slate-900 font-mono">{formatTime(c.start_time)}</span>
+                      <span className="text-sm text-slate-700 font-mono">{formatTime(c.start_time)}</span>
                     </div>
                     
                     {/* Case Number */}
                     <div className="col-span-2">
-                      <Link
+                      <Link 
                         href={`/cases/${c.id}`}
-                        className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors"
+                        className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                       >
-                        {c.case_number}
+                        Case #{c.case_number}
                       </Link>
                     </div>
                     
                     {/* Room */}
                     <div className="col-span-1">
-                      <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        <span className="text-xs font-medium text-slate-600">{roomName || '—'}</span>
-                      </div>
+                      <span className="text-sm text-slate-600">{roomName || '—'}</span>
                     </div>
                     
                     {/* Surgeon */}
-                    <div className="col-span-2">
-                      <div className="flex items-center gap-2.5">
-                        <SurgeonAvatar name={surgeon.fullName} size="sm" />
-                        <span className="text-sm font-medium text-slate-700 truncate">{surgeon.name}</span>
-                      </div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <SurgeonAvatar name={surgeon.fullName} size="sm" />
+                      <span className="text-sm text-slate-700">{surgeon.name}</span>
                     </div>
                     
                     {/* Procedure */}
                     <div className="col-span-2">
-                      <span className="text-sm text-slate-600 truncate block">{procedureName || 'Not specified'}</span>
+                      <span className="text-sm text-slate-700">{procedureName || '—'}</span>
                     </div>
                     
                     {/* Status */}
                     <div className="col-span-2">
-                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border ${statusConfig.bgColor} ${statusConfig.borderColor}`}>
+                      <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${statusConfig.bgColor} ${statusConfig.borderColor} border`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dotColor}`}></div>
-                        <span className={`text-xs font-semibold ${statusConfig.textColor}`}>
-                          {statusConfig.label}
-                        </span>
+                        <span className={`text-xs font-medium ${statusConfig.textColor}`}>{statusConfig.label}</span>
                       </div>
                     </div>
                     
                     {/* Actions */}
-                    <div className="col-span-1">
-                      <div className="flex items-center justify-end gap-1">
-                        {/* View button - ALWAYS visible */}
-                        <Link
-                          href={`/cases/${c.id}`}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                          title="View"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </Link>
-                        
-                        {/* Only show edit/delete if not completed or cancelled */}
-                        {statusName !== 'completed' && statusName !== 'cancelled' && (
-                          <>
-                            {/* Edit button */}
-                            <button
-                              onClick={() => router.push(`/cases/${c.id}/edit`)}
-                              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all duration-200"
-                              title="Edit"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                            
-                            <button
-                                onClick={() => setDeleteTarget(c)}
-                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                title="Delete"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                          </>
-                        )}
-                      </div>
+                    <div className="col-span-1 flex justify-end">
+                      <button
+                        onClick={() => setDeleteTarget(c)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
+                        title="Delete case"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 )
               })}
             </div>
 
-            {/* Table Footer - Pagination */}
-            <div className="px-6 py-3 bg-slate-50/50 border-t border-slate-200/80">
-              <div className="flex items-center justify-between">
-                {/* Left: Per-page selector + result count */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">Show</span>
-                    <select
-                      value={perPage}
-                      onChange={(e) => {
-                        setPerPage(Number(e.target.value))
-                        setCurrentPage(1)
-                      }}
-                      className="px-2.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors cursor-pointer appearance-none pr-7"
-                      style={{ 
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'right 6px center'
-                      }}
-                    >
-                      {perPageOptions.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    <span className="text-sm text-slate-500">per page</span>
-                  </div>
-                  
-                  <div className="h-4 w-px bg-slate-200" />
-                  
-                  <span className="text-sm text-slate-500">
-                    Showing{' '}
-                    <span className="font-semibold text-slate-700">
-                      {Math.min((currentPage - 1) * perPage + 1, cases.length)}
-                    </span>
-                    –
-                    <span className="font-semibold text-slate-700">
-                      {Math.min(currentPage * perPage, cases.length)}
-                    </span>
-                    {' '}of{' '}
-                    <span className="font-semibold text-slate-700">{cases.length}</span> cases
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+                {/* Per-page selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-600">Show</span>
+                  <select
+                    value={perPage}
+                    onChange={(e) => {
+                      setPerPage(Number(e.target.value))
+                      setCurrentPage(1)
+                    }}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {perPageOptions.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm text-slate-600">
+                    of {cases.length} {cases.length === 1 ? 'case' : 'cases'}
                   </span>
                 </div>
 
-                {/* Right: Page navigation */}
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-1">
-                    {/* Previous button */}
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                      title="Previous page"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
+                {/* Page buttons */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
 
-                    {/* Page numbers */}
-                    {pageNumbers.map((page, idx) =>
-                      page === 'ellipsis' ? (
-                        <span key={`ellipsis-${idx}`} className="px-1 text-sm text-slate-400">
-                          ···
-                        </span>
-                      ) : (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page)}
-                          className={`min-w-[32px] h-8 px-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                            page === currentPage
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'text-slate-600 hover:bg-white hover:text-slate-900'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      )
-                    )}
+                  {pageNumbers.map((page, idx) => (
+                    page === 'ellipsis' ? (
+                      <span key={`ellipsis-${idx}`} className="px-3 py-1 text-slate-400">...</span>
+                    ) : (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`
+                          px-3 py-1 rounded-lg text-sm font-medium transition-colors
+                          ${page === currentPage 
+                            ? 'bg-blue-600 text-white' 
+                            : 'text-slate-600 hover:bg-slate-100'
+                          }
+                        `}
+                      >
+                        {page}
+                      </button>
+                    )
+                  ))}
 
-                    {/* Next button */}
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400"
-                      title="Next page"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                )}
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
 
       {/* Floating Action Button */}
-      {effectiveFacilityId && (
-        <FloatingActionButton 
+      {effectiveFacilityId && userId && userEmail && (
+        <FloatingActionButton
           actions={[
             {
               id: 'call-next-patient',
@@ -821,6 +761,7 @@ const handleDelete = async (id: string) => {
           userEmail={userEmail}
         />
       )}
+
       <DeleteConfirm
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
