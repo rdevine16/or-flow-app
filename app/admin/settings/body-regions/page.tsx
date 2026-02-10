@@ -91,35 +91,37 @@ useEffect(() => {
 
 const fetchData = async () => {
     setLoading(true)
+    setError(null)
 
-    // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setCurrentUserId(user.id)
 
-    let query = supabase
-      .from('body_regions')
-      .select('*')
+      let query = supabase
+        .from('body_regions')
+        .select('*')
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
+
+      const { data, error: fetchErr } = await query.order('display_order')
+      if (fetchErr) throw fetchErr
+      setBodyRegions(data || [])
+
+      const { count } = await supabase
+        .from('body_regions')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
+
+      setArchivedCount(count || 0)
+    } catch (err) {
+      setError('Failed to load body regions. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    const { data, error } = await query.order('display_order')
-
-    if (!error && data) {
-      setBodyRegions(data)
-    }
-
-    // Get archived count
-    const { count } = await supabase
-      .from('body_regions')
-      .select('id', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
   }
 
   const closeConfirmModal = () => {
@@ -161,27 +163,28 @@ const fetchData = async () => {
     setSaving(true)
     const name = formName.trim() || generateName(formDisplayName)
 
-    const { data, error } = await supabase
-      .from('body_regions')
-      .insert({
-        name,
-        display_name: formDisplayName.trim(),
-        display_order: formDisplayOrder,
-      })
-      .select()
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('body_regions')
+        .insert({
+          name,
+          display_name: formDisplayName.trim(),
+          display_order: formDisplayOrder,
+        })
+        .select()
+        .single()
 
-if (!error && data) {
-  // Audit log
-  await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
+      if (error) throw error
 
-  setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
-  resetForm()
-  setShowAddModal(false)
-} else if (error) {
-  showToast(error.message || 'The name might already exist', 'error')
-}
-setSaving(false)
+      await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
+      setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
+      resetForm()
+      setShowAddModal(false)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to add body region', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleEdit = async () => {
@@ -190,18 +193,19 @@ setSaving(false)
     setSaving(true)
     const oldDisplayName = editingRegion.display_name
 
-    const { data, error } = await supabase
-      .from('body_regions')
-      .update({
-        display_name: formDisplayName.trim(),
-        display_order: formDisplayOrder,
-      })
-      .eq('id', editingRegion.id)
-      .select()
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('body_regions')
+        .update({
+          display_name: formDisplayName.trim(),
+          display_order: formDisplayOrder,
+        })
+        .eq('id', editingRegion.id)
+        .select()
+        .single()
 
-    if (!error && data) {
-      // Audit log if name changed
+      if (error) throw error
+
       if (oldDisplayName !== formDisplayName.trim()) {
         await adminAudit.bodyRegionUpdated(supabase, editingRegion.id, oldDisplayName, formDisplayName.trim())
       }
@@ -214,10 +218,11 @@ setSaving(false)
       setShowEditModal(false)
       setEditingRegion(null)
       resetForm()
-} else if (error) {
-  showToast(error instanceof Error ? error.message : 'Error updating body region:', 'error')
-}
-    setSaving(false)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update body region', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
 const handleDelete = (region: BodyRegion) => {
@@ -261,22 +266,25 @@ const handleDelete = (region: BodyRegion) => {
 
   const handleRestore = async (region: BodyRegion) => {
     setSaving(true)
-    const { error } = await supabase
-      .from('body_regions')
-      .update({
-        deleted_at: null,
-        deleted_by: null
-      })
-      .eq('id', region.id)
+    try {
+      const { error } = await supabase
+        .from('body_regions')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', region.id)
 
-    if (!error) {
+      if (error) throw error
+
       setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${region.display_name}" restored successfully`, 'success')
-    } else {
-      showToast('Failed to restore body region', 'error')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to restore body region', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   if (userLoading || !isGlobalAdmin) {
@@ -284,9 +292,7 @@ const handleDelete = (region: BodyRegion) => {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <PageLoader message="Loading..." />
         </Container>
       </DashboardLayout>
     )
@@ -347,9 +353,7 @@ const handleDelete = (region: BodyRegion) => {
 
             {/* Table */}
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              </div>
+              <PageLoader message="Loading body regions..." />
             ) : bodyRegions.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">

@@ -56,36 +56,34 @@ export default function ProfilePage() {
   // Fetch profile
   useEffect(() => {
     async function fetchProfile() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
-      }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          router.push('/login')
+          return
+        }
 
-      const { data, error } = await supabase
-        .from('users')
-        .select(`
-          *,
-          facility:facilities(name),
-          user_roles(name)
-        `)
-        .eq('id', user.id)
-        .single()
+        const { data, error } = await supabase
+          .from('users')
+          .select(`
+            *,
+            facility:facilities(name),
+            user_roles(name)
+          `)
+          .eq('id', user.id)
+          .single()
 
-      if (error) {
-        showToast({
-  type: 'error',
-  title: 'Error fetching profile:',
-  message: error instanceof Error ? error.message : 'Error fetching profile:'
-})
+        if (error) throw error
+
+        setProfile(data)
+        setFirstName(data.first_name || '')
+        setLastName(data.last_name || '')
+      } catch (err) {
+        setError('Failed to load profile. Please try again.')
+        showToast({ type: 'error', title: 'Failed to load profile', message: err instanceof Error ? err.message : 'Please try again' })
+      } finally {
         setLoading(false)
-        return
       }
-
-      setProfile(data)
-      setFirstName(data.first_name || '')
-      setLastName(data.last_name || '')
-      setLoading(false)
     }
 
     fetchProfile()
@@ -273,9 +271,7 @@ const handleChangePassword = async () => {
   if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
+        <PageLoader message="Loading profile..." />
       </DashboardLayout>
     )
   }

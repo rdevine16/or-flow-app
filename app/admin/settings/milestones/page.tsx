@@ -90,31 +90,37 @@ useEffect(() => {
 
 const fetchMilestones = async () => {
     setLoading(true)
+    setError(null)
     
-    let query = supabase
-      .from('milestone_types')
-      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
+    try {
+      let query = supabase
+        .from('milestone_types')
+        .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
+
+      query = query.order('display_order')
+
+      const { data, error: fetchErr } = await query
+      if (fetchErr) throw fetchErr
+      
+      setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
+
+      const { count } = await supabase
+        .from('milestone_types')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
+
+      setArchivedCount(count || 0)
+    } catch (err) {
+      setError('Failed to load milestones. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    query = query.order('display_order')
-
-    const { data } = await query
-    
-    setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
-
-    // Get archived count
-    const { count } = await supabase
-      .from('milestone_types')
-      .select('id', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
   }
 
   const closeConfirmModal = () => {
@@ -139,18 +145,20 @@ const fetchMilestones = async () => {
       ? Math.max(...milestones.map(m => m.display_order)) 
       : 0
 
-    const { data, error } = await supabase
-      .from('milestone_types')
-      .insert({
-        name,
-        display_name: newDisplayName.trim(),
-        display_order: maxOrder + 1,
-        is_active: true,
-      })
-      .select()
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('milestone_types')
+        .insert({
+          name,
+          display_name: newDisplayName.trim(),
+          display_order: maxOrder + 1,
+          is_active: true,
+        })
+        .select()
+        .single()
 
-    if (!error && data) {
+      if (error) throw error
+
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
       await propagateToFacilities(data)
       
@@ -158,8 +166,11 @@ const fetchMilestones = async () => {
       setNewName('')
       setNewDisplayName('')
       setShowAddModal(false)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to add milestone', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const propagateToFacilities = async (milestone: MilestoneType) => {
@@ -189,12 +200,14 @@ const fetchMilestones = async () => {
     setSaving(true)
     const oldDisplayName = editingMilestone.display_name
 
-    const { error } = await supabase
-      .from('milestone_types')
-      .update({ display_name: editDisplayName.trim() })
-      .eq('id', editingMilestone.id)
+    try {
+      const { error } = await supabase
+        .from('milestone_types')
+        .update({ display_name: editDisplayName.trim() })
+        .eq('id', editingMilestone.id)
 
-    if (!error) {
+      if (error) throw error
+
       if (oldDisplayName !== editDisplayName.trim()) {
         await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, editDisplayName.trim())
       }
@@ -211,8 +224,11 @@ const fetchMilestones = async () => {
       ))
       setShowEditModal(false)
       setEditingMilestone(null)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update milestone', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const handleToggleActive = async (milestone: MilestoneType) => {
@@ -278,49 +294,55 @@ const fetchMilestones = async () => {
     setSaving(true)
     const partner = milestones.find(m => m.id === selectedPairId)
 
-    // Clear any existing pairing for this milestone first
-    if (pairingMilestone.pair_with_id) {
-      await supabase
+    try {
+      // Clear any existing pairing for this milestone first
+      if (pairingMilestone.pair_with_id) {
+        await supabase
+          .from('milestone_types')
+          .update({ pair_with_id: null, pair_position: null })
+          .eq('id', pairingMilestone.pair_with_id)
+      }
+
+      // Set new pairing
+      const { error: err1 } = await supabase
         .from('milestone_types')
-        .update({ pair_with_id: null, pair_position: null })
-        .eq('id', pairingMilestone.pair_with_id)
+        .update({ pair_with_id: selectedPairId, pair_position: 'start' })
+        .eq('id', pairingMilestone.id)
+      if (err1) throw err1
+
+      const { error: err2 } = await supabase
+        .from('milestone_types')
+        .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
+        .eq('id', selectedPairId)
+      if (err2) throw err2
+
+      await milestoneTypeAudit.linked(
+        supabase,
+        pairingMilestone.display_name,
+        partner?.display_name || 'Unknown'
+      )
+
+      setMilestones(milestones.map(m => {
+        if (m.id === pairingMilestone.id) {
+          return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
+        }
+        if (m.id === selectedPairId) {
+          return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
+        }
+        if (m.id === pairingMilestone.pair_with_id) {
+          return { ...m, pair_with_id: null, pair_position: null }
+        }
+        return m
+      }))
+
+      setShowPairModal(false)
+      setPairingMilestone(null)
+      setSelectedPairId('')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to pair milestones', 'error')
+    } finally {
+      setSaving(false)
     }
-
-    // Set new pairing
-    await supabase
-      .from('milestone_types')
-      .update({ pair_with_id: selectedPairId, pair_position: 'start' })
-      .eq('id', pairingMilestone.id)
-
-    await supabase
-      .from('milestone_types')
-      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
-      .eq('id', selectedPairId)
-
-    await milestoneTypeAudit.linked(
-      supabase,
-      pairingMilestone.display_name,
-      partner?.display_name || 'Unknown'
-    )
-
-    // Update local state
-    setMilestones(milestones.map(m => {
-      if (m.id === pairingMilestone.id) {
-        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
-      }
-      if (m.id === selectedPairId) {
-        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
-      }
-      if (m.id === pairingMilestone.pair_with_id) {
-        return { ...m, pair_with_id: null, pair_position: null }
-      }
-      return m
-    }))
-
-    setShowPairModal(false)
-    setPairingMilestone(null)
-    setSelectedPairId('')
-    setSaving(false)
   }
 
   const handleUnlink = async (milestone: MilestoneType) => {
@@ -329,28 +351,35 @@ const fetchMilestones = async () => {
     setSaving(true)
     const partnerName = getPairedName(milestone.pair_with_id)
 
-    await supabase
-      .from('milestone_types')
-      .update({ pair_with_id: null, pair_position: null })
-      .eq('id', milestone.id)
+    try {
+      const { error: err1 } = await supabase
+        .from('milestone_types')
+        .update({ pair_with_id: null, pair_position: null })
+        .eq('id', milestone.id)
+      if (err1) throw err1
 
-    await supabase
-      .from('milestone_types')
-      .update({ pair_with_id: null, pair_position: null })
-      .eq('id', milestone.pair_with_id)
+      const { error: err2 } = await supabase
+        .from('milestone_types')
+        .update({ pair_with_id: null, pair_position: null })
+        .eq('id', milestone.pair_with_id)
+      if (err2) throw err2
 
-    await milestoneTypeAudit.unlinked(supabase, milestone.display_name, partnerName || 'Unknown')
+      await milestoneTypeAudit.unlinked(supabase, milestone.display_name, partnerName || 'Unknown')
 
-    setMilestones(milestones.map(m => {
-      if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-        return { ...m, pair_with_id: null, pair_position: null }
-      }
-      return m
-    }))
+      setMilestones(milestones.map(m => {
+        if (m.id === milestone.id || m.id === milestone.pair_with_id) {
+          return { ...m, pair_with_id: null, pair_position: null }
+        }
+        return m
+      }))
 
-    setShowPairModal(false)
-    setPairingMilestone(null)
-    setSaving(false)
+      setShowPairModal(false)
+      setPairingMilestone(null)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to unlink milestones', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 // Archive a milestone (soft delete)
   const handleArchive = async (milestone: MilestoneType) => {
@@ -442,24 +471,26 @@ const fetchMilestones = async () => {
   const handleRestore = async (milestone: MilestoneType) => {
     setSaving(true)
 
-    const { error } = await supabase
-      .from('milestone_types')
-      .update({
-        deleted_at: null,
-        deleted_by: null
-      })
-      .eq('id', milestone.id)
+    try {
+      const { error } = await supabase
+        .from('milestone_types')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', milestone.id)
 
-    if (!error) {
+      if (error) throw error
+
       await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
       setMilestones(milestones.filter(m => m.id !== milestone.id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${milestone.display_name}" restored successfully`, 'success')
-    } else {
-      showToast('Failed to restore milestone', 'error')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to restore milestone', 'error')
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
   // Filter based on showInactive
   const visibleMilestones = showInactive 
@@ -536,9 +567,7 @@ const fetchMilestones = async () => {
           {/* Table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              </div>
+              <PageLoader message="Loading milestones..." />
             ) : visibleMilestones.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
                 <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">

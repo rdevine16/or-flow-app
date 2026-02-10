@@ -119,12 +119,9 @@ useEffect(() => {
 
       query = query.order('type').order('display_order')
 
-      const { data, error } = await query
-
-if (error) {
-  showToast(error instanceof Error ? error.message : 'Error fetching categories:', 'error')
-}
-if (data) setCategories(data)
+      const { data, error: fetchErr } = await query
+      if (fetchErr) throw fetchErr
+      if (data) setCategories(data)
 
       // Get archived count
       const { count } = await supabase
@@ -134,7 +131,8 @@ if (data) setCategories(data)
 
       setArchivedCount(count || 0)
 } catch (error) {
-  showToast(error instanceof Error ? error.message : 'Error fetching categories', 'error')
+  setError('Failed to load cost categories. Please try again.')
+  showToast(error instanceof Error ? error.message : 'Failed to load categories', 'error')
 } finally {
       setLoading(false)
     }
@@ -219,7 +217,7 @@ if (data) setCategories(data)
 
       setShowModal(false)
     } catch (error) {
-showToast(error instanceof Error ? error.message : 'Error saving category:', 'error')
+showToast(error instanceof Error ? error.message : 'Failed to save category', 'error')
     } finally {
       setSaving(false)
     }
@@ -277,7 +275,7 @@ const handleDelete = async () => {
     
     closeDeleteModal()
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'Error archiving category', 'error')
+    showToast(error instanceof Error ? error.message : 'Failed to archive category', 'error')
   } finally {
     setSaving(false)
   }
@@ -332,7 +330,7 @@ const toggleActive = async (category: DefaultCostCategory) => {
         c.id === category.id ? { ...c, is_active: newActiveState } : c
       ))
     } catch (error) {
-showToast(error instanceof Error ? error.message : 'Error toggling active state:', 'error')
+showToast(error instanceof Error ? error.message : 'Failed to toggle active state', 'error')
     } finally {
       setSaving(false)
     }
@@ -354,9 +352,7 @@ showToast(error instanceof Error ? error.message : 'Error toggling active state:
       <DashboardLayout>
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
+          <PageLoader message="Loading..." />
         </Container>
       </DashboardLayout>
     )
@@ -434,9 +430,7 @@ showToast(error instanceof Error ? error.message : 'Error toggling active state:
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-            </div>
+            <PageLoader message="Loading cost categories..." />
           ) : (
             <div className="space-y-8">
               {/* Debits Section */}

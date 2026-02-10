@@ -156,10 +156,11 @@ export default function SubscriptionPage() {
         storageUsedMB: 124, // Placeholder
       })
     } catch (error) {
+      setError('Failed to load usage statistics. Please try again.')
       showToast({
         type: 'error',
-        title: 'Error Fetching Usage Stats',
-        message: error instanceof Error ? error.message : 'Failed to fetch usage statistics'
+        title: 'Failed to load usage stats',
+        message: error instanceof Error ? error.message : 'Please try again'
       })
     } finally {
       setLoading(false)

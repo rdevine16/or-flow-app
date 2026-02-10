@@ -405,25 +405,24 @@ export default function ChecklistBuilderPage() {
 
     const fetchFields = async () => {
       setLoading(true)
+      setError(null)
 
-      const { data, error } = await supabase
-        .from('preop_checklist_fields')
-        .select('*')
-        .eq('facility_id', userData.facilityId)
-        .is('deleted_at', null)
-        .order('display_order')
+      try {
+        const { data, error: fetchErr } = await supabase
+          .from('preop_checklist_fields')
+          .select('*')
+          .eq('facility_id', userData.facilityId)
+          .is('deleted_at', null)
+          .order('display_order')
 
-      if (error) {
-        showToast({
-          type: 'error',
-          title: 'Error fetching checklist fields',
-          message: error.message
-        })
-      } else {
+        if (fetchErr) throw fetchErr
         setFields(data || [])
+      } catch (err) {
+        setError('Failed to load checklist fields. Please try again.')
+        showToast({ type: 'error', title: 'Failed to load checklist fields', message: err instanceof Error ? err.message : 'Please try again' })
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchFields()
@@ -433,61 +432,47 @@ export default function ChecklistBuilderPage() {
   const handleSaveField = async (fieldData: Partial<ChecklistField>) => {
     if (!userData?.facilityId) return
 
-    if (isAddingNew) {
-      // Create new field
-      const newField = {
-        ...fieldData,
-        facility_id: userData.facilityId,
-        display_order: fields.length * 10,
-        is_active: true,
-      }
+    try {
+      if (isAddingNew) {
+        const newField = {
+          ...fieldData,
+          facility_id: userData.facilityId,
+          display_order: fields.length * 10,
+          is_active: true,
+        }
 
-      const { data, error } = await supabase
-        .from('preop_checklist_fields')
-        .insert(newField)
-        .select()
-        .single()
+        const { data, error } = await supabase
+          .from('preop_checklist_fields')
+          .insert(newField)
+          .select()
+          .single()
 
-      if (error) {
-        showToast({
-  type: 'error',
-  title: 'Error creating field:',
-  message: error instanceof Error ? error.message : 'Error creating field:'
-})
-      } else {
+        if (error) throw error
+
         setFields(prev => [...prev, data])
         setSuccessMessage('Field added')
         setTimeout(() => setSuccessMessage(null), 3000)
 
-        // Audit
         await checkinAudit.checklistFieldCreated(
           supabase,
           data.display_label,
           data.id,
           userData.facilityId
         )
-      }
-    } else if (editingField) {
-      // Update existing field
-      const { error } = await supabase
-        .from('preop_checklist_fields')
-        .update(fieldData)
-        .eq('id', editingField.id)
+      } else if (editingField) {
+        const { error } = await supabase
+          .from('preop_checklist_fields')
+          .update(fieldData)
+          .eq('id', editingField.id)
 
-      if (error) {
-        showToast({
-  type: 'error',
-  title: 'Error updating field:',
-  message: error instanceof Error ? error.message : 'Error updating field:'
-})
-      } else {
+        if (error) throw error
+
         setFields(prev => prev.map(f => 
           f.id === editingField.id ? { ...f, ...fieldData } as ChecklistField : f
         ))
         setSuccessMessage('Field updated')
         setTimeout(() => setSuccessMessage(null), 3000)
 
-        // Audit
         await checkinAudit.checklistFieldUpdated(
           supabase,
           editingField.id,
@@ -496,6 +481,8 @@ export default function ChecklistBuilderPage() {
           userData.facilityId
         )
       }
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to save field', message: err instanceof Error ? err.message : 'Please try again' })
     }
 
     setEditingField(null)
@@ -506,26 +493,21 @@ export default function ChecklistBuilderPage() {
   const handleDeleteField = async (field: ChecklistField) => {
     if (!confirm(`Delete "${field.display_label}"? This cannot be undone.`)) return
 
-    const { error } = await supabase
-      .from('preop_checklist_fields')
-      .update({ 
-        deleted_at: new Date().toISOString(),
-        deleted_by: currentUserId 
-      })
-      .eq('id', field.id)
+    try {
+      const { error } = await supabase
+        .from('preop_checklist_fields')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId 
+        })
+        .eq('id', field.id)
 
-    if (error) {
-      showToast({
-        type: 'error',
-        title: 'Error deleting field',
-        message: error.message
-      })
-    } else {
+      if (error) throw error
+
       setFields(prev => prev.filter(f => f.id !== field.id))
       setSuccessMessage('Field deleted')
       setTimeout(() => setSuccessMessage(null), 3000)
 
-      // Audit
       if (userData?.facilityId) {
         await checkinAudit.checklistFieldDeleted(
           supabase,
@@ -534,6 +516,8 @@ export default function ChecklistBuilderPage() {
           userData.facilityId
         )
       }
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to delete field', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
@@ -541,21 +525,19 @@ export default function ChecklistBuilderPage() {
   const handleToggleActive = async (field: ChecklistField) => {
     const newIsActive = !field.is_active
 
-    const { error } = await supabase
-      .from('preop_checklist_fields')
-      .update({ is_active: newIsActive })
-      .eq('id', field.id)
+    try {
+      const { error } = await supabase
+        .from('preop_checklist_fields')
+        .update({ is_active: newIsActive })
+        .eq('id', field.id)
 
-    if (error) {
-      showToast({
-        type: 'error',
-        title: 'Error toggling field',
-        message: error.message
-      })
-    } else {
+      if (error) throw error
+
       setFields(prev => prev.map(f => 
         f.id === field.id ? { ...f, is_active: newIsActive } : f
       ))
+    } catch (err) {
+      showToast({ type: 'error', title: 'Failed to toggle field', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 

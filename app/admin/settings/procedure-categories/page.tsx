@@ -92,52 +92,56 @@ useEffect(() => {
 
 const fetchData = async () => {
     setLoading(true)
+    setError(null)
 
-    // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setCurrentUserId(user.id)
 
-    // Fetch categories with body region
-    let query = supabase
-      .from('procedure_categories')
-      .select(`
-        id,
-        name,
-        display_name,
-        display_order,
-        body_region_id,
-        is_active,
-        deleted_at,
-        deleted_by,
-        body_regions (id, name, display_name)
-      `)
+      let query = supabase
+        .from('procedure_categories')
+        .select(`
+          id,
+          name,
+          display_name,
+          display_order,
+          body_region_id,
+          is_active,
+          deleted_at,
+          deleted_by,
+          body_regions (id, name, display_name)
+        `)
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
+
+      const { data: categoriesData, error: catErr } = await query.order('display_order')
+      if (catErr) throw catErr
+
+      const { data: regionsData, error: regErr } = await supabase
+        .from('body_regions')
+        .select('id, name, display_name')
+        .is('deleted_at', null)
+        .order('display_name')
+      if (regErr) throw regErr
+
+      setCategories((categoriesData || []) as ProcedureCategory[])
+      setBodyRegions(regionsData || [])
+
+      const { count } = await supabase
+        .from('procedure_categories')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
+
+      setArchivedCount(count || 0)
+    } catch (err) {
+      setError('Failed to load procedure categories. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    const { data: categoriesData } = await query.order('display_order')
-
-    // Fetch body regions for dropdown (only active ones)
-    const { data: regionsData } = await supabase
-      .from('body_regions')
-      .select('id, name, display_name')
-      .is('deleted_at', null)
-      .order('display_name')
-
-    setCategories((categoriesData || []) as ProcedureCategory[])
-    setBodyRegions(regionsData || [])
-
-    // Get archived count
-    const { count } = await supabase
-      .from('procedure_categories')
-      .select('id', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
   }
 
   const closeConfirmModal = () => {
@@ -168,35 +172,40 @@ const fetchData = async () => {
       ? Math.max(...categories.map(c => c.display_order))
       : 0
 
-    const { data, error } = await supabase
-      .from('procedure_categories')
-      .insert({
-        name,
-        display_name: formDisplayName.trim(),
-        display_order: maxOrder + 1,
-        body_region_id: formBodyRegionId || null,
-        is_active: true,
-      })
-      .select(`
-        id,
-        name,
-        display_name,
-        display_order,
-        body_region_id,
-        is_active,
-        body_regions (id, name, display_name)
-      `)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('procedure_categories')
+        .insert({
+          name,
+          display_name: formDisplayName.trim(),
+          display_order: maxOrder + 1,
+          body_region_id: formBodyRegionId || null,
+          is_active: true,
+        })
+        .select(`
+          id,
+          name,
+          display_name,
+          display_order,
+          body_region_id,
+          is_active,
+          body_regions (id, name, display_name)
+        `)
+        .single()
 
-    if (!error && data) {
+      if (error) throw error
+
       const regionName = bodyRegions.find(r => r.id === formBodyRegionId)?.display_name
       await procedureCategoryAudit.created(supabase, formDisplayName.trim(), data.id, regionName)
 
       setCategories([...categories, data as ProcedureCategory])
       resetForm()
       setShowAddModal(false)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to add category', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const handleEdit = async () => {
@@ -206,46 +215,50 @@ const fetchData = async () => {
     const oldDisplayName = editingCategory.display_name
     const oldBodyRegion = getBodyRegion(editingCategory)
 
-    const { data, error } = await supabase
-      .from('procedure_categories')
-      .update({
-        display_name: formDisplayName.trim(),
-        body_region_id: formBodyRegionId || null,
-      })
-      .eq('id', editingCategory.id)
-      .select(`
-        id,
-        name,
-        display_name,
-        display_order,
-        body_region_id,
-        is_active,
-        body_regions (id, name, display_name)
-      `)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('procedure_categories')
+        .update({
+          display_name: formDisplayName.trim(),
+          body_region_id: formBodyRegionId || null,
+        })
+        .eq('id', editingCategory.id)
+        .select(`
+          id,
+          name,
+          display_name,
+          display_order,
+          body_region_id,
+          is_active,
+          body_regions (id, name, display_name)
+        `)
+        .single()
 
-    if (!error && data) {
-      const newRegionName = bodyRegions.find(r => r.id === formBodyRegionId)?.display_name
-await procedureCategoryAudit.updated(
-  supabase,
-  editingCategory.id,
-  oldDisplayName,
-  { 
-    display_name: oldDisplayName,
-    body_region: oldBodyRegion?.display_name || null
-  },
-  {
-    display_name: formDisplayName.trim(),
-    body_region: bodyRegions.find(r => r.id === formBodyRegionId)?.display_name || null
-  }
-)
+      if (error) throw error
+
+      await procedureCategoryAudit.updated(
+        supabase,
+        editingCategory.id,
+        oldDisplayName,
+        { 
+          display_name: oldDisplayName,
+          body_region: oldBodyRegion?.display_name || null
+        },
+        {
+          display_name: formDisplayName.trim(),
+          body_region: bodyRegions.find(r => r.id === formBodyRegionId)?.display_name || null
+        }
+      )
 
       setCategories(categories.map(c => c.id === data.id ? data as ProcedureCategory : c))
       setShowEditModal(false)
       setEditingCategory(null)
       resetForm()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update category', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
  const handleDelete = (category: ProcedureCategory) => {
@@ -287,22 +300,25 @@ await procedureCategoryAudit.updated(
 
   const handleRestore = async (category: ProcedureCategory) => {
     setSaving(true)
-    const { error } = await supabase
-      .from('procedure_categories')
-      .update({
-        deleted_at: null,
-        deleted_by: null
-      })
-      .eq('id', category.id)
+    try {
+      const { error } = await supabase
+        .from('procedure_categories')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', category.id)
 
-    if (!error) {
+      if (error) throw error
+
       setCategories(categories.filter(c => c.id !== category.id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${category.display_name}" restored successfully`, 'success')
-    } else {
-      showToast('Failed to restore category', 'error')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to restore category', 'error')
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const openEditModal = (category: ProcedureCategory) => {
@@ -394,11 +410,7 @@ await procedureCategoryAudit.updated(
 
           {/* Content */}
           {loading ? (
-            <div className="bg-white border border-slate-200 rounded-xl">
-              <div className="flex items-center justify-center py-16">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              </div>
-            </div>
+            <PageLoader message="Loading categories..." />
           ) : categories.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl text-center py-16">
               <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">

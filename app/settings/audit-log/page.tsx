@@ -105,82 +105,94 @@ export default function AuditLogPage() {
   }, [currentPage, dateFrom, dateTo, actionFilter, userFilter])
 
   const fetchUsers = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
-
-    if (userData?.facility_id) {
-      const { data } = await supabase
+      const { data: userData, error: userErr } = await supabase
         .from('users')
-        .select('id, email, first_name, last_name')
-        .eq('facility_id', userData.facility_id)
-        .order('last_name')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
 
-      if (data) {
-        setUsers(data.map(u => ({
-          id: u.id,
-          email: u.email,
-          name: `${u.first_name} ${u.last_name}`,
-        })))
+      if (userErr) throw userErr
+
+      if (userData?.facility_id) {
+        const { data, error: fetchErr } = await supabase
+          .from('users')
+          .select('id, email, first_name, last_name')
+          .eq('facility_id', userData.facility_id)
+          .order('last_name')
+
+        if (fetchErr) throw fetchErr
+
+        if (data) {
+          setUsers(data.map(u => ({
+            id: u.id,
+            email: u.email,
+            name: `${u.first_name} ${u.last_name}`,
+          })))
+        }
       }
+    } catch (err) {
+      setError('Failed to load users for filter.')
     }
   }
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
+    setError(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-    const { data: userData } = await supabase
-      .from('users')
-      .select('facility_id')
-      .eq('id', user.id)
-      .single()
+      const { data: userData, error: userErr } = await supabase
+        .from('users')
+        .select('facility_id')
+        .eq('id', user.id)
+        .single()
 
-    if (!userData?.facility_id) {
-      setLoading(false)
-      return
-    }
+      if (userErr) throw userErr
 
-    let query = supabase
-      .from('audit_log')
-      .select('*', { count: 'exact' })
-      .eq('facility_id', userData.facility_id)
-      .order('created_at', { ascending: false })
+      if (!userData?.facility_id) {
+        return
+      }
 
-    // Apply filters
-    if (dateFrom) {
-      query = query.gte('created_at', `${dateFrom}T00:00:00`)
-    }
-    if (dateTo) {
-      query = query.lte('created_at', `${dateTo}T23:59:59`)
-    }
-    if (actionFilter) {
-      query = query.eq('action', actionFilter)
-    }
-    if (userFilter) {
-      query = query.eq('user_id', userFilter)
-    }
+      let query = supabase
+        .from('audit_log')
+        .select('*', { count: 'exact' })
+        .eq('facility_id', userData.facility_id)
+        .order('created_at', { ascending: false })
 
-    // Pagination
-    const from = (currentPage - 1) * pageSize
-    const to = from + pageSize - 1
-    query = query.range(from, to)
+      if (dateFrom) {
+        query = query.gte('created_at', `${dateFrom}T00:00:00`)
+      }
+      if (dateTo) {
+        query = query.lte('created_at', `${dateTo}T23:59:59`)
+      }
+      if (actionFilter) {
+        query = query.eq('action', actionFilter)
+      }
+      if (userFilter) {
+        query = query.eq('user_id', userFilter)
+      }
 
-    const { data, count, error } = await query
+      const from = (currentPage - 1) * pageSize
+      const to = from + pageSize - 1
+      query = query.range(from, to)
 
-    if (!error) {
+      const { data, count, error: fetchErr } = await query
+
+      if (fetchErr) throw fetchErr
+
       setLogs(data || [])
       setTotalCount(count || 0)
+    } catch (err) {
+      setError('Failed to load audit logs. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }, [currentPage, dateFrom, dateTo, actionFilter, userFilter, supabase])
 
   const exportToCSV = () => {
@@ -315,12 +327,7 @@ export default function AuditLogPage() {
           {/* Audit Log Table */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-              </div>
+              <PageLoader message="Loading audit logs..." />
             ) : filteredLogs.length === 0 ? (
               <div className="p-12 text-center">
                 <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

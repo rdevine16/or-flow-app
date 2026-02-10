@@ -417,30 +417,27 @@ export default function ChecklistTemplatesPage() {
 
     const fetchFields = async () => {
       setLoading(true)
+      setError(null)
 
-      let query = supabase
-        .from('preop_checklist_field_templates')
-        .select('*')
-        .is('deleted_at', null)
-        .order('display_order')
+      try {
+        let query = supabase
+          .from('preop_checklist_field_templates')
+          .select('*')
+          .is('deleted_at', null)
+          .order('display_order')
 
-      if (!showInactive) {
-        query = query.eq('is_active', true)
-      }
+        if (!showInactive) {
+          query = query.eq('is_active', true)
+        }
 
-      const { data, error } = await query
-
-      if (error) {
-        showToast({
-          type: 'error',
-          title: 'Failed to Load Templates',
-          message: error.message || 'An unexpected error occurred'
-        })
-      } else {
+        const { data, error: fetchErr } = await query
+        if (fetchErr) throw fetchErr
         setFields(data || [])
+      } catch (err) {
+        setError('Failed to load checklist templates. Please try again.')
+      } finally {
+        setLoading(false)
       }
-
-      setLoading(false)
     }
 
     fetchFields()
@@ -448,53 +445,41 @@ export default function ChecklistTemplatesPage() {
 
   // Save field (create or update)
   const handleSaveField = async (fieldData: Partial<ChecklistFieldTemplate>) => {
-    if (isAddingNew) {
-      // Create new template
-      const newField = {
-        ...fieldData,
-        display_order: fields.length + 1,
-        is_active: true,
-      }
+    try {
+      if (isAddingNew) {
+        const newField = {
+          ...fieldData,
+          display_order: fields.length + 1,
+          is_active: true,
+        }
 
-      const { data, error } = await supabase
-        .from('preop_checklist_field_templates')
-        .insert(newField)
-        .select()
-        .single()
+        const { data, error } = await supabase
+          .from('preop_checklist_field_templates')
+          .insert(newField)
+          .select()
+          .single()
 
-if (error) {
-  showToast({
-    type: 'error',
-    title: 'Create Failed',
-    message: error.message || 'Failed to create template'
-  })
-} else {
-  setFields(prev => [...prev, data])
-  setSuccessMessage('Template created')
-  setTimeout(() => setSuccessMessage(null), 3000)
-}
-    } else if (editingField) {
-      // Update existing template
-      const { error } = await supabase
-        .from('preop_checklist_field_templates')
-        .update({
-          display_label: fieldData.display_label,
-          field_type: fieldData.field_type,
-          options: fieldData.options,
-          placeholder: fieldData.placeholder,
-          is_required: fieldData.is_required,
-          show_on_escort_page: fieldData.show_on_escort_page,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingField.id)
+        if (error) throw error
 
-      if (error) {
-        showToast({
-          type: 'error',
-          title: 'Update Failed',
-          message: error.message || 'Failed to update template'
-        })
-      } else {
+        setFields(prev => [...prev, data])
+        setSuccessMessage('Template created')
+        setTimeout(() => setSuccessMessage(null), 3000)
+      } else if (editingField) {
+        const { error } = await supabase
+          .from('preop_checklist_field_templates')
+          .update({
+            display_label: fieldData.display_label,
+            field_type: fieldData.field_type,
+            options: fieldData.options,
+            placeholder: fieldData.placeholder,
+            is_required: fieldData.is_required,
+            show_on_escort_page: fieldData.show_on_escort_page,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', editingField.id)
+
+        if (error) throw error
+
         setFields(prev =>
           prev.map(f =>
             f.id === editingField.id
@@ -505,6 +490,12 @@ if (error) {
         setSuccessMessage('Template updated')
         setTimeout(() => setSuccessMessage(null), 3000)
       }
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Failed to save template',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
     }
 
     setEditingField(null)
@@ -515,24 +506,26 @@ if (error) {
   const handleDeleteField = async (field: ChecklistFieldTemplate) => {
     if (!confirm(`Delete "${field.display_label}"? This will not affect existing facilities.`)) return
 
-    const { error } = await supabase
-      .from('preop_checklist_field_templates')
-      .update({ 
-        deleted_at: new Date().toISOString(),
-        deleted_by: currentUserId 
-      })
-      .eq('id', field.id)
+    try {
+      const { error } = await supabase
+        .from('preop_checklist_field_templates')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId 
+        })
+        .eq('id', field.id)
 
-    if (error) {
-      showToast({
-        type: 'error',
-        title: 'Delete Failed',
-        message: error.message || 'Failed to delete template'
-      })
-    } else {
+      if (error) throw error
+
       setFields(prev => prev.filter(f => f.id !== field.id))
       setSuccessMessage('Template deleted')
       setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Failed to delete template',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
     }
   }
 
@@ -540,23 +533,18 @@ if (error) {
   const handleToggleActive = async (field: ChecklistFieldTemplate) => {
     const newActiveState = !field.is_active
 
-    const { error } = await supabase
-      .from('preop_checklist_field_templates')
-      .update({ 
-        is_active: newActiveState,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', field.id)
+    try {
+      const { error } = await supabase
+        .from('preop_checklist_field_templates')
+        .update({ 
+          is_active: newActiveState,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', field.id)
 
-    if (error) {
-      showToast({
-        type: 'error',
-        title: 'Toggle Failed',
-        message: error.message || 'Failed to update template status'
-      })
-    } else {
+      if (error) throw error
+
       if (!showInactive && !newActiveState) {
-        // Remove from list if we're not showing inactive
         setFields(prev => prev.filter(f => f.id !== field.id))
       } else {
         setFields(prev =>
@@ -567,6 +555,12 @@ if (error) {
       }
       setSuccessMessage(newActiveState ? 'Template activated' : 'Template deactivated')
       setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: 'Failed to toggle template',
+        message: err instanceof Error ? err.message : 'Please try again'
+      })
     }
   }
 

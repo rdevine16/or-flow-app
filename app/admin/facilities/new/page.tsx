@@ -343,97 +343,93 @@ export default function CreateFacilityPage() {
     async function fetchData() {
       setLoadingCounts(true)
 
-      // Fetch roles
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('id, name')
-        .order('name')
+      try {
+        // Fetch roles
+        const { data: rolesData, error: rolesErr } = await supabase
+          .from('user_roles')
+          .select('id, name')
+          .order('name')
 
-      if (rolesData) {
-        setRoles(rolesData)
-        const adminRole = rolesData.find(r => r.name === 'admin')
-        if (adminRole) {
-          setAdminData(prev => ({ ...prev, roleId: adminRole.id }))
+        if (rolesErr) throw rolesErr
+
+        if (rolesData) {
+          setRoles(rolesData)
+          const adminRole = rolesData.find(r => r.name === 'admin')
+          if (adminRole) {
+            setAdminData(prev => ({ ...prev, roleId: adminRole.id }))
+          }
         }
+
+        // Fetch template counts
+        const [
+          { count: procedureCount },
+          { count: milestoneCount },
+          { count: delayTypeCount },
+          { count: costCategoryCount },
+          { count: implantCompanyCount },
+          { count: complexityCount },
+          { count: cancellationReasonCount },
+          { count: checklistFieldCount },
+        ] = await Promise.all([
+          supabase
+            .from('procedure_type_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          supabase
+            .from('milestone_types')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          supabase
+            .from('delay_types')
+            .select('id', { count: 'exact', head: true })
+            .is('facility_id', null)
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          supabase
+            .from('cost_category_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          supabase
+            .from('implant_companies')
+            .select('id', { count: 'exact', head: true })
+            .is('facility_id', null)
+            .is('deleted_at', null),
+          supabase
+            .from('complexity_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          supabase
+            .from('cancellation_reason_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .is('deleted_at', null),
+          supabase
+            .from('preop_checklist_field_templates')
+            .select('id', { count: 'exact', head: true })
+            .eq('is_active', true)
+            .is('deleted_at', null),
+        ])
+
+        setTemplateCounts({
+          rooms: 3,
+          procedures: procedureCount || 0,
+          milestones: milestoneCount || 0,
+          delayTypes: delayTypeCount || 0,
+          costCategories: costCategoryCount || 0,
+          implantCompanies: implantCompanyCount || 0,
+          complexities: complexityCount || 0,
+          cancellationReasons: cancellationReasonCount || 0,
+          checklistFields: checklistFieldCount || 0,
+        })
+      } catch (err) {
+        setError('Failed to load template data. Please try again.')
+      } finally {
+        setLoadingCounts(false)
       }
-
-      // Fetch template counts
-      // Note: Different tables use different patterns
-      const [
-        { count: procedureCount },
-        { count: milestoneCount },
-        { count: delayTypeCount },
-        { count: costCategoryCount },
-        { count: implantCompanyCount },
-        { count: complexityCount },
-        { count: cancellationReasonCount },
-        { count: checklistFieldCount },
-      ] = await Promise.all([
-        // procedure_type_templates - separate template table
-        supabase
-          .from('procedure_type_templates')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .is('deleted_at', null),
-        // milestone_types - separate template table
-        supabase
-          .from('milestone_types')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .is('deleted_at', null),
-        // delay_types - HYBRID pattern (facility_id = NULL for templates)
-        supabase
-          .from('delay_types')
-          .select('id', { count: 'exact', head: true })
-          .is('facility_id', null)
-          .eq('is_active', true)
-          .is('deleted_at', null),
-        // cost_category_templates - separate template table
-        supabase
-          .from('cost_category_templates')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .is('deleted_at', null),
-        // implant_companies - HYBRID pattern (facility_id = NULL for global)
-        supabase
-          .from('implant_companies')
-          .select('id', { count: 'exact', head: true })
-          .is('facility_id', null)
-          .is('deleted_at', null),
-        // complexity_templates - separate template table
-        supabase
-          .from('complexity_templates')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .is('deleted_at', null),
-        // cancellation_reason_templates - separate template table
-        supabase
-          .from('cancellation_reason_templates')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .is('deleted_at', null),
-        // preop_checklist_field_templates
-        supabase
-          .from('preop_checklist_field_templates')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_active', true)
-          .is('deleted_at', null),
-      ])
-
-      setTemplateCounts({
-        rooms: 3,
-        procedures: procedureCount || 0,
-        milestones: milestoneCount || 0,
-        delayTypes: delayTypeCount || 0,
-        costCategories: costCategoryCount || 0,
-        implantCompanies: implantCompanyCount || 0,
-        complexities: complexityCount || 0,
-        cancellationReasons: cancellationReasonCount || 0,
-        checklistFields: checklistFieldCount || 0,
-      })
-
-
-      setLoadingCounts(false)
     }
 
     if (isGlobalAdmin) {
@@ -875,9 +871,7 @@ if (insertError) {
   if (userLoading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <PageLoader message="Loading..." />
       </DashboardLayout>
     )
   }

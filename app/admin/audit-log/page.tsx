@@ -1,4 +1,3 @@
-// app/admin/audit-log/page.tsx
 // This is the main page for the global audit log. It displays a list of all audit log entries across all facilities, with filters and pagination. Only accessible by global admins.
 'use client'
 
@@ -138,56 +137,61 @@ export default function GlobalAuditLogPage() {
   }, [isGlobalAdmin, pagination.currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter])
 
   const fetchFacilities = async () => {
-    const { data } = await supabase
-      .from('facilities')
-      .select('id, name')
-      .order('name')
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('facilities')
+        .select('id, name')
+        .order('name')
 
-    if (data) {
-      setFacilities(data)
+      if (fetchErr) throw fetchErr
+      if (data) setFacilities(data)
+    } catch (err) {
+      // Non-critical — filters will just be empty
     }
   }
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
+    setError(null)
 
-    let query = supabase
-      .from('audit_log')
-      .select('*, facility:facilities(name)', { count: 'exact' })
-      .order('created_at', { ascending: false })
+    try {
+      let query = supabase
+        .from('audit_log')
+        .select('*, facility:facilities(name)', { count: 'exact' })
+        .order('created_at', { ascending: false })
 
-    // Apply filters
-    if (dateFrom) {
-      query = query.gte('created_at', `${dateFrom}T00:00:00`)
-    }
-    if (dateTo) {
-      query = query.lte('created_at', `${dateTo}T23:59:59`)
-    }
-    if (actionFilter) {
-      query = query.eq('action', actionFilter)
-    }
-    if (facilityFilter) {
-      query = query.eq('facility_id', facilityFilter)
-    }
-    if (successFilter === 'success') {
-      query = query.eq('success', true)
-    } else if (successFilter === 'failed') {
-      query = query.eq('success', false)
-    }
+      if (dateFrom) {
+        query = query.gte('created_at', `${dateFrom}T00:00:00`)
+      }
+      if (dateTo) {
+        query = query.lte('created_at', `${dateTo}T23:59:59`)
+      }
+      if (actionFilter) {
+        query = query.eq('action', actionFilter)
+      }
+      if (facilityFilter) {
+        query = query.eq('facility_id', facilityFilter)
+      }
+      if (successFilter === 'success') {
+        query = query.eq('success', true)
+      } else if (successFilter === 'failed') {
+        query = query.eq('success', false)
+      }
 
-    // Pagination
-    const from = (pagination.currentPage - 1) * pagination.itemsPerPage
-    const to = from + pagination.itemsPerPage - 1
-    query = query.range(from, to)
+      const from = (pagination.currentPage - 1) * pagination.itemsPerPage
+      const to = from + pagination.itemsPerPage - 1
+      query = query.range(from, to)
 
-    const { data, count, error } = await query
+      const { data, count, error: fetchErr } = await query
+      if (fetchErr) throw fetchErr
 
-    if (!error) {
       setLogs(data || [])
       setTotalCount(count || 0)
+    } catch (err) {
+      setError('Failed to load audit logs. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }, [pagination.currentPage, pagination.itemsPerPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter, supabase])
 
   const exportToCSV = async () => {
@@ -251,9 +255,7 @@ const csvContent = [
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center h-64">
-<Spinner size="md" />
-          </div>
+          <PageLoader message="Loading..." />
         </Container>
       </DashboardLayout>
     )
@@ -382,12 +384,7 @@ const csvContent = [
       {/* Audit Log Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-          </div>
+          <PageLoader message="Loading audit logs..." />
         ) : filteredLogs.length === 0 ? (
           <div className="p-12 text-center">
             <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

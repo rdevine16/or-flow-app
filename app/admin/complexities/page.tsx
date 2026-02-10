@@ -80,13 +80,11 @@ const [complexitiesRes, categoriesRes] = await Promise.all([
       if (complexitiesRes.data) setComplexities(complexitiesRes.data)
       if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
 } catch (error) {
-  const message = error instanceof Error 
-    ? error.message 
-    : 'An error occurred'
+  setError('Failed to load complexities. Please try again.')
   showToast({
     type: 'error',
-    title: 'Error',
-    message: `Error fetching complexities: ${message}`
+    title: 'Failed to load complexities',
+    message: error instanceof Error ? error.message : 'Please try again'
   })
     } finally {
       setLoading(false)
@@ -157,7 +155,7 @@ const { data, error } = await supabase
   const errorMessage = error instanceof Error ? error.message : String(error)
   showToast({
     type: 'error',
-    title: 'Error saving complexity',
+    title: 'Failed to save complexity',
     message: errorMessage  // ✅ Just the error message!
   })
 } finally {
@@ -176,10 +174,9 @@ const { data, error } = await supabase
       const errorMessage = error instanceof Error ? error.message : String(error)
       showToast({
   type: 'error',
-  title: 'Error:',
-  message: `Error: ${errorMessage}`
+  title: 'Failed to delete complexity',
+  message: errorMessage
 })
-      alert('Error deleting')
     } finally {
       setSaving(false)
     }
@@ -209,8 +206,8 @@ const { data, error } = await supabase
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error:',
-  message: error instanceof Error ? error.message : 'Error:'
+  title: 'Failed to update categories',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -233,8 +230,8 @@ const { data, error } = await supabase
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error:',
-  message: error instanceof Error ? error.message : 'Error:'
+  title: 'Failed to toggle active state',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -250,9 +247,7 @@ const { data, error } = await supabase
       <DashboardLayout>
         <Container>
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
+          <PageLoader message="Loading..." />
         </Container>
       </DashboardLayout>
     )
@@ -269,12 +264,7 @@ const { data, error } = await supabase
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-12">
-              <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-            </div>
+            <PageLoader message="Loading complexities..." />
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               {/* Header */}

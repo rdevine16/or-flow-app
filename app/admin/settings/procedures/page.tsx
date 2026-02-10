@@ -139,11 +139,8 @@ export default function DefaultProceduresPage() {
       if (milestonesRes.data) setMilestoneTypes(milestonesRes.data)
       if (procMilestonesRes.data) setProcedureMilestones(procMilestonesRes.data)
     } catch (error) {
-      showToast({
-  type: 'error',
-  title: 'Error fetching data:',
-  message: error instanceof Error ? error.message : 'Error fetching data:'
-})
+      setError('Failed to load procedures. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load procedures', message: error instanceof Error ? error.message : 'Please try again' })
     } finally {
       setLoading(false)
     }
@@ -232,8 +229,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error saving procedure:',
-  message: error instanceof Error ? error.message : 'Error saving procedure:'
+  title: 'Failed to save procedure',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -261,8 +258,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error deleting procedure:',
-  message: error instanceof Error ? error.message : 'Error deleting procedure:'
+  title: 'Failed to delete procedure',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -288,8 +285,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error toggling procedure:',
-  message: error instanceof Error ? error.message : 'Error toggling procedure:'
+  title: 'Failed to toggle procedure',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -336,8 +333,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error toggling milestone:',
-  message: error instanceof Error ? error.message : 'Error toggling milestone:'
+  title: 'Failed to toggle milestone',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -391,8 +388,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error toggling paired milestone:',
-  message: error instanceof Error ? error.message : 'Error toggling paired milestone:'
+  title: 'Failed to toggle paired milestone',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -424,8 +421,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error enabling all milestones:',
-  message: error instanceof Error ? error.message : 'Error enabling all milestones:'
+  title: 'Failed to enable all milestones',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -446,8 +443,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error disabling all milestones:',
-  message: error instanceof Error ? error.message : 'Error disabling all milestones:'
+  title: 'Failed to disable all milestones',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
     } finally {
       setSaving(false)
@@ -476,9 +473,7 @@ export default function DefaultProceduresPage() {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <PageLoader message="Loading procedures..." />
         </Container>
       </DashboardLayout>
     )

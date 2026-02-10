@@ -64,33 +64,40 @@ useEffect(() => {
   }, [isGlobalAdmin, showArchived])
 
 const fetchData = async () => {
-    // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+    setLoading(true)
+    setError(null)
 
-    let query = supabase
-      .from('implant_companies')
-      .select('*')
-      .is('facility_id', null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setCurrentUserId(user.id)
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
+      let query = supabase
+        .from('implant_companies')
+        .select('*')
+        .is('facility_id', null)
+
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
+
+      const { data, error: fetchErr } = await query.order('name')
+      if (fetchErr) throw fetchErr
+      setCompanies(data || [])
+
+      const { count } = await supabase
+        .from('implant_companies')
+        .select('id', { count: 'exact', head: true })
+        .is('facility_id', null)
+        .not('deleted_at', 'is', null)
+
+      setArchivedCount(count || 0)
+    } catch (err) {
+      setError('Failed to load implant companies. Please try again.')
+    } finally {
+      setLoading(false)
     }
-
-    const { data } = await query.order('name')
-    setCompanies(data || [])
-
-    // Get archived count
-    const { count } = await supabase
-      .from('implant_companies')
-      .select('id', { count: 'exact', head: true })
-      .is('facility_id', null)
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
   }
 
   const openAddModal = () => {
@@ -113,17 +120,19 @@ const fetchData = async () => {
     
     setSaving(true)
 
-    if (modal.mode === 'add') {
-      const { data, error } = await supabase
-        .from('implant_companies')
-        .insert({
-          name: formData.name.trim(),
-          facility_id: null,
-        })
-        .select()
-        .single()
+    try {
+      if (modal.mode === 'add') {
+        const { data, error } = await supabase
+          .from('implant_companies')
+          .insert({
+            name: formData.name.trim(),
+            facility_id: null,
+          })
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setCompanies([...companies, data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
         await genericAuditLog(supabase, 'admin.implant_company_created', {
@@ -132,20 +141,20 @@ const fetchData = async () => {
           targetLabel: data.name,
           newValues: { name: data.name },
         })
-      }
-    } else if (modal.mode === 'edit' && modal.company) {
-      const oldName = modal.company.name
-      
-      const { data, error } = await supabase
-        .from('implant_companies')
-        .update({
-          name: formData.name.trim(),
-        })
-        .eq('id', modal.company.id)
-        .select()
-        .single()
+      } else if (modal.mode === 'edit' && modal.company) {
+        const oldName = modal.company.name
+        
+        const { data, error } = await supabase
+          .from('implant_companies')
+          .update({
+            name: formData.name.trim(),
+          })
+          .eq('id', modal.company.id)
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setCompanies(companies.map(c => c.id === data.id ? data : c).sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
         await genericAuditLog(supabase, 'admin.implant_company_updated', {
@@ -156,24 +165,28 @@ const fetchData = async () => {
           newValues: { name: data.name },
         })
       }
+    } catch (err) {
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to save implant company' })
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
 const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company) return
 
-    const { error } = await supabase
-      .from('implant_companies')
-      .update({
-        deleted_at: new Date().toISOString(),
-        deleted_by: currentUserId
-      })
-      .eq('id', id)
+    try {
+      const { error } = await supabase
+        .from('implant_companies')
+        .update({
+          deleted_at: new Date().toISOString(),
+          deleted_by: currentUserId
+        })
+        .eq('id', id)
 
-    if (!error) {
+      if (error) throw error
+
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
       setArchiveTarget(null)
@@ -183,6 +196,8 @@ const handleDelete = async (id: string) => {
         targetId: id,
         targetLabel: company.name,
       })
+    } catch (err) {
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to archive company' })
     }
   }
 
@@ -190,15 +205,17 @@ const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company) return
 
-    const { error } = await supabase
-      .from('implant_companies')
-      .update({
-        deleted_at: null,
-        deleted_by: null
-      })
-      .eq('id', id)
+    try {
+      const { error } = await supabase
+        .from('implant_companies')
+        .update({
+          deleted_at: null,
+          deleted_by: null
+        })
+        .eq('id', id)
 
-    if (!error) {
+      if (error) throw error
+
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev - 1)
       showToast({ type: 'success', title: `"${company.name}" restored successfully` })
@@ -207,6 +224,8 @@ const handleDelete = async (id: string) => {
         targetId: id,
         targetLabel: company.name,
       })
+    } catch (err) {
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to restore company' })
     }
   }
 
@@ -219,9 +238,7 @@ const handleDelete = async (id: string) => {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <PageLoader message="Loading implant companies..." />
         </Container>
       </DashboardLayout>
     )

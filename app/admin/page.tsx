@@ -128,11 +128,8 @@ const { showToast } = useToast()
           setRecentActivity(auditData as unknown as AuditEntry[])
         }
       } catch (error) {
-        showToast({
-  type: 'error',
-  title: 'Error fetching admin dashboard data:',
-  message: error instanceof Error ? error.message : 'Error fetching admin dashboard data:'
-})
+        setError('Failed to load admin dashboard. Please try again.')
+        showToast({ type: 'error', title: 'Failed to load dashboard', message: error instanceof Error ? error.message : 'Please try again' })
       } finally {
         setLoading(false)
       }
@@ -161,12 +158,7 @@ const { showToast } = useToast()
   if (userLoading || loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-slate-500">Loading admin dashboard...</p>
-          </div>
-        </div>
+        <PageLoader message="Loading admin dashboard..." />
       </DashboardLayout>
     )
   }

@@ -393,11 +393,7 @@ export default function FacilityDetailPage() {
         openIssues: issues,
       })
 } catch (error) {
-  showToast({
-    type: 'error',
-    title: 'Error fetching facility stats:',
-    message: error instanceof Error ? error.message : 'Error fetching facility stats:',
-  })
+  showToast({ type: 'error', title: 'Failed to load facility stats', message: error instanceof Error ? error.message : 'Please try again' })
 } finally {
       setStatsLoading(false)
     }
@@ -477,11 +473,8 @@ export default function FacilityDetailPage() {
           }
         }
       } catch (error) {
-        showToast({
-  type: 'error',
-  title: 'Error fetching facility data:',
-  message: error instanceof Error ? error.message : 'Error fetching facility data:'
-})
+        setError('Failed to load facility data. Please try again.')
+        showToast({ type: 'error', title: 'Failed to load facility data', message: error instanceof Error ? error.message : 'Please try again' })
 
       } finally {
         setLoading(false)
@@ -526,8 +519,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error updating facility:',
-  message: error instanceof Error ? error.message : 'Error updating facility:'
+  title: 'Failed to update facility',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to update facility')
     } finally {
@@ -597,8 +590,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error inviting user:',
-  message: error instanceof Error ? error.message : 'Error inviting user:'
+  title: 'Failed to invite user',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to invite user: ' + (error as Error).message)
     } finally {
@@ -630,8 +623,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error adding room:',
-  message: error instanceof Error ? error.message : 'Error adding room:'
+  title: 'Failed to add room',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to add room')
     } finally {
@@ -655,8 +648,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error deleting room:',
-  message: error instanceof Error ? error.message : 'Error deleting room:'
+  title: 'Failed to delete room',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to delete room')
     }
@@ -686,8 +679,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error adding procedure:',
-  message: error instanceof Error ? error.message : 'Error adding procedure:'
+  title: 'Failed to add procedure',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to add procedure')
     } finally {
@@ -711,8 +704,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error deleting procedure:',
-  message: error instanceof Error ? error.message : 'Error deleting procedure:'
+  title: 'Failed to delete procedure',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to delete procedure')
     }
@@ -749,8 +742,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Error updating user status:',
-  message: error instanceof Error ? error.message : 'Error updating user status:'
+  title: 'Failed to update user status',
+  message: error instanceof Error ? error.message : 'Please try again'
 })
       alert('Failed to update user status')
     }
@@ -832,9 +825,7 @@ export default function FacilityDetailPage() {
   if (userLoading || loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
+        <PageLoader message="Loading facility..." />
       </DashboardLayout>
     )
   }

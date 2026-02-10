@@ -53,14 +53,23 @@ export default function AdminDelayTypesPage() {
   }, [isGlobalAdmin])
 
   const fetchData = async () => {
-    const { data } = await supabase
-      .from('delay_types')
-      .select('*')
-      .is('facility_id', null)
-      .order('display_order')
+    setLoading(true)
+    setError(null)
 
-    setDelayTypes(data || [])
-    setLoading(false)
+    try {
+      const { data, error: fetchErr } = await supabase
+        .from('delay_types')
+        .select('*')
+        .is('facility_id', null)
+        .order('display_order')
+
+      if (fetchErr) throw fetchErr
+      setDelayTypes(data || [])
+    } catch (err) {
+      setError('Failed to load delay types. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openAddModal = () => {
@@ -89,60 +98,68 @@ export default function AdminDelayTypesPage() {
     setSaving(true)
     const nameValue = formData.name.trim() || formData.display_name.trim().toLowerCase().replace(/\s+/g, '_')
 
-    if (modal.mode === 'add') {
-      const { data, error } = await supabase
-        .from('delay_types')
-        .insert({
-          name: nameValue,
-          display_name: formData.display_name.trim(),
-          display_order: formData.display_order,
-          facility_id: null,
-        })
-        .select()
-        .single()
+    try {
+      if (modal.mode === 'add') {
+        const { data, error } = await supabase
+          .from('delay_types')
+          .insert({
+            name: nameValue,
+            display_name: formData.display_name.trim(),
+            display_order: formData.display_order,
+            facility_id: null,
+          })
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setDelayTypes([...delayTypes, data].sort((a, b) => a.display_order - b.display_order))
         closeModal()
         await delayTypeAudit.adminCreated(supabase, data.display_name, data.id)
-      }
-    } else if (modal.mode === 'edit' && modal.delayType) {
-      const oldName = modal.delayType.display_name
-      
-      const { data, error } = await supabase
-        .from('delay_types')
-        .update({
-          name: nameValue,
-          display_name: formData.display_name.trim(),
-          display_order: formData.display_order,
-        })
-        .eq('id', modal.delayType.id)
-        .select()
-        .single()
+      } else if (modal.mode === 'edit' && modal.delayType) {
+        const oldName = modal.delayType.display_name
+        
+        const { data, error } = await supabase
+          .from('delay_types')
+          .update({
+            name: nameValue,
+            display_name: formData.display_name.trim(),
+            display_order: formData.display_order,
+          })
+          .eq('id', modal.delayType.id)
+          .select()
+          .single()
 
-      if (!error && data) {
+        if (error) throw error
+
         setDelayTypes(delayTypes.map(dt => dt.id === data.id ? data : dt).sort((a, b) => a.display_order - b.display_order))
         closeModal()
         await delayTypeAudit.adminUpdated(supabase, data.id, oldName, data.display_name)
       }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to save delay type', 'error')
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   const handleDelete = async (id: string) => {
     const delayType = delayTypes.find(dt => dt.id === id)
     if (!delayType) return
 
-    const { error } = await supabase
-      .from('delay_types')
-      .delete()
-      .eq('id', id)
+    try {
+      const { error } = await supabase
+        .from('delay_types')
+        .delete()
+        .eq('id', id)
 
-    if (!error) {
+      if (error) throw error
+
       setDelayTypes(delayTypes.filter(dt => dt.id !== id))
       setDeleteTarget(null)
       await delayTypeAudit.adminDeleted(supabase, delayType.display_name, id)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete delay type', 'error')
     }
   }
 
@@ -151,9 +168,7 @@ export default function AdminDelayTypesPage() {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <div className="flex items-center justify-center h-64">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <PageLoader message="Loading delay types..." />
         </Container>
       </DashboardLayout>
     )

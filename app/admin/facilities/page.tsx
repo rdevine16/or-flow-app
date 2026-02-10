@@ -95,11 +95,8 @@ export default function FacilitiesListPage() {
 
       setFacilities(facilitiesWithCounts)
     } catch (error) {
-      showToast({
-  type: 'error',
-  title: 'Error fetching facilities:',
-  message: error instanceof Error ? error.message : 'Error fetching facilities:'
-})
+      setError('Failed to load facilities. Please try again.')
+      showToast({ type: 'error', title: 'Failed to load facilities', message: error instanceof Error ? error.message : 'Please try again' })
     } finally {
       setLoading(false)
     }
@@ -230,12 +227,7 @@ export default function FacilitiesListPage() {
   if (userLoading || loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-slate-500">Loading facilities...</p>
-          </div>
-        </div>
+        <PageLoader message="Loading facilities..." />
       </DashboardLayout>
     )
   }
