@@ -16,6 +16,7 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Surgeon {
   id: string
@@ -95,7 +96,7 @@ export default function SurgeonVariancePage() {
   const [editingItems, setEditingItems] = useState<Map<string, number>>(new Map())
 
   // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<{ surgeonId: string; procedureId: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SurgeonProcedureOverride | null>(null)
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -350,7 +351,7 @@ export default function SurgeonVariancePage() {
       })
 
       await fetchData()
-      setDeleteConfirm(null)
+      setDeleteTarget(null)
     } catch (error) {
       showToast({
   type: 'error',
@@ -508,26 +509,8 @@ export default function SurgeonVariancePage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
-                              {deleteConfirm?.surgeonId === override.surgeonId && 
-                               deleteConfirm?.procedureId === override.procedureId ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDelete(override.surgeonId, override.procedureId)}
-                                    disabled={saving}
-                                    className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded transition-colors"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirm({ surgeonId: override.surgeonId, procedureId: override.procedureId })}
+                              <button
+                                  onClick={() => setDeleteTarget(override)}
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
@@ -535,7 +518,6 @@ export default function SurgeonVariancePage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -748,6 +730,16 @@ export default function SurgeonVariancePage() {
           </div>
         </div>
       )}
+
+      <DeleteConfirm
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget) await handleDelete(deleteTarget.surgeonId, deleteTarget.procedureId)
+        }}
+        itemName={deleteTarget ? `${deleteTarget.surgeonName} — ${deleteTarget.procedureName}` : ''}
+        itemType="cost override"
+      />
     </DashboardLayout>
   )
 }

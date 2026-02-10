@@ -11,6 +11,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Payer {
   id: string
@@ -37,7 +38,7 @@ export default function PayersPage() {
   const [payerName, setPayerName] = useState('')
 
   // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<Payer | null>(null)
 // Toast
 
   // Current user for deleted_by tracking
@@ -198,7 +199,7 @@ showToast({
         facilityId: effectiveFacilityId,
       })
 
-setDeleteConfirm(null)
+setArchiveTarget(null)
 } catch (error) {
   showToast({
     type: 'error',
@@ -378,25 +379,8 @@ await genericAuditLog(supabase, 'payer.restored', {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
-                              {deleteConfirm === payer.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDelete(payer.id)}
-                                    disabled={saving}
-                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirm(payer.id)}
+                              <button
+                                  onClick={() => setArchiveTarget(payer)}
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Archive"
                                 >
@@ -404,7 +388,6 @@ await genericAuditLog(supabase, 'payer.restored', {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                   </svg>
                                 </button>
-                              )}
                             </>
                           )}
                         </div>
@@ -484,6 +467,16 @@ await genericAuditLog(supabase, 'payer.restored', {
           </div>
         </div>
       )}
+
+      <ArchiveConfirm
+        open={!!archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => {
+          if (archiveTarget) await handleDelete(archiveTarget.id)
+        }}
+        itemName={archiveTarget?.name || ''}
+        itemType="payer"
+      />
     </DashboardLayout>
   )
 }

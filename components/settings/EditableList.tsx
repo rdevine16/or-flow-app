@@ -1,7 +1,9 @@
+// components/settings/EditableList.tsx
 'use client'
 
 import { useState } from 'react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 
 interface Item {
   id: string
@@ -29,7 +31,7 @@ export default function EditableList({
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Item | null>(null)
   const [loading, setLoading] = useState(false)
 const { showToast } = useToast()
   const handleAdd = async () => {
@@ -58,8 +60,8 @@ const { showToast } = useToast()
     } catch (error) {
       showToast({
         type: 'error',
-        title: 'Error updating item:',
-        message: error instanceof Error ? error.message : 'Error updating item:'
+        title: 'Update Failed',
+        message: error instanceof Error ? error.message : 'Failed to update item'
       })
     }
     setLoading(false)
@@ -69,14 +71,13 @@ const { showToast } = useToast()
     setLoading(true)
     try {
       await onDelete(id)
-      setDeleteConfirm(null)
+      setDeleteTarget(null)
     } catch (error) {
       showToast({
         type: 'error',
-        title: 'Error deleting item:',
-        message: error instanceof Error ? error.message : 'Error deleting item:'
+        title: 'Delete Failed',
+        message: error instanceof Error ? error.message : 'This item may be in use by existing cases'
       })
-      alert('Cannot delete: This item may be in use by existing cases.')
     }
     setLoading(false)
   }
@@ -84,7 +85,7 @@ const { showToast } = useToast()
   const startEditing = (item: Item) => {
     setEditingId(item.id)
     setEditValue(item.name)
-    setDeleteConfirm(null)
+    setDeleteTarget(null)
   }
 
   const cancelEditing = () => {
@@ -163,29 +164,7 @@ const { showToast } = useToast()
                     )}
                   </div>
                   
-                  {deleteConfirm === item.id ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500">Delete?</span>
-                      <button
-                        onClick={() => handleDelete(item.id)}
-                        disabled={loading}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm(null)}
-                        className="p-1 text-slate-400 hover:bg-slate-100 rounded"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => startEditing(item)}
                         className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded"
@@ -195,7 +174,7 @@ const { showToast } = useToast()
                         </svg>
                       </button>
                       <button
-                        onClick={() => setDeleteConfirm(item.id)}
+                        onClick={() => setDeleteTarget(item)}
                         className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -203,7 +182,6 @@ const { showToast } = useToast()
                         </svg>
                       </button>
                     </div>
-                  )}
                 </>
               )}
             </div>
@@ -215,6 +193,16 @@ const { showToast } = useToast()
       {items.length > 0 && (
         <p className="text-xs text-slate-400">{items.length} item{items.length !== 1 ? 's' : ''}</p>
       )}
+      <DeleteConfirm
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget) await handleDelete(deleteTarget.id)
+        }}
+        itemName={deleteTarget?.display_name || deleteTarget?.name || ''}
+        itemType="item"
+        loading={loading}
+      />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+// app/settings/cancellation-reasons/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,6 +8,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
+import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 // ============================================================================
 // TYPES
@@ -56,7 +58,7 @@ export default function CancellationReasonsSettingsPage() {
   // Feedback state
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<CancellationReason | null>(null)
 
   const canEdit = isGlobalAdmin || isFacilityAdmin
 
@@ -186,7 +188,7 @@ export default function CancellationReasonsSettingsPage() {
     if (!error) {
       await cancellationReasonAudit.deleted(supabase, reason.display_name, reason.id, effectiveFacilityId)
       setSuccessMessage(`"${reason.display_name}" archived`)
-      setDeleteConfirm(null)
+      setArchiveTarget(null)
       fetchReasons()
     } else {
       setErrorMessage(error.message)
@@ -359,29 +361,18 @@ export default function CancellationReasonsSettingsPage() {
                                 {canEdit && (
                                   <div className="flex items-center gap-1">
                                     {reason.is_active ? (
-                                      deleteConfirm === reason.id ? (
-                                        <div className="flex items-center gap-1">
-                                          <button onClick={() => handleDelete(reason)} className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700">
-                                            Confirm
-                                          </button>
-                                          <button onClick={() => setDeleteConfirm(null)} className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300">
-                                            Cancel
-                                          </button>
-                                        </div>
-                                      ) : (
                                         <>
                                           <button onClick={() => openEditModal(reason)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Edit">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                             </svg>
                                           </button>
-                                          <button onClick={() => setDeleteConfirm(reason.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Archive">
+                                          <button onClick={() => setArchiveTarget(reason)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Archive">
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                                             </svg>
                                           </button>
                                         </>
-                                      )
                                     ) : (
                                       <button onClick={() => handleRestore(reason)} className="text-sm text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg">
                                         Restore
@@ -483,6 +474,16 @@ export default function CancellationReasonsSettingsPage() {
           </div>
         </div>
       )}
+
+      <ArchiveConfirm
+        open={!!archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => {
+          if (archiveTarget) await handleDelete(archiveTarget)
+        }}
+        itemName={archiveTarget?.display_name || ''}
+        itemType="cancellation reason"
+      />
     </DashboardLayout>
   )
 }

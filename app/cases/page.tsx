@@ -1,3 +1,4 @@
+// app/cases/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
@@ -12,6 +13,7 @@ import CasesFilterBar, { FilterState } from '@/components/filters/CaseFilterBar'
 import { getLocalDateString } from '@/lib/date-utils'
 import { getImpersonationState } from '@/lib/impersonation'
 import { extractName } from '@/lib/formatters'
+import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
 
 
@@ -192,7 +194,7 @@ function CasesPageContent() {
   // Core state
   const [cases, setCases] = useState<Case[]>([])
   const [loading, setLoading] = useState(true)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Case | null>(null)
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
   
@@ -418,7 +420,7 @@ function CasesPageContent() {
   const handleDelete = async (id: string) => {
     await supabase.from('cases').delete().eq('id', id)
     setCases(cases.filter(c => c.id !== id))
-    setDeleteConfirm(null)
+    setDeleteTarget(null)
   }
 
   // ============================================================================
@@ -624,31 +626,9 @@ function CasesPageContent() {
                               </svg>
                             </button>
                             
-                            {/* Delete button with confirmation */}
-                            {deleteConfirm === c.id ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => handleDelete(c.id)}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                  title="Confirm Delete"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => setDeleteConfirm(null)}
-                                  className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-all duration-200"
-                                  title="Cancel"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
+                            {/* Delete button */}
                               <button
-                                onClick={() => setDeleteConfirm(c.id)}
+                                onClick={() => setDeleteTarget(c)}
                                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200"
                                 title="Delete"
                               >
@@ -656,7 +636,6 @@ function CasesPageContent() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                 </svg>
                               </button>
-                            )}
                           </>
                         )}
                       </div>
@@ -788,6 +767,16 @@ function CasesPageContent() {
           userEmail={userEmail}
         />
       )}
+
+      <DeleteConfirm
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (deleteTarget) await handleDelete(deleteTarget.id)
+        }}
+        itemName={deleteTarget ? `Case #${deleteTarget.case_number}` : ''}
+        itemType="case"
+      />
     </DashboardLayout>
   )
 }
