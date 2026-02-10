@@ -1,3 +1,4 @@
+// app/admin/cancellation-reasons/page.tsx
 // This is the main page for managing cancellation reason templates. These templates are copied to new facilities during onboarding and can be customized by each facility without affecting others. Only accessible by global admins.
 'use client'
 
@@ -8,7 +9,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { Modal } from '@/components/ui/Modal'
+import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 
 
 // ============================================================================
@@ -63,7 +64,7 @@ export default function AdminCancellationReasonsPage() {
   // Feedback state
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<CancellationReasonTemplate | null>(null)
   // Toast
   const { showToast } = useToast()
 
@@ -230,7 +231,7 @@ const fetchReasons = async () => {
     } else {
       await cancellationReasonAudit.adminDeleted(supabase, reason.display_name, reason.id)
       setSuccessMessage(`"${reason.display_name}" archived`)
-      setDeleteConfirm(null)
+      setArchiveTarget(null)
       fetchReasons()
     }
 
@@ -432,22 +433,6 @@ const fetchReasons = async () => {
 
                           <div className="flex items-center gap-1">
                             {reason.is_active ? (
-                              deleteConfirm === reason.id ? (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={() => handleDelete(reason)}
-                                    className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirm(null)}
-                                    className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              ) : (
                                 <>
                                   <button
                                     onClick={() => openEditModal(reason)}
@@ -459,7 +444,7 @@ const fetchReasons = async () => {
                                     </svg>
                                   </button>
                                   <button
-                                    onClick={() => setDeleteConfirm(reason.id)}
+                                    onClick={() => setArchiveTarget(reason)}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Archive"
                                   >
@@ -468,7 +453,6 @@ const fetchReasons = async () => {
                                     </svg>
                                   </button>
                                 </>
-                              )
                             ) : (
                               <button
                                 onClick={() => handleRestore(reason)}
@@ -509,11 +493,16 @@ const fetchReasons = async () => {
       </Container>
 
       {/* Create/Edit Modal */}
-      <Modal
-        open={showModal}
-        onClose={closeModal}
-        title={editingReason ? 'Edit Cancellation Reason' : 'Add Cancellation Reason'}
-      >
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">
+                {editingReason ? 'Edit Cancellation Reason' : 'Add Cancellation Reason'}
+              </h3>
+            </div>
+
+            <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Display Name <span className="text-red-500">*</span>
@@ -564,17 +553,36 @@ const fetchReasons = async () => {
                 />
                 <p className="text-xs text-slate-500 mt-1">Lower numbers appear first within each category.</p>
               </div>
+            </div>
 
-        <Modal.Footer>
-          <Modal.Cancel onClick={closeModal} />
-          <Modal.Action
-            onClick={handleSubmit}
-            disabled={!formData.display_name.trim()}
-          >
-            {editingReason ? 'Save Changes' : 'Create Reason'}
-          </Modal.Action>
-        </Modal.Footer>
-      </Modal>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!formData.display_name.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {editingReason ? 'Save Changes' : 'Create Reason'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ArchiveConfirm
+        open={!!archiveTarget}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={async () => {
+          if (archiveTarget) await handleDelete(archiveTarget)
+        }}
+        itemName={archiveTarget?.display_name || ''}
+        itemType="cancellation reason"
+      />
     </DashboardLayout>
   )
 }
