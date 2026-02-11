@@ -16,9 +16,21 @@ import { caseAudit, caseDeviceAudit } from '@/lib/audit-logger'
 import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 import CaseComplexitySelector from '../cases/CaseComplexitySelector'
+import StaffMultiSelect from '../cases/StaffMultiSelect'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { LeaveConfirm } from '@/components/ui/ConfirmDialog'
 import { createCaseSchema, draftCaseSchema, validateField } from '@/lib/validation/schemas'
+
+interface StaffSelection {
+  user_id: string
+  role_id: string
+}
+
+interface RoomConflict {
+  case_number: string
+  start_time: string
+  surgeon_name: string | null
+}
 
 interface CaseFormProps {
   caseId?: string
@@ -88,6 +100,15 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // null = use procedure default, true = force require, false = force no require
   const [repRequiredOverride, setRepRequiredOverride] = useState<boolean | null>(null)
   const [originalRepRequiredOverride, setOriginalRepRequiredOverride] = useState<boolean | null>(null)
+
+  // Phase 3.1: Staff assignment state
+  const [selectedStaff, setSelectedStaff] = useState<StaffSelection[]>([])
+  const [originalStaff, setOriginalStaff] = useState<StaffSelection[]>([])
+
+  // Phase 3.3: Room conflict detection state
+  const [roomConflicts, setRoomConflicts] = useState<RoomConflict[]>([])
+  const [checkingConflicts, setCheckingConflicts] = useState(false)
+  const conflictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Draft state
   const [isDraft, setIsDraft] = useState(false)
@@ -167,6 +188,61 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       }
     }, 300)
   }, [userFacilityId, mode, caseId])
+
+  // Phase 3.3: Room conflict detection
+  const checkRoomConflicts = useCallback((roomId: string, date: string, time: string) => {
+    if (conflictTimerRef.current) {
+      clearTimeout(conflictTimerRef.current)
+    }
+
+    if (!roomId || !date || !time || !userFacilityId) {
+      setRoomConflicts([])
+      setCheckingConflicts(false)
+      return
+    }
+
+    setCheckingConflicts(true)
+
+    conflictTimerRef.current = setTimeout(async () => {
+      const query = supabase
+        .from('cases')
+        .select('id, case_number, start_time, surgeon:users!cases_surgeon_id_fkey(first_name, last_name)')
+        .eq('or_room_id', roomId)
+        .eq('scheduled_date', date)
+        .eq('facility_id', userFacilityId)
+        .is('is_draft', false)
+
+      // In edit mode, exclude the current case
+      if (mode === 'edit' && caseId) {
+        query.neq('id', caseId)
+      }
+
+      const { data, error: queryError } = await query
+
+      if (queryError) {
+        setCheckingConflicts(false)
+        setRoomConflicts([])
+        return
+      }
+
+      const conflicts: RoomConflict[] = (data || []).map((c: Record<string, unknown>) => {
+        const surgeon = c.surgeon as { first_name: string; last_name: string } | null
+        return {
+          case_number: c.case_number as string,
+          start_time: c.start_time ? (c.start_time as string).slice(0, 5) : '',
+          surgeon_name: surgeon ? `Dr. ${surgeon.first_name} ${surgeon.last_name}` : null,
+        }
+      })
+
+      setRoomConflicts(conflicts)
+      setCheckingConflicts(false)
+    }, 300)
+  }, [userFacilityId, mode, caseId])
+
+  // Re-check conflicts when room, date, or time changes
+  useEffect(() => {
+    checkRoomConflicts(formData.or_room_id, formData.scheduled_date, formData.start_time)
+  }, [formData.or_room_id, formData.scheduled_date, formData.start_time, checkRoomConflicts])
 
   // Compute effective rep required status
   const selectedProcedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
