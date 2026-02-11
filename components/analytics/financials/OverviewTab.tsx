@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { FinancialsMetrics, ProcedureStats, SurgeonStats } from './types'
 import { formatCurrency } from './utils'
-import { Banknote, ChevronDown, ChevronUp, Clock, DollarSign, Info, TrendingDown } from 'lucide-react'
+import { ArrowDown, Banknote, BanknoteIcon, ChevronDown, ChevronUp, Clock, DollarSign, DollarSignIcon, Info, Receipt, TrendingDown } from 'lucide-react'
 
 // ============================================
 // PROPS
@@ -70,34 +70,34 @@ export default function OverviewTab({
           label="Total Reimbursement"
           value={formatCurrency(metrics.totalReimbursement)}
           subtitle={`${metrics.totalCases} cases`}
-          icon={BanknotesIcon}
+          icon={BanknoteIcon}
         />
         <SummaryCard
           label="Total Costs"
           value={formatCurrency(totalCosts)}
           subtitle={`Avg ${formatCurrency(metrics.totalCases > 0 ? totalCosts / metrics.totalCases : 0)}/case`}
-          icon={ReceiptPercentIcon}
+          icon={Receipt}
           negative
         />
         <SummaryCard
           label="Total Debits"
           value={formatCurrency(metrics.totalDebits)}
           subtitle="Implants & supplies"
-          icon={ArrowTrendingDownIcon}
+          icon={ArrowDown}
           negative
         />
         <SummaryCard
           label="Total OR Cost"
           value={formatCurrency(metrics.totalORCost)}
           subtitle={`${formatCurrency(metrics.orRate)}/hr rate`}
-          icon={ClockIcon}
+          icon={Clock}
           negative
         />
         <SummaryCard
           label="Net Profit"
           value={formatCurrency(metrics.totalProfit)}
           subtitle={`${formatPercent(metrics.avgMargin)} margin`}
-          icon={CurrencyDollarIcon}
+          icon={DollarSignIcon}
           highlight={metrics.totalProfit >= 0}
           negative={metrics.totalProfit < 0}
         />
