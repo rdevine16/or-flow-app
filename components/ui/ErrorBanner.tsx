@@ -1,5 +1,6 @@
+'use client'
+
 // components/ui/ErrorBanner.tsx
-import { AlertCircle, X } from 'lucide-react'
 // Dismissible error banner with retry action
 // Replaces inline error banner patterns across all pages
 //
@@ -10,7 +11,7 @@ import { AlertCircle, X } from 'lucide-react'
 //     onDismiss={() => setError(null)}
 //   />
 
-'use client'
+import { AlertCircle, X } from 'lucide-react'
 
 
 interface ErrorBannerProps {
