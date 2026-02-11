@@ -8,7 +8,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
 import { getLocalDateString } from '@/lib/date-utils'
@@ -68,6 +68,7 @@ const OPERATIVE_SIDE_OPTIONS = [
 
 export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -274,8 +275,12 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     // Compare rep required override
     if (repRequiredOverride !== originalRepRequiredOverride) return true
 
+    // Compare staff selections
+    if (selectedStaff.length !== originalStaff.length ||
+        selectedStaff.some(s => !originalStaff.find(o => o.user_id === s.user_id))) return true
+
     return false
-  }, [formData, originalData, selectedCompanyIds, originalCompanyIds, selectedComplexityIds, originalComplexityIds, repRequiredOverride, originalRepRequiredOverride])
+  }, [formData, originalData, selectedCompanyIds, originalCompanyIds, selectedComplexityIds, originalComplexityIds, repRequiredOverride, originalRepRequiredOverride, selectedStaff, originalStaff])
 
   const handleCancel = useCallback(() => {
     if (isDirty) {
@@ -377,9 +382,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
       if (mode === 'create') {
         const scheduledStatus = statusesRes.data?.find(s => s.name === 'scheduled')
+        const dateFromParams = searchParams.get('date')
         const initialData: FormData = {
           case_number: '',
-          scheduled_date: getLocalDateString(),
+          scheduled_date: dateFromParams || getLocalDateString(),
           start_time: '07:30',
           or_room_id: '',
           procedure_type_id: '',
@@ -465,7 +471,18 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         setOriginalComplexityIds(complexityIds)
       }
 
-      setInitialLoading(false)
+      // Fetch existing staff assignments for this case
+      const { data: caseStaffData } = await supabase
+        .from('case_staff')
+        .select('user_id, role_id')
+        .eq('case_id', caseId)
+        .is('removed_at', null)
+
+      if (caseStaffData) {
+        setSelectedStaff(caseStaffData)
+        setOriginalStaff(caseStaffData)
+      }
+
       setInitialLoading(false)
     }
 
@@ -595,6 +612,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       p_notes: formData.notes || null,
       p_rep_required_override: repRequiredOverride,
       p_is_draft: true,
+      p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff) : null,
     })
 
     if (rpcError) {
@@ -719,6 +737,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         p_payer_id: formData.payer_id || null,
         p_notes: formData.notes || null,
         p_rep_required_override: repRequiredOverride,
+        p_staff_assignments: selectedStaff.length > 0 ? JSON.stringify(selectedStaff) : null,
       })
 
       result = rpcError
@@ -1026,7 +1045,28 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       return
     }
 
-    router.push('/cases')
+    if (mode === 'create') {
+      const preservedDate = formData.scheduled_date
+      showToast({
+        type: 'success',
+        title: 'Case created',
+        message: `${formData.case_number} created successfully`,
+        duration: 8000,
+        action: {
+          label: 'Create Another',
+          onClick: () => router.push(`/cases/new?date=${preservedDate}`),
+        },
+      })
+      setLoading(false)
+      router.push('/cases')
+    } else {
+      showToast({
+        type: 'success',
+        title: 'Case updated',
+        message: `${formData.case_number} updated successfully`,
+      })
+      router.push('/cases')
+    }
   }
 
   if (initialLoading) {
@@ -1167,6 +1207,27 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         error={fieldErrors.or_room_id}
       />
 
+      {/* Room conflict warning */}
+      {roomConflicts.length > 0 && (
+        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg" data-testid="room-conflict-warning">
+          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-amber-800">
+              Room has {roomConflicts.length} other case{roomConflicts.length !== 1 ? 's' : ''} on this date
+            </p>
+            <ul className="text-xs text-amber-700 mt-1 space-y-0.5">
+              {roomConflicts.map(c => (
+                <li key={c.case_number}>
+                  {c.case_number} at {c.start_time}{c.surgeon_name ? ` (${c.surgeon_name})` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
       {/* 5. Case Number — with real-time uniqueness check */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1297,7 +1358,25 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* 7. Anesthesiologist & Payer */}
+      {/* 7. Staff Assignment */}
+      {userFacilityId && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Staff Assignment
+          </label>
+          <StaffMultiSelect
+            facilityId={userFacilityId}
+            selectedStaff={selectedStaff}
+            onChange={setSelectedStaff}
+            excludeUserIds={formData.surgeon_id ? [formData.surgeon_id] : []}
+          />
+          <p className="text-xs text-slate-500 mt-1.5">
+            Assign nurses, techs, and other staff to this case (optional)
+          </p>
+        </div>
+      )}
+
+      {/* 8. Anesthesiologist & Payer */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SearchableDropdown
           label="Anesthesiologist"
