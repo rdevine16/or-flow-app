@@ -19,7 +19,7 @@
 'use client'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useState, useEffect, useCallback } from 'react'
-import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Flag, Info, X } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Flag, Info, Plus, X } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -69,7 +69,7 @@ interface CaseFlagsSectionProps {
 
 const SEVERITY_CONFIG = {
   critical: {
-    icon: ExclamationCircleIcon,
+    icon: AlertCircle,
     bg: 'bg-red-50',
     border: 'border-red-200',
     text: 'text-red-700',
@@ -79,7 +79,7 @@ const SEVERITY_CONFIG = {
     label: 'Critical',
   },
   warning: {
-    icon: ExclamationTriangleIcon,
+    icon: AlertTriangle,
     bg: 'bg-amber-50',
     border: 'border-amber-200',
     text: 'text-amber-700',
@@ -89,7 +89,7 @@ const SEVERITY_CONFIG = {
     label: 'Warning',
   },
   info: {
-    icon: InformationCircleIcon,
+    icon: Info,
     bg: 'bg-blue-50',
     border: 'border-blue-200',
     text: 'text-blue-700',
@@ -336,7 +336,7 @@ export default function CaseFlagsSection({
             onClick={() => setShowReportForm(true)}
             className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
           >
-            <PlusIcon className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5" />
             Report Delay
           </button>
         )}
