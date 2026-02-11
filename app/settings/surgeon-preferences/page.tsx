@@ -9,6 +9,7 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
 import { useSurgeons, useProcedureTypes, useImplantCompanies } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -44,13 +45,76 @@ export default function SurgeonPreferencesPage() {
   const { effectiveFacilityId, loading: userLoading } = useUser()
   
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
-  const [preferences, setPreferences] = useState<SurgeonPreference[]>([])
-  const [prefsLoading, setPrefsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const { data: surgeons, loading: surgeonsLoading } = useSurgeons(effectiveFacilityId)
   const { data: procedureTypes, loading: proceduresLoading } = useProcedureTypes(effectiveFacilityId)
   const { data: implantCompanies, loading: companiesLoading } = useImplantCompanies(effectiveFacilityId)
   const loading = userLoading || surgeonsLoading || proceduresLoading || companiesLoading
+
+  // Preferences for selected surgeon
+  const { data: prefData, loading: prefsLoading, error, setData: setPrefData, refetch: refetchPreferences } = useSupabaseQuery<{
+    preferences: SurgeonPreference[]
+    workflow: string
+    handoffMinutes: number
+  }>(
+    async (sb) => {
+      // Fetch surgeon's closing workflow settings
+      const { data: surgeonData, error: surgeonErr } = await sb
+        .from('users')
+        .select('closing_workflow, closing_handoff_minutes')
+        .eq('id', selectedSurgeon!)
+        .single()
+      if (surgeonErr) throw surgeonErr
+
+      // Fetch preferences
+      const { data, error: prefsErr } = await sb
+        .from('surgeon_preferences')
+        .select(`
+          id, surgeon_id, procedure_type_id,
+          procedure_types (name),
+          surgeon_preference_companies (
+            implant_company_id,
+            implant_companies (id, name)
+          )
+        `)
+        .eq('surgeon_id', selectedSurgeon!)
+        .order('created_at')
+      if (prefsErr) throw prefsErr
+
+      const transformed: SurgeonPreference[] = (data || []).map((pref: any) => {
+        const procedure = getFirst(pref.procedure_types)
+        const companies = (pref.surgeon_preference_companies || []).map((spc: any) => {
+          const company = getFirst(spc.implant_companies)
+          return company ? { id: company.id, name: company.name } : null
+        }).filter(Boolean)
+        return {
+          id: pref.id, surgeon_id: pref.surgeon_id,
+          procedure_type_id: pref.procedure_type_id,
+          procedure_name: procedure?.name || 'Unknown Procedure',
+          companies,
+        }
+      })
+
+      return {
+        preferences: transformed,
+        workflow: surgeonData?.closing_workflow || 'surgeon_closes',
+        handoffMinutes: surgeonData?.closing_handoff_minutes || 0,
+      }
+    },
+    { deps: [selectedSurgeon], enabled: !!selectedSurgeon }
+  )
+
+  const preferences = prefData?.preferences || []
+
+  // Sync workflow form state from query
+  const [closingWorkflow, setClosingWorkflow] = useState<'surgeon_closes' | 'pa_closes'>('surgeon_closes')
+  const [closingHandoffMinutes, setClosingHandoffMinutes] = useState(0)
+
+  useEffect(() => {
+    if (prefData) {
+      setClosingWorkflow(prefData.workflow as 'surgeon_closes' | 'pa_closes')
+      setClosingHandoffMinutes(prefData.handoffMinutes)
+    }
+  }, [prefData])
 
   
   // Modal state
@@ -62,79 +126,8 @@ export default function SurgeonPreferencesPage() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<SurgeonPreference | null>(null)
 
-  // PHASE 1: Closing workflow state
-  const [closingWorkflow, setClosingWorkflow] = useState<'surgeon_closes' | 'pa_closes'>('surgeon_closes')
-  const [closingHandoffMinutes, setClosingHandoffMinutes] = useState(0)
   const [workflowSaving, setWorkflowSaving] = useState(false)
   const [workflowSaved, setWorkflowSaved] = useState(false)
-
-  
-
-  // UPDATED: fetchPreferences now also fetches workflow settings
-  const fetchPreferences = async (surgeonId: string) => {
-    setPrefsLoading(true)
-    setError(null)
-    
-    try {
-      // Fetch surgeon's closing workflow settings
-      const { data: surgeonData, error: surgeonErr } = await supabase
-        .from('users')
-        .select('closing_workflow, closing_handoff_minutes')
-        .eq('id', surgeonId)
-        .single()
-      
-      if (surgeonErr) throw surgeonErr
-
-      if (surgeonData) {
-        setClosingWorkflow(surgeonData.closing_workflow || 'surgeon_closes')
-        setClosingHandoffMinutes(surgeonData.closing_handoff_minutes || 0)
-      } else {
-        setClosingWorkflow('surgeon_closes')
-        setClosingHandoffMinutes(0)
-      }
-      
-      // Fetch preferences
-      const { data, error: prefsErr } = await supabase
-        .from('surgeon_preferences')
-        .select(`
-          id,
-          surgeon_id,
-          procedure_type_id,
-          procedure_types (name),
-          surgeon_preference_companies (
-            implant_company_id,
-            implant_companies (id, name)
-          )
-        `)
-        .eq('surgeon_id', surgeonId)
-        .order('created_at')
-
-      if (prefsErr) throw prefsErr
-
-      const transformed: SurgeonPreference[] = (data || []).map((pref: any) => {
-        const procedure = getFirst(pref.procedure_types)
-        const companies = (pref.surgeon_preference_companies || []).map((spc: any) => {
-          const company = getFirst(spc.implant_companies)
-          return company ? { id: company.id, name: company.name } : null
-        }).filter(Boolean)
-
-        return {
-          id: pref.id,
-          surgeon_id: pref.surgeon_id,
-          procedure_type_id: pref.procedure_type_id,
-          procedure_name: procedure?.name || 'Unknown Procedure',
-          companies,
-        }
-      })
-
-      setPreferences(transformed)
-    } catch (err) {
-      setError('Failed to load surgeon preferences. Please try again.')
-      showToast({ type: 'error', title: 'Failed to load preferences', message: err instanceof Error ? err.message : 'Please try again' })
-    } finally {
-      setPrefsLoading(false)
-    }
-  }
 
   const openAddModal = () => {
     setFormData({ procedure_type_id: '', company_ids: [] })
@@ -204,7 +197,7 @@ export default function SurgeonPreferencesPage() {
       }
 
       closeModal()
-      fetchPreferences(selectedSurgeon)
+      refetchPreferences()
     } catch (err) {
       showToast({ type: 'error', title: 'Failed to save preference', message: err instanceof Error ? err.message : 'Please try again' })
     } finally {
@@ -218,7 +211,7 @@ export default function SurgeonPreferencesPage() {
       if (error) throw error
       setDeleteTarget(null)
       if (selectedSurgeon) {
-        fetchPreferences(selectedSurgeon)
+        refetchPreferences()
       }
     } catch (err) {
       showToast({ type: 'error', title: 'Failed to delete preference', message: err instanceof Error ? err.message : 'Please try again' })
@@ -268,7 +261,7 @@ export default function SurgeonPreferencesPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
-        <ErrorBanner message={error} onDismiss={() => setError(null)} />
+        <ErrorBanner message={error} />
         <SettingsLayout
           title="Surgeon Preferences"
           description="Create quick-fill templates for surgeon + procedure combinations"

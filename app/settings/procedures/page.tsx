@@ -1,7 +1,7 @@
 // app/settings/procedures/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -9,6 +9,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { procedureAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { PageLoader, Spinner } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
@@ -92,18 +93,99 @@ export default function ProceduresSettingsPage() {
 const { effectiveFacilityId, loading: userLoading } = useUser()
   
   // Data state
-  const [procedures, setProcedures] = useState<ProcedureType[]>([])
-  const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
-  const [techniques, setTechniques] = useState<ProcedureTechnique[]>([])
-  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
+  const [showArchived, setShowArchived] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+
+  // Reference data (body regions, techniques, categories) - fetched once
+  const { data: refData } = useSupabaseQuery<{
+    bodyRegions: BodyRegion[]
+    techniques: ProcedureTechnique[]
+    procedureCategories: ProcedureCategory[]
+  }>(
+    async (sb) => {
+      const [regionsResult, techniquesResult, categoriesResult] = await Promise.all([
+        sb.from('body_regions').select('id, name, display_name').order('display_name'),
+        sb.from('procedure_techniques').select('id, name, display_name').order('display_name'),
+        sb.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
+      ])
+      return {
+        bodyRegions: regionsResult.data || [],
+        techniques: techniquesResult.data || [],
+        procedureCategories: categoriesResult.data || [],
+      }
+    },
+    { deps: [], enabled: true }
+  )
+
+  const bodyRegions = refData?.bodyRegions || []
+  const techniques = refData?.techniques || []
+  const procedureCategories = refData?.procedureCategories || []
+
+  // Procedures + archived count - depends on showArchived
+  const { data: procData, loading, error, setData: setProcData, refetch: refetchProcedures } = useSupabaseQuery<{
+    procedures: ProcedureType[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let procedureQuery = sb
+        .from('procedure_types')
+        .select(`
+          id, name, body_region_id, technique_id, procedure_category_id,
+          implant_category, is_active, deleted_at, deleted_by,
+          body_regions (id, name, display_name),
+          procedure_techniques (id, name, display_name),
+          procedure_categories (id, name, display_name, body_region_id)
+        `)
+        .eq('facility_id', effectiveFacilityId!)
+
+      if (showArchived) {
+        procedureQuery = procedureQuery.not('deleted_at', 'is', null)
+      } else {
+        procedureQuery = procedureQuery.is('deleted_at', null)
+      }
+      procedureQuery = procedureQuery.order('name')
+
+      const archivedCountQuery = sb
+        .from('procedure_types')
+        .select('id', { count: 'exact', head: true })
+        .eq('facility_id', effectiveFacilityId!)
+        .not('deleted_at', 'is', null)
+
+      const [proceduresResult, archivedResult] = await Promise.all([procedureQuery, archivedCountQuery])
+      if (proceduresResult.error) throw proceduresResult.error
+
+      return {
+        procedures: (proceduresResult.data as ProcedureType[]) || [],
+        archivedCount: archivedResult.count || 0,
+      }
+    },
+    { deps: [effectiveFacilityId, showArchived], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const procedures = procData?.procedures || []
+  const archivedCount = procData?.archivedCount || 0
+
+  // Helper to update procedures optimistically
+  const setProcedures = (updater: ProcedureType[] | ((prev: ProcedureType[]) => ProcedureType[])) => {
+    setProcData(prev => {
+      const currentProcs = prev?.procedures || []
+      const newProcs = typeof updater === 'function' ? updater(currentProcs) : updater
+      return { procedures: newProcs, archivedCount: prev?.archivedCount || 0 }
+    })
+  }
+  const setArchivedCount = (updater: number | ((prev: number) => number)) => {
+    setProcData(prev => {
+      const currentCount = prev?.archivedCount || 0
+      const newCount = typeof updater === 'function' ? updater(currentCount) : updater
+      return { procedures: prev?.procedures || [], archivedCount: newCount }
+    })
+  }
   
   // UI state
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
-  const [searchQuery, setSearchQuery] = useState('')
   
   // Modal state
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', procedure: null })
@@ -122,91 +204,6 @@ const { effectiveFacilityId, loading: userLoading } = useUser()
     procedure_category_id: '',
     implant_category: '' 
   })
-
-  // Toast notification (you can replace with your toast system)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  // Get current user ID on mount
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
-    }
-    getCurrentUser()
-  }, [])
-  // =====================================================
-  // DATA FETCHING
-  // =====================================================
-
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchData()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId, showArchived])
-
-  const fetchData = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Build procedure query based on archive toggle
-      let procedureQuery = supabase
-        .from('procedure_types')
-        .select(`
-          id, 
-          name, 
-          body_region_id,
-          technique_id,
-          procedure_category_id,
-          implant_category,
-          is_active,
-          deleted_at,
-          deleted_by,
-          body_regions (id, name, display_name),
-          procedure_techniques (id, name, display_name),
-          procedure_categories (id, name, display_name, body_region_id)
-        `)
-        .eq('facility_id', effectiveFacilityId)
-
-      if (showArchived) {
-        procedureQuery = procedureQuery.not('deleted_at', 'is', null)
-      } else {
-        procedureQuery = procedureQuery.is('deleted_at', null)
-      }
-
-      procedureQuery = procedureQuery.order('name')
-
-      // Fetch archived count separately
-      const archivedCountQuery = supabase
-        .from('procedure_types')
-        .select('id', { count: 'exact', head: true })
-        .eq('facility_id', effectiveFacilityId)
-        .not('deleted_at', 'is', null)
-
-      const [proceduresResult, regionsResult, techniquesResult, categoriesResult, archivedResult] = await Promise.all([
-        procedureQuery,
-        supabase.from('body_regions').select('id, name, display_name').order('display_name'),
-        supabase.from('procedure_techniques').select('id, name, display_name').order('display_name'),
-        supabase.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
-        archivedCountQuery
-      ])
-
-      if (proceduresResult.error) throw proceduresResult.error
-
-      setProcedures(proceduresResult.data as ProcedureType[] || [])
-      setBodyRegions(regionsResult.data || [])
-      setTechniques(techniquesResult.data || [])
-      setProcedureCategories(categoriesResult.data || [])
-      setArchivedCount(archivedResult.count || 0)
-    } catch (err) {
-      setError('Failed to load procedures. Please try again.')
-      showToast({ type: 'error', title: 'Failed to load procedures', message: err instanceof Error ? err.message : 'Please try again' })
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // =====================================================
   // MODAL HANDLERS
@@ -493,7 +490,7 @@ deleted_by: currentUserId
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout
           title="Procedure Types"
           description="Manage the procedure types available at your facility."

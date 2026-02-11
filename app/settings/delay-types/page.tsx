@@ -1,15 +1,17 @@
 // app/settings/delay-types/page.tsx
+// app/admin/settings/delay-types/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useSupabaseList } from '@/hooks/useSupabaseQuery'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { delayTypeAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { useMutation } from '@/hooks/useAsync'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -37,47 +39,41 @@ export default function AdminDelayTypesPage() {
   const { isGlobalAdmin, loading: userLoading } = useUser()
   const { showToast } = useToast()
 
-  // ── Data fetching via useSupabaseList ───────────────────────────────
-  // BEFORE: useState([]) + useState(true) + useState(null) + useEffect(fetchData) + fetchData function
-  // AFTER:  1 hook call
-  const { data: delayTypes, loading, error, refetch } = useSupabaseList<DelayType>(
+  const { data: delayTypes, loading, error, setData: setDelayTypes, refetch } = useSupabaseQuery<DelayType[]>(
     async (sb) => {
       const { data, error } = await sb
         .from('delay_types')
         .select('*')
         .is('facility_id', null)
         .order('display_order')
-
-      return { data: data || [], error }
+      if (error) throw error
+      return data || []
     },
-    [isGlobalAdmin],
-    { enabled: isGlobalAdmin }
+    { deps: [isGlobalAdmin], enabled: !!isGlobalAdmin }
   )
 
-  // ── UI state ────────────────────────────────────────────────────────
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', delayType: null })
   const [formData, setFormData] = useState({ name: '', display_name: '', display_order: 0 })
-  const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DelayType | null>(null)
 
   // Redirect non-admins
-  if (!userLoading && !isGlobalAdmin) {
-    router.push('/dashboard')
-    return null
-  }
+  useEffect(() => {
+    if (!userLoading && !isGlobalAdmin) {
+      router.push('/dashboard')
+    }
+  }, [userLoading, isGlobalAdmin, router])
 
-  // ── Modal handlers ──────────────────────────────────────────────────
   const openAddModal = () => {
-    const maxOrder = Math.max(...delayTypes.map(dt => dt.display_order), 0)
+    const maxOrder = Math.max(...(delayTypes || []).map(dt => dt.display_order), 0)
     setFormData({ name: '', display_name: '', display_order: maxOrder + 1 })
     setModal({ isOpen: true, mode: 'add', delayType: null })
   }
 
   const openEditModal = (delayType: DelayType) => {
-    setFormData({
-      name: delayType.name,
+    setFormData({ 
+      name: delayType.name, 
       display_name: delayType.display_name,
-      display_order: delayType.display_order,
+      display_order: delayType.display_order 
     })
     setModal({ isOpen: true, mode: 'edit', delayType })
   }
@@ -87,60 +83,56 @@ export default function AdminDelayTypesPage() {
     setFormData({ name: '', display_name: '', display_order: 0 })
   }
 
-  // ── CRUD handlers ───────────────────────────────────────────────────
-  const handleSave = async () => {
+  const { mutate: doSave, loading: saving } = useMutation(async () => {
     if (!formData.display_name.trim()) return
-
-    setSaving(true)
+    
     const nameValue = formData.name.trim() || formData.display_name.trim().toLowerCase().replace(/\s+/g, '_')
 
-    try {
-      if (modal.mode === 'add') {
-        const { data, error } = await supabase
-          .from('delay_types')
-          .insert({
-            name: nameValue,
-            display_name: formData.display_name.trim(),
-            display_order: formData.display_order,
-            facility_id: null,
-          })
-          .select()
-          .single()
+    if (modal.mode === 'add') {
+      const { data, error } = await supabase
+        .from('delay_types')
+        .insert({
+          name: nameValue,
+          display_name: formData.display_name.trim(),
+          display_order: formData.display_order,
+          facility_id: null,
+        })
+        .select()
+        .single()
 
-        if (error) throw error
+      if (error) throw error
 
-        closeModal()
-        refetch()
-        await delayTypeAudit.adminCreated(supabase, data.display_name, data.id)
-      } else if (modal.mode === 'edit' && modal.delayType) {
-        const oldName = modal.delayType.display_name
+      setDelayTypes([...(delayTypes || []), data].sort((a, b) => a.display_order - b.display_order))
+      closeModal()
+      await delayTypeAudit.adminCreated(supabase, data.display_name, data.id)
+    } else if (modal.mode === 'edit' && modal.delayType) {
+      const oldName = modal.delayType.display_name
+      
+      const { data, error } = await supabase
+        .from('delay_types')
+        .update({
+          name: nameValue,
+          display_name: formData.display_name.trim(),
+          display_order: formData.display_order,
+        })
+        .eq('id', modal.delayType.id)
+        .select()
+        .single()
 
-        const { data, error } = await supabase
-          .from('delay_types')
-          .update({
-            name: nameValue,
-            display_name: formData.display_name.trim(),
-            display_order: formData.display_order,
-          })
-          .eq('id', modal.delayType.id)
-          .select()
-          .single()
+      if (error) throw error
 
-        if (error) throw error
-
-        closeModal()
-        refetch()
-        await delayTypeAudit.adminUpdated(supabase, data.id, oldName, data.display_name)
-      }
-    } catch (err) {
-      showToast({ type: 'error', title: 'Failed to save delay type', message: err instanceof Error ? err.message : 'Please try again' })
-    } finally {
-      setSaving(false)
+      setDelayTypes((delayTypes || []).map(dt => dt.id === data.id ? data : dt).sort((a, b) => a.display_order - b.display_order))
+      closeModal()
+      await delayTypeAudit.adminUpdated(supabase, data.id, oldName, data.display_name)
     }
-  }
+  }, {
+    onError: (err) => showToast({ type: 'error', title: 'Failed to save delay type', message: err.message })
+  })
+
+  const handleSave = () => doSave()
 
   const handleDelete = async (id: string) => {
-    const delayType = delayTypes.find(dt => dt.id === id)
+    const delayType = (delayTypes || []).find(dt => dt.id === id)
     if (!delayType) return
 
     try {
@@ -151,20 +143,19 @@ export default function AdminDelayTypesPage() {
 
       if (error) throw error
 
+      setDelayTypes((delayTypes || []).filter(dt => dt.id !== id))
       setDeleteTarget(null)
-      refetch()
       await delayTypeAudit.adminDeleted(supabase, delayType.display_name, id)
     } catch (err) {
       showToast({ type: 'error', title: 'Failed to delete delay type', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
-  // ── Render ──────────────────────────────────────────────────────────
   if (userLoading || loading) {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error?.message ?? null} onDismiss={() => {}} />
+          <ErrorBanner message={error} />
           <PageLoader message="Loading delay types..." />
         </Container>
       </DashboardLayout>
@@ -196,13 +187,13 @@ export default function AdminDelayTypesPage() {
           {/* Stats Bar */}
           <div className="flex items-center gap-4 mb-4">
             <span className="text-sm text-slate-500">
-              {delayTypes.length} delay type{delayTypes.length !== 1 ? 's' : ''}
+              {(delayTypes || []).length} delay type{(delayTypes || []).length !== 1 ? 's' : ''}
             </span>
           </div>
 
           {/* Table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            {delayTypes.length === 0 ? (
+            {(delayTypes || []).length === 0 ? (
               <div className="text-center py-16 text-slate-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No delay types defined</p>
@@ -224,36 +215,43 @@ export default function AdminDelayTypesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {delayTypes.map((delayType) => (
+                  {(delayTypes || []).map((delayType) => (
                     <tr key={delayType.id} className="group hover:bg-slate-50 transition-colors">
+                      {/* Order */}
                       <td className="px-4 py-3">
                         <span className="text-sm text-slate-400 font-medium">{delayType.display_order}</span>
                       </td>
+
+                      {/* Display Name */}
                       <td className="px-4 py-3">
                         <span className="text-sm font-medium text-slate-900">{delayType.display_name}</span>
                       </td>
+
+                      {/* Internal Name */}
                       <td className="px-4 py-3">
                         <code className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
                           {delayType.name}
                         </code>
                       </td>
+
+                      {/* Actions */}
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => openEditModal(delayType)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit"
-                          >
-                            <PenLine className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(delayType)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => openEditModal(delayType)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <PenLine className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(delayType)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                       </td>
                     </tr>
                   ))}
@@ -270,7 +268,7 @@ export default function AdminDelayTypesPage() {
                 <p className="font-medium text-slate-700 mb-1">About delay types</p>
                 <p>
                   These are global templates copied to new facilities. Each facility can customize 
-                  their own delay types. Changes here don&apos;t affect existing facilities.
+                  their own delay types. Changes here don't affect existing facilities.
                 </p>
               </div>
             </div>
@@ -280,56 +278,58 @@ export default function AdminDelayTypesPage() {
 
       {/* Modal */}
       <Modal open={modal.isOpen} onClose={closeModal} title={modal.mode === 'add' ? 'Add Delay Type' : 'Edit Delay Type'}>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Display Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.display_name}
-              onChange={(e) => setFormData({
-                ...formData,
-                display_name: e.target.value,
-                name: e.target.value.toLowerCase().replace(/\s+/g, '_'),
-              })}
-              placeholder="e.g., Waiting for Surgeon"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              autoFocus
-            />
-          </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Display Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.display_name}
+                  onChange={(e) => setFormData({ 
+                    ...formData, 
+                    display_name: e.target.value,
+                    name: e.target.value.toLowerCase().replace(/\s+/g, '_')
+                  })}
+                  placeholder="e.g., Waiting for Surgeon"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  autoFocus
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Internal Name <span className="text-slate-400 font-normal">(auto-generated)</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name || formData.display_name.toLowerCase().replace(/\s+/g, '_')}
+                  disabled
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Internal Name <span className="text-slate-400 font-normal">(auto-generated)</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name || formData.display_name.toLowerCase().replace(/\s+/g, '_')}
-              disabled
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500 font-mono text-sm"
-            />
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Display Order
+                </label>
+                <input
+                  type="number"
+                  value={formData.display_order}
+                  onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  min={1}
+                />
+                <p className="text-xs text-slate-500 mt-1">Lower numbers appear first in lists</p>
+              </div>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Display Order</label>
-            <input
-              type="number"
-              value={formData.display_order}
-              onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              min={1}
-            />
-            <p className="text-xs text-slate-500 mt-1">Lower numbers appear first in lists</p>
-          </div>
-        </div>
-
-        <Modal.Footer>
-          <Modal.Cancel onClick={closeModal} />
-          <Modal.Action onClick={handleSave} loading={saving} disabled={!formData.display_name.trim()}>
-            {modal.mode === 'add' ? 'Add Delay Type' : 'Save Changes'}
-          </Modal.Action>
-        </Modal.Footer>
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeModal} />
+              <Modal.Action onClick={handleSave} loading={saving} disabled={!formData.display_name.trim()}>
+                {modal.mode === 'add' ? 'Add Delay Type' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
       </Modal>
 
       <DeleteConfirm

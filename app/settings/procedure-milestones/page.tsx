@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
@@ -40,11 +41,53 @@ export default function ProcedureMilestonesSettingsPage() {
   const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast()
 
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [procedures, setProcedures] = useState<ProcedureType[]>([])
-  const [milestones, setMilestones] = useState<FacilityMilestone[]>([])
+  // Data fetching - procedures and milestones are read-only
+  const { data: procedures, loading: proceduresLoading } = useSupabaseQuery<ProcedureType[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('procedure_types')
+        .select('id, name, implant_category, source_template_id')
+        .eq('facility_id', effectiveFacilityId!)
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const { data: milestones, loading: milestonesLoading } = useSupabaseQuery<FacilityMilestone[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facility_milestones')
+        .select('id, name, display_name, display_order, pair_position, pair_with_id, source_milestone_type_id')
+        .eq('facility_id', effectiveFacilityId!)
+        .eq('is_active', true)
+        .order('display_order')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const { data: initialConfigs, loading: configsLoading, refetch: refetchConfigs } = useSupabaseQuery<ProcedureMilestoneConfig[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('procedure_milestone_config')
+        .select('id, procedure_type_id, facility_milestone_id')
+        .eq('facility_id', effectiveFacilityId!)
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  // Configs use managed state for optimistic updates
   const [configs, setConfigs] = useState<ProcedureMilestoneConfig[]>([])
+  useEffect(() => {
+    if (initialConfigs) setConfigs(initialConfigs)
+  }, [initialConfigs])
+
+  const loading = proceduresLoading || milestonesLoading || configsLoading
   const [expandedProcedure, setExpandedProcedure] = useState<string | null>(null)
 
   // Track which individual milestones are currently saving
@@ -74,54 +117,6 @@ export default function ProcedureMilestonesSettingsPage() {
   const isSavingMilestone = useCallback((procedureId: string, milestoneId: string): boolean => {
     return savingKeys.has(`${procedureId}:${milestoneId}`)
   }, [savingKeys])
-
-  // --- Data fetching ---
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchData()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId])
-
-  const fetchData = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-    setError(null)
-
-    try {
-      const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
-        supabase
-          .from('procedure_types')
-          .select('id, name, implant_category, source_template_id')
-          .eq('facility_id', effectiveFacilityId)
-          .order('name'),
-        supabase
-          .from('facility_milestones')
-          .select('id, name, display_name, display_order, pair_position, pair_with_id, source_milestone_type_id')
-          .eq('facility_id', effectiveFacilityId)
-          .eq('is_active', true)
-          .order('display_order'),
-        supabase
-          .from('procedure_milestone_config')
-          .select('id, procedure_type_id, facility_milestone_id')
-          .eq('facility_id', effectiveFacilityId)
-      ])
-
-      if (proceduresRes.error) throw proceduresRes.error
-      if (milestonesRes.error) throw milestonesRes.error
-      if (configsRes.error) throw configsRes.error
-
-      setProcedures(proceduresRes.data || [])
-      setMilestones(milestonesRes.data || [])
-      setConfigs(configsRes.data || [])
-    } catch (err) {
-      setError('Failed to load procedure milestones. Please try again.')
-      showToast({ type: 'error', title: 'Failed to load data', message: err instanceof Error ? err.message : 'Please try again' })
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // Check if milestone is enabled for procedure
   const isMilestoneEnabled = (procedureId: string, milestoneId: string): boolean => {
@@ -161,7 +156,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
       if (results.some(r => r.error)) {
         showToast({ type: 'error', title: 'Failed to remove milestone. Reverting change.' })
-        await fetchData()
+        await refetchConfigs()
       }
     } else {
       // Optimistically add placeholders
@@ -184,7 +179,7 @@ export default function ProcedureMilestonesSettingsPage() {
       }
 
       const rows = milestoneIds.map(mid => {
-        const m = milestones.find(ms => ms.id === mid)
+        const m = (milestones || []).find(ms => ms.id === mid)
         return {
           facility_id: effectiveFacilityId,
           procedure_type_id: procedureId,
@@ -200,7 +195,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
       if (error || !data) {
         showToast({ type: 'error', title: 'Failed to add milestone. Reverting change.' })
-        await fetchData()
+        await refetchConfigs()
       } else {
         // Replace optimistic placeholders with real rows
         setConfigs(prev => {
@@ -223,7 +218,7 @@ export default function ProcedureMilestonesSettingsPage() {
   }, [toggleMilestoneIds])
 
   const togglePairedMilestone = useCallback((procedureId: string, startMilestoneId: string) => {
-    const startMilestone = milestones.find(m => m.id === startMilestoneId)
+    const startMilestone = (milestones || []).find(m => m.id === startMilestoneId)
     if (!startMilestone) return
 
     const milestoneIds = startMilestone.pair_with_id
@@ -237,7 +232,7 @@ export default function ProcedureMilestonesSettingsPage() {
   const enableAllMilestones = useCallback(async (procedureId: string) => {
     if (!effectiveFacilityId) return
 
-    const toEnable = milestones.filter(m => !isMilestoneEnabled(procedureId, m.id))
+    const toEnable = (milestones || []).filter(m => !isMilestoneEnabled(procedureId, m.id))
     if (toEnable.length === 0) return
 
     const milestoneIds = toEnable.map(m => m.id)
@@ -265,7 +260,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
     if (error || !data) {
       showToast({ type: 'error', title: 'Failed to enable all milestones. Reverting.' })
-      await fetchData()
+      await refetchConfigs()
     } else {
       setConfigs(prev => {
         const cleaned = prev.filter(
@@ -299,7 +294,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
     if (error) {
       showToast({ type: 'error', title: 'Failed to clear milestones. Reverting.' })
-      await fetchData()
+      await refetchConfigs()
     }
 
     clearSaving(procedureId, milestoneIds)
@@ -328,7 +323,6 @@ export default function ProcedureMilestonesSettingsPage() {
     return (
       <DashboardLayout>
         <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
           <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
             <PageLoader message="Loading procedure milestones..." />
           </SettingsLayout>
@@ -348,10 +342,10 @@ export default function ProcedureMilestonesSettingsPage() {
           ) : (
             <>
               <div className="space-y-3">
-                {procedures.map(procedure => {
+                {(procedures || []).map(procedure => {
                   const isExpanded = expandedProcedure === procedure.id
                   const milestoneCount = getMilestoneCount(procedure.id)
-                  const totalMilestones = milestones.length
+                  const totalMilestones = (milestones || []).length
 
                   return (
                     <div
@@ -413,7 +407,7 @@ export default function ProcedureMilestonesSettingsPage() {
                             Select which milestones appear when tracking <span className="font-semibold">{procedure.name}</span> cases:
                           </p>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            {milestones
+                            {(milestones || [])
                               .filter(m => m.pair_position !== 'end')
                               .map(milestone => {
                                 const isEnabled = isMilestoneEnabled(procedure.id, milestone.id)
@@ -489,7 +483,7 @@ export default function ProcedureMilestonesSettingsPage() {
                   )
                 })}
 
-                {procedures.length === 0 && (
+                {(procedures || []).length === 0 && (
                   <div className="text-center py-12 text-slate-500">
                     <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                     <p>No procedure types configured for this facility.</p>

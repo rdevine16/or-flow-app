@@ -6,13 +6,14 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
@@ -84,45 +85,21 @@ export default function FlagsSettingsPage() {
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
   // State
-  const [rules, setRules] = useState<FlagRule[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState<string | null>(null) // rule ID being saved
-  const [expandedRule, setExpandedRule] = useState<string | null>(null)
-  // =====================================================
-  // DATA FETCHING
-  // =====================================================
-
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchData()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId])
-
-  const fetchData = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { data, error: fetchErr } = await supabase
+  const { data: rules, loading, error, setData: setRules } = useSupabaseQuery<FlagRule[]>(
+    async (sb) => {
+      const { data, error } = await sb
         .from('flag_rules')
         .select('*')
-        .eq('facility_id', effectiveFacilityId)
+        .eq('facility_id', effectiveFacilityId!)
         .order('display_order', { ascending: true })
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
 
-      if (fetchErr) throw fetchErr
-      if (data) setRules(data)
-    } catch (err) {
-      setError('Failed to load flag rules. Please try again.')
-      showToast({ type: 'error', title: 'Failed to load flag rules', message: err instanceof Error ? err.message : 'Please try again' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  const [saving, setSaving] = useState<string | null>(null) // rule ID being saved
+  const [expandedRule, setExpandedRule] = useState<string | null>(null)
   // =====================================================
   // FLAG RULE HANDLERS
   // =====================================================
@@ -225,7 +202,7 @@ export default function FlagsSettingsPage() {
     return (
       <DashboardLayout>
         <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
             <PageLoader message="Loading flag rules..." />
           </SettingsLayout>
@@ -271,12 +248,12 @@ export default function FlagsSettingsPage() {
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-                {rules.length === 0 ? (
+                {(rules || []).length === 0 ? (
                   <div className="px-6 py-10 text-center text-sm text-slate-400">
                     No flag rules found. Rules are seeded when your facility is created.
                   </div>
                 ) : (
-                  rules.map((rule) => {
+                  (rules || []).map((rule) => {
                     const isExpanded = expandedRule === rule.id
                     const isSaving = saving === rule.id
 

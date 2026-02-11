@@ -1,13 +1,6 @@
 // hooks/index.ts
 // Clean exports for all custom hooks
 
-// ── Supabase Query hooks (data fetching) ──────────────────────────────
-export {
-  useSupabaseQuery,
-  useSupabaseList,
-  useSupabaseQueries,
-} from './useSupabaseQuery'
-
 // Lookup data hooks
 export {
   useProcedureTypes,
@@ -52,6 +45,13 @@ export {
   validators,
   FormField,
 } from './useForm'
+
+// Data fetching hooks
+export {
+  useSupabaseQuery,
+  useSupabaseQueries,
+  useCurrentUser,
+} from './useSupabaseQuery'
 
 // Existing hooks (re-export for convenience)
 export { useBlockSchedules } from './useBlockSchedules'

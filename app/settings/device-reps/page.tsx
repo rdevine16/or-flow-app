@@ -1,13 +1,14 @@
 // app/settings/device-reps/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { deviceRepAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
@@ -58,142 +59,100 @@ function getFirst<T>(arr: T[] | T | null | undefined): T | null {
 
 export default function DeviceRepsPage() {
   const supabase = createClient()
-  const [reps, setReps] = useState<DeviceRep[]>([])
-  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
-  const [companies, setCompanies] = useState<ImplantCompany[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [facilityId, setFacilityId] = useState<string | null>(null)
-  const [facilityName, setFacilityName] = useState<string>('')
+  const { showToast } = useToast()
+  const { data: currentUser, loading: userLoading } = useCurrentUser()
+  const facilityId = currentUser?.facilityId || null
+
+  // Facility name
+  const { data: facilityData } = useSupabaseQuery<{ name: string } | null>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facilities')
+        .select('name')
+        .eq('id', facilityId!)
+        .single()
+      if (error) throw error
+      return data
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
+  const facilityName = facilityData?.name || ''
+
+  // Device reps
+  const { data: reps, loading: repsLoading, error, setData: setReps, refetch: refetchReps } = useSupabaseQuery<DeviceRep[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facility_device_reps')
+        .select(`
+          id, user_id, facility_id, status, created_at, accepted_at,
+          users!facility_device_reps_user_id_fkey (
+            id, first_name, last_name, email, phone,
+            implant_companies!users_implant_company_id_fkey (name)
+          )
+        `)
+        .eq('facility_id', facilityId!)
+        .neq('status', 'revoked')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data || []).map((rep: any) => {
+        const user = getFirst(rep.users)
+        const company = user ? getFirst(user.implant_companies) : null
+        return {
+          id: rep.id, user_id: rep.user_id, facility_id: rep.facility_id,
+          status: rep.status, created_at: rep.created_at, accepted_at: rep.accepted_at,
+          user_first_name: user?.first_name || '', user_last_name: user?.last_name || '',
+          user_email: user?.email || '', user_phone: user?.phone || null,
+          company_name: company?.name || 'Unknown Company', type: 'rep' as const,
+        }
+      })
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
+
+  // Pending invites
+  const { data: pendingInvites, setData: setPendingInvites, refetch: refetchInvites } = useSupabaseQuery<PendingInvite[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('device_rep_invites')
+        .select(`id, email, facility_id, created_at, expires_at, implant_companies (name)`)
+        .eq('facility_id', facilityId!)
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data || []).map((invite: any) => {
+        const company = getFirst(invite.implant_companies)
+        return {
+          id: invite.id, email: invite.email, facility_id: invite.facility_id,
+          created_at: invite.created_at, expires_at: invite.expires_at,
+          company_name: company?.name || 'Unknown Company', type: 'invite' as const,
+        }
+      })
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
+
+  // Implant companies for dropdown
+  const { data: companies } = useSupabaseQuery<ImplantCompany[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('implant_companies')
+        .select('id, name')
+        .or(`facility_id.is.null,facility_id.eq.${facilityId}`)
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [facilityId], enabled: !!facilityId }
+  )
+
+  const loading = userLoading || repsLoading
+
   const [inviteModal, setInviteModal] = useState<InviteModalState>({ isOpen: false })
   const [inviteForm, setInviteForm] = useState({ email: '', implant_company_id: '' })
   const [sending, setSending] = useState(false)
   const [actionConfirm, setActionConfirm] = useState<{ id: string; type: 'revoke' | 'cancel' } | null>(null)
   const [inviteLinkModal, setInviteLinkModal] = useState<{ isOpen: boolean; link: string; email: string }>({ isOpen: false, link: '', email: '' })
-  const { showToast } = useToast()
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: userData, error: userErr } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
-
-      if (userErr) throw userErr
-      if (!userData) return
-      setFacilityId(userData.facility_id)
-
-      // Get facility name
-      const { data: facilityData } = await supabase
-        .from('facilities')
-        .select('name')
-        .eq('id', userData.facility_id)
-        .single()
-
-      if (facilityData) {
-        setFacilityName(facilityData.name)
-      }
-
-      // Fetch device reps with access to this facility
-      const { data: repsData, error: repsErr } = await supabase
-        .from('facility_device_reps')
-        .select(`
-          id,
-          user_id,
-          facility_id,
-          status,
-          created_at,
-          accepted_at,
-          users!facility_device_reps_user_id_fkey (
-            id,
-            first_name,
-            last_name,
-            email,
-            phone,
-            implant_companies!users_implant_company_id_fkey (name)
-          )
-        `)
-        .eq('facility_id', userData.facility_id)
-        .neq('status', 'revoked')
-        .order('created_at', { ascending: false })
-
-      if (repsErr) throw repsErr
-
-      // Transform reps data
-      const transformedReps: DeviceRep[] = (repsData || []).map((rep: any) => {
-        const user = getFirst(rep.users)
-        const company = user ? getFirst(user.implant_companies) : null
-        return {
-          id: rep.id,
-          user_id: rep.user_id,
-          facility_id: rep.facility_id,
-          status: rep.status,
-          created_at: rep.created_at,
-          accepted_at: rep.accepted_at,
-          user_first_name: user?.first_name || '',
-          user_last_name: user?.last_name || '',
-          user_email: user?.email || '',
-          user_phone: user?.phone || null,
-          company_name: company?.name || 'Unknown Company',
-          type: 'rep' as const,
-        }
-      })
-
-      setReps(transformedReps)
-
-      // Fetch pending invites
-      const { data: invitesData } = await supabase
-        .from('device_rep_invites')
-        .select(`
-          id,
-          email,
-          facility_id,
-          created_at,
-          expires_at,
-          implant_companies (name)
-        `)
-        .eq('facility_id', userData.facility_id)
-        .is('accepted_at', null)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-
-      // Transform invites data
-      const transformedInvites: PendingInvite[] = (invitesData || []).map((invite: any) => {
-        const company = getFirst(invite.implant_companies)
-        return {
-          id: invite.id,
-          email: invite.email,
-          facility_id: invite.facility_id,
-          created_at: invite.created_at,
-          expires_at: invite.expires_at,
-          company_name: company?.name || 'Unknown Company',
-          type: 'invite' as const,
-        }
-      })
-
-      setPendingInvites(transformedInvites)
-
-      // Fetch implant companies for invite dropdown
-      const { data: companiesData } = await supabase
-        .from('implant_companies')
-        .select('id, name')
-        .or(`facility_id.is.null,facility_id.eq.${userData.facility_id}`)
-        .order('name')
-
-      setCompanies(companiesData || [])
-    } catch (err) {
-      setError('Failed to load device reps. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const openInviteModal = () => {
     setInviteForm({ email: '', implant_company_id: '' })
@@ -212,7 +171,7 @@ export default function DeviceRepsPage() {
 
     try {
       const inviteToken = crypto.randomUUID()
-      const companyName = companies.find(c => c.id === inviteForm.implant_company_id)?.name || 'Unknown'
+      const companyName = (companies || []).find(c => c.id === inviteForm.implant_company_id)?.name || 'Unknown'
 
       const { data, error } = await supabase
         .from('device_rep_invites')
@@ -298,7 +257,7 @@ export default function DeviceRepsPage() {
 
       if (error) throw error
 
-      setReps(reps.filter(r => r.id !== rep.id))
+      setReps((reps || []).filter(r => r.id !== rep.id))
       setActionConfirm(null)
 
       await deviceRepAudit.accessRevoked(
@@ -323,7 +282,7 @@ export default function DeviceRepsPage() {
 
       if (error) throw error
 
-      setPendingInvites(pendingInvites.filter(i => i.id !== inviteId))
+      setPendingInvites((pendingInvites || []).filter(i => i.id !== inviteId))
       setActionConfirm(null)
     } catch (err) {
       showToast({ type: 'error', title: 'Failed to cancel invite', message: err instanceof Error ? err.message : 'Please try again' })
@@ -339,19 +298,19 @@ export default function DeviceRepsPage() {
   }
 
   // Combine and sort: active reps first, then pending invites
-  const activeReps = reps.filter(r => r.status === 'accepted')
+  const activeReps = (reps || []).filter(r => r.status === 'accepted')
   const allRows: TableRow[] = [
     ...activeReps.map(r => ({ ...r, type: 'rep' as const })),
-    ...pendingInvites.map(i => ({ ...i, type: 'invite' as const })),
+    ...(pendingInvites || []).map(i => ({ ...i, type: 'invite' as const })),
   ]
 
   const activeCount = activeReps.length
-  const pendingCount = pendingInvites.length
+  const pendingCount = (pendingInvites || []).length
 
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout
           title="Device Rep Access"
           description="Manage implant company representative access to your cases."
@@ -564,7 +523,7 @@ export default function DeviceRepsPage() {
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 >
                   <option value="">Select company...</option>
-                  {companies.map((company) => (
+                  {(companies || []).map((company) => (
                     <option key={company.id} value={company.id}>
                       {company.name}
                     </option>

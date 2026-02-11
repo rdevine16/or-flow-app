@@ -11,6 +11,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
@@ -165,107 +166,63 @@ export default function GeneralOverviewPage() {
   const supabase = createClient()
   const { effectiveFacilityId, isFacilityAdmin, isGlobalAdmin, loading: userLoading } = useUser()
   const { showToast } = useToast() 
-  // State
-  const [facility, setFacility] = useState<Facility | null>(null)
-  const [stats, setStats] = useState<FacilityStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  
+  // Data fetching
+  const { data: facility, loading: facilityLoading, error, setData: setFacility, refetch } = useSupabaseQuery<Facility | null>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facilities')
+        .select('*')
+        .eq('id', effectiveFacilityId!)
+        .single()
+      if (error) throw error
+      return data
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const { data: stats } = useSupabaseQuery<FacilityStats>(
+    async (sb) => {
+      const [casesRes, usersRes, roomsRes, casesThisMonthRes] = await Promise.all([
+        sb.from('cases').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!),
+        sb.from('users').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!).eq('is_active', true),
+        sb.from('or_rooms').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!).is('deleted_at', null),
+        sb.from('cases').select('id', { count: 'exact', head: true }).eq('facility_id', effectiveFacilityId!)
+          .gte('scheduled_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]),
+      ])
+      return {
+        totalCases: casesRes.count || 0,
+        totalUsers: usersRes.count || 0,
+        totalRooms: roomsRes.count || 0,
+        casesThisMonth: casesThisMonthRes.count || 0,
+      }
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const loading = facilityLoading
   const [saving, setSaving] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [copied, setCopied] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
-    name: '',
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    phone: '',
-    timezone: '',
+    name: '', address: '', city: '', state: '', zip: '', phone: '', timezone: '',
   })
 
-  const canEdit = isFacilityAdmin || isGlobalAdmin
-
-  // =====================================================
-  // DATA FETCHING
-  // =====================================================
-
-  const fetchData = useCallback(async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Fetch facility details
-      const { data: facilityData, error: facilityError } = await supabase
-        .from('facilities')
-        .select('*')
-        .eq('id', effectiveFacilityId)
-        .single()
-
-      if (facilityError) throw facilityError
-
-      setFacility(facilityData)
-      setFormData({
-        name: facilityData.name || '',
-        address: facilityData.address || '',
-        city: facilityData.city || '',
-        state: facilityData.state || '',
-        zip: facilityData.zip || '',
-        phone: facilityData.phone || '',
-        timezone: facilityData.timezone || 'America/New_York',
-      })
-
-      // Fetch stats
-      const [casesRes, usersRes, roomsRes, casesThisMonthRes] = await Promise.all([
-        supabase
-          .from('cases')
-          .select('id', { count: 'exact', head: true })
-          .eq('facility_id', effectiveFacilityId),
-        supabase
-          .from('users')
-          .select('id', { count: 'exact', head: true })
-          .eq('facility_id', effectiveFacilityId)
-          .eq('is_active', true),
-        supabase
-          .from('or_rooms')
-          .select('id', { count: 'exact', head: true })
-          .eq('facility_id', effectiveFacilityId)
-          .is('deleted_at', null),
-        supabase
-          .from('cases')
-          .select('id', { count: 'exact', head: true })
-          .eq('facility_id', effectiveFacilityId)
-          .gte('scheduled_date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]),
-      ])
-
-      setStats({
-        totalCases: casesRes.count || 0,
-        totalUsers: usersRes.count || 0,
-        totalRooms: roomsRes.count || 0,
-        casesThisMonth: casesThisMonthRes.count || 0,
-      })
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to load facility data'
-      setError('Failed to load facility data. Please try again.')
-      showToast({
-        type: 'error',
-        title: 'Failed to load facility data',
-        message: msg
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [effectiveFacilityId, supabase])
-
+  // Sync form from facility data
   useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchData()
-    } else if (!userLoading) {
-      setLoading(false)
+    if (facility) {
+      setFormData({
+        name: facility.name || '', address: facility.address || '',
+        city: facility.city || '', state: facility.state || '',
+        zip: facility.zip || '', phone: facility.phone || '',
+        timezone: facility.timezone || 'America/New_York',
+      })
     }
-  }, [userLoading, effectiveFacilityId, fetchData])
+  }, [facility])
+
+  const canEdit = isFacilityAdmin || isGlobalAdmin
 
   // =====================================================
   // HANDLERS
@@ -381,7 +338,7 @@ showToast({
   return (
     <DashboardLayout>
       <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout title="General" description="Manage your facility's basic information and settings">
           {loading ? (
             <OverviewSkeleton />

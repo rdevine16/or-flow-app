@@ -1,13 +1,15 @@
 // app/settings/cancellation-reasons/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
@@ -49,44 +51,17 @@ const CATEGORIES = [
 export default function CancellationReasonsSettingsPage() {
   const supabase = createClient()
   const { effectiveFacilityId, isGlobalAdmin, isFacilityAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
   
   // Data state
-  const [reasons, setReasons] = useState<CancellationReason[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [showArchived, setShowArchived] = useState(false)  
-  // Modal state
-  const [showModal, setShowModal] = useState(false)
-  const [editingReason, setEditingReason] = useState<CancellationReason | null>(null)
-  const [formData, setFormData] = useState({ display_name: '', category: 'patient' })
-  
-  // Feedback state
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [archiveTarget, setArchiveTarget] = useState<CancellationReason | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
-  const canEdit = isGlobalAdmin || isFacilityAdmin
-
-  // ============================================================================
-  // DATA FETCHING
-  // ============================================================================
-
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchReasons()
-    }
-  }, [userLoading, effectiveFacilityId, showArchived])
-
-  const fetchReasons = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-    setError(null)
-    
-    try {
-      let query = supabase
+  const { data: reasons, loading, error, setData: setReasons, refetch: refetchReasons } = useSupabaseQuery<CancellationReason[]>(
+    async (sb) => {
+      let query = sb
         .from('cancellation_reasons')
         .select('*')
-        .eq('facility_id', effectiveFacilityId)
+        .eq('facility_id', effectiveFacilityId!)
         .order('category')
         .order('display_order')
       
@@ -94,17 +69,20 @@ export default function CancellationReasonsSettingsPage() {
         query = query.eq('is_active', true).is('deleted_at', null)
       }
       
-      const { data, error: fetchErr } = await query
-      
-      if (fetchErr) throw fetchErr
-      setReasons(data || [])
-    } catch (err) {
-      setError('Failed to load cancellation reasons. Please try again.')
-      setErrorMessage('Failed to load cancellation reasons')
-    } finally {
-      setLoading(false)
-    }
-  }
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId, showArchived], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  // Modal state
+  const [showModal, setShowModal] = useState(false)
+  const [editingReason, setEditingReason] = useState<CancellationReason | null>(null)
+  const [formData, setFormData] = useState({ display_name: '', category: 'patient' })
+  const [archiveTarget, setArchiveTarget] = useState<CancellationReason | null>(null)
+
+  const canEdit = isGlobalAdmin || isFacilityAdmin
 
   // ============================================================================
   // MODAL HANDLERS
@@ -154,9 +132,9 @@ export default function CancellationReasonsSettingsPage() {
         if (error) throw error
 
         await cancellationReasonAudit.updated(supabase, editingReason.id, editingReason.display_name, formData.display_name.trim(), effectiveFacilityId)
-        setSuccessMessage('Cancellation reason updated')
+        showToast({ type: 'success', title: 'Cancellation reason updated' })
         closeModal()
-        fetchReasons()
+        refetchReasons()
       } else {
         const { data, error } = await supabase
           .from('cancellation_reasons')
@@ -165,27 +143,25 @@ export default function CancellationReasonsSettingsPage() {
             name,
             display_name: formData.display_name.trim(),
             category: formData.category,
-            display_order: reasons.length * 10,
+            display_order: (reasons || []).length * 10,
             is_active: true,
           })
           .select()
           .single()
 
         if (error) {
-          setErrorMessage(error.code === '23505' ? 'This reason already exists' : error.message)
+          showToast({ type: 'error', title: error.code === '23505' ? 'This reason already exists' : error.message })
           return
         }
 
         await cancellationReasonAudit.created(supabase, formData.display_name.trim(), data.id, formData.category, effectiveFacilityId)
-        setSuccessMessage('Cancellation reason created')
+        showToast({ type: 'success', title: 'Cancellation reason created' })
         closeModal()
-        fetchReasons()
+        refetchReasons()
       }
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to save reason')
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to save reason' })
     }
-
-    setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   const handleDelete = async (reason: CancellationReason) => {
@@ -202,13 +178,12 @@ export default function CancellationReasonsSettingsPage() {
       if (error) throw error
 
       await cancellationReasonAudit.deleted(supabase, reason.display_name, reason.id, effectiveFacilityId)
-      setSuccessMessage(`"${reason.display_name}" archived`)
+      showToast({ type: 'success', title: `"${reason.display_name}" archived` })
       setArchiveTarget(null)
-      fetchReasons()
+      refetchReasons()
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to archive reason')
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to archive reason' })
     }
-    setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   const handleRestore = async (reason: CancellationReason) => {
@@ -223,26 +198,25 @@ export default function CancellationReasonsSettingsPage() {
       if (error) throw error
 
       await cancellationReasonAudit.restored(supabase, reason.display_name, reason.id, effectiveFacilityId)
-      setSuccessMessage(`"${reason.display_name}" restored`)
-      fetchReasons()
+      showToast({ type: 'success', title: `"${reason.display_name}" restored` })
+      refetchReasons()
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to restore reason')
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to restore reason' })
     }
-    setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   // ============================================================================
   // COMPUTED
   // ============================================================================
 
-  const groupedReasons = reasons.reduce((acc, r) => {
+  const groupedReasons = (reasons || []).reduce((acc, r) => {
     if (!acc[r.category]) acc[r.category] = []
     acc[r.category].push(r)
     return acc
   }, {} as Record<string, CancellationReason[]>)
 
-  const activeCount = reasons.filter(r => r.is_active).length
-  const archivedCount = reasons.filter(r => !r.is_active).length
+  const activeCount = (reasons || []).filter(r => r.is_active).length
+  const archivedCount = (reasons || []).filter(r => !r.is_active).length
 
   // ============================================================================
   // RENDER
@@ -251,7 +225,7 @@ export default function CancellationReasonsSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout
           title="Cancellation Reasons"
           description="Manage the reasons staff can select when cancelling a surgical case."
@@ -264,20 +238,6 @@ export default function CancellationReasonsSettingsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Messages */}
-              {successMessage && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
-                  <Check className="w-5 h-5 text-green-500" />
-                  <p className="text-sm font-medium text-green-800">{successMessage}</p>
-                </div>
-              )}
-              {errorMessage && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-500" />
-                  <p className="text-sm font-medium text-red-800">{errorMessage}</p>
-                </div>
-              )}
-
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Header */}
@@ -315,7 +275,7 @@ export default function CancellationReasonsSettingsPage() {
                 </div>
 
                 {/* Content */}
-                {reasons.length === 0 ? (
+                {(reasons || []).length === 0 ? (
                   <div className="px-6 py-12 text-center">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
                       <Ban className="w-6 h-6 text-slate-400" />

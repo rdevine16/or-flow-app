@@ -12,12 +12,13 @@ import Badge from '@/components/ui/Badge'
 import InviteUserModal from '@/components/InviteUserModal'
 import { userAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
-import { AlertCircle, Archive, Ban, Check, CheckCircle2, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
+import { Archive, Ban, CheckCircle2, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
 
 interface User {
   id: string
@@ -65,20 +66,14 @@ export default function UsersSettingsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<UserRole[]>([])
   const [facilities, setFacilities] = useState<Facility[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deactivateConfirm, setDeactivateConfirm] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [resendingInvite, setResendingInvite] = useState<string | null>(null)
   const [sendingInvite, setSendingInvite] = useState<string | null>(null)
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set())
   const [authUserIds, setAuthUserIds] = useState<Set<string>>(new Set())
   const { showToast } = useToast()
-  // NEW: Show archived users toggle
   const [showArchived, setShowArchived] = useState(false)
   
   // Invite prompt state
@@ -95,71 +90,70 @@ export default function UsersSettingsPage() {
     facility_id: '',
   })
 
-  useEffect(() => {
-    if (!userLoading) {
-      fetchCurrentUserId()
-      fetchData()
-    }
-  }, [userLoading, effectiveFacilityId, isImpersonating, showArchived])
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
 
-  const fetchCurrentUserId = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      setCurrentUserId(user.id)
-    }
-  }
+  const showAllUsers = isGlobalAdmin && !isImpersonating
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      let usersQuery = supabase
+  const { data: queryData, loading, error, refetch: refetchUsers } = useSupabaseQuery<{
+    users: User[]
+    roles: UserRole[]
+    facilities: Facility[]
+  }>(
+    async (sb) => {
+      let usersQuery = sb
         .from('users')
         .select('id, first_name, last_name, email, role_id, access_level, facility_id, is_active, deleted_at, last_login_at, user_roles(name), facilities(name)')
         .order('last_name')
 
-      const showAllUsers = isGlobalAdmin && !isImpersonating
+      const allUsers = isGlobalAdmin && !isImpersonating
 
-      if (!showAllUsers && effectiveFacilityId) {
+      if (!allUsers && effectiveFacilityId) {
         usersQuery = usersQuery
           .eq('facility_id', effectiveFacilityId)
           .in('access_level', ['user', 'facility_admin'])
       }
 
-      // Filter by active status
       if (!showArchived) {
         usersQuery = usersQuery.eq('is_active', true)
       }
 
       const [usersRes, rolesRes, facilitiesRes] = await Promise.all([
         usersQuery,
-        supabase.from('user_roles').select('id, name').order('name'),
-        showAllUsers
-          ? supabase.from('facilities').select('id, name').order('name')
-          : Promise.resolve({ data: [] }),
+        sb.from('user_roles').select('id, name').order('name'),
+        allUsers
+          ? sb.from('facilities').select('id, name').order('name')
+          : Promise.resolve({ data: [] as Facility[], error: null }),
       ])
 
       if (usersRes.error) throw usersRes.error
       if (rolesRes.error) throw rolesRes.error
 
-      const usersData = (usersRes.data as unknown as User[]) || []
-      setUsers(usersData)
-      setRoles(rolesRes.data || [])
-      setFacilities(facilitiesRes.data || [])
-
-      const emailsToCheck = usersData.filter(u => u.email).map(u => u.email as string)
-      if (emailsToCheck.length > 0) {
-        await fetchPendingStatus(emailsToCheck)
+      return {
+        users: (usersRes.data as unknown as User[]) || [],
+        roles: rolesRes.data || [],
+        facilities: (facilitiesRes.data as Facility[]) || [],
       }
+    },
+    { deps: [effectiveFacilityId, isImpersonating, showArchived, isGlobalAdmin], enabled: !userLoading }
+  )
 
-      await fetchAuthStatus(usersData.map(u => u.id))
-    } catch (err) {
-      setError('Failed to load users. Please try again.')
-    } finally {
-      setLoading(false)
+  // Sync query data to local state
+  useEffect(() => {
+    if (queryData) {
+      setUsers(queryData.users)
+      setRoles(queryData.roles)
+      setFacilities(queryData.facilities)
     }
-  }
+  }, [queryData])
+
+  // Fetch pending/auth status after users load
+  useEffect(() => {
+    if (!queryData?.users.length) return
+    const emailsToCheck = queryData.users.filter(u => u.email).map(u => u.email as string)
+    if (emailsToCheck.length > 0) fetchPendingStatus(emailsToCheck)
+    fetchAuthStatus(queryData.users.map(u => u.id))
+  }, [queryData])
 
   const fetchPendingStatus = async (emails: string[]) => {
     try {
@@ -211,16 +205,14 @@ export default function UsersSettingsPage() {
   }
 
   const handleInviteSuccess = () => {
-    setSuccessMessage('Staff member added successfully!')
-    fetchData()
-    setTimeout(() => setSuccessMessage(null), 5000)
+    showToast({ type: 'success', title: 'Staff member added successfully!' })
+    refetchUsers()
   }
 
   const handleResendInvite = async (user: User) => {
     if (!user.email) return
     
     setResendingInvite(user.id)
-    setErrorMessage(null)
 
     try {
       const response = await fetch('/api/resend-invite', {
@@ -232,15 +224,12 @@ export default function UsersSettingsPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        setErrorMessage(data.error || 'Failed to resend invite')
-        setTimeout(() => setErrorMessage(null), 5000)
+        showToast({ type: 'error', title: data.error || 'Failed to resend invite' })
       } else {
-        setSuccessMessage(`Invite resent to ${user.email}`)
-        setTimeout(() => setSuccessMessage(null), 5000)
+        showToast({ type: 'success', title: `Invite resent to ${user.email}` })
       }
     } catch (error) {
-      setErrorMessage('Failed to resend invite')
-      setTimeout(() => setErrorMessage(null), 5000)
+      showToast({ type: 'error', title: 'Failed to resend invite' })
     }
 
     setResendingInvite(null)
@@ -250,7 +239,6 @@ export default function UsersSettingsPage() {
     if (!user.email) return
     
     setSendingInvite(user.id)
-    setErrorMessage(null)
 
     try {
       const response = await fetch('/api/admin/invite', {
@@ -270,19 +258,16 @@ export default function UsersSettingsPage() {
       const data = await response.json()
 
       if (!response.ok || !data.success) {
-        setErrorMessage(data.error || 'Failed to send invitation')
-        setTimeout(() => setErrorMessage(null), 5000)
+        showToast({ type: 'error', title: data.error || 'Failed to send invitation' })
       } else {
         // Audit log the invite
         await userAudit.invited(supabase, user.email!, user.id)
         
-        setSuccessMessage(`Invitation sent to ${user.email}`)
-        fetchData()
-        setTimeout(() => setSuccessMessage(null), 5000)
+        showToast({ type: 'success', title: `Invitation sent to ${user.email}` })
+        refetchUsers()
       }
     } catch (error) {
-      setErrorMessage('Failed to send invitation')
-      setTimeout(() => setErrorMessage(null), 5000)
+      showToast({ type: 'error', title: 'Failed to send invitation' })
     }
 
     setSendingInvite(null)
@@ -379,14 +364,12 @@ export default function UsersSettingsPage() {
         setPendingInviteUser(updatedUser)
         setShowInvitePrompt(true)
       } else {
-        setSuccessMessage('User updated successfully!')
-        setTimeout(() => setSuccessMessage(null), 5000)
+        showToast({ type: 'success', title: 'User updated successfully!' })
       }
 
-      fetchData()
+      refetchUsers()
     } else {
-      setErrorMessage(error.message || 'Failed to update user')
-      setTimeout(() => setErrorMessage(null), 5000)
+      showToast({ type: 'error', title: error.message || 'Failed to update user' })
     }
   }
 
@@ -401,8 +384,7 @@ export default function UsersSettingsPage() {
   const handleInvitePromptSkip = () => {
     setShowInvitePrompt(false)
     setPendingInviteUser(null)
-    setSuccessMessage('Email added. You can send an invite later.')
-    setTimeout(() => setSuccessMessage(null), 5000)
+    showToast({ type: 'success', title: 'Email added. You can send an invite later.' })
   }
 
   // NEW: Deactivate user (soft delete)
@@ -429,12 +411,10 @@ export default function UsersSettingsPage() {
     if (!error) {
       await userAudit.deactivated(supabase, userName, userEmail, id)
       setDeactivateConfirm(null)
-      setSuccessMessage(`${userName} has been deactivated`)
-      setTimeout(() => setSuccessMessage(null), 5000)
-      fetchData()
+      showToast({ type: 'success', title: `${userName} has been deactivated` })
+      refetchUsers()
     } else {
-      setErrorMessage('Failed to deactivate user')
-      setTimeout(() => setErrorMessage(null), 5000)
+      showToast({ type: 'error', title: 'Failed to deactivate user' })
     }
   }
 
@@ -457,12 +437,10 @@ export default function UsersSettingsPage() {
 
     if (!error) {
       await userAudit.reactivated(supabase, userName, userEmail, id)
-      setSuccessMessage(`${userName} has been reactivated`)
-      setTimeout(() => setSuccessMessage(null), 5000)
-      fetchData()
+      showToast({ type: 'success', title: `${userName} has been reactivated` })
+      refetchUsers()
     } else {
-      setErrorMessage('Failed to reactivate user')
-      setTimeout(() => setErrorMessage(null), 5000)
+      showToast({ type: 'error', title: 'Failed to reactivate user' })
     }
   }
 
@@ -514,8 +492,6 @@ export default function UsersSettingsPage() {
     }
   }
 
-  const showAllUsers = isGlobalAdmin && !isImpersonating
-
   // Count stats - separate active from deactivated
   const activeUsers = users.filter(u => u.is_active !== false)
   const deactivatedUsers = users.filter(u => u.is_active === false)
@@ -526,7 +502,7 @@ export default function UsersSettingsPage() {
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout
           title="Users & Roles"
           description="Manage staff members at your facility."
@@ -539,28 +515,6 @@ export default function UsersSettingsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Success Message */}
-              {successMessage && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-                  <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium text-green-800">{successMessage}</p>
-                  <button onClick={() => setSuccessMessage(null)} className="ml-auto text-green-500 hover:text-green-700">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {errorMessage && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium text-red-800">{errorMessage}</p>
-                  <button onClick={() => setErrorMessage(null)} className="ml-auto text-red-500 hover:text-red-700">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Header */}

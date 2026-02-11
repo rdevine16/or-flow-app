@@ -1,7 +1,7 @@
 // app/settings/implant-companies/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
@@ -12,7 +12,9 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Archive, Building2, Check, Pencil, Plus, Search, X } from 'lucide-react'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
+import { Archive, Building2, Pencil, Plus, Search } from 'lucide-react'
 
 interface ImplantCompany {
   id: string
@@ -31,82 +33,69 @@ interface ModalState {
 
 export default function ImplantCompaniesPage() {
   const supabase = createClient()
-  const [companies, setCompanies] = useState<ImplantCompany[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [facilityId, setFacilityId] = useState<string | null>(null)
+  const { showToast } = useToast()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+  const facilityId = currentUserData?.facilityId || null
+
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', company: null })
   const [formData, setFormData] = useState({ name: '' })
   const [saving, setSaving] = useState(false)
   const [archiveTarget, setArchiveTarget] = useState<ImplantCompany | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-// Archive toggle
   const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
-  // Current user for deleted_by tracking
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-  useEffect(() => {
-    fetchData()
-  }, [showArchived])
-
-const fetchData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      setCurrentUserId(user.id)
-
-      const { data: userData, error: userErr } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
-
-      if (userErr) throw userErr
-
-      if (userData) {
-        setFacilityId(userData.facility_id)
-      }
-
-      let query = supabase
-        .from('implant_companies')
-        .select('*')
+  const { data: queryData, loading, error, setData: setQueryData } = useSupabaseQuery<{
+    companies: ImplantCompany[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let query = sb.from('implant_companies').select('*')
 
       if (showArchived) {
         query = query
-          .eq('facility_id', userData?.facility_id)
+          .eq('facility_id', facilityId!)
           .not('deleted_at', 'is', null)
       } else {
         query = query
-          .or(`facility_id.is.null,facility_id.eq.${userData?.facility_id}`)
+          .or(`facility_id.is.null,facility_id.eq.${facilityId}`)
           .is('deleted_at', null)
       }
 
-      const { data, error: fetchErr } = await query.order('name')
-      if (fetchErr) throw fetchErr
-      setCompanies(data || [])
+      const { data, error } = await query.order('name')
+      if (error) throw error
 
-      const { count } = await supabase
+      const { count } = await sb
         .from('implant_companies')
         .select('id', { count: 'exact', head: true })
-        .eq('facility_id', userData?.facility_id)
+        .eq('facility_id', facilityId!)
         .not('deleted_at', 'is', null)
 
-      setArchivedCount(count || 0)
-    } catch (err) {
-      setError('Failed to load implant companies. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+      return {
+        companies: data || [],
+        archivedCount: count || 0,
+      }
+    },
+    { deps: [facilityId, showArchived], enabled: !!facilityId }
+  )
+
+  const companies = queryData?.companies || []
+  const archivedCount = queryData?.archivedCount || 0
+
+  // Optimistic update helpers
+  const setCompanies = (updater: ImplantCompany[] | ((prev: ImplantCompany[]) => ImplantCompany[])) => {
+    setQueryData(prev => {
+      const currentCompanies = prev?.companies || []
+      const newCompanies = typeof updater === 'function' ? updater(currentCompanies) : updater
+      return { companies: newCompanies, archivedCount: prev?.archivedCount || 0 }
+    })
+  }
+  const setArchivedCount = (updater: number | ((prev: number) => number)) => {
+    setQueryData(prev => {
+      const currentCount = prev?.archivedCount || 0
+      const newCount = typeof updater === 'function' ? updater(currentCount) : updater
+      return { companies: prev?.companies || [], archivedCount: newCount }
+    })
   }
 
   // Filter companies by search
@@ -170,7 +159,7 @@ const fetchData = async () => {
         await implantCompanyAudit.updated(supabase, data.id, oldName, data.name, facilityId)
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to save company', 'error')
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to save company' })
     } finally {
       setSaving(false)
     }
@@ -194,10 +183,10 @@ const handleDelete = async (id: string) => {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
       setArchiveTarget(null)
-      showToast(`"${company.name}" moved to archive`, 'success')
+      showToast({ type: 'success', title: `"${company.name}" moved to archive` })
       await implantCompanyAudit.deleted(supabase, company.name, id, facilityId)
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to archive company', 'error')
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to archive company' })
     }
   }
 
@@ -218,17 +207,17 @@ const handleDelete = async (id: string) => {
 
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev - 1)
-      showToast(`"${company.name}" restored successfully`, 'success')
+      showToast({ type: 'success', title: `"${company.name}" restored successfully` })
       await implantCompanyAudit.deleted(supabase, `${company.name} (restored)`, id, facilityId)
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to restore company', 'error')
+      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to restore company' })
     }
   }
 
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout
           title="Implant Companies"
           description="Manage surgical implant vendors for case assignments."
@@ -431,20 +420,6 @@ const handleDelete = async (id: string) => {
           </Modal>
         </SettingsLayout>
       </Container>
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <Check className="w-5 h-5" />
-          ) : (
-            <X className="w-5 h-5" />
-          )}
-          {toast.message}
-        </div>
-      )}
-
       <ArchiveConfirm
         open={!!archiveTarget}
         onClose={() => setArchiveTarget(null)}

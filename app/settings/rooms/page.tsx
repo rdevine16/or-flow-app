@@ -2,7 +2,7 @@
 // app/settings/rooms/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
@@ -18,6 +18,7 @@ import {
 } from '@/hooks/useRoomSchedules'
 import { formatTime12Hour } from '@/types/block-scheduling'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { PageLoader, Spinner } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
@@ -224,15 +225,27 @@ export default function RoomsSettingsPage() {
   const { showToast } = useToast()
   const { effectiveFacilityId, loading: userLoading } = useUser()
 
-  const [rooms, setRooms] = useState<ORRoom[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+
+  const { data: rooms, loading, error, setData: setRooms, refetch: refetchRooms } = useSupabaseQuery<ORRoom[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('or_rooms')
+        .select('id, name, available_hours, deleted_at, deleted_by')
+        .eq('facility_id', effectiveFacilityId!)
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
   const [showDeleted, setShowDeleted] = useState(false)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', room: null })
   const [formData, setFormData] = useState({ name: '' })
   const [formSchedule, setFormSchedule] = useState<RoomDaySchedule[]>(getDefaultWeekSchedule())
   const [saving, setSaving] = useState(false)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
     isOpen: false,
     room: null,
@@ -245,46 +258,6 @@ export default function RoomsSettingsPage() {
     saveRoomSchedule,
     loading: scheduleLoading,
   } = useRoomSchedules({ facilityId: effectiveFacilityId })
-
-  // Get current user ID on mount
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
-    }
-    getCurrentUser()
-  }, [])
-
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchRooms()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId])
-
-  const fetchRooms = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-    setError(null)
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('or_rooms')
-        .select('id, name, available_hours, deleted_at, deleted_by')
-        .eq('facility_id', effectiveFacilityId)
-        .order('name')
-
-      if (fetchError) throw fetchError
-      setRooms(data || [])
-    } catch (err) {
-      setError('Failed to load rooms. Please try again.')
-      showToast({ type: 'error', title: 'Failed to load rooms', message: err instanceof Error ? err.message : 'Please try again' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Show toast with auto-dismiss
 
   const openAddModal = () => {
     setFormData({ name: '' })
@@ -447,7 +420,7 @@ export default function RoomsSettingsPage() {
 
       if (error) throw error
 
-      setRooms(rooms.map(r =>
+      setRooms((rooms || []).map(r =>
         r.id === deleteModal.room!.id
           ? { ...r, deleted_at: new Date().toISOString(), deleted_by: currentUserId }
           : r
@@ -471,7 +444,7 @@ export default function RoomsSettingsPage() {
 
       if (error) throw error
 
-      setRooms(rooms.map(r =>
+      setRooms((rooms || []).map(r =>
         r.id === room.id ? { ...r, deleted_at: null, deleted_by: null } : r
       ))
       showToast({ type: 'success', title: `${room.name} restored` })
@@ -482,13 +455,13 @@ export default function RoomsSettingsPage() {
   }
 
   // Separate active vs deleted rooms
-  const activeRooms = rooms.filter(r => !r.deleted_at)
-  const deletedRooms = rooms.filter(r => r.deleted_at)
+  const activeRooms = (rooms || []).filter(r => !r.deleted_at)
+  const deletedRooms = (rooms || []).filter(r => r.deleted_at)
 
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout
           title="OR Rooms"
           description="Manage the operating rooms and their daily schedules at your facility."

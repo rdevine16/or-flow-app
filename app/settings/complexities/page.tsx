@@ -10,6 +10,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -38,10 +39,35 @@ export default function FacilityComplexitiesPage() {
   const supabase = createClient()
   const { effectiveFacilityId, isFacilityAdmin, isGlobalAdmin, loading: userLoading } = useUser()
   const { showToast } = useToast()
-  const [complexities, setComplexities] = useState<Complexity[]>([])
-  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+
+  // Data fetching
+  const { data: complexities, loading: complexitiesLoading, error, setData: setComplexities } = useSupabaseQuery<Complexity[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('complexities')
+        .select('*')
+        .eq('facility_id', effectiveFacilityId!)
+        .is('deleted_at', null)
+        .order('display_order')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const { data: procedureCategories } = useSupabaseQuery<ProcedureCategory[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('procedure_categories')
+        .select('id, name, display_name')
+        .order('display_name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const loading = complexitiesLoading
   const [saving, setSaving] = useState(false)
 
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -53,70 +79,23 @@ export default function FacilityComplexitiesPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [archivedComplexities, setArchivedComplexities] = useState<Complexity[]>([])
   const canEdit = isFacilityAdmin || isGlobalAdmin
-
-  useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchData()
-    } else if (!userLoading) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId])
-
-  const fetchData = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-
-    try {
-      const [complexitiesRes, categoriesRes] = await Promise.all([
-        supabase
-          .from('complexities')
-          .select('*')
-          .eq('facility_id', effectiveFacilityId)
-          .is('deleted_at', null)
-          .order('display_order'),
-        supabase
-          .from('procedure_categories')
-          .select('id, name, display_name')
-          .order('display_name')
-      ])
-
-      if (complexitiesRes.data) setComplexities(complexitiesRes.data)
-      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
-    } catch (error) {
-      setError('Failed to load complexities. Please try again.')
-      showToast({
-        type: 'error',
-        title: 'Failed to load complexities',
-        message: error instanceof Error ? error.message : 'Please try again'
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-const fetchArchivedComplexities = async () => {
-    if (!effectiveFacilityId) return
-    try {
-      const { data } = await supabase
+  const { data: archivedData } = useSupabaseQuery<Complexity[]>(
+    async (sb) => {
+      const { data, error } = await sb
         .from('complexities')
         .select('*')
-        .eq('facility_id', effectiveFacilityId)
+        .eq('facility_id', effectiveFacilityId!)
         .not('deleted_at', 'is', null)
         .order('deleted_at', { ascending: false })
-      if (data) setArchivedComplexities(data)
-    } catch (error) {
-      showToast({
-        type: 'error',
-        title: 'Error fetching archived complexities',
-        message: error instanceof Error ? error.message : 'Error fetching archived complexities'
-      })
-    }
-  }
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId, showArchived], enabled: showArchived && !!effectiveFacilityId }
+  )
 
   useEffect(() => {
-    if (showArchived && effectiveFacilityId) {
-      fetchArchivedComplexities()
-    }
-  }, [showArchived, effectiveFacilityId])
+    if (archivedData) setArchivedComplexities(archivedData)
+  }, [archivedData])
   const handleNew = () => {
     setEditingComplexity(null)
     setFormDisplayName('')
@@ -151,7 +130,7 @@ const fetchArchivedComplexities = async () => {
 
         if (error) throw error
 
-        setComplexities(complexities.map(c =>
+        setComplexities((complexities || []).map(c =>
           c.id === editingComplexity.id
             ? { ...c, display_name: formDisplayName.trim(), description: formDescription.trim() || null }
             : c
@@ -165,14 +144,14 @@ const fetchArchivedComplexities = async () => {
             display_name: formDisplayName.trim(),
             description: formDescription.trim() || null,
             is_active: true,
-            display_order: complexities.length,
+            display_order: (complexities || []).length,
             procedure_category_ids: [],
           })
           .select()
           .single()
 
         if (error) throw error
-        setComplexities([...complexities, data])
+        setComplexities([...(complexities || []), data])
       }
 
       setShowModal(false)
@@ -196,7 +175,7 @@ const fetchArchivedComplexities = async () => {
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id)
       if (error) throw error
-      setComplexities(complexities.filter(c => c.id !== id))
+      setComplexities((complexities || []).filter(c => c.id !== id))
       setArchiveConfirm(null)
     } catch (error) {
       showToast({
@@ -221,7 +200,7 @@ const fetchArchivedComplexities = async () => {
         .single()
       if (error) throw error
       if (data) {
-        setComplexities([...complexities, data])
+        setComplexities([...(complexities || []), data])
         setArchivedComplexities(archivedComplexities.filter(c => c.id !== id))
       }
     } catch (error) {
@@ -239,7 +218,7 @@ const fetchArchivedComplexities = async () => {
 
   const toggleCategory = async (complexityId: string, categoryId: string) => {
     if (!canEdit) return
-    const complexity = complexities.find(c => c.id === complexityId)
+    const complexity = (complexities || []).find(c => c.id === complexityId)
     if (!complexity) return
 
     setSaving(true)
@@ -256,7 +235,7 @@ const fetchArchivedComplexities = async () => {
 
       if (error) throw error
 
-      setComplexities(complexities.map(c =>
+      setComplexities((complexities || []).map(c =>
         c.id === complexityId ? { ...c, procedure_category_ids: newIds } : c
       ))
     } catch (error) {
@@ -271,14 +250,14 @@ const fetchArchivedComplexities = async () => {
   }
 
   const getCategoryNames = (complexity: Complexity) => {
-    const cats = procedureCategories.filter(c => complexity.procedure_category_ids?.includes(c.id))
+    const cats = (procedureCategories || []).filter(c => complexity.procedure_category_ids?.includes(c.id))
     return cats
   }
 
   return (
     <DashboardLayout>
       <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <SettingsLayout title="Case Complexities" description="Complexity factors that can be tagged on cases">
           {loading ? (
             <PageLoader message="Loading complexities..." />
@@ -292,7 +271,7 @@ const fetchArchivedComplexities = async () => {
               <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <h3 className="font-medium text-slate-900">Complexities</h3>
-                  <p className="text-sm text-slate-500">{complexities.length} complexity factors</p>
+                  <p className="text-sm text-slate-500">{(complexities || []).length} complexity factors</p>
                 </div>
                 {canEdit && (
                   <Button onClick={handleNew}>
@@ -303,7 +282,7 @@ const fetchArchivedComplexities = async () => {
               </div>
 
               {/* Table */}
-              {complexities.length === 0 ? (
+              {(complexities || []).length === 0 ? (
                 <div className="px-6 py-12 text-center">
                   <p className="text-slate-500">No complexities defined yet.</p>
                   {canEdit && (
@@ -324,7 +303,7 @@ const fetchArchivedComplexities = async () => {
 
                   {/* Table Body */}
                   <div className="divide-y divide-slate-100">
-                    {complexities.map((complexity) => {
+                    {(complexities || []).map((complexity) => {
                       const linkedCategories = getCategoryNames(complexity)
                       const isExpanded = expandedId === complexity.id
 
@@ -411,7 +390,7 @@ const fetchArchivedComplexities = async () => {
                                   {canEdit ? 'Applies to procedure categories (empty = all):' : 'Applies to:'}
                                 </p>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                                  {procedureCategories.map((category) => {
+                                  {(procedureCategories || []).map((category) => {
                                     const isLinked = complexity.procedure_category_ids?.includes(category.id)
                                     return (
                                       <label

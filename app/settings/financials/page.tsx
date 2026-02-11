@@ -13,6 +13,7 @@ import { Building2, Calculator, Check, ChevronRight, ClipboardCheck, Clock, PenL
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 
@@ -93,138 +94,68 @@ export default function FinancialsOverviewPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast() 
-  const [stats, setStats] = useState<Stats>({
+
+  // Fetch all financial stats + recent activity
+  const { data: pageData, loading, error, refetch } = useSupabaseQuery<{
+    stats: Stats
+    recentActivity: AuditEntry[]
+  }>(
+    async (sb) => {
+      const [
+        costCategoriesRes, payersRes, proceduresRes,
+        procedureCostsRes, surgeonVariancesRes, facilityRes, activityRes,
+      ] = await Promise.all([
+        sb.from('facility_cost_categories').select('id, type').eq('facility_id', effectiveFacilityId!).eq('is_active', true),
+        sb.from('payers').select('id').eq('facility_id', effectiveFacilityId!).is('deleted_at', null),
+        sb.from('procedure_types').select('id').eq('facility_id', effectiveFacilityId!).is('deleted_at', null),
+        sb.from('procedure_cost_items').select('procedure_type_id').eq('facility_id', effectiveFacilityId!).is('effective_to', null),
+        sb.from('surgeon_cost_items').select('surgeon_id, procedure_type_id').eq('facility_id', effectiveFacilityId!).is('effective_to', null),
+        sb.from('facilities').select('or_hourly_rate').eq('id', effectiveFacilityId!).single(),
+        sb.from('audit_log_with_users').select('id, action, target_label, user_email, user_name, created_at')
+          .eq('facility_id', effectiveFacilityId!).in('action', FINANCIAL_AUDIT_ACTIONS)
+          .order('created_at', { ascending: false }).limit(10),
+      ])
+
+      const costCategories = costCategoriesRes.data || []
+      const debits = costCategories.filter(c => c.type === 'debit').length
+      const credits = costCategories.filter(c => c.type === 'credit').length
+      const procedureCosts = procedureCostsRes.data || []
+      const uniqueProceduresWithCosts = new Set(procedureCosts.map(p => p.procedure_type_id)).size
+      const surgeonVariances = surgeonVariancesRes.data || []
+      const uniqueVariances = new Set(surgeonVariances.map(v => `${v.surgeon_id}-${v.procedure_type_id}`)).size
+
+      return {
+        stats: {
+          costCategories: { total: costCategories.length, debits, credits },
+          payers: payersRes.data?.length || 0,
+          procedurePricing: { configured: uniqueProceduresWithCosts, total: proceduresRes.data?.length || 0 },
+          surgeonVariances: uniqueVariances,
+          orHourlyRate: facilityRes.data?.or_hourly_rate || null,
+        },
+        recentActivity: activityRes.data || [],
+      }
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const stats = pageData?.stats || {
     costCategories: { total: 0, debits: 0, credits: 0 },
-    payers: 0,
-    procedurePricing: { configured: 0, total: 0 },
-    surgeonVariances: 0,
-    orHourlyRate: null,
-  })
-  const [recentActivity, setRecentActivity] = useState<AuditEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+    payers: 0, procedurePricing: { configured: 0, total: 0 },
+    surgeonVariances: 0, orHourlyRate: null,
+  }
+  const recentActivity = pageData?.recentActivity || []
 
   // OR Rate editing
   const [editingRate, setEditingRate] = useState(false)
   const [rateInput, setRateInput] = useState('')
   const [savingRate, setSavingRate] = useState(false)
 
-  // Toast
-
+  // Sync rate input from query data
   useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchData()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
+    if (pageData?.stats.orHourlyRate != null) {
+      setRateInput(pageData.stats.orHourlyRate.toString())
     }
-  }, [userLoading, effectiveFacilityId])
-
-  const fetchData = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-
-    try {
-      // Fetch all stats in parallel
-      const [
-        costCategoriesRes,
-        payersRes,
-        proceduresRes,
-        procedureCostsRes,
-        surgeonVariancesRes,
-        facilityRes,
-        activityRes,
-      ] = await Promise.all([
-        // Cost categories (active only)
-        supabase
-          .from('facility_cost_categories')
-          .select('id, type')
-          .eq('facility_id', effectiveFacilityId)
-          .eq('is_active', true),
-        
-        // Payers (active only)
-        supabase
-          .from('payers')
-          .select('id')
-          .eq('facility_id', effectiveFacilityId)
-          .is('deleted_at', null),
-        
-        // Total procedures
-        supabase
-          .from('procedure_types')
-          .select('id')
-          .eq('facility_id', effectiveFacilityId)
-          .is('deleted_at', null),
-        
-        // Procedures with costs configured (distinct procedure_type_ids)
-        supabase
-          .from('procedure_cost_items')
-          .select('procedure_type_id')
-          .eq('facility_id', effectiveFacilityId)
-          .is('effective_to', null),
-        
-        // Surgeon variances (distinct surgeon/procedure combos)
-        supabase
-          .from('surgeon_cost_items')
-          .select('surgeon_id, procedure_type_id')
-          .eq('facility_id', effectiveFacilityId)
-          .is('effective_to', null),
-        
-        // Facility for OR rate
-        supabase
-          .from('facilities')
-          .select('or_hourly_rate')
-          .eq('id', effectiveFacilityId)
-          .single(),
-        
-        // Recent financial activity
-        supabase
-          .from('audit_log_with_users')
-          .select('id, action, target_label, user_email, user_name, created_at')
-          .eq('facility_id', effectiveFacilityId)
-          .in('action', FINANCIAL_AUDIT_ACTIONS)
-          .order('created_at', { ascending: false })
-          .limit(10),
-      ])
-
-      // Process cost categories
-      const costCategories = costCategoriesRes.data || []
-      const debits = costCategories.filter(c => c.type === 'debit').length
-      const credits = costCategories.filter(c => c.type === 'credit').length
-
-      // Process procedures with costs (get unique procedure IDs)
-      const procedureCosts = procedureCostsRes.data || []
-      const uniqueProceduresWithCosts = new Set(procedureCosts.map(p => p.procedure_type_id)).size
-
-      // Process surgeon variances (get unique combos)
-      const surgeonVariances = surgeonVariancesRes.data || []
-      const uniqueVariances = new Set(
-        surgeonVariances.map(v => `${v.surgeon_id}-${v.procedure_type_id}`)
-      ).size
-
-      setStats({
-        costCategories: { total: costCategories.length, debits, credits },
-        payers: payersRes.data?.length || 0,
-        procedurePricing: {
-          configured: uniqueProceduresWithCosts,
-          total: proceduresRes.data?.length || 0,
-        },
-        surgeonVariances: uniqueVariances,
-        orHourlyRate: facilityRes.data?.or_hourly_rate || null,
-      })
-
-      setRecentActivity(activityRes.data || [])
-      setRateInput(facilityRes.data?.or_hourly_rate?.toString() || '')
-    } catch (error) {
-      setError('Failed to load financial data. Please try again.')
-      showToast({
-        type: 'error',
-        title: 'Failed to load financial data',
-        message: error instanceof Error ? error.message : 'Please try again'
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [pageData])
 
   const handleSaveRate = async () => {
     if (!effectiveFacilityId) return
@@ -258,7 +189,7 @@ if (isNaN(newRate) || newRate < 0) {
         facilityId: effectiveFacilityId,
       })
 
-setStats(prev => ({ ...prev, orHourlyRate: newRate }))
+setRateInput(newRate.toString())
 setEditingRate(false)
 showToast({
   type: 'success',
@@ -267,7 +198,7 @@ showToast({
 })
 
       // Refresh activity
-      fetchData()
+      refetch()
 } catch (error) {
   showToast({
     type: 'error',
@@ -334,7 +265,7 @@ showToast({
     return (
       <DashboardLayout>
         <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
             <PageLoader message="Loading financials..." />
           </SettingsLayout>

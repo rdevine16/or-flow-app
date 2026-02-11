@@ -13,6 +13,7 @@ import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
@@ -351,52 +352,26 @@ export default function ChecklistBuilderPage() {
   const { userData, isAdmin, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
-  const [fields, setFields] = useState<ChecklistField[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+
+  const { data: fields, loading, error, setData: setFields } = useSupabaseQuery<ChecklistField[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('preop_checklist_fields')
+        .select('*')
+        .eq('facility_id', userData!.facilityId)
+        .is('deleted_at', null)
+        .order('display_order')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [userData?.facilityId], enabled: !userLoading && !!userData?.facilityId }
+  )
+
   const [editingField, setEditingField] = useState<ChecklistField | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  // Get current user ID
-  useEffect(() => {
-    const getUserId = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setCurrentUserId(user.id)
-    }
-    getUserId()
-  }, [supabase])
-
-  // Fetch fields
-  useEffect(() => {
-    if (userLoading || !userData?.facilityId) return
-
-    const fetchFields = async () => {
-      setLoading(true)
-
-      const { data, error } = await supabase
-        .from('preop_checklist_fields')
-        .select('*')
-        .eq('facility_id', userData.facilityId)
-        .is('deleted_at', null)
-        .order('display_order')
-
-      if (error) {
-        showToast({
-          type: 'error',
-          title: 'Error fetching checklist fields',
-          message: error.message
-        })
-      } else {
-        setFields(data || [])
-      }
-
-      setLoading(false)
-    }
-
-    fetchFields()
-  }, [userData?.facilityId, userLoading, supabase])
 
   // Save field (create or update)
   const handleSaveField = async (fieldData: Partial<ChecklistField>) => {
@@ -407,7 +382,7 @@ export default function ChecklistBuilderPage() {
       const newField = {
         ...fieldData,
         facility_id: userData.facilityId,
-        display_order: fields.length * 10,
+        display_order: (fields || []).length * 10,
         is_active: true,
       }
 
@@ -536,7 +511,7 @@ export default function ChecklistBuilderPage() {
 
   return (
     <DashboardLayout>
-      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <ErrorBanner message={error} />
       <SettingsLayout 
         title="Checklist Builder" 
         description="Customize pre-op checklist fields"
@@ -572,7 +547,7 @@ export default function ChecklistBuilderPage() {
               <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
             ))}
           </div>
-        ) : fields.length === 0 ? (
+        ) : (fields || []).length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
             <div className="w-16 h-16 bg-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <ClipboardCheck className="w-8 h-8 text-slate-400" />
@@ -589,7 +564,7 @@ export default function ChecklistBuilderPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {fields.map((field) => (
+            {(fields || []).map((field) => (
               <FieldRow
                 key={field.id}
                 field={field}

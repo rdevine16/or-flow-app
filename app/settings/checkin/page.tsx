@@ -14,6 +14,7 @@ import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { FeatureGate, TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Button } from '@/components/ui/Button'
 import { Check, ChevronRight, ClipboardCheck, Lock, X } from 'lucide-react'
 
@@ -43,9 +44,37 @@ export default function CheckInSettingsPage() {
   const { userData, isAdmin, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
-  const [facility, setFacility] = useState<Facility | null>(null)
-  const [procedures, setProcedures] = useState<ProcedureType[]>([])
-  const [loading, setLoading] = useState(true)
+
+  // Data fetching
+  const { data: facility, loading: facilityLoading, setData: setFacility } = useSupabaseQuery<Facility | null>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facilities')
+        .select('id, name, default_arrival_lead_time_minutes')
+        .eq('id', userData!.facilityId)
+        .single()
+      if (error) throw error
+      return data
+    },
+    { deps: [userData?.facilityId], enabled: !userLoading && !!userData?.facilityId }
+  )
+
+  const { data: procedures, loading: proceduresLoading } = useSupabaseQuery<ProcedureType[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('procedure_types')
+        .select('id, name, arrival_lead_time_minutes')
+        .eq('facility_id', userData!.facilityId)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [userData?.facilityId], enabled: !userLoading && !!userData?.facilityId }
+  )
+
+  const loading = facilityLoading || proceduresLoading
   const [saving, setSaving] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
@@ -53,50 +82,24 @@ export default function CheckInSettingsPage() {
   const [defaultLeadTime, setDefaultLeadTime] = useState<number>(90)
   const [procedureOverrides, setProcedureOverrides] = useState<Record<string, number | null>>({})
 
-  // Fetch data
+  // Sync form state when data loads
   useEffect(() => {
-    if (userLoading || !userData?.facilityId) return
-
-    const fetchData = async () => {
-      setLoading(true)
-
-      // Fetch facility
-      const { data: facilityData } = await supabase
-        .from('facilities')
-        .select('id, name, default_arrival_lead_time_minutes')
-        .eq('id', userData.facilityId)
-        .single()
-
-      if (facilityData) {
-        setFacility(facilityData)
-        setDefaultLeadTime(facilityData.default_arrival_lead_time_minutes || 90)
-      }
-
-      // Fetch procedures with their overrides
-      const { data: procedureData } = await supabase
-        .from('procedure_types')
-        .select('id, name, arrival_lead_time_minutes')
-        .eq('facility_id', userData.facilityId)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('name')
-
-      if (procedureData) {
-        setProcedures(procedureData)
-        const overrides: Record<string, number | null> = {}
-        procedureData.forEach(p => {
-          if (p.arrival_lead_time_minutes !== null) {
-            overrides[p.id] = p.arrival_lead_time_minutes
-          }
-        })
-        setProcedureOverrides(overrides)
-      }
-
-      setLoading(false)
+    if (facility) {
+      setDefaultLeadTime(facility.default_arrival_lead_time_minutes || 90)
     }
+  }, [facility])
 
-    fetchData()
-  }, [userData?.facilityId, userLoading, supabase])
+  useEffect(() => {
+    if (procedures) {
+      const overrides: Record<string, number | null> = {}
+      procedures.forEach(p => {
+        if (p.arrival_lead_time_minutes !== null) {
+          overrides[p.id] = p.arrival_lead_time_minutes
+        }
+      })
+      setProcedureOverrides(overrides)
+    }
+  }, [procedures])
 
   // Save default lead time
   const handleSaveDefault = async () => {
@@ -292,12 +295,12 @@ export default function CheckInSettingsPage() {
                     <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />
                   ))}
                 </div>
-              ) : procedures.length === 0 ? (
+              ) : (procedures || []).length === 0 ? (
                 <div className="p-6 text-center text-slate-500">
                   No procedures found. Add procedures in Settings → Procedures.
                 </div>
               ) : (
-                procedures.map((procedure) => {
+                (procedures || []).map((procedure) => {
                   const hasOverride = procedureOverrides[procedure.id] !== undefined
                   const overrideValue = procedureOverrides[procedure.id] ?? defaultLeadTime
 

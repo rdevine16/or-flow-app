@@ -6,6 +6,8 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 
 interface AnalyticsSettings {
   id: string
@@ -46,11 +48,23 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
 export default function AnalyticsSettingsPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { showToast } = useToast()
 
-  const [settings, setSettings] = useState<AnalyticsSettings | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data: settings, loading, refetch: refetchSettings } = useSupabaseQuery<AnalyticsSettings | null>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('facility_analytics_settings')
+        .select('*')
+        .eq('facility_id', effectiveFacilityId!)
+        .single()
+      if (error?.code === 'PGRST116') return null // No settings row yet
+      if (error) throw error
+      return data as AnalyticsSettings
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   // Form state (strings for controlled inputs)
   const [form, setForm] = useState({
@@ -70,49 +84,26 @@ export default function AnalyticsSettingsPage() {
     min_procedure_cases: '3',
   })
 
+  // Sync fetched settings to form state
   useEffect(() => {
-    if (!userLoading && effectiveFacilityId) {
-      fetchSettings()
-    } else if (!userLoading && !effectiveFacilityId) {
-      setLoading(false)
-    }
-  }, [userLoading, effectiveFacilityId])
-
-  const fetchSettings = async () => {
-    if (!effectiveFacilityId) return
-    setLoading(true)
-
-    const { data, error } = await supabase
-      .from('facility_analytics_settings')
-      .select('*')
-      .eq('facility_id', effectiveFacilityId)
-      .single()
-
-    if (data) {
-      setSettings(data as AnalyticsSettings)
+    if (settings) {
       setForm({
-        fcots_milestone: data.fcots_milestone || 'patient_in',
-        fcots_grace_minutes: String(data.fcots_grace_minutes ?? 2),
-        fcots_target_percent: String(data.fcots_target_percent ?? 85),
-        turnover_target_same_surgeon: String(data.turnover_target_same_surgeon ?? 30),
-        turnover_target_flip_room: String(data.turnover_target_flip_room ?? 45),
-        utilization_target_percent: String(data.utilization_target_percent ?? 80),
-        cancellation_target_percent: String(data.cancellation_target_percent ?? 5),
-        // ORbit Score v2
-        start_time_milestone: data.start_time_milestone || data.fcots_milestone || 'patient_in',
-        start_time_grace_minutes: String(data.start_time_grace_minutes ?? data.fcots_grace_minutes ?? 3),
-        start_time_floor_minutes: String(data.start_time_floor_minutes ?? 20),
-        waiting_on_surgeon_minutes: String(data.waiting_on_surgeon_minutes ?? 3),
-        waiting_on_surgeon_floor_minutes: String(data.waiting_on_surgeon_floor_minutes ?? 10),
-        min_procedure_cases: String(data.min_procedure_cases ?? 3),
+        fcots_milestone: settings.fcots_milestone || 'patient_in',
+        fcots_grace_minutes: String(settings.fcots_grace_minutes ?? 2),
+        fcots_target_percent: String(settings.fcots_target_percent ?? 85),
+        turnover_target_same_surgeon: String(settings.turnover_target_same_surgeon ?? 30),
+        turnover_target_flip_room: String(settings.turnover_target_flip_room ?? 45),
+        utilization_target_percent: String(settings.utilization_target_percent ?? 80),
+        cancellation_target_percent: String(settings.cancellation_target_percent ?? 5),
+        start_time_milestone: settings.start_time_milestone || settings.fcots_milestone || 'patient_in',
+        start_time_grace_minutes: String(settings.start_time_grace_minutes ?? settings.fcots_grace_minutes ?? 3),
+        start_time_floor_minutes: String(settings.start_time_floor_minutes ?? 20),
+        waiting_on_surgeon_minutes: String(settings.waiting_on_surgeon_minutes ?? 3),
+        waiting_on_surgeon_floor_minutes: String(settings.waiting_on_surgeon_floor_minutes ?? 10),
+        min_procedure_cases: String(settings.min_procedure_cases ?? 3),
       })
-    } else if (error?.code === 'PGRST116') {
-      // No settings row yet — will insert on save
-      setSettings(null)
     }
-
-    setLoading(false)
-  }
+  }, [settings])
 
   const handleSave = async () => {
     if (!effectiveFacilityId) return
@@ -151,14 +142,13 @@ export default function AnalyticsSettingsPage() {
     }
 
     if (error) {
-      setToast({ message: 'Failed to save settings', type: 'error' })
+      showToast({ type: 'error', title: 'Failed to save settings' })
     } else {
-      setToast({ message: 'Analytics settings saved', type: 'success' })
-      fetchSettings()
+      showToast({ type: 'success', title: 'Analytics settings saved' })
+      refetchSettings()
     }
 
     setSaving(false)
-    setTimeout(() => setToast(null), 3000)
   }
 
   const handleReset = () => {
@@ -631,16 +621,6 @@ export default function AnalyticsSettingsPage() {
               </button>
             </div>
 
-            {/* Toast */}
-            {toast && (
-              <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 ${
-                toast.type === 'success' 
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                  : 'bg-red-50 text-red-700 border border-red-200'
-              }`}>
-                {toast.message}
-              </div>
-            )}
           </div>
         </SettingsLayout>
       </Container>
