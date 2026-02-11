@@ -399,7 +399,7 @@ export default function ChecklistBuilderPage() {
   message: error instanceof Error ? error.message : 'Error creating field:'
 })
       } else {
-        setFields(prev => [...prev, data])
+        setFields((prev: ChecklistField[] | null) => [...(prev || []), data])
         setSuccessMessage('Field added')
         setTimeout(() => setSuccessMessage(null), 3000)
 
@@ -425,7 +425,7 @@ export default function ChecklistBuilderPage() {
   message: error instanceof Error ? error.message : 'Error updating field:'
 })
       } else {
-        setFields(prev => prev.map(f => 
+        setFields((prev: ChecklistField[] | null) => (prev || []).map(f => 
           f.id === editingField.id ? { ...f, ...fieldData } as ChecklistField : f
         ))
         setSuccessMessage('Field updated')
@@ -465,7 +465,7 @@ export default function ChecklistBuilderPage() {
         message: error.message
       })
     } else {
-      setFields(prev => prev.filter(f => f.id !== field.id))
+      setFields((prev: ChecklistField[] | null) => (prev || []).filter(f => f.id !== field.id))
       setSuccessMessage('Field deleted')
       setTimeout(() => setSuccessMessage(null), 3000)
 
@@ -497,7 +497,7 @@ export default function ChecklistBuilderPage() {
         message: error.message
       })
     } else {
-      setFields(prev => prev.map(f => 
+      setFields((prev: ChecklistField[] | null) => (prev || []).map(f => 
         f.id === field.id ? { ...f, is_active: newIsActive } : f
       ))
     }

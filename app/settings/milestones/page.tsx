@@ -170,7 +170,7 @@ export default function MilestonesSettingsPage() {
       if (error) throw error
 
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
-      setMilestones([...milestones, { ...data, deleted_at: null }])
+      setMilestones([...(milestones || []), { ...data, deleted_at: null }])
       setNewName('')
       setNewDisplayName('')
       setShowAddModal(false)
@@ -205,7 +205,7 @@ export default function MilestonesSettingsPage() {
       }
 
       setMilestones(
-        milestones.map(m => m.id === editingMilestone.id 
+        (milestones || []).map(m => m.id === editingMilestone.id 
           ? { ...m, display_name: editDisplayName.trim(), min_minutes: editMinMinutes, max_minutes: editMaxMinutes } 
           : m
         )
@@ -255,7 +255,7 @@ export default function MilestonesSettingsPage() {
                 .eq('id', partner.id)
             }
 
-            setMilestones(milestones.map(m => {
+            setMilestones((milestones || []).map(m => {
               if (m.id === milestone.id || m.id === milestone.pair_with_id) {
                 return { ...m, is_active: false }
               }
@@ -282,7 +282,7 @@ export default function MilestonesSettingsPage() {
 
       if (error) throw error
 
-      setMilestones(milestones.map(m => 
+      setMilestones((milestones || []).map(m => 
         m.id === milestone.id ? { ...m, is_active: newActiveState } : m
       ))
     } catch (err) {
@@ -366,7 +366,7 @@ export default function MilestonesSettingsPage() {
 
           await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
           
-          setMilestones(milestones.map(m => {
+          setMilestones((milestones || []).map(m => {
             if (m.id === milestone.id) {
               return { ...m, deleted_at: new Date().toISOString(), deleted_by: currentUserId, is_active: false, pair_with_id: null, pair_position: null }
             }
@@ -405,7 +405,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
 
     await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
     
-    setMilestones(milestones.map(m => 
+    setMilestones((milestones || []).map(m => 
       m.id === milestone.id 
         ? { ...m, deleted_at: null, deleted_by: null, is_active: true } 
         : m
@@ -467,7 +467,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
             partner?.display_name || 'Unknown'
           )
 
-          setMilestones(milestones.map(m => {
+          setMilestones((milestones || []).map(m => {
             if (m.id === milestone.id || m.id === milestone.pair_with_id) {
               return { ...m, pair_with_id: null, pair_position: null, validation_type: 'sequence_gap' }
             }
@@ -528,7 +528,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
       )
 
       // Update local state
-      setMilestones(milestones.map(m => {
+      setMilestones((milestones || []).map(m => {
         // Clear old pairings
         if (m.id === pairingMilestone.pair_with_id || m.id === partner.pair_with_id) {
           if (m.id !== pairingMilestone.id && m.id !== selectedPairId) {

@@ -311,7 +311,7 @@ export default function RoomsSettingsPage() {
         // Save room schedule
         await saveRoomSchedule(data.id, formSchedule, undefined, data.name)
 
-        setRooms([...rooms, data].sort((a, b) => a.name.localeCompare(b.name)))
+        setRooms([...(rooms || []), data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
         showToast({ type: 'success', title: `${data.name} created` })
         await roomAudit.created(supabase, formData.name.trim(), data.id)
@@ -341,7 +341,7 @@ export default function RoomsSettingsPage() {
         await saveRoomSchedule(modal.room.id, formSchedule, undefined, formData.name.trim())
 
         setRooms(
-          rooms
+          (rooms || [])
             .map(r => r.id === modal.room!.id
               ? { ...r, name: formData.name.trim(), available_hours: Math.round(avgHours * 10) / 10 }
               : r
