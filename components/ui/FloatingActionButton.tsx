@@ -4,7 +4,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { BarChart3, ClipboardList, Clock, Megaphone, Plus, UserPlus, X } from 'lucide-react'
+import { BarChart3, ChevronRight, ClipboardList, Clock, Megaphone, Plus, UserPlus, X } from 'lucide-react'
 
 export interface FABAction {
   id: string
