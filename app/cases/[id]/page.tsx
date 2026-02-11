@@ -23,6 +23,7 @@ import ImplantBadge from '@/components/cases/ImplantBadge'
 import { runDetectionForCase } from '@/lib/dataQuality'
 import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWrapper'
 import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
+import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Check, ChevronLeft, ClipboardList, LogOut } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
@@ -66,6 +67,9 @@ interface CaseData {
   call_time: string | null
   operative_side: string | null
   procedure_type_id: string | null
+  surgeon_id: string | null
+  or_room_id: string | null
+  is_draft: boolean
   notes: string | null
   surgeon_left_at: string | null
   or_rooms: { name: string }[] | { name: string } | null
@@ -158,6 +162,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [surgeonLeftAt, setSurgeonLeftAt] = useState<string | null>(null)
   const [isPiPOpen, setIsPiPOpen] = useState(false)
 
+  // Incomplete case modal — dropdown options
+  const [allSurgeons, setAllSurgeons] = useState<{ id: string; label: string }[]>([])
+  const [allProcedures, setAllProcedures] = useState<{ id: string; label: string }[]>([])
+  const [allRooms, setAllRooms] = useState<{ id: string; label: string }[]>([])
+  const [showIncompleteModal, setShowIncompleteModal] = useState(false)
+
   // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
@@ -179,7 +189,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       const { data: caseResult, error: caseError } = await supabase
         .from('cases')
         .select(`
-          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, notes, call_time, surgeon_left_at,
+          id, case_number, scheduled_date, start_time, operative_side, procedure_type_id, surgeon_id, or_room_id, is_draft, notes, call_time, surgeon_left_at,
           or_rooms (name),
           procedure_types (name),
           case_statuses (id, name),
@@ -249,6 +259,22 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         const roleName = Array.isArray(u.user_roles) ? u.user_roles[0]?.name : (u.user_roles as any)?.name
         return roleName === 'nurse' || roleName === 'tech' || roleName === 'anesthesiologist'
       })
+
+      // Fetch dropdown options for incomplete case modal
+      const surgeonUsers = (allFacilityUsers || []).filter(u => {
+        const roleName = Array.isArray(u.user_roles) ? u.user_roles[0]?.name : (u.user_roles as any)?.name
+        return roleName === 'surgeon'
+      })
+      setAllSurgeons(surgeonUsers.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` })))
+
+      const [roomsRes, proceduresRes] = await Promise.all([
+        supabase.from('or_rooms').select('id, name').eq('facility_id', effectiveFacilityId).order('name'),
+        supabase.from('procedure_types').select('id, name')
+          .or(`facility_id.is.null,facility_id.eq.${effectiveFacilityId}`)
+          .order('name'),
+      ])
+      setAllRooms((roomsRes.data || []).map(r => ({ id: r.id, label: r.name })))
+      setAllProcedures((proceduresRes.data || []).map(p => ({ id: p.id, label: p.name })))
 
       // Fetch implants
       const { data: implantData } = await supabase
@@ -380,6 +406,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       // Set state
       setCaseData(caseResult)
       setSurgeonLeftAt(caseResult?.surgeon_left_at || null)
+
+      // Check for incomplete case (missing required fields) — show modal
+      if (caseResult && !caseResult.is_draft) {
+        const hasMissing = !caseResult.surgeon_id || !caseResult.procedure_type_id || !caseResult.or_room_id
+        setShowIncompleteModal(hasMissing)
+      }
       setMilestoneTypes(milestoneTypesResult)
       setCaseMilestones(milestonesResult || [])
       setCaseStaff(staffResult as CaseStaff[] || [])
@@ -677,6 +709,45 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // ============================================================================
+  // INCOMPLETE CASE MODAL
+  // ============================================================================
+
+  const incompleteMissingFields = {
+    surgeon_id: !caseData.surgeon_id,
+    procedure_type_id: !caseData.procedure_type_id,
+    or_room_id: !caseData.or_room_id,
+  }
+
+  const handleIncompleteSave = async (values: {
+    surgeon_id?: string
+    procedure_type_id?: string
+    or_room_id?: string
+  }) => {
+    const { error: updateError } = await supabase
+      .from('cases')
+      .update(values)
+      .eq('id', id)
+
+    if (updateError) {
+      showToast({
+        type: 'error',
+        title: 'Failed to update case',
+        message: updateError.message,
+      })
+      return
+    }
+
+    showToast({
+      type: 'success',
+      title: 'Case updated',
+      message: 'Missing fields have been filled in.',
+    })
+
+    setShowIncompleteModal(false)
+    fetchData() // Refresh all data
+  }
+
+  // ============================================================================
   // COMPLETED CASE VIEW
   // ============================================================================
 
@@ -788,6 +859,23 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <DashboardLayout>
+      {/* Incomplete Case Modal — blocks interaction until required fields are filled */}
+      {showIncompleteModal && (
+        <IncompleteCaseModal
+          caseId={id}
+          missingFields={incompleteMissingFields}
+          surgeons={allSurgeons}
+          procedures={allProcedures}
+          rooms={allRooms}
+          existingValues={{
+            surgeon_id: caseData.surgeon_id,
+            procedure_type_id: caseData.procedure_type_id,
+            or_room_id: caseData.or_room_id,
+          }}
+          onSave={handleIncompleteSave}
+        />
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-24">
 
         {/* Error Banner */}

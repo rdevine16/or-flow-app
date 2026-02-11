@@ -459,6 +459,7 @@ export default function UsersSettingsPage() {
     switch (accessLevel) {
       case 'global_admin': return 'Global Admin'
       case 'facility_admin': return 'Facility Admin'
+      case 'coordinator': return 'Coordinator'
       default: return 'Staff'
     }
   }
@@ -851,6 +852,7 @@ export default function UsersSettingsPage() {
                   disabled={editingUser.id === currentUserId}
                 >
                   <option value="user">Staff — View cases, record milestones</option>
+                  <option value="coordinator">Coordinator — Create and edit cases</option>
                   <option value="facility_admin">Facility Admin — Full facility access</option>
                   {showAllUsers && <option value="global_admin">Global Admin — All facilities access</option>}
                 </select>

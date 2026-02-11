@@ -614,3 +614,352 @@ describe('CaseForm — Phase 1: Transaction Safety + Validation', () => {
     })
   })
 })
+
+// ============================================
+// PHASE 2 TESTS
+// ============================================
+
+describe('CaseForm — Phase 2: Drafts + Unsaved Changes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSupabase = createSupabaseMock()
+  })
+
+  describe('2.1 — Save as Draft button', () => {
+    it('renders Save as Draft button in create mode', async () => {
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      expect(screen.getByText('Save as Draft')).toBeInTheDocument()
+    })
+
+    it('does not render Save as Draft button in edit mode', async () => {
+      // Override the from mock to handle edit mode case fetch
+      const baseMock = createSupabaseMock()
+      const originalFrom = baseMock.from
+      baseMock.from = vi.fn((table: string) => {
+        const chain = originalFrom(table)
+        if (table === 'cases') {
+          // Override single() for the edit-mode case fetch
+          chain.single = vi.fn(() => Promise.resolve({
+            data: {
+              case_number: 'C-001', scheduled_date: '2026-02-11', start_time: '08:00',
+              or_room_id: 'room-1', procedure_type_id: 'proc-1', status_id: 'status-scheduled',
+              surgeon_id: 'surgeon-1', anesthesiologist_id: null, operative_side: null,
+              payer_id: null, notes: null, rep_required_override: null, is_draft: false,
+            },
+            error: null,
+          }))
+        }
+        return chain
+      })
+      mockSupabase = baseMock
+
+      render(<CaseForm mode="edit" caseId="case-1" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      expect(screen.queryByText('Save as Draft')).not.toBeInTheDocument()
+      expect(screen.getByText('Update Case')).toBeInTheDocument()
+    })
+
+    it('calls RPC with p_is_draft=true when Save as Draft is clicked', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Draft only requires scheduled_date (auto-populated to 2026-02-11)
+      await user.click(screen.getByText('Save as Draft'))
+
+      await waitFor(() => {
+        expect(mockSupabase.rpc).toHaveBeenCalledWith(
+          'create_case_with_milestones',
+          expect.objectContaining({
+            p_is_draft: true,
+            p_scheduled_date: '2026-02-11',
+          })
+        )
+      })
+    })
+
+    it('auto-generates DRAFT- case number if case number is empty', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      await user.click(screen.getByText('Save as Draft'))
+
+      await waitFor(() => {
+        expect(mockSupabase.rpc).toHaveBeenCalledWith(
+          'create_case_with_milestones',
+          expect.objectContaining({
+            p_case_number: expect.stringContaining('DRAFT-'),
+            p_is_draft: true,
+          })
+        )
+      })
+    })
+
+    it('shows success toast and navigates to /cases after draft save', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      await user.click(screen.getByText('Save as Draft'))
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'success',
+            title: 'Draft saved',
+          })
+        )
+      })
+
+      expect(mockPush).toHaveBeenCalledWith('/cases')
+    })
+
+    it('shows error when draft save RPC fails', async () => {
+      mockSupabase = createSupabaseMock({
+        rpc_create_case: { data: null, error: { message: 'Draft save failed' } },
+      })
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      await user.click(screen.getByText('Save as Draft'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Draft save failed')).toBeInTheDocument()
+      })
+
+      // Should NOT navigate
+      expect(mockPush).not.toHaveBeenCalled()
+    })
+
+    it('shows Finalize Case button when editing a draft', async () => {
+      // Mock loading an existing draft case
+      const draftChainable = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn(() => Promise.resolve({
+          data: {
+            id: 'draft-case-1',
+            case_number: 'DRAFT-123',
+            scheduled_date: '2026-02-11',
+            start_time: '08:00',
+            or_room_id: 'room-1',
+            procedure_type_id: 'proc-1',
+            status_id: 'status-scheduled',
+            surgeon_id: 'surgeon-1',
+            anesthesiologist_id: null,
+            operative_side: null,
+            payer_id: null,
+            notes: null,
+            rep_required_override: null,
+            is_draft: true,
+          },
+          error: null,
+        })),
+      }
+
+      // Patch the from mock to return draft case data
+      const originalFrom = mockSupabase.from
+      mockSupabase.from = vi.fn((table: string) => {
+        if (table === 'cases') return draftChainable as any
+        return originalFrom(table)
+      })
+
+      render(<CaseForm mode="edit" caseId="draft-case-1" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      // Should show "Finalize Case" instead of "Update Case"
+      expect(screen.getByText('Finalize Case')).toBeInTheDocument()
+    })
+
+    it('disables Create Case while draft is saving', async () => {
+      // Make RPC return a never-resolving promise to simulate slow save
+      mockSupabase.rpc = vi.fn(() => new Promise(() => {}))
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      await user.click(screen.getByText('Save as Draft'))
+
+      await waitFor(() => {
+        expect(screen.getByText('Saving Draft...')).toBeInTheDocument()
+      })
+
+      // Create Case button should be disabled
+      const createButton = screen.getByText('Create Case')
+      expect(createButton).toBeDisabled()
+    })
+  })
+
+  describe('2.4 — Unsaved changes warning', () => {
+    it('navigates directly when Cancel is clicked with no changes', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Click Cancel without making any changes
+      await user.click(screen.getByText('Cancel'))
+
+      // Should navigate immediately without showing dialog
+      expect(mockPush).toHaveBeenCalledWith('/cases')
+      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
+    })
+
+    it('shows leave confirmation dialog when Cancel is clicked with unsaved changes', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Make a change to the form
+      const caseNumberInput = screen.getByPlaceholderText('e.g., C-2025-001')
+      await user.type(caseNumberInput, 'C-DIRTY-001')
+
+      // Click Cancel
+      await user.click(screen.getByText('Cancel'))
+
+      // Should show the leave confirmation dialog
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+      expect(screen.getByText(/You have unsaved changes/)).toBeInTheDocument()
+      expect(screen.getByText('Stay')).toBeInTheDocument()
+      expect(screen.getByText('Leave')).toBeInTheDocument()
+
+      // Should NOT have navigated yet
+      expect(mockPush).not.toHaveBeenCalled()
+    })
+
+    it('navigates away when user clicks Leave in the dialog', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Make a change
+      const caseNumberInput = screen.getByPlaceholderText('e.g., C-2025-001')
+      await user.type(caseNumberInput, 'C-DIRTY-001')
+
+      // Click Cancel to show dialog
+      await user.click(screen.getByText('Cancel'))
+
+      // Click "Leave" to confirm navigation
+      await user.click(screen.getByText('Leave'))
+
+      expect(mockPush).toHaveBeenCalledWith('/cases')
+    })
+
+    it('stays on form when user clicks Stay in the dialog', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Make a change
+      const caseNumberInput = screen.getByPlaceholderText('e.g., C-2025-001')
+      await user.type(caseNumberInput, 'C-DIRTY-001')
+
+      // Click Cancel to show dialog
+      await user.click(screen.getByText('Cancel'))
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+
+      // Click "Stay" to dismiss dialog
+      await user.click(screen.getByText('Stay'))
+
+      // Dialog should close, should NOT navigate, form value preserved
+      await waitFor(() => {
+        expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
+      })
+      expect(mockPush).not.toHaveBeenCalled()
+      expect(caseNumberInput).toHaveValue('C-DIRTY-001')
+    })
+
+    it('registers beforeunload listener when form is dirty', async () => {
+      const addEventSpy = vi.spyOn(window, 'addEventListener')
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Initially should not have beforeunload registered
+      const beforeUnloadCallsBefore = addEventSpy.mock.calls.filter(
+        ([event]) => event === 'beforeunload'
+      )
+      expect(beforeUnloadCallsBefore.length).toBe(0)
+
+      // Make a change to dirty the form
+      const caseNumberInput = screen.getByPlaceholderText('e.g., C-2025-001')
+      await user.type(caseNumberInput, 'X')
+
+      // Should now have beforeunload registered
+      await waitFor(() => {
+        const calls = addEventSpy.mock.calls.filter(
+          ([event]) => event === 'beforeunload'
+        )
+        expect(calls.length).toBeGreaterThan(0)
+      })
+
+      addEventSpy.mockRestore()
+    })
+
+    it('does not show dialog when notes change is reverted', async () => {
+      const user = userEvent.setup()
+      render(<CaseForm mode="create" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 3000 })
+
+      // Type in notes then clear it (revert to original empty)
+      const notesInput = screen.getByPlaceholderText('Any additional notes...')
+      await user.type(notesInput, 'temporary')
+      await user.clear(notesInput)
+
+      // Cancel should navigate directly — form is back to original state
+      await user.click(screen.getByText('Cancel'))
+
+      expect(mockPush).toHaveBeenCalledWith('/cases')
+      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
+    })
+  })
+})

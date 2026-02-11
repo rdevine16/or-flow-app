@@ -39,6 +39,7 @@ interface Case {
   scheduled_date: string
   start_time: string | null
   operative_side: string | null
+  is_draft: boolean
   or_rooms: { name: string }[] | { name: string } | null
   procedure_types: { name: string }[] | { name: string } | null
   case_statuses: { name: string }[] | { name: string } | null
@@ -96,6 +97,7 @@ function CasesPageContent() {
     effectiveFacilityId,
     isGlobalAdmin,
     isImpersonating,
+    canCreateCases,
   } = useUser()
 
   // Core state
@@ -160,6 +162,7 @@ function CasesPageContent() {
           scheduled_date,
           start_time,
           operative_side,
+          is_draft,
           or_rooms (name),
           procedure_types (name),
           case_statuses (name),
@@ -175,17 +178,29 @@ function CasesPageContent() {
         query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
       }
 
-      // Apply status filter
-      if (filters.status.length > 0) {
+      // Apply status filter (handle "draft" pseudo-status separately)
+      const draftFilter = filters.status.includes('draft')
+      const realStatuses = filters.status.filter(s => s !== 'draft')
+
+      if (draftFilter && realStatuses.length === 0) {
+        // Only drafts requested
+        query = query.eq('is_draft', true)
+      } else if (realStatuses.length > 0) {
         const { data: statusData, error: statusError } = await supabase
           .from('case_statuses')
           .select('id, name')
-          .in('name', filters.status)
+          .in('name', realStatuses)
 
         if (statusError) throw statusError
 
         if (statusData && statusData.length > 0) {
-          query = query.in('status_id', statusData.map(s => s.id))
+          if (draftFilter) {
+            // Drafts + specific statuses: use .or() to combine
+            const statusIds = statusData.map(s => `status_id.eq.${s.id}`).join(',')
+            query = query.or(`is_draft.eq.true,${statusIds}`)
+          } else {
+            query = query.in('status_id', statusData.map(s => s.id))
+          }
         }
       }
 
@@ -320,13 +335,15 @@ function CasesPageContent() {
           <h1 className="text-2xl font-bold text-slate-900">Cases</h1>
           <p className="text-slate-500 text-sm mt-1">Manage surgical cases and track progress</p>
         </div>
-        <Link
-          href="/cases/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
-        >
-          <Plus className="w-4 h-4" />
-          New Case
-        </Link>
+        {canCreateCases && (
+          <Link
+            href="/cases/new"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
+          >
+            <Plus className="w-4 h-4" />
+            New Case
+          </Link>
+        )}
       </div>
 
       {/* Filter Bar */}
@@ -386,7 +403,9 @@ function CasesPageContent() {
                 return (
                   <div
                     key={c.id}
-                    className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/80 transition-all duration-200 group"
+                    className={`grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/80 transition-all duration-200 group ${
+                      c.is_draft ? 'border-l-2 border-dashed border-l-amber-400 bg-amber-50/30' : ''
+                    }`}
                   >
                     {/* Date */}
                     <div className="col-span-1">
@@ -402,14 +421,19 @@ function CasesPageContent() {
                       </span>
                     </div>
 
-                    {/* Case Number */}
-                    <div className="col-span-2">
+                    {/* Case Number + Draft Badge */}
+                    <div className="col-span-2 flex items-center gap-2">
                       <Link
-                        href={`/cases/${c.id}`}
+                        href={c.is_draft ? `/cases/${c.id}/edit` : `/cases/${c.id}`}
                         className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                       >
                         Case #{c.case_number}
                       </Link>
+                      {c.is_draft && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded-md">
+                          Draft
+                        </span>
+                      )}
                     </div>
 
                     {/* Room */}
@@ -430,7 +454,14 @@ function CasesPageContent() {
 
                     {/* Status */}
                     <div className="col-span-2">
-                      <StatusBadgeDot status={statusName || 'scheduled'} />
+                      {c.is_draft ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Draft
+                        </span>
+                      ) : (
+                        <StatusBadgeDot status={statusName || 'scheduled'} />
+                      )}
                     </div>
 
                     {/* Actions */}

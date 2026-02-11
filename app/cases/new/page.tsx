@@ -1,14 +1,41 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import Card from '@/components/ui/Card'
 import CaseForm from '@/components/cases/CaseForm'
+import { useUser } from '@/lib/UserContext'
+import { PageLoader } from '@/components/ui/Loading'
 import { ChevronLeft } from 'lucide-react'
 
 export default function NewCasePage() {
   const router = useRouter()
+  const { canCreateCases, loading } = useUser()
+
+  // Redirect unauthorized users
+  useEffect(() => {
+    if (!loading && !canCreateCases) {
+      router.replace('/cases')
+    }
+  }, [loading, canCreateCases, router])
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <PageLoader />
+      </DashboardLayout>
+    )
+  }
+
+  if (!canCreateCases) {
+    return (
+      <DashboardLayout>
+        <PageLoader />
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>

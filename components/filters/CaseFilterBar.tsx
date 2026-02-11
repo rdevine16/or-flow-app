@@ -78,6 +78,7 @@ const DATE_OPTIONS: FilterOption[] = [
 ]
 
 const STATUS_OPTIONS: FilterOption[] = [
+  { value: 'draft', label: 'Drafts' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'delayed', label: 'Delayed' },

@@ -1,0 +1,12 @@
+-- ============================================
+-- Phase 2.3: Add coordinator access level
+-- Coordinators can create/edit cases but cannot manage settings.
+-- ============================================
+
+-- No constraint to add/alter since access_level is plain TEXT.
+-- This migration serves as documentation that 'coordinator' is now
+-- a recognized access_level value alongside:
+--   global_admin, facility_admin, user, device_rep, coordinator
+--
+-- The application layer enforces valid values.
+-- To verify: SELECT DISTINCT access_level FROM public.users;

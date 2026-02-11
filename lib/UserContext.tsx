@@ -11,7 +11,7 @@ interface UserData {
   userEmail: string | null
   firstName: string
   lastName: string
-  accessLevel: 'global_admin' | 'facility_admin' | 'user'
+  accessLevel: 'global_admin' | 'facility_admin' | 'coordinator' | 'user'
   facilityId: string | null
   facilityName: string | null
   facilityTimezone: string
@@ -22,7 +22,9 @@ interface UserContextType {
   loading: boolean
   isGlobalAdmin: boolean
   isFacilityAdmin: boolean
+  isCoordinator: boolean
   isAdmin: boolean
+  canCreateCases: boolean
   isImpersonating: boolean
   impersonatedFacilityId: string | null
   impersonatedFacilityName: string | null
@@ -46,7 +48,9 @@ const UserContext = createContext<UserContextType>({
   loading: true,
   isGlobalAdmin: false,
   isFacilityAdmin: false,
+  isCoordinator: false,
   isAdmin: false,
+  canCreateCases: false,
   isImpersonating: false,
   impersonatedFacilityId: null,
   impersonatedFacilityName: null,
@@ -172,7 +176,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const isGlobalAdmin = userData.accessLevel === 'global_admin'
   const isFacilityAdmin = userData.accessLevel === 'facility_admin'
+  const isCoordinator = userData.accessLevel === 'coordinator'
   const isAdmin = isGlobalAdmin || isFacilityAdmin
+  const canCreateCases = isGlobalAdmin || isFacilityAdmin || isCoordinator
   const isImpersonating = isGlobalAdmin && impersonatedFacilityId !== null
   const effectiveFacilityId = isImpersonating ? impersonatedFacilityId : userData.facilityId
 
@@ -182,7 +188,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       loading,
       isGlobalAdmin,
       isFacilityAdmin,
+      isCoordinator,
       isAdmin,
+      canCreateCases,
       isImpersonating,
       impersonatedFacilityId,
       impersonatedFacilityName,

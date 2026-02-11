@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
@@ -17,7 +17,8 @@ import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 import CaseComplexitySelector from '../cases/CaseComplexitySelector'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { createCaseSchema, validateField } from '@/lib/validation/schemas'
+import { LeaveConfirm } from '@/components/ui/ConfirmDialog'
+import { createCaseSchema, draftCaseSchema, validateField } from '@/lib/validation/schemas'
 
 interface CaseFormProps {
   caseId?: string
@@ -87,6 +88,10 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // null = use procedure default, true = force require, false = force no require
   const [repRequiredOverride, setRepRequiredOverride] = useState<boolean | null>(null)
   const [originalRepRequiredOverride, setOriginalRepRequiredOverride] = useState<boolean | null>(null)
+
+  // Draft state
+  const [isDraft, setIsDraft] = useState(false)
+  const [savingDraft, setSavingDraft] = useState(false)
 
   // Store original data for edit mode to track changes
   const [originalData, setOriginalData] = useState<FormData | null>(null)
@@ -168,6 +173,54 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const procedureRequiresRep = selectedProcedure?.requires_rep ?? false
   const effectiveRepRequired = repRequiredOverride !== null ? repRequiredOverride : procedureRequiresRep
 
+  // ============================================
+  // DIRTY STATE: Track unsaved changes
+  // ============================================
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+
+  const isDirty = useMemo(() => {
+    if (!originalData) return false
+
+    // Compare formData fields
+    const formChanged = (Object.keys(originalData) as (keyof FormData)[]).some(
+      key => formData[key] !== originalData[key]
+    )
+    if (formChanged) return true
+
+    // Compare company selections
+    if (selectedCompanyIds.length !== originalCompanyIds.length ||
+        selectedCompanyIds.some(id => !originalCompanyIds.includes(id))) return true
+
+    // Compare complexity selections
+    if (selectedComplexityIds.length !== originalComplexityIds.length ||
+        selectedComplexityIds.some(id => !originalComplexityIds.includes(id))) return true
+
+    // Compare rep required override
+    if (repRequiredOverride !== originalRepRequiredOverride) return true
+
+    return false
+  }, [formData, originalData, selectedCompanyIds, originalCompanyIds, selectedComplexityIds, originalComplexityIds, repRequiredOverride, originalRepRequiredOverride])
+
+  const handleCancel = useCallback(() => {
+    if (isDirty) {
+      setShowLeaveConfirm(true)
+    } else {
+      router.push('/cases')
+    }
+  }, [isDirty, router])
+
+  // Warn on browser/tab close when form is dirty
+  useEffect(() => {
+    if (!isDirty) return
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
   // First, get the current user's facility
   useEffect(() => {
     async function fetchUserFacility() {
@@ -247,18 +300,22 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       }
 
       if (mode === 'create') {
-        setFormData(prev => ({
-          ...prev,
+        const scheduledStatus = statusesRes.data?.find(s => s.name === 'scheduled')
+        const initialData: FormData = {
+          case_number: '',
           scheduled_date: getLocalDateString(),
-        }))
-        
-        if (statusesRes.data) {
-          const scheduledStatus = statusesRes.data.find(s => s.name === 'scheduled')
-          if (scheduledStatus) {
-            setFormData(prev => ({ ...prev, status_id: scheduledStatus.id }))
-          }
+          start_time: '07:30',
+          or_room_id: '',
+          procedure_type_id: '',
+          status_id: scheduledStatus?.id || '',
+          surgeon_id: '',
+          anesthesiologist_id: '',
+          operative_side: '',
+          payer_id: '',
+          notes: '',
         }
-        
+        setFormData(initialData)
+        setOriginalData(initialData)
         setInitialLoading(false)
       }
     }
@@ -299,6 +356,11 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
       setFormData(caseFormData)
       setOriginalData(caseFormData)
+
+      // Set draft state
+      if (data.is_draft) {
+        setIsDraft(true)
+      }
 
       // Set rep required override
       setRepRequiredOverride(data.rep_required_override)
@@ -400,6 +462,78 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         return next
       })
     }
+  }
+
+  // ============================================
+  // DRAFT SAVE: Relaxed validation, no milestones
+  // ============================================
+  const handleSaveDraft = async () => {
+    setSavingDraft(true)
+    setError(null)
+
+    if (!userFacilityId) {
+      setError('Could not determine your facility. Please try again.')
+      setSavingDraft(false)
+      return
+    }
+
+    // Validate with relaxed draft schema (only date required)
+    const draftResult = draftCaseSchema.safeParse(formData)
+    if (!draftResult.success) {
+      const errors: Record<string, string> = {}
+      for (const issue of draftResult.error.issues) {
+        const field = issue.path[0] as string
+        if (field && !errors[field]) {
+          errors[field] = issue.message
+        }
+      }
+      setFieldErrors(errors)
+      setError('Please fix the highlighted fields.')
+      setSavingDraft(false)
+      return
+    }
+    setFieldErrors({})
+
+    const currentUser = (await supabase.auth.getUser()).data.user
+
+    // Find the "scheduled" status ID for drafts
+    let statusId = formData.status_id
+    if (!statusId) {
+      const scheduledStatus = statuses.find(s => s.name === 'scheduled')
+      if (scheduledStatus) statusId = scheduledStatus.id
+    }
+
+    const { data: rpcCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
+      p_case_number: formData.case_number || `DRAFT-${Date.now()}`,
+      p_scheduled_date: formData.scheduled_date,
+      p_start_time: formData.start_time || null,
+      p_or_room_id: formData.or_room_id || null,
+      p_procedure_type_id: formData.procedure_type_id || null,
+      p_status_id: statusId || null,
+      p_surgeon_id: formData.surgeon_id || null,
+      p_facility_id: userFacilityId,
+      p_created_by: currentUser?.id || null,
+      p_anesthesiologist_id: formData.anesthesiologist_id || null,
+      p_operative_side: formData.operative_side || null,
+      p_payer_id: formData.payer_id || null,
+      p_notes: formData.notes || null,
+      p_rep_required_override: repRequiredOverride,
+      p_is_draft: true,
+    })
+
+    if (rpcError) {
+      setError(rpcError.message)
+      setSavingDraft(false)
+      return
+    }
+
+    showToast({
+      type: 'success',
+      title: 'Draft saved',
+      message: 'Case saved as draft. You can complete it later.',
+    })
+
+    router.push('/cases')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -596,6 +730,40 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             }
           }
         }
+      }
+    } else if (isDraft && caseId) {
+      // Finalizing a draft → use finalize_draft_case RPC (creates milestones atomically)
+      const { data: finalizedId, error: finalizeError } = await supabase.rpc('finalize_draft_case', {
+        p_case_id: caseId,
+        p_case_number: formData.case_number,
+        p_scheduled_date: formData.scheduled_date,
+        p_start_time: formData.start_time,
+        p_or_room_id: formData.or_room_id || null,
+        p_procedure_type_id: formData.procedure_type_id || null,
+        p_status_id: formData.status_id,
+        p_surgeon_id: formData.surgeon_id || null,
+        p_facility_id: userFacilityId,
+        p_anesthesiologist_id: formData.anesthesiologist_id || null,
+        p_operative_side: formData.operative_side || null,
+        p_payer_id: formData.payer_id || null,
+        p_notes: formData.notes || null,
+        p_rep_required_override: repRequiredOverride,
+      })
+
+      result = finalizeError
+        ? { data: null, error: { message: finalizeError.message } }
+        : { data: { id: finalizedId as string }, error: null }
+      savedCaseId = caseId
+
+      if (!result.error) {
+        setIsDraft(false)
+        const procedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
+        await caseAudit.updated(
+          supabase,
+          { id: savedCaseId, case_number: formData.case_number },
+          { status: 'Draft' },
+          { status: 'Finalized', procedure: procedure?.name || 'Unknown' }
+        )
       }
     } else {
       result = await supabase.from('cases').update(caseData).eq('id', caseId).select().single()
@@ -1129,19 +1297,36 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       <div className="flex items-center justify-end gap-4 pt-4">
         <button
           type="button"
-          onClick={() => router.push('/cases')}
+          onClick={handleCancel}
           className="px-6 py-3 text-slate-600 font-medium hover:bg-slate-100 rounded-xl transition-colors"
         >
           Cancel
         </button>
+        {mode === 'create' && (
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={savingDraft || loading}
+            className="px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            {savingDraft ? 'Saving Draft...' : 'Save as Draft'}
+          </button>
+        )}
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || savingDraft}
           className="px-6 py-3 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 disabled:opacity-50"
         >
-          {loading ? 'Saving...' : mode === 'create' ? 'Create Case' : 'Update Case'}
+          {loading ? 'Saving...' : isDraft ? 'Finalize Case' : mode === 'create' ? 'Create Case' : 'Update Case'}
         </button>
       </div>
+
+      {/* Unsaved changes warning */}
+      <LeaveConfirm
+        open={showLeaveConfirm}
+        onClose={() => setShowLeaveConfirm(false)}
+        onConfirm={() => router.push('/cases')}
+      />
     </form>
   )
 }

@@ -65,6 +65,35 @@ export type CreateCaseInput = z.infer<typeof createCaseSchema>
 export const updateCaseSchema = createCaseSchema.partial()
 export type UpdateCaseInput = z.infer<typeof updateCaseSchema>
 
+// Phase 2.1: Relaxed schema for draft cases — only date required
+export const draftCaseSchema = z.object({
+  case_number: z.string().max(50, 'Case number too long').optional().or(z.literal('')),
+
+  scheduled_date: z.string()
+    .min(1, 'Scheduled date is required')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
+
+  start_time: z.string().optional().or(z.literal('')),
+
+  surgeon_id: z.string().optional().or(z.literal('')),
+
+  procedure_type_id: z.string().optional().or(z.literal('')),
+
+  or_room_id: z.string().optional().or(z.literal('')),
+
+  status_id: z.string().optional().or(z.literal('')),
+
+  anesthesiologist_id: z.string().optional().or(z.literal('')),
+
+  operative_side: z.enum(['left', 'right', 'bilateral', 'n/a', '']).optional(),
+
+  payer_id: z.string().optional().or(z.literal('')),
+
+  notes: z.string().max(1000, 'Notes must be under 1000 characters').optional().or(z.literal('')),
+})
+
+export type DraftCaseInput = z.infer<typeof draftCaseSchema>
+
 // ============================================
 // MILESTONE SCHEMAS
 // ============================================

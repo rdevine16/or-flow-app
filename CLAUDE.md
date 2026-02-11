@@ -215,3 +215,10 @@ When conducting feature audits, read the corresponding brief in `docs/feature-au
 - Interview questions to ask the developer
 
 Always complete the audit and interview BEFORE making code changes.
+
+## Context Management
+
+- Monitor context usage. When you reach 70%, finish the current item and stop.
+- Do not start new items above 70%.
+- Before stopping, always update the relevant phase progress file in docs/feature-audits/.
+- Inform me when you're approaching the limit so I can decide whether to continue or clear.
