@@ -441,8 +441,6 @@ const handleRestore = async (milestone: FacilityMilestone) => {
     setSaving(false)
   }
 }
-  setSaving(false)
-}
 
   // Unlink milestones
   const handleUnlink = async (milestone: FacilityMilestone) => {
@@ -664,15 +662,15 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-4">
                   {inactiveMilestones.length > 0 && (
-<label className="flex items-center gap-2 cursor-pointer">
+                    <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={showDeleted}
-                        onChange={(e) => setShowDeleted(e.target.checked)}
-                        className="w-4 h-4 text-amber-600 rounded border-slate-300"
+                        checked={showInactive}
+                        onChange={(e) => setShowInactive(e.target.checked)}
+                        className="w-4 h-4 text-slate-600 rounded border-slate-300"
                       />
                       <span className="text-sm text-slate-600">
-                        Show archived ({deletedMilestones.length})
+                        Show inactive ({inactiveMilestones.length})
                       </span>
                     </label>
                   )}
@@ -1001,19 +999,6 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                   </p>
                 </div>
               )}
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={editDisplayName}
-                  onChange={(e) => setEditDisplayName(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., Patient In Room"
-                />
-              </div>
 
               <div className="pt-2 border-t border-slate-200">
                 <label className="block text-sm font-medium text-slate-700 mb-2">
