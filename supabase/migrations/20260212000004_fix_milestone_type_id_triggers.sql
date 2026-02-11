@@ -1,61 +1,39 @@
 -- ============================================
--- Fix: Drop triggers on case_milestones that reference the dropped milestone_type_id column
+-- Fix: Replace trigger_record_case_stats to remove reference to
+-- the dropped milestone_type_id column on case_milestones.
 --
--- Background: milestone_type_id was DROPPED from case_milestones during the v2.0
--- milestone cleanup. All operations now use facility_milestone_id exclusively.
--- However, some triggers still reference NEW.milestone_type_id, causing:
---   ERROR: record "new" has no field "milestone_type_id"
--- This breaks finalize_draft_case and any other path that inserts into case_milestones.
+-- Root cause: trigger_record_case_stats fires AFTER INSERT on
+-- case_milestones and contains a fallback:
+--
+--   IF v_milestone_name IS NULL AND NEW.milestone_type_id IS NOT NULL THEN
+--
+-- milestone_type_id was DROPPED from case_milestones in v2.0.
+-- All milestones now use facility_milestone_id exclusively.
+-- The fallback is no longer needed — remove it.
+--
+-- Error: record "new" has no field "milestone_type_id"
+-- Repro: create case → save as draft → edit → save (finalize)
 -- ============================================
 
--- 1) Find and drop triggers on case_milestones whose handler functions
---    reference the old milestone_type_id column.
-DO $$
+CREATE OR REPLACE FUNCTION public.trigger_record_case_stats()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
 DECLARE
-  trig RECORD;
-  dropped_triggers TEXT[] := ARRAY[]::TEXT[];
+  v_milestone_name TEXT;
 BEGIN
-  FOR trig IN
-    SELECT t.tgname AS trigger_name, p.proname AS function_name
-    FROM pg_trigger t
-    JOIN pg_class c ON t.tgrelid = c.oid
-    JOIN pg_namespace n ON c.relnamespace = n.oid
-    JOIN pg_proc p ON t.tgfoid = p.oid
-    WHERE c.relname = 'case_milestones'
-      AND n.nspname = 'public'
-      AND NOT t.tgisinternal
-      AND p.prosrc LIKE '%milestone_type_id%'
-  LOOP
-    EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.case_milestones', trig.trigger_name);
-    dropped_triggers := array_append(dropped_triggers, trig.trigger_name || ' (function: ' || trig.function_name || ')');
-    RAISE NOTICE 'Dropped trigger: % (function: %)', trig.trigger_name, trig.function_name;
-  END LOOP;
+  -- Get the milestone name via facility_milestone_id (the only path now)
+  SELECT fm.name INTO v_milestone_name
+  FROM facility_milestones fm
+  WHERE fm.id = NEW.facility_milestone_id;
 
-  IF array_length(dropped_triggers, 1) IS NULL THEN
-    RAISE NOTICE 'No triggers referencing milestone_type_id found on case_milestones.';
-  ELSE
-    RAISE NOTICE 'Dropped % trigger(s) referencing milestone_type_id: %',
-      array_length(dropped_triggers, 1), array_to_string(dropped_triggers, ', ');
+  -- Only trigger stats recording on patient_out milestone
+  IF v_milestone_name = 'patient_out' THEN
+    PERFORM record_case_stats(NEW.case_id);
+    PERFORM refresh_case_stats();
   END IF;
-END$$;
 
--- 2) Also fix any triggers on the cases table that reference milestone_type_id
---    (e.g., triggers that try to auto-create milestones with the old column).
-DO $$
-DECLARE
-  trig RECORD;
-BEGIN
-  FOR trig IN
-    SELECT t.tgname AS trigger_name, p.proname AS function_name
-    FROM pg_trigger t
-    JOIN pg_class c ON t.tgrelid = c.oid
-    JOIN pg_namespace n ON c.relnamespace = n.oid
-    JOIN pg_proc p ON t.tgfoid = p.oid
-    WHERE c.relname = 'cases'
-      AND n.nspname = 'public'
-      AND NOT t.tgisinternal
-      AND p.prosrc LIKE '%milestone_type_id%'
-  LOOP
-    RAISE NOTICE 'WARNING: Trigger "%" on cases table references milestone_type_id (function: %). Review manually.', trig.trigger_name, trig.function_name;
-  END LOOP;
-END$$;
+  RETURN NEW;
+END;
+$$;
