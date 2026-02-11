@@ -11,7 +11,7 @@ import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { AlertTriangle, DollarSign } from 'lucide-react'
+import { AlertTriangle, DollarSign, DollarSignIcon } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 
 // Local components
@@ -27,6 +27,7 @@ import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import OverviewTab from '@/components/analytics/financials/OverviewTab'
 import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
+import { Sign } from 'crypto'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
@@ -245,7 +246,7 @@ if (facilityStatsRes.error) {
           <AnalyticsPageHeader
             title="Financial Analytics"
             description="Profitability metrics and insights"
-            icon={CurrencyDollarIcon}
+            icon={DollarSign}
           />
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
@@ -277,7 +278,7 @@ if (facilityStatsRes.error) {
           <AnalyticsPageHeader
             title="Financial Analytics"
             description="Profitability metrics and insights"
-            icon={CurrencyDollarIcon}
+            icon={DollarSignIcon}
           />
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
@@ -307,7 +308,7 @@ if (facilityStatsRes.error) {
         <AnalyticsPageHeader
           title="Financial Analytics"
           description={`${metrics.totalCases} cases analyzed`}
-          icon={CurrencyDollarIcon}
+          icon={DollarSign}
           actions={
             <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
           }
