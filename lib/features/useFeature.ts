@@ -6,6 +6,9 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '../supabase'
 import { useUser } from '../UserContext'
+import { logger } from '@/lib/logger'
+
+const log = logger('useFeature')
 
 // Feature name constants
 export const FEATURES = {
@@ -80,7 +83,7 @@ export function useFeature(featureName: FeatureName): FeatureStatus {
         })
 
         if (error) {
-          console.error('Error checking feature:', error)
+          log.error('Feature check failed', error)
           setStatus(prev => ({ ...prev, isEnabled: false, isLoading: false }))
           return
         }
@@ -123,7 +126,7 @@ export function useFeature(featureName: FeatureName): FeatureStatus {
           })
         }
       } catch (err) {
-        console.error('Error checking feature:', err)
+        log.error('Feature check failed', err)
         setStatus(prev => ({ ...prev, isEnabled: false, isLoading: false }))
       }
     }

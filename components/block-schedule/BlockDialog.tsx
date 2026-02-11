@@ -13,7 +13,10 @@ import {
   DAY_OF_WEEK_LABELS,
   RECURRENCE_LABELS,
   formatTime12Hour,
-} from '@/types/block-scheduling'
+} from "@/types/block-scheduling"
+import { logger } from "@/lib/logger"
+
+const log = logger("BlockDialog")
 
 interface Surgeon {
   id: string
@@ -178,7 +181,7 @@ export function BlockDialog({
 
       onSave()
     } catch (error) {
-      console.error('Error saving block:', error)
+      log.error('Error saving block:', error)
     } finally {
       setLoading(false)
     }

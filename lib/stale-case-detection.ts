@@ -6,6 +6,9 @@
 // ============================================
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('stale-case-detection')
 
 interface StaleCase {
   case_id: string
@@ -241,13 +244,13 @@ async function detectNoActivity(
   
   for (const c of cases || []) {
     const milestones = Array.isArray(c.case_milestones) ? c.case_milestones : []
-    const recordedMilestones = milestones.filter((m: any) => m.recorded_at)
+    const recordedMilestones = milestones.filter((m: { recorded_at: string | null }) => m.recorded_at)
     
     if (recordedMilestones.length === 0) continue // Skip if no milestones at all
     
     // Find most recent activity
-    const lastActivity = recordedMilestones.reduce((latest: string | null, m: any) => {
-      if (!latest || m.recorded_at > latest) return m.recorded_at
+    const lastActivity = recordedMilestones.reduce((latest: string | null, m: { recorded_at: string | null }) => {
+      if (!latest || (m.recorded_at && m.recorded_at > latest)) return m.recorded_at
       return latest
     }, null)
     
@@ -285,7 +288,7 @@ export async function detectStaleCasesAllFacilities(
   for (const facility of facilities || []) {
     const result = await detectStaleCases(supabase, facility.id)
     results.set(facility.id, result)
-    console.log(`Stale detection for ${facility.name}: ${result.detected} found, ${result.created} created`)
+    log.info(`Stale detection for ${facility.name}: ${result.detected} found, ${result.created} created`)
   }
   
   return results

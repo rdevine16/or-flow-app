@@ -7,6 +7,9 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { tokens, alertColors } from '@/lib/design-tokens'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
+import { logger } from '@/lib/logger'
+
+const log = logger('ToastProvider')
 
 /**
  * USAGE:
@@ -84,7 +87,7 @@ export function useToast() {
   const context = useContext(ToastContext)
   if (!context) {
     // Safe fallback for SSR/build
-    console.warn('useToast called outside ToastProvider, using fallback')
+    log.warn('useToast called outside ToastProvider, using fallback')
     return {
       toasts: [],
       showToast: () => '',

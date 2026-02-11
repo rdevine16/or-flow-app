@@ -11,6 +11,9 @@
 
 import { createClient } from '@/lib/supabase'
 import { useState, useEffect } from 'react'
+import { logger } from '@/lib/logger'
+
+const log = logger('session-manager')
 
 // Session durations
 const SESSION_DURATION = {
@@ -143,7 +146,7 @@ export async function getActiveSessions(userId: string) {
     .order('last_activity', { ascending: false })
   
   if (error) {
-    console.error('Error fetching sessions:', error)
+    log.error('Error fetching sessions:', error)
     return []
   }
   
@@ -220,7 +223,7 @@ export async function updateSessionActivity(userId: string): Promise<void> {
  */
 export async function validateSession(): Promise<{
   valid: boolean
-  user?: any
+  user?: Record<string, unknown>
   reason?: string
 }> {
   const supabase = createClient()
@@ -255,7 +258,7 @@ export async function validateSession(): Promise<{
     return { valid: false, reason: 'session_revoked' }
   }
   
-  return { valid: true, user: session.user }
+  return { valid: true, user: { ...session.user } }
 }
 
 /**

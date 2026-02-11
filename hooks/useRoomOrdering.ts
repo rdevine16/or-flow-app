@@ -3,6 +3,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
+
+const log = logger('useRoomOrdering')
 
 export interface OrderableRoom {
   id: string
@@ -53,7 +56,7 @@ export function useRoomOrdering({ facilityId }: UseRoomOrderingOptions): UseRoom
 
       setRooms(data || [])
     } catch (err) {
-      console.error('Error fetching rooms:', err)
+      log.error('Error fetching rooms:', err)
       setError('Failed to load rooms')
     } finally {
       setLoading(false)
@@ -117,13 +120,13 @@ export function useRoomOrdering({ facilityId }: UseRoomOrderingOptions): UseRoom
           })
         }
       } catch (auditErr) {
-        console.error('Audit log error:', auditErr)
+        log.error('Audit log error:', auditErr)
         // Don't fail the operation for audit errors
       }
 
       return true
     } catch (err) {
-      console.error('Error saving room order:', err)
+      log.error('Error saving room order:', err)
       setError('Failed to save room order')
       
       // Rollback to previous state

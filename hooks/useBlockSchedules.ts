@@ -12,6 +12,9 @@ import {
   RECURRENCE_LABELS,
   RecurrenceType,
 } from '@/types/block-scheduling'
+import { logger } from '@/lib/logger'
+
+const log = logger('useBlockSchedules')
 
 interface UseBlockSchedulesOptions {
   facilityId: string | null
@@ -55,7 +58,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch blocks'
         setError(message)
-        console.error('Error fetching blocks:', err)
+        log.error('Error fetching blocks:', err)
         return []
       } finally {
         setLoading(false)
@@ -83,7 +86,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       if (fetchError) throw fetchError
       return data || []
     } catch (err) {
-      console.error('Error fetching block schedules:', err)
+      log.error('Error fetching block schedules:', err)
       return []
     }
   }, [facilityId, supabase])
@@ -126,7 +129,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to create block'
         setError(message)
-        console.error('Error creating block:', err)
+        log.error('Error creating block:', err)
         return null
       } finally {
         setLoading(false)
@@ -202,7 +205,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to update block'
         setError(message)
-        console.error('Error updating block:', err)
+        log.error('Error updating block:', err)
         return false
       } finally {
         setLoading(false)
@@ -238,7 +241,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to delete block'
         setError(message)
-        console.error('Error deleting block:', err)
+        log.error('Error deleting block:', err)
         return false
       } finally {
         setLoading(false)
@@ -274,7 +277,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to restore block'
         setError(message)
-        console.error('Error restoring block:', err)
+        log.error('Error restoring block:', err)
         return false
       } finally {
         setLoading(false)
@@ -337,7 +340,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to add exception date'
         setError(message)
-        console.error('Error adding exception date:', err)
+        log.error('Error adding exception date:', err)
         return false
       } finally {
         setLoading(false)
@@ -390,7 +393,7 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to remove exception date'
         setError(message)
-        console.error('Error removing exception date:', err)
+        log.error('Error removing exception date:', err)
         return false
       } finally {
         setLoading(false)

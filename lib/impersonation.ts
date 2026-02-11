@@ -3,6 +3,9 @@
 // Allows viewing any facility's data while staying logged in as admin
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('impersonation')
 
 // Storage key for impersonation state
 const IMPERSONATION_KEY = 'orbit-impersonation'
@@ -37,7 +40,7 @@ export async function startImpersonation(
       .single()
 
     if (error) {
-      console.error('[IMPERSONATION] Failed to create session:', error)
+      log.error('[IMPERSONATION] Failed to create session:', error)
       return { success: false, error: error.message }
     }
 
@@ -55,7 +58,7 @@ export async function startImpersonation(
 
     return { success: true, sessionId: session.id }
   } catch (err) {
-    console.error('[IMPERSONATION] Exception starting impersonation:', err)
+    log.error('[IMPERSONATION] Exception starting impersonation:', err)
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
   }
 }
@@ -86,7 +89,7 @@ export async function endImpersonation(
       .eq('id', state.sessionId)
 
     if (error) {
-      console.error('[IMPERSONATION] Failed to end session:', error)
+      log.error('[IMPERSONATION] Failed to end session:', error)
       // Still clear localStorage even if DB update fails
     }
 
@@ -95,7 +98,7 @@ export async function endImpersonation(
 
     return { success: true }
   } catch (err) {
-    console.error('[IMPERSONATION] Exception ending impersonation:', err)
+    log.error('[IMPERSONATION] Exception ending impersonation:', err)
     clearImpersonationStorage() // Clear anyway
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
   }

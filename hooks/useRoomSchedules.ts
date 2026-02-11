@@ -4,6 +4,9 @@
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { roomScheduleAudit } from '@/lib/audit-logger'
+import { logger } from '@/lib/logger'
+
+const log = logger('useRoomSchedules')
 
 export interface RoomScheduleRow {
   id: string
@@ -107,7 +110,7 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
         return def
       })
     } catch (err) {
-      console.error('Error fetching room schedule:', err)
+      log.error('Error fetching room schedule:', err)
       return getDefaultWeekSchedule()
     }
   }, [facilityId, supabase])
@@ -163,7 +166,7 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
 
       return result
     } catch (err) {
-      console.error('Error fetching all room schedules:', err)
+      log.error('Error fetching all room schedules:', err)
       return new Map()
     }
   }, [facilityId, supabase])
@@ -262,7 +265,7 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save room schedule'
       setError(message)
-      console.error('Error saving room schedule:', err)
+      log.error('Error saving room schedule:', err)
       return false
     } finally {
       setLoading(false)

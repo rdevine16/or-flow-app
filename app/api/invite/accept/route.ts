@@ -7,11 +7,15 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { error } from 'console'
+import { env, serverEnv } from '@/lib/env'
+import { logger } from '@/lib/logger'
+
+const log = logger('api/invite-accept')
+
 // Admin client with service role key - can bypass email confirmation
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  env.NEXT_PUBLIC_SUPABASE_URL,
+  serverEnv.SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
       autoRefreshToken: false,
@@ -108,7 +112,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (authError) {
-console.error('Error description:', error)
+log.error('Auth error:', authError)
 
       return NextResponse.json(
         { success: false, error: 'Failed to create account: ' + authError.message },
@@ -140,7 +144,7 @@ if (!authData.user) {
       })
 
     if (profileError) {
-      console.error('Profile creation error:', profileError)
+      log.error('Profile creation error:', profileError)
       // Don't fail completely - auth user exists
       // They might need admin help but can still try to sign in
     }
@@ -158,7 +162,7 @@ if (!authData.user) {
     })
 
   } catch (error) {
-    console.error('Accept invite error:', error)
+    log.error('Accept invite error:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to accept invite' },
       { status: 500 }

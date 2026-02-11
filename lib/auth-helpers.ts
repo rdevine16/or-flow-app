@@ -2,6 +2,9 @@
 // Helper functions for authentication-related operations
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('auth-helpers')
 
 /**
  * Update user's last login timestamp
@@ -13,7 +16,7 @@ export async function updateLastLogin(supabase: SupabaseClient, userId: string) 
     .eq('id', userId)
 
   if (error) {
-    console.error('Failed to update last login:', error)
+    log.error('Failed to update last login:', error)
   }
 }
 
@@ -32,7 +35,7 @@ export async function checkUserActive(
     .single()
 
   if (error) {
-    console.error('Failed to check user status:', error)
+    log.error('Failed to check user status:', error)
     return { isActive: false, error: 'Unable to verify account status' }
   }
 

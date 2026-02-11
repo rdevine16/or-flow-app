@@ -1,5 +1,8 @@
 // components/ui/SearchInput.tsx
 import { Search, X } from 'lucide-react'
+import { logger } from '@/lib/logger'
+
+const log = logger('SearchInput')
 'use client'
 
 
@@ -97,7 +100,7 @@ const [search, setSearch] = useState('')
   value={search}
   onChange={setSearch}
   onClear={() => {
-    console.log('Search cleared')
+    log.info('Search cleared')
     // Reset filters, etc.
   }}
 />

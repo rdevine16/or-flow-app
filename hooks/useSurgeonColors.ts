@@ -3,6 +3,9 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
+
+const log = logger('useSurgeonColors')
 
 // Default color palette - assigned to surgeons in order
 const DEFAULT_COLORS = [
@@ -79,7 +82,7 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
 
       setColors(colorMap)
     } catch (err) {
-      console.error('Error fetching surgeon colors:', err)
+      log.error('Error fetching surgeon colors:', err)
       // Pure localStorage fallback
       const storedColors = getStoredColors(facilityId)
       const colorMap: Record<string, string> = {}
@@ -118,10 +121,10 @@ export function useSurgeonColors({ facilityId }: UseSurgeonColorsOptions) {
         })
 
       if (error) {
-        console.log('Could not save color to database, using localStorage')
+        log.info('Could not save color to database, using localStorage')
       }
     } catch (err) {
-      console.error('Error saving surgeon color:', err)
+      log.error('Error saving surgeon color:', err)
     }
   }, [facilityId])
 

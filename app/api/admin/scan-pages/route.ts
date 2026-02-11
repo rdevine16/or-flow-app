@@ -5,8 +5,12 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { env } from '@/lib/env'
 import fs from 'fs'
 import path from 'path'
+import { logger } from '@/lib/logger'
+
+const log = logger('api/admin-scan-pages')
 
 
 // =============================================================================
@@ -19,8 +23,8 @@ async function verifyGlobalAdmin(req: NextRequest): Promise<boolean> {
     if (!authHeader) return false
 
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      env.NEXT_PUBLIC_SUPABASE_URL,
+      env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       { global: { headers: { Authorization: authHeader } } }
     )
 
@@ -176,9 +180,9 @@ export async function GET(req: NextRequest) {
     }
 
   return NextResponse.json({ files, stats: buildStats(files) })
-} catch (error: any) {
-  console.error('[scan-pages] GET error:', error instanceof Error ? error.message : error)
-  return NextResponse.json({ error: error.message }, { status: 500 })
+} catch (error: unknown) {
+  log.error('[scan-pages] GET error:', error instanceof Error ? error.message : error)
+  return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
 }
 }
 
@@ -245,10 +249,10 @@ export async function POST(req: NextRequest) {
     const metadata = extractMetadata(source, filePath, scope)
 
     return NextResponse.json({ metadata })
-  } catch (error: any) {
-console.error('Error description:', error)
+  } catch (error: unknown) {
+log.error('Error description:', error)
 
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal server error" }, { status: 500 })
   }
 }
 

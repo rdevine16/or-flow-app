@@ -1,41 +1,63 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { env } from '@/lib/env'
+
+// ============================================
+// PUBLIC ROUTES (no auth required)
+// ============================================
+
+/** Routes that are fully public — no session check at all */
+const PUBLIC_ROUTES = [
+  '/auth/',       // Auth callbacks, password reset, etc.
+  '/invite/',     // Device rep signup flow
+  '/login',       // Login page
+  '/status/',     // Public case status pages
+]
+
+/**
+ * API routes that must be publicly accessible.
+ * All other /api/* routes require authentication at the middleware level.
+ */
+const PUBLIC_API_ROUTES = [
+  '/api/invite/accept',       // Invite acceptance (user doesn't have account yet)
+  '/api/create-device-rep',   // Device rep signup (user doesn't have account yet)
+  '/api/check-auth-status',   // Auth status check (returns 401 gracefully if not authed)
+]
+
+function isPublicRoute(pathname: string): boolean {
+  return PUBLIC_ROUTES.some(route => pathname.startsWith(route))
+}
+
+function isPublicApiRoute(pathname: string): boolean {
+  return PUBLIC_API_ROUTES.some(route => pathname.startsWith(route))
+}
+
+// ============================================
+// MIDDLEWARE
+// ============================================
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  // Allow auth routes to pass through without session check
-  // These routes handle their own authentication
-  if (pathname.startsWith('/auth/')) {
+  // Public routes pass through without any session check
+  if (isPublicRoute(pathname)) {
     return NextResponse.next()
   }
 
-  // Allow invite routes for device reps (they need to sign up)
-if (pathname.startsWith('/invite/')) {
-  return NextResponse.next()
-}
-  // Allow API routes to handle their own auth
-  if (pathname.startsWith('/api/')) {
-    return NextResponse.next()
-  }
-
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  // Set up Supabase client with cookie handling
+  let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           )
@@ -48,16 +70,41 @@ if (pathname.startsWith('/invite/')) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // If not logged in and trying to access protected routes, redirect to login
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  // ────────────────────────────────────────────
+  // API route authentication
+  // ────────────────────────────────────────────
+  if (pathname.startsWith('/api/')) {
+    // Public API routes skip auth
+    if (isPublicApiRoute(pathname)) {
+      return supabaseResponse
+    }
+
+    // All other API routes require authentication
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Authentication required', code: 'UNAUTHENTICATED' },
+        { status: 401 }
+      )
+    }
+
+    // Attach user ID as header for downstream use (optional convenience)
+    supabaseResponse.headers.set('x-user-id', user.id)
+    return supabaseResponse
+  }
+
+  // ────────────────────────────────────────────
+  // Page route authentication
+  // ────────────────────────────────────────────
+
+  // Not logged in → redirect to login
+  if (!user && !pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    // Preserve query params (for error messages etc)
     return NextResponse.redirect(url)
   }
 
-  // If logged in and trying to access login page, redirect to dashboard
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  // Logged in → redirect away from login
+  if (user && pathname.startsWith('/login')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

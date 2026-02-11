@@ -9,6 +9,10 @@ import { z } from 'zod'
 import { withErrorHandler, ValidationError } from '@/lib/errorHandling'
 import { validate } from '@/lib/validation/schemas'
 import { nowUTC } from '@/lib/dateFactory'
+import { env, serverEnv } from '@/lib/env'
+import { logger } from '@/lib/logger'
+
+const log = logger('api/create-device-rep')
 
 // Validation schema
 const createDeviceRepSchema = z.object({
@@ -29,8 +33,8 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   // Create admin client
   const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    serverEnv.SUPABASE_SERVICE_ROLE_KEY,
     {
       auth: {
         autoRefreshToken: false,
@@ -96,7 +100,7 @@ export const POST = withErrorHandler(async (request: NextRequest) => {
 
   if (inviteError) {
     // Log but don't fail - user is already created
-    console.error('Failed to update invite status:', inviteError)
+    log.error('Failed to update invite status:', inviteError)
   }
 
   return NextResponse.json({

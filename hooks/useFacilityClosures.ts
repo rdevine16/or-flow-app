@@ -3,6 +3,9 @@
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { facilityHolidayAudit, facilityClosureAudit } from '@/lib/audit-logger'
+import { logger } from '@/lib/logger'
+
+const log = logger('useFacilityClosures')
 import {
   FacilityHoliday,
   FacilityClosure,
@@ -47,7 +50,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch holidays'
       setError(message)
-      console.error('Error fetching holidays:', err)
+      log.error('Failed to fetch holidays', err)
       return []
     } finally {
       setLoading(false)
@@ -90,7 +93,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to create holiday'
         setError(message)
-        console.error('Error creating holiday:', err)
+        log.error('Failed to create holiday', err)
         return null
       } finally {
         setLoading(false)
@@ -144,7 +147,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to update holiday'
         setError(message)
-        console.error('Error updating holiday:', err)
+        log.error('Failed to update holiday', err)
         return false
       } finally {
         setLoading(false)
@@ -177,7 +180,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to delete holiday'
         setError(message)
-        console.error('Error deleting holiday:', err)
+        log.error('Failed to delete holiday', err)
         return false
       } finally {
         setLoading(false)
@@ -215,7 +218,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to toggle holiday'
         setError(message)
-        console.error('Error toggling holiday:', err)
+        log.error('Failed to toggle holiday', err)
         return false
       } finally {
         setLoading(false)
@@ -258,7 +261,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch closures'
         setError(message)
-        console.error('Error fetching closures:', err)
+        log.error('Failed to fetch closures', err)
         return []
       } finally {
         setLoading(false)
@@ -305,7 +308,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to create closure'
         setError(message)
-        console.error('Error creating closure:', err)
+        log.error('Failed to create closure', err)
         return null
       } finally {
         setLoading(false)
@@ -338,7 +341,7 @@ export function useFacilityClosures({ facilityId }: UseFacilityClosuresOptions) 
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to delete closure'
         setError(message)
-        console.error('Error deleting closure:', err)
+        log.error('Failed to delete closure', err)
         return false
       } finally {
         setLoading(false)

@@ -4,6 +4,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { PostgrestError } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('errorHandling')
 
 // ============================================
 // ERROR TYPES
@@ -14,7 +17,7 @@ export class AppError extends Error {
     message: string,
     public code: string,
     public statusCode: number = 500,
-    public details?: Record<string, any>
+    public details?: Record<string, unknown>
   ) {
     super(message)
     this.name = 'AppError'
@@ -22,7 +25,7 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, details?: Record<string, any>) {
+  constructor(message: string, details?: Record<string, unknown>) {
     super(message, 'VALIDATION_ERROR', 400, details)
     this.name = 'ValidationError'
   }
@@ -53,7 +56,7 @@ interface ErrorContext {
   userId?: string
   facilityId?: string
   action?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 export async function logError(
@@ -70,9 +73,9 @@ export async function logError(
 
   // Log to console
   if (process.env.NODE_ENV === 'development') {
-    console.error('❌ Error:', errorLog)
+    log.error('❌ Error:', errorLog)
   } else {
-    console.error('Error:', error.message, context)
+    log.error('Error:', error, context ? { ...context } : undefined)
   }
 }
 
@@ -123,9 +126,9 @@ export function handleSupabaseError(error: PostgrestError | null): never {
 // ============================================
 
 export function withErrorHandler<T>(
-  handler: (req: NextRequest, ...args: any[]) => Promise<T>
+  handler: (req: NextRequest, ...args: unknown[]) => Promise<T>
 ) {
-  return async (req: NextRequest, ...args: any[]) => {
+  return async (req: NextRequest, ...args: unknown[]) => {
     try {
       const result = await handler(req, ...args)
       return result

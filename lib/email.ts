@@ -7,6 +7,9 @@
 // 3. Verify your domain in Resend dashboard
 
 import { Resend } from 'resend'
+import { logger } from '@/lib/logger'
+
+const log = logger('email')
 
 // Initialize Resend client
 let resend: Resend | null = null
@@ -127,13 +130,13 @@ Questions? Reply to this email and we'll help you get started.
     })
 
     if (error) {
-      console.error('[EMAIL ERROR] Failed to send welcome email:', error)
+      log.error('[EMAIL ERROR] Failed to send welcome email:', error)
       return { success: false, error: error.message }
     }
 
     return { success: true, messageId: data?.id }
   } catch (err) {
-    console.error('[EMAIL ERROR] Exception sending welcome email:', err)
+    log.error('[EMAIL ERROR] Exception sending welcome email:', err)
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
   }
 }
@@ -330,13 +333,13 @@ If you didn't expect this invitation, you can safely ignore this email.
     })
 
     if (error) {
-      console.error('[EMAIL ERROR] Failed to send user invite email:', error)
+      log.error('[EMAIL ERROR] Failed to send user invite email:', error)
       return { success: false, error: error.message }
     }
 
     return { success: true, messageId: data?.id }
   } catch (err) {
-    console.error('[EMAIL ERROR] Exception sending user invite email:', err)
+    log.error('[EMAIL ERROR] Exception sending user invite email:', err)
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
   }
 }
@@ -423,13 +426,13 @@ Questions? Reply to this email and we'll be happy to help.
     })
 
     if (error) {
-      console.error('[EMAIL ERROR] Failed to send trial warning email:', error)
+      log.error('[EMAIL ERROR] Failed to send trial warning email:', error)
       return { success: false, error: error.message }
     }
 
     return { success: true, messageId: data?.id }
   } catch (err) {
-    console.error('[EMAIL ERROR] Exception sending trial warning email:', err)
+    log.error('[EMAIL ERROR] Exception sending trial warning email:', err)
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
   }
 }
@@ -502,13 +505,13 @@ If you didn't request a password reset, you can safely ignore this email.
     })
 
     if (error) {
-      console.error('[EMAIL ERROR] Failed to send password reset email:', error)
+      log.error('[EMAIL ERROR] Failed to send password reset email:', error)
       return { success: false, error: error.message }
     }
 
     return { success: true, messageId: data?.id }
   } catch (err) {
-    console.error('[EMAIL ERROR] Exception sending password reset email:', err)
+    log.error('[EMAIL ERROR] Exception sending password reset email:', err)
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' }
   }
 }
