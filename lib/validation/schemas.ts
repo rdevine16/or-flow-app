@@ -31,34 +31,33 @@ export const emailSchema = z.string().email('Invalid email address')
 // ============================================
 
 export const createCaseSchema = z.object({
-  patient_name: z.string()
-    .min(1, 'Patient name is required')
-    .max(100, 'Patient name too long'),
-  
-  patient_mrn: z.string()
-    .min(1, 'MRN is required')
-    .max(50, 'MRN too long'),
-  
-  surgeon_id: uuidSchema,
-  
-  scheduled_date: dateSchema,
-  
-  scheduled_time: timeSchema,
-  
-  room_id: uuidSchema,
-  
-  procedure_ids: z.array(uuidSchema)
-    .min(1, 'At least one procedure required'),
-  
-  anesthesia_type: z.enum(['general', 'mac', 'regional', 'local']).optional(),
-  
-  estimated_duration_minutes: z.number()
-    .int()
-    .min(1)
-    .max(1440)
-    .optional(),
-  
-  notes: z.string().max(1000).optional(),
+  case_number: z.string()
+    .min(1, 'Case number is required')
+    .max(50, 'Case number too long'),
+
+  scheduled_date: z.string()
+    .min(1, 'Scheduled date is required')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
+
+  start_time: z.string()
+    .min(1, 'Start time is required')
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/, 'Time must be HH:MM (24-hour)'),
+
+  surgeon_id: z.string().min(1, 'Surgeon is required'),
+
+  procedure_type_id: z.string().min(1, 'Procedure type is required'),
+
+  or_room_id: z.string().min(1, 'OR room is required'),
+
+  status_id: z.string().min(1, 'Status is required'),
+
+  anesthesiologist_id: z.string().optional().or(z.literal('')),
+
+  operative_side: z.enum(['left', 'right', 'bilateral', 'n/a', '']).optional(),
+
+  payer_id: z.string().optional().or(z.literal('')),
+
+  notes: z.string().max(1000, 'Notes must be under 1000 characters').optional().or(z.literal('')),
 })
 
 export type CreateCaseInput = z.infer<typeof createCaseSchema>
@@ -157,6 +156,24 @@ export function validatePartial<T extends Record<string, any>>(
 ): Partial<T> {
   const partialSchema = schema.partial()
   return validate(partialSchema, data) as Partial<T>
+}
+
+/**
+ * Validate a single field against a schema.
+ * Returns the error message string or null if valid.
+ */
+export function validateField(
+  schema: z.ZodObject<any>,
+  field: string,
+  value: unknown
+): string | null {
+  const fieldSchema = schema.shape[field]
+  if (!fieldSchema) return null
+
+  const result = fieldSchema.safeParse(value)
+  if (result.success) return null
+
+  return result.error.issues[0]?.message || 'Invalid value'
 }
 
 // ============================================

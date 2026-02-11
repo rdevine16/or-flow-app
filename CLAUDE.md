@@ -17,6 +17,7 @@ ORbit is a surgical analytics platform for ambulatory surgery centers (ASCs). It
 - **Hosting:** Vercel
 - **Styling:** Tailwind CSS
 - **Icons:** Heroicons
+- **Testing:** Vitest + React Testing Library
 - **iOS companion app:** SwiftUI (separate repo)
 
 ---
@@ -112,6 +113,63 @@ RLS policies enforce these at the database level. App code should also check rol
 
 ---
 
+## Coding Rules
+
+### Component Architecture
+- **Reuse existing components** — always search `components/` before creating anything new
+- **No inline component definitions** — every component gets its own file
+- **Use centralized hooks** — useToast, useAuth, etc. No one-off implementations
+- **Use shared components** — DateRangeSelector, SearchableDropdown, etc. Search before building
+- **Follow existing patterns** — find a similar feature in the codebase and match its approach
+
+### Code Quality
+- **TypeScript strict** — no `any` types. Define proper interfaces for all props, API responses, and database rows
+- **No magic strings** — use constants or enums for status names, role names, milestone names
+- **No hardcoded IDs** — always query for IDs dynamically (facility, status, role, milestone)
+- **Error handling on every async call** — try/catch with user-facing error messages via useToast
+- **Loading states on every data fetch** — never show stale or empty UI while data loads
+- **No console.log in production code** — use the error logger for real errors
+
+### UI/UX Standards
+- **Empty states** — every list and table needs a meaningful empty state, not just blank space
+- **Loading skeletons** — use skeleton placeholders, not spinners, for initial page loads
+- **Optimistic updates** — immediate UI feedback, roll back on error
+- **Confirmation dialogs** — any destructive action (delete, cancel, exclude) requires confirmation
+- **Inline validation** — validate fields on blur, not just on submit
+- **Accessible** — proper aria labels, keyboard navigation, focus management on modals
+- **Responsive** — must work on tablet-sized screens (OR coordinators use iPads)
+- **Consistent spacing** — follow existing Tailwind patterns, don't invent new spacing scales
+- **Toast notifications** — success for creates/updates, error for failures, never silent failures
+
+### Database & Security
+- **Every query filters by facility_id** — no exceptions
+- **RLS policies on every new table** — match the pattern of existing tables
+- **Soft delete over hard delete** — use is_active/deleted_at pattern (see existing tables)
+- **Audit trail** — created_at, created_by, updated_at on all user-facing tables
+- **Input sanitization** — never trust client input, validate server-side too
+- **No sensitive data in client logs** — no patient names, emails, or IDs in console output
+
+### Testing
+- **Write tests alongside every change** — not after
+- **Test the behavior, not the implementation** — test what the user sees and does
+- **No mocking core logic** — test real validation, real state changes
+- **Edge cases** — empty inputs, null values, concurrent operations, unauthorized access
+- **Name tests descriptively** — "should show error when required field is empty" not "test validation"
+
+### Performance
+- **Paginate large lists** — never load all cases/milestones at once
+- **Debounce search inputs** — 300ms minimum
+- **Memoize expensive calculations** — useMemo for computed values in analytics
+- **Lazy load routes** — don't bundle admin pages for staff users
+
+### Healthcare-Specific
+- **Never expose PHI in URLs** — no patient names or identifiers in query params
+- **Session timeout** — respect session management settings
+- **Data validation before analytics** — unvalidated cases must not appear in reports
+- **Timezone consistency** — all timestamps in timestamptz, display in facility's local time
+
+---
+
 ## Common Pitfalls
 
 1. **Always filter by `facility_id`** — queries without it return cross-facility data or hit RLS errors
@@ -131,6 +189,7 @@ RLS policies enforce these at the database level. App code should also check rol
 - Transitioning from custom toast implementations to centralized `useToast` provider
 - Flags and delays system is being integrated
 - Improvement plans feature connects low scores to actionable recommendations
+- Vitest + React Testing Library is now configured and running
 
 ---
 
@@ -142,6 +201,7 @@ RLS policies enforce these at the database level. App code should also check rol
 4. **Verify RLS** — any new table or query must respect facility scoping
 5. **Check downstream** — changes to case data can affect `case_completion_stats`, materialized views, and the scoring engine
 6. **Maintain backward compatibility** — existing data must not break during migrations
+7. **Run tests before committing** — `npx vitest run` to verify nothing is broken
 
 ---
 

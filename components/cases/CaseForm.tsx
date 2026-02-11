@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import SearchableDropdown from '../ui/SearchableDropdown'
@@ -17,6 +17,7 @@ import ImplantCompanySelect from '../cases/ImplantCompanySelect'
 import SurgeonPreferenceSelect from '../cases/SurgeonPreferenceSelect'
 import CaseComplexitySelector from '../cases/CaseComplexitySelector'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { createCaseSchema, validateField } from '@/lib/validation/schemas'
 
 interface CaseFormProps {
   caseId?: string
@@ -102,7 +103,67 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   // Store implant companies for audit logging
   const [implantCompanies, setImplantCompanies] = useState<{ id: string; name: string }[]>([])
 
-  // NEW: Compute effective rep required status
+  // Phase 1.4: Case number uniqueness check
+  const [caseNumberUnique, setCaseNumberUnique] = useState<boolean | null>(null) // null = not checked
+  const [checkingCaseNumber, setCheckingCaseNumber] = useState(false)
+  const caseNumberTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const checkCaseNumberUniqueness = useCallback((caseNumber: string) => {
+    // Clear any pending check
+    if (caseNumberTimerRef.current) {
+      clearTimeout(caseNumberTimerRef.current)
+    }
+
+    // Reset state if empty
+    if (!caseNumber.trim()) {
+      setCaseNumberUnique(null)
+      setCheckingCaseNumber(false)
+      return
+    }
+
+    setCheckingCaseNumber(true)
+    setCaseNumberUnique(null)
+
+    // Debounce 300ms
+    caseNumberTimerRef.current = setTimeout(async () => {
+      if (!userFacilityId) {
+        setCheckingCaseNumber(false)
+        return
+      }
+
+      const { data, error: queryError } = await supabase
+        .from('cases')
+        .select('id')
+        .eq('facility_id', userFacilityId)
+        .eq('case_number', caseNumber.trim())
+        .maybeSingle()
+
+      if (queryError) {
+        setCheckingCaseNumber(false)
+        setCaseNumberUnique(null)
+        return
+      }
+
+      // In edit mode, ignore the current case's own number
+      const isDuplicate = data !== null && (mode === 'create' || data.id !== caseId)
+      setCaseNumberUnique(!isDuplicate)
+      setCheckingCaseNumber(false)
+
+      if (isDuplicate) {
+        setFieldErrors(prev => ({ ...prev, case_number: 'This case number already exists at this facility' }))
+      } else {
+        setFieldErrors(prev => {
+          const next = { ...prev }
+          if (next.case_number === 'This case number already exists at this facility') {
+            delete next.case_number
+          }
+          return next
+        })
+      }
+    }, 300)
+  }, [userFacilityId, mode, caseId])
+
+  // Compute effective rep required status
   const selectedProcedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
   const procedureRequiresRep = selectedProcedure?.requires_rep ?? false
   const effectiveRepRequired = repRequiredOverride !== null ? repRequiredOverride : procedureRequiresRep
@@ -297,81 +358,37 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   }
 
   // ============================================
-  // Initialize milestones for a case
-  // Creates case_milestones entries with recorded_at = NULL
-  // for all enabled milestones in the procedure type.
-  // NOTE: Zero-milestone check is done in handleSubmit BEFORE
-  // the case is created — this function only runs post-insert.
+  // VALIDATION: Zod-based field + form validation
   // ============================================
-  const initializeCaseMilestones = async (caseId: string, procedureTypeId: string, facilityId: string) => {
-    const { data: procedureMilestones, error: pmError } = await supabase
-      .from('procedure_milestone_config')
-      .select('facility_milestone_id, display_order')
-      .eq('procedure_type_id', procedureTypeId)
-      .eq('facility_id', facilityId)
-      .eq('is_enabled', true)
-      .order('display_order')
 
-    if (pmError) {
-      showToast({
-        type: 'error',
-        title: 'Failed to Initialize Milestones',
-        message: pmError instanceof Error ? pmError.message : 'An unexpected error occurred',
-      })
-      return
+  // Validate the full form — returns a map of field → error message
+  const validateForm = (): Record<string, string> => {
+    const result = createCaseSchema.safeParse(formData)
+    if (result.success) return {}
+
+    const errors: Record<string, string> = {}
+    for (const issue of result.error.issues) {
+      const field = issue.path[0] as string
+      if (field && !errors[field]) {
+        errors[field] = issue.message
+      }
     }
-
-    // Should not happen (pre-checked in handleSubmit) but guard defensively
-    if (!procedureMilestones || procedureMilestones.length === 0) {
-      return
-    }
-
-    const caseMilestonesData = procedureMilestones.map(pm => ({
-      case_id: caseId,
-      facility_milestone_id: pm.facility_milestone_id,
-      recorded_at: null,
-      recorded_by: null,
-    }))
-
-    const { error: insertError } = await supabase
-      .from('case_milestones')
-      .insert(caseMilestonesData)
-
-    if (insertError) {
-      showToast({
-        type: 'error',
-        title: 'Milestone Initialization Failed',
-        message: `Could not create milestones: ${insertError.message}`,
-      })
-    }
+    return errors
   }
 
-  // ============================================
-  // VALIDATION: Enforce required fields before submit
-  // ============================================
-  const validateForm = (): Record<string, string> => {
-    const errors: Record<string, string> = {}
-
-    if (!formData.case_number.trim()) {
-      errors.case_number = 'Case number is required'
+  // Validate a single field on blur
+  const handleFieldBlur = (field: string) => {
+    const value = formData[field as keyof FormData]
+    const error = validateField(createCaseSchema, field, value)
+    if (error) {
+      setFieldErrors(prev => ({ ...prev, [field]: error }))
+    } else {
+      setFieldErrors(prev => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
     }
-    if (!formData.scheduled_date) {
-      errors.scheduled_date = 'Scheduled date is required'
-    }
-    if (!formData.start_time) {
-      errors.start_time = 'Start time is required'
-    }
-    if (!formData.surgeon_id) {
-      errors.surgeon_id = 'Surgeon is required'
-    }
-    if (!formData.procedure_type_id) {
-      errors.procedure_type_id = 'Procedure type is required'
-    }
-    if (!formData.or_room_id) {
-      errors.or_room_id = 'OR room is required'
-    }
-
-    return errors
   }
 
   // Clear a specific field error when the user changes that field
@@ -396,8 +413,14 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       return
     }
 
-    // Phase 0.2: Validate required fields
+    // Validate required fields via Zod schema
     const errors = validateForm()
+
+    // Phase 1.4: Block if case number is a known duplicate
+    if (caseNumberUnique === false) {
+      errors.case_number = 'This case number already exists at this facility'
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors)
       setError('Please fill in all required fields.')
@@ -465,21 +488,43 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       rep_required_override: repRequiredOverride, // NEW
     }
 
-    let result
+    let result: { data: { id: string } | null; error: { message: string } | null }
     let savedCaseId: string
 
     if (mode === 'create') {
-      result = await supabase.from('cases').insert(caseData).select().single()
-      
+      // Phase 1.1: Atomic case+milestone creation via RPC
+      const currentUser = (await supabase.auth.getUser()).data.user
+      const { data: rpcCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
+        p_case_number: formData.case_number,
+        p_scheduled_date: formData.scheduled_date,
+        p_start_time: formData.start_time,
+        p_or_room_id: formData.or_room_id || null,
+        p_procedure_type_id: formData.procedure_type_id || null,
+        p_status_id: formData.status_id,
+        p_surgeon_id: formData.surgeon_id || null,
+        p_facility_id: userFacilityId,
+        p_created_by: currentUser?.id || null,
+        p_anesthesiologist_id: formData.anesthesiologist_id || null,
+        p_operative_side: formData.operative_side || null,
+        p_payer_id: formData.payer_id || null,
+        p_notes: formData.notes || null,
+        p_rep_required_override: repRequiredOverride,
+      })
+
+      result = rpcError
+        ? { data: null, error: { message: rpcError.message } }
+        : { data: { id: rpcCaseId as string }, error: null }
+
       if (!result.error && result.data) {
         savedCaseId = result.data.id
         const procedure = procedureTypes.find(p => p.id === formData.procedure_type_id)
-        
+
         await caseAudit.created(supabase, {
-          id: result.data.id,
+          id: savedCaseId,
           case_number: formData.case_number,
           procedure_name: procedure?.name,
         })
+
         // Save case complexities
         if (selectedComplexityIds.length > 0) {
           await supabase.from('case_complexities').insert(
@@ -488,14 +533,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
               complexity_id: complexityId,
             }))
           )
-        }
-        // ============================================
-        // NEW: Initialize milestones for this case
-        // This creates case_milestones with recorded_at = NULL
-        // so we have a snapshot of expected milestones at creation time
-        // ============================================
-        if (formData.procedure_type_id) {
-          await initializeCaseMilestones(savedCaseId, formData.procedure_type_id, userFacilityId)
         }
 
         // Save implant companies
@@ -522,7 +559,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             }
           }
 
-          // NEW: If rep is required, also create case_device_companies entries for SPD tracking
+          // If rep is required, also create case_device_companies entries for SPD tracking
           if (effectiveRepRequired) {
             await supabase.from('case_device_companies').insert(
               selectedCompanyIds.map(companyId => ({
@@ -540,7 +577,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                   case_id: savedCaseId,
                   implant_company_id: companyId,
                   activity_type: 'company_assigned',
-                  actor_id: (await supabase.auth.getUser()).data.user?.id,
+                  actor_id: currentUser?.id,
                   actor_type: 'facility_staff',
                   message: `${company.name} assigned to case`,
                   metadata: { company_name: company.name },
@@ -775,35 +812,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* Surgeon Preference Quick Fill - Only show in create mode */}
-      {mode === 'create' && formData.surgeon_id && userFacilityId && (
-        <SurgeonPreferenceSelect
-          surgeonId={formData.surgeon_id}
-          facilityId={userFacilityId}
-          onSelect={handlePreferenceSelect}
-        />
-      )}
-
-      {/* Case Number & Date/Time Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Case Number <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.case_number}
-            onChange={(e) => {
-              setFormData({ ...formData, case_number: e.target.value })
-              clearFieldError('case_number')
-            }}
-            className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.case_number ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
-            placeholder="e.g., C-2025-001"
-          />
-          {fieldErrors.case_number && (
-            <p className="text-red-600 text-xs mt-1">{fieldErrors.case_number}</p>
-          )}
-        </div>
+      {/* 1. Date & Time */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Scheduled Date <span className="text-red-500">*</span>
@@ -815,6 +825,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
               setFormData({ ...formData, scheduled_date: e.target.value })
               clearFieldError('scheduled_date')
             }}
+            onBlur={() => handleFieldBlur('scheduled_date')}
             className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.scheduled_date ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
           />
           {fieldErrors.scheduled_date && (
@@ -832,6 +843,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
               setFormData({ ...formData, start_time: e.target.value })
               clearFieldError('start_time')
             }}
+            onBlur={() => handleFieldBlur('start_time')}
             className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.start_time ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
           />
           {fieldErrors.start_time && (
@@ -840,33 +852,29 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       </div>
 
-      {/* Room & Surgeon */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <SearchableDropdown
-          label="OR Room *"
-          placeholder="Select Room"
-          value={formData.or_room_id}
-          onChange={(id) => {
-            setFormData({ ...formData, or_room_id: id })
-            clearFieldError('or_room_id')
-          }}
-          options={orRooms.map(r => ({ id: r.id, label: r.name }))}
-          error={fieldErrors.or_room_id}
-        />
-        <SearchableDropdown
-          label="Surgeon *"
-          placeholder="Select Surgeon"
-          value={formData.surgeon_id}
-          onChange={(id) => {
-            setFormData({ ...formData, surgeon_id: id })
-            clearFieldError('surgeon_id')
-          }}
-          options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
-          error={fieldErrors.surgeon_id}
-        />
-      </div>
+      {/* 2. Surgeon — with preference quick-fill below */}
+      <SearchableDropdown
+        label="Surgeon *"
+        placeholder="Select Surgeon"
+        value={formData.surgeon_id}
+        onChange={(id) => {
+          setFormData({ ...formData, surgeon_id: id })
+          clearFieldError('surgeon_id')
+        }}
+        options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
+        error={fieldErrors.surgeon_id}
+      />
 
-      {/* Procedure & Operative Side */}
+      {/* Surgeon Preference Quick Fill - Only show in create mode after surgeon selected */}
+      {mode === 'create' && formData.surgeon_id && userFacilityId && (
+        <SurgeonPreferenceSelect
+          surgeonId={formData.surgeon_id}
+          facilityId={userFacilityId}
+          onSelect={handlePreferenceSelect}
+        />
+      )}
+
+      {/* 3. Procedure & Operative Side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <SearchableDropdown
@@ -883,7 +891,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             error={fieldErrors.procedure_type_id}
           />
         </div>
-        {/* Operative Side */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Operative Side
@@ -903,7 +910,60 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       </div>
 
-      {/* NEW: Device Rep & Implant Companies Section */}
+      {/* 4. Room */}
+      <SearchableDropdown
+        label="OR Room *"
+        placeholder="Select Room"
+        value={formData.or_room_id}
+        onChange={(id) => {
+          setFormData({ ...formData, or_room_id: id })
+          clearFieldError('or_room_id')
+        }}
+        options={orRooms.map(r => ({ id: r.id, label: r.name }))}
+        error={fieldErrors.or_room_id}
+      />
+
+      {/* 5. Case Number — with real-time uniqueness check */}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Case Number <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            value={formData.case_number}
+            onChange={(e) => {
+              setFormData({ ...formData, case_number: e.target.value })
+              clearFieldError('case_number')
+              checkCaseNumberUniqueness(e.target.value)
+            }}
+            onBlur={() => handleFieldBlur('case_number')}
+            className={`w-full px-4 py-3 pr-10 rounded-xl border ${fieldErrors.case_number ? 'border-red-400 ring-2 ring-red-500/20' : caseNumberUnique === true ? 'border-green-400 ring-2 ring-green-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
+            placeholder="e.g., C-2025-001"
+          />
+          {/* Uniqueness indicator */}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+            {checkingCaseNumber && (
+              <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            )}
+            {!checkingCaseNumber && caseNumberUnique === true && !fieldErrors.case_number && (
+              <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+            {!checkingCaseNumber && caseNumberUnique === false && (
+              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
+          </div>
+        </div>
+        {fieldErrors.case_number && (
+          <p className="text-red-600 text-xs mt-1">{fieldErrors.case_number}</p>
+        )}
+      </div>
+
+      {/* 6. Device Rep & Implant Companies Section */}
       {userFacilityId && (
         <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-4">
           <div className="flex items-center justify-between">
@@ -915,7 +975,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             </div>
           </div>
 
-          {/* Rep Required Toggle & Implant Companies side by side */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Rep Required Toggle */}
             <div className="md:col-span-1">
@@ -940,7 +999,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                       Override
                     </span>
                   )}
-                  {/* Toggle indicator */}
                   <div className={`w-10 h-6 rounded-full transition-colors ${effectiveRepRequired ? 'bg-blue-500' : 'bg-slate-300'}`}>
                     <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform mt-1 ${effectiveRepRequired ? 'translate-x-5 ml-0' : 'translate-x-1'}`} />
                   </div>
@@ -974,7 +1032,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
                 onChange={setSelectedCompanyIds}
               />
               <p className="text-xs text-slate-500 mt-1.5">
-                {effectiveRepRequired 
+                {effectiveRepRequired
                   ? 'Select vendors providing implants. They will be notified to confirm tray requirements.'
                   : 'Select all vendors providing implants for this case (optional)'}
               </p>
@@ -995,7 +1053,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
       )}
 
-      {/* Anesthesiologist & Payer */}
+      {/* 7. Anesthesiologist & Payer */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SearchableDropdown
           label="Anesthesiologist"
@@ -1004,8 +1062,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           onChange={(id) => setFormData({ ...formData, anesthesiologist_id: id })}
           options={anesthesiologists.map(a => ({ id: a.id, label: `Dr. ${a.first_name} ${a.last_name}` }))}
         />
-        
-        {/* Payer Selection */}
+
         {payers.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1043,19 +1100,20 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
           }))}
         />
       )}
-      {/* Case Complexities */}
+
+      {/* 8. Case Complexities */}
       {userFacilityId && (
         <CaseComplexitySelector
           facilityId={userFacilityId}
           selectedIds={selectedComplexityIds}
           onChange={setSelectedComplexityIds}
-procedureCategoryId={
-  procedureTypes.find(p => p.id === formData.procedure_type_id)?.procedure_category_id ?? undefined
-
+          procedureCategoryId={
+            procedureTypes.find(p => p.id === formData.procedure_type_id)?.procedure_category_id ?? undefined
           }
         />
       )}
-      {/* Notes */}
+
+      {/* 9. Notes */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">Notes</label>
         <textarea

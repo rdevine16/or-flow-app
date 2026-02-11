@@ -23,6 +23,7 @@ export interface CaseListItem {
   surgeon_id: string | null
   facility_id: string
   created_at: string
+  created_by: string | null
   surgeon?: { first_name: string; last_name: string } | null
   or_room?: { name: string } | null
   case_status?: { name: string; color: string } | null
@@ -105,7 +106,8 @@ export interface CaseForAnalytics {
 
 const CASE_LIST_SELECT = `
   id, case_number, patient_name, patient_mrn,
-  scheduled_date, start_time, status, or_room_id, surgeon_id, facility_id, created_at,
+  scheduled_date, start_time, status, or_room_id, surgeon_id, facility_id,
+  created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name, color)
