@@ -325,7 +325,7 @@ export default function AdminCancellationReasonsPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
             </div>
-          ) : reasons.length === 0 ? (
+          ) : (reasons || []).length === 0 ? (
             <div className="px-6 py-12 text-center">
               <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Ban className="w-6 h-6 text-slate-400" />

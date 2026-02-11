@@ -212,7 +212,7 @@ export default function FacilitiesListPage() {
 
   return (
     <DashboardLayout>
-      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <ErrorBanner message={error} />
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -381,7 +381,7 @@ export default function FacilitiesListPage() {
 
       {/* Summary Footer */}
       <div className="mt-4 text-sm text-slate-500 text-center">
-        Showing {filteredFacilities.length} of {facilities.length} facilities
+        Showing {filteredFacilities.length} of {(facilities || []).length} facilities
       </div>
 
       {/* Delete Confirmation Modal */}
