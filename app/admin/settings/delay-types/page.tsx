@@ -8,6 +8,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { delayTypeAudit } from '@/lib/audit-logger'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -32,9 +33,6 @@ export default function AdminDelayTypesPage() {
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
-  const [delayTypes, setDelayTypes] = useState<DelayType[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', delayType: null })
   const [formData, setFormData] = useState({ name: '', display_name: '', display_order: 0 })
   const [saving, setSaving] = useState(false)
@@ -47,25 +45,21 @@ export default function AdminDelayTypesPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  useEffect(() => {
-    if (isGlobalAdmin) {
-      fetchData()
-    }
-  }, [isGlobalAdmin])
-
-  const fetchData = async () => {
-    const { data } = await supabase
-      .from('delay_types')
-      .select('*')
-      .is('facility_id', null)
-      .order('display_order')
-
-    setDelayTypes(data || [])
-    setLoading(false)
-  }
+  const { data: delayTypes, loading, error, refetch: refetchData } = useSupabaseQuery<DelayType[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('delay_types')
+        .select('*')
+        .is('facility_id', null)
+        .order('display_order')
+      if (error) throw error
+      return data || []
+    },
+    { enabled: isGlobalAdmin }
+  )
 
   const openAddModal = () => {
-    const maxOrder = Math.max(...delayTypes.map(dt => dt.display_order), 0)
+    const maxOrder = Math.max(...(delayTypes || []).map(dt => dt.display_order), 0)
     setFormData({ name: '', display_name: '', display_order: maxOrder + 1 })
     setModal({ isOpen: true, mode: 'add', delayType: null })
   }
@@ -103,7 +97,7 @@ export default function AdminDelayTypesPage() {
         .single()
 
       if (!error && data) {
-        setDelayTypes([...delayTypes, data].sort((a, b) => a.display_order - b.display_order))
+        refetchData()
         closeModal()
         await delayTypeAudit.adminCreated(supabase, data.display_name, data.id)
       }
@@ -122,7 +116,7 @@ export default function AdminDelayTypesPage() {
         .single()
 
       if (!error && data) {
-        setDelayTypes(delayTypes.map(dt => dt.id === data.id ? data : dt).sort((a, b) => a.display_order - b.display_order))
+        refetchData()
         closeModal()
         await delayTypeAudit.adminUpdated(supabase, data.id, oldName, data.display_name)
       }
@@ -132,7 +126,7 @@ export default function AdminDelayTypesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const delayType = delayTypes.find(dt => dt.id === id)
+    const delayType = (delayTypes || []).find(dt => dt.id === id)
     if (!delayType) return
 
     const { error } = await supabase
@@ -141,7 +135,7 @@ export default function AdminDelayTypesPage() {
       .eq('id', id)
 
     if (!error) {
-      setDelayTypes(delayTypes.filter(dt => dt.id !== id))
+      refetchData()
       setDeleteTarget(null)
       await delayTypeAudit.adminDeleted(supabase, delayType.display_name, id)
     }
@@ -151,7 +145,7 @@ export default function AdminDelayTypesPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
@@ -188,13 +182,13 @@ export default function AdminDelayTypesPage() {
           {/* Stats Bar */}
           <div className="flex items-center gap-4 mb-4">
             <span className="text-sm text-slate-500">
-              {delayTypes.length} delay type{delayTypes.length !== 1 ? 's' : ''}
+              {(delayTypes || []).length} delay type{(delayTypes || []).length !== 1 ? 's' : ''}
             </span>
           </div>
 
           {/* Table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            {delayTypes.length === 0 ? (
+            {(delayTypes || []).length === 0 ? (
               <div className="text-center py-16 text-slate-500">
                 <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No delay types defined</p>
@@ -216,7 +210,7 @@ export default function AdminDelayTypesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {delayTypes.map((delayType) => (
+                  {(delayTypes || []).map((delayType) => (
                     <tr key={delayType.id} className="group hover:bg-slate-50 transition-colors">
                       {/* Order */}
                       <td className="px-4 py-3">

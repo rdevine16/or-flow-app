@@ -9,6 +9,7 @@ import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -33,23 +34,16 @@ export default function AdminImplantCompaniesPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
 
-  const [companies, setCompanies] = useState<ImplantCompany[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ isOpen: false, mode: 'add', company: null })
   const [formData, setFormData] = useState({ name: '' })
   const [saving, setSaving] = useState(false)
   const [archiveTarget, setArchiveTarget] = useState<ImplantCompany | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-// Archive toggle
   const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
-
-  const { showToast } = useToast()
-
-  // Current user for deleted_by tracking
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Redirect non-admins
   useEffect(() => {
@@ -58,41 +52,35 @@ export default function AdminImplantCompaniesPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-useEffect(() => {
-    if (isGlobalAdmin) {
-      fetchData()
-    }
-  }, [isGlobalAdmin, showArchived])
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    companies: ImplantCompany[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let query = sb.from('implant_companies').select('*').is('facility_id', null)
 
-const fetchData = async () => {
-    // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
 
-    let query = supabase
-      .from('implant_companies')
-      .select('*')
-      .is('facility_id', null)
+      const { data, error } = await query.order('name')
+      if (error) throw error
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
-    }
+      const { count } = await sb
+        .from('implant_companies')
+        .select('id', { count: 'exact', head: true })
+        .is('facility_id', null)
+        .not('deleted_at', 'is', null)
 
-    const { data } = await query.order('name')
-    setCompanies(data || [])
+      return { companies: data || [], archivedCount: count || 0 }
+    },
+    { deps: [showArchived], enabled: isGlobalAdmin }
+  )
 
-    // Get archived count
-    const { count } = await supabase
-      .from('implant_companies')
-      .select('id', { count: 'exact', head: true })
-      .is('facility_id', null)
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
-  }
+  const companies = queryData?.companies || []
+  const archivedCount = queryData?.archivedCount || 0
 
   const openAddModal = () => {
     setFormData({ name: '' })
@@ -125,7 +113,7 @@ const fetchData = async () => {
         .single()
 
       if (!error && data) {
-        setCompanies([...companies, data].sort((a, b) => a.name.localeCompare(b.name)))
+        refetchData()
         closeModal()
         await genericAuditLog(supabase, 'admin.implant_company_created', {
           targetType: 'implant_company',
@@ -147,7 +135,7 @@ const fetchData = async () => {
         .single()
 
       if (!error && data) {
-        setCompanies(companies.map(c => c.id === data.id ? data : c).sort((a, b) => a.name.localeCompare(b.name)))
+        refetchData()
         closeModal()
         await genericAuditLog(supabase, 'admin.implant_company_updated', {
           targetType: 'implant_company',
@@ -175,8 +163,7 @@ const handleDelete = async (id: string) => {
       .eq('id', id)
 
     if (!error) {
-      setCompanies(companies.filter(c => c.id !== id))
-      setArchivedCount(prev => prev + 1)
+      refetchData()
       setArchiveTarget(null)
       showToast({ type: 'success', title: `"${company.name}" moved to archive` })
       await genericAuditLog(supabase, 'admin.implant_company_deleted', {
@@ -200,8 +187,7 @@ const handleDelete = async (id: string) => {
       .eq('id', id)
 
     if (!error) {
-      setCompanies(companies.filter(c => c.id !== id))
-      setArchivedCount(prev => prev - 1)
+      refetchData()
       showToast({ type: 'success', title: `"${company.name}" restored successfully` })
       await genericAuditLog(supabase, 'admin.implant_company_restored', {
         targetType: 'implant_company',
@@ -219,7 +205,7 @@ const handleDelete = async (id: string) => {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>

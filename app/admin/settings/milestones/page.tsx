@@ -1,16 +1,18 @@
 // app/admin/settings/milestones/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Archive, Check, Clock, Info, Link, Pencil, Plus, X } from 'lucide-react'
+import { Archive, Check, Clock, Info, Link, Pencil, Plus } from 'lucide-react'
 
 
 interface MilestoneType {
@@ -27,9 +29,10 @@ interface MilestoneType {
 
 export default function AdminMilestonesSettingsPage() {
   const supabase = createClient()
-  const [milestones, setMilestones] = useState<MilestoneType[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { showToast } = useToast()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+
   const [saving, setSaving] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
   
@@ -62,61 +65,42 @@ export default function AdminMilestonesSettingsPage() {
   const [newDisplayName, setNewDisplayName] = useState('')
   const [editDisplayName, setEditDisplayName] = useState('')
   const [selectedPairId, setSelectedPairId] = useState<string>('')
-// Archive state
   const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    milestones: MilestoneType[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let query = sb
+        .from('milestone_types')
+        .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
 
-  // Current user
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
 
-  // Get current user ID on mount
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
-    }
-    getCurrentUser()
-  }, [])
+      query = query.order('display_order')
+      const { data, error } = await query
+      if (error) throw error
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-useEffect(() => {
-    fetchMilestones()
-  }, [showArchived])
+      const { count } = await sb
+        .from('milestone_types')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
 
-const fetchMilestones = async () => {
-    setLoading(true)
-    
-    let query = supabase
-      .from('milestone_types')
-      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
+      return {
+        milestones: data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [],
+        archivedCount: count || 0,
+      }
+    },
+    { deps: [showArchived] }
+  )
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
-    }
-
-    query = query.order('display_order')
-
-    const { data } = await query
-    
-    setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
-
-    // Get archived count
-    const { count } = await supabase
-      .from('milestone_types')
-      .select('id', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
-  }
+  const milestones = queryData?.milestones || []
+  const archivedCount = queryData?.archivedCount || 0
 
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -155,7 +139,7 @@ const fetchMilestones = async () => {
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
       await propagateToFacilities(data)
       
-      setMilestones([...milestones, { ...data, pair_with_id: null, pair_position: null, is_active: true }])
+      refetchData()
       setNewName('')
       setNewDisplayName('')
       setShowAddModal(false)
@@ -205,11 +189,7 @@ const fetchMilestones = async () => {
         .update({ display_name: editDisplayName.trim() })
         .eq('source_milestone_type_id', editingMilestone.id)
 
-      setMilestones(milestones.map(m => 
-        m.id === editingMilestone.id 
-          ? { ...m, display_name: editDisplayName.trim() }
-          : m
-      ))
+      refetchData()
       setShowEditModal(false)
       setEditingMilestone(null)
     }
@@ -243,9 +223,7 @@ const fetchMilestones = async () => {
 
         if (!error) {
           
-          setMilestones(milestones.map(m => 
-            m.id === milestone.id ? { ...m, is_active: newIsActive } : m
-          ))
+          refetchData()
         }
         
         setSaving(false)
@@ -305,18 +283,7 @@ const fetchMilestones = async () => {
     )
 
     // Update local state
-    setMilestones(milestones.map(m => {
-      if (m.id === pairingMilestone.id) {
-        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
-      }
-      if (m.id === selectedPairId) {
-        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
-      }
-      if (m.id === pairingMilestone.pair_with_id) {
-        return { ...m, pair_with_id: null, pair_position: null }
-      }
-      return m
-    }))
+    refetchData()
 
     setShowPairModal(false)
     setPairingMilestone(null)
@@ -342,12 +309,7 @@ const fetchMilestones = async () => {
 
     await milestoneTypeAudit.unlinked(supabase, milestone.display_name, partnerName || 'Unknown')
 
-    setMilestones(milestones.map(m => {
-      if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-        return { ...m, pair_with_id: null, pair_position: null }
-      }
-      return m
-    }))
+    refetchData()
 
     setShowPairModal(false)
     setPairingMilestone(null)
@@ -394,9 +356,8 @@ const fetchMilestones = async () => {
 
           if (!error) {
             await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
-            setMilestones(milestones.filter(m => m.id !== milestone.id))
-            setArchivedCount(prev => prev + 1)
-            showToast(`"${milestone.display_name}" moved to archive`, 'success')
+            refetchData()
+            showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
           }
 
           closeConfirmModal()
@@ -428,9 +389,8 @@ const fetchMilestones = async () => {
 
         if (!error) {
           await milestoneTypeAudit.deleted(supabase, milestone.display_name, milestone.id)
-          setMilestones(milestones.filter(m => m.id !== milestone.id))
-          setArchivedCount(prev => prev + 1)
-          showToast(`"${milestone.display_name}" moved to archive`, 'success')
+          refetchData()
+          showToast({ type: 'success', title: `"${milestone.display_name}" moved to archive` })
         }
 
         closeConfirmModal()
@@ -453,11 +413,10 @@ const fetchMilestones = async () => {
 
     if (!error) {
       await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
-      setMilestones(milestones.filter(m => m.id !== milestone.id))
-      setArchivedCount(prev => prev - 1)
-      showToast(`"${milestone.display_name}" restored successfully`, 'success')
+      refetchData()
+      showToast({ type: 'success', title: `"${milestone.display_name}" restored successfully` })
     } else {
-      showToast('Failed to restore milestone', 'error')
+      showToast({ type: 'error', title: 'Failed to restore milestone' })
     }
 
     setSaving(false)
@@ -473,7 +432,7 @@ const fetchMilestones = async () => {
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
 <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-start justify-between mb-6">
@@ -879,19 +838,6 @@ const fetchMilestones = async () => {
         confirmText={confirmModal.confirmLabel}
         loading={saving}
       />
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <Check className="w-5 h-5" />
-          ) : (
-            <X className="w-5 h-5" />
-          )}
-          {toast.message}
-        </div>
-      )}
     </DashboardLayout>
   )
 }

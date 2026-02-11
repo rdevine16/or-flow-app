@@ -12,6 +12,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { adminAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -66,31 +67,17 @@ export default function DefaultProceduresPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
 
-  const [procedures, setProcedures] = useState<DefaultProcedure[]>([])
-  const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
-  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
-  const [milestoneTypes, setMilestoneTypes] = useState<MilestoneType[]>([])
-  const [procedureMilestones, setProcedureMilestones] = useState<DefaultProcedureMilestone[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-
-  // Expanded procedure for milestone config
   const [expandedProcedureId, setExpandedProcedureId] = useState<string | null>(null)
-
-  // Modal state
   const [showModal, setShowModal] = useState(false)
   const [editingProcedure, setEditingProcedure] = useState<DefaultProcedure | null>(null)
-
-  // Form state
   const [formName, setFormName] = useState('')
   const [formBodyRegion, setFormBodyRegion] = useState<string>('')
   const [formProcedureCategory, setFormProcedureCategory] = useState<string>('')
   const [formImplantCategory, setFormImplantCategory] = useState<string>('')
   const [formIsActive, setFormIsActive] = useState(true)
-  const { showToast } = useToast()
-  // Filter state
   const [filterRegion, setFilterRegion] = useState<string>('all')
   const [filterActive, setFilterActive] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -102,53 +89,40 @@ export default function DefaultProceduresPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  // Fetch data
-  useEffect(() => {
-    if (!isGlobalAdmin) return
-    fetchData()
-  }, [isGlobalAdmin])
-
-  const fetchData = async () => {
-    setLoading(true)
-
-    try {
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    procedures: DefaultProcedure[]
+    bodyRegions: BodyRegion[]
+    procedureCategories: ProcedureCategory[]
+    milestoneTypes: MilestoneType[]
+    procedureMilestones: DefaultProcedureMilestone[]
+  }>(
+    async (sb) => {
       const [proceduresRes, regionsRes, categoriesRes, milestonesRes, procMilestonesRes] = await Promise.all([
-        supabase
-          .from('procedure_type_templates')
+        sb.from('procedure_type_templates')
           .select('*, body_region:body_regions(name, display_name), procedure_category:procedure_categories(name, display_name)')
           .order('name'),
-        supabase
-          .from('body_regions')
-          .select('id, name, display_name')
-          .order('display_name'),
-        supabase
-          .from('procedure_categories')
-          .select('id, name, display_name, body_region_id')
-          .order('display_name'),
-        supabase
-          .from('milestone_types')
-          .select('id, name, display_name, display_order, pair_position')
-          .order('display_order'),
-        supabase
-          .from('procedure_milestone_templates')
-          .select('*')
+        sb.from('body_regions').select('id, name, display_name').order('display_name'),
+        sb.from('procedure_categories').select('id, name, display_name, body_region_id').order('display_name'),
+        sb.from('milestone_types').select('id, name, display_name, display_order, pair_position').order('display_order'),
+        sb.from('procedure_milestone_templates').select('*'),
       ])
 
-      if (proceduresRes.data) setProcedures(proceduresRes.data)
-      if (regionsRes.data) setBodyRegions(regionsRes.data)
-      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
-      if (milestonesRes.data) setMilestoneTypes(milestonesRes.data)
-      if (procMilestonesRes.data) setProcedureMilestones(procMilestonesRes.data)
-    } catch (error) {
-      showToast({
-  type: 'error',
-  title: 'Error fetching data:',
-  message: error instanceof Error ? error.message : 'Error fetching data:'
-})
-    } finally {
-      setLoading(false)
-    }
-  }
+      return {
+        procedures: proceduresRes.data || [],
+        bodyRegions: regionsRes.data || [],
+        procedureCategories: categoriesRes.data || [],
+        milestoneTypes: milestonesRes.data || [],
+        procedureMilestones: procMilestonesRes.data || [],
+      }
+    },
+    { enabled: isGlobalAdmin }
+  )
+
+  const procedures = queryData?.procedures || []
+  const bodyRegions = queryData?.bodyRegions || []
+  const procedureCategories = queryData?.procedureCategories || []
+  const milestoneTypes = queryData?.milestoneTypes || []
+  const procedureMilestones = queryData?.procedureMilestones || []
 
   const handleNew = () => {
     setEditingProcedure(null)
@@ -201,20 +175,7 @@ export default function DefaultProceduresPage() {
           is_active: formIsActive,
         })
 
-        setProcedures(procedures.map(p => 
-          p.id === editingProcedure.id 
-            ? { 
-                ...p, 
-                ...data,
-                body_region: formBodyRegion 
-                  ? bodyRegions.find(r => r.id === formBodyRegion) || null
-                  : null,
-                procedure_category: formProcedureCategory
-                  ? procedureCategories.find(c => c.id === formProcedureCategory) || null
-                  : null
-              }
-            : p
-        ))
+        refetchData()
       } else {
         const { data: newProcedure, error } = await supabase
           .from('procedure_type_templates')
@@ -226,7 +187,7 @@ export default function DefaultProceduresPage() {
 
         await adminAudit.defaultProcedureCreated(supabase, formName.trim(), newProcedure.id)
 
-        setProcedures([...procedures, newProcedure])
+        refetchData()
       }
 
       setShowModal(false)
@@ -258,7 +219,7 @@ export default function DefaultProceduresPage() {
 
       await adminAudit.defaultProcedureDeleted(supabase, procedure.name, procedure.id)
 
-      setProcedures(procedures.filter(p => p.id !== procedure.id))
+      refetchData()
     } catch (error) {
       showToast({
   type: 'error',
@@ -283,9 +244,7 @@ export default function DefaultProceduresPage() {
 
       if (error) throw error
 
-      setProcedures(procedures.map(p =>
-        p.id === procedure.id ? { ...p, is_active: !p.is_active } : p
-      ))
+        refetchData()
     } catch (error) {
       showToast({
   type: 'error',
@@ -322,7 +281,7 @@ export default function DefaultProceduresPage() {
           .delete()
           .eq('id', existing.id)
         
-        setProcedureMilestones(procedureMilestones.filter(pm => pm.id !== existing.id))
+        refetchData()
       } else {
         const { data, error } = await supabase
           .from('procedure_milestone_templates')
@@ -331,7 +290,7 @@ export default function DefaultProceduresPage() {
           .single()
 
         if (!error && data) {
-          setProcedureMilestones([...procedureMilestones, data])
+          refetchData()
         }
       }
     } catch (error) {
@@ -369,9 +328,7 @@ export default function DefaultProceduresPage() {
           await supabase.from('procedure_milestone_templates').delete().eq('id', pm.id)
         }
         
-        setProcedureMilestones(procedureMilestones.filter(
-          pm => !toDelete.some(d => d.id === pm.id)
-        ))
+        refetchData()
       } else {
         const toInsert = [
           { procedure_type_template_id: procedureId, milestone_type_id: startMilestoneId }
@@ -386,7 +343,7 @@ export default function DefaultProceduresPage() {
           .select()
 
         if (!error && data) {
-          setProcedureMilestones([...procedureMilestones, ...data])
+          refetchData()
         }
       }
     } catch (error) {
@@ -419,7 +376,7 @@ export default function DefaultProceduresPage() {
           .select()
 
         if (!error && data) {
-          setProcedureMilestones([...procedureMilestones, ...data])
+          refetchData()
         }
       }
     } catch (error) {
@@ -443,7 +400,7 @@ export default function DefaultProceduresPage() {
         await supabase.from('procedure_milestone_templates').delete().eq('id', pm.id)
       }
 
-      setProcedureMilestones(procedureMilestones.filter(pm => pm.procedure_type_template_id !== procedureId))
+      refetchData()
     } catch (error) {
       showToast({
   type: 'error',
@@ -476,7 +433,7 @@ export default function DefaultProceduresPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>

@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Ban, CheckCircle2, ChevronRight, ClipboardCheck, Info, PenLine, Plus, Trash2, X } from 'lucide-react'
@@ -376,15 +377,12 @@ export default function ChecklistTemplatesPage() {
   const supabase = createClient()
   const { showToast } = useToast()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
 
-  const [fields, setFields] = useState<ChecklistFieldTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [editingField, setEditingField] = useState<ChecklistFieldTemplate | null>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showInactive, setShowInactive] = useState(false)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Redirect non-global admins
   useEffect(() => {
@@ -393,23 +391,9 @@ export default function ChecklistTemplatesPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  // Get current user ID
-  useEffect(() => {
-    const getUserId = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setCurrentUserId(user.id)
-    }
-    getUserId()
-  }, [supabase])
-
-  // Fetch templates
-  useEffect(() => {
-    if (userLoading || !isGlobalAdmin) return
-
-    const fetchFields = async () => {
-      setLoading(true)
-
-      let query = supabase
+  const { data: fields, loading, error, refetch: refetchData } = useSupabaseQuery<ChecklistFieldTemplate[]>(
+    async (sb) => {
+      let query = sb
         .from('preop_checklist_field_templates')
         .select('*')
         .is('deleted_at', null)
@@ -420,22 +404,11 @@ export default function ChecklistTemplatesPage() {
       }
 
       const { data, error } = await query
-
-      if (error) {
-        showToast({
-          type: 'error',
-          title: 'Failed to Load Templates',
-          message: error.message || 'An unexpected error occurred'
-        })
-      } else {
-        setFields(data || [])
-      }
-
-      setLoading(false)
-    }
-
-    fetchFields()
-  }, [isGlobalAdmin, userLoading, supabase, showInactive])
+      if (error) throw error
+      return data || []
+    },
+    { deps: [showInactive], enabled: !userLoading && isGlobalAdmin }
+  )
 
   // Save field (create or update)
   const handleSaveField = async (fieldData: Partial<ChecklistFieldTemplate>) => {
@@ -443,7 +416,7 @@ export default function ChecklistTemplatesPage() {
       // Create new template
       const newField = {
         ...fieldData,
-        display_order: fields.length + 1,
+        display_order: (fields || []).length + 1,
         is_active: true,
       }
 
@@ -460,9 +433,8 @@ if (error) {
     message: error.message || 'Failed to create template'
   })
 } else {
-  setFields(prev => [...prev, data])
-  setSuccessMessage('Template created')
-  setTimeout(() => setSuccessMessage(null), 3000)
+  refetchData()
+  showToast({ type: 'success', title: 'Template created' })
 }
     } else if (editingField) {
       // Update existing template
@@ -486,15 +458,8 @@ if (error) {
           message: error.message || 'Failed to update template'
         })
       } else {
-        setFields(prev =>
-          prev.map(f =>
-            f.id === editingField.id
-              ? { ...f, ...fieldData }
-              : f
-          )
-        )
-        setSuccessMessage('Template updated')
-        setTimeout(() => setSuccessMessage(null), 3000)
+        refetchData()
+        showToast({ type: 'success', title: 'Template updated' })
       }
     }
 
@@ -521,9 +486,8 @@ if (error) {
         message: error.message || 'Failed to delete template'
       })
     } else {
-      setFields(prev => prev.filter(f => f.id !== field.id))
-      setSuccessMessage('Template deleted')
-      setTimeout(() => setSuccessMessage(null), 3000)
+      refetchData()
+      showToast({ type: 'success', title: 'Template deleted' })
     }
   }
 
@@ -546,18 +510,8 @@ if (error) {
         message: error.message || 'Failed to update template status'
       })
     } else {
-      if (!showInactive && !newActiveState) {
-        // Remove from list if we're not showing inactive
-        setFields(prev => prev.filter(f => f.id !== field.id))
-      } else {
-        setFields(prev =>
-          prev.map(f =>
-            f.id === field.id ? { ...f, is_active: newActiveState } : f
-          )
-        )
-      }
-      setSuccessMessage(newActiveState ? 'Template activated' : 'Template deactivated')
-      setTimeout(() => setSuccessMessage(null), 3000)
+      refetchData()
+      showToast({ type: 'success', title: newActiveState ? 'Template activated' : 'Template deactivated' })
     }
   }
 
@@ -585,12 +539,12 @@ if (error) {
     return null
   }
 
-  const activeCount = fields.filter(f => f.is_active).length
-  const inactiveCount = fields.filter(f => !f.is_active).length
+  const activeCount = (fields || []).filter(f => f.is_active).length
+  const inactiveCount = (fields || []).filter(f => !f.is_active).length
 
   return (
     <DashboardLayout>
-      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <ErrorBanner message={error} />
       <div className="p-6 max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -620,14 +574,6 @@ if (error) {
             </button>
           </div>
         </div>
-
-        {/* Success Message */}
-        {successMessage && (
-          <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            <span className="text-emerald-800 font-medium">{successMessage}</span>
-          </div>
-        )}
 
         {/* Info Card */}
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
@@ -668,7 +614,7 @@ if (error) {
         </div>
 
         {/* Fields List */}
-        {fields.length === 0 ? (
+        {(fields || []).length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
             <ClipboardCheck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-slate-900">No templates found</h3>
@@ -687,7 +633,7 @@ if (error) {
           </div>
         ) : (
           <div className="space-y-3">
-            {fields.map(field => (
+            {(fields || []).map(field => (
               <FieldRow
                 key={field.id}
                 field={field}

@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown, ClipboardList, Info, Loader2 } from 'lucide-react'
@@ -47,12 +48,7 @@ export default function AdminProcedureMilestonesPage() {
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
 
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [procedures, setProcedures] = useState<DefaultProcedureType[]>([])
-  const [milestones, setMilestones] = useState<MilestoneType[]>([])
-  const [configs, setConfigs] = useState<DefaultProcedureMilestone[]>([])
   const [expandedProcedure, setExpandedProcedure] = useState<string | null>(null)
 
   // Redirect non-global-admins
@@ -62,43 +58,42 @@ export default function AdminProcedureMilestonesPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  // Fetch data on mount
-  useEffect(() => {
-    if (!userLoading && isGlobalAdmin) {
-      fetchData()
-    }
-  }, [userLoading, isGlobalAdmin])
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    procedures: DefaultProcedureType[]
+    milestones: MilestoneType[]
+    configs: DefaultProcedureMilestone[]
+  }>(
+    async (sb) => {
+      const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
+        sb.from('procedure_type_templates')
+          .select('id, name, body_region_id, implant_category, is_active, display_order, body_regions(name)')
+          .eq('is_active', true)
+          .order('name'),
+        sb.from('milestone_types')
+          .select('id, name, display_name, display_order, pair_position, pair_with_id, is_active')
+          .eq('is_active', true)
+          .order('display_order'),
+        sb.from('procedure_milestone_templates')
+          .select('id, procedure_type_template_id, milestone_type_id, display_order'),
+      ])
 
-  const fetchData = async () => {
-    setLoading(true)
+      const processedProcedures = (proceduresRes.data || []).map(p => ({
+        ...p,
+        body_region: Array.isArray(p.body_regions) ? p.body_regions[0] : p.body_regions
+      }))
 
-    const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
-      supabase
-        .from('procedure_type_templates')
-        .select('id, name, body_region_id, implant_category, is_active, display_order, body_regions(name)')
-        .eq('is_active', true)
-        .order('name'),
-      supabase
-        .from('milestone_types')
-        .select('id, name, display_name, display_order, pair_position, pair_with_id, is_active')
-        .eq('is_active', true)
-        .order('display_order'),
-      supabase
-        .from('procedure_milestone_templates')
-        .select('id, procedure_type_template_id, milestone_type_id, display_order')
-    ])
+      return {
+        procedures: processedProcedures,
+        milestones: milestonesRes.data || [],
+        configs: configsRes.data || [],
+      }
+    },
+    { enabled: !userLoading && isGlobalAdmin }
+  )
 
-    // Handle the body_regions join - it comes back as an object or array depending on relationship
-    const processedProcedures = (proceduresRes.data || []).map(p => ({
-      ...p,
-      body_region: Array.isArray(p.body_regions) ? p.body_regions[0] : p.body_regions
-    }))
-
-    setProcedures(processedProcedures)
-    setMilestones(milestonesRes.data || [])
-    setConfigs(configsRes.data || [])
-    setLoading(false)
-  }
+  const procedures = queryData?.procedures || []
+  const milestones = queryData?.milestones || []
+  const configs = queryData?.configs || []
 
   // Check if milestone is enabled for procedure
   const isMilestoneEnabled = (procedureId: string, milestoneId: string): boolean => {
@@ -122,9 +117,7 @@ export default function AdminProcedureMilestonesPage() {
         .eq('milestone_type_id', milestoneId)
 
       if (!error) {
-        setConfigs(configs.filter(
-          c => !(c.procedure_type_template_id === procedureId && c.milestone_type_id === milestoneId)
-        ))
+        refetchData()
       }
     } else {
       // Add the config
@@ -140,7 +133,7 @@ export default function AdminProcedureMilestonesPage() {
         .single()
 
       if (!error && data) {
-        setConfigs([...configs, data])
+        refetchData()
       }
     }
     setSaving(false)
@@ -184,22 +177,17 @@ export default function AdminProcedureMilestonesPage() {
 
     for (const m of milestones) {
       if (!isMilestoneEnabled(procedureId, m.id)) {
-        const { data } = await supabase
+        await supabase
           .from('procedure_milestone_templates')
           .insert({
             procedure_type_template_id: procedureId,
             milestone_type_id: m.id,
             display_order: m.display_order
           })
-          .select()
-          .single()
-
-        if (data) {
-          setConfigs(prev => [...prev, data])
-        }
       }
     }
 
+    refetchData()
     setSaving(false)
   }
 
@@ -213,7 +201,7 @@ export default function AdminProcedureMilestonesPage() {
       .eq('procedure_type_template_id', procedureId)
 
     if (!error) {
-      setConfigs(configs.filter(c => c.procedure_type_template_id !== procedureId))
+      refetchData()
     }
 
     setSaving(false)
@@ -256,7 +244,7 @@ export default function AdminProcedureMilestonesPage() {
     }
 
     // Refresh data
-    await fetchData()
+    await refetchData()
     setSaving(false)
   }
 
@@ -265,7 +253,7 @@ export default function AdminProcedureMilestonesPage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="flex items-center justify-center py-12">
             <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
           </div>
