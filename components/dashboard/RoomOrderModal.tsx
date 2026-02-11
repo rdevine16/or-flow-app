@@ -22,6 +22,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useRoomOrdering, OrderableRoom } from '@/hooks/useRoomOrdering'
+import { AlertCircle, AlertTriangle, ArrowUpDown, Building2, Loader2, X } from 'lucide-react'
 
 interface RoomOrderModalProps {
   isOpen: boolean
@@ -78,9 +79,7 @@ function SortableRoomItem({ room, index }: { room: OrderableRoom; index: number 
 
       {/* Room Icon */}
       <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-        <svg className="w-4.5 h-4.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
+        <Building2 className="w-4.5 h-4.5 text-emerald-600" />
       </div>
 
       {/* Room Name */}
@@ -88,9 +87,7 @@ function SortableRoomItem({ room, index }: { room: OrderableRoom; index: number 
 
       {/* Drag Hint Icon */}
       <div className="text-slate-300">
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-        </svg>
+        <ArrowUpDown className="w-5 h-5" />
       </div>
     </div>
   )
@@ -220,9 +217,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
             onClick={handleCancel}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -233,9 +228,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
           ) : localRooms.length === 0 ? (
             <div className="py-12 text-center">
               <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+                <Building2 className="w-7 h-7 text-slate-400" />
               </div>
               <p className="text-slate-600 font-medium">No rooms configured</p>
               <p className="text-sm text-slate-400 mt-1">Add rooms in Settings to get started</p>
@@ -262,9 +255,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
           {/* Error Message */}
           {error && (
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2">
-              <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
@@ -305,10 +296,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
               >
                 {saving ? (
                   <span className="flex items-center gap-2">
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Saving...
                   </span>
                 ) : (
@@ -321,9 +309,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
           {/* Unsaved Changes Hint */}
           {hasChanges && (
             <p className="text-xs text-amber-600 mt-3 text-center flex items-center justify-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+              <AlertTriangle className="w-3.5 h-3.5" />
               You have unsaved changes
             </p>
           )}

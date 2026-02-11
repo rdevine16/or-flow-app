@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Building2, CalendarDays, Check, CheckCircle2, ChevronDown, ClipboardList, Search, User, X } from 'lucide-react'
 
 // ============================================================================
 // TYPES
@@ -160,14 +161,9 @@ function FilterDropdown({
       >
         {icon}
         <span>{getDisplayLabel()}</span>
-        <svg 
+        <ChevronDown 
           className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        />
         {hasSelection && multiSelect && (
           <span className="ml-1 px-1.5 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full">
             {selected.length}
@@ -183,9 +179,7 @@ function FilterDropdown({
                 onClick={() => onChange([])}
                 className="w-full px-4 py-2 text-left text-sm text-slate-500 hover:bg-slate-50 flex items-center gap-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4 h-4" />
                 Clear selection
               </button>
               <div className="border-t border-slate-100 my-1" />
@@ -209,9 +203,7 @@ function FilterDropdown({
                       ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}
                     `}>
                       {isSelected && (
-                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-3 h-3 text-white" />
                       )}
                     </div>
                   )}
@@ -221,9 +213,7 @@ function FilterDropdown({
                   <span className="text-xs text-slate-400">{option.count}</span>
                 )}
                 {!multiSelect && isSelected && (
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check className="w-4 h-4 text-blue-600" />
                 )}
               </button>
             )
@@ -251,9 +241,7 @@ function FilterPill({ label, onRemove }: FilterPillProps) {
         onClick={onRemove}
         className="ml-0.5 hover:bg-blue-200 rounded p-0.5 transition-colors"
       >
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
+        <X className="w-3 h-3" />
       </button>
     </span>
   )
@@ -414,27 +402,19 @@ function InlineSearch({
     switch (type) {
       case 'case':
         return (
-          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
+          <ClipboardList className="w-4 h-4 text-blue-500" />
         )
       case 'surgeon':
         return (
-          <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
+          <User className="w-4 h-4 text-violet-500" />
         )
       case 'room':
         return (
-          <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-          </svg>
+          <Building2 className="w-4 h-4 text-emerald-500" />
         )
       case 'procedure':
         return (
-          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
+          <ClipboardList className="w-4 h-4 text-amber-500" />
         )
       default:
         return null
@@ -443,14 +423,7 @@ function InlineSearch({
 
   return (
     <div className="relative flex-1 min-w-[200px] max-w-md" ref={containerRef}>
-      <svg 
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" 
-        fill="none" 
-        stroke="currentColor" 
-        viewBox="0 0 24 24"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
       <input
         ref={inputRef}
         type="text"
@@ -745,9 +718,7 @@ useEffect(() => {
           <FilterDropdown
             label="Date Range"
             icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <CalendarDays className="w-4 h-4" />
             }
             options={DATE_OPTIONS}
             selected={[filters.dateRange]}
@@ -758,9 +729,7 @@ useEffect(() => {
           <FilterDropdown
             label="Status"
             icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <CheckCircle2 className="w-4 h-4" />
             }
             options={STATUS_OPTIONS}
             selected={filters.status}
@@ -772,9 +741,7 @@ useEffect(() => {
           <FilterDropdown
             label="Surgeon"
             icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+              <User className="w-4 h-4" />
             }
             options={surgeonOptions}
             selected={filters.surgeonIds}
@@ -786,9 +753,7 @@ useEffect(() => {
           <FilterDropdown
             label="Room"
             icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+              <Building2 className="w-4 h-4" />
             }
             options={roomOptions}
             selected={filters.roomIds}
@@ -800,9 +765,7 @@ useEffect(() => {
           <FilterDropdown
             label="Procedure"
             icon={
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
+              <ClipboardList className="w-4 h-4" />
             }
             options={procedureOptions}
             selected={filters.procedureIds}
@@ -818,9 +781,7 @@ useEffect(() => {
                 onClick={clearAllFilters}
                 className="text-sm text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4 h-4" />
                 Clear all
               </button>
             </>

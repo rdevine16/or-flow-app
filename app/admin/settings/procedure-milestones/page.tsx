@@ -12,6 +12,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ChevronDown, ClipboardList, Info, Loader2 } from 'lucide-react'
 
 // Types
 interface DefaultProcedureType {
@@ -70,42 +71,33 @@ export default function AdminProcedureMilestonesPage() {
 
   const fetchData = async () => {
     setLoading(true)
-    setError(null)
 
-    try {
-      const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
-        supabase
-          .from('procedure_type_templates')
-          .select('id, name, body_region_id, implant_category, is_active, display_order, body_regions(name)')
-          .eq('is_active', true)
-          .order('name'),
-        supabase
-          .from('milestone_types')
-          .select('id, name, display_name, display_order, pair_position, pair_with_id, is_active')
-          .eq('is_active', true)
-          .order('display_order'),
-        supabase
-          .from('procedure_milestone_templates')
-          .select('id, procedure_type_template_id, milestone_type_id, display_order')
-      ])
+    const [proceduresRes, milestonesRes, configsRes] = await Promise.all([
+      supabase
+        .from('procedure_type_templates')
+        .select('id, name, body_region_id, implant_category, is_active, display_order, body_regions(name)')
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('milestone_types')
+        .select('id, name, display_name, display_order, pair_position, pair_with_id, is_active')
+        .eq('is_active', true)
+        .order('display_order'),
+      supabase
+        .from('procedure_milestone_templates')
+        .select('id, procedure_type_template_id, milestone_type_id, display_order')
+    ])
 
-      if (proceduresRes.error) throw proceduresRes.error
-      if (milestonesRes.error) throw milestonesRes.error
-      if (configsRes.error) throw configsRes.error
+    // Handle the body_regions join - it comes back as an object or array depending on relationship
+    const processedProcedures = (proceduresRes.data || []).map(p => ({
+      ...p,
+      body_region: Array.isArray(p.body_regions) ? p.body_regions[0] : p.body_regions
+    }))
 
-      const processedProcedures = (proceduresRes.data || []).map(p => ({
-        ...p,
-        body_region: Array.isArray(p.body_regions) ? p.body_regions[0] : p.body_regions
-      }))
-
-      setProcedures(processedProcedures)
-      setMilestones(milestonesRes.data || [])
-      setConfigs(configsRes.data || [])
-    } catch (err) {
-      setError('Failed to load procedure milestones. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    setProcedures(processedProcedures)
+    setMilestones(milestonesRes.data || [])
+    setConfigs(configsRes.data || [])
+    setLoading(false)
   }
 
   // Check if milestone is enabled for procedure
@@ -121,39 +113,37 @@ export default function AdminProcedureMilestonesPage() {
     
     const isEnabled = isMilestoneEnabled(procedureId, milestoneId)
 
-    try {
-      if (isEnabled) {
-        const { error } = await supabase
-          .from('procedure_milestone_templates')
-          .delete()
-          .eq('procedure_type_template_id', procedureId)
-          .eq('milestone_type_id', milestoneId)
+    if (isEnabled) {
+      // Remove the config
+      const { error } = await supabase
+        .from('procedure_milestone_templates')
+        .delete()
+        .eq('procedure_type_template_id', procedureId)
+        .eq('milestone_type_id', milestoneId)
 
-        if (error) throw error
-
+      if (!error) {
         setConfigs(configs.filter(
           c => !(c.procedure_type_template_id === procedureId && c.milestone_type_id === milestoneId)
         ))
-      } else {
-        const milestone = milestones.find(m => m.id === milestoneId)
-        const { data, error } = await supabase
-          .from('procedure_milestone_templates')
-          .insert({
-            procedure_type_template_id: procedureId,
-            milestone_type_id: milestoneId,
-            display_order: milestone?.display_order || 0
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-        if (data) setConfigs([...configs, data])
       }
-    } catch (err) {
-      // Silent fail for individual toggles — state stays in sync
-    } finally {
-      setSaving(false)
+    } else {
+      // Add the config
+      const milestone = milestones.find(m => m.id === milestoneId)
+      const { data, error } = await supabase
+        .from('procedure_milestone_templates')
+        .insert({
+          procedure_type_template_id: procedureId,
+          milestone_type_id: milestoneId,
+          display_order: milestone?.display_order || 0
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        setConfigs([...configs, data])
+      }
     }
+    setSaving(false)
   }
 
   // Toggle paired milestones together (e.g., Anesthesia Start + Anesthesia End)
@@ -192,92 +182,82 @@ export default function AdminProcedureMilestonesPage() {
   const enableAllMilestones = async (procedureId: string) => {
     setSaving(true)
 
-    try {
-      for (const m of milestones) {
-        if (!isMilestoneEnabled(procedureId, m.id)) {
-          const { data, error } = await supabase
-            .from('procedure_milestone_templates')
-            .insert({
-              procedure_type_template_id: procedureId,
-              milestone_type_id: m.id,
-              display_order: m.display_order
-            })
-            .select()
-            .single()
+    for (const m of milestones) {
+      if (!isMilestoneEnabled(procedureId, m.id)) {
+        const { data } = await supabase
+          .from('procedure_milestone_templates')
+          .insert({
+            procedure_type_template_id: procedureId,
+            milestone_type_id: m.id,
+            display_order: m.display_order
+          })
+          .select()
+          .single()
 
-          if (error) throw error
-          if (data) setConfigs(prev => [...prev, data])
+        if (data) {
+          setConfigs(prev => [...prev, data])
         }
       }
-    } catch (err) {
-      // Partial failure — refresh to get accurate state
-      await fetchData()
-    } finally {
-      setSaving(false)
     }
+
+    setSaving(false)
   }
 
   // Disable all milestones for a procedure
   const disableAllMilestones = async (procedureId: string) => {
     setSaving(true)
 
-    try {
-      const { error } = await supabase
-        .from('procedure_milestone_templates')
-        .delete()
-        .eq('procedure_type_template_id', procedureId)
+    const { error } = await supabase
+      .from('procedure_milestone_templates')
+      .delete()
+      .eq('procedure_type_template_id', procedureId)
 
-      if (error) throw error
-
+    if (!error) {
       setConfigs(configs.filter(c => c.procedure_type_template_id !== procedureId))
-    } catch (err) {
-      await fetchData()
-    } finally {
-      setSaving(false)
     }
+
+    setSaving(false)
   }
 
   // Apply same milestones to all procedures
   const applyToAllProcedures = async (sourceProcedureId: string) => {
     setSaving(true)
 
-    try {
-      const sourceMilestoneIds = configs
-        .filter(c => c.procedure_type_template_id === sourceProcedureId)
-        .map(c => c.milestone_type_id)
+    // Get milestones enabled for the source procedure
+    const sourceMilestoneIds = configs
+      .filter(c => c.procedure_type_template_id === sourceProcedureId)
+      .map(c => c.milestone_type_id)
 
-      for (const procedure of procedures) {
-        if (procedure.id === sourceProcedureId) continue
+    // For each procedure, sync to match source
+    for (const procedure of procedures) {
+      if (procedure.id === sourceProcedureId) continue
 
-        const { error: delErr } = await supabase
+      // First, remove all existing configs for this procedure
+      await supabase
+        .from('procedure_milestone_templates')
+        .delete()
+        .eq('procedure_type_template_id', procedure.id)
+
+      // Then add the configs from source
+      if (sourceMilestoneIds.length > 0) {
+        const newConfigs = sourceMilestoneIds.map(milestoneId => {
+          const milestone = milestones.find(m => m.id === milestoneId)
+          return {
+            procedure_type_template_id: procedure.id,
+            milestone_type_id: milestoneId,
+            display_order: milestone?.display_order || 0
+          }
+        })
+
+        await supabase
           .from('procedure_milestone_templates')
-          .delete()
-          .eq('procedure_type_template_id', procedure.id)
-        if (delErr) throw delErr
-
-        if (sourceMilestoneIds.length > 0) {
-          const newConfigs = sourceMilestoneIds.map(milestoneId => {
-            const milestone = milestones.find(m => m.id === milestoneId)
-            return {
-              procedure_type_template_id: procedure.id,
-              milestone_type_id: milestoneId,
-              display_order: milestone?.display_order || 0
-            }
-          })
-
-          const { error: insErr } = await supabase
-            .from('procedure_milestone_templates')
-            .insert(newConfigs)
-          if (insErr) throw insErr
-        }
+          .insert(newConfigs)
       }
-
-      await fetchData()
-    } catch (err) {
-      await fetchData()
-    } finally {
-      setSaving(false)
     }
+
+    // Refresh data
+    await fetchData()
+    setSaving(false)
   }
 
   // Loading state
@@ -286,7 +266,9 @@ export default function AdminProcedureMilestonesPage() {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <PageLoader message="Loading procedure milestones..." />
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -320,9 +302,7 @@ export default function AdminProcedureMilestonesPage() {
           {/* Info Banner */}
           <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-800">
                 <p className="font-medium">How this works:</p>
                 <p className="mt-1">
@@ -372,9 +352,7 @@ export default function AdminProcedureMilestonesPage() {
                           ? 'bg-purple-100 text-purple-600' 
                           : 'bg-slate-100 text-slate-600'
                       }`}>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
+                        <ClipboardList className="w-5 h-5" />
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900">{procedure.name}</h3>
@@ -411,14 +389,7 @@ export default function AdminProcedureMilestonesPage() {
                           style={{ width: `${totalMilestones > 0 ? (milestoneCount / totalMilestones) * 100 : 0}%` }}
                         />
                       </div>
-                      <svg 
-                        className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                        fill="none" 
-                        stroke="currentColor" 
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
+                      <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
 
@@ -503,10 +474,7 @@ export default function AdminProcedureMilestonesPage() {
                           <>
                             <span className="text-slate-300">|</span>
                             <span className="text-xs text-slate-400 flex items-center gap-1">
-                              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                              </svg>
+                              <Loader2 className="w-3 h-3 animate-spin" />
                               Saving...
                             </span>
                           </>
@@ -520,9 +488,7 @@ export default function AdminProcedureMilestonesPage() {
 
             {procedures.length === 0 && (
               <div className="text-center py-12 text-slate-500 bg-white border border-slate-200 rounded-xl">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
+                <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No default procedure types configured.</p>
                 <button
                   onClick={() => router.push('/admin/settings/procedure-types')}

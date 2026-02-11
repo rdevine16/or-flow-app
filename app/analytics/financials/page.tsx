@@ -8,9 +8,10 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
-import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
+
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { AlertTriangle, DollarSign } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 
 // Local components
@@ -249,9 +250,7 @@ if (facilityStatsRes.error) {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <DollarSign className="w-8 h-8 text-blue-500" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
               <p className="text-slate-500 mb-6 max-w-sm mx-auto">
@@ -283,9 +282,7 @@ if (facilityStatsRes.error) {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-2">Financials Not Configured</h3>
               <p className="text-slate-500 mb-6 max-w-sm mx-auto">

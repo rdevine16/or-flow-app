@@ -1,818 +1,208 @@
-// app/analytics/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
-import DateRangeSelector from '@/components/ui/DateRangeSelector'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { PageLoader } from '@/components/ui/Loading'
+import SettingsLayout from '@/components/settings/SettingsLayout'
+import { useUser } from '@/lib/UserContext'
 
-// Tremor components
-import {
-  BarChart,
-  DonutChart,
-  AreaChart,
-  Legend,
-  type Color,
-} from '@tremor/react'
-
-// Analytics functions
-import {
-  calculateAnalyticsOverview,
-  calculateAvgCaseTime,  // ADD THIS
-  formatMinutes,
-  type CaseWithMilestones,
-  type FlipRoomAnalysis,
-} from '@/lib/analyticsV2'
-
-import FlagsSummaryCard from '@/components/analytics/FlagsSummaryCard'
-
-// Icons
-import { 
-  ClockIcon, 
-  ChartBarIcon, 
-  ExclamationTriangleIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  CalendarDaysIcon,
-  SparklesIcon,
-  ArrowRightIcon,
-  XMarkIcon,
-  UserIcon,
-  ArrowPathIcon,
-  PresentationChartLineIcon,
-  CurrencyDollarIcon,
-  FlagIcon,
-  StarIcon,
-} from '@heroicons/react/24/outline'
-
-// ============================================
-// TYPES
-// ============================================
-
-interface KPIData {
-  value: number
-  displayValue: string
-  subtitle: string
-  target?: number
-  targetMet?: boolean
-  delta?: number
-  deltaType?: 'increase' | 'decrease' | 'unchanged'
-  dailyData?: Array<{ color: Color; tooltip: string }>
-}
-
-interface ProcedureCategory {
+interface AnalyticsSettings {
   id: string
-  name: string
-  display_name: string
+  facility_id: string
+  fcots_milestone: 'patient_in' | 'incision'
+  fcots_grace_minutes: number
+  fcots_target_percent: number
+  turnover_target_same_surgeon: number
+  turnover_target_flip_room: number
+  utilization_target_percent: number
+  cancellation_target_percent: number
+  // ORbit Score v2
+  start_time_milestone: 'patient_in' | 'incision'
+  start_time_grace_minutes: number
+  start_time_floor_minutes: number
+  waiting_on_surgeon_minutes: number
+  waiting_on_surgeon_floor_minutes: number
+  min_procedure_cases: number
 }
 
-interface ProcedureTechnique {
-  id: string
-  name: string
-  display_name: string
+const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
+  fcots_milestone: 'patient_in',
+  fcots_grace_minutes: 2,
+  fcots_target_percent: 85,
+  turnover_target_same_surgeon: 30,
+  turnover_target_flip_room: 45,
+  utilization_target_percent: 80,
+  cancellation_target_percent: 5,
+  // ORbit Score v2
+  start_time_milestone: 'patient_in',
+  start_time_grace_minutes: 3,
+  start_time_floor_minutes: 20,
+  waiting_on_surgeon_minutes: 3,
+  waiting_on_surgeon_floor_minutes: 10,
+  min_procedure_cases: 3,
 }
 
-// ============================================
-// REPORT NAVIGATION CARD
-// ============================================
-
-interface ReportCardProps {
-  title: string
-  description: string
-  href: string
-  icon: React.ComponentType<{ className?: string }>
-  accentColor: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'cyan'
-  badge?: string
-  stats?: { label: string; value: string }[]
-}
-
-function ReportCard({ title, description, href, icon: Icon, accentColor, badge, stats }: ReportCardProps) {
-  const colorClasses = {
-    blue: {
-      iconBg: 'bg-blue-100',
-      iconColor: 'text-blue-600',
-      hoverBorder: 'hover:border-blue-300',
-      badgeBg: 'bg-blue-50',
-      badgeText: 'text-blue-700',
-    },
-    emerald: {
-      iconBg: 'bg-emerald-100',
-      iconColor: 'text-emerald-600',
-      hoverBorder: 'hover:border-emerald-300',
-      badgeBg: 'bg-emerald-50',
-      badgeText: 'text-emerald-700',
-    },
-    violet: {
-      iconBg: 'bg-violet-100',
-      iconColor: 'text-violet-600',
-      hoverBorder: 'hover:border-violet-300',
-      badgeBg: 'bg-violet-50',
-      badgeText: 'text-violet-700',
-    },
-    amber: {
-      iconBg: 'bg-amber-100',
-      iconColor: 'text-amber-600',
-      hoverBorder: 'hover:border-amber-300',
-      badgeBg: 'bg-amber-50',
-      badgeText: 'text-amber-700',
-    },
-    rose: {
-      iconBg: 'bg-rose-100',
-      iconColor: 'text-rose-600',
-      hoverBorder: 'hover:border-rose-300',
-      badgeBg: 'bg-rose-50',
-      badgeText: 'text-rose-700',
-    },
-    cyan: {
-      iconBg: 'bg-cyan-100',
-      iconColor: 'text-cyan-600',
-      hoverBorder: 'hover:border-cyan-300',
-      badgeBg: 'bg-cyan-50',
-      badgeText: 'text-cyan-700',
-    },
-  }
-
-  const colors = colorClasses[accentColor]
-
-  return (
-    <Link
-      href={href}
-      className={`
-        group block bg-white rounded-xl border border-slate-200/60 
-        shadow-sm hover:shadow-md transition-all duration-200
-        ${colors.hoverBorder}
-      `}
-    >
-      <div className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div className={`p-2.5 rounded-xl ${colors.iconBg}`}>
-            <Icon className={`w-5 h-5 ${colors.iconColor}`} />
-          </div>
-          {badge && (
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${colors.badgeBg} ${colors.badgeText}`}>
-              {badge}
-            </span>
-          )}
-        </div>
-        
-        <h3 className="text-base font-semibold text-slate-900 mb-1 group-hover:text-slate-700">
-          {title}
-        </h3>
-        <p className="text-sm text-slate-500 mb-4 line-clamp-2">
-          {description}
-        </p>
-
-        {stats && stats.length > 0 && (
-          <div className="flex items-center gap-4 pt-3 border-t border-slate-100">
-            {stats.map((stat, i) => (
-              <div key={i}>
-                <p className="text-xs text-slate-400">{stat.label}</p>
-                <p className="text-sm font-semibold text-slate-900">{stat.value}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center text-sm font-medium text-slate-600 group-hover:text-blue-600 mt-3">
-          View report
-          <ArrowRightIcon className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
-        </div>
-      </div>
-    </Link>
-  )
-}
-
-// ============================================
-// QUICK STAT CARD (for overview row)
-// ============================================
-
-function QuickStatCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  trend,
-  trendType,
-}: {
-  title: string
-  value: string
-  subtitle?: string
-  icon: React.ComponentType<{ className?: string }>
-  trend?: number
-  trendType?: 'up' | 'down'
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="p-1.5 rounded-lg bg-slate-100">
-          <Icon className="w-4 h-4 text-slate-600" />
-        </div>
-        {trend !== undefined && trendType && (
-          <div className={`
-            flex items-center gap-1 text-sm font-semibold px-2 py-0.5 rounded-full
-            ${trend === 0 
-              ? 'text-slate-500 bg-slate-100'
-              : trendType === 'up' 
-                ? 'text-emerald-700 bg-emerald-50' 
-                : 'text-rose-700 bg-rose-50'
-            }
-          `}>
-            {trend === 0 ? (
-              <span>— 0%</span>
-            ) : trendType === 'up' ? (
-              <>
-                <ArrowTrendingUpIcon className="w-4 h-4" />
-                {trend}%
-              </>
-            ) : (
-              <>
-                <ArrowTrendingDownIcon className="w-4 h-4" />
-                {trend}%
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      <p className="text-2xl font-semibold text-slate-900">{value}</p>
-      <p className="text-xs text-slate-500 mt-0.5">{title}</p>
-      {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
-    </div>
-  )
-}
-
-
-// ============================================
-// SECTION HEADER
-// ============================================
-
-function SectionHeader({
-  title,
-  subtitle,
-  action,
-}: {
-  title: string
-  subtitle?: string
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-start justify-between mb-4">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-        {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
-      </div>
-      {action}
-    </div>
-  )
-}
-
-// ============================================
-// FLIP ROOM MODAL (kept for surgeon idle time)
-// ============================================
-
-function FlipRoomModal({ 
-  isOpen, 
-  onClose, 
-  data 
-}: { 
-  isOpen: boolean
-  onClose: () => void
-  data: FlipRoomAnalysis[]
-}) {
-  if (!isOpen) return null
-  
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-        
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <SparklesIcon className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Flip Room Analysis</h2>
-                <p className="text-sm text-slate-500">Surgeon idle time between room transitions</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
-            >
-              <XMarkIcon className="w-5 h-5" />
-            </button>
-          </div>
-          
-          <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
-            {data.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-1">No flip room patterns detected</h3>
-                <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  Flip rooms occur when a surgeon operates in multiple rooms on the same day.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {data.map((analysis, idx) => (
-                  <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
-                          {analysis.surgeonName.replace('Dr. ', '').charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
-                          <p className="text-sm text-slate-500">{analysis.date}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
-                        <p className="text-2xl font-semibold text-amber-600">{Math.round(analysis.totalIdleTime)} min</p>
-                      </div>
-                    </div>
-                    
-                    <div className="mb-4">
-                      <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Room Sequence</p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {analysis.cases.map((c, i) => (
-                          <div key={c.caseId} className="flex items-center">
-                            <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                              <span className="font-semibold text-slate-900">{c.roomName}</span>
-                              <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
-                            </div>
-                            {i < analysis.cases.length - 1 && (
-                              <ArrowRightIcon className="w-4 h-4 mx-2 text-slate-300" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    {analysis.idleGaps.length > 0 && (
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Transition Gaps</p>
-                        <div className="space-y-2">
-                          {analysis.idleGaps.map((gap, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-700">{gap.fromCase}</span>
-                                <ArrowRightIcon className="w-4 h-4 text-slate-300" />
-                                <span className="font-medium text-slate-700">{gap.toCase}</span>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className="text-xs text-slate-400">Idle</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-rose-600' : 'text-amber-600'}`}>
-                                    {Math.round(gap.idleMinutes)} min
-                                  </p>
-                                </div>
-                                {gap.optimalCallDelta > 0 && (
-                                  <div className="text-right pl-4 border-l border-slate-200">
-                                    <p className="text-xs text-blue-600">Call earlier</p>
-                                    <p className="font-semibold text-blue-600">
-                                      {Math.round(gap.optimalCallDelta)} min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ============================================
-// MAIN PAGE COMPONENT
-// ============================================
-
-export default function AnalyticsHubPage() {
+export default function AnalyticsSettingsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
-  
-  const [cases, setCases] = useState<CaseWithMilestones[]>([])
-  const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
-  const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
-  const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
+  const { effectiveFacilityId, loading: userLoading } = useUser()
+
+  const [settings, setSettings] = useState<AnalyticsSettings | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [dateFilter, setDateFilter] = useState('month')
-  const [currentStartDate, setCurrentStartDate] = useState<string | undefined>()
-  const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
-  
-  const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
-  // Fetch procedure categories and techniques
+  // Form state (strings for controlled inputs)
+  const [form, setForm] = useState({
+    fcots_milestone: 'patient_in' as 'patient_in' | 'incision',
+    fcots_grace_minutes: '2',
+    fcots_target_percent: '85',
+    turnover_target_same_surgeon: '30',
+    turnover_target_flip_room: '45',
+    utilization_target_percent: '80',
+    cancellation_target_percent: '5',
+    // ORbit Score v2
+    start_time_milestone: 'patient_in' as 'patient_in' | 'incision',
+    start_time_grace_minutes: '3',
+    start_time_floor_minutes: '20',
+    waiting_on_surgeon_minutes: '3',
+    waiting_on_surgeon_floor_minutes: '10',
+    min_procedure_cases: '3',
+  })
+
   useEffect(() => {
-    async function fetchLookups() {
-      const [categoriesRes, techniquesRes] = await Promise.all([
-        supabase.from('procedure_categories').select('id, name, display_name').order('display_order'),
-        supabase.from('procedure_techniques').select('id, name, display_name').order('display_order'),
-      ])
-      
-      if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
-      if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
+    if (!userLoading && effectiveFacilityId) {
+      fetchSettings()
+    } else if (!userLoading && !effectiveFacilityId) {
+      setLoading(false)
     }
-    fetchLookups()
+  }, [userLoading, effectiveFacilityId])
 
-  }, [])
-
-  // Fetch data
-  const fetchData = async (startDate?: string, endDate?: string) => {
+  const fetchSettings = async () => {
     if (!effectiveFacilityId) return
-    
     setLoading(true)
 
-    let query = supabase
-      .from('cases')
-      .select(`
-        id,
-        case_number,
-        facility_id,
-        scheduled_date,
-        start_time,
-        surgeon_id,
-        or_room_id,
-        status_id,
-        surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-        procedure_types (
-          id, 
-          name,
-          procedure_category_id,
-          technique_id,
-          procedure_categories (id, name, display_name),
-          procedure_techniques (id, name, display_name)
-        ),
-        or_rooms (id, name),
-        case_statuses (name),
-case_milestones (
-            facility_milestone_id,
-            recorded_at,
-            facility_milestones (name)
-          )
-        )
-      `)
+    const { data, error } = await supabase
+      .from('facility_analytics_settings')
+      .select('*')
       .eq('facility_id', effectiveFacilityId)
-      .order('scheduled_date', { ascending: false })
+      .single()
 
-    if (startDate && endDate) {
-      query = query.gte('scheduled_date', startDate).lte('scheduled_date', endDate)
+    if (data) {
+      setSettings(data as AnalyticsSettings)
+      setForm({
+        fcots_milestone: data.fcots_milestone || 'patient_in',
+        fcots_grace_minutes: String(data.fcots_grace_minutes ?? 2),
+        fcots_target_percent: String(data.fcots_target_percent ?? 85),
+        turnover_target_same_surgeon: String(data.turnover_target_same_surgeon ?? 30),
+        turnover_target_flip_room: String(data.turnover_target_flip_room ?? 45),
+        utilization_target_percent: String(data.utilization_target_percent ?? 80),
+        cancellation_target_percent: String(data.cancellation_target_percent ?? 5),
+        // ORbit Score v2
+        start_time_milestone: data.start_time_milestone || data.fcots_milestone || 'patient_in',
+        start_time_grace_minutes: String(data.start_time_grace_minutes ?? data.fcots_grace_minutes ?? 3),
+        start_time_floor_minutes: String(data.start_time_floor_minutes ?? 20),
+        waiting_on_surgeon_minutes: String(data.waiting_on_surgeon_minutes ?? 3),
+        waiting_on_surgeon_floor_minutes: String(data.waiting_on_surgeon_floor_minutes ?? 10),
+        min_procedure_cases: String(data.min_procedure_cases ?? 3),
+      })
+    } else if (error?.code === 'PGRST116') {
+      // No settings row yet — will insert on save
+      setSettings(null)
     }
 
-    const { data: casesData } = await query
-    setCases((casesData as unknown as CaseWithMilestones[]) || [])
-    
-  // Fetch previous period for comparison
-    if (startDate && endDate) {
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      const periodLength = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-      
-      const prevEnd = new Date(start)
-      prevEnd.setDate(prevEnd.getDate() - 1)
-      const prevStart = new Date(prevEnd)
-      prevStart.setDate(prevStart.getDate() - periodLength)
-      
-      const { data: prevData } = await supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          facility_id,
-          scheduled_date,
-          start_time,
-          surgeon_id,
-          or_room_id,
-          status_id,
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name),
-          procedure_types (
-            id, 
-            name,
-            procedure_category_id,
-            technique_id,
-            procedure_categories (id, name, display_name),
-            procedure_techniques (id, name, display_name)
-          ),
-          or_rooms (id, name),
-          case_statuses (name),
-          case_milestones (
-            facility_milestone_id,
-            recorded_at,
-            facility_milestones (name)
-          )
-        `)
-        .eq('facility_id', effectiveFacilityId)
-        .gte('scheduled_date', prevStart.toISOString().split('T')[0])
-        .lte('scheduled_date', prevEnd.toISOString().split('T')[0])
-      
-      setPreviousPeriodCases((prevData as unknown as CaseWithMilestones[]) || [])
-    }
-    
     setLoading(false)
   }
 
-  useEffect(() => {
+  const handleSave = async () => {
     if (!effectiveFacilityId) return
-    const today = new Date()
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-    const start = monthStart.toISOString().split('T')[0]
-    const end = today.toISOString().split('T')[0]
-    setCurrentStartDate(start)
-    setCurrentEndDate(end)
-    fetchData(start, end)
-  }, [effectiveFacilityId])
+    setSaving(true)
 
-  const handleFilterChange = (filter: string, startDate: string, endDate: string) => {
-    setDateFilter(filter)
-    setCurrentStartDate(startDate)
-    setCurrentEndDate(endDate)
-    fetchData(startDate, endDate)
-  }
-
-  // Calculate all analytics
-  const analytics = useMemo(() => {
-    return calculateAnalyticsOverview(cases, previousPeriodCases)
-  }, [cases, previousPeriodCases])
-
-  // Calculate avg case time with delta
-  const avgCaseTimeKPIData = useMemo(() => {
-    return calculateAvgCaseTime(cases, previousPeriodCases)
-  }, [cases, previousPeriodCases])
-
-  // ============================================
-  // NEW CHART DATA CALCULATIONS
-  // ============================================
-
-  // Daily Case Volume Trend Data
-  const dailyCaseTrendData = useMemo(() => {
-    const byDate: { [key: string]: number } = {}
-    
-    cases.forEach(c => {
-      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
-      if (status?.name === 'completed') {
-        const date = c.scheduled_date
-        byDate[date] = (byDate[date] || 0) + 1
-      }
-    })
-
-    return Object.entries(byDate)
-      .map(([date, count]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        rawDate: date,
-        'Completed Cases': count,
-      }))
-      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [cases])
-
-  // Procedure Category Volume Data
-  const procedureCategoryData = useMemo(() => {
-    const byCategoryId: { [key: string]: { count: number; name: string } } = {}
-    
-    cases.forEach(c => {
-      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
-      if (status?.name !== 'completed') return
-      
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!procType) return
-      
-      const category = procType.procedure_categories
-      if (category) {
-        const catData = Array.isArray(category) ? category[0] : category
-        if (catData) {
-          if (!byCategoryId[catData.id]) {
-            byCategoryId[catData.id] = { count: 0, name: catData.display_name || catData.name }
-          }
-          byCategoryId[catData.id].count++
-        }
-      }
-    })
-
-    return Object.values(byCategoryId)
-      .map(cat => ({ name: cat.name, cases: cat.count }))
-      .sort((a, b) => b.cases - a.cases)
-      .slice(0, 8) // Top 8 categories
-  }, [cases])
-
-  const categoryChartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet', 'fuchsia', 'pink', 'emerald', 'amber']
-
-  // Helper to get surgical time from milestones
-  const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
-    const milestones = caseData.case_milestones || []
-    let incisionTimestamp: number | null = null
-    let closingTimestamp: number | null = null
-
-    milestones.forEach(m => {
-const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
-      if (mType?.name === 'incision') {
-        incisionTimestamp = new Date(m.recorded_at).getTime()
-      } else if (mType?.name === 'closing' || mType?.name === 'closing_complete') {
-        closingTimestamp = new Date(m.recorded_at).getTime()
-      }
-    })
-
-    if (incisionTimestamp !== null && closingTimestamp !== null) {
-      return Math.round((closingTimestamp - incisionTimestamp) / (1000 * 60))
+    const payload = {
+      facility_id: effectiveFacilityId,
+      fcots_milestone: form.fcots_milestone,
+      fcots_grace_minutes: parseFloat(form.fcots_grace_minutes) || 2,
+      fcots_target_percent: parseFloat(form.fcots_target_percent) || 85,
+      turnover_target_same_surgeon: parseFloat(form.turnover_target_same_surgeon) || 30,
+      turnover_target_flip_room: parseFloat(form.turnover_target_flip_room) || 45,
+      utilization_target_percent: parseFloat(form.utilization_target_percent) || 80,
+      cancellation_target_percent: parseFloat(form.cancellation_target_percent) || 5,
+      // ORbit Score v2
+      start_time_milestone: form.start_time_milestone,
+      start_time_grace_minutes: parseInt(form.start_time_grace_minutes) || 3,
+      start_time_floor_minutes: parseInt(form.start_time_floor_minutes) || 20,
+      waiting_on_surgeon_minutes: parseInt(form.waiting_on_surgeon_minutes) || 3,
+      waiting_on_surgeon_floor_minutes: parseInt(form.waiting_on_surgeon_floor_minutes) || 10,
+      min_procedure_cases: parseInt(form.min_procedure_cases) || 3,
     }
-    return null
+
+    let error
+    if (settings?.id) {
+      // Update existing
+      ;({ error } = await supabase
+        .from('facility_analytics_settings')
+        .update(payload)
+        .eq('id', settings.id))
+    } else {
+      // Insert new
+      ;({ error } = await supabase
+        .from('facility_analytics_settings')
+        .insert(payload))
+    }
+
+    if (error) {
+      setToast({ message: 'Failed to save settings', type: 'error' })
+    } else {
+      setToast({ message: 'Analytics settings saved', type: 'success' })
+      fetchSettings()
+    }
+
+    setSaving(false)
+    setTimeout(() => setToast(null), 3000)
   }
 
-  // Robotic vs Traditional Comparison Data for Total Knee
-  const kneeComparisonData = useMemo(() => {
-    const totalKneeCategoryId = procedureCategories.find(c => c.name === 'total_knee')?.id
-    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
-    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
-
-    if (!totalKneeCategoryId) return []
-
-    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
-
-    cases.forEach(c => {
-      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
-      if (status?.name !== 'completed') return
-
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!procType) return
-
-      const category = procType.procedure_categories
-      const catData = Array.isArray(category) ? category[0] : category
-      if (catData?.id !== totalKneeCategoryId) return
-
-      const surgicalTime = getSurgicalTimeMinutes(c)
-      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return // Filter outliers
-
-      const date = c.scheduled_date
-      if (!byDate[date]) {
-        byDate[date] = { robotic: [], traditional: [] }
-      }
-
-      if (procType.technique_id === roboticTechniqueId) {
-        byDate[date].robotic.push(surgicalTime)
-      } else if (procType.technique_id === manualTechniqueId) {
-        byDate[date].traditional.push(surgicalTime)
-      }
+  const handleReset = () => {
+    setForm({
+      fcots_milestone: DEFAULT_SETTINGS.fcots_milestone,
+      fcots_grace_minutes: String(DEFAULT_SETTINGS.fcots_grace_minutes),
+      fcots_target_percent: String(DEFAULT_SETTINGS.fcots_target_percent),
+      turnover_target_same_surgeon: String(DEFAULT_SETTINGS.turnover_target_same_surgeon),
+      turnover_target_flip_room: String(DEFAULT_SETTINGS.turnover_target_flip_room),
+      utilization_target_percent: String(DEFAULT_SETTINGS.utilization_target_percent),
+      cancellation_target_percent: String(DEFAULT_SETTINGS.cancellation_target_percent),
+      // ORbit Score v2
+      start_time_milestone: DEFAULT_SETTINGS.start_time_milestone,
+      start_time_grace_minutes: String(DEFAULT_SETTINGS.start_time_grace_minutes),
+      start_time_floor_minutes: String(DEFAULT_SETTINGS.start_time_floor_minutes),
+      waiting_on_surgeon_minutes: String(DEFAULT_SETTINGS.waiting_on_surgeon_minutes),
+      waiting_on_surgeon_floor_minutes: String(DEFAULT_SETTINGS.waiting_on_surgeon_floor_minutes),
+      min_procedure_cases: String(DEFAULT_SETTINGS.min_procedure_cases),
     })
+  }
 
-    return Object.entries(byDate)
-      .map(([date, times]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        rawDate: date,
-        'Robotic (Mako)': times.robotic.length > 0 
-          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
-          : null,
-        'Traditional': times.traditional.length > 0 
-          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
-          : null,
-      }))
-      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
-      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [cases, procedureCategories, procedureTechniques])
-
-  // Robotic vs Traditional Comparison Data for Total Hip
-  const hipComparisonData = useMemo(() => {
-    const totalHipCategoryId = procedureCategories.find(c => c.name === 'total_hip')?.id
-    const roboticTechniqueId = procedureTechniques.find(t => t.name === 'robotic')?.id
-    const manualTechniqueId = procedureTechniques.find(t => t.name === 'manual')?.id
-
-    if (!totalHipCategoryId) return []
-
-    const byDate: { [key: string]: { robotic: number[]; traditional: number[] } } = {}
-
-    cases.forEach(c => {
-      const status = Array.isArray(c.case_statuses) ? c.case_statuses[0] : c.case_statuses
-      if (status?.name !== 'completed') return
-
-      const procType = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!procType) return
-
-      const category = procType.procedure_categories
-      const catData = Array.isArray(category) ? category[0] : category
-      if (catData?.id !== totalHipCategoryId) return
-
-      const surgicalTime = getSurgicalTimeMinutes(c)
-      if (!surgicalTime || surgicalTime <= 0 || surgicalTime > 600) return
-
-      const date = c.scheduled_date
-      if (!byDate[date]) {
-        byDate[date] = { robotic: [], traditional: [] }
-      }
-
-      if (procType.technique_id === roboticTechniqueId) {
-        byDate[date].robotic.push(surgicalTime)
-      } else if (procType.technique_id === manualTechniqueId) {
-        byDate[date].traditional.push(surgicalTime)
-      }
-    })
-
-    return Object.entries(byDate)
-      .map(([date, times]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        rawDate: date,
-        'Robotic (Mako)': times.robotic.length > 0 
-          ? Math.round(times.robotic.reduce((a, b) => a + b, 0) / times.robotic.length) 
-          : null,
-        'Traditional': times.traditional.length > 0 
-          ? Math.round(times.traditional.reduce((a, b) => a + b, 0) / times.traditional.length) 
-          : null,
-      }))
-      .filter(d => d['Robotic (Mako)'] !== null || d['Traditional'] !== null)
-      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [cases, procedureCategories, procedureTechniques])
-
-  // Report cards configuration
-  const reportCards: ReportCardProps[] = [
-    {
-      title: 'ORbit Score',
-      description: 'Composite surgeon performance scores based on controllable operational metrics',
-      href: '/analytics/orbit-score',
-      icon: StarIcon,
-      accentColor: 'violet',
-      badge: 'New',
-    },
-    {
-      title: 'KPI Overview',
-      description: 'Complete dashboard with all key performance indicators, targets, and daily trends',
-      href: '/analytics/kpi',
-      icon: PresentationChartLineIcon,
-      accentColor: 'blue',
-      badge: 'Full Report',
-    },
-    {
-      title: 'Financial Analytics',
-      description: 'Profitability metrics, cost analysis, and revenue insights',
-      href: '/analytics/financials',
-      icon: CurrencyDollarIcon,
-      accentColor: 'emerald',
-    },
-    {
-      title: 'Surgeon Performance',
-      description: 'Compare surgeon metrics, case times, and efficiency across procedures',
-      href: '/analytics/surgeons',
-      icon: UserIcon,
-      accentColor: 'emerald',
-    },
-    {
-      title: 'Block Utilization',
-      description: 'Block time usage by surgeon, capacity gaps, and case-fitting opportunities',
-      href: '/analytics/block-utilization',
-      icon: CalendarDaysIcon,
-      accentColor: 'blue',
-    },
-    {
-      title: 'Case Flags',
-      description: 'Review flagged cases, timing anomalies, and reported delays across your facility',
-      href: '/analytics/flags',
-      icon: FlagIcon,
-      accentColor: 'rose',
-      badge: 'New',
-    },
-  ]
-
-  // Loading state
-  if (userLoading) {
+  if (userLoading || loading) {
     return (
       <DashboardLayout>
-        <PageLoader message="Loading analytics..." />
+        <Container>
+          <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          </SettingsLayout>
+        </Container>
       </DashboardLayout>
     )
   }
 
-  // No facility selected (global admin)
-  if (!effectiveFacilityId && isGlobalAdmin) {
+  if (!effectiveFacilityId) {
     return (
       <DashboardLayout>
-        <Container className="py-12">
-          <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <ChartBarIcon className="w-8 h-8 text-blue-500" />
+        <Container>
+          <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
+            <div className="text-center py-20 text-slate-500">
+              <p>No facility selected. Please select a facility to configure analytics settings.</p>
             </div>
-            <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
-            <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
-            <Link
-              href="/admin/facilities"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              View Facilities
-              <ArrowRightIcon className="w-4 h-4" />
-            </Link>
-          </div>
+          </SettingsLayout>
         </Container>
       </DashboardLayout>
     )
@@ -820,291 +210,440 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
 
   return (
     <DashboardLayout>
-      <div className="min-h-screen bg-slate-50/50">
-        <Container className="py-8">
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Analytics</h1>
-              <p className="text-slate-500 mt-1">
-                Performance insights and operational metrics
-              </p>
-            </div>
-            <DateRangeSelector value={dateFilter} onChange={handleFilterChange} />
-          </div>
+      <Container>
+        <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
+          <div className="space-y-8">
+            {/* FCOTS Configuration */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-sm font-semibold text-slate-900">First Case On-Time Start (FCOTS)</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Define what &quot;on-time&quot; means for your facility</p>
+              </div>
+              <div className="p-6 space-y-5">
+                {/* Milestone Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Start Milestone
+                  </label>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Which event defines when the first case has &quot;started&quot;?
+                  </p>
+                  <div className="flex gap-3">
+                    <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                      form.fcots_milestone === 'patient_in' 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="fcots_milestone"
+                        value="patient_in"
+                        checked={form.fcots_milestone === 'patient_in'}
+                        onChange={(e) => setForm({ ...form, fcots_milestone: e.target.value as 'patient_in' | 'incision' })}
+                        className="text-blue-600"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-900">Wheels In</div>
+                        <div className="text-xs text-slate-500">Patient enters the OR</div>
+                      </div>
+                    </label>
+                    <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                      form.fcots_milestone === 'incision' 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-slate-200 hover:border-slate-300'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="fcots_milestone"
+                        value="incision"
+                        checked={form.fcots_milestone === 'incision'}
+                        onChange={(e) => setForm({ ...form, fcots_milestone: e.target.value as 'patient_in' | 'incision' })}
+                        className="text-blue-600"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-slate-900">Incision</div>
+                        <div className="text-xs text-slate-500">Cut time / procedure start</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center py-24">
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm text-slate-500">Calculating metrics...</p>
+                {/* Grace Period + Target */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Grace Period (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.fcots_grace_minutes}
+                      onChange={(e) => setForm({ ...form, fcots_grace_minutes: e.target.value })}
+                      min="0"
+                      max="30"
+                      step="1"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Minutes after scheduled time still considered &quot;on-time&quot;
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Target (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.fcots_target_percent}
+                      onChange={(e) => setForm({ ...form, fcots_target_percent: e.target.value })}
+                      min="0"
+                      max="100"
+                      step="1"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Industry benchmark: 85%
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-          ) : (
-            <div className="space-y-8">
-              {/* QUICK STATS ROW */}
-<section>
-  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-    <QuickStatCard
-      title="Completed Cases"
-      value={analytics.completedCases.toString()}
-      icon={CalendarDaysIcon}
-      trend={analytics.caseVolume.delta}
-      trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
-    />
-    <QuickStatCard
-      title="FCOTS Rate"
-      value={analytics.fcots.displayValue}
-      icon={ClockIcon}
-      trend={analytics.fcots.delta}
-      trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
-    />
-    <QuickStatCard
-      title="Avg Turnover"
-      value={analytics.turnoverTime.displayValue}
-      icon={ArrowPathIcon}
-      trend={analytics.turnoverTime.delta}
-      trendType={analytics.turnoverTime.deltaType === 'increase' ? 'up' : analytics.turnoverTime.deltaType === 'decrease' ? 'down' : undefined}
-    />
-    <QuickStatCard
-      title="OR Utilization"
-      value={analytics.orUtilization.displayValue}
-      icon={ChartBarIcon}
-      trend={analytics.orUtilization.delta}
-      trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
-    />
-<QuickStatCard
-  title="Avg Case Time"
-  value={avgCaseTimeKPIData.displayValue}
-  icon={ClockIcon}
-  trend={avgCaseTimeKPIData.delta}
-  trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
-/>
-    <QuickStatCard
-      title="Cancellation Rate"
-      value={analytics.cancellationRate.displayValue}
-      icon={ExclamationTriangleIcon}
-      trend={analytics.cancellationRate.delta}
-      trendType={analytics.cancellationRate.deltaType === 'increase' ? 'up' : analytics.cancellationRate.deltaType === 'decrease' ? 'down' : undefined}
-    />
-  </div>
-</section>
 
-              {/* CHARTS ROW - Case Trends & Category Breakdown */}
-              <section>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Daily Case Volume Trend */}
-                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Case Volume Trend</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Completed cases over time</p>
-                    </div>
-                    <div className="p-6">
-                      {dailyCaseTrendData.length > 0 ? (
-                        <BarChart
-                          className="h-64"
-                          data={dailyCaseTrendData}
-                          index="date"
-                          categories={['Completed Cases']}
-                          colors={['blue']}
-                          valueFormatter={(v) => v.toString()}
-                          yAxisWidth={40}
-                          showAnimation={true}
-                          showLegend={false}
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-64 text-slate-400">
-                          <div className="text-center">
-                            <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                            <p>No data available</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+            {/* Turnover Targets */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-sm font-semibold text-slate-900">Turnover Targets</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Target times for room turnovers (minutes)</p>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Same Surgeon (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.turnover_target_same_surgeon}
+                      onChange={(e) => setForm({ ...form, turnover_target_same_surgeon: e.target.value })}
+                      min="5"
+                      max="120"
+                      step="5"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Same surgeon, same room. Benchmark: 25–30 min
+                    </p>
                   </div>
-
-                  {/* Procedure Category Breakdown */}
-                  <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <h3 className="text-base font-semibold text-slate-900">Procedure Categories</h3>
-                      <p className="text-sm text-slate-500 mt-0.5">Case distribution by procedure type</p>
-                    </div>
-                    <div className="p-6">
-                      {procedureCategoryData.length > 0 ? (
-                        <div className="flex flex-col items-center">
-                          <DonutChart
-                            className="h-52"
-                            data={procedureCategoryData}
-                            index="name"
-                            category="cases"
-                            colors={categoryChartColors}
-                            valueFormatter={(v) => `${v} cases`}
-                            showAnimation={true}
-                            label={`${procedureCategoryData.reduce((sum, d) => sum + d.cases, 0)} total`}
-                          />
-                          <Legend
-                            className="mt-4"
-                            categories={procedureCategoryData.map(d => d.name)}
-                            colors={categoryChartColors.slice(0, procedureCategoryData.length)}
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-64 text-slate-400">
-                          <div className="text-center">
-                            <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-                            <p>No data available</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Flip Room (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.turnover_target_flip_room}
+                      onChange={(e) => setForm({ ...form, turnover_target_flip_room: e.target.value })}
+                      min="5"
+                      max="120"
+                      step="5"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Surgeon switches rooms. Benchmark: 40–45 min
+                    </p>
                   </div>
                 </div>
-              </section>
-
-              {/* CASE FLAGS SUMMARY */}
-              {effectiveFacilityId && (
-                <section>
-                  <SectionHeader
-                    title="Case Flags"
-                    subtitle="Auto-detected anomalies and reported delays"
-                  />
-                  <FlagsSummaryCard
-                    facilityId={effectiveFacilityId}
-                    startDate={currentStartDate}
-                    endDate={currentEndDate}
-                  />
-                </section>
-              )}
-
-              {/* ROBOTIC VS TRADITIONAL COMPARISON */}
-              {(kneeComparisonData.length > 0 || hipComparisonData.length > 0) && (
-                <section>
-                  <SectionHeader
-                    title="Robotic vs Traditional Surgical Time"
-                    subtitle="Average surgical time comparison by technique"
-                  />
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Total Knee Comparison */}
-                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <h3 className="text-base font-semibold text-slate-900">Total Knee Arthroplasty</h3>
-                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
-                      </div>
-                      <div className="p-6">
-                        {kneeComparisonData.length > 0 ? (
-                          <AreaChart
-                            className="h-56"
-                            data={kneeComparisonData}
-                            index="date"
-                            categories={['Robotic (Mako)', 'Traditional']}
-                            colors={['cyan', 'slate']}
-                            valueFormatter={(v) => `${v} min`}
-                            yAxisWidth={48}
-                            showAnimation={true}
-                            connectNulls={true}
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-56 text-slate-400">
-                            <div className="text-center">
-                              <ChartBarIcon className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                              <p className="text-sm">No TKA data available</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Total Hip Comparison */}
-                    <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden">
-                      <div className="px-6 py-4 border-b border-slate-100">
-                        <h3 className="text-base font-semibold text-slate-900">Total Hip Arthroplasty</h3>
-                        <p className="text-sm text-slate-500 mt-0.5">Surgical time by technique (minutes)</p>
-                      </div>
-                      <div className="p-6">
-                        {hipComparisonData.length > 0 ? (
-                          <AreaChart
-                            className="h-56"
-                            data={hipComparisonData}
-                            index="date"
-                            categories={['Robotic (Mako)', 'Traditional']}
-                            colors={['cyan', 'slate']}
-                            valueFormatter={(v) => `${v} min`}
-                            yAxisWidth={48}
-                            showAnimation={true}
-                            connectNulls={true}
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-56 text-slate-400">
-                            <div className="text-center">
-                              <ChartBarIcon className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                              <p className="text-sm">No THA data available</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {/* AI INSIGHT CARD */}
-              {analytics.surgeonIdleTime.value > 0 && (
-                <section>
-                  <button
-                    onClick={() => setShowFlipRoomModal(true)}
-                    className="w-full text-left bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
-                  >
-                    <div className="p-5">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-blue-100">
-                            <SparklesIcon className="w-5 h-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold text-slate-900">Optimization Opportunity</h3>
-                              <span className="px-2 py-0.5 text-xs font-semibold bg-blue-600 text-white rounded-full">
-                                AI Insight
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-600 mt-1">
-                              Surgeons are waiting an average of <span className="font-semibold text-blue-700">{analytics.surgeonIdleTime.displayValue}</span> between rooms.
-                              {analytics.surgeonIdleTime.subtitle !== 'No optimization needed' && (
-                                <span className="text-blue-700"> {analytics.surgeonIdleTime.subtitle}</span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <ArrowRightIcon className="w-5 h-5 text-blue-600" />
-                      </div>
-                    </div>
-                  </button>
-                </section>
-              )}
-
-              {/* REPORTS GRID */}
-              <section>
-                <SectionHeader
-                  title="Detailed Reports"
-                  subtitle="Dive deeper into specific areas of OR performance"
-                />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {reportCards.map((card) => (
-                    <ReportCard key={card.href} {...card} />
-                  ))}
-                </div>
-              </section>
-
-              {/* FLIP ROOM MODAL */}
-              <FlipRoomModal
-                isOpen={showFlipRoomModal}
-                onClose={() => setShowFlipRoomModal(false)}
-                data={analytics.flipRoomAnalysis}
-              />
+              </div>
             </div>
-          )}
-        </Container>
-      </div>
+
+            {/* Other Targets */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <h3 className="text-sm font-semibold text-slate-900">Other Targets</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Performance thresholds for dashboard KPIs</p>
+              </div>
+              <div className="p-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      OR Utilization Target (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.utilization_target_percent}
+                      onChange={(e) => setForm({ ...form, utilization_target_percent: e.target.value })}
+                      min="0"
+                      max="100"
+                      step="5"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Patient-in-room time as % of available hours. Benchmark: 75–85%
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Same-Day Cancellation Target (%)
+                    </label>
+                    <input
+                      type="number"
+                      value={form.cancellation_target_percent}
+                      onChange={(e) => setForm({ ...form, cancellation_target_percent: e.target.value })}
+                      min="0"
+                      max="100"
+                      step="1"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Maximum acceptable same-day cancellation rate. Benchmark: &lt;5%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ORbit Score Configuration */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">ORbit Score</h3>
+                  <span className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                    v2
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">Surgeon scorecard thresholds — graduated scoring with linear decay</p>
+              </div>
+              <div className="p-6 space-y-6">
+
+                {/* Schedule Adherence */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-pink-500" />
+                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Schedule Adherence</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">25% weight</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Measures whether cases start at or before their scheduled time. All cases (first and subsequent) are scored identically using graduated decay.
+                  </p>
+
+                  {/* Milestone Selection */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Start Milestone
+                    </label>
+                    <div className="flex gap-3">
+                      <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                        form.start_time_milestone === 'patient_in'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="start_time_milestone"
+                          value="patient_in"
+                          checked={form.start_time_milestone === 'patient_in'}
+                          onChange={(e) => setForm({ ...form, start_time_milestone: e.target.value as 'patient_in' | 'incision' })}
+                          className="text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">Patient In</div>
+                          <div className="text-xs text-slate-500">When patient enters OR</div>
+                        </div>
+                      </label>
+                      <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
+                        form.start_time_milestone === 'incision'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="start_time_milestone"
+                          value="incision"
+                          checked={form.start_time_milestone === 'incision'}
+                          onChange={(e) => setForm({ ...form, start_time_milestone: e.target.value as 'patient_in' | 'incision' })}
+                          className="text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">Incision</div>
+                          <div className="text-xs text-slate-500">Cut time / procedure start</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Grace Period (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.start_time_grace_minutes}
+                        onChange={(e) => setForm({ ...form, start_time_grace_minutes: e.target.value })}
+                        min="0"
+                        max="15"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Minutes after scheduled start before score begins to decay
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Decay Floor (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.start_time_floor_minutes}
+                        onChange={(e) => setForm({ ...form, start_time_floor_minutes: e.target.value })}
+                        min="5"
+                        max="60"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Minutes over grace until case score reaches 0.
+                        {' '}Cost: <span className="font-mono font-semibold text-slate-600">
+                          {(1 / (parseInt(form.start_time_floor_minutes) || 20)).toFixed(2)}
+                        </span>/min
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual preview */}
+                  <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <span className="font-semibold text-slate-600">Example:</span>{' '}
+                      Case scheduled 7:00 AM → within {form.start_time_grace_minutes} min grace = score 1.0.{' '}
+                      At {parseInt(form.start_time_grace_minutes || '3') + Math.round((parseInt(form.start_time_floor_minutes || '20')) / 2)} min late = score 0.50.{' '}
+                      At {parseInt(form.start_time_grace_minutes || '3') + parseInt(form.start_time_floor_minutes || '20')} min late = score 0.0.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* Availability */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-violet-500" />
+                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Surgeon Availability</h4>
+                    <span className="text-[10px] text-slate-400 font-mono">20% weight</span>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Measures time between prep/drape complete and incision. Steeper decay because a full surgical team is standing idle.
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Expected Gap (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.waiting_on_surgeon_minutes}
+                        onChange={(e) => setForm({ ...form, waiting_on_surgeon_minutes: e.target.value })}
+                        min="0"
+                        max="15"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Normal prep-to-incision gap (scrub + site marking)
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        Decay Floor (minutes)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.waiting_on_surgeon_floor_minutes}
+                        onChange={(e) => setForm({ ...form, waiting_on_surgeon_floor_minutes: e.target.value })}
+                        min="3"
+                        max="30"
+                        step="1"
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Minutes over threshold until case score reaches 0.
+                        {' '}Cost: <span className="font-mono font-semibold text-slate-600">
+                          {(1 / (parseInt(form.waiting_on_surgeon_floor_minutes) || 10)).toFixed(2)}
+                        </span>/min
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual preview */}
+                  <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      <span className="font-semibold text-slate-600">Example:</span>{' '}
+                      Prep/drape done → within {form.waiting_on_surgeon_minutes} min = score 1.0.{' '}
+                      At {parseInt(form.waiting_on_surgeon_minutes || '3') + Math.round((parseInt(form.waiting_on_surgeon_floor_minutes || '10')) / 2)} min gap = score 0.50.{' '}
+                      At {parseInt(form.waiting_on_surgeon_minutes || '3') + parseInt(form.waiting_on_surgeon_floor_minutes || '10')} min gap = score 0.0.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100" />
+
+                {/* Cohort Threshold */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-slate-400" />
+                    <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Scoring Thresholds</h4>
+                  </div>
+                  <div className="max-w-xs">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Min Cases per Procedure Type
+                    </label>
+                    <input
+                      type="number"
+                      value={form.min_procedure_cases}
+                      onChange={(e) => setForm({ ...form, min_procedure_cases: e.target.value })}
+                      min="1"
+                      max="10"
+                      step="1"
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">
+                      Minimum cases of a procedure type to include in peer comparison cohort
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={handleReset}
+                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Reset to Defaults
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+
+            {/* Toast */}
+            {toast && (
+              <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-lg shadow-lg text-sm font-medium z-50 ${
+                toast.type === 'success' 
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                  : 'bg-red-50 text-red-700 border border-red-200'
+              }`}>
+                {toast.message}
+              </div>
+            )}
+          </div>
+        </SettingsLayout>
+      </Container>
     </DashboardLayout>
   )
 }

@@ -10,6 +10,11 @@ import { facilityAudit, procedureAudit, genericAuditLog } from '@/lib/audit-logg
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Button, IconButton } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
+import { Input, Select, Label, FormField } from '@/components/ui/Input'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Plus, Pencil, Trash2, X, ChevronRight, ChevronDown } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -689,22 +694,19 @@ export default function FinancialsSettingsPage() {
                         />
                       </div>
                       <span className="text-sm text-slate-500">/hr</span>
-                      <button
-                        onClick={handleSaveOrRate}
-                        disabled={saving}
-                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {saving ? 'Saving...' : 'Save'}
-                      </button>
-                      <button
+                      <Button size="sm" onClick={handleSaveOrRate} loading={saving}>
+                        Save
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           setOrHourlyRate(currentFacility?.or_hourly_rate?.toString() || '')
                           setEditingOrRate(false)
                         }}
-                        className="px-3 py-2 text-slate-600 text-sm hover:bg-slate-100 rounded-lg"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
@@ -718,9 +720,7 @@ export default function FinancialsSettingsPage() {
                         onClick={() => setEditingOrRate(true)}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <Pencil className="w-4 h-4" />
                       </button>
                     </div>
                   )}
@@ -818,9 +818,7 @@ export default function FinancialsSettingsPage() {
                                 }}
                                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
+                                <ChevronRight className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
@@ -839,15 +837,10 @@ export default function FinancialsSettingsPage() {
                   <h3 className="font-medium text-slate-900">Payers</h3>
                   <p className="text-sm text-slate-500">{activePayers.length} active payers</p>
                 </div>
-                <button
-                  onClick={openAddPayerModal}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                <Button onClick={openAddPayerModal}>
+                  <Plus className="w-4 h-4" />
                   Add Payer
-                </button>
+                </Button>
               </div>
 
               {activePayers.length === 0 && inactivePayers.length === 0 ? (
@@ -882,33 +875,23 @@ export default function FinancialsSettingsPage() {
                             onClick={() => openEditPayerModal(payer)}
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            <Pencil className="w-4 h-4" />
                           </button>
                           {deletePayerConfirm === payer.id ? (
                             <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDeletePayer(payer.id)}
-                                className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-                              >
+                              <Button variant="danger" size="xs" onClick={() => handleDeletePayer(payer.id)}>
                                 Confirm
-                              </button>
-                              <button
-                                onClick={() => setDeletePayerConfirm(null)}
-                                className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300"
-                              >
+                              </Button>
+                              <Button variant="secondary" size="xs" onClick={() => setDeletePayerConfirm(null)}>
                                 Cancel
-                              </button>
+                              </Button>
                             </div>
                           ) : (
                             <button
                               onClick={() => setDeletePayerConfirm(payer.id)}
                               className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
@@ -924,14 +907,7 @@ export default function FinancialsSettingsPage() {
                         className="w-full px-6 py-3 flex items-center justify-between text-sm text-slate-500 hover:bg-slate-50"
                       >
                         <span>{inactivePayers.length} inactive payer{inactivePayers.length > 1 ? 's' : ''}</span>
-                        <svg
-                          className={`w-4 h-4 transition-transform ${showInactivePayers ? 'rotate-180' : ''}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
+                        <ChevronDown className={`w-4 h-4 transition-transform ${showInactivePayers ? 'rotate-180' : ''}`} />
                       </button>
                       {showInactivePayers && (
                         <div className="divide-y divide-slate-100 bg-slate-50/50">
@@ -987,9 +963,7 @@ export default function FinancialsSettingsPage() {
                     onClick={closeProcedureSlideOut}
                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -1108,9 +1082,7 @@ export default function FinancialsSettingsPage() {
                                     onClick={() => removePayerReimbursement(index)}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               ))}
@@ -1140,66 +1112,47 @@ export default function FinancialsSettingsPage() {
 
                 {/* Footer */}
                 <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                  <button
-                    onClick={closeProcedureSlideOut}
-                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
+                  <Button variant="ghost" onClick={closeProcedureSlideOut}>
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleSaveProcedureFinancials}
-                    disabled={saving}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    loading={saving}
                   >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </button>
+                    Save Changes
+                  </Button>
                 </div>
               </div>
             </>
           )}
 
           {/* Payer Modal */}
-          {payerModalOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    {payerModalMode === 'add' ? 'Add Payer' : 'Edit Payer'}
-                  </h3>
-                </div>
-                <div className="p-6">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Payer Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={payerName}
-                      onChange={(e) => setPayerName(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      placeholder="e.g., Medicare, BCBS, Aetna"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                  <button
-                    onClick={closePayerModal}
-                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSavePayer}
-                    disabled={saving || !payerName.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : payerModalMode === 'add' ? 'Add Payer' : 'Save Changes'}
-                  </button>
-                </div>
-              </div>
+          <Modal
+            open={payerModalOpen}
+            onClose={closePayerModal}
+            title={payerModalMode === 'add' ? 'Add Payer' : 'Edit Payer'}
+          >
+            <div>
+              <Label htmlFor="payerName">Payer Name *</Label>
+              <Input
+                id="payerName"
+                value={payerName}
+                onChange={(e) => setPayerName(e.target.value)}
+                placeholder="e.g., Medicare, BCBS, Aetna"
+                autoFocus
+              />
             </div>
-          )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closePayerModal} />
+              <Modal.Action
+                onClick={handleSavePayer}
+                loading={saving}
+                disabled={!payerName.trim()}
+              >
+                {payerModalMode === 'add' ? 'Add Payer' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
         </SettingsLayout>
       </Container>
     </DashboardLayout>

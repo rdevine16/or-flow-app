@@ -10,6 +10,7 @@ import Container from '@/components/ui/Container'
 import { caseAudit } from '@/lib/audit-logger'
 import { extractName } from '@/lib/formatters'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { AlertCircle, AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 
 // ============================================================================
 // TYPES
@@ -321,10 +322,7 @@ export default function CancelCasePage() {
       <DashboardLayout>
         <Container className="py-8">
           <div className="flex justify-center py-20">
-            <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
+            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
           </div>
         </Container>
       </DashboardLayout>
@@ -341,15 +339,11 @@ export default function CancelCasePage() {
         <Container className="py-8">
           <div className="max-w-2xl mx-auto text-center py-12">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+              <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">{error}</h2>
             <Link href="/cases" className="inline-flex items-center gap-2 mt-4 text-blue-600 hover:text-blue-700">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
+              <ArrowLeft className="w-4 h-4" />
               Back to Cases
             </Link>
           </div>
@@ -369,9 +363,7 @@ export default function CancelCasePage() {
           {/* Header */}
           <div className="mb-8">
             <Link href={`/cases/${caseId}`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-blue-600 mb-4">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
+              <ArrowLeft className="w-4 h-4" />
               Back to Case
             </Link>
             <h1 className="text-2xl font-bold text-slate-900">Cancel Case</h1>
@@ -381,9 +373,7 @@ export default function CancelCasePage() {
           {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-              <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
               <p className="text-sm font-medium text-red-800">{error}</p>
             </div>
           )}
@@ -427,9 +417,7 @@ export default function CancelCasePage() {
           {isInProgress && (
             <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
               <div className="flex gap-3">
-                <svg className="w-6 h-6 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0" />
                 <div>
                   <h4 className="font-semibold text-amber-900">Case In Progress</h4>
                   <p className="text-sm text-amber-700 mt-1">
@@ -585,10 +573,7 @@ export default function CancelCasePage() {
                 >
                   {submitting ? (
                     <>
-                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
+                      <Loader2 className="animate-spin w-4 h-4" />
                       Cancelling...
                     </>
                   ) : (

@@ -44,21 +44,7 @@ import {
   type SurgeonIdleSummary,
 } from '@/lib/analyticsV2'
 
-// Icons
-import { 
-  ClockIcon, 
-  ChartBarIcon, 
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  UserGroupIcon,
-  CalendarDaysIcon,
-  SparklesIcon,
-  ArrowRightIcon,
-  XMarkIcon,
-  InformationCircleIcon,
-} from '@heroicons/react/24/outline'
+import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock, Info, Sparkles, TrendingDown, TrendingUp, X } from 'lucide-react'
 
 // ============================================
 // TYPES
@@ -168,7 +154,7 @@ function KPICard({
               <Text className="font-medium text-slate-600">{title}</Text>
               {tooltip && (
                 <div className="relative">
-                  <InformationCircleIcon 
+                  <Info 
                     className="w-4 h-4 text-slate-400 hover:text-slate-600 cursor-help transition-colors" 
                     onMouseEnter={() => setShowTooltip(true)}
                     onMouseLeave={() => setShowTooltip(false)}
@@ -194,9 +180,9 @@ function KPICard({
               }
             `}>
               {getDeltaType() === 'increase' ? (
-                <ArrowTrendingUpIcon className="w-3 h-3" />
+                <TrendingUp className="w-3 h-3" />
               ) : (
-                <ArrowTrendingDownIcon className="w-3 h-3" />
+                <TrendingDown className="w-3 h-3" />
               )}
               {Math.abs(kpi.delta)}%
             </div>
@@ -221,9 +207,9 @@ function KPICard({
               }
             `}>
               {kpi.targetMet ? (
-                <CheckCircleIcon className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5" />
               ) : (
-                <ExclamationTriangleIcon className="w-3.5 h-3.5" />
+                <AlertTriangle className="w-3.5 h-3.5" />
               )}
               Target: {title.includes('Cancellation') ? `<${kpi.target}%` : 
                        title.includes('Same-Room') || title.includes('Flip Room') ? `≤${kpi.target} min` :
@@ -256,7 +242,7 @@ function KPICard({
         {onClick && (
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center text-xs font-medium text-blue-600 hover:text-blue-700">
             View details
-            <ArrowRightIcon className="w-3 h-3 ml-1" />
+            <ArrowRight className="w-3 h-3 ml-1" />
           </div>
         )}
       </div>
@@ -305,7 +291,7 @@ function SurgeonIdleTimeCard({
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-100">
-              <SparklesIcon className="w-4 h-4 text-blue-600" />
+              <Sparkles className="w-4 h-4 text-blue-600" />
             </div>
             <div>
               <Text className="font-medium text-slate-700">Surgeon Callback Optimization</Text>
@@ -326,7 +312,7 @@ function SurgeonIdleTimeCard({
           </div>
           <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
             <div className="flex items-center gap-1.5 mb-1">
-              <ArrowRightIcon className="w-3 h-3 text-violet-500" />
+              <ArrowRight className="w-3 h-3 text-violet-500" />
               <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">Flip Room Idle</Text>
             </div>
             <div className="text-2xl font-semibold text-violet-700">{flipKpi.displayValue}</div>
@@ -334,7 +320,7 @@ function SurgeonIdleTimeCard({
           </div>
           <div className="p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-blue-200/40">
             <div className="flex items-center gap-1.5 mb-1">
-              <ClockIcon className="w-3 h-3 text-amber-500" />
+              <Clock className="w-3 h-3 text-amber-500" />
               <Text className="text-xs font-medium text-slate-500 uppercase tracking-wide">Same Room Idle</Text>
             </div>
             <div className="text-2xl font-semibold text-amber-700">{sameRoomKpi.displayValue}</div>
@@ -348,7 +334,7 @@ function SurgeonIdleTimeCard({
             {/* Section label */}
             <div className="px-4 py-2 bg-violet-50/50 border-b border-blue-100/60">
               <div className="flex items-center gap-2">
-                <ArrowRightIcon className="w-3.5 h-3.5 text-violet-500" />
+                <ArrowRight className="w-3.5 h-3.5 text-violet-500" />
                 <Text className="text-xs font-semibold text-violet-700 uppercase tracking-wide">
                   Flip Room Surgeons — Callback Optimization
                 </Text>
@@ -427,7 +413,7 @@ function SurgeonIdleTimeCard({
             {/* Section label */}
             <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100/60">
               <div className="flex items-center gap-2">
-                <ClockIcon className="w-3.5 h-3.5 text-slate-400" />
+                <Clock className="w-3.5 h-3.5 text-slate-400" />
                 <Text className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
                   Same-Room Only — Callback N/A (turnover-driven)
                 </Text>
@@ -476,7 +462,7 @@ function SurgeonIdleTimeCard({
             return (
               <div className="mt-4 p-3 bg-amber-50/80 backdrop-blur-sm rounded-lg border border-amber-200/40">
                 <div className="flex items-start gap-2">
-                  <ExclamationTriangleIcon className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                   <Text className="text-amber-800 text-sm font-medium">
                     {callSoonerCount} surgeon{callSoonerCount > 1 ? 's' : ''} with flip rooms could benefit from earlier patient callbacks — potential to recover {
                       Math.round(flipSurgeons.filter(s => s.status === 'call_sooner').reduce((sum, s) => sum + s.medianCallbackDelta, 0))
@@ -489,7 +475,7 @@ function SurgeonIdleTimeCard({
             return (
               <div className="mt-4 p-3 bg-blue-50/80 backdrop-blur-sm rounded-lg border border-blue-200/40">
                 <div className="flex items-start gap-2">
-                  <ExclamationTriangleIcon className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <AlertTriangle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <Text className="text-blue-800 text-sm font-medium">
                     {callLaterCount} surgeon{callLaterCount > 1 ? 's' : ''} arriving before flip rooms are ready — consider delaying callbacks slightly
                   </Text>
@@ -500,7 +486,7 @@ function SurgeonIdleTimeCard({
             return (
               <div className="mt-4 p-3 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/40">
                 <div className="flex items-start gap-2">
-                  <CheckCircleIcon className="w-4 h-4 text-emerald-600 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
                   <Text className="text-emerald-800 text-sm font-medium">
                     All {onTrackCount} flip room surgeon{onTrackCount !== 1 ? 's have' : ' has'} well-timed callbacks
                   </Text>
@@ -511,7 +497,7 @@ function SurgeonIdleTimeCard({
             return (
               <div className="mt-4 p-3 bg-slate-50/80 backdrop-blur-sm rounded-lg border border-slate-200/40">
                 <div className="flex items-start gap-2">
-                  <ClockIcon className="w-4 h-4 text-slate-500 mt-0.5" />
+                  <Clock className="w-4 h-4 text-slate-500 mt-0.5" />
                   <Text className="text-slate-700 text-sm font-medium">
                     No flip room transitions this period — all idle time is turnover-driven (same room)
                   </Text>
@@ -653,7 +639,7 @@ function FlipRoomModal({
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-100">
-                <SparklesIcon className="w-5 h-5 text-blue-600" />
+                <Sparkles className="w-5 h-5 text-blue-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Surgeon Idle Time Analysis</h2>
@@ -664,7 +650,7 @@ function FlipRoomModal({
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
             >
-              <XMarkIcon className="w-5 h-5" />
+              <X className="w-5 h-5" />
             </button>
           </div>
           
@@ -707,7 +693,7 @@ function FlipRoomModal({
             {filteredData.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
+                  <CalendarDays className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900 mb-1">No idle gaps found</h3>
                 <p className="text-sm text-slate-500 max-w-sm mx-auto">
@@ -763,7 +749,7 @@ function FlipRoomModal({
                                 <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
                               </div>
                               {i < analysis.cases.length - 1 && (
-                                <ArrowRightIcon className="w-4 h-4 mx-2 text-slate-300" />
+                                <ArrowRight className="w-4 h-4 mx-2 text-slate-300" />
                               )}
                             </div>
                           ))}
@@ -790,7 +776,7 @@ function FlipRoomModal({
                                 {gap.fromRoom && gap.toRoom && gap.fromRoom !== gap.toRoom && (
                                   <span className="text-xs text-slate-400">({gap.fromRoom})</span>
                                 )}
-                                <ArrowRightIcon className="w-4 h-4 text-slate-300" />
+                                <ArrowRight className="w-4 h-4 text-slate-300" />
                                 <span className="font-medium text-slate-700">{gap.toCase}</span>
                                 {gap.fromRoom && gap.toRoom && gap.fromRoom !== gap.toRoom && (
                                   <span className="text-xs text-slate-400">({gap.toRoom})</span>
@@ -857,7 +843,7 @@ function ORUtilizationModal({
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-violet-100">
-                <ChartBarIcon className="w-5 h-5 text-violet-600" />
+                <BarChart3 className="w-5 h-5 text-violet-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">OR Utilization by Room</h2>
@@ -874,7 +860,7 @@ function ORUtilizationModal({
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
             >
-              <XMarkIcon className="w-5 h-5" />
+              <X className="w-5 h-5" />
             </button>
           </div>
           
@@ -883,7 +869,7 @@ function ORUtilizationModal({
             {roomBreakdown.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <ChartBarIcon className="w-8 h-8 text-slate-400" />
+                  <BarChart3 className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900 mb-1">No utilization data</h3>
                 <p className="text-sm text-slate-500">No rooms with case data found in this period.</p>
@@ -1199,7 +1185,7 @@ export default function AnalyticsOverviewPage() {
         <Container className="py-12">
           <div className="max-w-md mx-auto text-center">
             <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <ChartBarIcon className="w-8 h-8 text-blue-500" />
+              <BarChart3 className="w-8 h-8 text-blue-500" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
             <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
@@ -1208,7 +1194,7 @@ export default function AnalyticsOverviewPage() {
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               View Facilities
-              <ArrowRightIcon className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </Container>
@@ -1252,14 +1238,14 @@ export default function AnalyticsOverviewPage() {
                   <KPICard 
                     title="First Case On-Time" 
                     kpi={analytics.fcots}
-                    icon={ClockIcon}
+                    icon={Clock}
                     accentColor="blue"
                     tooltip="Percentage of first cases per room per day that started on time within the configured grace period."
                   />
                   <KPICard 
                     title="OR Utilization" 
                     kpi={analytics.orUtilization}
-                    icon={ChartBarIcon}
+                    icon={BarChart3}
                     accentColor="violet"
                     onClick={() => setShowORUtilModal(true)}
                     tooltip="Percentage of available OR hours used for patient care (Patient In to Patient Out). Click to view per-room breakdown."
@@ -1267,7 +1253,7 @@ export default function AnalyticsOverviewPage() {
                   <KPICard 
                     title="Case Volume" 
                     kpi={analytics.caseVolume}
-                    icon={CalendarDaysIcon}
+                    icon={CalendarDays}
                     accentColor="amber"
                     showTracker={false}
                     tooltip="Total number of cases in the selected date range, compared to the equivalent previous period."
@@ -1275,7 +1261,7 @@ export default function AnalyticsOverviewPage() {
                   <KPICard 
                     title="Same-Day Cancellation" 
                     kpi={analytics.cancellationRate}
-                    icon={ExclamationTriangleIcon}
+                    icon={AlertTriangle}
                     accentColor="rose"
                     tooltip="Percentage of cases cancelled on the same day they were scheduled. Lower is better."
                   />
@@ -1292,28 +1278,28 @@ export default function AnalyticsOverviewPage() {
                   <KPICard 
                     title="Median Same Room Turnover" 
                     kpi={analytics.turnoverTime}
-                    icon={ClockIcon}
+                    icon={Clock}
                     accentColor="emerald"
                     tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
                   />
                   <KPICard 
                     title="Median Same-Room Surgical Turnover" 
                     kpi={analytics.standardSurgicalTurnover}
-                    icon={ClockIcon}
+                    icon={Clock}
                     accentColor="blue"
                     tooltip="Time from Surgeon Done (Case A) to Incision (Case B) for the same surgeon in the same room. Measures how long the surgeon waits between cuts."
                   />
                   <KPICard 
                     title="Median Flip-Room Surgical Turnover" 
                     kpi={analytics.flipRoomTime}
-                    icon={ArrowRightIcon}
+                    icon={ArrowRight}
                     accentColor="violet"
                     tooltip="Time from Surgeon Done (Case A) to Incision (Case B) when the surgeon moves to a different room. Measures flip room transition efficiency."
                   />
                   <KPICard 
                     title="Non-Operative Time" 
                     kpi={analytics.nonOperativeTime}
-                    icon={ClockIcon}
+                    icon={Clock}
                     accentColor="amber"
                     showTracker={false}
                     invertDelta={true}
@@ -1349,37 +1335,37 @@ export default function AnalyticsOverviewPage() {
                     title="Total Case Time"
                     value={formatMinutes(analytics.avgTotalCaseTime)}
                     subtitle="Patient In → Out"
-                    icon={ClockIcon}
+                    icon={Clock}
                   />
                   <TimeMetricCard
                     title="Surgical Time"
                     value={formatMinutes(analytics.avgSurgicalTime)}
                     subtitle="Incision → Closing"
-                    icon={ClockIcon}
+                    icon={Clock}
                   />
                   <TimeMetricCard
                     title="Pre-Op Time"
                     value={formatMinutes(analytics.avgPreOpTime)}
                     subtitle="Patient In → Incision"
-                    icon={ClockIcon}
+                    icon={Clock}
                   />
                   <TimeMetricCard
                     title="Anesthesia Time"
                     value={formatMinutes(analytics.avgAnesthesiaTime)}
                     subtitle="Anes Start → End"
-                    icon={ClockIcon}
+                    icon={Clock}
                   />
                   <TimeMetricCard
                     title="Closing Time"
                     value={formatMinutes(analytics.avgClosingTime)}
                     subtitle="Closing → Complete"
-                    icon={ClockIcon}
+                    icon={Clock}
                   />
                   <TimeMetricCard
                     title="Emergence"
                     value={formatMinutes(analytics.avgEmergenceTime)}
                     subtitle="Close → Patient Out"
-                    icon={ClockIcon}
+                    icon={Clock}
                   />
                 </div>
               </section>
@@ -1412,7 +1398,7 @@ export default function AnalyticsOverviewPage() {
                     ) : (
                       <div className="flex items-center justify-center h-72 text-slate-400">
                         <div className="text-center">
-                          <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                          <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                           <p>No data available</p>
                         </div>
                       </div>
@@ -1446,7 +1432,7 @@ export default function AnalyticsOverviewPage() {
                     ) : (
                       <div className="flex items-center justify-center h-72 text-slate-400">
                         <div className="text-center">
-                          <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                          <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                           <p>No data available</p>
                         </div>
                       </div>

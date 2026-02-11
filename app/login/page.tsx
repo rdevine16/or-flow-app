@@ -9,6 +9,7 @@ import Image from 'next/image'
 import { checkRateLimit, recordFailedAttempt, clearRateLimit } from '@/lib/rate-limiter'
 import { signInWithSession } from '@/lib/session-manager'
 import { errorLogger, ErrorCategory } from '@/lib/error-logger'
+import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Mail, ShieldCheck } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -279,9 +280,7 @@ export default function LoginPage() {
           <div className="mt-12 flex items-center gap-3">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-slate-600" />
             <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <svg className="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>HIPAA Compliant</span>
             </div>
             <div className="h-px w-12 bg-gradient-to-l from-transparent to-slate-600" />
@@ -315,9 +314,7 @@ export default function LoginPage() {
                 {resetEmailSent ? (
                   <div className="text-center">
                     <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
-                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
+                      <Mail className="w-8 h-8 text-green-600" />
                     </div>
                     <h2 className="text-2xl font-semibold text-slate-900 mb-3">Check your email</h2>
                     <p className="text-slate-600 mb-8 leading-relaxed">
@@ -327,9 +324,7 @@ export default function LoginPage() {
                       onClick={handleBackToLogin}
                       className="text-blue-600 hover:text-blue-700 font-medium transition-colors inline-flex items-center gap-2 group"
                     >
-                      <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                      </svg>
+                      <ArrowLeft className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" />
                       Back to login
                     </button>
                   </div>
@@ -340,9 +335,7 @@ export default function LoginPage() {
                         onClick={handleBackToLogin}
                         className="text-slate-600 hover:text-slate-900 font-medium transition-colors inline-flex items-center gap-2 group mb-6"
                       >
-                        <svg className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
+                        <ArrowLeft className="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" />
                         Back to login
                       </button>
                       <h2 className="text-3xl font-semibold text-slate-900 mb-2">Reset your password</h2>
@@ -370,9 +363,7 @@ export default function LoginPage() {
 
                       {error && (
                         <div id="reset-error" role="alert" className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
-                          <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                           <p className="text-sm text-red-600">{error}</p>
                         </div>
                       )}
@@ -385,10 +376,7 @@ export default function LoginPage() {
                       >
                         {resetLoading ? (
                           <span className="flex items-center justify-center gap-2">
-                            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
+                            <Loader2 className="animate-spin h-5 w-5" />
                             Sending...
                           </span>
                         ) : (
@@ -457,14 +445,9 @@ export default function LoginPage() {
                         aria-label={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                          </svg>
+                          <EyeOff className="w-5 h-5" />
                         ) : (
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
+                          <Eye className="w-5 h-5" />
                         )}
                       </button>
                     </div>
@@ -496,9 +479,7 @@ export default function LoginPage() {
 
                   {error && (
                     <div id="login-error" role="alert" className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                      <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                      <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-sm text-red-600">{error}</p>
                         {isRateLimited && rateLimitUntil && (
@@ -516,10 +497,7 @@ export default function LoginPage() {
                   >
                     {loading ? (
                       <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
+                        <Loader2 className="animate-spin h-5 w-5" />
                         <span>Signing in...</span>
                       </span>
                     ) : (

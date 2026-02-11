@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Check, ChevronLeft, ChevronRight, Circle, CornerDownLeft, X } from 'lucide-react'
 
 interface Milestone {
   id: string
@@ -217,9 +218,7 @@ export default function PiPMilestonePanel({
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <circle cx="12" cy="12" r="8" />
-            </svg>
+            <Circle size={12} stroke="white" strokeWidth={2} />
           </div>
           <div>
             <p style={{ fontSize: '12px', fontWeight: 600, margin: 0 }}>{roomName} - {procedureName}</p>
@@ -230,9 +229,7 @@ export default function PiPMilestonePanel({
           onClick={onClose}
           style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer' }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <X size={14} stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
         </button>
       </div>
 
@@ -330,9 +327,7 @@ export default function PiPMilestonePanel({
           </svg>
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {activeItem.isComplete ? (
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={accentColor} strokeWidth="2.5">
-                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <Check size={28} stroke={accentColor} strokeWidth={2.5} />
             ) : activeItem.isInProgress ? (
               <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: accentColor, animation: 'pulse 2s infinite' }} />
             ) : (
@@ -437,9 +432,7 @@ export default function PiPMilestonePanel({
               gap: '4px',
             }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <CornerDownLeft size={12} strokeWidth={2} />
             {activeItem.isInProgress ? 'Undo Start' : 'Undo'}
           </button>
         )}
@@ -490,9 +483,7 @@ export default function PiPMilestonePanel({
             opacity: activeIndex === 0 ? 0.3 : 1,
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-            <path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <ChevronLeft size={16} stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
         </button>
         
         <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>
@@ -510,9 +501,7 @@ export default function PiPMilestonePanel({
             opacity: activeIndex === displayItems.length - 1 ? 0.3 : 1,
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-            <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <ChevronRight size={16} stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
         </button>
       </div>
     </div>

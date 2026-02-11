@@ -12,6 +12,7 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Check, Clock } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -156,11 +157,10 @@ export default function SubscriptionPage() {
         storageUsedMB: 124, // Placeholder
       })
     } catch (error) {
-      setError('Failed to load usage statistics. Please try again.')
       showToast({
         type: 'error',
-        title: 'Failed to load usage stats',
-        message: error instanceof Error ? error.message : 'Please try again'
+        title: 'Error Fetching Usage Stats',
+        message: error instanceof Error ? error.message : 'Failed to fetch usage statistics'
       })
     } finally {
       setLoading(false)
@@ -194,9 +194,7 @@ export default function SubscriptionPage() {
           <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Clock className="w-5 h-5 text-amber-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-slate-900">Coming Soon</h3>
@@ -374,9 +372,7 @@ export default function SubscriptionPage() {
                           <ul className="space-y-2 mb-4">
                             {plan.features.map((feature, idx) => (
                               <li key={idx} className="flex items-center gap-2 text-sm text-slate-600">
-                                <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                </svg>
+                                <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                                 {feature}
                               </li>
                             ))}

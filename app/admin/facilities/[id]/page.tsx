@@ -22,6 +22,7 @@ import FacilityLogoUpload from '@/components/FacilityLogoUpload'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Building2, CheckCircle2, ChevronLeft, ClipboardList, Clock, Eye, FlaskConical, Plus, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
 
 type TabType = 'overview' | 'users' | 'rooms' | 'procedures' | 'subscription' | 'audit'
 
@@ -393,7 +394,11 @@ export default function FacilityDetailPage() {
         openIssues: issues,
       })
 } catch (error) {
-  showToast({ type: 'error', title: 'Failed to load facility stats', message: error instanceof Error ? error.message : 'Please try again' })
+  showToast({
+    type: 'error',
+    title: 'Error fetching facility stats:',
+    message: error instanceof Error ? error.message : 'Error fetching facility stats:',
+  })
 } finally {
       setStatsLoading(false)
     }
@@ -473,8 +478,11 @@ export default function FacilityDetailPage() {
           }
         }
       } catch (error) {
-        setError('Failed to load facility data. Please try again.')
-        showToast({ type: 'error', title: 'Failed to load facility data', message: error instanceof Error ? error.message : 'Please try again' })
+        showToast({
+  type: 'error',
+  title: 'Error fetching facility data:',
+  message: error instanceof Error ? error.message : 'Error fetching facility data:'
+})
 
       } finally {
         setLoading(false)
@@ -519,8 +527,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to update facility',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error updating facility:',
+  message: error instanceof Error ? error.message : 'Error updating facility:'
 })
       alert('Failed to update facility')
     } finally {
@@ -590,8 +598,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to invite user',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error inviting user:',
+  message: error instanceof Error ? error.message : 'Error inviting user:'
 })
       alert('Failed to invite user: ' + (error as Error).message)
     } finally {
@@ -623,8 +631,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to add room',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error adding room:',
+  message: error instanceof Error ? error.message : 'Error adding room:'
 })
       alert('Failed to add room')
     } finally {
@@ -648,8 +656,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to delete room',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error deleting room:',
+  message: error instanceof Error ? error.message : 'Error deleting room:'
 })
       alert('Failed to delete room')
     }
@@ -679,8 +687,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to add procedure',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error adding procedure:',
+  message: error instanceof Error ? error.message : 'Error adding procedure:'
 })
       alert('Failed to add procedure')
     } finally {
@@ -704,8 +712,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to delete procedure',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error deleting procedure:',
+  message: error instanceof Error ? error.message : 'Error deleting procedure:'
 })
       alert('Failed to delete procedure')
     }
@@ -742,8 +750,8 @@ export default function FacilityDetailPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to update user status',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error updating user status:',
+  message: error instanceof Error ? error.message : 'Error updating user status:'
 })
       alert('Failed to update user status')
     }
@@ -825,7 +833,9 @@ export default function FacilityDetailPage() {
   if (userLoading || loading) {
     return (
       <DashboardLayout>
-        <PageLoader message="Loading facility..." />
+        <div className="flex items-center justify-center h-64">
+          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
       </DashboardLayout>
     )
   }
@@ -848,9 +858,7 @@ export default function FacilityDetailPage() {
             href="/admin/facilities"
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <ChevronLeft className="w-5 h-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
@@ -874,10 +882,7 @@ export default function FacilityDetailPage() {
             onClick={handleImpersonate}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium transition-all shadow-sm hover:shadow-md"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
+            <Eye className="w-5 h-5" />
             View as Facility
           </button>
         </div>
@@ -976,9 +981,7 @@ export default function FacilityDetailPage() {
                   trend={usageTrend || undefined}
                   color="blue"
                   icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
+                    <ClipboardList className="w-5 h-5" />
                   }
                 />
                 <StatCard
@@ -987,9 +990,7 @@ export default function FacilityDetailPage() {
                   subtext={`of ${stats?.totalUsers || 0} total`}
                   color="emerald"
                   icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                    </svg>
+                    <Users className="w-5 h-5" />
                   }
                 />
                 <StatCard
@@ -998,9 +999,7 @@ export default function FacilityDetailPage() {
                   subtext={`${stats?.openIssues || 0} open issues`}
                   color={stats?.dataQualityScore && stats.dataQualityScore < 80 ? 'amber' : 'purple'}
                   icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <CheckCircle2 className="w-5 h-5" />
                   }
                 />
                 <StatCard
@@ -1009,9 +1008,7 @@ export default function FacilityDetailPage() {
                   subtext={`~${stats?.avgCasesPerDay || 0} per day avg`}
                   color="slate"
                   icon={
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                    </svg>
+                    <TrendingUp className="w-5 h-5" />
                   }
                 />
               </div>
@@ -1049,9 +1046,7 @@ export default function FacilityDetailPage() {
                       className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
                     >
                       <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
+                        <UserPlus className="w-5 h-5" />
                       </div>
                       <p className="font-medium text-slate-900">Invite User</p>
                       <p className="text-xs text-slate-500 mt-0.5">Add team members</p>
@@ -1061,9 +1056,7 @@ export default function FacilityDetailPage() {
                       className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
                     >
                       <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
+                        <Building2 className="w-5 h-5" />
                       </div>
                       <p className="font-medium text-slate-900">Manage Rooms</p>
                       <p className="text-xs text-slate-500 mt-0.5">{rooms.length} configured</p>
@@ -1073,9 +1066,7 @@ export default function FacilityDetailPage() {
                       className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
                     >
                       <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                        </svg>
+                        <FlaskConical className="w-5 h-5" />
                       </div>
                       <p className="font-medium text-slate-900">Procedures</p>
                       <p className="text-xs text-slate-500 mt-0.5">{procedures.length} types</p>
@@ -1085,9 +1076,7 @@ export default function FacilityDetailPage() {
                       className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
                     >
                       <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                        </svg>
+                        <ClipboardList className="w-5 h-5" />
                       </div>
                       <p className="font-medium text-slate-900">Audit Log</p>
                       <p className="text-xs text-slate-500 mt-0.5">View activity</p>
@@ -1199,9 +1188,7 @@ export default function FacilityDetailPage() {
                 onClick={() => setShowInviteModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus className="w-4 h-4" />
                 Invite User
               </button>
             </div>
@@ -1249,9 +1236,7 @@ export default function FacilityDetailPage() {
                       <td className="px-4 py-3">
                         {user.invitation_token ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <Clock className="w-3 h-3" />
                             Pending
                           </span>
                         ) : user.is_active ? (
@@ -1307,9 +1292,7 @@ export default function FacilityDetailPage() {
                 onClick={() => setShowRoomModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus className="w-4 h-4" />
                 Add Room
               </button>
             </div>
@@ -1318,9 +1301,7 @@ export default function FacilityDetailPage() {
                 <div key={room.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
+                      <Building2 className="w-5 h-5 text-emerald-600" />
                     </div>
                     <span className="font-medium text-slate-900">{room.name}</span>
                   </div>
@@ -1328,18 +1309,14 @@ export default function FacilityDetailPage() {
                     onClick={() => handleDeleteRoom(room.id, room.name)}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
               {rooms.length === 0 && (
                 <div className="p-12 text-center">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
+                    <Building2 className="w-6 h-6 text-slate-400" />
                   </div>
                   <p className="text-slate-600 font-medium">No rooms configured</p>
                   <p className="text-sm text-slate-400 mt-1">Add operating rooms to get started</p>
@@ -1361,9 +1338,7 @@ export default function FacilityDetailPage() {
                 onClick={() => setShowProcedureModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus className="w-4 h-4" />
                 Add Procedure
               </button>
             </div>
@@ -1372,9 +1347,7 @@ export default function FacilityDetailPage() {
                 <div key={proc.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                      </svg>
+                      <FlaskConical className="w-5 h-5 text-purple-600" />
                     </div>
                     <span className="font-medium text-slate-900">{proc.name}</span>
                   </div>
@@ -1382,18 +1355,14 @@ export default function FacilityDetailPage() {
                     onClick={() => handleDeleteProcedure(proc.id, proc.name)}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
               {procedures.length === 0 && (
                 <div className="p-12 text-center">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                    </svg>
+                    <FlaskConical className="w-6 h-6 text-slate-400" />
                   </div>
                   <p className="text-slate-600 font-medium">No procedures configured</p>
                   <p className="text-sm text-slate-400 mt-1">Add procedure types to get started</p>
@@ -1549,9 +1518,7 @@ export default function FacilityDetailPage() {
               {auditEntries.length === 0 && (
                 <div className="p-12 text-center">
                   <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                    </svg>
+                    <ClipboardList className="w-6 h-6 text-slate-400" />
                   </div>
                   <p className="text-slate-600 font-medium">No activity yet</p>
                   <p className="text-sm text-slate-400 mt-1">Actions will appear here as they happen</p>

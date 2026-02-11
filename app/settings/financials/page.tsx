@@ -9,6 +9,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
+import { Building2, Calculator, Check, ChevronRight, ClipboardCheck, Clock, PenLine, Plus, Tag, User } from 'lucide-react'
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -423,9 +424,7 @@ showToast({
                           className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                           title="Edit rate"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
+                          <PenLine className="w-5 h-5" />
                         </button>
                       )}
                     </div>
@@ -444,9 +443,7 @@ showToast({
                       className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-purple-200 hover:shadow-lg hover:shadow-purple-500/5 transition-all"
                     >
                       <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-500 group-hover:scale-110 transition-all">
-                        <svg className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Plus className="w-5 h-5 text-purple-600 group-hover:text-white transition-colors" />
                       </div>
                       <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Cost Category</span>
                     </Link>
@@ -455,9 +452,7 @@ showToast({
                       className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-green-200 hover:shadow-lg hover:shadow-green-500/5 transition-all"
                     >
                       <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-500 group-hover:scale-110 transition-all">
-                        <svg className="w-5 h-5 text-green-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Plus className="w-5 h-5 text-green-600 group-hover:text-white transition-colors" />
                       </div>
                       <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Payer</span>
                     </Link>
@@ -466,9 +461,7 @@ showToast({
                       className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-blue-200 hover:shadow-lg hover:shadow-blue-500/5 transition-all"
                     >
                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-500 group-hover:scale-110 transition-all">
-                        <svg className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Plus className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" />
                       </div>
                       <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Procedure</span>
                     </Link>
@@ -477,9 +470,7 @@ showToast({
                       className="group relative flex flex-col items-center gap-2 p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white hover:border-orange-200 hover:shadow-lg hover:shadow-orange-500/5 transition-all"
                     >
                       <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-orange-500 group-hover:scale-110 transition-all">
-                        <svg className="w-5 h-5 text-orange-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                        <Plus className="w-5 h-5 text-orange-600 group-hover:text-white transition-colors" />
                       </div>
                       <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 text-center">Surgeon Override</span>
                     </Link>
@@ -496,13 +487,9 @@ showToast({
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
+                      <Tag className="w-5 h-5 text-purple-600" />
                     </div>
-                    <svg className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Cost Categories</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.costCategories.total}</p>
@@ -518,13 +505,9 @@ showToast({
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
+                      <Building2 className="w-5 h-5 text-green-600" />
                     </div>
-                    <svg className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Payers</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.payers}</p>
@@ -538,13 +521,9 @@ showToast({
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
+                      <Calculator className="w-5 h-5 text-blue-600" />
                     </div>
-                    <svg className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Procedure Pricing</h3>
                   <p className="text-2xl font-bold text-slate-900">
@@ -561,13 +540,9 @@ showToast({
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
+                      <User className="w-5 h-5 text-orange-600" />
                     </div>
-                    <svg className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Surgeon Variance</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.surgeonVariances}</p>
@@ -580,9 +555,7 @@ showToast({
                 {/* Setup Checklist */}
                 <div className="bg-white border border-slate-200 rounded-xl p-6">
                   <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                    </svg>
+                    <ClipboardCheck className="w-5 h-5 text-slate-400" />
                     Setup Checklist
                   </h3>
                   <div className="space-y-3">
@@ -602,9 +575,7 @@ showToast({
                           }
                         `}>
                           {step.complete && !step.optional ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="w-4 h-4" />
                           ) : (
                             <span className="text-xs font-semibold">{index + 1}</span>
                           )}
@@ -634,9 +605,7 @@ showToast({
                             <p className="text-xs text-slate-400 mt-1">{step.count} defined</p>
                           ) : null}
                         </div>
-                        <svg className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
                       </Link>
                     ))}
                   </div>
@@ -645,17 +614,13 @@ showToast({
                 {/* Recent Activity */}
                 <div className="bg-white border border-slate-200 rounded-xl p-6">
                   <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <Clock className="w-5 h-5 text-slate-400" />
                     Recent Activity
                   </h3>
                   {recentActivity.length === 0 ? (
                     <div className="text-center py-8">
                       <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <Clock className="w-6 h-6 text-slate-400" />
                       </div>
                       <p className="text-slate-500 text-sm">No recent activity</p>
                       <p className="text-slate-400 text-xs mt-1">Changes to financial settings will appear here</p>

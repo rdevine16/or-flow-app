@@ -11,6 +11,7 @@ import { delayTypeAudit } from '@/lib/audit-logger'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { AlertTriangle, Info, Pencil, Plus, Trash2 } from 'lucide-react'
 
 interface DelayType {
   id: string
@@ -53,23 +54,14 @@ export default function AdminDelayTypesPage() {
   }, [isGlobalAdmin])
 
   const fetchData = async () => {
-    setLoading(true)
-    setError(null)
+    const { data } = await supabase
+      .from('delay_types')
+      .select('*')
+      .is('facility_id', null)
+      .order('display_order')
 
-    try {
-      const { data, error: fetchErr } = await supabase
-        .from('delay_types')
-        .select('*')
-        .is('facility_id', null)
-        .order('display_order')
-
-      if (fetchErr) throw fetchErr
-      setDelayTypes(data || [])
-    } catch (err) {
-      setError('Failed to load delay types. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    setDelayTypes(data || [])
+    setLoading(false)
   }
 
   const openAddModal = () => {
@@ -98,68 +90,60 @@ export default function AdminDelayTypesPage() {
     setSaving(true)
     const nameValue = formData.name.trim() || formData.display_name.trim().toLowerCase().replace(/\s+/g, '_')
 
-    try {
-      if (modal.mode === 'add') {
-        const { data, error } = await supabase
-          .from('delay_types')
-          .insert({
-            name: nameValue,
-            display_name: formData.display_name.trim(),
-            display_order: formData.display_order,
-            facility_id: null,
-          })
-          .select()
-          .single()
+    if (modal.mode === 'add') {
+      const { data, error } = await supabase
+        .from('delay_types')
+        .insert({
+          name: nameValue,
+          display_name: formData.display_name.trim(),
+          display_order: formData.display_order,
+          facility_id: null,
+        })
+        .select()
+        .single()
 
-        if (error) throw error
-
+      if (!error && data) {
         setDelayTypes([...delayTypes, data].sort((a, b) => a.display_order - b.display_order))
         closeModal()
         await delayTypeAudit.adminCreated(supabase, data.display_name, data.id)
-      } else if (modal.mode === 'edit' && modal.delayType) {
-        const oldName = modal.delayType.display_name
-        
-        const { data, error } = await supabase
-          .from('delay_types')
-          .update({
-            name: nameValue,
-            display_name: formData.display_name.trim(),
-            display_order: formData.display_order,
-          })
-          .eq('id', modal.delayType.id)
-          .select()
-          .single()
+      }
+    } else if (modal.mode === 'edit' && modal.delayType) {
+      const oldName = modal.delayType.display_name
+      
+      const { data, error } = await supabase
+        .from('delay_types')
+        .update({
+          name: nameValue,
+          display_name: formData.display_name.trim(),
+          display_order: formData.display_order,
+        })
+        .eq('id', modal.delayType.id)
+        .select()
+        .single()
 
-        if (error) throw error
-
+      if (!error && data) {
         setDelayTypes(delayTypes.map(dt => dt.id === data.id ? data : dt).sort((a, b) => a.display_order - b.display_order))
         closeModal()
         await delayTypeAudit.adminUpdated(supabase, data.id, oldName, data.display_name)
       }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to save delay type', 'error')
-    } finally {
-      setSaving(false)
     }
+
+    setSaving(false)
   }
 
   const handleDelete = async (id: string) => {
     const delayType = delayTypes.find(dt => dt.id === id)
     if (!delayType) return
 
-    try {
-      const { error } = await supabase
-        .from('delay_types')
-        .delete()
-        .eq('id', id)
+    const { error } = await supabase
+      .from('delay_types')
+      .delete()
+      .eq('id', id)
 
-      if (error) throw error
-
+    if (!error) {
       setDelayTypes(delayTypes.filter(dt => dt.id !== id))
       setDeleteTarget(null)
       await delayTypeAudit.adminDeleted(supabase, delayType.display_name, id)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete delay type', 'error')
     }
   }
 
@@ -168,7 +152,9 @@ export default function AdminDelayTypesPage() {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <PageLoader message="Loading delay types..." />
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -194,9 +180,7 @@ export default function AdminDelayTypesPage() {
               onClick={openAddModal}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus className="w-4 h-4" />
               Add Delay Type
             </button>
           </div>
@@ -212,9 +196,7 @@ export default function AdminDelayTypesPage() {
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             {delayTypes.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No delay types defined</p>
                 <button
                   onClick={openAddModal}
@@ -261,18 +243,14 @@ export default function AdminDelayTypesPage() {
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Edit"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
+                              <Pencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(delayType)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                       </td>
@@ -286,9 +264,7 @@ export default function AdminDelayTypesPage() {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">About delay types</p>
                 <p>

@@ -8,6 +8,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Bell, CalendarDays, ClipboardList, Clock, FileBarChart, FlaskConical, Mail, Smartphone } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -38,9 +39,7 @@ const notificationCategories: NotificationCategory[] = [
     title: 'Case Alerts',
     description: 'Real-time notifications during surgical cases',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-      </svg>
+      <ClipboardList className="w-5 h-5" />
     ),
     settings: [
       {
@@ -74,9 +73,7 @@ const notificationCategories: NotificationCategory[] = [
     title: 'Schedule Alerts',
     description: 'Notifications about scheduling and timing',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
+      <CalendarDays className="w-5 h-5" />
     ),
     settings: [
       {
@@ -104,9 +101,7 @@ const notificationCategories: NotificationCategory[] = [
     title: 'Tray Management',
     description: 'Notifications for device rep coordination',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-      </svg>
+      <FlaskConical className="w-5 h-5" />
     ),
     settings: [
       {
@@ -134,9 +129,7 @@ const notificationCategories: NotificationCategory[] = [
     title: 'Reports & Summaries',
     description: 'Scheduled report notifications',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
+      <FileBarChart className="w-5 h-5" />
     ),
     settings: [
       {
@@ -174,9 +167,7 @@ export default function NotificationsPage() {
           <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Clock className="w-5 h-5 text-amber-600" />
               </div>
               <div>
                 <h3 className="font-semibold text-slate-900">Coming Soon</h3>
@@ -247,9 +238,7 @@ export default function NotificationsPage() {
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
+                      <Smartphone className="w-5 h-5 text-slate-500" />
                     </div>
                     <div>
                       <p className="font-medium text-slate-900">Push Notifications</p>
@@ -268,9 +257,7 @@ export default function NotificationsPage() {
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                      </svg>
+                      <Bell className="w-5 h-5 text-slate-500" />
                     </div>
                     <div>
                       <p className="font-medium text-slate-900">In-App Alerts</p>
@@ -289,9 +276,7 @@ export default function NotificationsPage() {
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-white border border-slate-200 rounded-lg flex items-center justify-center">
-                      <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
+                      <Mail className="w-5 h-5 text-slate-500" />
                     </div>
                     <div>
                       <p className="font-medium text-slate-900">Email</p>

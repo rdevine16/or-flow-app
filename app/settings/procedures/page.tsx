@@ -9,8 +9,12 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { procedureAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { PageLoader } from '@/components/ui/Loading'
+import { PageLoader, Spinner } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
+import { Input, Select, Label } from '@/components/ui/Input'
+import { Plus, Pencil, Archive, Search, AlertTriangle, Undo2 } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -526,23 +530,16 @@ deleted_by: currentUserId
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                      </svg>
+                      <Archive className="w-4 h-4" />
                       {showArchived ? 'View Active' : `Archive (${archivedCount})`}
                     </button>
 
                     {/* Add Button (only when viewing active) */}
                     {!showArchived && (
-                      <button
-                        onClick={openAddModal}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                      <Button onClick={openAddModal}>
+                        <Plus className="w-4 h-4" />
                         Add Procedure
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -550,9 +547,7 @@ deleted_by: currentUserId
                 {/* Search (show if more than 5 items) */}
                 {procedures.length > 5 && (
                   <div className="relative">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
                       placeholder="Search procedures..."
@@ -685,9 +680,7 @@ deleted_by: currentUserId
                               disabled={saving}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                              </svg>
+                              <Undo2 className="w-4 h-4" />
                               Restore
                             </button>
                           ) : (
@@ -698,18 +691,14 @@ deleted_by: currentUserId
                                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Edit"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
+                                <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => openDeleteModal(procedure)}
                                 className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Archive"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                </svg>
+                                <Archive className="w-4 h-4" />
                               </button>
                             </>
                           )}
@@ -725,195 +714,156 @@ deleted_by: currentUserId
           {/* =====================================================
               ADD/EDIT MODAL
               ===================================================== */}
-          {modal.isOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    {modal.mode === 'add' ? 'Add Procedure' : 'Edit Procedure'}
-                  </h3>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Procedure Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      placeholder="e.g., Total Hip Replacement"
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Body Region
-                    </label>
-                    <select
-                      value={formData.body_region_id}
-                      onChange={(e) => setFormData({ ...formData, body_region_id: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value="">Select region...</option>
-                      {bodyRegions.map((region) => (
-                        <option key={region.id} value={region.id}>
-                          {region.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Procedure Category
-                    </label>
-                    <select
-                      value={formData.procedure_category_id}
-                      onChange={(e) => setFormData({ ...formData, procedure_category_id: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value="">Select category...</option>
-                      {filteredCategories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.display_name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-500 mt-1.5">
-                      Used for analytics grouping and comparisons
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Technique
-                    </label>
-                    <select
-                      value={formData.technique_id}
-                      onChange={(e) => setFormData({ ...formData, technique_id: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value="">Select technique...</option>
-                      {techniques.map((technique) => (
-                        <option key={technique.id} value={technique.id}>
-                          {technique.display_name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Implant Tracking
-                    </label>
-                    <select
-                      value={formData.implant_category}
-                      onChange={(e) => setFormData({ ...formData, implant_category: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      {IMPLANT_CATEGORIES.map((category) => (
-                        <option key={category.value} value={category.value}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-500 mt-1.5">
-                      Enable implant size tracking for hip or knee procedures
-                    </p>
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                  <button
-                    onClick={closeModal}
-                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !formData.name.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Procedure' : 'Save Changes'}
-                  </button>
-                </div>
-              </div>
+          <Modal
+            open={modal.isOpen}
+            onClose={closeModal}
+            title={modal.mode === 'add' ? 'Add Procedure' : 'Edit Procedure'}
+          >
+            <div>
+              <Label htmlFor="procName">Procedure Name *</Label>
+              <Input
+                id="procName"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g., Total Hip Replacement"
+                autoFocus
+              />
             </div>
-          )}
+            <div>
+              <Label htmlFor="bodyRegion">Body Region</Label>
+              <Select
+                id="bodyRegion"
+                value={formData.body_region_id}
+                onChange={(e) => setFormData({ ...formData, body_region_id: e.target.value })}
+              >
+                <option value="">Select region...</option>
+                {bodyRegions.map((region) => (
+                  <option key={region.id} value={region.id}>
+                    {region.display_name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="procCategory">Procedure Category</Label>
+              <Select
+                id="procCategory"
+                value={formData.procedure_category_id}
+                onChange={(e) => setFormData({ ...formData, procedure_category_id: e.target.value })}
+              >
+                <option value="">Select category...</option>
+                {filteredCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.display_name}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-slate-500 mt-1.5">
+                Used for analytics grouping and comparisons
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="technique">Technique</Label>
+              <Select
+                id="technique"
+                value={formData.technique_id}
+                onChange={(e) => setFormData({ ...formData, technique_id: e.target.value })}
+              >
+                <option value="">Select technique...</option>
+                {techniques.map((technique) => (
+                  <option key={technique.id} value={technique.id}>
+                    {technique.display_name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="implant">Implant Tracking</Label>
+              <Select
+                id="implant"
+                value={formData.implant_category}
+                onChange={(e) => setFormData({ ...formData, implant_category: e.target.value })}
+              >
+                {IMPLANT_CATEGORIES.map((category) => (
+                  <option key={category.value} value={category.value}>
+                    {category.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-slate-500 mt-1.5">
+                Enable implant size tracking for hip or knee procedures
+              </p>
+            </div>
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeModal} />
+              <Modal.Action
+                onClick={handleSave}
+                loading={saving}
+                disabled={!formData.name.trim()}
+              >
+                {modal.mode === 'add' ? 'Add Procedure' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
 
           {/* =====================================================
               DELETE CONFIRMATION MODAL
               ===================================================== */}
-          {deleteModal.isOpen && deleteModal.procedure && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    Archive Procedure
-                  </h3>
-                </div>
-                <div className="p-6">
-                  {deleteModal.loading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-slate-600 mb-4">
-                        Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.procedure.name}"</span>?
-                      </p>
-
-                      {/* Dependency Warning */}
-                      {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.milestoneConfigs > 0) && (
-                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-                          <div className="flex gap-3">
-                            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <div>
-                              <p className="font-medium text-amber-800">This procedure is in use:</p>
-                              <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
-                                {deleteModal.dependencies.cases > 0 && (
-                                  <li>{deleteModal.dependencies.cases} case{deleteModal.dependencies.cases !== 1 ? 's' : ''}</li>
-                                )}
-                                {deleteModal.dependencies.milestoneConfigs > 0 && (
-                                  <li>{deleteModal.dependencies.milestoneConfigs} milestone configuration{deleteModal.dependencies.milestoneConfigs !== 1 ? 's' : ''}</li>
-                                )}
-                              </ul>
-                              <p className="mt-2 text-sm text-amber-700">
-                                Archiving will hide it from new cases but existing data will be preserved.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <p className="text-sm text-slate-500">
-                        You can restore archived procedures at any time.
-                      </p>
-                    </>
-                  )}
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                  <button
-                    onClick={closeDeleteModal}
-                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={saving || deleteModal.loading}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Archiving...' : 'Archive Procedure'}
-                  </button>
-                </div>
+          <Modal
+            open={deleteModal.isOpen && !!deleteModal.procedure}
+            onClose={closeDeleteModal}
+            title="Archive Procedure"
+          >
+            {deleteModal.loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="md" color="blue" />
               </div>
-            </div>
-          )}
+            ) : deleteModal.procedure && (
+              <>
+                <p className="text-slate-600">
+                  Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.procedure.name}"</span>?
+                </p>
+
+                {/* Dependency Warning */}
+                {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.milestoneConfigs > 0) && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-amber-800">This procedure is in use:</p>
+                        <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
+                          {deleteModal.dependencies.cases > 0 && (
+                            <li>{deleteModal.dependencies.cases} case{deleteModal.dependencies.cases !== 1 ? 's' : ''}</li>
+                          )}
+                          {deleteModal.dependencies.milestoneConfigs > 0 && (
+                            <li>{deleteModal.dependencies.milestoneConfigs} milestone configuration{deleteModal.dependencies.milestoneConfigs !== 1 ? 's' : ''}</li>
+                          )}
+                        </ul>
+                        <p className="mt-2 text-sm text-amber-700">
+                          Archiving will hide it from new cases but existing data will be preserved.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-sm text-slate-500">
+                  You can restore archived procedures at any time.
+                </p>
+              </>
+            )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeDeleteModal} />
+              <Modal.Action
+                onClick={handleDelete}
+                loading={saving}
+                disabled={deleteModal.loading}
+                variant="danger"
+              >
+                Archive Procedure
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
 
           {/* =====================================================
               TOAST NOTIFICATION

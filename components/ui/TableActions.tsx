@@ -1,7 +1,7 @@
 // components/ui/TableActions.tsx
+import { Copy, ExternalLink, Eye, Pencil, Trash2 } from 'lucide-react'
 'use client'
 
-import { PencilIcon, TrashIcon, EyeIcon, DocumentDuplicateIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
 
 interface TableActionsProps {
   onView?: () => void
@@ -43,7 +43,7 @@ export function TableActions({
           title={viewTooltip}
           aria-label={viewTooltip}
         >
-          <EyeIcon className="w-4 h-4" />
+          <Eye className="w-4 h-4" />
         </button>
       )}
 
@@ -58,7 +58,7 @@ export function TableActions({
           title={editTooltip}
           aria-label={editTooltip}
         >
-          <PencilIcon className="w-4 h-4" />
+          <Pencil className="w-4 h-4" />
         </button>
       )}
 
@@ -73,7 +73,7 @@ export function TableActions({
           title={duplicateTooltip}
           aria-label={duplicateTooltip}
         >
-          <DocumentDuplicateIcon className="w-4 h-4" />
+          <Copy className="w-4 h-4" />
         </button>
       )}
 
@@ -88,7 +88,7 @@ export function TableActions({
           title={openTooltip}
           aria-label={openTooltip}
         >
-          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+          <ExternalLink className="w-4 h-4" />
         </button>
       )}
 
@@ -103,7 +103,7 @@ export function TableActions({
           title={deleteTooltip}
           aria-label={deleteTooltip}
         >
-          <TrashIcon className="w-4 h-4" />
+          <Trash2 className="w-4 h-4" />
         </button>
       )}
     </div>

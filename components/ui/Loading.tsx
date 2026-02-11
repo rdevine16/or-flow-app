@@ -7,7 +7,7 @@ import { ReactNode } from 'react'
 // Spinner
 // ============================================
 
-type SpinnerSize = 'sm' | 'md' | 'lg' | 'xl'
+type SpinnerSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 type SpinnerColor = 'blue' | 'white' | 'slate' | 'green' | 'red'
 
 interface SpinnerProps {
@@ -17,6 +17,7 @@ interface SpinnerProps {
 }
 
 const sizeClasses: Record<SpinnerSize, string> = {
+  xs: 'w-3 h-3 border-[1.5px]',
   sm: 'w-4 h-4 border-2',
   md: 'w-8 h-8 border-2',
   lg: 'w-12 h-12 border-3',

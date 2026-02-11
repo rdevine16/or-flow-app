@@ -14,6 +14,9 @@ import { useProcedureTypes, usePayers } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { AlertTriangle, ClipboardList, ExternalLink, Info, Pencil, X } from 'lucide-react'
 
 
 // Types
@@ -460,9 +463,7 @@ export default function ProcedurePricingPage() {
                         onClick={() => setEditingOrRate(true)}
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <Pencil className="w-4 h-4" />
                       </button>
                     </div>
                   )}
@@ -473,9 +474,7 @@ export default function ProcedurePricingPage() {
               {costCategories.length === 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                   <div className="flex gap-3">
-                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm text-amber-800 font-medium">No cost categories defined</p>
                       <p className="text-sm text-amber-700 mt-0.5">
@@ -500,9 +499,7 @@ export default function ProcedurePricingPage() {
 
                 {procedures.length === 0 ? (
                   <div className="px-6 py-12 text-center">
-                    <svg className="w-12 h-12 text-slate-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
+                    <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-500 mb-4">No procedures configured</p>
                     <a
                       href="/settings/procedures"
@@ -583,9 +580,7 @@ export default function ProcedurePricingPage() {
                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="Edit pricing"
                                   >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
+                                    <Pencil className="w-5 h-5" />
                                   </button>
                                 </div>
                               </td>
@@ -601,9 +596,7 @@ export default function ProcedurePricingPage() {
 {/* Info Box with Cross-Links */}
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
                 <div className="flex gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <div className="text-sm text-blue-800">
                     <p className="font-medium mb-1">How procedure pricing works</p>
                     <p className="mb-3">
@@ -615,21 +608,15 @@ export default function ProcedurePricingPage() {
                       <span className="font-medium text-blue-800">Related:</span>
                       <a href="/settings/financials/cost-categories" className="underline hover:no-underline inline-flex items-center gap-1">
                         Cost Categories
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                       <a href="/settings/financials/payers" className="underline hover:no-underline inline-flex items-center gap-1">
                         Payers
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                       <a href="/settings/financials/surgeon-variance" className="underline hover:no-underline inline-flex items-center gap-1">
                         Surgeon Variance
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
                   </div>
@@ -658,9 +645,7 @@ export default function ProcedurePricingPage() {
                 onClick={closePanel}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -812,19 +797,12 @@ export default function ProcedurePricingPage() {
 
             {/* Footer */}
             <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={closePanel}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
+              <Button variant="ghost" onClick={closePanel}>
                 Cancel
-              </button>
-              <button
-                onClick={handleSaveProcedure}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
+              </Button>
+              <Button onClick={handleSaveProcedure} loading={saving}>
+                Save Changes
+              </Button>
             </div>
           </div>
         </div>

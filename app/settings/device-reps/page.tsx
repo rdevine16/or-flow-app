@@ -10,6 +10,9 @@ import { deviceRepAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { Ban, Check, CheckCircle2, Mail, Plus, Users, X } from 'lucide-react'
 
 interface DeviceRep {
   id: string
@@ -367,24 +370,17 @@ export default function DeviceRepsPage() {
                       {activeCount} active{pendingCount > 0 && <span className="text-amber-600"> · {pendingCount} pending</span>}
                     </p>
                   </div>
-                  <button
-                    onClick={openInviteModal}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                  <Button onClick={openInviteModal}>
+                    <Plus className="w-4 h-4" />
                     Invite Rep
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Table */}
                 {allRows.length === 0 ? (
                   <div className="px-6 py-12 text-center">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
+                      <Users className="w-6 h-6 text-slate-400" />
                     </div>
                     <p className="text-slate-500">No device reps with access yet.</p>
                     <button
@@ -434,9 +430,7 @@ export default function DeviceRepsPage() {
                                 ) : invite ? (
                                   <>
                                     <div className="w-9 h-9 bg-amber-100 rounded-full flex items-center justify-center text-sm font-semibold text-amber-600 flex-shrink-0">
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                      </svg>
+                                      <Mail className="w-4 h-4" />
                                     </div>
                                     <div className="min-w-0">
                                       <p className="font-medium text-slate-900 truncate">{invite.email}</p>
@@ -458,9 +452,7 @@ export default function DeviceRepsPage() {
                             <div className="col-span-3">
                               {isRep ? (
                                 <span className="inline-flex items-center gap-1 text-xs text-green-600">
-                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
+                                  <CheckCircle2 className="w-3 h-3" />
                                   Active
                                 </span>
                               ) : invite ? (
@@ -506,13 +498,9 @@ export default function DeviceRepsPage() {
                                   title={isRep ? 'Revoke access' : 'Cancel invite'}
                                 >
                                   {isRep ? (
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                    </svg>
+                                    <Ban className="w-4 h-4" />
                                   ) : (
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
+                                    <X className="w-4 h-4" />
                                   )}
                                 </button>
                               )}
@@ -551,99 +539,71 @@ export default function DeviceRepsPage() {
           )}
 
           {/* Invite Modal */}
-          {inviteModal.isOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-900">Invite Device Rep</h3>
-                  <p className="text-sm text-slate-500 mt-1">
-                    They'll receive an email to create their account
-                  </p>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      value={inviteForm.email}
-                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      placeholder="rep@stryker.com"
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Implant Company *
-                    </label>
-                    <select
-                      value={inviteForm.implant_company_id}
-                      onChange={(e) => setInviteForm({ ...inviteForm, implant_company_id: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    >
-                      <option value="">Select company...</option>
-                      {companies.map((company) => (
-                        <option key={company.id} value={company.id}>
-                          {company.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      The rep will only see cases assigned to this company
-                    </p>
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                  <button
-                    onClick={closeInviteModal}
-                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSendInvite}
-                    disabled={sending || !inviteForm.email.trim() || !inviteForm.implant_company_id}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {sending ? 'Sending...' : 'Send Invite'}
-                  </button>
-                </div>
+          <Modal open={inviteModal.isOpen} onClose={closeInviteModal} title="Invite Device Rep" subtitle="They'll receive an email to create their account">
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  placeholder="rep@stryker.com"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Implant Company *
+                </label>
+                <select
+                  value={inviteForm.implant_company_id}
+                  onChange={(e) => setInviteForm({ ...inviteForm, implant_company_id: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                >
+                  <option value="">Select company...</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  The rep will only see cases assigned to this company
+                </p>
               </div>
             </div>
-          )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeInviteModal} />
+              <Modal.Action onClick={handleSendInvite} loading={sending} disabled={!inviteForm.email.trim() || !inviteForm.implant_company_id}>
+                Send Invite
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
 
           {/* Success Modal */}
-          {inviteLinkModal.isOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm text-center">
-                <div className="p-8">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-slate-900 mb-2">Invite Sent!</h3>
-                  <p className="text-slate-600">
-                    An invitation email has been sent to<br />
-                    <span className="font-medium text-slate-900">{inviteLinkModal.email}</span>
-                  </p>
-                  <p className="text-sm text-slate-500 mt-3">
-                    The invite expires in 7 days.
-                  </p>
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200">
-                  <button
-                    onClick={() => setInviteLinkModal({ isOpen: false, link: '', email: '' })}
-                    className="w-full py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
+          <Modal open={inviteLinkModal.isOpen} onClose={() => setInviteLinkModal({ isOpen: false, link: '', email: '' })} size="sm">
+            <div className="text-center py-4">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-green-600" />
               </div>
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">Invite Sent!</h3>
+              <p className="text-slate-600">
+                An invitation email has been sent to<br />
+                <span className="font-medium text-slate-900">{inviteLinkModal.email}</span>
+              </p>
+              <p className="text-sm text-slate-500 mt-3">
+                The invite expires in 7 days.
+              </p>
             </div>
-          )}
+            <Modal.Footer>
+              <Modal.Action onClick={() => setInviteLinkModal({ isOpen: false, link: '', email: '' })}>
+                Done
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
         </SettingsLayout>
       </Container>
     </DashboardLayout>

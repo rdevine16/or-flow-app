@@ -14,6 +14,9 @@ import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { AlertTriangle, Archive, Calculator, CheckCircle2, ChevronRight, ExternalLink, Info, Loader2, Pencil, Plus } from 'lucide-react'
 
 interface CostCategory {
   id: string
@@ -472,27 +475,18 @@ await genericAuditLog(supabase, 'cost_category.restored', {
             <PageLoader message="Loading categories..." />
           ) : activeCategories.length === 0 && deletedCategories.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-              <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
+              <Calculator className="w-12 h-12 text-slate-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-900 mb-2">No Cost Categories</h3>
               <p className="text-slate-600 mb-6">
                 Cost categories help track expenses (debits) and offsets (credits) per procedure.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <button
-                  onClick={copyFromDefaults}
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {saving ? 'Copying...' : 'Copy Default Categories'}
-                </button>
-                <button
-                  onClick={() => openAddModal('debit')}
-                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                >
+                <Button onClick={copyFromDefaults} loading={saving}>
+                  Copy Default Categories
+                </Button>
+                <Button variant="secondary" onClick={() => openAddModal('debit')}>
                   Create from Scratch
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -510,9 +504,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                     title="Add Debit Category"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                    <Plus className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -540,27 +532,21 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                             }`}
                             title={cat.is_active ? 'Deactivate' : 'Activate'}
                           >
-                            <svg className="w-4 h-4" fill={cat.is_active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <CheckCircle2 className="w-4 h-4" fill={cat.is_active ? 'currentColor' : 'none'} />
                           </button>
                           <button
                             onClick={() => openEditModal(cat)}
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Edit"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => openDeleteModal(cat)}
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
-<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-</svg>
+<Archive className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -582,9 +568,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                     title="Add Credit Category"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                    <Plus className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -612,27 +596,21 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                             }`}
                             title={cat.is_active ? 'Deactivate' : 'Activate'}
                           >
-                            <svg className="w-4 h-4" fill={cat.is_active ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <CheckCircle2 className="w-4 h-4" fill={cat.is_active ? 'currentColor' : 'none'} />
                           </button>
                           <button
                             onClick={() => openEditModal(cat)}
                             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Edit"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => openDeleteModal(cat)}
                             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Delete"
                           >
-<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-</svg>
+<Archive className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -650,14 +628,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                 onClick={() => setShowDeleted(!showDeleted)}
                 className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
               >
-                <svg 
-                  className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-90' : ''}`} 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronRight className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-90' : ''}`} />
                 Recently Deleted ({deletedCategories.length})
               </button>
 
@@ -704,9 +675,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
           {/* Info Box with Cross-Links */}
 <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
   <div className="flex gap-3">
-    <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
+    <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
     <div className="text-sm text-blue-800">
       <p className="font-medium mb-1">How cost categories work</p>
       <p className="mb-3">
@@ -717,15 +686,11 @@ await genericAuditLog(supabase, 'cost_category.restored', {
         <span className="font-medium text-blue-800">Used in:</span>
         <a href="/settings/financials/procedure-pricing" className="underline hover:no-underline inline-flex items-center gap-1">
           Procedure Pricing
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
+          <ExternalLink className="w-3 h-3" />
         </a>
         <a href="/settings/financials/surgeon-variance" className="underline hover:no-underline inline-flex items-center gap-1">
           Surgeon Variance
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
+          <ExternalLink className="w-3 h-3" />
         </a>
       </div>
     </div>
@@ -735,15 +700,8 @@ await genericAuditLog(supabase, 'cost_category.restored', {
       </Container>
 
       {/* Add/Edit Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {modalMode === 'add' ? `Add ${formData.type === 'debit' ? 'Debit' : 'Credit'} Category` : 'Edit Category'}
-              </h3>
-            </div>
-            <div className="p-6 space-y-4">
+      <Modal open={modalOpen} onClose={closeModal} title={modalMode === 'add' ? `Add ${formData.type === 'debit' ? 'Debit' : 'Credit'} Category` : 'Edit Category'}>
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Name <span className="text-red-500">*</span>
@@ -770,51 +728,30 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formData.name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : modalMode === 'add' ? 'Add Category' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeModal} />
+              <Modal.Action onClick={handleSave} loading={saving} disabled={!formData.name.trim()}>
+                {modalMode === 'add' ? 'Add Category' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
+      </Modal>
 
 {/* Archive Confirmation Modal */}
-      {deleteModalState.isOpen && deleteModalState.category && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">Archive Cost Category</h3>
-            </div>
-            <div className="p-6">
+      <Modal open={deleteModalState.isOpen && !!deleteModalState.category} onClose={closeDeleteModal} title="Archive Cost Category">
+            <div>
               {deleteModalState.loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
+                  <Loader2 className="animate-spin h-6 w-6 text-blue-500" />
                 </div>
               ) : (
                 <>
                   <p className="text-slate-600 mb-4">
-                    Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModalState.category.name}"</span>?
+                    Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModalState.category?.name}"</span>?
                   </p>
                   {(deleteModalState.dependencies.procedureCostItems > 0 || deleteModalState.dependencies.surgeonCostItems > 0) && (
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
                       <div className="flex gap-3">
-                        <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
+                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                         <div>
                           <p className="font-medium text-amber-800">This category is in use:</p>
                           <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
@@ -836,21 +773,13 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                 </>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={saving || deleteModalState.loading}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Archiving...' : 'Archive Category'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeDeleteModal} />
+              <Modal.Action variant="warning" onClick={handleDelete} loading={saving} disabled={deleteModalState.loading}>
+                Archive Category
+              </Modal.Action>
+            </Modal.Footer>
+      </Modal>
     </DashboardLayout>
   )
 }

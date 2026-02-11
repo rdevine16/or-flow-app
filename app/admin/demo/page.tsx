@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { AlertTriangle, Building2, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Database, Loader2, X, Zap } from 'lucide-react'
 
 // ============================================================================
 // TYPES
@@ -305,9 +306,7 @@ export default function DemoDataWizard() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-              </svg>
+              <Database className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-semibold text-slate-900">Demo Data Wizard</h1>
@@ -317,7 +316,7 @@ export default function DemoDataWizard() {
           {facility && step !== 'facility' && (
             <button onClick={() => { setStep('facility'); setSelectedFacilityId(null); setResult(null) }}
               className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5 transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              <ChevronLeft className="w-4 h-4" />
               Change facility
             </button>
           )}
@@ -343,7 +342,7 @@ export default function DemoDataWizard() {
                       : done ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
                       : 'bg-slate-100 text-slate-400'
                     }`}>
-                    {done && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                    {done && <Check className="w-3.5 h-3.5" />}
                     {labels[s]}
                   </button>
                 </div>
@@ -369,9 +368,7 @@ export default function DemoDataWizard() {
             {facilities.length === 0 ? (
               <EmptyState
                 icon={
-                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
+                  <Building2 className="w-6 h-6 text-slate-400" />
                 }
                 title="No demo facilities found"
                 description="Set is_demo = true on facilities to enable them here."
@@ -385,16 +382,14 @@ export default function DemoDataWizard() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-11 h-11 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-200 transition-colors">
-                          <svg className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
+                          <Building2 className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-slate-900">{f.name}</h3>
                           <p className="text-xs text-slate-400 mt-0.5">{f.timezone} · {f.id.slice(0, 8)}…</p>
                         </div>
                       </div>
-                      <svg className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                     </div>
                   </button>
                 ))}
@@ -429,9 +424,7 @@ export default function DemoDataWizard() {
             ) : surgeons.length === 0 ? (
               <EmptyState
                 icon={
-                  <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
+                  <AlertTriangle className="w-6 h-6 text-amber-500" />
                 }
                 title="No surgeons found"
                 description="Add surgeons via Staff Management first."
@@ -477,10 +470,7 @@ export default function DemoDataWizard() {
                             : p.speedProfile === 'slow' ? 'bg-amber-50 text-amber-700'
                             : 'bg-blue-50 text-blue-700'
                           }`}>{p.speedProfile}</span>
-                          <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
+                          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                         </div>
                       </button>
 
@@ -702,9 +692,9 @@ export default function DemoDataWizard() {
                       }`}>
                         <div className="flex items-center gap-1.5 mb-1">
                           {item.v > 0 ? (
-                            <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
                           ) : item.r ? (
-                            <svg className="w-3.5 h-3.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" /></svg>
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
                           ) : (
                             <div className="w-3.5 h-3.5 rounded-full bg-slate-300" />
                           )}
@@ -799,7 +789,7 @@ export default function DemoDataWizard() {
                 </div>
                 <button onClick={generate}
                   className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-lg shadow-blue-600/20">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  <Zap className="w-4 h-4" />
                   Generate Demo Data
                 </button>
               </div>
@@ -816,10 +806,7 @@ export default function DemoDataWizard() {
               {progress && progress.phase !== 'complete' && !result ? (
                 <>
                   <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-5">
-                    <svg className="w-8 h-8 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                   </div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-2">Generating Demo Data</h3>
                   <p className="text-sm text-slate-500 mb-6">{progress.message}</p>
@@ -832,8 +819,8 @@ export default function DemoDataWizard() {
                 <>
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${result.success ? 'bg-emerald-50' : 'bg-red-50'}`}>
                     {result.success
-                      ? <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                      : <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      ? <Check className="w-8 h-8 text-emerald-600" />
+                      : <X className="w-8 h-8 text-red-600" />
                     }
                   </div>
                   <h3 className={`text-lg font-semibold mb-2 ${result.success ? 'text-slate-900' : 'text-red-800'}`}>
@@ -929,9 +916,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+          <CalendarDays className="w-4 h-4 text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-700">Weekly OR Schedule</h3>
         </div>
         <p className="text-[11px] text-slate-400">Updates live as you configure surgeons below</p>
@@ -1035,8 +1020,8 @@ function ResultBanner({ result, onDismiss }: { result: GenerationResult; onDismi
         result.success ? 'bg-emerald-100' : 'bg-red-100'
       }`}>
         {result.success
-          ? <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-          : <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          ? <Check className="w-4 h-4 text-emerald-600" />
+          : <X className="w-4 h-4 text-red-600" />
         }
       </div>
       <div className="flex-1 min-w-0">
@@ -1049,7 +1034,7 @@ function ResultBanner({ result, onDismiss }: { result: GenerationResult; onDismi
         {!result.success && result.error && <p className="text-sm text-red-700 mt-1">{result.error}</p>}
       </div>
       <button onClick={onDismiss} className="text-slate-400 hover:text-slate-600 p-1">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        <X className="w-4 h-4" />
       </button>
     </div>
   )

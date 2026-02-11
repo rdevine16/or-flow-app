@@ -18,8 +18,13 @@ import {
 } from '@/hooks/useRoomSchedules'
 import { formatTime12Hour } from '@/types/block-scheduling'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { PageLoader } from '@/components/ui/Loading'
+import { PageLoader, Spinner } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
+import { Input, Label } from '@/components/ui/Input'
+import { Toggle } from '@/components/ui/Toggle'
+import { Plus, Pencil, Trash2, Building2, AlertTriangle, ChevronRight } from 'lucide-react'
 
 // ============================================
 // TYPES
@@ -158,16 +163,12 @@ function RoomScheduleEditor({
 
             {/* Open toggle */}
             <div className="flex justify-center">
-              <button
-                onClick={() => updateDay(dayOfWeek, { isClosed: !day.isClosed })}
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  day.isClosed ? 'bg-slate-300' : 'bg-blue-500'
-                }`}
-              >
-                <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-                  day.isClosed ? 'left-0.5' : 'left-[22px]'
-                }`} />
-              </button>
+              <Toggle
+                size="sm"
+                checked={!day.isClosed}
+                onChange={() => updateDay(dayOfWeek, { isClosed: !day.isClosed })}
+                aria-label={`${DAY_LABELS[dayOfWeek]} open`}
+              />
             </div>
           </div>
         )
@@ -498,23 +499,16 @@ export default function RoomsSettingsPage() {
             <div className="max-w-3xl">
               {/* Add Room button */}
               <div className="flex justify-end mb-6">
-                <button
-                  onClick={openAddModal}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                <Button onClick={openAddModal}>
+                  <Plus className="w-4 h-4" />
                   Add Room
-                </button>
+                </Button>
               </div>
 
               {/* Active Rooms */}
               {activeRooms.length === 0 ? (
                 <div className="text-center py-16 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-                  <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
+                  <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
                   <p className="text-slate-500 font-medium">No rooms configured</p>
                   <p className="text-sm text-slate-400 mt-1">Add your first operating room to get started</p>
                   <button
@@ -533,9 +527,7 @@ export default function RoomsSettingsPage() {
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                          </svg>
+                          <Building2 className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
                           <span className="text-sm font-semibold text-slate-900">{room.name}</span>
@@ -550,18 +542,14 @@ export default function RoomsSettingsPage() {
                           className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Edit room & schedule"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
+                          <Pencil className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => openDeleteModal(room)}
                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Archive room"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -576,9 +564,7 @@ export default function RoomsSettingsPage() {
                     onClick={() => setShowDeleted(!showDeleted)}
                     className="text-sm text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1"
                   >
-                    <svg className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    <ChevronRight className={`w-4 h-4 transition-transform ${showDeleted ? 'rotate-90' : ''}`} />
                     {deletedRooms.length} archived room{deletedRooms.length !== 1 ? 's' : ''}
                   </button>
                   {showDeleted && (
@@ -589,12 +575,9 @@ export default function RoomsSettingsPage() {
                           className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg opacity-60"
                         >
                           <span className="text-sm text-slate-500 line-through">{room.name}</span>
-                          <button
-                            onClick={() => handleRestore(room)}
-                            className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => handleRestore(room)}>
                             Restore
-                          </button>
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -605,131 +588,106 @@ export default function RoomsSettingsPage() {
           )}
 
           {/* Add/Edit Modal with Schedule Editor */}
-          {modal.isOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <div className="px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
-                  <h3 className="text-lg font-semibold text-slate-900">
-                    {modal.mode === 'add' ? 'Add Room' : 'Edit Room'}
-                  </h3>
-                </div>
-                <div className="p-6 space-y-6">
-                  {/* Room Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Room Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      placeholder="e.g., OR 1, OR 2, Main OR"
-                      autoFocus
-                    />
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      Use a short, recognizable name for your OR staff
-                    </p>
-                  </div>
-
-                  {/* Weekly Schedule */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-3">
-                      Operating Hours
-                    </label>
-                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
-                      <RoomScheduleEditor
-                        schedule={formSchedule}
-                        onChange={setFormSchedule}
-                      />
-                    </div>
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      Define when this room is available for cases — used for utilization analytics
-                    </p>
-                  </div>
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3 sticky bottom-0 bg-white rounded-b-2xl">
-                  <button
-                    onClick={closeModal}
-                    className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !formData.name.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Room' : 'Save Changes'}
-                  </button>
-                </div>
-              </div>
+          <Modal
+            open={modal.isOpen}
+            onClose={closeModal}
+            title={modal.mode === 'add' ? 'Add Room' : 'Edit Room'}
+            size="lg"
+            scrollable
+          >
+            {/* Room Name */}
+            <div>
+              <Label htmlFor="roomName">Room Name *</Label>
+              <Input
+                id="roomName"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+                placeholder="e.g., OR 1, OR 2, Main OR"
+                autoFocus
+              />
+              <p className="mt-1.5 text-xs text-slate-500">
+                Use a short, recognizable name for your OR staff
+              </p>
             </div>
-          )}
+
+            {/* Weekly Schedule */}
+            <div>
+              <Label>Operating Hours</Label>
+              <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 mt-1.5">
+                <RoomScheduleEditor
+                  schedule={formSchedule}
+                  onChange={setFormSchedule}
+                />
+              </div>
+              <p className="mt-1.5 text-xs text-slate-500">
+                Define when this room is available for cases — used for utilization analytics
+              </p>
+            </div>
+
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeModal} />
+              <Modal.Action
+                onClick={handleSave}
+                loading={saving}
+                disabled={!formData.name.trim()}
+              >
+                {modal.mode === 'add' ? 'Add Room' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
 
           {/* Delete Confirmation Modal */}
-          {deleteModal.isOpen && deleteModal.room && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-                <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="text-lg font-semibold text-slate-900">Archive Room</h3>
-                </div>
-                <div className="p-6">
-                  {deleteModal.loading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <svg className="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-slate-600 mb-4">
-                        Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.room.name}"</span>?
-                      </p>
-                      {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.blockSchedules > 0) && (
-                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-                          <div className="flex gap-3">
-                            <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <div>
-                              <p className="font-medium text-amber-800">This room is in use:</p>
-                              <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
-                                {deleteModal.dependencies.cases > 0 && (
-                                  <li>{deleteModal.dependencies.cases} case{deleteModal.dependencies.cases !== 1 ? 's' : ''}</li>
-                                )}
-                                {deleteModal.dependencies.blockSchedules > 0 && (
-                                  <li>{deleteModal.dependencies.blockSchedules} block schedule{deleteModal.dependencies.blockSchedules !== 1 ? 's' : ''}</li>
-                                )}
-                              </ul>
-                              <p className="mt-2 text-sm text-amber-700">
-                                Archiving will hide it from new cases but existing data will be preserved.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      <p className="text-sm text-slate-500">You can restore archived rooms at any time.</p>
-                    </>
-                  )}
-                </div>
-                <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-                  <button onClick={closeDeleteModal} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={saving || deleteModal.loading}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Archiving...' : 'Archive Room'}
-                  </button>
-                </div>
+          <Modal
+            open={deleteModal.isOpen && !!deleteModal.room}
+            onClose={closeDeleteModal}
+            title="Archive Room"
+          >
+            {deleteModal.loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Spinner size="md" color="blue" />
               </div>
-            </div>
-          )}
+            ) : deleteModal.room && (
+              <>
+                <p className="text-slate-600">
+                  Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.room.name}"</span>?
+                </p>
+                {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.blockSchedules > 0) && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-amber-800">This room is in use:</p>
+                        <ul className="mt-1 text-sm text-amber-700 list-disc list-inside">
+                          {deleteModal.dependencies.cases > 0 && (
+                            <li>{deleteModal.dependencies.cases} case{deleteModal.dependencies.cases !== 1 ? 's' : ''}</li>
+                          )}
+                          {deleteModal.dependencies.blockSchedules > 0 && (
+                            <li>{deleteModal.dependencies.blockSchedules} block schedule{deleteModal.dependencies.blockSchedules !== 1 ? 's' : ''}</li>
+                          )}
+                        </ul>
+                        <p className="mt-2 text-sm text-amber-700">
+                          Archiving will hide it from new cases but existing data will be preserved.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <p className="text-sm text-slate-500">You can restore archived rooms at any time.</p>
+              </>
+            )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeDeleteModal} />
+              <Modal.Action
+                onClick={handleDelete}
+                loading={saving}
+                disabled={deleteModal.loading}
+                variant="danger"
+              >
+                Archive Room
+              </Modal.Action>
+            </Modal.Footer>
+          </Modal>
         </SettingsLayout>
       </Container>
     </DashboardLayout>

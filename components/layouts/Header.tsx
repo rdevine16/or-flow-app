@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import GlobalSearch from '../GlobalSearch'
 import { NavItem, isNavItemActive } from './navigation-config'
+import { Bell, ChevronDown, ChevronRight, Clock, Eye, LogOut, Settings, User, X } from 'lucide-react'
 
 interface UserData {
   firstName: string
@@ -112,19 +113,7 @@ export default function Header({
               <span className="text-slate-500 truncate">
                 {displayFacilityName}
               </span>
-              <svg
-                className="w-4 h-4 text-slate-300 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
+              <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
             </>
           )}
           <span className="font-semibold text-slate-900 truncate">
@@ -146,19 +135,7 @@ export default function Header({
 
         {/* Notifications */}
         <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-            />
-          </svg>
+          <Bell className="w-5 h-5" />
           <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
         </button>
 
@@ -179,21 +156,11 @@ export default function Header({
                 {userData.facilityName || getRoleDisplay()}
               </p>
             </div>
-            <svg
+            <ChevronDown
               className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
                 userMenuOpen ? 'rotate-180' : ''
               }`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
+            />
           </button>
 
           {/* Dropdown Menu */}
@@ -226,19 +193,7 @@ export default function Header({
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                   onClick={() => setUserMenuOpen(false)}
                 >
-                  <svg
-                    className="w-4 h-4 text-slate-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
+                  <User className="w-4 h-4 text-slate-400" />
                   Your Profile
                 </Link>
                 {isAdmin && (
@@ -247,25 +202,7 @@ export default function Header({
                     className="flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     onClick={() => setUserMenuOpen(false)}
                   >
-                    <svg
-                      className="w-4 h-4 text-slate-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                    </svg>
+                    <Settings className="w-4 h-4 text-slate-400" />
                     Settings
                   </Link>
                 )}
@@ -277,19 +214,7 @@ export default function Header({
                   onClick={onLogout}
                   className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors w-full"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    />
-                  </svg>
+                  <LogOut className="w-4 h-4" />
                   Sign Out
                 </button>
               </div>
@@ -313,19 +238,7 @@ export function TrialBanner({ daysRemaining }: TrialBannerProps) {
   return (
     <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-3">
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
+        <Clock className="w-5 h-5" />
         <span className="text-sm font-medium">
           Your trial expires in {daysRemaining} day
           {daysRemaining !== 1 ? 's' : ''}.
@@ -354,25 +267,7 @@ export function ImpersonationBanner({
     <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-6 py-2.5 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-          <svg
-            className="w-4 h-4 text-amber-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-            />
-          </svg>
+          <Eye className="w-4 h-4 text-amber-600" />
         </div>
         <span className="text-sm font-medium text-amber-800">
           Viewing as: <span className="font-semibold">{facilityName}</span>
@@ -382,19 +277,7 @@ export function ImpersonationBanner({
         onClick={onEndImpersonation}
         className="flex items-center gap-2 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium transition-colors"
       >
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
+        <X className="w-4 h-4" />
         Exit
       </button>
     </div>

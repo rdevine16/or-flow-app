@@ -11,7 +11,7 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
-import { CalendarDaysIcon } from '@heroicons/react/24/outline'
+
 import { useSurgeons } from '@/hooks'
 import { AreaChart, BarChart } from '@tremor/react'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
@@ -1646,7 +1646,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
         <AnalyticsPageHeader
           title="Block & Room Utilization"
           description="Track how effectively surgeons use block time and how rooms are utilized"
-          icon={CalendarDaysIcon}
+          icon={CalendarDays}
         />
 
         <div className="space-y-8 pb-12">

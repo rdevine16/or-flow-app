@@ -4,6 +4,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { ArrowDown, ArrowUp } from 'lucide-react'
 
 interface MetricCardProps {
   title: string
@@ -164,13 +165,9 @@ export function MetricCard({
             trend >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
           }`}>
             {trend >= 0 ? (
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
+              <ArrowUp className="w-3 h-3" />
             ) : (
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-              </svg>
+              <ArrowDown className="w-3 h-3" />
             )}
             {Math.abs(trend)}%
           </span>

@@ -12,6 +12,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Ban, CheckCircle2, ChevronRight, ClipboardCheck, Info, PenLine, Plus, Trash2, X } from 'lucide-react'
 
 
 // =====================================================
@@ -113,13 +114,9 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             title={field.is_active ? 'Deactivate' : 'Activate'}
           >
             {field.is_active ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-              </svg>
+              <Ban className="w-4 h-4" />
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <CheckCircle2 className="w-4 h-4" />
             )}
           </button>
           <button
@@ -127,18 +124,14 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             title="Edit"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <PenLine className="w-4 h-4" />
           </button>
           <button
             onClick={() => onDelete(field)}
             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Delete"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -291,9 +284,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
                         onClick={() => removeOption(index)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X className="w-5 h-5" />
                       </button>
                     )}
                   </div>
@@ -417,27 +408,30 @@ export default function ChecklistTemplatesPage() {
 
     const fetchFields = async () => {
       setLoading(true)
-      setError(null)
 
-      try {
-        let query = supabase
-          .from('preop_checklist_field_templates')
-          .select('*')
-          .is('deleted_at', null)
-          .order('display_order')
+      let query = supabase
+        .from('preop_checklist_field_templates')
+        .select('*')
+        .is('deleted_at', null)
+        .order('display_order')
 
-        if (!showInactive) {
-          query = query.eq('is_active', true)
-        }
-
-        const { data, error: fetchErr } = await query
-        if (fetchErr) throw fetchErr
-        setFields(data || [])
-      } catch (err) {
-        setError('Failed to load checklist templates. Please try again.')
-      } finally {
-        setLoading(false)
+      if (!showInactive) {
+        query = query.eq('is_active', true)
       }
+
+      const { data, error } = await query
+
+      if (error) {
+        showToast({
+          type: 'error',
+          title: 'Failed to Load Templates',
+          message: error.message || 'An unexpected error occurred'
+        })
+      } else {
+        setFields(data || [])
+      }
+
+      setLoading(false)
     }
 
     fetchFields()
@@ -445,41 +439,53 @@ export default function ChecklistTemplatesPage() {
 
   // Save field (create or update)
   const handleSaveField = async (fieldData: Partial<ChecklistFieldTemplate>) => {
-    try {
-      if (isAddingNew) {
-        const newField = {
-          ...fieldData,
-          display_order: fields.length + 1,
-          is_active: true,
-        }
+    if (isAddingNew) {
+      // Create new template
+      const newField = {
+        ...fieldData,
+        display_order: fields.length + 1,
+        is_active: true,
+      }
 
-        const { data, error } = await supabase
-          .from('preop_checklist_field_templates')
-          .insert(newField)
-          .select()
-          .single()
+      const { data, error } = await supabase
+        .from('preop_checklist_field_templates')
+        .insert(newField)
+        .select()
+        .single()
 
-        if (error) throw error
+if (error) {
+  showToast({
+    type: 'error',
+    title: 'Create Failed',
+    message: error.message || 'Failed to create template'
+  })
+} else {
+  setFields(prev => [...prev, data])
+  setSuccessMessage('Template created')
+  setTimeout(() => setSuccessMessage(null), 3000)
+}
+    } else if (editingField) {
+      // Update existing template
+      const { error } = await supabase
+        .from('preop_checklist_field_templates')
+        .update({
+          display_label: fieldData.display_label,
+          field_type: fieldData.field_type,
+          options: fieldData.options,
+          placeholder: fieldData.placeholder,
+          is_required: fieldData.is_required,
+          show_on_escort_page: fieldData.show_on_escort_page,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingField.id)
 
-        setFields(prev => [...prev, data])
-        setSuccessMessage('Template created')
-        setTimeout(() => setSuccessMessage(null), 3000)
-      } else if (editingField) {
-        const { error } = await supabase
-          .from('preop_checklist_field_templates')
-          .update({
-            display_label: fieldData.display_label,
-            field_type: fieldData.field_type,
-            options: fieldData.options,
-            placeholder: fieldData.placeholder,
-            is_required: fieldData.is_required,
-            show_on_escort_page: fieldData.show_on_escort_page,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', editingField.id)
-
-        if (error) throw error
-
+      if (error) {
+        showToast({
+          type: 'error',
+          title: 'Update Failed',
+          message: error.message || 'Failed to update template'
+        })
+      } else {
         setFields(prev =>
           prev.map(f =>
             f.id === editingField.id
@@ -490,12 +496,6 @@ export default function ChecklistTemplatesPage() {
         setSuccessMessage('Template updated')
         setTimeout(() => setSuccessMessage(null), 3000)
       }
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: 'Failed to save template',
-        message: err instanceof Error ? err.message : 'Please try again'
-      })
     }
 
     setEditingField(null)
@@ -506,26 +506,24 @@ export default function ChecklistTemplatesPage() {
   const handleDeleteField = async (field: ChecklistFieldTemplate) => {
     if (!confirm(`Delete "${field.display_label}"? This will not affect existing facilities.`)) return
 
-    try {
-      const { error } = await supabase
-        .from('preop_checklist_field_templates')
-        .update({ 
-          deleted_at: new Date().toISOString(),
-          deleted_by: currentUserId 
-        })
-        .eq('id', field.id)
+    const { error } = await supabase
+      .from('preop_checklist_field_templates')
+      .update({ 
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId 
+      })
+      .eq('id', field.id)
 
-      if (error) throw error
-
+    if (error) {
+      showToast({
+        type: 'error',
+        title: 'Delete Failed',
+        message: error.message || 'Failed to delete template'
+      })
+    } else {
       setFields(prev => prev.filter(f => f.id !== field.id))
       setSuccessMessage('Template deleted')
       setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: 'Failed to delete template',
-        message: err instanceof Error ? err.message : 'Please try again'
-      })
     }
   }
 
@@ -533,18 +531,23 @@ export default function ChecklistTemplatesPage() {
   const handleToggleActive = async (field: ChecklistFieldTemplate) => {
     const newActiveState = !field.is_active
 
-    try {
-      const { error } = await supabase
-        .from('preop_checklist_field_templates')
-        .update({ 
-          is_active: newActiveState,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', field.id)
+    const { error } = await supabase
+      .from('preop_checklist_field_templates')
+      .update({ 
+        is_active: newActiveState,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', field.id)
 
-      if (error) throw error
-
+    if (error) {
+      showToast({
+        type: 'error',
+        title: 'Toggle Failed',
+        message: error.message || 'Failed to update template status'
+      })
+    } else {
       if (!showInactive && !newActiveState) {
+        // Remove from list if we're not showing inactive
         setFields(prev => prev.filter(f => f.id !== field.id))
       } else {
         setFields(prev =>
@@ -555,12 +558,6 @@ export default function ChecklistTemplatesPage() {
       }
       setSuccessMessage(newActiveState ? 'Template activated' : 'Template deactivated')
       setTimeout(() => setSuccessMessage(null), 3000)
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: 'Failed to toggle template',
-        message: err instanceof Error ? err.message : 'Please try again'
-      })
     }
   }
 
@@ -604,9 +601,7 @@ export default function ChecklistTemplatesPage() {
             >
               Admin
             </button>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="w-4 h-4" />
             <span className="text-slate-900">Checklist Templates</span>
           </div>
           <div className="flex items-start justify-between gap-4">
@@ -620,9 +615,7 @@ export default function ChecklistTemplatesPage() {
               onClick={() => setIsAddingNew(true)}
               className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus className="w-5 h-5" />
               Add Template
             </button>
           </div>
@@ -631,9 +624,7 @@ export default function ChecklistTemplatesPage() {
         {/* Success Message */}
         {successMessage && (
           <div className="mb-4 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2">
-            <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             <span className="text-emerald-800 font-medium">{successMessage}</span>
           </div>
         )}
@@ -641,9 +632,7 @@ export default function ChecklistTemplatesPage() {
         {/* Info Card */}
         <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
           <div className="flex gap-3">
-            <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
               <p className="font-medium">How templates work</p>
               <p className="mt-1 text-blue-700">
@@ -681,9 +670,7 @@ export default function ChecklistTemplatesPage() {
         {/* Fields List */}
         {fields.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
-            <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
+            <ClipboardCheck className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-slate-900">No templates found</h3>
             <p className="text-slate-500 mt-1">
               {showInactive 

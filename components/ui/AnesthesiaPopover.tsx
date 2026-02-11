@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { ArrowLeftRight, ChevronDown, Plus, User, X } from 'lucide-react'
 
 interface Anesthesiologist {
   id: string
@@ -58,13 +59,9 @@ export default function AnesthesiaPopover({
         className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition-colors"
       >
         {/* Single person icon */}
-        <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
+        <User className="w-5 h-5 text-amber-600" />
         <span className="text-sm font-semibold text-amber-700">{count} Anesthesia</span>
-        <svg className={`w-4 h-4 text-amber-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDown className={`w-4 h-4 text-amber-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -76,13 +73,11 @@ export default function AnesthesiaPopover({
               onClick={() => setShowChange(!showChange)}
               className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center gap-1"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {currentAnesthesiologist ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                )}
-              </svg>
+              {currentAnesthesiologist ? (
+                <ArrowLeftRight className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
               {currentAnesthesiologist ? 'Change' : 'Add'}
             </button>
           </div>
@@ -155,9 +150,7 @@ export default function AnesthesiaPopover({
                     }}
                     className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>

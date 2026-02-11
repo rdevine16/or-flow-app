@@ -13,6 +13,8 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Button } from '@/components/ui/Button'
+import { AlertTriangle, Archive, ChevronDown, Pencil, Plus } from 'lucide-react'
 
 interface Complexity {
   id: string
@@ -293,15 +295,10 @@ const fetchArchivedComplexities = async () => {
                   <p className="text-sm text-slate-500">{complexities.length} complexity factors</p>
                 </div>
                 {canEdit && (
-                  <button
-                    onClick={handleNew}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                  <Button onClick={handleNew}>
+                    <Plus className="w-4 h-4" />
                     Add Complexity
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -341,9 +338,7 @@ const fetchArchivedComplexities = async () => {
  {/* Complexity Name */}
                             <div className="col-span-4 flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-orange-100">
-                                <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
+                                <AlertTriangle className="w-4 h-4 text-orange-600" />
                               </div>
                               <p className="font-medium text-slate-900">
                                 {complexity.display_name}
@@ -382,9 +377,7 @@ const fetchArchivedComplexities = async () => {
                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="Edit"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
+                                    <Pencil className="w-4 h-4" />
                                   </button>
  {archiveConfirm === complexity.id ? (
                                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -401,16 +394,12 @@ const fetchArchivedComplexities = async () => {
                                       className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                                       title="Archive"
                                     >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                      </svg>
+                                      <Archive className="w-4 h-4" />
                                     </button>
                                   )}
                                 </>
                               )}
-                              <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
+                              <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                             </div>
                           </div>
 
@@ -482,9 +471,7 @@ const fetchArchivedComplexities = async () => {
                       <div key={complexity.id} className="px-6 py-3 flex items-center justify-between bg-slate-50/50">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100">
-                            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <AlertTriangle className="w-4 h-4 text-slate-400" />
                           </div>
                           <div>
                             <p className="font-medium text-slate-500">{complexity.display_name}</p>

@@ -13,6 +13,9 @@ import { useToast } from '@/components/ui/Toast'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { AlertTriangle, Info, PenLine, Plus, Trash2 } from 'lucide-react'
 
 interface DelayType {
   id: string
@@ -191,15 +194,10 @@ export default function AdminDelayTypesPage() {
                 Standard delay reasons available to all facilities as templates.
               </p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+            <Button onClick={openAddModal}>
+              <Plus className="w-4 h-4" />
               Add Delay Type
-            </button>
+            </Button>
           </div>
 
           {/* Stats Bar */}
@@ -213,9 +211,7 @@ export default function AdminDelayTypesPage() {
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             {delayTypes.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
+                <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No delay types defined</p>
                 <button
                   onClick={openAddModal}
@@ -262,18 +258,14 @@ export default function AdminDelayTypesPage() {
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Edit"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
+                              <PenLine className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setDeleteTarget(delayType)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                       </td>
@@ -287,9 +279,7 @@ export default function AdminDelayTypesPage() {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">About delay types</p>
                 <p>
@@ -303,13 +293,7 @@ export default function AdminDelayTypesPage() {
       </Container>
 
       {/* Modal */}
-      {modal.isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              {modal.mode === 'add' ? 'Add Delay Type' : 'Edit Delay Type'}
-            </h3>
-            
+      <Modal open={modal.isOpen} onClose={closeModal} title={modal.mode === 'add' ? 'Add Delay Type' : 'Edit Delay Type'}>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
@@ -356,24 +340,13 @@ export default function AdminDelayTypesPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !formData.display_name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? 'Saving...' : modal.mode === 'add' ? 'Add Delay Type' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeModal} />
+              <Modal.Action onClick={handleSave} loading={saving} disabled={!formData.display_name.trim()}>
+                {modal.mode === 'add' ? 'Add Delay Type' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
+      </Modal>
 
       <DeleteConfirm
         open={!!deleteTarget}

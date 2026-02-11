@@ -1,6 +1,6 @@
 interface BadgeProps {
   children: React.ReactNode
-  variant?: 'default' | 'success' | 'warning' | 'error' | 'info'
+  variant?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple'
   size?: 'sm' | 'md'
 }
 
@@ -10,6 +10,7 @@ const variantClasses = {
   warning: 'bg-amber-50 text-amber-700',
   error: 'bg-red-50 text-red-700',
   info: 'bg-blue-50 text-blue-700',
+  purple: 'bg-purple-50 text-purple-700',
 }
 
 const sizeClasses = {

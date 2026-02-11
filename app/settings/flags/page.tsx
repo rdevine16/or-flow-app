@@ -15,6 +15,8 @@ import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Button } from '@/components/ui/Button'
+import { ChevronDown } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -340,14 +342,9 @@ export default function FlagsSettingsPage() {
                             onClick={() => setExpandedRule(isExpanded ? null : rule.id)}
                             className="flex-shrink-0 p-1 text-slate-400 hover:text-slate-600 transition-colors"
                           >
-                            <svg
+                            <ChevronDown
                               className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
+                            />
                           </button>
                         </div>
 

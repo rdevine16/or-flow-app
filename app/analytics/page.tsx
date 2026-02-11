@@ -1,13 +1,15 @@
+// app/analytics/page.tsx
 'use client'
-
+ 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
+import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { PageLoader } from '@/components/ui/Loading'
 
 // Tremor components
 import {
@@ -29,24 +31,7 @@ import {
 
 import FlagsSummaryCard from '@/components/analytics/FlagsSummaryCard'
 
-// Icons
-import { 
-  ClockIcon, 
-  ChartBarIcon, 
-  ExclamationTriangleIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-  CalendarDaysIcon,
-  SparklesIcon,
-  ArrowRightIcon,
-  XMarkIcon,
-  UserIcon,
-  ArrowPathIcon,
-  PresentationChartLineIcon,
-  CurrencyDollarIcon,
-  FlagIcon,
-  StarIcon,
-} from '@heroicons/react/24/outline'
+import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Clock, DollarSign, Flag, Presentation, RefreshCw, Sparkles, Star, TrendingDown, TrendingUp, User, X } from 'lucide-react'
 
 // ============================================
 // TYPES
@@ -178,7 +163,7 @@ function ReportCard({ title, description, href, icon: Icon, accentColor, badge, 
 
         <div className="flex items-center text-sm font-medium text-slate-600 group-hover:text-blue-600 mt-3">
           View report
-          <ArrowRightIcon className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
+          <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-0.5 transition-transform" />
         </div>
       </div>
     </Link>
@@ -224,12 +209,12 @@ function QuickStatCard({
               <span>— 0%</span>
             ) : trendType === 'up' ? (
               <>
-                <ArrowTrendingUpIcon className="w-4 h-4" />
+                <TrendingUp className="w-4 h-4" />
                 {trend}%
               </>
             ) : (
               <>
-                <ArrowTrendingDownIcon className="w-4 h-4" />
+                <TrendingDown className="w-4 h-4" />
                 {trend}%
               </>
             )}
@@ -292,7 +277,7 @@ function FlipRoomModal({
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-100">
-                <SparklesIcon className="w-5 h-5 text-blue-600" />
+                <Sparkles className="w-5 h-5 text-blue-600" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Flip Room Analysis</h2>
@@ -303,7 +288,7 @@ function FlipRoomModal({
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
             >
-              <XMarkIcon className="w-5 h-5" />
+              <X className="w-5 h-5" />
             </button>
           </div>
           
@@ -311,7 +296,7 @@ function FlipRoomModal({
             {data.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <CalendarDaysIcon className="w-8 h-8 text-slate-400" />
+                  <CalendarDays className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900 mb-1">No flip room patterns detected</h3>
                 <p className="text-sm text-slate-500 max-w-sm mx-auto">
@@ -348,7 +333,7 @@ function FlipRoomModal({
                               <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
                             </div>
                             {i < analysis.cases.length - 1 && (
-                              <ArrowRightIcon className="w-4 h-4 mx-2 text-slate-300" />
+                              <ArrowRight className="w-4 h-4 mx-2 text-slate-300" />
                             )}
                           </div>
                         ))}
@@ -363,7 +348,7 @@ function FlipRoomModal({
                             <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-slate-700">{gap.fromCase}</span>
-                                <ArrowRightIcon className="w-4 h-4 text-slate-300" />
+                                <ArrowRight className="w-4 h-4 text-slate-300" />
                                 <span className="font-medium text-slate-700">{gap.toCase}</span>
                               </div>
                               <div className="flex items-center gap-4">
@@ -404,40 +389,19 @@ function FlipRoomModal({
 
 export default function AnalyticsHubPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
-  
-  const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
-  const [noFacilitySelected, setNoFacilitySelected] = useState(false)
-  const [facilityCheckComplete, setFacilityCheckComplete] = useState(false)
+  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
   
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState('month')
   const [currentStartDate, setCurrentStartDate] = useState<string | undefined>()
   const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
   
   const [showFlipRoomModal, setShowFlipRoomModal] = useState(false)
-
-  // Determine effective facility ID
-  useEffect(() => {
-    if (userLoading) return
-    
-    if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
-      const impersonation = getImpersonationState()
-      if (impersonation?.facilityId) {
-        setEffectiveFacilityId(impersonation.facilityId)
-      } else {
-        setNoFacilitySelected(true)
-      }
-    } else if (userData.facilityId) {
-      setEffectiveFacilityId(userData.facilityId)
-    }
-    
-    setFacilityCheckComplete(true)
-  }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
 
   // Fetch procedure categories and techniques
   useEffect(() => {
@@ -761,7 +725,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       title: 'ORbit Score',
       description: 'Composite surgeon performance scores based on controllable operational metrics',
       href: '/analytics/orbit-score',
-      icon: StarIcon,
+      icon: Star,
       accentColor: 'violet',
       badge: 'New',
     },
@@ -769,7 +733,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       title: 'KPI Overview',
       description: 'Complete dashboard with all key performance indicators, targets, and daily trends',
       href: '/analytics/kpi',
-      icon: PresentationChartLineIcon,
+      icon: Presentation,
       accentColor: 'blue',
       badge: 'Full Report',
     },
@@ -777,55 +741,50 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       title: 'Financial Analytics',
       description: 'Profitability metrics, cost analysis, and revenue insights',
       href: '/analytics/financials',
-      icon: CurrencyDollarIcon,
+      icon: DollarSign,
       accentColor: 'emerald',
     },
     {
       title: 'Surgeon Performance',
       description: 'Compare surgeon metrics, case times, and efficiency across procedures',
       href: '/analytics/surgeons',
-      icon: UserIcon,
+      icon: User,
       accentColor: 'emerald',
     },
     {
       title: 'Block Utilization',
       description: 'Block time usage by surgeon, capacity gaps, and case-fitting opportunities',
       href: '/analytics/block-utilization',
-      icon: CalendarDaysIcon,
+      icon: CalendarDays,
       accentColor: 'blue',
     },
     {
       title: 'Case Flags',
       description: 'Review flagged cases, timing anomalies, and reported delays across your facility',
       href: '/analytics/flags',
-      icon: FlagIcon,
+      icon: Flag,
       accentColor: 'rose',
       badge: 'New',
     },
   ]
 
   // Loading state
-  if (userLoading || !facilityCheckComplete) {
+  if (userLoading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center py-24">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-slate-500">Loading analytics...</p>
-          </div>
-        </div>
+        <PageLoader message="Loading analytics..." />
       </DashboardLayout>
     )
   }
 
   // No facility selected (global admin)
-  if (noFacilitySelected) {
+  if (!effectiveFacilityId && isGlobalAdmin) {
     return (
       <DashboardLayout>
         <Container className="py-12">
           <div className="max-w-md mx-auto text-center">
             <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <ChartBarIcon className="w-8 h-8 text-blue-500" />
+              <BarChart3 className="w-8 h-8 text-blue-500" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
             <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
@@ -834,7 +793,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               View Facilities
-              <ArrowRightIcon className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </Container>
@@ -872,42 +831,42 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     <QuickStatCard
       title="Completed Cases"
       value={analytics.completedCases.toString()}
-      icon={CalendarDaysIcon}
+      icon={CalendarDays}
       trend={analytics.caseVolume.delta}
       trendType={analytics.caseVolume.deltaType === 'increase' ? 'up' : analytics.caseVolume.deltaType === 'decrease' ? 'down' : undefined}
     />
     <QuickStatCard
       title="FCOTS Rate"
       value={analytics.fcots.displayValue}
-      icon={ClockIcon}
+      icon={Clock}
       trend={analytics.fcots.delta}
       trendType={analytics.fcots.deltaType === 'increase' ? 'up' : analytics.fcots.deltaType === 'decrease' ? 'down' : undefined}
     />
     <QuickStatCard
       title="Avg Turnover"
       value={analytics.turnoverTime.displayValue}
-      icon={ArrowPathIcon}
+      icon={RefreshCw}
       trend={analytics.turnoverTime.delta}
       trendType={analytics.turnoverTime.deltaType === 'increase' ? 'up' : analytics.turnoverTime.deltaType === 'decrease' ? 'down' : undefined}
     />
     <QuickStatCard
       title="OR Utilization"
       value={analytics.orUtilization.displayValue}
-      icon={ChartBarIcon}
+      icon={BarChart3}
       trend={analytics.orUtilization.delta}
       trendType={analytics.orUtilization.deltaType === 'increase' ? 'up' : analytics.orUtilization.deltaType === 'decrease' ? 'down' : undefined}
     />
 <QuickStatCard
   title="Avg Case Time"
   value={avgCaseTimeKPIData.displayValue}
-  icon={ClockIcon}
+  icon={Clock}
   trend={avgCaseTimeKPIData.delta}
   trendType={avgCaseTimeKPIData.deltaType === 'increase' ? 'up' : avgCaseTimeKPIData.deltaType === 'decrease' ? 'down' : undefined}
 />
     <QuickStatCard
       title="Cancellation Rate"
       value={analytics.cancellationRate.displayValue}
-      icon={ExclamationTriangleIcon}
+      icon={AlertTriangle}
       trend={analytics.cancellationRate.delta}
       trendType={analytics.cancellationRate.deltaType === 'increase' ? 'up' : analytics.cancellationRate.deltaType === 'decrease' ? 'down' : undefined}
     />
@@ -939,7 +898,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       ) : (
                         <div className="flex items-center justify-center h-64 text-slate-400">
                           <div className="text-center">
-                            <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                            <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                             <p>No data available</p>
                           </div>
                         </div>
@@ -975,7 +934,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       ) : (
                         <div className="flex items-center justify-center h-64 text-slate-400">
                           <div className="text-center">
-                            <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                            <BarChart3 className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                             <p>No data available</p>
                           </div>
                         </div>
@@ -1030,7 +989,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         ) : (
                           <div className="flex items-center justify-center h-56 text-slate-400">
                             <div className="text-center">
-                              <ChartBarIcon className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
                               <p className="text-sm">No TKA data available</p>
                             </div>
                           </div>
@@ -1060,7 +1019,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         ) : (
                           <div className="flex items-center justify-center h-56 text-slate-400">
                             <div className="text-center">
-                              <ChartBarIcon className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                              <BarChart3 className="w-10 h-10 mx-auto mb-2 text-slate-300" />
                               <p className="text-sm">No THA data available</p>
                             </div>
                           </div>
@@ -1082,7 +1041,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <div className="p-2 rounded-lg bg-blue-100">
-                            <SparklesIcon className="w-5 h-5 text-blue-600" />
+                            <Sparkles className="w-5 h-5 text-blue-600" />
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
@@ -1099,7 +1058,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                             </p>
                           </div>
                         </div>
-                        <ArrowRightIcon className="w-5 h-5 text-blue-600" />
+                        <ArrowRight className="w-5 h-5 text-blue-600" />
                       </div>
                     </div>
                   </button>

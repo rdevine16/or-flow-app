@@ -4,6 +4,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { Bookmark } from 'lucide-react'
 import Link from 'next/link'
 import { OrbitLogoFull } from '../icons/OrbitLogo'
 import {
@@ -102,19 +103,10 @@ export default function Sidebar({
             }`}
           >
             <div className="w-12 flex items-center justify-center flex-shrink-0">
-              <svg
+              <Bookmark
                 className="w-4 h-4"
                 fill={isPinned ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                />
-              </svg>
+              />
             </div>
             <span className="whitespace-nowrap">
               {isPinned ? 'Unpin sidebar' : 'Pin sidebar'}

@@ -8,6 +8,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ChevronDown, Download, FileText, Info, Loader2, Search } from 'lucide-react'
 
 interface AuditLogEntry {
   id: string
@@ -105,94 +106,82 @@ export default function AuditLogPage() {
   }, [currentPage, dateFrom, dateTo, actionFilter, userFilter])
 
   const fetchUsers = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-      const { data: userData, error: userErr } = await supabase
+    const { data: userData } = await supabase
+      .from('users')
+      .select('facility_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userData?.facility_id) {
+      const { data } = await supabase
         .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
+        .select('id, email, first_name, last_name')
+        .eq('facility_id', userData.facility_id)
+        .order('last_name')
 
-      if (userErr) throw userErr
-
-      if (userData?.facility_id) {
-        const { data, error: fetchErr } = await supabase
-          .from('users')
-          .select('id, email, first_name, last_name')
-          .eq('facility_id', userData.facility_id)
-          .order('last_name')
-
-        if (fetchErr) throw fetchErr
-
-        if (data) {
-          setUsers(data.map(u => ({
-            id: u.id,
-            email: u.email,
-            name: `${u.first_name} ${u.last_name}`,
-          })))
-        }
+      if (data) {
+        setUsers(data.map(u => ({
+          id: u.id,
+          email: u.email,
+          name: `${u.first_name} ${u.last_name}`,
+        })))
       }
-    } catch (err) {
-      setError('Failed to load users for filter.')
     }
   }
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
-    setError(null)
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-      const { data: userData, error: userErr } = await supabase
-        .from('users')
-        .select('facility_id')
-        .eq('id', user.id)
-        .single()
+    const { data: userData } = await supabase
+      .from('users')
+      .select('facility_id')
+      .eq('id', user.id)
+      .single()
 
-      if (userErr) throw userErr
+    if (!userData?.facility_id) {
+      setLoading(false)
+      return
+    }
 
-      if (!userData?.facility_id) {
-        return
-      }
+    let query = supabase
+      .from('audit_log')
+      .select('*', { count: 'exact' })
+      .eq('facility_id', userData.facility_id)
+      .order('created_at', { ascending: false })
 
-      let query = supabase
-        .from('audit_log')
-        .select('*', { count: 'exact' })
-        .eq('facility_id', userData.facility_id)
-        .order('created_at', { ascending: false })
+    // Apply filters
+    if (dateFrom) {
+      query = query.gte('created_at', `${dateFrom}T00:00:00`)
+    }
+    if (dateTo) {
+      query = query.lte('created_at', `${dateTo}T23:59:59`)
+    }
+    if (actionFilter) {
+      query = query.eq('action', actionFilter)
+    }
+    if (userFilter) {
+      query = query.eq('user_id', userFilter)
+    }
 
-      if (dateFrom) {
-        query = query.gte('created_at', `${dateFrom}T00:00:00`)
-      }
-      if (dateTo) {
-        query = query.lte('created_at', `${dateTo}T23:59:59`)
-      }
-      if (actionFilter) {
-        query = query.eq('action', actionFilter)
-      }
-      if (userFilter) {
-        query = query.eq('user_id', userFilter)
-      }
+    // Pagination
+    const from = (currentPage - 1) * pageSize
+    const to = from + pageSize - 1
+    query = query.range(from, to)
 
-      const from = (currentPage - 1) * pageSize
-      const to = from + pageSize - 1
-      query = query.range(from, to)
+    const { data, count, error } = await query
 
-      const { data, count, error: fetchErr } = await query
-
-      if (fetchErr) throw fetchErr
-
+    if (!error) {
       setLogs(data || [])
       setTotalCount(count || 0)
-    } catch (err) {
-      setError('Failed to load audit logs. Please try again.')
-    } finally {
-      setLoading(false)
     }
+
+    setLoading(false)
   }, [currentPage, dateFrom, dateTo, actionFilter, userFilter, supabase])
 
   const exportToCSV = () => {
@@ -291,9 +280,7 @@ export default function AuditLogPage() {
 
               {/* Search */}
               <div className="relative flex-1 min-w-[200px]">
-                <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   placeholder="Search targets..."
@@ -308,9 +295,7 @@ export default function AuditLogPage() {
                 onClick={exportToCSV}
                 className="px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
+                <Download className="w-4 h-4" />
                 Export CSV
               </button>
             </div>
@@ -327,12 +312,12 @@ export default function AuditLogPage() {
           {/* Audit Log Table */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             {loading ? (
-              <PageLoader message="Loading audit logs..." />
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+              </div>
             ) : filteredLogs.length === 0 ? (
               <div className="p-12 text-center">
-                <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+                <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-slate-500">No audit log entries found</p>
                 <p className="text-slate-400 text-sm mt-1">Try adjusting your filters</p>
               </div>
@@ -375,14 +360,9 @@ export default function AuditLogPage() {
                       )}
 
                       {/* Expand Arrow */}
-                      <svg
+                      <ChevronDown
                         className={`w-5 h-5 text-slate-400 transition-transform ${expandedLog === log.id ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
+                      />
                     </div>
 
                     {/* Expanded Details */}
@@ -468,9 +448,7 @@ export default function AuditLogPage() {
           {/* HIPAA Notice */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <div className="flex items-start gap-3">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-blue-800">Compliance Notice</p>
                 <p className="text-sm text-blue-700 mt-0.5">

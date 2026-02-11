@@ -10,20 +10,7 @@ import { formatCurrency } from './utils'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { 
-  InformationCircleIcon, 
-  ChevronRightIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  CalendarDaysIcon,
-  ClockIcon,
-  CurrencyDollarIcon,
-  ChartBarIcon,
-  UserIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
-} from '@heroicons/react/24/outline'
-import { CheckCircleIcon } from '@heroicons/react/24/solid'
+import { BarChart3, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock, DollarSign, Info, TrendingDown, TrendingUp } from 'lucide-react'
 
 interface SurgeonTabProps {
   metrics: FinancialsMetrics
@@ -220,7 +207,7 @@ function Breadcrumb({
       
       {surgeonName && (
         <>
-          <ChevronRightIcon className="w-4 h-4 text-slate-400" />
+          <ChevronRight className="w-4 h-4 text-slate-400" />
           <button 
             onClick={() => onNavigate('detail')}
             className={`font-medium transition-colors ${
@@ -236,7 +223,7 @@ function Breadcrumb({
       
       {selectedDate && (
         <>
-          <ChevronRightIcon className="w-4 h-4 text-slate-400" />
+          <ChevronRight className="w-4 h-4 text-slate-400" />
           <span className="font-medium text-slate-900">
             {formatShortDate(selectedDate)}
           </span>
@@ -379,7 +366,7 @@ function AllSurgeonsOverview({
                     <MarginBadge value={surgeon.avgMarginPercent} />
                   </td>
                   <td className="px-6 py-4">
-                    <ChevronRightIcon className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="w-5 h-5 text-slate-400" />
                   </td>
                 </tr>
               ))}
@@ -729,7 +716,7 @@ function DailyActivityTab({
   if (dailyStats.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-        <CalendarDaysIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <CalendarDays className="w-12 h-12 text-slate-300 mx-auto mb-3" />
         <h3 className="text-lg font-semibold text-slate-900">No activity in this period</h3>
         <p className="text-slate-500 mt-1">Try selecting a different date range</p>
       </div>
@@ -773,7 +760,7 @@ function DailyActivityTab({
                 <div className="text-sm font-semibold text-slate-900">{formatCurrency(day.avgProfit)}</div>
               </div>
               
-              <ChevronRightIcon className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
             </div>
           </div>
         ))}
@@ -796,7 +783,7 @@ function ProceduresTab({
   if (!surgeon.procedureBreakdown || surgeon.procedureBreakdown.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-        <ChartBarIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <BarChart3 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
         <h3 className="text-lg font-semibold text-slate-900">No procedure data</h3>
         <p className="text-slate-500 mt-1">Complete cases to see procedure breakdown</p>
       </div>
@@ -1044,7 +1031,7 @@ showToast({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <CalendarDaysIcon className="w-5 h-5 text-white" />
+            <CalendarDays className="w-5 h-5 text-white" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Day Overview</h3>
@@ -1123,7 +1110,7 @@ showToast({
 
         {dayCases.length === 0 ? (
           <EmptyState
-            icon={<CalendarDaysIcon className="w-8 h-8 text-slate-400" />}
+            icon={<CalendarDays className="w-8 h-8 text-slate-400" />}
             title="No cases on this day"
             description="Select a different date to view cases"
           />
@@ -1279,7 +1266,7 @@ function MetricCard({
         <p className="text-sm font-medium text-slate-500">{title}</p>
         {tooltip && (
           <div className="group relative">
-            <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+            <Info className="w-4 h-4 text-slate-400 cursor-help" />
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 max-w-xs">
               {tooltip}
             </div>
@@ -1351,8 +1338,8 @@ function SortTH<T extends string>({
         {label}
         {isActive && (
           dir === 'desc'
-            ? <ChevronDownIcon className="w-3 h-3" />
-            : <ChevronUpIcon className="w-3 h-3" />
+            ? <ChevronDown className="w-3 h-3" />
+            : <ChevronUp className="w-3 h-3" />
         )}
       </span>
     </th>
@@ -1443,9 +1430,9 @@ function ComparisonPill({
       }
     `}>
       {isGood ? (
-        <ArrowTrendingUpIcon className="w-3 h-3" />
+        <TrendingUp className="w-3 h-3" />
       ) : (
-        <ArrowTrendingDownIcon className="w-3 h-3" />
+        <TrendingDown className="w-3 h-3" />
       )}
       {displayValue}
     </span>

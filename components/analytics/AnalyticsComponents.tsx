@@ -6,6 +6,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { InfoTooltip } from '@/components/ui/Tooltip'
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Clock, Phone, X, Zap } from 'lucide-react'
 
 // ============================================
 // SECTION HEADER — Accented section dividers
@@ -161,13 +162,9 @@ export function TrendPill({ value, improved, size = 'sm' }: TrendPillProps) {
         : 'bg-red-50 text-red-700'
     }`}>
       {improved ? (
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-        </svg>
+        <ArrowUp className="w-3 h-3" />
       ) : (
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-        </svg>
+        <ArrowDown className="w-3 h-3" />
       )}
       {Math.abs(value)}%
     </span>
@@ -312,9 +309,7 @@ export function SurgeonSelector({ surgeons, selectedId, onChange, placeholder = 
         ) : (
           <span className="text-slate-400">{placeholder}</span>
         )}
-        <svg className={`w-4 h-4 text-slate-400 ml-auto flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDown className={`w-4 h-4 text-slate-400 ml-auto flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
@@ -343,9 +338,7 @@ export function SurgeonSelector({ surgeons, selectedId, onChange, placeholder = 
                 Dr. {surgeon.last_name}, {surgeon.first_name}
               </span>
               {surgeon.id === selectedId && (
-                <svg className="w-4 h-4 text-blue-600 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                <Check className="w-4 h-4 text-blue-600 ml-auto flex-shrink-0" />
               )}
             </button>
           ))}
@@ -435,9 +428,7 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-          </svg>
+          <Phone className="w-5 h-5 text-blue-600" />
         </div>
         <div>
           <h3 className="font-semibold text-slate-900">Patient Call Timing</h3>
@@ -460,9 +451,7 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
           {/* Step 1: Call */}
           <div className="flex flex-col items-center text-center" style={{ width: '22%' }}>
             <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center mb-2">
-              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
+              <Phone className="w-4 h-4 text-blue-600" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Call Sent</span>
             <span className="text-[11px] text-slate-400 mt-0.5">{callEarliness} min before</span>
@@ -471,17 +460,13 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
           {/* Arrow */}
           <div className="flex items-center pt-4 text-slate-300">
             <div className="w-8 h-px bg-slate-200" />
-            <svg className="w-3 h-3 -ml-px" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="w-3 h-3 -ml-px" />
           </div>
 
           {/* Step 2: Prep */}
           <div className="flex flex-col items-center text-center" style={{ width: '22%' }}>
             <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center mb-2">
-              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Clock className="w-4 h-4 text-amber-600" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Team Prep</span>
             <span className="text-[11px] text-slate-400 mt-0.5">{prepDuration} min</span>
@@ -490,17 +475,13 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
           {/* Arrow */}
           <div className="flex items-center pt-4 text-slate-300">
             <div className="w-8 h-px bg-slate-200" />
-            <svg className="w-3 h-3 -ml-px" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="w-3 h-3 -ml-px" />
           </div>
 
           {/* Step 3: Ready */}
           <div className="flex flex-col items-center text-center" style={{ width: '22%' }}>
             <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
-              <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-4 h-4 text-emerald-600" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Room Ready</span>
             {waitForSurgeon !== null && (
@@ -511,17 +492,13 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
           {/* Arrow */}
           <div className="flex items-center pt-4 text-slate-300">
             <div className="w-8 h-px bg-slate-200" />
-            <svg className="w-3 h-3 -ml-px" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M9 5l7 7-7 7" />
-            </svg>
+            <ChevronRight className="w-3 h-3 -ml-px" />
           </div>
 
           {/* Step 4: Incision */}
           <div className="flex flex-col items-center text-center" style={{ width: '22%' }}>
             <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center mb-2">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <Zap className="w-4 h-4 text-white" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Incision</span>
           </div>
@@ -665,9 +642,7 @@ export function SlideOutPanel({ isOpen, onClose, title, subtitle, children }: Sl
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
           

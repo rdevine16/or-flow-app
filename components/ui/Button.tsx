@@ -5,11 +5,14 @@
 //   <Button>Primary</Button>
 //   <Button variant="secondary">Secondary</Button>
 //   <Button variant="danger" size="sm">Delete</Button>
+//   <Button variant="dangerGhost">Remove</Button>
+//   <Button variant="warning">Restore</Button>
 //   <Button loading={saving}>Save</Button>
 
 import { ButtonHTMLAttributes, forwardRef } from 'react'
+import { Spinner } from '@/components/ui/Loading'
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline'
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerGhost' | 'warning' | 'ghost' | 'outline'
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -23,8 +26,21 @@ const variants: Record<ButtonVariant, string> = {
   primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500/20 shadow-sm',
   secondary: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 focus:ring-slate-500/20',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/20 shadow-sm',
+  dangerGhost: 'text-red-600 hover:bg-red-50 focus:ring-red-500/20',
+  warning: 'bg-amber-500 text-white hover:bg-amber-600 focus:ring-amber-500/20 shadow-sm',
   ghost: 'text-slate-600 hover:bg-slate-100 focus:ring-slate-500/20',
   outline: 'border border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500/20',
+}
+
+// Map variant to spinner color for proper contrast
+const spinnerColors: Record<ButtonVariant, 'white' | 'blue' | 'red' | 'slate'> = {
+  primary: 'white',
+  secondary: 'slate',
+  danger: 'white',
+  dangerGhost: 'red',
+  warning: 'white',
+  ghost: 'slate',
+  outline: 'blue',
 }
 
 const sizes: Record<ButtonSize, string> = {
@@ -67,25 +83,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading && (
-          <svg 
-            className="animate-spin h-4 w-4" 
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <circle 
-              className="opacity-25" 
-              cx="12" 
-              cy="12" 
-              r="10" 
-              stroke="currentColor" 
-              strokeWidth="4" 
-            />
-            <path 
-              className="opacity-75" 
-              fill="currentColor" 
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" 
-            />
-          </svg>
+          <Spinner size="sm" color={spinnerColors[variant]} />
         )}
         {children}
       </button>

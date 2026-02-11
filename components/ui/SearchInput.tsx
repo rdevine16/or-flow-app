@@ -1,7 +1,7 @@
 // components/ui/SearchInput.tsx
+import { Search, X } from 'lucide-react'
 'use client'
 
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 interface SearchInputProps {
   value: string
@@ -29,7 +29,7 @@ export function SearchInput({
     <div className={`relative ${className}`}>
       {/* Search icon */}
       <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-        <MagnifyingGlassIcon className="w-5 h-5 text-slate-400" />
+        <Search className="w-5 h-5 text-slate-400" />
       </div>
 
       {/* Input */}
@@ -71,7 +71,7 @@ export function SearchInput({
           "
           aria-label="Clear search"
         >
-          <XMarkIcon className="w-5 h-5" />
+          <X className="w-5 h-5" />
         </button>
       )}
     </div>

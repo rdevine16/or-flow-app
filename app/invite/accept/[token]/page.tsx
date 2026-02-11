@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { Building2, Check, X } from 'lucide-react'
 
 // Transformed invite data for display
 interface InviteData {
@@ -151,9 +152,7 @@ export default function AcceptInvitePage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-8 h-8 text-red-600" />
           </div>
           <h1 className="text-xl font-semibold text-slate-900 mb-2">Invite Error</h1>
           <p className="text-slate-600 mb-6">{error}</p>
@@ -186,9 +185,7 @@ export default function AcceptInvitePage() {
           
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+              <Building2 className="w-5 h-5 text-blue-600" />
             </div>
             <div>
               <p className="font-semibold text-slate-900">{invite?.facility_name}</p>
@@ -213,21 +210,15 @@ export default function AcceptInvitePage() {
           <p className="mb-2">As a device rep, you'll be able to:</p>
           <ul className="space-y-1.5">
             <li className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
               View cases using {invite?.company_name} implants
             </li>
             <li className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
               See case schedule, surgeon, and OR room
             </li>
             <li className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
               Receive notifications for case updates
             </li>
           </ul>

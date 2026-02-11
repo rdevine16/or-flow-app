@@ -15,6 +15,9 @@ import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { Check, ClipboardCheck, Eye, EyeOff, GripHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -65,9 +68,7 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
       <div className="flex items-center gap-4">
         {/* Drag Handle */}
         <div className="cursor-grab text-slate-300 hover:text-slate-400">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-          </svg>
+          <GripHorizontal className="w-5 h-5" />
         </div>
 
         {/* Field Type Icon */}
@@ -109,14 +110,9 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             title={field.is_active ? 'Disable' : 'Enable'}
           >
             {field.is_active ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-              </svg>
+              <EyeOff className="w-4 h-4" />
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
+              <Eye className="w-4 h-4" />
             )}
           </button>
 
@@ -125,9 +121,7 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
             title="Edit"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            <Pencil className="w-4 h-4" />
           </button>
 
           <button
@@ -135,9 +129,7 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="Delete"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -217,17 +209,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
   if (!field && !isNew) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div 
-        className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {isNew ? 'Add Checklist Field' : 'Edit Field'}
-          </h2>
-        </div>
+    <Modal open={true} onClose={onClose} title={isNew ? 'Add Checklist Field' : 'Edit Field'} scrollable>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]">
@@ -288,9 +270,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
                       onClick={() => removeOption(index)}
                       className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
@@ -351,24 +331,13 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
           </div>
         </form>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
+        <Modal.Footer>
+          <Modal.Cancel onClick={onClose} />
+          <Modal.Action onClick={handleSubmit}>
             {isNew ? 'Add Field' : 'Save Changes'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Modal.Action>
+        </Modal.Footer>
+    </Modal>
   )
 }
 
@@ -405,24 +374,25 @@ export default function ChecklistBuilderPage() {
 
     const fetchFields = async () => {
       setLoading(true)
-      setError(null)
 
-      try {
-        const { data, error: fetchErr } = await supabase
-          .from('preop_checklist_fields')
-          .select('*')
-          .eq('facility_id', userData.facilityId)
-          .is('deleted_at', null)
-          .order('display_order')
+      const { data, error } = await supabase
+        .from('preop_checklist_fields')
+        .select('*')
+        .eq('facility_id', userData.facilityId)
+        .is('deleted_at', null)
+        .order('display_order')
 
-        if (fetchErr) throw fetchErr
+      if (error) {
+        showToast({
+          type: 'error',
+          title: 'Error fetching checklist fields',
+          message: error.message
+        })
+      } else {
         setFields(data || [])
-      } catch (err) {
-        setError('Failed to load checklist fields. Please try again.')
-        showToast({ type: 'error', title: 'Failed to load checklist fields', message: err instanceof Error ? err.message : 'Please try again' })
-      } finally {
-        setLoading(false)
       }
+
+      setLoading(false)
     }
 
     fetchFields()
@@ -432,47 +402,61 @@ export default function ChecklistBuilderPage() {
   const handleSaveField = async (fieldData: Partial<ChecklistField>) => {
     if (!userData?.facilityId) return
 
-    try {
-      if (isAddingNew) {
-        const newField = {
-          ...fieldData,
-          facility_id: userData.facilityId,
-          display_order: fields.length * 10,
-          is_active: true,
-        }
+    if (isAddingNew) {
+      // Create new field
+      const newField = {
+        ...fieldData,
+        facility_id: userData.facilityId,
+        display_order: fields.length * 10,
+        is_active: true,
+      }
 
-        const { data, error } = await supabase
-          .from('preop_checklist_fields')
-          .insert(newField)
-          .select()
-          .single()
+      const { data, error } = await supabase
+        .from('preop_checklist_fields')
+        .insert(newField)
+        .select()
+        .single()
 
-        if (error) throw error
-
+      if (error) {
+        showToast({
+  type: 'error',
+  title: 'Error creating field:',
+  message: error instanceof Error ? error.message : 'Error creating field:'
+})
+      } else {
         setFields(prev => [...prev, data])
         setSuccessMessage('Field added')
         setTimeout(() => setSuccessMessage(null), 3000)
 
+        // Audit
         await checkinAudit.checklistFieldCreated(
           supabase,
           data.display_label,
           data.id,
           userData.facilityId
         )
-      } else if (editingField) {
-        const { error } = await supabase
-          .from('preop_checklist_fields')
-          .update(fieldData)
-          .eq('id', editingField.id)
+      }
+    } else if (editingField) {
+      // Update existing field
+      const { error } = await supabase
+        .from('preop_checklist_fields')
+        .update(fieldData)
+        .eq('id', editingField.id)
 
-        if (error) throw error
-
+      if (error) {
+        showToast({
+  type: 'error',
+  title: 'Error updating field:',
+  message: error instanceof Error ? error.message : 'Error updating field:'
+})
+      } else {
         setFields(prev => prev.map(f => 
           f.id === editingField.id ? { ...f, ...fieldData } as ChecklistField : f
         ))
         setSuccessMessage('Field updated')
         setTimeout(() => setSuccessMessage(null), 3000)
 
+        // Audit
         await checkinAudit.checklistFieldUpdated(
           supabase,
           editingField.id,
@@ -481,8 +465,6 @@ export default function ChecklistBuilderPage() {
           userData.facilityId
         )
       }
-    } catch (err) {
-      showToast({ type: 'error', title: 'Failed to save field', message: err instanceof Error ? err.message : 'Please try again' })
     }
 
     setEditingField(null)
@@ -493,21 +475,26 @@ export default function ChecklistBuilderPage() {
   const handleDeleteField = async (field: ChecklistField) => {
     if (!confirm(`Delete "${field.display_label}"? This cannot be undone.`)) return
 
-    try {
-      const { error } = await supabase
-        .from('preop_checklist_fields')
-        .update({ 
-          deleted_at: new Date().toISOString(),
-          deleted_by: currentUserId 
-        })
-        .eq('id', field.id)
+    const { error } = await supabase
+      .from('preop_checklist_fields')
+      .update({ 
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId 
+      })
+      .eq('id', field.id)
 
-      if (error) throw error
-
+    if (error) {
+      showToast({
+        type: 'error',
+        title: 'Error deleting field',
+        message: error.message
+      })
+    } else {
       setFields(prev => prev.filter(f => f.id !== field.id))
       setSuccessMessage('Field deleted')
       setTimeout(() => setSuccessMessage(null), 3000)
 
+      // Audit
       if (userData?.facilityId) {
         await checkinAudit.checklistFieldDeleted(
           supabase,
@@ -516,8 +503,6 @@ export default function ChecklistBuilderPage() {
           userData.facilityId
         )
       }
-    } catch (err) {
-      showToast({ type: 'error', title: 'Failed to delete field', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
@@ -525,19 +510,21 @@ export default function ChecklistBuilderPage() {
   const handleToggleActive = async (field: ChecklistField) => {
     const newIsActive = !field.is_active
 
-    try {
-      const { error } = await supabase
-        .from('preop_checklist_fields')
-        .update({ is_active: newIsActive })
-        .eq('id', field.id)
+    const { error } = await supabase
+      .from('preop_checklist_fields')
+      .update({ is_active: newIsActive })
+      .eq('id', field.id)
 
-      if (error) throw error
-
+    if (error) {
+      showToast({
+        type: 'error',
+        title: 'Error toggling field',
+        message: error.message
+      })
+    } else {
       setFields(prev => prev.map(f => 
         f.id === field.id ? { ...f, is_active: newIsActive } : f
       ))
-    } catch (err) {
-      showToast({ type: 'error', title: 'Failed to toggle field', message: err instanceof Error ? err.message : 'Please try again' })
     }
   }
 
@@ -560,9 +547,7 @@ export default function ChecklistBuilderPage() {
         {/* Success Message */}
         {successMessage && (
           <div className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-            <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-5 h-5 text-emerald-500" />
             <span className="text-sm font-medium text-emerald-700">{successMessage}</span>
           </div>
         )}
@@ -574,15 +559,10 @@ export default function ChecklistBuilderPage() {
               Drag fields to reorder. Toggle visibility for each field.
             </p>
           </div>
-          <button
-            onClick={() => setIsAddingNew(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+          <Button onClick={() => setIsAddingNew(true)}>
+            <Plus className="w-4 h-4" />
             Add Field
-          </button>
+          </Button>
         </div>
 
         {/* Fields List */}
@@ -595,9 +575,7 @@ export default function ChecklistBuilderPage() {
         ) : fields.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
             <div className="w-16 h-16 bg-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
+              <ClipboardCheck className="w-8 h-8 text-slate-400" />
             </div>
             <h3 className="text-lg font-medium text-slate-900 mb-1">No checklist fields</h3>
             <p className="text-slate-500 mb-4">Add your first field to start building your checklist</p>
@@ -605,9 +583,7 @@ export default function ChecklistBuilderPage() {
               onClick={() => setIsAddingNew(true)}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus className="w-4 h-4" />
               Add First Field
             </button>
           </div>

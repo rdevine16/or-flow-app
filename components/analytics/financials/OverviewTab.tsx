@@ -5,16 +5,7 @@
 import { useMemo, useState } from 'react'
 import { FinancialsMetrics, ProcedureStats, SurgeonStats } from './types'
 import { formatCurrency } from './utils'
-import {
-  InformationCircleIcon,
-  ChevronUpIcon,
-  ChevronDownIcon,
-  BanknotesIcon,
-  ReceiptPercentIcon,
-  ClockIcon,
-  CurrencyDollarIcon,
-  ArrowTrendingDownIcon,
-} from '@heroicons/react/24/outline'
+import { Banknote, ChevronDown, ChevronUp, Clock, DollarSign, Info, TrendingDown } from 'lucide-react'
 
 // ============================================
 // PROPS
@@ -238,7 +229,7 @@ function KPICard({
         <p className="text-sm font-medium text-slate-500">{label}</p>
         {tooltip && (
           <div className="group relative">
-            <InformationCircleIcon className="w-4 h-4 text-slate-400 cursor-help" />
+            <Info className="w-4 h-4 text-slate-400 cursor-help" />
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal z-10 max-w-xs text-center">
               {tooltip}
             </div>
@@ -568,8 +559,8 @@ function SortHeader<T extends string>({
         {label}
         {isActive && (
           dir === 'desc'
-            ? <ChevronDownIcon className="w-3 h-3" />
-            : <ChevronUpIcon className="w-3 h-3" />
+            ? <ChevronDown className="w-3 h-3" />
+            : <ChevronUp className="w-3 h-3" />
         )}
       </span>
     </th>

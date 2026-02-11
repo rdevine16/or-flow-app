@@ -24,6 +24,7 @@ import { runDetectionForCase } from '@/lib/dataQuality'
 import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWrapper'
 import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Check, ChevronLeft, ClipboardList, LogOut } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import { StatusBadgeDot } from '@/components/ui/StatusBadge'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -685,9 +686,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center gap-4 mb-6">
             <Link href="/cases" className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronLeft className="w-5 h-5" />
             </Link>
             <div>
               <div className="flex items-center gap-3">
@@ -883,9 +882,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               <div>
                 <div className="flex items-center gap-2">
                   <Link href="/cases" className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
+                    <ChevronLeft className="w-4 h-4" />
                   </Link>
                   <h1 className="text-lg font-bold text-slate-900">{caseData.case_number}</h1>
                 </div>
@@ -946,9 +943,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             <div className="p-5">
               {milestoneTypes.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
-                  <svg className="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
+                  <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
                   <p className="text-sm font-medium">No milestones configured</p>
                   <p className="text-xs mt-1">Configure milestones in Settings</p>
                 </div>
@@ -973,9 +968,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-4 h-4 text-orange-500" />
                         <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
                       </div>
                       <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt)}</p>
@@ -1061,18 +1054,14 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
+                    <LogOut className="w-4 h-4" />
                     Surgeon Left OR
                   </button>
                 ) : (
                   <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
                     <div>
                       <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-4 h-4 text-orange-500" />
                         <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
                       </div>
                       <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt)}</p>

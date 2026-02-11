@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
+import { AlertTriangle, ArrowRight, Bell, Box, Building2, Eye, MessageSquare, Minus, X } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -272,9 +273,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -326,9 +325,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
             {!requiresRep ? (
               <div className="bg-slate-50 rounded-xl p-6 text-center">
                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                  </svg>
+                  <Minus className="w-6 h-6 text-slate-400" />
                 </div>
                 <p className="text-slate-600 font-medium">No Rep Required</p>
                 <p className="text-sm text-slate-400 mt-1">This case does not require device rep involvement</p>
@@ -337,9 +334,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
                   </div>
                   <div>
                     <p className="font-medium text-amber-800">No Device Company Assigned</p>
@@ -391,9 +386,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
                       {dc.rep_notes && (
                         <div className="mt-3 pt-3 border-t border-slate-100">
                           <div className="flex items-start gap-2">
-                            <svg className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                            </svg>
+                            <MessageSquare className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
                             <div>
                               <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Rep Notes</p>
                               <p className="text-sm text-slate-700 mt-1">{dc.rep_notes}</p>
@@ -460,9 +453,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
             className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors"
           >
             View Full Case Details
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
@@ -639,9 +630,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
           <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
+            <Building2 className="w-8 h-8 text-slate-400" />
           </div>
           <h2 className="text-xl font-semibold text-slate-800 mb-2">No Facility Selected</h2>
           <p className="text-slate-500 mb-6 max-w-md">
@@ -765,9 +754,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
         ) : filteredCases.length === 0 ? (
           <EmptyState
             icon={
-              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
+              <Box className="w-8 h-8 text-slate-400" />
             }
             title="No cases found"
             description="No cases match the selected filters."
@@ -813,9 +800,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                   {/* Room */}
                   <div className="col-span-1">
                     <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-100 rounded-lg">
-                      <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
+                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
                       <span className="text-xs font-medium text-slate-600">{roomName}</span>
                     </div>
                   </div>
@@ -898,10 +883,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                         className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
                         title="View Details"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
+                        <Eye className="w-4 h-4" />
                       </button>
 
                       {/* Remind Rep (only for pending) */}
@@ -911,9 +893,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                           className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
                           title="Send Reminder"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                          </svg>
+                          <Bell className="w-4 h-4" />
                         </button>
                       )}
                     </div>

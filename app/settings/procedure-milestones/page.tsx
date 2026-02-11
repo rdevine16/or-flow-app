@@ -10,6 +10,7 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ChevronDown, ClipboardList, Loader2 } from 'lucide-react'
 
 interface ProcedureType {
   id: string
@@ -368,9 +369,7 @@ export default function ProcedureMilestonesSettingsPage() {
                               ? 'bg-purple-100 text-purple-600' 
                               : 'bg-slate-100 text-slate-600'
                           }`}>
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                            </svg>
+                            <ClipboardList className="w-5 h-5" />
                           </div>
                           <div>
                             <h3 className="font-semibold text-slate-900">{procedure.name}</h3>
@@ -401,14 +400,9 @@ export default function ProcedureMilestonesSettingsPage() {
                               style={{ width: `${totalMilestones > 0 ? (milestoneCount / totalMilestones) * 100 : 0}%` }}
                             />
                           </div>
-                          <svg 
+                          <ChevronDown 
                             className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
+                          />
                         </div>
                       </div>
 
@@ -464,10 +458,7 @@ export default function ProcedureMilestonesSettingsPage() {
                                       )}
                                     </div>
                                     {isBusy && (
-                                      <svg className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                      </svg>
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400 shrink-0" />
                                     )}
                                   </label>
                                 )
@@ -500,9 +491,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
                 {procedures.length === 0 && (
                   <div className="text-center py-12 text-slate-500">
-                    <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
+                    <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                     <p>No procedure types configured for this facility.</p>
                     <p className="text-sm mt-1">Add procedures in the Procedure Types settings first.</p>
                   </div>

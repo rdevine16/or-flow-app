@@ -6,6 +6,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import DateRangeSelector, { getPresetDates } from '@/components/ui/DateRangeSelector'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -345,12 +346,9 @@ function SurgeonCard({ scorecard, settings }: { scorecard: ORbitScorecard; setti
               {plan!.recommendations.length} {plan!.recommendations.length === 1 ? 'area' : 'areas'} · +{plan!.projectedComposite - plan!.currentComposite} pts potential
             </span>
           </span>
-          <svg
+          <ChevronDown
             className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          />
         </button>
       )}
 
@@ -366,9 +364,7 @@ function SurgeonCard({ scorecard, settings }: { scorecard: ORbitScorecard; setti
                 </div>
                 <div className="text-[9px] text-slate-400 uppercase tracking-wider">Current</div>
               </div>
-              <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
+              <ArrowRight className="w-5 h-5 text-slate-300" />
               <div className="text-center">
                 <div className="text-lg font-bold" style={{ color: plan.projectedGrade.text }}>
                   {plan.projectedComposite}

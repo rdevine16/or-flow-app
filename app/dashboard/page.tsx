@@ -15,6 +15,7 @@ import EnhancedRoomGridView from '@/components/dashboard/EnhancedRoomGridView'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { ArrowUpDown, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import { getLocalDateString, formatDateWithWeekday } from '@/lib/date-utils'
 import { extractName } from '@/lib/formatters'
@@ -510,9 +511,7 @@ export default function DashboardPage() {
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
               title="Previous day"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
+              <ChevronLeft className="w-5 h-5" />
             </button>
 
             <div className="flex items-center gap-3">
@@ -524,9 +523,7 @@ export default function DashboardPage() {
                   className="absolute inset-0 opacity-0 cursor-pointer w-full"
                 />
                 <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-slate-300 transition-colors">
-                  <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+                  <CalendarDays className="w-4 h-4 text-slate-400" />
                   <span className="text-sm font-medium text-slate-900">
                     {selectedDate ? formatDateWithWeekday(selectedDate) : 'Select date'}
                   </span>
@@ -554,9 +551,7 @@ export default function DashboardPage() {
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
               title="Next day"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              <ChevronRight className="w-5 h-5" />
             </button>
           </div>
 
@@ -581,9 +576,7 @@ export default function DashboardPage() {
                   }
                 `}>
                   {hideCompleted && (
-                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="w-3 h-3 text-white" />
                   )}
                 </div>
               </div>
@@ -610,9 +603,7 @@ export default function DashboardPage() {
                     }
                   `}>
                     {showStaffPanel && (
-                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="w-3 h-3 text-white" />
                     )}
                   </div>
                 </div>
@@ -652,14 +643,9 @@ export default function DashboardPage() {
                   className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                   title={roomsCollapsed ? 'Expand rooms' : 'Collapse rooms'}
                 >
-                  <svg 
+                  <ChevronDown 
                     className={`w-5 h-5 transition-transform ${roomsCollapsed ? '' : 'rotate-180'}`} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  />
                 </button>
               </div>
               
@@ -670,9 +656,7 @@ export default function DashboardPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
                   title="Reorder rooms"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                  </svg>
+                  <ArrowUpDown className="w-4 h-4" />
                   Reorder
                 </button>
               )}

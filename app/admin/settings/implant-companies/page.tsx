@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Archive, Building2, Info, Pencil, Plus, Search } from 'lucide-react'
 
 interface ImplantCompany {
   id: string
@@ -64,40 +65,33 @@ useEffect(() => {
   }, [isGlobalAdmin, showArchived])
 
 const fetchData = async () => {
-    setLoading(true)
-    setError(null)
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setCurrentUserId(user.id)
+    let query = supabase
+      .from('implant_companies')
+      .select('*')
+      .is('facility_id', null)
 
-      let query = supabase
-        .from('implant_companies')
-        .select('*')
-        .is('facility_id', null)
-
-      if (showArchived) {
-        query = query.not('deleted_at', 'is', null)
-      } else {
-        query = query.is('deleted_at', null)
-      }
-
-      const { data, error: fetchErr } = await query.order('name')
-      if (fetchErr) throw fetchErr
-      setCompanies(data || [])
-
-      const { count } = await supabase
-        .from('implant_companies')
-        .select('id', { count: 'exact', head: true })
-        .is('facility_id', null)
-        .not('deleted_at', 'is', null)
-
-      setArchivedCount(count || 0)
-    } catch (err) {
-      setError('Failed to load implant companies. Please try again.')
-    } finally {
-      setLoading(false)
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
     }
+
+    const { data } = await query.order('name')
+    setCompanies(data || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('implant_companies')
+      .select('id', { count: 'exact', head: true })
+      .is('facility_id', null)
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
+    setLoading(false)
   }
 
   const openAddModal = () => {
@@ -120,19 +114,17 @@ const fetchData = async () => {
     
     setSaving(true)
 
-    try {
-      if (modal.mode === 'add') {
-        const { data, error } = await supabase
-          .from('implant_companies')
-          .insert({
-            name: formData.name.trim(),
-            facility_id: null,
-          })
-          .select()
-          .single()
+    if (modal.mode === 'add') {
+      const { data, error } = await supabase
+        .from('implant_companies')
+        .insert({
+          name: formData.name.trim(),
+          facility_id: null,
+        })
+        .select()
+        .single()
 
-        if (error) throw error
-
+      if (!error && data) {
         setCompanies([...companies, data].sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
         await genericAuditLog(supabase, 'admin.implant_company_created', {
@@ -141,20 +133,20 @@ const fetchData = async () => {
           targetLabel: data.name,
           newValues: { name: data.name },
         })
-      } else if (modal.mode === 'edit' && modal.company) {
-        const oldName = modal.company.name
-        
-        const { data, error } = await supabase
-          .from('implant_companies')
-          .update({
-            name: formData.name.trim(),
-          })
-          .eq('id', modal.company.id)
-          .select()
-          .single()
+      }
+    } else if (modal.mode === 'edit' && modal.company) {
+      const oldName = modal.company.name
+      
+      const { data, error } = await supabase
+        .from('implant_companies')
+        .update({
+          name: formData.name.trim(),
+        })
+        .eq('id', modal.company.id)
+        .select()
+        .single()
 
-        if (error) throw error
-
+      if (!error && data) {
         setCompanies(companies.map(c => c.id === data.id ? data : c).sort((a, b) => a.name.localeCompare(b.name)))
         closeModal()
         await genericAuditLog(supabase, 'admin.implant_company_updated', {
@@ -165,28 +157,24 @@ const fetchData = async () => {
           newValues: { name: data.name },
         })
       }
-    } catch (err) {
-      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to save implant company' })
-    } finally {
-      setSaving(false)
     }
+
+    setSaving(false)
   }
 
 const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company) return
 
-    try {
-      const { error } = await supabase
-        .from('implant_companies')
-        .update({
-          deleted_at: new Date().toISOString(),
-          deleted_by: currentUserId
-        })
-        .eq('id', id)
+    const { error } = await supabase
+      .from('implant_companies')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by: currentUserId
+      })
+      .eq('id', id)
 
-      if (error) throw error
-
+    if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev + 1)
       setArchiveTarget(null)
@@ -196,8 +184,6 @@ const handleDelete = async (id: string) => {
         targetId: id,
         targetLabel: company.name,
       })
-    } catch (err) {
-      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to archive company' })
     }
   }
 
@@ -205,17 +191,15 @@ const handleDelete = async (id: string) => {
     const company = companies.find(c => c.id === id)
     if (!company) return
 
-    try {
-      const { error } = await supabase
-        .from('implant_companies')
-        .update({
-          deleted_at: null,
-          deleted_by: null
-        })
-        .eq('id', id)
+    const { error } = await supabase
+      .from('implant_companies')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', id)
 
-      if (error) throw error
-
+    if (!error) {
       setCompanies(companies.filter(c => c.id !== id))
       setArchivedCount(prev => prev - 1)
       showToast({ type: 'success', title: `"${company.name}" restored successfully` })
@@ -224,8 +208,6 @@ const handleDelete = async (id: string) => {
         targetId: id,
         targetLabel: company.name,
       })
-    } catch (err) {
-      showToast({ type: 'error', title: err instanceof Error ? err.message : 'Failed to restore company' })
     }
   }
 
@@ -238,7 +220,9 @@ const handleDelete = async (id: string) => {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <PageLoader message="Loading implant companies..." />
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -275,9 +259,7 @@ const handleDelete = async (id: string) => {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
+                <Archive className="w-4 h-4" />
                 {showArchived ? 'View Active' : `Archive (${archivedCount})`}
               </button>
 
@@ -287,9 +269,7 @@ const handleDelete = async (id: string) => {
                   onClick={openAddModal}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Plus className="w-4 h-4" />
                   Add Company
                 </button>
               )}
@@ -302,9 +282,7 @@ const handleDelete = async (id: string) => {
               {filteredCompanies.length} of {companies.length} compan{companies.length !== 1 ? 'ies' : 'y'}
             </span>
             <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
@@ -319,9 +297,7 @@ const handleDelete = async (id: string) => {
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             {companies.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+                <Building2 className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No implant companies defined</p>
                 <button
                   onClick={openAddModal}
@@ -372,18 +348,14 @@ const handleDelete = async (id: string) => {
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                               title="Edit"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                              </svg>
+                              <Pencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setArchiveTarget(company)}
                               className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Archive"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                              </svg>
+                              <Archive className="w-4 h-4" />
                             </button>
                           </div>
                         )}
@@ -398,9 +370,7 @@ const handleDelete = async (id: string) => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">About implant companies</p>
                 <p>

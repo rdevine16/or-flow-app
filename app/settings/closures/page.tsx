@@ -22,7 +22,6 @@ import {
   Trash2,
   Edit2,
   X,
-  Loader2,
   AlertCircle,
   Check,
   ChevronRight,
@@ -31,6 +30,8 @@ import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Toggle } from '@/components/ui/Toggle'
+import { Button } from '@/components/ui/Button'
 
 // Week options for dynamic holidays
 const WEEK_OPTIONS = [
@@ -240,16 +241,16 @@ export default function FacilityClosuresPage() {
                     <p className="text-sm text-slate-500">Annual closures that repeat every year</p>
                   </div>
                 </div>
-                <button
+                <Button
                   onClick={() => {
                     setEditingHoliday(null)
                     setHolidayDialogOpen(true)
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  size="sm"
                 >
                   <Plus className="h-4 w-4" />
                   Add Holiday
-                </button>
+                </Button>
               </div>
 
               <div className="divide-y divide-slate-100">
@@ -327,13 +328,13 @@ export default function FacilityClosuresPage() {
                     <p className="text-sm text-slate-500">Specific dates the facility is closed</p>
                   </div>
                 </div>
-                <button
+                <Button
                   onClick={() => setClosureDialogOpen(true)}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  size="sm"
                 >
                   <Plus className="h-4 w-4" />
                   Add Closure
-                </button>
+                </Button>
               </div>
 
               <div className="divide-y divide-slate-100">
@@ -460,19 +461,13 @@ function HolidayRow({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-1 min-w-0">
           {/* Toggle */}
-          <button
-            onClick={onToggle}
+          <Toggle
+            checked={holiday.is_active}
+            onChange={onToggle}
             disabled={loading}
-            className={`relative w-10 h-6 rounded-full transition-colors ${
-              holiday.is_active ? 'bg-blue-600' : 'bg-slate-300'
-            } ${loading ? 'opacity-50' : ''}`}
-          >
-            <span
-              className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                holiday.is_active ? 'translate-x-4' : ''
-              }`}
-            />
-          </button>
+            size="sm"
+            aria-label={`Toggle ${holiday.name}`}
+          />
 
           {/* Info */}
           <div className="flex-1 min-w-0">
@@ -805,21 +800,12 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl -mx-6 -mb-6 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-            >
+            <Button variant="ghost" type="button" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !name.trim()}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            </Button>
+            <Button type="submit" loading={loading} disabled={!name.trim()}>
               {editingHoliday ? 'Save Changes' : 'Add Holiday'}
-            </button>
+            </Button>
           </div>
         </form>
     </Modal>
@@ -895,21 +881,12 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl -mx-6 -mb-6 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-            >
+            <Button variant="ghost" type="button" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !closureDate}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            </Button>
+            <Button type="submit" loading={loading} disabled={!closureDate}>
               Add Closure
-            </button>
+            </Button>
           </div>
         </form>
     </Modal>

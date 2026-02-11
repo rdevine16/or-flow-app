@@ -14,7 +14,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface PaginationProps {
   currentPage: number
@@ -98,7 +98,7 @@ export function Pagination({
             className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             aria-label="Previous page"
           >
-            <ChevronLeftIcon className="w-4 h-4" />
+            <ChevronLeft className="w-4 h-4" />
           </button>
 
           {pageNumbers.map((page, idx) =>
@@ -129,7 +129,7 @@ export function Pagination({
             className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             aria-label="Next page"
           >
-            <ChevronRightIcon className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}

@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Archive, Check, Info, Package, Pencil, Plus, X } from 'lucide-react'
 
 interface BodyRegion {
   id: string
@@ -92,56 +93,52 @@ useEffect(() => {
 
 const fetchData = async () => {
     setLoading(true)
-    setError(null)
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setCurrentUserId(user.id)
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
 
-      let query = supabase
-        .from('procedure_categories')
-        .select(`
-          id,
-          name,
-          display_name,
-          display_order,
-          body_region_id,
-          is_active,
-          deleted_at,
-          deleted_by,
-          body_regions (id, name, display_name)
-        `)
+    // Fetch categories with body region
+    let query = supabase
+      .from('procedure_categories')
+      .select(`
+        id,
+        name,
+        display_name,
+        display_order,
+        body_region_id,
+        is_active,
+        deleted_at,
+        deleted_by,
+        body_regions (id, name, display_name)
+      `)
 
-      if (showArchived) {
-        query = query.not('deleted_at', 'is', null)
-      } else {
-        query = query.is('deleted_at', null)
-      }
-
-      const { data: categoriesData, error: catErr } = await query.order('display_order')
-      if (catErr) throw catErr
-
-      const { data: regionsData, error: regErr } = await supabase
-        .from('body_regions')
-        .select('id, name, display_name')
-        .is('deleted_at', null)
-        .order('display_name')
-      if (regErr) throw regErr
-
-      setCategories((categoriesData || []) as ProcedureCategory[])
-      setBodyRegions(regionsData || [])
-
-      const { count } = await supabase
-        .from('procedure_categories')
-        .select('id', { count: 'exact', head: true })
-        .not('deleted_at', 'is', null)
-
-      setArchivedCount(count || 0)
-    } catch (err) {
-      setError('Failed to load procedure categories. Please try again.')
-    } finally {
-      setLoading(false)
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
     }
+
+    const { data: categoriesData } = await query.order('display_order')
+
+    // Fetch body regions for dropdown (only active ones)
+    const { data: regionsData } = await supabase
+      .from('body_regions')
+      .select('id, name, display_name')
+      .is('deleted_at', null)
+      .order('display_name')
+
+    setCategories((categoriesData || []) as ProcedureCategory[])
+    setBodyRegions(regionsData || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('procedure_categories')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
+    setLoading(false)
   }
 
   const closeConfirmModal = () => {
@@ -172,40 +169,35 @@ const fetchData = async () => {
       ? Math.max(...categories.map(c => c.display_order))
       : 0
 
-    try {
-      const { data, error } = await supabase
-        .from('procedure_categories')
-        .insert({
-          name,
-          display_name: formDisplayName.trim(),
-          display_order: maxOrder + 1,
-          body_region_id: formBodyRegionId || null,
-          is_active: true,
-        })
-        .select(`
-          id,
-          name,
-          display_name,
-          display_order,
-          body_region_id,
-          is_active,
-          body_regions (id, name, display_name)
-        `)
-        .single()
+    const { data, error } = await supabase
+      .from('procedure_categories')
+      .insert({
+        name,
+        display_name: formDisplayName.trim(),
+        display_order: maxOrder + 1,
+        body_region_id: formBodyRegionId || null,
+        is_active: true,
+      })
+      .select(`
+        id,
+        name,
+        display_name,
+        display_order,
+        body_region_id,
+        is_active,
+        body_regions (id, name, display_name)
+      `)
+      .single()
 
-      if (error) throw error
-
+    if (!error && data) {
       const regionName = bodyRegions.find(r => r.id === formBodyRegionId)?.display_name
       await procedureCategoryAudit.created(supabase, formDisplayName.trim(), data.id, regionName)
 
       setCategories([...categories, data as ProcedureCategory])
       resetForm()
       setShowAddModal(false)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to add category', 'error')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   const handleEdit = async () => {
@@ -215,50 +207,46 @@ const fetchData = async () => {
     const oldDisplayName = editingCategory.display_name
     const oldBodyRegion = getBodyRegion(editingCategory)
 
-    try {
-      const { data, error } = await supabase
-        .from('procedure_categories')
-        .update({
-          display_name: formDisplayName.trim(),
-          body_region_id: formBodyRegionId || null,
-        })
-        .eq('id', editingCategory.id)
-        .select(`
-          id,
-          name,
-          display_name,
-          display_order,
-          body_region_id,
-          is_active,
-          body_regions (id, name, display_name)
-        `)
-        .single()
+    const { data, error } = await supabase
+      .from('procedure_categories')
+      .update({
+        display_name: formDisplayName.trim(),
+        body_region_id: formBodyRegionId || null,
+      })
+      .eq('id', editingCategory.id)
+      .select(`
+        id,
+        name,
+        display_name,
+        display_order,
+        body_region_id,
+        is_active,
+        body_regions (id, name, display_name)
+      `)
+      .single()
 
-      if (error) throw error
-
-      await procedureCategoryAudit.updated(
-        supabase,
-        editingCategory.id,
-        oldDisplayName,
-        { 
-          display_name: oldDisplayName,
-          body_region: oldBodyRegion?.display_name || null
-        },
-        {
-          display_name: formDisplayName.trim(),
-          body_region: bodyRegions.find(r => r.id === formBodyRegionId)?.display_name || null
-        }
-      )
+    if (!error && data) {
+      const newRegionName = bodyRegions.find(r => r.id === formBodyRegionId)?.display_name
+await procedureCategoryAudit.updated(
+  supabase,
+  editingCategory.id,
+  oldDisplayName,
+  { 
+    display_name: oldDisplayName,
+    body_region: oldBodyRegion?.display_name || null
+  },
+  {
+    display_name: formDisplayName.trim(),
+    body_region: bodyRegions.find(r => r.id === formBodyRegionId)?.display_name || null
+  }
+)
 
       setCategories(categories.map(c => c.id === data.id ? data as ProcedureCategory : c))
       setShowEditModal(false)
       setEditingCategory(null)
       resetForm()
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update category', 'error')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
  const handleDelete = (category: ProcedureCategory) => {
@@ -300,25 +288,22 @@ const fetchData = async () => {
 
   const handleRestore = async (category: ProcedureCategory) => {
     setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('procedure_categories')
-        .update({
-          deleted_at: null,
-          deleted_by: null
-        })
-        .eq('id', category.id)
+    const { error } = await supabase
+      .from('procedure_categories')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', category.id)
 
-      if (error) throw error
-
+    if (!error) {
       setCategories(categories.filter(c => c.id !== category.id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${category.display_name}" restored successfully`, 'success')
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to restore category', 'error')
-    } finally {
-      setSaving(false)
+    } else {
+      showToast('Failed to restore category', 'error')
     }
+    setSaving(false)
   }
 
   const openEditModal = (category: ProcedureCategory) => {
@@ -380,9 +365,7 @@ const fetchData = async () => {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
+                <Archive className="w-4 h-4" />
                 {showArchived ? 'View Active' : `Archive (${archivedCount})`}
               </button>
 
@@ -392,9 +375,7 @@ const fetchData = async () => {
                   onClick={openAddModal}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Plus className="w-4 h-4" />
                   Add Category
                 </button>
               )}
@@ -410,12 +391,14 @@ const fetchData = async () => {
 
           {/* Content */}
           {loading ? (
-            <PageLoader message="Loading categories..." />
+            <div className="bg-white border border-slate-200 rounded-xl">
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            </div>
           ) : categories.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl text-center py-16">
-              <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
+              <Package className="w-12 h-12 mx-auto mb-4 text-slate-300" />
               <p className="text-slate-500 mb-2">No categories defined</p>
               <button
                 onClick={openAddModal}
@@ -477,18 +460,14 @@ const fetchData = async () => {
                                   className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                   title="Edit"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                  </svg>
+                                  <Pencil className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(category)}
                                   className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Archive"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                  </svg>
+                                  <Archive className="w-4 h-4" />
                                 </button>
                               </div>
                             )}
@@ -505,9 +484,7 @@ const fetchData = async () => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">How categories work</p>
                 <p>
@@ -638,13 +615,9 @@ const fetchData = async () => {
           toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
         }`}>
           {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-5 h-5" />
           ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           )}
           {toast.message}
         </div>

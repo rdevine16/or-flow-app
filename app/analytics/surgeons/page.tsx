@@ -9,7 +9,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
-import { UserIcon } from '@heroicons/react/24/outline'
+
 import { useSurgeons, useProcedureTypes } from '@/hooks'
 import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
 
@@ -43,6 +43,7 @@ import {
 
 // Enterprise analytics components
 import {
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Pencil, RefreshCw, TrendingUp, User } from 'lucide-react'
   SectionHeader,
   EnhancedMetricCard,
   TrendPill,
@@ -747,9 +748,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
             <AnalyticsPageHeader title="Surgeon Performance" icon={UserIcon} />
             <EmptyState
               icon={
-                <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
+                <Building2 className="w-8 h-8 text-slate-400" />
               }
               title={isGlobalAdmin ? 'Select a Facility' : 'No Facility Assigned'}
               description={isGlobalAdmin ? 'Choose a facility from the top bar to view surgeon analytics.' : 'Contact your administrator to be assigned to a facility.'}
@@ -781,7 +780,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
           {!selectedSurgeon ? (
             <EmptyState
               icon={
-                <UserIcon className="w-8 h-8 text-slate-400" />
+                <User className="w-8 h-8 text-slate-400" />
               }
               title="Select a Surgeon"
               description="Choose a surgeon above to view their performance metrics and trends."
@@ -846,9 +845,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       value={overviewMetrics.totalCases.toString()}
                       accentColor="blue"
                       icon={
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
+                        <ClipboardList className="w-4 h-4" />
                       }
                       trend={overviewMetrics.prevCases > 0 ? {
                         value: Math.abs(Math.round(((overviewMetrics.totalCases - overviewMetrics.prevCases) / overviewMetrics.prevCases) * 100)),
@@ -862,9 +859,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       accentColor="emerald"
                       subtitle="per case"
                       icon={
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <Clock className="w-4 h-4" />
                       }
                     />
                     <EnhancedMetricCard
@@ -872,9 +867,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       value={overviewMetrics.avgTurnover ? formatMinutesToHHMMSS(overviewMetrics.avgTurnover) : 'N/A'}
                       accentColor="amber"
                       icon={
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
+                        <RefreshCw className="w-4 h-4" />
                       }
                       trend={overviewMetrics.prevAvgTurnover && overviewMetrics.avgTurnover ? {
                         value: Math.abs(Math.round(((overviewMetrics.avgTurnover - overviewMetrics.prevAvgTurnover) / overviewMetrics.prevAvgTurnover) * 100)),
@@ -888,9 +881,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       accentColor="violet"
                       subtitle="cumulative"
                       icon={
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <Clock className="w-4 h-4" />
                       }
                     />
                   </div>
@@ -903,9 +894,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         subtitle="Cases per day over the selected period"
                         accentColor="blue"
                         icon={
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
+                          <BarChart3 className="w-4 h-4" />
                         }
                       />
                       <BarChart
@@ -931,9 +920,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         subtitle="Performance by procedure type"
                         accentColor="emerald"
                         icon={
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                          </svg>
+                          <Archive className="w-4 h-4" />
                         }
                       />
                       
@@ -962,9 +949,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         <div className="mt-4">
                           <EmptyState
                             icon={
-                              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                              </svg>
+                              <Archive className="w-6 h-6 text-slate-400" />
                             }
                             title="No Procedure Data"
                             description="No completed procedures found for the selected period."
@@ -981,9 +966,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                           subtitle="Robotic vs Traditional (minutes)"
                           accentColor="blue"
                           icon={
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                            </svg>
+                            <TrendingUp className="w-4 h-4" />
                           }
                         />
                         <AreaChart
@@ -1009,9 +992,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                           subtitle="Robotic vs Traditional (minutes)"
                           accentColor="blue"
                           icon={
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                            </svg>
+                            <TrendingUp className="w-4 h-4" />
                           }
                         />
                         <AreaChart
@@ -1046,9 +1027,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         }}
                         className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <ChevronLeft className="w-5 h-5" />
                       </button>
                       <input
                         type="date"
@@ -1064,9 +1043,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         }}
                         className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="w-5 h-5" />
                       </button>
                       <button
                         onClick={() => setSelectedDate(getLocalDateString())}
@@ -1084,9 +1061,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       subtitle="Track efficiency by measuring key time metrics"
                       accentColor="blue"
                       icon={
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <Pencil className="w-4 h-4" />
                       }
                     />
 
@@ -1094,9 +1069,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     <div className="grid grid-cols-4 gap-4 mt-6">
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                          <Clock className="w-4 h-4 text-blue-500" />
                           First Case Start
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">
@@ -1116,27 +1089,21 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
+                          <ClipboardList className="w-4 h-4 text-blue-500" />
                           Cases
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.totalCases}</div>
                       </div>
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                          <Clock className="w-4 h-4 text-emerald-500" />
                           Total OR Time
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalORTime)}</div>
                       </div>
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
+                          <Clock className="w-4 h-4 text-violet-500" />
                           Total Surgical Time
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}</div>
@@ -1148,9 +1115,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       {/* Surgical Turnover */}
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
+                          <RefreshCw className="w-4 h-4 text-amber-500" />
                           Surgical Turnover
                         </div>
                         {dayMetrics.surgicalTurnoverCount > 0 ? (
@@ -1174,9 +1139,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       {/* Room Turnover */}
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
+                          <RefreshCw className="w-4 h-4 text-amber-500" />
                           Room Turnover
                         </div>
                         {dayMetrics.roomTurnoverCount > 0 ? (
@@ -1200,9 +1163,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       {/* Uptime vs Downtime */}
                       <div className="bg-slate-50/80 rounded-lg p-4 col-span-2">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
+                          <BarChart3 className="w-4 h-4 text-blue-500" />
                           Uptime vs Downtime
                         </div>
                         
@@ -1249,9 +1210,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         subtitle={`${dayMetrics.totalCases} case${dayMetrics.totalCases !== 1 ? 's' : ''} completed`}
                         accentColor="blue"
                         icon={
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
+                          <ClipboardList className="w-4 h-4" />
                         }
                       />
 
@@ -1259,9 +1218,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         <div className="mt-4">
                           <EmptyState
                             icon={
-                              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                              </svg>
+                              <ClipboardList className="w-6 h-6 text-slate-400" />
                             }
                             title="No Cases"
                             description="No completed cases for this date."
@@ -1302,9 +1259,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         subtitle="Today vs 30-day average by procedure"
                         accentColor="emerald"
                         icon={
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
+                          <BarChart3 className="w-4 h-4" />
                         }
                       />
 

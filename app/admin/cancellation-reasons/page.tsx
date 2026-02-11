@@ -1,3 +1,4 @@
+// app/admin/cancellation-reasons/page.tsx
 // This is the main page for managing cancellation reason templates. These templates are copied to new facilities during onboarding and can be customized by each facility without affecting others. Only accessible by global admins.
 'use client'
 
@@ -12,6 +13,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { AlertCircle, Archive, Ban, Check, Info, Loader2, PenLine, Plus, RefreshCw } from 'lucide-react'
 
 
 // ============================================================================
@@ -83,27 +85,31 @@ export default function AdminCancellationReasonsPage() {
 
 const fetchReasons = async () => {
   setLoading(true)
-  setError(null)
   
-  try {
-    let query = supabase
-      .from('cancellation_reason_templates')
-      .select('*')
-      .order('category')
-      .order('display_order')
-    
-    if (!showArchived) {
-      query = query.eq('is_active', true).is('deleted_at', null)
-    }
-    
-    const { data, error: fetchErr } = await query
-    if (fetchErr) throw fetchErr
-    setReasons(data || [])
-  } catch (err) {
-    setError('Failed to load cancellation reasons. Please try again.')
-  } finally {
-    setLoading(false)
+  let query = supabase
+    .from('cancellation_reason_templates')
+    .select('*')
+    .order('category')
+    .order('display_order')
+  
+  if (!showArchived) {
+    query = query.eq('is_active', true).is('deleted_at', null)
   }
+  
+  const { data, error } = await query
+
+  if (error) {
+    showToast({
+      type: 'error',
+      title: 'Error',
+      message: 'Error fetching cancellation reasons: ' + error
+    })
+    setErrorMessage('Failed to load cancellation reasons')
+  } else {
+    setReasons(data || [])
+  }
+
+  setLoading(false)
 }
 
 // ============================================================================
@@ -158,20 +164,21 @@ const fetchReasons = async () => {
 
     const name = formData.name || generateName(formData.display_name)
 
-    try {
-      if (editingReason) {
-        const { error } = await supabase
-          .from('cancellation_reason_templates')
-          .update({
-            name,
-            display_name: formData.display_name.trim(),
-            category: formData.category,
-            display_order: formData.display_order,
-          })
-          .eq('id', editingReason.id)
+    if (editingReason) {
+      // Update
+      const { error } = await supabase
+        .from('cancellation_reason_templates')
+        .update({
+          name,
+          display_name: formData.display_name.trim(),
+          category: formData.category,
+          display_order: formData.display_order,
+        })
+        .eq('id', editingReason.id)
 
-        if (error) throw error
-
+      if (error) {
+        setErrorMessage(error.message)
+      } else {
         await cancellationReasonAudit.adminUpdated(
           supabase, editingReason.id, editingReason.display_name, 
           formData.display_name.trim(), formData.category
@@ -179,27 +186,27 @@ const fetchReasons = async () => {
         setSuccessMessage('Cancellation reason updated')
         closeModal()
         fetchReasons()
+      }
+    } else {
+      // Create
+      const { data, error } = await supabase
+        .from('cancellation_reason_templates')
+        .insert({
+          name,
+          display_name: formData.display_name.trim(),
+          category: formData.category,
+          display_order: formData.display_order,
+          is_active: true,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        setErrorMessage(error.code === '23505' 
+          ? 'A reason with this name already exists' 
+          : error.message
+        )
       } else {
-        const { data, error } = await supabase
-          .from('cancellation_reason_templates')
-          .insert({
-            name,
-            display_name: formData.display_name.trim(),
-            category: formData.category,
-            display_order: formData.display_order,
-            is_active: true,
-          })
-          .select()
-          .single()
-
-        if (error) {
-          setErrorMessage(error.code === '23505' 
-            ? 'A reason with this name already exists' 
-            : error.message
-          )
-          return
-        }
-
         await cancellationReasonAudit.adminCreated(
           supabase, formData.display_name.trim(), data.id, formData.category
         )
@@ -207,52 +214,46 @@ const fetchReasons = async () => {
         closeModal()
         fetchReasons()
       }
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to save cancellation reason')
     }
 
     setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   const handleDelete = async (reason: CancellationReasonTemplate) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      const { error } = await supabase
-        .from('cancellation_reason_templates')
-        .update({
-          is_active: false,
-          deleted_at: new Date().toISOString(),
-          deleted_by: user?.id,
-        })
-        .eq('id', reason.id)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    const { error } = await supabase
+      .from('cancellation_reason_templates')
+      .update({
+        is_active: false,
+        deleted_at: new Date().toISOString(),
+        deleted_by: user?.id,
+      })
+      .eq('id', reason.id)
 
-      if (error) throw error
-
+    if (error) {
+      setErrorMessage(error.message)
+    } else {
       await cancellationReasonAudit.adminDeleted(supabase, reason.display_name, reason.id)
       setSuccessMessage(`"${reason.display_name}" archived`)
       setArchiveTarget(null)
       fetchReasons()
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to archive reason')
     }
 
     setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   const handleRestore = async (reason: CancellationReasonTemplate) => {
-    try {
-      const { error } = await supabase
-        .from('cancellation_reason_templates')
-        .update({ is_active: true, deleted_at: null, deleted_by: null })
-        .eq('id', reason.id)
+    const { error } = await supabase
+      .from('cancellation_reason_templates')
+      .update({ is_active: true, deleted_at: null, deleted_by: null })
+      .eq('id', reason.id)
 
-      if (error) throw error
-
+    if (error) {
+      setErrorMessage(error.message)
+    } else {
       setSuccessMessage(`"${reason.display_name}" restored`)
       fetchReasons()
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to restore reason')
     }
 
     setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
@@ -312,18 +313,14 @@ const fetchReasons = async () => {
         {/* Messages */}
         {successMessage && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-            <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
             <p className="text-sm font-medium text-green-800">{successMessage}</p>
           </div>
         )}
 
         {errorMessage && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <p className="text-sm font-medium text-red-800">{errorMessage}</p>
           </div>
         )}
@@ -355,9 +352,7 @@ const fetchReasons = async () => {
                   onClick={() => setShowArchived(true)}
                   className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                  </svg>
+                  <Archive className="w-4 h-4" />
                   View Archived ({archivedCount})
                 </button>
               )}
@@ -366,9 +361,7 @@ const fetchReasons = async () => {
                   onClick={openCreateModal}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Plus className="w-4 h-4" />
                   Add Reason
                 </button>
               )}
@@ -377,13 +370,13 @@ const fetchReasons = async () => {
 
           {/* Content */}
           {loading ? (
-            <PageLoader message="Loading cancellation reasons..." />
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+            </div>
           ) : reasons.length === 0 ? (
             <div className="px-6 py-12 text-center">
               <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
+                <Ban className="w-6 h-6 text-slate-400" />
               </div>
               <p className="text-slate-500">
                 {showArchived ? 'No archived templates.' : 'No templates yet.'}
@@ -439,18 +432,14 @@ const fetchReasons = async () => {
                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="Edit"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
+                                    <PenLine className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={() => setArchiveTarget(reason)}
                                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Archive"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                    </svg>
+                                    <Archive className="w-4 h-4" />
                                   </button>
                                 </>
                             ) : (
@@ -458,9 +447,7 @@ const fetchReasons = async () => {
                                 onClick={() => handleRestore(reason)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
+                                <RefreshCw className="w-4 h-4" />
                                 Restore
                               </button>
                             )}
@@ -478,9 +465,7 @@ const fetchReasons = async () => {
         {/* Info Card */}
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
           <div className="flex gap-3">
-            <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-medium text-blue-900">How Templates Work</h4>
               <p className="text-sm text-blue-700 mt-1">

@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Check, ChevronDown, ClipboardList, Info, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 
 interface DefaultProcedure {
   id: string
@@ -139,8 +140,11 @@ export default function DefaultProceduresPage() {
       if (milestonesRes.data) setMilestoneTypes(milestonesRes.data)
       if (procMilestonesRes.data) setProcedureMilestones(procMilestonesRes.data)
     } catch (error) {
-      setError('Failed to load procedures. Please try again.')
-      showToast({ type: 'error', title: 'Failed to load procedures', message: error instanceof Error ? error.message : 'Please try again' })
+      showToast({
+  type: 'error',
+  title: 'Error fetching data:',
+  message: error instanceof Error ? error.message : 'Error fetching data:'
+})
     } finally {
       setLoading(false)
     }
@@ -229,8 +233,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to save procedure',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error saving procedure:',
+  message: error instanceof Error ? error.message : 'Error saving procedure:'
 })
     } finally {
       setSaving(false)
@@ -258,8 +262,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to delete procedure',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error deleting procedure:',
+  message: error instanceof Error ? error.message : 'Error deleting procedure:'
 })
     } finally {
       setSaving(false)
@@ -285,8 +289,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to toggle procedure',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error toggling procedure:',
+  message: error instanceof Error ? error.message : 'Error toggling procedure:'
 })
     } finally {
       setSaving(false)
@@ -333,8 +337,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to toggle milestone',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error toggling milestone:',
+  message: error instanceof Error ? error.message : 'Error toggling milestone:'
 })
     } finally {
       setSaving(false)
@@ -388,8 +392,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to toggle paired milestone',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error toggling paired milestone:',
+  message: error instanceof Error ? error.message : 'Error toggling paired milestone:'
 })
     } finally {
       setSaving(false)
@@ -421,8 +425,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to enable all milestones',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error enabling all milestones:',
+  message: error instanceof Error ? error.message : 'Error enabling all milestones:'
 })
     } finally {
       setSaving(false)
@@ -443,8 +447,8 @@ export default function DefaultProceduresPage() {
     } catch (error) {
       showToast({
   type: 'error',
-  title: 'Failed to disable all milestones',
-  message: error instanceof Error ? error.message : 'Please try again'
+  title: 'Error disabling all milestones:',
+  message: error instanceof Error ? error.message : 'Error disabling all milestones:'
 })
     } finally {
       setSaving(false)
@@ -473,7 +477,9 @@ export default function DefaultProceduresPage() {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <PageLoader message="Loading procedures..." />
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -497,9 +503,7 @@ export default function DefaultProceduresPage() {
               onClick={handleNew}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus className="w-4 h-4" />
               Add Procedure
             </button>
           </div>
@@ -511,9 +515,7 @@ export default function DefaultProceduresPage() {
             </span>
             <div className="flex-1" />
             <div className="relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search..."
@@ -547,9 +549,7 @@ export default function DefaultProceduresPage() {
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             {filteredProcedures.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
+                <ClipboardList className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No procedures found</p>
                 <button
                   onClick={handleNew}
@@ -599,9 +599,7 @@ export default function DefaultProceduresPage() {
                                   }`}
                                 >
                                   {procedure.is_active && (
-                                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                    </svg>
+                                    <Check className="w-3 h-3 text-white" />
                                   )}
                                 </button>
                               </div>
@@ -663,27 +661,16 @@ export default function DefaultProceduresPage() {
                                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="Edit"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                    </svg>
+                                    <Pencil className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={(e) => handleDelete(procedure, e)}
                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                     title="Delete"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
-                                  <svg 
-                                    className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                                    fill="none" 
-                                    stroke="currentColor" 
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                  </svg>
+                                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                 </div>
                               </div>
                             </div>
@@ -758,10 +745,7 @@ export default function DefaultProceduresPage() {
                                       <>
                                         <span className="text-slate-300">|</span>
                                         <span className="text-xs text-slate-400 flex items-center gap-1">
-                                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                          </svg>
+                                          <Loader2 className="w-3 h-3 animate-spin" />
                                           Saving...
                                         </span>
                                       </>
@@ -783,9 +767,7 @@ export default function DefaultProceduresPage() {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">Template System</p>
                 <p>

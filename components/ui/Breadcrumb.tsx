@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { getBreadcrumbsFromParam, BreadcrumbItem } from '@/lib/breadcrumbs'
+import { ChevronLeft, ChevronRight, Home } from 'lucide-react'
 
 interface BreadcrumbProps {
   // Optional: override breadcrumbs instead of reading from URL
@@ -50,19 +51,7 @@ export default function Breadcrumb({ items, currentPage }: BreadcrumbProps) {
 
 function ChevronIcon() {
   return (
-    <svg 
-      className="w-4 h-4 text-slate-400 flex-shrink-0" 
-      fill="none" 
-      stroke="currentColor" 
-      viewBox="0 0 24 24"
-    >
-      <path 
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-        strokeWidth={2} 
-        d="M9 5l7 7-7 7" 
-      />
-    </svg>
+    <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
   )
 }
 
@@ -87,19 +76,7 @@ export function BreadcrumbCompact({ items, currentPage }: BreadcrumbProps) {
         href={backTo.href}
         className="flex items-center gap-1.5 text-slate-500 hover:text-slate-900 transition-colors"
       >
-        <svg 
-          className="w-4 h-4" 
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M15 19l-7-7 7-7" 
-          />
-        </svg>
+        <ChevronLeft className="w-4 h-4" />
         <span>
           {breadcrumbs.map(b => b.label).join(' / ')}
         </span>
@@ -124,9 +101,7 @@ export function HeaderBreadcrumb({ items, currentPage }: BreadcrumbProps) {
         href="/" 
         className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
       >
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
+        <Home className="w-5 h-5" />
       </Link>
 
       {/* Breadcrumb trail */}

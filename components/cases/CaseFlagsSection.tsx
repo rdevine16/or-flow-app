@@ -19,17 +19,7 @@
 'use client'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useState, useEffect, useCallback } from 'react'
-import {
-  ExclamationCircleIcon,
-  ExclamationTriangleIcon,
-  InformationCircleIcon,
-  FlagIcon,
-  ClockIcon,
-  PlusIcon,
-  XMarkIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-} from '@heroicons/react/24/outline'
+import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Flag, Info, X } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -369,7 +359,7 @@ export default function CaseFlagsSection({
                 }}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
               >
-                <XMarkIcon className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -427,7 +417,7 @@ export default function CaseFlagsSection({
         {/* ============================================= */}
         {sortedFlags.length === 0 ? (
           <div className="text-center py-4">
-            <FlagIcon className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
+            <Flag className="w-6 h-6 text-slate-300 mx-auto mb-1.5" />
             <p className="text-xs text-slate-400">
               {isCompleted ? 'No flags on this case' : 'No delays reported'}
             </p>
@@ -504,12 +494,12 @@ export default function CaseFlagsSection({
               >
                 {expanded ? (
                   <>
-                    <ChevronUpIcon className="w-3 h-3" />
+                    <ChevronUp className="w-3 h-3" />
                     Show less
                   </>
                 ) : (
                   <>
-                    <ChevronDownIcon className="w-3 h-3" />
+                    <ChevronDown className="w-3 h-3" />
                     {sortedFlags.length - COLLAPSE_THRESHOLD} more flag{sortedFlags.length - COLLAPSE_THRESHOLD !== 1 ? 's' : ''}
                   </>
                 )}

@@ -7,6 +7,7 @@ import Container from '@/components/ui/Container'
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, Loader2, RefreshCw, X } from 'lucide-react'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -1151,9 +1152,7 @@ showToast({
               </>
             ) : (
               <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+                <RefreshCw className="w-4 h-4" />
                 Run Detection
               </>
             )}
@@ -1169,16 +1168,12 @@ showToast({
             <div className="mb-4 flex items-center gap-2">
               {isCurrent ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check className="w-3 h-3" />
                   Current
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Clock className="w-3 h-3" />
                   Not Current
                 </span>
               )}
@@ -1336,9 +1331,7 @@ showToast({
               {issues.length === 0 ? (
                 <div className="px-4 py-12 text-center">
                   <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="w-6 h-6 text-emerald-600" />
                   </div>
                   <p className="text-slate-600 font-medium">No issues found</p>
                   <p className="text-sm text-slate-500 mt-1">Your data quality looks great!</p>
@@ -1544,9 +1537,7 @@ showToast({
                     <div key={step} className="flex items-center gap-3">
                       {detectionStep > step ? (
                         <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
-                          <svg className="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
+                          <Check className="w-3 h-3 text-emerald-600" />
                         </div>
                       ) : detectionStep === step ? (
                         <div className="w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center">
@@ -1585,9 +1576,7 @@ showToast({
                   )}
                 </div>
                 <button onClick={closeModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-5 h-5 text-slate-500" />
                 </button>
               </div>
 
@@ -1621,9 +1610,7 @@ showToast({
                       <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <Clock className="w-4 h-4 text-orange-600" />
                           </div>
                           <div className="flex-1">
                             <h4 className="text-sm font-semibold text-orange-800">
@@ -1670,9 +1657,7 @@ showToast({
                       <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="w-4 h-4 text-emerald-600" />
                           </div>
                           <div>
                             <h4 className="text-sm font-semibold text-emerald-800">Issue Already Resolved</h4>
@@ -1690,9 +1675,7 @@ showToast({
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
+                            <AlertTriangle className="w-4 h-4 text-amber-600" />
                           </div>
                           <div className="flex-1">
                             {caseIssues.length > 1 ? (
@@ -1742,9 +1725,7 @@ showToast({
                             <ul className="space-y-1">
                               {impact.cannotCalculate.map(metric => (
                                 <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
-                                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
+                                  <X className="w-4 h-4 text-red-500 flex-shrink-0" />
                                   {metric}
                                 </li>
                               ))}
@@ -1759,9 +1740,7 @@ showToast({
                             <ul className="space-y-1">
                               {impact.canCalculate.map(metric => (
                                 <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
-                                  <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
+                                  <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                                   {metric}
                                 </li>
                               ))}
@@ -1853,14 +1832,10 @@ showToast({
                                   {/* Pair arrow indicator */}
                                   <div className="w-5 flex-shrink-0 flex items-center justify-center">
                                     {isStartOfPair && (
-                                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                                      </svg>
+                                      <ArrowDown className="w-4 h-4 text-blue-400" />
                                     )}
                                     {isEndOfPair && (
-                                      <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                                      </svg>
+                                      <ArrowUp className="w-4 h-4 text-blue-400" />
                                     )}
                                   </div>
                                   
@@ -1973,9 +1948,7 @@ showToast({
                           <div className="bg-amber-100 rounded-lg p-3">
                             {missingMilestones.map(m => (
                               <div key={m} className="flex items-center gap-2 text-sm text-amber-800">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
+                                <AlertTriangle className="w-4 h-4" />
                                 {m}
                               </div>
                             ))}
@@ -1987,9 +1960,7 @@ showToast({
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                         {affectedMetrics.map(m => (
                           <div key={m} className="flex items-center gap-2 text-sm text-red-700">
-                            <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            <X className="w-4 h-4 text-red-500" />
                             {m}
                           </div>
                         ))}

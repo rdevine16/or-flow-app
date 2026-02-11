@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Archive, Check, Clock, Info, Link, Pencil, Plus, X } from 'lucide-react'
 
 
 interface MilestoneType {
@@ -90,37 +91,31 @@ useEffect(() => {
 
 const fetchMilestones = async () => {
     setLoading(true)
-    setError(null)
     
-    try {
-      let query = supabase
-        .from('milestone_types')
-        .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
+    let query = supabase
+      .from('milestone_types')
+      .select('id, name, display_name, display_order, pair_with_id, pair_position, is_active, deleted_at, deleted_by')
 
-      if (showArchived) {
-        query = query.not('deleted_at', 'is', null)
-      } else {
-        query = query.is('deleted_at', null)
-      }
-
-      query = query.order('display_order')
-
-      const { data, error: fetchErr } = await query
-      if (fetchErr) throw fetchErr
-      
-      setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
-
-      const { count } = await supabase
-        .from('milestone_types')
-        .select('id', { count: 'exact', head: true })
-        .not('deleted_at', 'is', null)
-
-      setArchivedCount(count || 0)
-    } catch (err) {
-      setError('Failed to load milestones. Please try again.')
-    } finally {
-      setLoading(false)
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
     }
+
+    query = query.order('display_order')
+
+    const { data } = await query
+    
+    setMilestones(data?.map(m => ({ ...m, is_active: m.is_active ?? true })) || [])
+
+    // Get archived count
+    const { count } = await supabase
+      .from('milestone_types')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
+    setLoading(false)
   }
 
   const closeConfirmModal = () => {
@@ -145,20 +140,18 @@ const fetchMilestones = async () => {
       ? Math.max(...milestones.map(m => m.display_order)) 
       : 0
 
-    try {
-      const { data, error } = await supabase
-        .from('milestone_types')
-        .insert({
-          name,
-          display_name: newDisplayName.trim(),
-          display_order: maxOrder + 1,
-          is_active: true,
-        })
-        .select()
-        .single()
+    const { data, error } = await supabase
+      .from('milestone_types')
+      .insert({
+        name,
+        display_name: newDisplayName.trim(),
+        display_order: maxOrder + 1,
+        is_active: true,
+      })
+      .select()
+      .single()
 
-      if (error) throw error
-
+    if (!error && data) {
       await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
       await propagateToFacilities(data)
       
@@ -166,11 +159,8 @@ const fetchMilestones = async () => {
       setNewName('')
       setNewDisplayName('')
       setShowAddModal(false)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to add milestone', 'error')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   const propagateToFacilities = async (milestone: MilestoneType) => {
@@ -200,14 +190,12 @@ const fetchMilestones = async () => {
     setSaving(true)
     const oldDisplayName = editingMilestone.display_name
 
-    try {
-      const { error } = await supabase
-        .from('milestone_types')
-        .update({ display_name: editDisplayName.trim() })
-        .eq('id', editingMilestone.id)
+    const { error } = await supabase
+      .from('milestone_types')
+      .update({ display_name: editDisplayName.trim() })
+      .eq('id', editingMilestone.id)
 
-      if (error) throw error
-
+    if (!error) {
       if (oldDisplayName !== editDisplayName.trim()) {
         await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, editDisplayName.trim())
       }
@@ -224,11 +212,8 @@ const fetchMilestones = async () => {
       ))
       setShowEditModal(false)
       setEditingMilestone(null)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update milestone', 'error')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   const handleToggleActive = async (milestone: MilestoneType) => {
@@ -294,55 +279,49 @@ const fetchMilestones = async () => {
     setSaving(true)
     const partner = milestones.find(m => m.id === selectedPairId)
 
-    try {
-      // Clear any existing pairing for this milestone first
-      if (pairingMilestone.pair_with_id) {
-        await supabase
-          .from('milestone_types')
-          .update({ pair_with_id: null, pair_position: null })
-          .eq('id', pairingMilestone.pair_with_id)
-      }
-
-      // Set new pairing
-      const { error: err1 } = await supabase
+    // Clear any existing pairing for this milestone first
+    if (pairingMilestone.pair_with_id) {
+      await supabase
         .from('milestone_types')
-        .update({ pair_with_id: selectedPairId, pair_position: 'start' })
-        .eq('id', pairingMilestone.id)
-      if (err1) throw err1
-
-      const { error: err2 } = await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
-        .eq('id', selectedPairId)
-      if (err2) throw err2
-
-      await milestoneTypeAudit.linked(
-        supabase,
-        pairingMilestone.display_name,
-        partner?.display_name || 'Unknown'
-      )
-
-      setMilestones(milestones.map(m => {
-        if (m.id === pairingMilestone.id) {
-          return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
-        }
-        if (m.id === selectedPairId) {
-          return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
-        }
-        if (m.id === pairingMilestone.pair_with_id) {
-          return { ...m, pair_with_id: null, pair_position: null }
-        }
-        return m
-      }))
-
-      setShowPairModal(false)
-      setPairingMilestone(null)
-      setSelectedPairId('')
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to pair milestones', 'error')
-    } finally {
-      setSaving(false)
+        .update({ pair_with_id: null, pair_position: null })
+        .eq('id', pairingMilestone.pair_with_id)
     }
+
+    // Set new pairing
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: selectedPairId, pair_position: 'start' })
+      .eq('id', pairingMilestone.id)
+
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: pairingMilestone.id, pair_position: 'end' })
+      .eq('id', selectedPairId)
+
+    await milestoneTypeAudit.linked(
+      supabase,
+      pairingMilestone.display_name,
+      partner?.display_name || 'Unknown'
+    )
+
+    // Update local state
+    setMilestones(milestones.map(m => {
+      if (m.id === pairingMilestone.id) {
+        return { ...m, pair_with_id: selectedPairId, pair_position: 'start' }
+      }
+      if (m.id === selectedPairId) {
+        return { ...m, pair_with_id: pairingMilestone.id, pair_position: 'end' }
+      }
+      if (m.id === pairingMilestone.pair_with_id) {
+        return { ...m, pair_with_id: null, pair_position: null }
+      }
+      return m
+    }))
+
+    setShowPairModal(false)
+    setPairingMilestone(null)
+    setSelectedPairId('')
+    setSaving(false)
   }
 
   const handleUnlink = async (milestone: MilestoneType) => {
@@ -351,35 +330,28 @@ const fetchMilestones = async () => {
     setSaving(true)
     const partnerName = getPairedName(milestone.pair_with_id)
 
-    try {
-      const { error: err1 } = await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: null, pair_position: null })
-        .eq('id', milestone.id)
-      if (err1) throw err1
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: null, pair_position: null })
+      .eq('id', milestone.id)
 
-      const { error: err2 } = await supabase
-        .from('milestone_types')
-        .update({ pair_with_id: null, pair_position: null })
-        .eq('id', milestone.pair_with_id)
-      if (err2) throw err2
+    await supabase
+      .from('milestone_types')
+      .update({ pair_with_id: null, pair_position: null })
+      .eq('id', milestone.pair_with_id)
 
-      await milestoneTypeAudit.unlinked(supabase, milestone.display_name, partnerName || 'Unknown')
+    await milestoneTypeAudit.unlinked(supabase, milestone.display_name, partnerName || 'Unknown')
 
-      setMilestones(milestones.map(m => {
-        if (m.id === milestone.id || m.id === milestone.pair_with_id) {
-          return { ...m, pair_with_id: null, pair_position: null }
-        }
-        return m
-      }))
+    setMilestones(milestones.map(m => {
+      if (m.id === milestone.id || m.id === milestone.pair_with_id) {
+        return { ...m, pair_with_id: null, pair_position: null }
+      }
+      return m
+    }))
 
-      setShowPairModal(false)
-      setPairingMilestone(null)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to unlink milestones', 'error')
-    } finally {
-      setSaving(false)
-    }
+    setShowPairModal(false)
+    setPairingMilestone(null)
+    setSaving(false)
   }
 // Archive a milestone (soft delete)
   const handleArchive = async (milestone: MilestoneType) => {
@@ -471,26 +443,24 @@ const fetchMilestones = async () => {
   const handleRestore = async (milestone: MilestoneType) => {
     setSaving(true)
 
-    try {
-      const { error } = await supabase
-        .from('milestone_types')
-        .update({
-          deleted_at: null,
-          deleted_by: null
-        })
-        .eq('id', milestone.id)
+    const { error } = await supabase
+      .from('milestone_types')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', milestone.id)
 
-      if (error) throw error
-
+    if (!error) {
       await milestoneTypeAudit.restored(supabase, milestone.display_name, milestone.id)
       setMilestones(milestones.filter(m => m.id !== milestone.id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${milestone.display_name}" restored successfully`, 'success')
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to restore milestone', 'error')
-    } finally {
-      setSaving(false)
+    } else {
+      showToast('Failed to restore milestone', 'error')
     }
+
+    setSaving(false)
   }
   // Filter based on showInactive
   const visibleMilestones = showInactive 
@@ -523,9 +493,7 @@ const fetchMilestones = async () => {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
+                <Archive className="w-4 h-4" />
                 {showArchived ? 'View Active' : `Archive (${archivedCount})`}
               </button>
 
@@ -535,9 +503,7 @@ const fetchMilestones = async () => {
                   onClick={() => setShowAddModal(true)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
+                  <Plus className="w-4 h-4" />
                   Add Milestone
                 </button>
               )}
@@ -567,12 +533,12 @@ const fetchMilestones = async () => {
           {/* Table */}
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
             {loading ? (
-              <PageLoader message="Loading milestones..." />
+              <div className="flex items-center justify-center py-16">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
             ) : visibleMilestones.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
-                <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <Clock className="w-12 h-12 mx-auto mb-4 text-slate-300" />
                 <p>No milestones found</p>
                 {!showInactive && inactiveCount > 0 && (
                   <button
@@ -619,9 +585,7 @@ const fetchMilestones = async () => {
                           title={milestone.is_active ? 'Deactivate' : 'Activate'}
                         >
                           {milestone.is_active && (
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="w-3 h-3 text-white" />
                           )}
                         </button>
                       </td>
@@ -684,9 +648,7 @@ const fetchMilestones = async () => {
                                   }`}
                                   title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                  </svg>
+                                  <Link className="w-4 h-4" />
                                 </button>
                               )}
                               <button
@@ -698,9 +660,7 @@ const fetchMilestones = async () => {
                                 className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                                 title="Edit"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
+                                <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleArchive(milestone)}
@@ -708,9 +668,7 @@ const fetchMilestones = async () => {
                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                                 title="Archive"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                </svg>
+                                <Archive className="w-4 h-4" />
                               </button>
                             </>
                           )}
@@ -726,9 +684,7 @@ const fetchMilestones = async () => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">About milestone pairing</p>
                 <p>
@@ -929,13 +885,9 @@ const fetchMilestones = async () => {
           toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
         }`}>
           {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-5 h-5" />
           ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           )}
           {toast.message}
         </div>

@@ -14,6 +14,8 @@ import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { FeatureGate, TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { Button } from '@/components/ui/Button'
+import { Check, ChevronRight, ClipboardCheck, Lock, X } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -176,9 +178,7 @@ export default function CheckInSettingsPage() {
         >
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
             <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+              <Lock className="w-6 h-6 text-slate-400" />
             </div>
             <h3 className="text-lg font-semibold text-slate-900 mb-1">Feature Not Enabled</h3>
             <p className="text-slate-500 text-sm mb-4">
@@ -208,9 +208,7 @@ export default function CheckInSettingsPage() {
         {/* Success Message */}
         {successMessage && (
           <div className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-            <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-5 h-5 text-emerald-500" />
             <span className="text-sm font-medium text-emerald-700">{successMessage}</span>
           </div>
         )}
@@ -265,13 +263,9 @@ export default function CheckInSettingsPage() {
                     ))}
                   </div>
 
-                  <button
-                    onClick={handleSaveDefault}
-                    disabled={saving}
-                    className="ml-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {saving ? 'Saving...' : 'Save'}
-                  </button>
+                  <Button onClick={handleSaveDefault} loading={saving} className="ml-auto">
+                    Save
+                  </Button>
                 </div>
               )}
 
@@ -353,9 +347,7 @@ export default function CheckInSettingsPage() {
                               className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                               title="Remove override"
                             >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
+                              <X className="w-4 h-4" />
                             </button>
                           </>
                         ) : (
@@ -389,17 +381,13 @@ export default function CheckInSettingsPage() {
                 className="inline-flex items-center gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 transition-colors group"
               >
                 <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200 group-hover:border-slate-300">
-                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                  </svg>
+                  <ClipboardCheck className="w-5 h-5 text-slate-600" />
                 </div>
                 <div className="flex-1">
                   <div className="font-medium text-slate-900">Checklist Builder</div>
                   <div className="text-sm text-slate-500">Add, edit, and reorder checklist items</div>
                 </div>
-                <svg className="w-5 h-5 text-slate-400 group-hover:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600" />
               </Link>
             </div>
           </div>

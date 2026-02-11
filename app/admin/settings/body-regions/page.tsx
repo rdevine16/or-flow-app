@@ -15,6 +15,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Archive, Check, Info, Pencil, Plus, User, X } from 'lucide-react'
 
 interface BodyRegion {
   id: string
@@ -91,37 +92,35 @@ useEffect(() => {
 
 const fetchData = async () => {
     setLoading(true)
-    setError(null)
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) setCurrentUserId(user.id)
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) setCurrentUserId(user.id)
 
-      let query = supabase
-        .from('body_regions')
-        .select('*')
+    let query = supabase
+      .from('body_regions')
+      .select('*')
 
-      if (showArchived) {
-        query = query.not('deleted_at', 'is', null)
-      } else {
-        query = query.is('deleted_at', null)
-      }
-
-      const { data, error: fetchErr } = await query.order('display_order')
-      if (fetchErr) throw fetchErr
-      setBodyRegions(data || [])
-
-      const { count } = await supabase
-        .from('body_regions')
-        .select('id', { count: 'exact', head: true })
-        .not('deleted_at', 'is', null)
-
-      setArchivedCount(count || 0)
-    } catch (err) {
-      setError('Failed to load body regions. Please try again.')
-    } finally {
-      setLoading(false)
+    if (showArchived) {
+      query = query.not('deleted_at', 'is', null)
+    } else {
+      query = query.is('deleted_at', null)
     }
+
+    const { data, error } = await query.order('display_order')
+
+    if (!error && data) {
+      setBodyRegions(data)
+    }
+
+    // Get archived count
+    const { count } = await supabase
+      .from('body_regions')
+      .select('id', { count: 'exact', head: true })
+      .not('deleted_at', 'is', null)
+
+    setArchivedCount(count || 0)
+    setLoading(false)
   }
 
   const closeConfirmModal = () => {
@@ -163,28 +162,27 @@ const fetchData = async () => {
     setSaving(true)
     const name = formName.trim() || generateName(formDisplayName)
 
-    try {
-      const { data, error } = await supabase
-        .from('body_regions')
-        .insert({
-          name,
-          display_name: formDisplayName.trim(),
-          display_order: formDisplayOrder,
-        })
-        .select()
-        .single()
+    const { data, error } = await supabase
+      .from('body_regions')
+      .insert({
+        name,
+        display_name: formDisplayName.trim(),
+        display_order: formDisplayOrder,
+      })
+      .select()
+      .single()
 
-      if (error) throw error
+if (!error && data) {
+  // Audit log
+  await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
 
-      await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
-      setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
-      resetForm()
-      setShowAddModal(false)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to add body region', 'error')
-    } finally {
-      setSaving(false)
-    }
+  setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
+  resetForm()
+  setShowAddModal(false)
+} else if (error) {
+  showToast(error.message || 'The name might already exist', 'error')
+}
+setSaving(false)
   }
 
   const handleEdit = async () => {
@@ -193,19 +191,18 @@ const fetchData = async () => {
     setSaving(true)
     const oldDisplayName = editingRegion.display_name
 
-    try {
-      const { data, error } = await supabase
-        .from('body_regions')
-        .update({
-          display_name: formDisplayName.trim(),
-          display_order: formDisplayOrder,
-        })
-        .eq('id', editingRegion.id)
-        .select()
-        .single()
+    const { data, error } = await supabase
+      .from('body_regions')
+      .update({
+        display_name: formDisplayName.trim(),
+        display_order: formDisplayOrder,
+      })
+      .eq('id', editingRegion.id)
+      .select()
+      .single()
 
-      if (error) throw error
-
+    if (!error && data) {
+      // Audit log if name changed
       if (oldDisplayName !== formDisplayName.trim()) {
         await adminAudit.bodyRegionUpdated(supabase, editingRegion.id, oldDisplayName, formDisplayName.trim())
       }
@@ -218,11 +215,10 @@ const fetchData = async () => {
       setShowEditModal(false)
       setEditingRegion(null)
       resetForm()
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update body region', 'error')
-    } finally {
-      setSaving(false)
-    }
+} else if (error) {
+  showToast(error instanceof Error ? error.message : 'Error updating body region:', 'error')
+}
+    setSaving(false)
   }
 
 const handleDelete = (region: BodyRegion) => {
@@ -266,25 +262,22 @@ const handleDelete = (region: BodyRegion) => {
 
   const handleRestore = async (region: BodyRegion) => {
     setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('body_regions')
-        .update({
-          deleted_at: null,
-          deleted_by: null
-        })
-        .eq('id', region.id)
+    const { error } = await supabase
+      .from('body_regions')
+      .update({
+        deleted_at: null,
+        deleted_by: null
+      })
+      .eq('id', region.id)
 
-      if (error) throw error
-
+    if (!error) {
       setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
       setArchivedCount(prev => prev - 1)
       showToast(`"${region.display_name}" restored successfully`, 'success')
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to restore body region', 'error')
-    } finally {
-      setSaving(false)
+    } else {
+      showToast('Failed to restore body region', 'error')
     }
+    setSaving(false)
   }
 
   if (userLoading || !isGlobalAdmin) {
@@ -292,7 +285,9 @@ const handleDelete = (region: BodyRegion) => {
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <PageLoader message="Loading..." />
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -330,9 +325,7 @@ const handleDelete = (region: BodyRegion) => {
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                  </svg>
+                  <Archive className="w-4 h-4" />
                   {showArchived ? 'View Active' : `Archive (${archivedCount})`}
                 </button>
 
@@ -342,9 +335,7 @@ const handleDelete = (region: BodyRegion) => {
                     onClick={openAddModal}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                    <Plus className="w-4 h-4" />
                     Add Region
                   </button>
                 )}
@@ -353,13 +344,13 @@ const handleDelete = (region: BodyRegion) => {
 
             {/* Table */}
             {loading ? (
-              <PageLoader message="Loading body regions..." />
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              </div>
             ) : bodyRegions.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+                  <User className="w-6 h-6 text-slate-400" />
                 </div>
                 <p className="text-slate-500 mb-2">No body regions defined yet</p>
                 <button
@@ -420,18 +411,14 @@ const handleDelete = (region: BodyRegion) => {
                                 className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Edit"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
+                                <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(region)}
                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Archive"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                </svg>
+                                <Archive className="w-4 h-4" />
                               </button>
                             </div>
                           )}
@@ -447,9 +434,7 @@ const handleDelete = (region: BodyRegion) => {
           {/* Info Box */}
           <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">How body regions work</p>
                 <p>
@@ -580,13 +565,9 @@ const handleDelete = (region: BodyRegion) => {
           toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
         }`}>
           {toast.type === 'success' ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
+            <Check className="w-5 h-5" />
           ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X className="w-5 h-5" />
           )}
           {toast.message}
         </div>

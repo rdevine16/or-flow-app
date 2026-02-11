@@ -14,6 +14,9 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Modal } from '@/components/ui/Modal'
+import { Button } from '@/components/ui/Button'
+import { Archive, Building2, ExternalLink, Info, Pencil, Plus } from 'lucide-react'
 
 interface Payer {
   id: string
@@ -298,23 +301,16 @@ await genericAuditLog(supabase, 'payer.restored', {
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
+              <Archive className="w-4 h-4" />
               {showInactivePayers ? 'View Active' : `Archive (${inactivePayers.length})`}
             </button>
 
             {/* Add Payer - hide when viewing archived */}
 {!showInactivePayers && (
-              <button
-                onClick={openAddModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+              <Button onClick={openAddModal}>
+                <Plus className="w-4 h-4" />
                 Add Payer
-              </button>
+              </Button>
             )}
           </div>
 
@@ -322,20 +318,13 @@ await genericAuditLog(supabase, 'payer.restored', {
             <PageLoader message="Loading payer data..." />
           ) : activePayers.length === 0 && inactivePayers.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-              <svg className="w-12 h-12 text-slate-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
+              <Building2 className="w-12 h-12 text-slate-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-900 mb-2">No Payers</h3>
               <p className="text-slate-600 mb-4">Add insurance companies and payers to configure procedure-specific reimbursement rates.</p>
-              <button
-                onClick={openAddModal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+              <Button onClick={openAddModal}>
+                <Plus className="w-4 h-4" />
                 Add Payer
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -375,18 +364,14 @@ await genericAuditLog(supabase, 'payer.restored', {
                                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Edit"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
+                                <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                   onClick={() => setArchiveTarget(payer)}
                                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Archive"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                  </svg>
+                                  <Archive className="w-4 h-4" />
                                 </button>
                             </>
                           )}
@@ -402,9 +387,7 @@ await genericAuditLog(supabase, 'payer.restored', {
           {/* Info Box with Cross-Links */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <div className="flex gap-3">
-              <svg className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-800">
                 <p className="font-medium mb-1">How payers work</p>
                 <p className="mb-3">
@@ -414,9 +397,7 @@ await genericAuditLog(supabase, 'payer.restored', {
                   <span className="font-medium text-blue-800">Next step:</span>
                   <a href="/settings/financials/procedure-pricing" className="underline hover:no-underline inline-flex items-center gap-1">
                     Set Reimbursement Rates in Procedure Pricing
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
+                    <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
               </div>
@@ -426,15 +407,8 @@ await genericAuditLog(supabase, 'payer.restored', {
       </Container>
 
       {/* Add/Edit Modal */}
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
-            <div className="px-6 py-4 border-b border-slate-200">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {modalMode === 'add' ? 'Add Payer' : 'Edit Payer'}
-              </h3>
-            </div>
-            <div className="p-6">
+      <Modal open={modalOpen} onClose={closeModal} title={modalMode === 'add' ? 'Add Payer' : 'Edit Payer'}>
+            <div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
                   Payer Name <span className="text-red-500">*</span>
@@ -449,24 +423,13 @@ await genericAuditLog(supabase, 'payer.restored', {
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || !payerName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : modalMode === 'add' ? 'Add Payer' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <Modal.Footer>
+              <Modal.Cancel onClick={closeModal} />
+              <Modal.Action onClick={handleSave} loading={saving} disabled={!payerName.trim()}>
+                {modalMode === 'add' ? 'Add Payer' : 'Save Changes'}
+              </Modal.Action>
+            </Modal.Footer>
+      </Modal>
 
       <ArchiveConfirm
         open={!!archiveTarget}

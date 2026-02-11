@@ -1,3 +1,4 @@
+// app/admin/audit-log/page.tsx
 // This is the main page for the global audit log. It displays a list of all audit log entries across all facilities, with filters and pagination. Only accessible by global admins.
 'use client'
 
@@ -12,6 +13,7 @@ import { Spinner } from '@/components/ui/Loading'
 import { usePagination } from '@/hooks/usePagination'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { AlertTriangle, CheckCircle2, ChevronDown, Download, FileText, Loader2, Search, XCircle } from 'lucide-react'
 
 interface AuditLogEntry {
   id: string
@@ -137,61 +139,56 @@ export default function GlobalAuditLogPage() {
   }, [isGlobalAdmin, pagination.currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter])
 
   const fetchFacilities = async () => {
-    try {
-      const { data, error: fetchErr } = await supabase
-        .from('facilities')
-        .select('id, name')
-        .order('name')
+    const { data } = await supabase
+      .from('facilities')
+      .select('id, name')
+      .order('name')
 
-      if (fetchErr) throw fetchErr
-      if (data) setFacilities(data)
-    } catch (err) {
-      // Non-critical — filters will just be empty
+    if (data) {
+      setFacilities(data)
     }
   }
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
-    setError(null)
 
-    try {
-      let query = supabase
-        .from('audit_log')
-        .select('*, facility:facilities(name)', { count: 'exact' })
-        .order('created_at', { ascending: false })
+    let query = supabase
+      .from('audit_log')
+      .select('*, facility:facilities(name)', { count: 'exact' })
+      .order('created_at', { ascending: false })
 
-      if (dateFrom) {
-        query = query.gte('created_at', `${dateFrom}T00:00:00`)
-      }
-      if (dateTo) {
-        query = query.lte('created_at', `${dateTo}T23:59:59`)
-      }
-      if (actionFilter) {
-        query = query.eq('action', actionFilter)
-      }
-      if (facilityFilter) {
-        query = query.eq('facility_id', facilityFilter)
-      }
-      if (successFilter === 'success') {
-        query = query.eq('success', true)
-      } else if (successFilter === 'failed') {
-        query = query.eq('success', false)
-      }
+    // Apply filters
+    if (dateFrom) {
+      query = query.gte('created_at', `${dateFrom}T00:00:00`)
+    }
+    if (dateTo) {
+      query = query.lte('created_at', `${dateTo}T23:59:59`)
+    }
+    if (actionFilter) {
+      query = query.eq('action', actionFilter)
+    }
+    if (facilityFilter) {
+      query = query.eq('facility_id', facilityFilter)
+    }
+    if (successFilter === 'success') {
+      query = query.eq('success', true)
+    } else if (successFilter === 'failed') {
+      query = query.eq('success', false)
+    }
 
-      const from = (pagination.currentPage - 1) * pagination.itemsPerPage
-      const to = from + pagination.itemsPerPage - 1
-      query = query.range(from, to)
+    // Pagination
+    const from = (pagination.currentPage - 1) * pagination.itemsPerPage
+    const to = from + pagination.itemsPerPage - 1
+    query = query.range(from, to)
 
-      const { data, count, error: fetchErr } = await query
-      if (fetchErr) throw fetchErr
+    const { data, count, error } = await query
 
+    if (!error) {
       setLogs(data || [])
       setTotalCount(count || 0)
-    } catch (err) {
-      setError('Failed to load audit logs. Please try again.')
-    } finally {
-      setLoading(false)
     }
+
+    setLoading(false)
   }, [pagination.currentPage, pagination.itemsPerPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter, supabase])
 
   const exportToCSV = async () => {
@@ -255,7 +252,9 @@ const csvContent = [
       <DashboardLayout>
         <Container className="py-8">
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <PageLoader message="Loading..." />
+          <div className="flex items-center justify-center h-64">
+<Spinner size="md" />
+          </div>
         </Container>
       </DashboardLayout>
     )
@@ -356,9 +355,7 @@ const csvContent = [
 
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">
-            <svg className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search..."
@@ -373,9 +370,7 @@ const csvContent = [
             onClick={exportToCSV}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
+            <Download className="w-4 h-4" />
             Export CSV
           </button>
         </div>
@@ -384,12 +379,12 @@ const csvContent = [
       {/* Audit Log Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
-          <PageLoader message="Loading audit logs..." />
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+          </div>
         ) : filteredLogs.length === 0 ? (
           <div className="p-12 text-center">
-            <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+            <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500">No audit log entries found</p>
             <p className="text-slate-400 text-sm mt-1">Try adjusting your filters</p>
           </div>
@@ -449,29 +444,18 @@ const csvContent = [
                     <div className="w-16 flex-shrink-0">
                       {log.success ? (
                         <span className="inline-flex items-center text-green-600">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
+                          <CheckCircle2 className="w-4 h-4" />
                         </span>
                       ) : (
                         <span className="inline-flex items-center text-red-600">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
+                          <XCircle className="w-4 h-4" />
                         </span>
                       )}
                     </div>
 
                     {/* Expand Arrow */}
                     <div className="w-8 flex-shrink-0">
-                      <svg
-                        className={`w-5 h-5 text-slate-400 transition-transform ${expandedLog === log.id ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
+                      <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${expandedLog === log.id ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
 
@@ -586,9 +570,7 @@ const csvContent = [
       {/* HIPAA Notice */}
       <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
         <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-amber-800">HIPAA Compliance Notice</p>
             <p className="text-sm text-amber-700 mt-0.5">

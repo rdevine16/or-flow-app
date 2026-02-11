@@ -16,6 +16,8 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { Button } from '@/components/ui/Button'
+import { AlertCircle, Archive, Ban, Check, CheckCircle2, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
 
 interface User {
   id: string
@@ -497,9 +499,7 @@ export default function UsersSettingsPage() {
       case 'active':
         return (
           <span className="inline-flex items-center gap-1 text-xs text-green-600">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
+            <CheckCircle2 className="w-3 h-3" />
             Active
           </span>
         )
@@ -542,14 +542,10 @@ export default function UsersSettingsPage() {
               {/* Success Message */}
               {successMessage && (
                 <div className="p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-                  <svg className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+                  <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
                   <p className="text-sm font-medium text-green-800">{successMessage}</p>
                   <button onClick={() => setSuccessMessage(null)} className="ml-auto text-green-500 hover:text-green-700">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -557,14 +553,10 @@ export default function UsersSettingsPage() {
               {/* Error Message */}
               {errorMessage && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-                  <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-sm font-medium text-red-800">{errorMessage}</p>
                   <button onClick={() => setErrorMessage(null)} className="ml-auto text-red-500 hover:text-red-700">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -603,22 +595,15 @@ export default function UsersSettingsPage() {
                         onClick={() => setShowArchived(true)}
                         className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5"
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                        </svg>
+                        <Archive className="w-4 h-4" />
                         View Deactivated
                       </button>
                     )}
                     {!showArchived && (
-                      <button
-                        onClick={() => setShowInviteModal(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                      <Button onClick={() => setShowInviteModal(true)}>
+                        <Plus className="w-4 h-4" />
                         Add Staff Member
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -627,9 +612,7 @@ export default function UsersSettingsPage() {
                 {users.length === 0 ? (
                   <div className="px-6 py-12 text-center">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
+                      <Users className="w-6 h-6 text-slate-400" />
                     </div>
                     <p className="text-slate-500">
                       {showArchived ? 'No deactivated staff members.' : 'No staff members yet.'}
@@ -734,9 +717,7 @@ export default function UsersSettingsPage() {
                                   onClick={() => handleReactivate(user.id)}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
                                 >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                  </svg>
+                                  <RefreshCw className="w-4 h-4" />
                                   Reactivate
                                 </button>
                               ) : deactivateConfirm === user.id ? (
@@ -765,14 +746,9 @@ export default function UsersSettingsPage() {
                                       title="Resend invite"
                                     >
                                       {resendingInvite === user.id ? (
-                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                        </svg>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
                                       ) : (
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                        </svg>
+                                        <Mail className="w-4 h-4" />
                                       )}
                                     </button>
                                   )}
@@ -786,14 +762,9 @@ export default function UsersSettingsPage() {
                                       title="Send invite"
                                     >
                                       {sendingInvite === user.id ? (
-                                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                        </svg>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
                                       ) : (
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                        </svg>
+                                        <Send className="w-4 h-4" />
                                       )}
                                     </button>
                                   )}
@@ -803,9 +774,7 @@ export default function UsersSettingsPage() {
                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     title="Edit"
                                   >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
+                                    <Pencil className="w-4 h-4" />
                                   </button>
                                   
                                   {!isCurrentUser && (
@@ -814,9 +783,7 @@ export default function UsersSettingsPage() {
                                       className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                       title="Deactivate"
                                     >
-                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                      </svg>
+                                      <Ban className="w-4 h-4" />
                                     </button>
                                   )}
                                 </>
@@ -979,9 +946,7 @@ export default function UsersSettingsPage() {
         confirmText="Send Invite"
         cancelText="Not Now"
         icon={
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
+          <Mail className="w-6 h-6" />
         }
       />
     </DashboardLayout>

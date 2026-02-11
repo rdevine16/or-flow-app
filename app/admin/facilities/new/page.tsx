@@ -13,6 +13,7 @@ import { facilityAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { AlertCircle, AlertTriangle, Ban, Building2, Check, ClipboardCheck, Clock, DollarSign, FlaskConical, Info, Mail, Palette } from 'lucide-react'
 
 // ============================================================================
 // INTERFACES
@@ -164,9 +165,7 @@ const TEMPLATE_CONFIG = [
     label: 'Operating Rooms',
     description: 'Default OR 1, OR 2, and OR 3',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-      </svg>
+      <Building2 className="w-5 h-5" />
     ),
   },
   {
@@ -174,9 +173,7 @@ const TEMPLATE_CONFIG = [
     label: 'Procedure Types',
     description: 'Surgical procedures with body region mapping',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-      </svg>
+      <ClipboardCheck className="w-5 h-5" />
     ),
   },
   {
@@ -184,9 +181,7 @@ const TEMPLATE_CONFIG = [
     label: 'Milestones',
     description: 'Case tracking points (Patient In, Incision, etc.)',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+      <Clock className="w-5 h-5" />
     ),
   },
   {
@@ -194,9 +189,7 @@ const TEMPLATE_CONFIG = [
   label: 'Pre-Op Checklist Fields',
   description: 'Default checklist items for patient check-in',
   icon: (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
+    <ClipboardCheck className="w-5 h-5" />
   ),
 },
   {
@@ -204,9 +197,7 @@ const TEMPLATE_CONFIG = [
     label: 'Delay Types',
     description: 'Categories for tracking surgical delays',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
+      <AlertTriangle className="w-5 h-5" />
     ),
   },
   {
@@ -214,9 +205,7 @@ const TEMPLATE_CONFIG = [
     label: 'Cost Categories',
     description: 'Financial tracking for analytics and reporting',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+      <DollarSign className="w-5 h-5" />
     ),
   },
   {
@@ -224,9 +213,7 @@ const TEMPLATE_CONFIG = [
     label: 'Implant Companies',
     description: 'Standard implant manufacturers and vendors',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-      </svg>
+      <FlaskConical className="w-5 h-5" />
     ),
   },
   {
@@ -234,9 +221,7 @@ const TEMPLATE_CONFIG = [
     label: 'Complexities',
     description: 'Case complexity modifiers for scheduling',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-      </svg>
+      <Palette className="w-5 h-5" />
     ),
   },
  {
@@ -244,9 +229,7 @@ const TEMPLATE_CONFIG = [
     label: 'Cancellation Reasons',
     description: 'Categories for tracking why cases are cancelled',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-      </svg>
+      <Ban className="w-5 h-5" />
     ),
   },
   {
@@ -254,9 +237,7 @@ const TEMPLATE_CONFIG = [
     label: 'Pre-Op Checklist Fields',
     description: 'Default checklist items for patient check-in',
     icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-      </svg>
+      <ClipboardCheck className="w-5 h-5" />
     ),
   },
 ]
@@ -343,93 +324,97 @@ export default function CreateFacilityPage() {
     async function fetchData() {
       setLoadingCounts(true)
 
-      try {
-        // Fetch roles
-        const { data: rolesData, error: rolesErr } = await supabase
-          .from('user_roles')
-          .select('id, name')
-          .order('name')
+      // Fetch roles
+      const { data: rolesData } = await supabase
+        .from('user_roles')
+        .select('id, name')
+        .order('name')
 
-        if (rolesErr) throw rolesErr
-
-        if (rolesData) {
-          setRoles(rolesData)
-          const adminRole = rolesData.find(r => r.name === 'admin')
-          if (adminRole) {
-            setAdminData(prev => ({ ...prev, roleId: adminRole.id }))
-          }
+      if (rolesData) {
+        setRoles(rolesData)
+        const adminRole = rolesData.find(r => r.name === 'admin')
+        if (adminRole) {
+          setAdminData(prev => ({ ...prev, roleId: adminRole.id }))
         }
-
-        // Fetch template counts
-        const [
-          { count: procedureCount },
-          { count: milestoneCount },
-          { count: delayTypeCount },
-          { count: costCategoryCount },
-          { count: implantCompanyCount },
-          { count: complexityCount },
-          { count: cancellationReasonCount },
-          { count: checklistFieldCount },
-        ] = await Promise.all([
-          supabase
-            .from('procedure_type_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_active', true)
-            .is('deleted_at', null),
-          supabase
-            .from('milestone_types')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_active', true)
-            .is('deleted_at', null),
-          supabase
-            .from('delay_types')
-            .select('id', { count: 'exact', head: true })
-            .is('facility_id', null)
-            .eq('is_active', true)
-            .is('deleted_at', null),
-          supabase
-            .from('cost_category_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_active', true)
-            .is('deleted_at', null),
-          supabase
-            .from('implant_companies')
-            .select('id', { count: 'exact', head: true })
-            .is('facility_id', null)
-            .is('deleted_at', null),
-          supabase
-            .from('complexity_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_active', true)
-            .is('deleted_at', null),
-          supabase
-            .from('cancellation_reason_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_active', true)
-            .is('deleted_at', null),
-          supabase
-            .from('preop_checklist_field_templates')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_active', true)
-            .is('deleted_at', null),
-        ])
-
-        setTemplateCounts({
-          rooms: 3,
-          procedures: procedureCount || 0,
-          milestones: milestoneCount || 0,
-          delayTypes: delayTypeCount || 0,
-          costCategories: costCategoryCount || 0,
-          implantCompanies: implantCompanyCount || 0,
-          complexities: complexityCount || 0,
-          cancellationReasons: cancellationReasonCount || 0,
-          checklistFields: checklistFieldCount || 0,
-        })
-      } catch (err) {
-        setError('Failed to load template data. Please try again.')
-      } finally {
-        setLoadingCounts(false)
       }
+
+      // Fetch template counts
+      // Note: Different tables use different patterns
+      const [
+        { count: procedureCount },
+        { count: milestoneCount },
+        { count: delayTypeCount },
+        { count: costCategoryCount },
+        { count: implantCompanyCount },
+        { count: complexityCount },
+        { count: cancellationReasonCount },
+        { count: checklistFieldCount },
+      ] = await Promise.all([
+        // procedure_type_templates - separate template table
+        supabase
+          .from('procedure_type_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        // milestone_types - separate template table
+        supabase
+          .from('milestone_types')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        // delay_types - HYBRID pattern (facility_id = NULL for templates)
+        supabase
+          .from('delay_types')
+          .select('id', { count: 'exact', head: true })
+          .is('facility_id', null)
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        // cost_category_templates - separate template table
+        supabase
+          .from('cost_category_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        // implant_companies - HYBRID pattern (facility_id = NULL for global)
+        supabase
+          .from('implant_companies')
+          .select('id', { count: 'exact', head: true })
+          .is('facility_id', null)
+          .is('deleted_at', null),
+        // complexity_templates - separate template table
+        supabase
+          .from('complexity_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        // cancellation_reason_templates - separate template table
+        supabase
+          .from('cancellation_reason_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+        // preop_checklist_field_templates
+        supabase
+          .from('preop_checklist_field_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .is('deleted_at', null),
+      ])
+
+      setTemplateCounts({
+        rooms: 3,
+        procedures: procedureCount || 0,
+        milestones: milestoneCount || 0,
+        delayTypes: delayTypeCount || 0,
+        costCategories: costCategoryCount || 0,
+        implantCompanies: implantCompanyCount || 0,
+        complexities: complexityCount || 0,
+        cancellationReasons: cancellationReasonCount || 0,
+        checklistFields: checklistFieldCount || 0,
+      })
+
+
+      setLoadingCounts(false)
     }
 
     if (isGlobalAdmin) {
@@ -871,7 +856,9 @@ if (insertError) {
   if (userLoading) {
     return (
       <DashboardLayout>
-        <PageLoader message="Loading..." />
+        <div className="flex items-center justify-center h-64">
+          <div className="w-10 h-10 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
       </DashboardLayout>
     )
   }
@@ -913,9 +900,7 @@ if (insertError) {
                     }`}
                   >
                     {s < step ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
+                      <Check className="w-5 h-5" />
                     ) : (
                       s
                     )}
@@ -1236,9 +1221,7 @@ if (insertError) {
                 </div>
 
                 <div className="bg-blue-50 rounded-xl p-4 flex gap-3">
-                  <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <Info className="w-5 h-5 text-blue-600 flex-shrink-0" />
                   <p className="text-sm text-blue-800">
                     They'll receive an email with a link to create their password and access the facility.
                   </p>
@@ -1311,9 +1294,7 @@ if (insertError) {
                             }`}
                           >
                             {enabled && !noTemplates && (
-                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
+                              <Check className="w-3.5 h-3.5" />
                             )}
                           </div>
                         </div>
@@ -1382,9 +1363,7 @@ if (insertError) {
                           }`}
                         >
                           {sendWelcomeEmail && (
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
+                            <Check className="w-3.5 h-3.5" />
                           )}
                         </div>
                       </div>
@@ -1396,9 +1375,7 @@ if (insertError) {
                             : 'bg-slate-100 text-slate-400'
                         }`}
                       >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
+                        <Mail className="w-5 h-5" />
                       </div>
 
                       <div className="flex-1">
@@ -1428,9 +1405,7 @@ if (insertError) {
 
               {error && (
                 <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm flex items-start gap-3">
-                  <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
@@ -1565,9 +1540,7 @@ if (insertError) {
                   </>
                 ) : (
                   <>
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
+                    <Check className="w-5 h-5" />
                     Create Facility
                   </>
                 )}

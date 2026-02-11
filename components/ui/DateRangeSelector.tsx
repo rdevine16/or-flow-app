@@ -5,7 +5,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { CalendarDaysIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { CalendarDays, ChevronDown } from 'lucide-react'
 
 export interface DateRangeSelectorProps {
   value: string
@@ -224,9 +224,9 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
         onClick={() => setIsOpen(!isOpen)}
         className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
       >
-        <CalendarDaysIcon className="w-4 h-4 text-slate-400" />
+        <CalendarDays className="w-4 h-4 text-slate-400" />
         <span>{displayLabel}</span>
-        <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown */}

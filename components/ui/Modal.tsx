@@ -1,9 +1,10 @@
 // components/ui/Modal.tsx
 // Shared modal shell — overlay, header, body, footer
-// Replaces repeated inline modal markup across ~18 pages
+// Replaces repeated inline modal markup across all pages
 //
 // USAGE:
 //
+//   Simple form:
 //   <Modal open={showModal} onClose={close} title="Add Item" size="md">
 //     <div className="space-y-4">
 //       <input ... />
@@ -17,36 +18,49 @@
 //     </Modal.Footer>
 //   </Modal>
 //
-//   Size variants: 'sm' | 'md' | 'lg' | 'xl' | 'full'
-//   - sm:   max-w-sm  (simple confirms, short forms)
-//   - md:   max-w-md  (standard forms — default)
-//   - lg:   max-w-lg  (wider forms)
-//   - xl:   max-w-xl  (multi-column)
-//   - full: max-w-4xl (large tables/editors)
+//   Rich header (analytics drilldowns):
+//   <Modal open={show} onClose={close} title="Idle Time Analysis"
+//     subtitle="All idle gaps between consecutive cases"
+//     icon={<SparklesIcon className="w-5 h-5 text-blue-600" />}
+//     size="full" scrollable
+//   >
+//     ...content...
+//   </Modal>
 //
-//   The close X button appears in the header by default.
-//   Escape key and backdrop click also close the modal.
+//   Progress modal (no footer, no close):
+//   <Modal open={running} onClose={() => {}} title="Processing" hideCloseButton>
+//     <ProgressBar ... />
+//   </Modal>
+//
+//   Size variants: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
 
 'use client'
 
 import { ReactNode, useEffect, useCallback } from 'react'
 import { X } from 'lucide-react'
+import { Spinner } from '@/components/ui/Loading'
 import { tokens } from '@/lib/design-tokens'
 
 // ============================================
 // TYPES
 // ============================================
 
-type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full'
+type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
 
 interface ModalProps {
   open: boolean
   onClose: () => void
   title: string
+  /** Optional subtitle below the title */
+  subtitle?: ReactNode
+  /** Optional icon displayed left of the title */
+  icon?: ReactNode
   size?: ModalSize
   children: ReactNode
   /** Hide the X close button in the header */
   hideCloseButton?: boolean
+  /** Enable scrollable body with max-height (useful for large content modals) */
+  scrollable?: boolean
 }
 
 // ============================================
@@ -58,6 +72,8 @@ const sizeClasses: Record<ModalSize, string> = {
   md: 'max-w-md',
   lg: 'max-w-lg',
   xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
   full: 'max-w-4xl',
 }
 
@@ -69,9 +85,12 @@ export function Modal({
   open,
   onClose,
   title,
+  subtitle,
+  icon,
   size = 'md',
   children,
   hideCloseButton = false,
+  scrollable = false,
 }: ModalProps) {
   // Escape to close
   const handleKeyDown = useCallback(
@@ -129,22 +148,38 @@ export function Modal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="modal-title"
-          className={`bg-white rounded-2xl shadow-xl w-full ${sizeClasses[size]} animate-in zoom-in-95 duration-200`}
+          className={`
+            bg-white rounded-2xl shadow-xl w-full ${sizeClasses[size]}
+            animate-in zoom-in-95 duration-200
+            ${scrollable ? 'max-h-[85vh] overflow-hidden flex flex-col' : ''}
+          `}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-            <h3
-              id="modal-title"
-              className="text-lg font-semibold text-slate-900"
-            >
-              {title}
-            </h3>
+          <div className={`flex items-center justify-between px-6 py-4 border-b border-slate-200 ${(icon || subtitle) ? 'bg-slate-50' : ''}`}>
+            <div className="flex items-center gap-3 min-w-0">
+              {icon && (
+                <div className="p-2 rounded-lg bg-blue-100 flex-shrink-0">
+                  {icon}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h3
+                  id="modal-title"
+                  className="text-lg font-semibold text-slate-900"
+                >
+                  {title}
+                </h3>
+                {subtitle && (
+                  <p className="text-sm text-slate-500 truncate">{subtitle}</p>
+                )}
+              </div>
+            </div>
             {!hideCloseButton && (
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors -mr-2"
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors -mr-2 flex-shrink-0"
               >
                 <X className="h-5 w-5 text-slate-400" />
               </button>
@@ -152,7 +187,9 @@ export function Modal({
           </div>
 
           {/* Body */}
-          <div className="p-6 space-y-4">{body}</div>
+          <div className={`p-6 space-y-4 ${scrollable ? 'overflow-y-auto flex-1' : ''}`}>
+            {body}
+          </div>
 
           {/* Footer */}
           {footer}
@@ -172,7 +209,7 @@ interface ModalFooterProps {
 
 function ModalFooter({ children }: ModalFooterProps) {
   return (
-    <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+    <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0">
       {children}
     </div>
   )
@@ -211,7 +248,7 @@ interface ModalActionProps {
   onClick: () => void
   loading?: boolean
   disabled?: boolean
-  variant?: 'primary' | 'danger'
+  variant?: 'primary' | 'danger' | 'warning'
   children: ReactNode
 }
 
@@ -225,6 +262,8 @@ function ModalAction({
   const colorClasses =
     variant === 'danger'
       ? 'bg-red-600 hover:bg-red-700'
+      : variant === 'warning'
+      ? 'bg-amber-500 hover:bg-amber-600'
       : 'bg-blue-600 hover:bg-blue-700'
 
   return (
@@ -234,27 +273,7 @@ function ModalAction({
       disabled={loading || disabled}
       className={`px-4 py-2 text-sm font-medium text-white ${colorClasses} rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
     >
-      {loading && (
-        <svg
-          className="animate-spin h-4 w-4"
-          viewBox="0 0 24 24"
-          fill="none"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          />
-        </svg>
-      )}
+      {loading && <Spinner size="sm" color="white" />}
       {children}
     </button>
   )
