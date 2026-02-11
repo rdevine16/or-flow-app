@@ -4,11 +4,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { checkPasswordStrength } from '@/lib/passwords'
 import { authAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertCircle, Check, LogOut, X } from 'lucide-react'
 
@@ -34,18 +35,16 @@ export default function ProfilePage() {
   const supabase = createClient()
   const { showToast } = useToast()
 
-  // ── Data fetching via useSupabaseQuery ──────────────────────────────
-  // BEFORE: 4 useState + 1 useEffect + manual try/catch/finally (15 lines)
-  // AFTER:  1 hook call (10 lines)
-  const { data: profile, loading, error, refetch } = useSupabaseQuery<UserProfile>(
+  // Profile fetch via useSupabaseQuery
+  const { data: profile, loading, error, refetch, setData: setProfile } = useSupabaseQuery<UserProfile>(
     async (sb) => {
       const { data: { user } } = await sb.auth.getUser()
       if (!user) {
         router.push('/login')
-        return { data: null, error: null }
+        throw new Error('Not authenticated')
       }
 
-      const result = await sb
+      const { data, error } = await sb
         .from('users')
         .select(`
           *,
@@ -55,16 +54,18 @@ export default function ProfilePage() {
         .eq('id', user.id)
         .single()
 
-      return result as { data: UserProfile | null; error: typeof result.error }
-    },
-    []
+      if (error) throw error
+      if (!data) throw new Error('Profile not found')
+      return data as UserProfile
+    }
   )
 
-  // ── Edit states ─────────────────────────────────────────────────────
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Edit states
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
 
   // Password change states
   const [showPasswordSection, setShowPasswordSection] = useState(false)
@@ -76,7 +77,7 @@ export default function ProfilePage() {
 
   const passwordStrength = checkPasswordStrength(newPassword)
 
-  // Sync form state when profile loads
+  // Sync profile data to form state
   useEffect(() => {
     if (profile) {
       setFirstName(profile.first_name || '')
@@ -84,98 +85,156 @@ export default function ProfilePage() {
     }
   }, [profile])
 
-  // ── Save profile ────────────────────────────────────────────────────
+  // Save profile changes
   const handleSaveProfile = async () => {
     if (!profile) return
 
     setSaving(true)
     setMessage(null)
 
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-        })
-        .eq('id', profile.id)
+try {
+  const { error } = await supabase
+    .from('users')
+    .update({
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+    })
+    .eq('id', profile.id)
 
-      if (error) throw error
+  if (error) throw error
 
-      refetch()
-      showToast({ type: 'success', title: 'Profile Updated', message: 'Your profile has been updated successfully' })
-      setMessage({ type: 'success', text: 'Profile updated successfully' })
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Failed to update profile'
-      showToast({ type: 'error', title: 'Update Failed', message: msg })
-      setMessage({ type: 'error', text: 'Failed to update profile' })
-    } finally {
-      setSaving(false)
-    }
+  setProfile({ ...profile, first_name: firstName.trim(), last_name: lastName.trim() })
+  
+  // ✅ Success toast
+  showToast({
+    type: 'success',
+    title: 'Profile Updated',
+    message: 'Your profile has been updated successfully'
+  })
+  
+  // You can keep setMessage too if you're displaying it on the page
+  setMessage({ type: 'success', text: 'Profile updated successfully' })
+  
+} catch (error) {
+  
+  const message = error instanceof Error ? error.message : 'Failed to update profile'
+  
+  // ✅ Error toast
+  showToast({
+    type: 'error',
+    title: 'Update Failed',
+    message
+  })
+  
+  // You can keep setMessage too
+  setMessage({ type: 'error', text: 'Failed to update profile' })
+  
+} finally {
+  setSaving(false)
+}
   }
 
-  // ── Change password ─────────────────────────────────────────────────
-  const handleChangePassword = async () => {
-    if (!currentPassword) {
-      showToast({ type: 'error', title: 'Validation Error', message: 'Please enter your current password' })
-      return
-    }
-    if (newPassword.length < 8) {
-      showToast({ type: 'error', title: 'Validation Error', message: 'New password must be at least 8 characters' })
-      return
-    }
-    if (newPassword !== confirmPassword) {
-      showToast({ type: 'error', title: 'Validation Error', message: 'New passwords do not match' })
-      return
-    }
-    if (passwordStrength.level === 'weak') {
-      showToast({ type: 'error', title: 'Validation Error', message: 'Please choose a stronger password' })
-      return
-    }
+  // Change password
+const handleChangePassword = async () => {
+  // Validation with toasts
+  if (!currentPassword) {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'Please enter your current password'
+    })
+    return
+  }
 
-    setChangingPassword(true)
+  if (newPassword.length < 8) {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'New password must be at least 8 characters'
+    })
+    return
+  }
 
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: profile?.email || '',
-        password: currentPassword,
-      })
+  if (newPassword !== confirmPassword) {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'New passwords do not match'
+    })
+    return
+  }
 
-      if (signInError) {
-        showToast({ type: 'error', title: 'Invalid Password', message: 'Current password is incorrect' })
-        setChangingPassword(false)
-        return
-      }
+  if (passwordStrength.level === 'weak') {
+    showToast({
+      type: 'error',
+      title: 'Validation Error',
+      message: 'Please choose a stronger password'
+    })
+    return
+  }
 
-      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
-      if (updateError) throw updateError
+  setChangingPassword(true)
 
-      await authAudit.passwordChanged(supabase)
+  try {
+    // Verify current password by attempting to sign in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: profile?.email || '',
+      password: currentPassword,
+    })
 
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setShowPasswordSection(false)
-      showToast({ type: 'success', title: 'Password Changed', message: 'Your password has been updated successfully' })
-    } catch (error) {
+    if (signInError) {
       showToast({
         type: 'error',
-        title: 'Password Change Failed',
-        message: error instanceof Error ? error.message : 'Failed to change password',
+        title: 'Invalid Password',
+        message: 'Current password is incorrect'
       })
-    } finally {
       setChangingPassword(false)
+      return
     }
-  }
 
-  // ── Sign out ────────────────────────────────────────────────────────
+    // Update password
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    })
+
+    if (updateError) throw updateError
+
+    // Log password change
+    await authAudit.passwordChanged(supabase)
+
+    // Clear form
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setShowPasswordSection(false)
+    
+    // Success toast
+    showToast({
+      type: 'success',
+      title: 'Password Changed',
+      message: 'Your password has been updated successfully'
+    })
+    
+  } catch (error) {
+    // Error toast
+    showToast({
+      type: 'error',
+      title: 'Password Change Failed',
+      message: error instanceof Error ? error.message : 'Failed to change password'
+    })
+  } finally {
+    setChangingPassword(false)
+  }
+}
+
+  // Sign out
   const handleSignOut = async () => {
     await authAudit.logout(supabase)
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────
+  // Format date
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never'
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -187,6 +246,7 @@ export default function ProfilePage() {
     })
   }
 
+  // Get role display name
   const getRoleDisplay = (accessLevel: string) => {
     switch (accessLevel) {
       case 'global_admin': return 'Global Administrator'
@@ -196,6 +256,7 @@ export default function ProfilePage() {
     }
   }
 
+  // Get initials
   const getInitials = () => {
     if (firstName && lastName) {
       return `${firstName[0]}${lastName[0]}`.toUpperCase()
@@ -203,7 +264,6 @@ export default function ProfilePage() {
     return profile?.email?.[0]?.toUpperCase() || 'U'
   }
 
-  // ── Render ──────────────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -226,7 +286,7 @@ export default function ProfilePage() {
 
   return (
     <DashboardLayout>
-      <ErrorBanner message={error?.message ?? null} onDismiss={() => {}} />
+      <ErrorBanner message={error} />
       <div className="max-w-4xl mx-auto py-8 px-4">
         <h1 className="text-2xl font-bold text-slate-900 mb-8">Profile Settings</h1>
 
@@ -325,7 +385,9 @@ export default function ProfilePage() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    First Name
+                  </label>
                   <input
                     type="text"
                     value={firstName}
@@ -334,7 +396,9 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Last Name</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Last Name
+                  </label>
                   <input
                     type="text"
                     value={lastName}
@@ -345,7 +409,9 @@ export default function ProfilePage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Email Address
+                </label>
                 <input
                   type="email"
                   value={profile.email}
@@ -383,26 +449,35 @@ export default function ProfilePage() {
               {showPasswordSection ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Current Password</label>
-                    <input
-                      type={showPasswords ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                      placeholder="••••••••••••"
-                    />
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Current Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPasswords ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                        placeholder="••••••••••••"
+                      />
+                    </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
-                    <input
-                      type={showPasswords ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                      placeholder="••••••••••••"
-                    />
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      New Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPasswords ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                        placeholder="••••••••••••"
+                      />
+                    </div>
 
+                    {/* Password Strength */}
                     {newPassword && (
                       <div className="mt-2">
                         <div className="flex gap-1 mb-1">
@@ -411,9 +486,12 @@ export default function ProfilePage() {
                               key={level}
                               className={`h-1 flex-1 rounded-full ${
                                 passwordStrength.score >= level * 25
-                                  ? passwordStrength.level === 'weak' ? 'bg-red-500'
-                                    : passwordStrength.level === 'fair' ? 'bg-amber-500'
-                                    : passwordStrength.level === 'good' ? 'bg-blue-500'
+                                  ? passwordStrength.level === 'weak'
+                                    ? 'bg-red-500'
+                                    : passwordStrength.level === 'fair'
+                                    ? 'bg-amber-500'
+                                    : passwordStrength.level === 'good'
+                                    ? 'bg-blue-500'
                                     : 'bg-emerald-500'
                                   : 'bg-slate-200'
                               }`}
@@ -433,13 +511,17 @@ export default function ProfilePage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Confirm New Password</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Confirm New Password
+                    </label>
                     <input
                       type={showPasswords ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all ${
-                        confirmPassword && newPassword !== confirmPassword ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                        confirmPassword && newPassword !== confirmPassword
+                          ? 'border-red-300 bg-red-50'
+                          : 'border-slate-200'
                       }`}
                       placeholder="••••••••••••"
                     />
@@ -448,6 +530,7 @@ export default function ProfilePage() {
                     )}
                   </div>
 
+                  {/* Show/Hide Toggle */}
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
