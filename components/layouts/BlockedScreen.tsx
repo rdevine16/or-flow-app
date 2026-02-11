@@ -1,9 +1,9 @@
+'use client'
 // components/layouts/BlockedScreen.tsx
-import { Ban, Clock, LogOut } from 'lucide-react'
 // Full-screen blocking UI for expired trials or disabled accounts
 
-'use client'
 
+import { Ban, Clock, LogOut } from 'lucide-react'
 interface BlockedScreenProps {
   type: 'trial' | 'disabled'
   facilityName?: string | null
