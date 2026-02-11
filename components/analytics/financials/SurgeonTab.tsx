@@ -10,7 +10,7 @@ import { formatCurrency } from './utils'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { BarChart3, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock, DollarSign, Info, TrendingDown, TrendingUp } from 'lucide-react'
+import { ArrowDown, BarChart3, CalendarDays, ChartBar, ChartBarIcon, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock, DollarSign, DollarSignIcon, Info, TrendingDown, TrendingUp, UserIcon } from 'lucide-react'
 
 interface SurgeonTabProps {
   metrics: FinancialsMetrics
@@ -287,7 +287,7 @@ function AllSurgeonsOverview({
         <SummaryCard 
           title="Total Profit"
           value={formatCurrency(totalProfit)}
-          icon={CurrencyDollarIcon}
+          icon={DollarSignIcon}
           variant="success"
         />
         <SummaryCard 
@@ -298,7 +298,7 @@ function AllSurgeonsOverview({
         <SummaryCard 
           title="Avg $/OR Hour"
           value={metrics.profitPerORHour !== null ? formatCurrency(metrics.profitPerORHour) : '—'}
-          icon={ArrowTrendingUpIcon}
+          icon={ArrowDown}
         />
       </div>
 
@@ -1041,22 +1041,22 @@ showToast({
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <DayMetricCard 
-            icon={ClockIcon}
+            icon={Clock}
             label="First Case Start"
             value={formatTime(dayMetrics.firstCaseTime, selectedDate)}
           />
           <DayMetricCard 
-            icon={ChartBarIcon}
+            icon={ChartBar}
             label="Total Cases"
             value={dayMetrics.caseCount.toString()}
           />
           <DayMetricCard 
-            icon={ClockIcon}
+            icon={Clock}
             label="Total OR Time"
             value={formatDuration(dayMetrics.totalDuration)}
           />
           <DayMetricCard 
-            icon={CurrencyDollarIcon}
+            icon={DollarSignIcon}
             label="Total Profit"
             value={formatCurrency(dayMetrics.totalProfit)}
             highlight
