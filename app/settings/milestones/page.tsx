@@ -15,7 +15,7 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
-import { Archive, Clock, Info, Link2, Pencil, Plus } from 'lucide-react'
+import { Archive, Check, Clock, Info, Link2, Pencil, Plus } from 'lucide-react'
 
 
 interface FacilityMilestone {
@@ -224,7 +224,7 @@ export default function MilestonesSettingsPage() {
     const newActiveState = !milestone.is_active
 
     if (!newActiveState && milestone.pair_with_id) {
-      const partner = milestones.find(m => m.id === milestone.pair_with_id)
+      const partner = (milestones || []).find(m => m.id === milestone.pair_with_id)
       
       setConfirmModal({
         isOpen: true,
@@ -296,7 +296,7 @@ export default function MilestonesSettingsPage() {
   const handleDelete = async (milestone: FacilityMilestone) => {
     const usageCount = usageCounts[milestone.id] || 0
     const partner = milestone.pair_with_id 
-      ? milestones.find(m => m.id === milestone.pair_with_id) 
+      ? (milestones || []).find(m => m.id === milestone.pair_with_id) 
       : null
 
     // If used in cases, show warning but still allow soft delete
@@ -422,7 +422,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
   const handleUnlink = async (milestone: FacilityMilestone) => {
     if (!milestone.pair_with_id) return
 
-    const partner = milestones.find(m => m.id === milestone.pair_with_id)
+    const partner = (milestones || []).find(m => m.id === milestone.pair_with_id)
     
     setConfirmModal({
       isOpen: true,
@@ -592,7 +592,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
   // Phase 2: Helper to get validation description
   const getValidationDescription = (milestone: FacilityMilestone): string => {
     if (milestone.validation_type === 'duration' && milestone.pair_with_id) {
-      const partner = milestones.find(m => m.id === milestone.pair_with_id)
+      const partner = (milestones || []).find(m => m.id === milestone.pair_with_id)
       return `Duration: ${milestone.min_minutes || 0}-${milestone.max_minutes || 90} min (${milestone.display_name} → ${partner?.display_name || 'End'})`
     }
     return `Gap from previous: ${milestone.min_minutes || 0}-${milestone.max_minutes || 90} min`
