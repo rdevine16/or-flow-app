@@ -16,6 +16,7 @@ interface SearchableDropdownProps {
   placeholder?: string
   label?: string
   disabled?: boolean
+  error?: string
 }
 
 export default function SearchableDropdown({
@@ -25,6 +26,7 @@ export default function SearchableDropdown({
   placeholder = 'Select...',
   label,
   disabled = false,
+  error,
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -71,10 +73,12 @@ export default function SearchableDropdown({
           }
         }}
         disabled={disabled}
-        className={`w-full px-4 py-3 text-left bg-white border border-slate-200 rounded-xl flex items-center justify-between transition-all duration-200 ${
+        className={`w-full px-4 py-3 text-left bg-white border rounded-xl flex items-center justify-between transition-all duration-200 ${
           disabled
-            ? 'opacity-50 cursor-not-allowed'
-            : 'hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500'
+            ? 'opacity-50 cursor-not-allowed border-slate-200'
+            : error
+              ? 'border-red-400 ring-2 ring-red-500/20 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400'
+              : 'border-slate-200 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500'
         }`}
       >
         <span className={selectedOption ? 'text-slate-900' : 'text-slate-400'}>
@@ -82,6 +86,9 @@ export default function SearchableDropdown({
         </span>
         <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
+      {error && (
+        <p className="text-red-600 text-xs mt-1">{error}</p>
+      )}
 
       {isOpen && (
         <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">

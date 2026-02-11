@@ -55,9 +55,11 @@ const OPERATIVE_SIDE_OPTIONS = [
 export default function CaseForm({ caseId, mode }: CaseFormProps) {
   const router = useRouter()
   const supabase = createClient()
+  const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   
   const [userFacilityId, setUserFacilityId] = useState<string | null>(null)
 
@@ -295,13 +297,13 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   }
 
   // ============================================
-  // NEW: Initialize milestones for a case
+  // Initialize milestones for a case
   // Creates case_milestones entries with recorded_at = NULL
-  // for all enabled milestones in the procedure type
+  // for all enabled milestones in the procedure type.
+  // NOTE: Zero-milestone check is done in handleSubmit BEFORE
+  // the case is created — this function only runs post-insert.
   // ============================================
   const initializeCaseMilestones = async (caseId: string, procedureTypeId: string, facilityId: string) => {
-    const { showToast } = useToast()
-    // Get all enabled milestones for this procedure type
     const { data: procedureMilestones, error: pmError } = await supabase
       .from('procedure_milestone_config')
       .select('facility_milestone_id, display_order')
@@ -313,45 +315,74 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     if (pmError) {
       showToast({
         type: 'error',
-        title: 'Failed to Fetch Procedure Milestones',
-        message: pmError instanceof Error ? pmError.message : 'An unexpected error occurred'
+        title: 'Failed to Initialize Milestones',
+        message: pmError instanceof Error ? pmError.message : 'An unexpected error occurred',
       })
       return
     }
 
+    // Should not happen (pre-checked in handleSubmit) but guard defensively
     if (!procedureMilestones || procedureMilestones.length === 0) {
-showToast({
-  type: 'info',
-  title: 'No milestones configured for this procedure type',
-  message: 'No milestones configured for this procedure type'
-})      
-return
+      return
     }
 
-    // Build the case_milestones insert data
     const caseMilestonesData = procedureMilestones.map(pm => ({
       case_id: caseId,
       facility_milestone_id: pm.facility_milestone_id,
-      recorded_at: null,  // Not recorded yet
+      recorded_at: null,
       recorded_by: null,
     }))
 
-    // Insert all milestones for this case
     const { error: insertError } = await supabase
       .from('case_milestones')
       .insert(caseMilestonesData)
 
     if (insertError) {
-showToast({
-  type: 'error',
-  title: 'Error initializing case milestones:',
-  message: `Error initializing case milestones: ${insertError}`
-})    } else {
-showToast({
-  type: 'info',
-  title: `Initialized ${caseMilestonesData.length} milestones for case ${caseId}`,
-  message: `Initialized ${caseMilestonesData.length} milestones for case ${caseId}`
-})    }
+      showToast({
+        type: 'error',
+        title: 'Milestone Initialization Failed',
+        message: `Could not create milestones: ${insertError.message}`,
+      })
+    }
+  }
+
+  // ============================================
+  // VALIDATION: Enforce required fields before submit
+  // ============================================
+  const validateForm = (): Record<string, string> => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.case_number.trim()) {
+      errors.case_number = 'Case number is required'
+    }
+    if (!formData.scheduled_date) {
+      errors.scheduled_date = 'Scheduled date is required'
+    }
+    if (!formData.start_time) {
+      errors.start_time = 'Start time is required'
+    }
+    if (!formData.surgeon_id) {
+      errors.surgeon_id = 'Surgeon is required'
+    }
+    if (!formData.procedure_type_id) {
+      errors.procedure_type_id = 'Procedure type is required'
+    }
+    if (!formData.or_room_id) {
+      errors.or_room_id = 'OR room is required'
+    }
+
+    return errors
+  }
+
+  // Clear a specific field error when the user changes that field
+  const clearFieldError = (field: string) => {
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -363,6 +394,46 @@ showToast({
       setError('Could not determine your facility. Please try again.')
       setLoading(false)
       return
+    }
+
+    // Phase 0.2: Validate required fields
+    const errors = validateForm()
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      setError('Please fill in all required fields.')
+      setLoading(false)
+      return
+    }
+    setFieldErrors({})
+
+    // Phase 0.3: Check milestone config BEFORE creating the case
+    if (mode === 'create' && formData.procedure_type_id) {
+      const { data: procedureMilestones, error: pmError } = await supabase
+        .from('procedure_milestone_config')
+        .select('facility_milestone_id')
+        .eq('procedure_type_id', formData.procedure_type_id)
+        .eq('facility_id', userFacilityId)
+        .eq('is_enabled', true)
+
+      if (pmError) {
+        showToast({
+          type: 'error',
+          title: 'Milestone Check Failed',
+          message: 'Could not verify milestone configuration. Please try again.',
+        })
+        setLoading(false)
+        return
+      }
+
+      if (!procedureMilestones || procedureMilestones.length === 0) {
+        showToast({
+          type: 'error',
+          title: 'No Milestones Configured',
+          message: 'No milestones are configured for this procedure type. Contact an admin to set up milestones before creating a case.',
+        })
+        setLoading(false)
+        return
+      }
     }
 
     // NEW: Warning if rep required but no company assigned
@@ -716,52 +787,82 @@ showToast({
       {/* Case Number & Date/Time Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Case Number</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Case Number <span className="text-red-500">*</span>
+          </label>
           <input
             type="text"
             value={formData.case_number}
-            onChange={(e) => setFormData({ ...formData, case_number: e.target.value })}
-            required
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            onChange={(e) => {
+              setFormData({ ...formData, case_number: e.target.value })
+              clearFieldError('case_number')
+            }}
+            className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.case_number ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
             placeholder="e.g., C-2025-001"
           />
+          {fieldErrors.case_number && (
+            <p className="text-red-600 text-xs mt-1">{fieldErrors.case_number}</p>
+          )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Scheduled Date</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Scheduled Date <span className="text-red-500">*</span>
+          </label>
           <input
             type="date"
             value={formData.scheduled_date}
-            onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })}
-            required
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            onChange={(e) => {
+              setFormData({ ...formData, scheduled_date: e.target.value })
+              clearFieldError('scheduled_date')
+            }}
+            className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.scheduled_date ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
           />
+          {fieldErrors.scheduled_date && (
+            <p className="text-red-600 text-xs mt-1">{fieldErrors.scheduled_date}</p>
+          )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Start Time</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Start Time <span className="text-red-500">*</span>
+          </label>
           <input
             type="time"
             value={formData.start_time}
-            onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            onChange={(e) => {
+              setFormData({ ...formData, start_time: e.target.value })
+              clearFieldError('start_time')
+            }}
+            className={`w-full px-4 py-3 rounded-xl border ${fieldErrors.start_time ? 'border-red-400 ring-2 ring-red-500/20' : 'border-slate-200'} focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all`}
           />
+          {fieldErrors.start_time && (
+            <p className="text-red-600 text-xs mt-1">{fieldErrors.start_time}</p>
+          )}
         </div>
       </div>
 
       {/* Room & Surgeon */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <SearchableDropdown
-          label="OR Room"
+          label="OR Room *"
           placeholder="Select Room"
           value={formData.or_room_id}
-          onChange={(id) => setFormData({ ...formData, or_room_id: id })}
+          onChange={(id) => {
+            setFormData({ ...formData, or_room_id: id })
+            clearFieldError('or_room_id')
+          }}
           options={orRooms.map(r => ({ id: r.id, label: r.name }))}
+          error={fieldErrors.or_room_id}
         />
         <SearchableDropdown
-          label="Surgeon"
+          label="Surgeon *"
           placeholder="Select Surgeon"
           value={formData.surgeon_id}
-          onChange={(id) => setFormData({ ...formData, surgeon_id: id })}
+          onChange={(id) => {
+            setFormData({ ...formData, surgeon_id: id })
+            clearFieldError('surgeon_id')
+          }}
           options={surgeons.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` }))}
+          error={fieldErrors.surgeon_id}
         />
       </div>
 
@@ -769,15 +870,17 @@ showToast({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <SearchableDropdown
-            label="Procedure Type"
+            label="Procedure Type *"
             placeholder="Select Procedure"
             value={formData.procedure_type_id}
             onChange={(id) => {
               setFormData({ ...formData, procedure_type_id: id })
+              clearFieldError('procedure_type_id')
               // Reset rep override when procedure changes
               setRepRequiredOverride(null)
             }}
             options={procedureTypes.map(p => ({ id: p.id, label: p.name }))}
+            error={fieldErrors.procedure_type_id}
           />
         </div>
         {/* Operative Side */}
