@@ -40,7 +40,7 @@ interface UseSupabaseQueryReturn<T> {
   loading: boolean
   error: string | null
   refetch: () => Promise<void>
-  setData: (data: T | null) => void
+  setData: (dataOrUpdater: T | null | ((prev: T | null) => T | null)) => void
 }
 
 // ============================================
