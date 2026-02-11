@@ -11,11 +11,12 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { adminAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Archive, Check, Info, Pencil, Plus, User, X } from 'lucide-react'
+import { Archive, Info, Pencil, Plus, User } from 'lucide-react'
 
 interface BodyRegion {
   id: string
@@ -31,10 +32,10 @@ export default function AdminBodyRegionsPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
 
-  const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Modal states
@@ -63,20 +64,8 @@ export default function AdminBodyRegionsPage() {
     confirmVariant: 'danger',
     onConfirm: () => {},
   })
-// Archive toggle
   const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
-  // Current user for deleted_by tracking
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -84,44 +73,34 @@ export default function AdminBodyRegionsPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-useEffect(() => {
-    if (isGlobalAdmin) {
-      fetchData()
-    }
-  }, [isGlobalAdmin, showArchived])
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    regions: BodyRegion[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let query = sb.from('body_regions').select('*')
 
-const fetchData = async () => {
-    setLoading(true)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
 
-    // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+      const { data, error } = await query.order('display_order')
+      if (error) throw error
 
-    let query = supabase
-      .from('body_regions')
-      .select('*')
+      const { count } = await sb
+        .from('body_regions')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
-    }
+      return { regions: data || [], archivedCount: count || 0 }
+    },
+    { deps: [showArchived], enabled: isGlobalAdmin }
+  )
 
-    const { data, error } = await query.order('display_order')
-
-    if (!error && data) {
-      setBodyRegions(data)
-    }
-
-    // Get archived count
-    const { count } = await supabase
-      .from('body_regions')
-      .select('id', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
-  }
+  const bodyRegions = queryData?.regions || []
+  const archivedCount = queryData?.archivedCount || 0
 
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -176,11 +155,11 @@ if (!error && data) {
   // Audit log
   await adminAudit.bodyRegionCreated(supabase, formDisplayName.trim(), data.id)
 
-  setBodyRegions([...bodyRegions, data].sort((a, b) => a.display_order - b.display_order))
+  refetchData()
   resetForm()
   setShowAddModal(false)
 } else if (error) {
-  showToast(error.message || 'The name might already exist', 'error')
+  showToast({ type: 'error', title: error.message || 'The name might already exist' })
 }
 setSaving(false)
   }
@@ -207,16 +186,12 @@ setSaving(false)
         await adminAudit.bodyRegionUpdated(supabase, editingRegion.id, oldDisplayName, formDisplayName.trim())
       }
 
-      setBodyRegions(
-        bodyRegions
-          .map(r => r.id === editingRegion.id ? data : r)
-          .sort((a, b) => a.display_order - b.display_order)
-      )
+      refetchData()
       setShowEditModal(false)
       setEditingRegion(null)
       resetForm()
 } else if (error) {
-  showToast(error instanceof Error ? error.message : 'Error updating body region:', 'error')
+  showToast({ type: 'error', title: error instanceof Error ? error.message : 'Error updating body region' })
 }
     setSaving(false)
   }
@@ -248,12 +223,11 @@ const handleDelete = (region: BodyRegion) => {
 
         if (!error) {
   await adminAudit.bodyRegionDeleted(supabase, region.display_name, region.id)
-  setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
-  setArchivedCount(prev => prev + 1)
+  refetchData()
   closeConfirmModal()
-  showToast(`"${region.display_name}" moved to archive`, 'success')
+  showToast({ type: 'success', title: `"${region.display_name}" moved to archive` })
 } else {
-  showToast(error.message || 'Error archiving body region', 'error')
+  showToast({ type: 'error', title: error.message || 'Error archiving body region' })
 }
         setSaving(false)
       },
@@ -271,11 +245,10 @@ const handleDelete = (region: BodyRegion) => {
       .eq('id', region.id)
 
     if (!error) {
-      setBodyRegions(bodyRegions.filter(r => r.id !== region.id))
-      setArchivedCount(prev => prev - 1)
-      showToast(`"${region.display_name}" restored successfully`, 'success')
+      refetchData()
+      showToast({ type: 'success', title: `"${region.display_name}" restored successfully` })
     } else {
-      showToast('Failed to restore body region', 'error')
+      showToast({ type: 'error', title: 'Failed to restore body region' })
     }
     setSaving(false)
   }
@@ -284,7 +257,7 @@ const handleDelete = (region: BodyRegion) => {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="flex items-center justify-center h-64">
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
@@ -559,19 +532,6 @@ const handleDelete = (region: BodyRegion) => {
           </Modal.Action>
         </Modal.Footer>
       </Modal>
-{/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <Check className="w-5 h-5" />
-          ) : (
-            <X className="w-5 h-5" />
-          )}
-          {toast.message}
-        </div>
-      )}
       {/* Confirmation Modal */}
       <ConfirmDialog
         open={confirmModal.isOpen}

@@ -1,16 +1,18 @@
 // app/admin/settings/procedure-categories/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { procedureCategoryAudit } from '@/lib/audit-logger'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Archive, Check, Info, Package, Pencil, Plus, X } from 'lucide-react'
+import { Archive, Info, Package, Pencil, Plus } from 'lucide-react'
 
 interface BodyRegion {
   id: string
@@ -41,10 +43,10 @@ function getBodyRegion(category: ProcedureCategory): BodyRegion | null {
 
 export default function AdminProcedureCategoriesPage() {
   const supabase = createClient()
-  const [categories, setCategories] = useState<ProcedureCategory[]>([])
-  const [bodyRegions, setBodyRegions] = useState<BodyRegion[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { showToast } = useToast()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+
   const [saving, setSaving] = useState(false)
 
   // Modal states
@@ -73,73 +75,53 @@ export default function AdminProcedureCategoriesPage() {
     confirmVariant: 'danger',
     onConfirm: () => {},
   })
-// Archive toggle
   const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    categories: ProcedureCategory[]
+    bodyRegions: BodyRegion[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let query = sb
+        .from('procedure_categories')
+        .select(`
+          id, name, display_name, display_order, body_region_id,
+          is_active, deleted_at, deleted_by,
+          body_regions (id, name, display_name)
+        `)
 
-  // Current user for deleted_by tracking
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+      if (showArchived) {
+        query = query.not('deleted_at', 'is', null)
+      } else {
+        query = query.is('deleted_at', null)
+      }
 
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-useEffect(() => {
-    fetchData()
-  }, [showArchived])
+      const { data: categoriesData } = await query.order('display_order')
 
-const fetchData = async () => {
-    setLoading(true)
+      const { data: regionsData } = await sb
+        .from('body_regions')
+        .select('id, name, display_name')
+        .is('deleted_at', null)
+        .order('display_name')
 
-    // Get current user ID
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) setCurrentUserId(user.id)
+      const { count } = await sb
+        .from('procedure_categories')
+        .select('id', { count: 'exact', head: true })
+        .not('deleted_at', 'is', null)
 
-    // Fetch categories with body region
-    let query = supabase
-      .from('procedure_categories')
-      .select(`
-        id,
-        name,
-        display_name,
-        display_order,
-        body_region_id,
-        is_active,
-        deleted_at,
-        deleted_by,
-        body_regions (id, name, display_name)
-      `)
+      return {
+        categories: (categoriesData || []) as ProcedureCategory[],
+        bodyRegions: regionsData || [],
+        archivedCount: count || 0,
+      }
+    },
+    { deps: [showArchived] }
+  )
 
-    if (showArchived) {
-      query = query.not('deleted_at', 'is', null)
-    } else {
-      query = query.is('deleted_at', null)
-    }
-
-    const { data: categoriesData } = await query.order('display_order')
-
-    // Fetch body regions for dropdown (only active ones)
-    const { data: regionsData } = await supabase
-      .from('body_regions')
-      .select('id, name, display_name')
-      .is('deleted_at', null)
-      .order('display_name')
-
-    setCategories((categoriesData || []) as ProcedureCategory[])
-    setBodyRegions(regionsData || [])
-
-    // Get archived count
-    const { count } = await supabase
-      .from('procedure_categories')
-      .select('id', { count: 'exact', head: true })
-      .not('deleted_at', 'is', null)
-
-    setArchivedCount(count || 0)
-    setLoading(false)
-  }
+  const categories = queryData?.categories || []
+  const bodyRegions = queryData?.bodyRegions || []
+  const archivedCount = queryData?.archivedCount || 0
 
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
@@ -193,7 +175,7 @@ const fetchData = async () => {
       const regionName = bodyRegions.find(r => r.id === formBodyRegionId)?.display_name
       await procedureCategoryAudit.created(supabase, formDisplayName.trim(), data.id, regionName)
 
-      setCategories([...categories, data as ProcedureCategory])
+      refetchData()
       resetForm()
       setShowAddModal(false)
     }
@@ -241,7 +223,7 @@ await procedureCategoryAudit.updated(
   }
 )
 
-      setCategories(categories.map(c => c.id === data.id ? data as ProcedureCategory : c))
+      refetchData()
       setShowEditModal(false)
       setEditingCategory(null)
       resetForm()
@@ -274,11 +256,10 @@ await procedureCategoryAudit.updated(
 
         if (!error) {
           await procedureCategoryAudit.deleted(supabase, category.display_name, category.id)
-          setCategories(categories.filter(c => c.id !== category.id))
-          setArchivedCount(prev => prev + 1)
-          showToast(`"${category.display_name}" moved to archive`, 'success')
+          refetchData()
+          showToast({ type: 'success', title: `"${category.display_name}" moved to archive` })
         } else {
-          showToast('Failed to archive category', 'error')
+          showToast({ type: 'error', title: 'Failed to archive category' })
         }
         setSaving(false)
         closeConfirmModal()
@@ -297,11 +278,10 @@ await procedureCategoryAudit.updated(
       .eq('id', category.id)
 
     if (!error) {
-      setCategories(categories.filter(c => c.id !== category.id))
-      setArchivedCount(prev => prev - 1)
-      showToast(`"${category.display_name}" restored successfully`, 'success')
+      refetchData()
+      showToast({ type: 'success', title: `"${category.display_name}" restored successfully` })
     } else {
-      showToast('Failed to restore category', 'error')
+      showToast({ type: 'error', title: 'Failed to restore category' })
     }
     setSaving(false)
   }
@@ -340,7 +320,7 @@ await procedureCategoryAudit.updated(
   return (
     <DashboardLayout>
       <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
         <div className="max-w-4xl mx-auto">
           {/* Header */}
  <div className="flex items-start justify-between mb-6">
@@ -609,19 +589,6 @@ await procedureCategoryAudit.updated(
           </Modal.Action>
         </Modal.Footer>
       </Modal>
-{/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <Check className="w-5 h-5" />
-          ) : (
-            <X className="w-5 h-5" />
-          )}
-          {toast.message}
-        </div>
-      )}
       {/* Confirmation Modal */}
       <ConfirmDialog
         open={confirmModal.isOpen}

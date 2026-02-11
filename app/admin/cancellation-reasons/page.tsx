@@ -2,18 +2,19 @@
 // This is the main page for managing cancellation reason templates. These templates are copied to new facilities during onboarding and can be customized by each facility without affecting others. Only accessible by global admins.
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { AlertCircle, Archive, Ban, Check, Info, Loader2, PenLine, Plus, RefreshCw } from 'lucide-react'
+import { Archive, Ban, Info, Loader2, PenLine, Plus, RefreshCw } from 'lucide-react'
 
 
 // ============================================================================
@@ -49,11 +50,9 @@ const CATEGORIES = [
 export default function AdminCancellationReasonsPage() {
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
+  const { showToast } = useToast()
   
   // Data state
-  const [reasons, setReasons] = useState<CancellationReasonTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   
   // Modal state
@@ -66,51 +65,26 @@ export default function AdminCancellationReasonsPage() {
     display_order: 0,
   })
   
-  // Feedback state
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [archiveTarget, setArchiveTarget] = useState<CancellationReasonTemplate | null>(null)
-  // Toast
-  const { showToast } = useToast()
 
-  // ============================================================================
-  // DATA FETCHING
-  // ============================================================================
+  const { data: reasons, loading, error, refetch: refetchReasons } = useSupabaseQuery<CancellationReasonTemplate[]>(
+    async (sb) => {
+      let query = sb
+        .from('cancellation_reason_templates')
+        .select('*')
+        .order('category')
+        .order('display_order')
 
-  useEffect(() => {
-    if (!userLoading && isGlobalAdmin) {
-      fetchReasons()
-    }
-  }, [userLoading, isGlobalAdmin, showArchived])
+      if (!showArchived) {
+        query = query.eq('is_active', true).is('deleted_at', null)
+      }
 
-const fetchReasons = async () => {
-  setLoading(true)
-  
-  let query = supabase
-    .from('cancellation_reason_templates')
-    .select('*')
-    .order('category')
-    .order('display_order')
-  
-  if (!showArchived) {
-    query = query.eq('is_active', true).is('deleted_at', null)
-  }
-  
-  const { data, error } = await query
-
-  if (error) {
-    showToast({
-      type: 'error',
-      title: 'Error',
-      message: 'Error fetching cancellation reasons: ' + error
-    })
-    setErrorMessage('Failed to load cancellation reasons')
-  } else {
-    setReasons(data || [])
-  }
-
-  setLoading(false)
-}
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
+    },
+    { deps: [showArchived], enabled: !userLoading && isGlobalAdmin }
+  )
 
 // ============================================================================
 // MODAL HANDLERS
@@ -122,7 +96,7 @@ const fetchReasons = async () => {
       name: '',
       display_name: '',
       category: 'patient',
-      display_order: reasons.length * 10,
+      display_order: (reasons || []).length * 10,
     })
     setShowModal(true)
   }
@@ -158,7 +132,7 @@ const fetchReasons = async () => {
 
   const handleSubmit = async () => {
     if (!formData.display_name.trim()) {
-      setErrorMessage('Display name is required')
+      showToast({ type: 'error', title: 'Display name is required' })
       return
     }
 
@@ -177,15 +151,15 @@ const fetchReasons = async () => {
         .eq('id', editingReason.id)
 
       if (error) {
-        setErrorMessage(error.message)
+        showToast({ type: 'error', title: error.message })
       } else {
         await cancellationReasonAudit.adminUpdated(
           supabase, editingReason.id, editingReason.display_name, 
           formData.display_name.trim(), formData.category
         )
-        setSuccessMessage('Cancellation reason updated')
+        showToast({ type: 'success', title: 'Cancellation reason updated' })
         closeModal()
-        fetchReasons()
+        refetchReasons()
       }
     } else {
       // Create
@@ -202,21 +176,18 @@ const fetchReasons = async () => {
         .single()
 
       if (error) {
-        setErrorMessage(error.code === '23505' 
+        showToast({ type: 'error', title: error.code === '23505' 
           ? 'A reason with this name already exists' 
-          : error.message
-        )
+          : error.message })
       } else {
         await cancellationReasonAudit.adminCreated(
           supabase, formData.display_name.trim(), data.id, formData.category
         )
-        setSuccessMessage('Cancellation reason created')
+        showToast({ type: 'success', title: 'Cancellation reason created' })
         closeModal()
-        fetchReasons()
+        refetchReasons()
       }
     }
-
-    setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   const handleDelete = async (reason: CancellationReasonTemplate) => {
@@ -232,15 +203,13 @@ const fetchReasons = async () => {
       .eq('id', reason.id)
 
     if (error) {
-      setErrorMessage(error.message)
+      showToast({ type: 'error', title: error.message })
     } else {
       await cancellationReasonAudit.adminDeleted(supabase, reason.display_name, reason.id)
-      setSuccessMessage(`"${reason.display_name}" archived`)
+      showToast({ type: 'success', title: `"${reason.display_name}" archived` })
       setArchiveTarget(null)
-      fetchReasons()
+      refetchReasons()
     }
-
-    setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   const handleRestore = async (reason: CancellationReasonTemplate) => {
@@ -250,27 +219,25 @@ const fetchReasons = async () => {
       .eq('id', reason.id)
 
     if (error) {
-      setErrorMessage(error.message)
+      showToast({ type: 'error', title: error.message })
     } else {
-      setSuccessMessage(`"${reason.display_name}" restored`)
-      fetchReasons()
+      showToast({ type: 'success', title: `"${reason.display_name}" restored` })
+      refetchReasons()
     }
-
-    setTimeout(() => { setSuccessMessage(null); setErrorMessage(null) }, 5000)
   }
 
   // ============================================================================
   // COMPUTED VALUES
   // ============================================================================
 
-  const groupedReasons = reasons.reduce((acc, reason) => {
+  const groupedReasons = (reasons || []).reduce((acc, reason) => {
     if (!acc[reason.category]) acc[reason.category] = []
     acc[reason.category].push(reason)
     return acc
   }, {} as Record<string, CancellationReasonTemplate[]>)
 
-  const activeCount = reasons.filter(r => r.is_active).length
-  const archivedCount = reasons.filter(r => !r.is_active).length
+  const activeCount = (reasons || []).filter(r => r.is_active).length
+  const archivedCount = (reasons || []).filter(r => !r.is_active).length
 
   // ============================================================================
   // ACCESS CHECK
@@ -280,7 +247,7 @@ const fetchReasons = async () => {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
             <p className="text-slate-500 mt-2">You need global admin privileges to access this page.</p>
@@ -309,21 +276,6 @@ const fetchReasons = async () => {
             Manage default cancellation reasons copied to new facilities.
           </p>
         </div>
-
-        {/* Messages */}
-        {successMessage && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-start gap-3">
-            <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm font-medium text-green-800">{successMessage}</p>
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm font-medium text-red-800">{errorMessage}</p>
-          </div>
-        )}
 
         {/* Main Card */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

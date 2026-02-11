@@ -13,9 +13,10 @@ import { startImpersonation } from '@/lib/impersonation'
 import { adminAudit } from '@/lib/audit-logger'
 import DeleteFacilityModal from '@/components/modals/DeleteFacilityModal'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Building2, Check, Eye, Plus, Search, Trash2, User, X } from 'lucide-react'
+import { Building2, Eye, Plus, Search, Trash2, User } from 'lucide-react'
 
 
 interface Facility {
@@ -38,15 +39,9 @@ export default function FacilitiesListPage() {
   const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
   const { showToast } = useToast()
 
-  const [facilities, setFacilities] = useState<Facility[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  
-  // Delete modal state
   const [facilityToDelete, setFacilityToDelete] = useState<Facility | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Redirect non-admins
   useEffect(() => {
@@ -55,61 +50,35 @@ export default function FacilitiesListPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  // Fetch facilities
-  const fetchFacilities = async () => {
-    setLoading(true)
-
-    try {
-      // Fetch all facilities
-      const { data: facilitiesData, error } = await supabase
+  const { data: facilities, loading, error, refetch: refetchFacilities } = useSupabaseQuery<Facility[]>(
+    async (sb) => {
+      const { data: facilitiesData, error } = await sb
         .from('facilities')
         .select('*')
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      // Fetch user counts per facility
-      const { data: userCounts } = await supabase
+      const { data: userCounts } = await sb
         .from('users')
         .select('facility_id')
 
-      // Fetch case counts (last 30 days)
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-      const { data: caseCounts } = await supabase
+      const { data: caseCounts } = await sb
         .from('cases')
         .select('facility_id, created_at')
         .gte('created_at', thirtyDaysAgo.toISOString())
 
-      // Combine data
-      const facilitiesWithCounts = (facilitiesData || []).map(facility => {
-        const userCount = (userCounts || []).filter(u => u.facility_id === facility.id).length
-        const caseCount = (caseCounts || []).filter(c => c.facility_id === facility.id).length
-
-        return {
-          ...facility,
-          user_count: userCount,
-          case_count: caseCount,
-        }
-      })
-
-      setFacilities(facilitiesWithCounts)
-    } catch (error) {
-      showToast({
-  type: 'error',
-  title: 'Error fetching facilities:',
-  message: error instanceof Error ? error.message : 'Error fetching facilities:'
-})
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!isGlobalAdmin) return
-    fetchFacilities()
-  }, [isGlobalAdmin, supabase])
+      return (facilitiesData || []).map(facility => ({
+        ...facility,
+        user_count: (userCounts || []).filter(u => u.facility_id === facility.id).length,
+        case_count: (caseCounts || []).filter(c => c.facility_id === facility.id).length,
+      }))
+    },
+    { enabled: isGlobalAdmin }
+  )
 
   // Handle impersonation
   const handleImpersonate = async (facility: Facility) => {
@@ -145,16 +114,12 @@ export default function FacilitiesListPage() {
   const handleDeleteSuccess = () => {
     const deletedName = facilityToDelete?.name
     setFacilityToDelete(null)
-    // Show success message
-    setSuccessMessage(`"${deletedName}" has been permanently deleted`)
-    // Auto-hide after 5 seconds
-    setTimeout(() => setSuccessMessage(null), 5000)
-    // Refresh the list
-    fetchFacilities()
+    showToast({ type: 'success', title: `"${deletedName}" has been permanently deleted` })
+    refetchFacilities()
   }
 
   // Filter facilities
-  const filteredFacilities = facilities.filter(facility => {
+  const filteredFacilities = (facilities || []).filter(facility => {
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
@@ -418,24 +383,6 @@ export default function FacilitiesListPage() {
       <div className="mt-4 text-sm text-slate-500 text-center">
         Showing {filteredFacilities.length} of {facilities.length} facilities
       </div>
-
-      {/* Success Toast */}
-      {successMessage && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
-          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 text-emerald-800 px-5 py-4 rounded-xl shadow-lg">
-            <div className="flex-shrink-0 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
-              <Check className="w-5 h-5 text-emerald-600" />
-            </div>
-            <p className="font-medium">{successMessage}</p>
-            <button
-              onClick={() => setSuccessMessage(null)}
-              className="ml-2 text-emerald-600 hover:text-emerald-800"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Delete Confirmation Modal */}
       {facilityToDelete && (

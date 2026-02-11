@@ -11,11 +11,12 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { costCategoryAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
+import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Archive, Check, Info, PenLine, Plus, X } from 'lucide-react'
+import { Archive, Info, PenLine, Plus } from 'lucide-react'
 
 interface DefaultCostCategory {
   id: string
@@ -39,10 +40,10 @@ export default function DefaultCostCategoriesPage() {
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
- 
-  const [categories, setCategories] = useState<DefaultCostCategory[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { showToast } = useToast()
+  const { data: currentUserData } = useCurrentUser()
+  const currentUserId = currentUserData?.userId || null
+
   const [saving, setSaving] = useState(false)
 
   // Modal state
@@ -59,8 +60,7 @@ export default function DefaultCostCategoriesPage() {
   const [filterType, setFilterType] = useState<string>('all')
   const [filterActive, setFilterActive] = useState<string>('all')
 
-  // Delete confirmation
-// Delete modal
+  // Delete modal
   const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
     isOpen: false,
     category: null,
@@ -69,27 +69,7 @@ export default function DefaultCostCategoriesPage() {
 
   // Archive view toggle
   const [showArchived, setShowArchived] = useState(false)
-  const [archivedCount, setArchivedCount] = useState(0)
 
-  // Toast
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
-  // Current user
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-
-  // Get current user ID on mount
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
-    }
-    getCurrentUser()
-  }, [])
-
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
   // Redirect non-admins
   useEffect(() => {
     if (!userLoading && !isGlobalAdmin) {
@@ -97,20 +77,12 @@ export default function DefaultCostCategoriesPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  // Fetch data
-useEffect(() => {
-    if (!isGlobalAdmin) return
-    fetchData()
-  }, [isGlobalAdmin, showArchived])
-
- const fetchData = async () => {
-    setLoading(true)
-
-    try {
-      // Build query based on archive toggle
-      let query = supabase
-        .from('cost_category_templates')
-        .select('*')
+  const { data: queryData, loading, error, refetch: refetchData } = useSupabaseQuery<{
+    categories: DefaultCostCategory[]
+    archivedCount: number
+  }>(
+    async (sb) => {
+      let query = sb.from('cost_category_templates').select('*')
 
       if (showArchived) {
         query = query.not('deleted_at', 'is', null)
@@ -119,27 +91,21 @@ useEffect(() => {
       }
 
       query = query.order('type').order('display_order')
-
       const { data, error } = await query
+      if (error) throw error
 
-if (error) {
-  showToast(error instanceof Error ? error.message : 'Error fetching categories:', 'error')
-}
-if (data) setCategories(data)
-
-      // Get archived count
-      const { count } = await supabase
+      const { count } = await sb
         .from('cost_category_templates')
         .select('id', { count: 'exact', head: true })
         .not('deleted_at', 'is', null)
 
-      setArchivedCount(count || 0)
-} catch (error) {
-  showToast(error instanceof Error ? error.message : 'Error fetching categories', 'error')
-} finally {
-      setLoading(false)
-    }
-  }
+      return { categories: data || [], archivedCount: count || 0 }
+    },
+    { deps: [showArchived], enabled: isGlobalAdmin }
+  )
+
+  const categories = queryData?.categories || []
+  const archivedCount = queryData?.archivedCount || 0
 
   const handleNew = () => {
     setEditingCategory(null)
@@ -188,9 +154,7 @@ if (data) setCategories(data)
           { name: data.name, type: data.type, description: data.description || undefined }
         )
 
-        setCategories(categories.map(c => 
-          c.id === editingCategory.id ? { ...c, ...data } : c
-        ))
+        refetchData()
       } else {
         // Create
         const maxOrder = categories
@@ -212,15 +176,12 @@ if (data) setCategories(data)
           data.type
         )
 
-        setCategories([...categories, newCategory].sort((a, b) => {
-          if (a.type !== b.type) return a.type.localeCompare(b.type)
-          return a.display_order - b.display_order
-        }))
+        refetchData()
       }
 
       setShowModal(false)
     } catch (error) {
-showToast(error instanceof Error ? error.message : 'Error saving category:', 'error')
+      showToast({ type: 'error', title: error instanceof Error ? error.message : 'Error saving category' })
     } finally {
       setSaving(false)
     }
@@ -271,14 +232,13 @@ const handleDelete = async () => {
 
     await costCategoryAudit.adminDeleted(supabase, category.name, category.id)
 
-    setCategories(categories.filter(c => c.id !== category.id))
-    setArchivedCount(prev => prev + 1)
+    refetchData()
     
-    showToast(`"${category.name}" moved to archive`, 'success')
+    showToast({ type: 'success', title: `"${category.name}" moved to archive` })
     
     closeDeleteModal()
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'Error archiving category', 'error')
+    showToast({ type: 'error', title: error instanceof Error ? error.message : 'Error archiving category' })
   } finally {
     setSaving(false)
   }
@@ -298,12 +258,11 @@ const handleRestore = async (category: DefaultCostCategory) => {
 
     if (error) throw error
 
-    setCategories(categories.filter(c => c.id !== category.id))
-    setArchivedCount(prev => prev - 1)
+    refetchData()
     
-    showToast(`"${category.name}" restored successfully`, 'success')
+    showToast({ type: 'success', title: `"${category.name}" restored successfully` })
   } catch (error) {
-    showToast(error instanceof Error ? error.message : 'Failed to restore category', 'error')
+    showToast({ type: 'error', title: error instanceof Error ? error.message : 'Failed to restore category' })
   } finally {
     setSaving(false)
   }
@@ -329,11 +288,9 @@ const toggleActive = async (category: DefaultCostCategory) => {
         { name: category.name, is_active: newActiveState }
       )
 
-      setCategories(categories.map(c => 
-        c.id === category.id ? { ...c, is_active: newActiveState } : c
-      ))
+      refetchData()
     } catch (error) {
-showToast(error instanceof Error ? error.message : 'Error toggling active state:', 'error')
+      showToast({ type: 'error', title: error instanceof Error ? error.message : 'Error toggling active state' })
     } finally {
       setSaving(false)
     }
@@ -354,7 +311,7 @@ showToast(error instanceof Error ? error.message : 'Error toggling active state:
     return (
       <DashboardLayout>
         <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
+          <ErrorBanner message={error} />
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
           </div>
@@ -717,20 +674,6 @@ showToast(error instanceof Error ? error.message : 'Error toggling active state:
         itemType="cost category template"
         loading={saving}
       />
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50 ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
-        }`}>
-          {toast.type === 'success' ? (
-            <Check className="w-5 h-5" />
-          ) : (
-            <X className="w-5 h-5" />
-          )}
-          {toast.message}
-        </div>
-      )}
     </DashboardLayout>
   )
 }
