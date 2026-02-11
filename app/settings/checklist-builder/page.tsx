@@ -173,8 +173,8 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
     }
   }, [field])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault()
     
     // Generate field_key from label if new
     const fieldKey = isNew 
@@ -333,7 +333,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
 
         <Modal.Footer>
           <Modal.Cancel onClick={onClose} />
-          <Modal.Action onClick={handleSubmit}>
+          <Modal.Action onClick={() => handleSubmit()}>
             {isNew ? 'Add Field' : 'Save Changes'}
           </Modal.Action>
         </Modal.Footer>
