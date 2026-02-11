@@ -204,7 +204,7 @@ export default function DeviceRepsPage() {
         company_name: company?.name || 'Unknown Company',
         type: 'invite',
       }
-      setPendingInvites([newInvite, ...pendingInvites])
+      setPendingInvites([newInvite, ...(pendingInvites || [])])
       closeInviteModal()
 
       try {
