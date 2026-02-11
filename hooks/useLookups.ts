@@ -106,13 +106,15 @@ export interface ProcedureType {
   body_region_id?: string
   procedure_category_id?: string
   expected_duration?: number
+  requires_rep?: boolean
+  requires_operative_side?: boolean
 }
 
 export function useProcedureTypes(facilityId: string | null | undefined) {
   return useLookup<ProcedureType>(
     'procedure_types',
     { facilityId, includeGlobal: true },
-    'id, name, body_region_id, procedure_category_id'
+    'id, name, body_region_id, procedure_category_id, requires_rep, requires_operative_side'
   )
 }
 

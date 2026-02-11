@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createCaseSchema, validateField } from '../schemas'
+import { createCaseSchema, bulkCaseRowSchema, bulkCaseSubmissionSchema, validateField } from '../schemas'
 
 describe('createCaseSchema — Phase 1.3', () => {
   const validData = {
@@ -122,5 +122,168 @@ describe('validateField — Phase 1.3', () => {
   it('returns null for valid optional empty string', () => {
     const error = validateField(createCaseSchema, 'notes', '')
     expect(error).toBeNull()
+  })
+})
+
+// ============================================
+// BULK CASE SCHEMAS — Phase 4.1
+// ============================================
+
+describe('bulkCaseRowSchema — Phase 4.1', () => {
+  const validRow = {
+    case_number: 'C-2026-010',
+    start_time: '07:30',
+    procedure_type_id: 'proc-1',
+    or_room_id: 'room-1',
+    operative_side: 'left',
+    implant_company_ids: [],
+    rep_required_override: null,
+  }
+
+  it('accepts a valid row', () => {
+    const result = bulkCaseRowSchema.safeParse(validRow)
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects empty case_number', () => {
+    const result = bulkCaseRowSchema.safeParse({ ...validRow, case_number: '' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const field = result.error.issues.find(i => i.path[0] === 'case_number')
+      expect(field?.message).toBe('Case number is required')
+    }
+  })
+
+  it('rejects empty start_time', () => {
+    const result = bulkCaseRowSchema.safeParse({ ...validRow, start_time: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects invalid time format', () => {
+    const result = bulkCaseRowSchema.safeParse({ ...validRow, start_time: '25:00' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty procedure_type_id', () => {
+    const result = bulkCaseRowSchema.safeParse({ ...validRow, procedure_type_id: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty or_room_id', () => {
+    const result = bulkCaseRowSchema.safeParse({ ...validRow, or_room_id: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts all valid operative side values', () => {
+    for (const side of ['left', 'right', 'bilateral', 'n/a', '']) {
+      const result = bulkCaseRowSchema.safeParse({ ...validRow, operative_side: side })
+      expect(result.success).toBe(true)
+    }
+  })
+
+  it('accepts row without optional fields', () => {
+    const minimal = {
+      case_number: 'C-001',
+      start_time: '08:00',
+      procedure_type_id: 'proc-1',
+      or_room_id: 'room-1',
+    }
+    const result = bulkCaseRowSchema.safeParse(minimal)
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts implant_company_ids array', () => {
+    const result = bulkCaseRowSchema.safeParse({
+      ...validRow,
+      implant_company_ids: ['company-1', 'company-2'],
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('bulkCaseSubmissionSchema — Phase 4.1', () => {
+  const validRow = {
+    case_number: 'C-2026-010',
+    start_time: '07:30',
+    procedure_type_id: 'proc-1',
+    or_room_id: 'room-1',
+  }
+
+  const validSubmission = {
+    scheduled_date: '2026-03-15',
+    surgeon_id: 'surgeon-1',
+    rows: [validRow],
+  }
+
+  it('accepts a valid submission with one row', () => {
+    const result = bulkCaseSubmissionSchema.safeParse(validSubmission)
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a valid submission with multiple rows', () => {
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      rows: [
+        { ...validRow, case_number: 'C-001', start_time: '07:00' },
+        { ...validRow, case_number: 'C-002', start_time: '08:00' },
+        { ...validRow, case_number: 'C-003', start_time: '09:00' },
+      ],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects empty scheduled_date', () => {
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      scheduled_date: '',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty surgeon_id', () => {
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      surgeon_id: '',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty rows array', () => {
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      rows: [],
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects more than 20 rows', () => {
+    const rows = Array.from({ length: 21 }, (_, i) => ({
+      ...validRow,
+      case_number: `C-${i}`,
+    }))
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      rows,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects submission when any row is invalid', () => {
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      rows: [
+        validRow,
+        { ...validRow, case_number: '', start_time: '' }, // invalid row
+      ],
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('validates nested row fields correctly', () => {
+    const result = bulkCaseSubmissionSchema.safeParse({
+      ...validSubmission,
+      rows: [{ ...validRow, start_time: '25:00' }], // invalid time
+    })
+    expect(result.success).toBe(false)
   })
 })

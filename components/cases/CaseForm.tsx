@@ -55,6 +55,7 @@ interface ProcedureType {
   id: string
   name: string
   requires_rep: boolean
+  requires_operative_side: boolean
   procedure_category_id: string | null
 }
 
@@ -339,7 +340,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
         // UPDATED: Fetch requires_rep along with procedure types
-        supabase.from('procedure_types').select('id, name, requires_rep, procedure_category_id') 
+        supabase.from('procedure_types').select('id, name, requires_rep, requires_operative_side, procedure_category_id') 
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
@@ -1166,7 +1167,13 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             placeholder="Select Procedure"
             value={formData.procedure_type_id}
             onChange={(id) => {
-              setFormData({ ...formData, procedure_type_id: id })
+              const proc = procedureTypes.find(p => p.id === id)
+              const updates: Partial<FormData> = { procedure_type_id: id }
+              // Clear operative side when switching to a procedure that doesn't need it
+              if (!proc?.requires_operative_side) {
+                updates.operative_side = ''
+              }
+              setFormData(prev => ({ ...prev, ...updates }))
               clearFieldError('procedure_type_id')
               // Reset rep override when procedure changes
               setRepRequiredOverride(null)
@@ -1175,23 +1182,25 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             error={fieldErrors.procedure_type_id}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
-            Operative Side
-          </label>
-          <select
-            value={formData.operative_side}
-            onChange={(e) => setFormData({ ...formData, operative_side: e.target.value })}
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
-          >
-            <option value="">Select Side</option>
-            {OPERATIVE_SIDE_OPTIONS.map(option => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {selectedProcedure?.requires_operative_side && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Operative Side
+            </label>
+            <select
+              value={formData.operative_side}
+              onChange={(e) => setFormData({ ...formData, operative_side: e.target.value })}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white"
+            >
+              <option value="">Select Side</option>
+              {OPERATIVE_SIDE_OPTIONS.map(option => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* 4. Room */}

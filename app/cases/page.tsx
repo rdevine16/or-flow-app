@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -12,7 +12,7 @@ import CallNextPatientModal from '@/components/CallNextPatientModal'
 import CasesFilterBar, { FilterState } from '@/components/filters/CaseFilterBar'
 import { Pagination } from '@/components/ui/Pagination'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, List } from 'lucide-react'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 import { PageLoader } from '@/components/ui/Loading'
 import { StatusBadgeDot } from '@/components/ui/StatusBadge'
@@ -28,6 +28,62 @@ import {
 } from '@/lib/formatters'
 import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
 
+
+// ============================================================================
+// SPLIT BUTTON — New Case / Bulk Create
+// ============================================================================
+
+function CreateCaseSplitButton() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="inline-flex rounded-xl shadow-sm">
+        {/* Primary action */}
+        <Link
+          href="/cases/new"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-l-xl hover:bg-blue-700 transition-all duration-200"
+        >
+          <Plus className="w-4 h-4" />
+          New Case
+        </Link>
+        {/* Dropdown toggle */}
+        <button
+          type="button"
+          onClick={() => setOpen(prev => !prev)}
+          className="inline-flex items-center px-2.5 py-2.5 bg-blue-600 text-white border-l border-blue-500 rounded-r-xl hover:bg-blue-700 transition-all duration-200"
+          aria-label="More create options"
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-50">
+          <Link
+            href="/cases/bulk-create"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <List className="w-4 h-4 text-slate-400" />
+            Bulk Create
+          </Link>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ============================================================================
 // TYPES
@@ -336,13 +392,7 @@ function CasesPageContent() {
           <p className="text-slate-500 text-sm mt-1">Manage surgical cases and track progress</p>
         </div>
         {canCreateCases && (
-          <Link
-            href="/cases/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow-md"
-          >
-            <Plus className="w-4 h-4" />
-            New Case
-          </Link>
+          <CreateCaseSplitButton />
         )}
       </div>
 

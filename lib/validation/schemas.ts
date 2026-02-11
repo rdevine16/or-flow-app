@@ -94,6 +94,45 @@ export const draftCaseSchema = z.object({
 
 export type DraftCaseInput = z.infer<typeof draftCaseSchema>
 
+// Phase 4.1: Schema for a single row in bulk case creation
+// Date and surgeon are shared header fields, not per-row
+export const bulkCaseRowSchema = z.object({
+  case_number: z.string()
+    .min(1, 'Case number is required')
+    .max(50, 'Case number too long'),
+
+  start_time: z.string()
+    .min(1, 'Start time is required')
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/, 'Time must be HH:MM (24-hour)'),
+
+  procedure_type_id: z.string().min(1, 'Procedure is required'),
+
+  or_room_id: z.string().min(1, 'Room is required'),
+
+  operative_side: z.enum(['left', 'right', 'bilateral', 'n/a', '']).optional(),
+
+  implant_company_ids: z.array(z.string()).optional(),
+
+  rep_required_override: z.boolean().nullable().optional(),
+})
+
+export type BulkCaseRowInput = z.infer<typeof bulkCaseRowSchema>
+
+// Schema for the entire bulk creation submission (header + rows)
+export const bulkCaseSubmissionSchema = z.object({
+  scheduled_date: z.string()
+    .min(1, 'Scheduled date is required')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD format'),
+
+  surgeon_id: z.string().min(1, 'Surgeon is required'),
+
+  rows: z.array(bulkCaseRowSchema)
+    .min(1, 'At least one case row is required')
+    .max(20, 'Maximum 20 cases per bulk submission'),
+})
+
+export type BulkCaseSubmissionInput = z.infer<typeof bulkCaseSubmissionSchema>
+
 // ============================================
 // MILESTONE SCHEMAS
 // ============================================
