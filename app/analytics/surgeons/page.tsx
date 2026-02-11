@@ -42,8 +42,8 @@ import {
 } from '@/lib/analyticsV2'
 
 // Enterprise analytics components
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Pencil, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
 import {
-import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Pencil, RefreshCw, TrendingUp, User } from 'lucide-react'
   SectionHeader,
   EnhancedMetricCard,
   TrendPill,
@@ -780,7 +780,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
           {!selectedSurgeon ? (
             <EmptyState
               icon={
-                <User className="w-8 h-8 text-slate-400" />
+                <UserIcon className="w-8 h-8 text-slate-400" />
               }
               title="Select a Surgeon"
               description="Choose a surgeon above to view their performance metrics and trends."
