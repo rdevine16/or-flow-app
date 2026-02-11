@@ -2,10 +2,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { generateDemoData, purgeCaseData, getDetailedStatus, type GenerationConfig } from '@/lib/demo-data-generator'
+import { env, serverEnv } from '@/lib/env'
+import { logger } from '@/lib/logger'
+
+const log = logger('api/demo-data')
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  env.NEXT_PUBLIC_SUPABASE_URL,
+  serverEnv.SUPABASE_SERVICE_ROLE_KEY
 )
 
 export async function POST(request: Request) {
@@ -73,7 +77,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
     }
   } catch (error) {
-console.error('Error description:', error)
+log.error('Error description:', error)
 
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal error' }, { status: 500 })
   }

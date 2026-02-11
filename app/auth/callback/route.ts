@@ -2,6 +2,9 @@ import { createClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('auth/callback')
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
@@ -12,30 +15,21 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get('code')
   const next = requestUrl.searchParams.get('next') || '/dashboard'
 
-  console.log('Auth callback:', { 
-    hasTokenHash: !!token_hash, 
-    hasCode: !!code, 
-    type, 
-    next 
-  })
-
   const supabase = await createClient()
 
   // Handle token_hash flow (from email links)
   if (token_hash && type) {
     const { data, error } = await supabase.auth.verifyOtp({
-      type,
       token_hash,
+      type,
     })
 
     if (error) {
-      console.error('Error verifying OTP:', error)
+      log.error('OTP verification failed', error, { type: type ?? undefined })
       return NextResponse.redirect(
         new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin)
       )
     }
-
-    console.log('OTP verified for:', data.user?.email)
 
     // Redirect to set-password for invite or recovery
     if (type === 'invite' || type === 'recovery' || type === 'magiclink') {
@@ -51,13 +45,11 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (error) {
-      console.error('Error exchanging code for session:', error)
+      log.error('Code exchange failed', error)
       return NextResponse.redirect(
         new URL(`/login?error=${encodeURIComponent(error.message)}`, requestUrl.origin)
       )
     }
-
-    console.log('Session created for:', data.user?.email)
 
     // Check if this is an invite/recovery based on type param
     if (type === 'invite' || type === 'recovery') {
@@ -68,6 +60,5 @@ export async function GET(request: NextRequest) {
   }
 
   // No token_hash or code - redirect to login
-  console.log('No token_hash or code provided')
   return NextResponse.redirect(new URL('/login', requestUrl.origin))
 }

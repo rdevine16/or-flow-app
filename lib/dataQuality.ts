@@ -6,6 +6,9 @@
 // ============================================
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('dataQuality')
 
 // ============================================
 // TYPES
@@ -110,7 +113,7 @@ export async function fetchIssueTypes(supabase: SupabaseClient): Promise<IssueTy
     .order('severity')
 
   if (error) {
-    console.error('Error fetching issue types:', error)
+    log.error('Error fetching issue types:', error)
     return []
   }
   return data || []
@@ -126,7 +129,7 @@ export async function fetchResolutionTypes(supabase: SupabaseClient): Promise<Re
     .order('name')
 
   if (error) {
-    console.error('Error fetching resolution types:', error)
+    log.error('Error fetching resolution types:', error)
     return []
   }
   return data || []
@@ -198,7 +201,7 @@ export async function fetchMetricIssues(
   const { data, error } = await query
 
   if (error) {
-    console.error('Error fetching metric issues:', error)
+    log.error('Error fetching metric issues:', error)
     return []
   }
 
@@ -299,7 +302,7 @@ export async function resolveIssue(
     .single()
 
   if (!resType) {
-    console.error('Resolution type not found:', resolutionTypeName)
+    log.error('Resolution type not found:', resolutionTypeName)
     return false
   }
 
@@ -314,7 +317,7 @@ export async function resolveIssue(
     .eq('id', issueId)
 
   if (error) {
-    console.error('Error resolving issue:', error)
+    log.error('Error resolving issue:', error)
     return false
   }
 
@@ -338,7 +341,7 @@ export async function resolveMultipleIssues(
     .single()
 
   if (!resType) {
-    console.error('Resolution type not found:', resolutionTypeName)
+    log.error('Resolution type not found:', resolutionTypeName)
     return 0
   }
 
@@ -354,7 +357,7 @@ export async function resolveMultipleIssues(
     .select('id')
 
   if (error) {
-    console.error('Error resolving issues:', error)
+    log.error('Error resolving issues:', error)
     return 0
   }
 
@@ -380,7 +383,7 @@ export async function reopenIssue(
     .eq('id', issueId)
 
   if (error) {
-    console.error('Error reopening issue:', error)
+    log.error('Error reopening issue:', error)
     return false
   }
 
@@ -402,7 +405,7 @@ export async function runDetectionForCase(
     .rpc('run_issue_detection_for_case', { p_case_id: caseId })
 
   if (error) {
-    console.error('Error running detection for case:', error)
+    log.error('Error running detection for case:', error)
     return 0
   }
 
@@ -416,7 +419,7 @@ export async function expireOldIssues(supabase: SupabaseClient): Promise<number>
   const { data, error } = await supabase.rpc('expire_old_issues')
 
   if (error) {
-    console.error('Error expiring old issues:', error)
+    log.error('Error expiring old issues:', error)
     return 0
   }
 
@@ -443,7 +446,7 @@ export async function runDetectionForFacility(
     .gte('scheduled_date', startDate.toISOString().split('T')[0])
 
   if (casesError || !cases) {
-    console.error('Error fetching cases:', casesError)
+    log.error('Error fetching cases:', casesError)
     return { casesChecked: 0, issuesFound: 0, staleCasesFound: 0 }
   }
 
@@ -456,7 +459,7 @@ export async function runDetectionForFacility(
 
   // Run stale case detection
   const staleResult = await detectStaleCases(supabase, facilityId)
-  console.log(`Stale cases: ${staleResult.detected} found, ${staleResult.created} created`)
+  log.info(`Stale cases: ${staleResult.detected} found, ${staleResult.created} created`)
 
   return { 
     casesChecked: cases.length, 
@@ -488,7 +491,7 @@ export async function detectStaleCases(
   
   // If issue types don't exist yet, skip stale detection
   if (issueTypeMap.size === 0) {
-    console.log('Stale case issue types not found in database - skipping stale detection')
+    log.info('Stale case issue types not found in database - skipping stale detection')
     return results
   }
   
@@ -691,13 +694,13 @@ async function detectNoActivity(
   
   for (const c of cases || []) {
     const milestones = Array.isArray(c.case_milestones) ? c.case_milestones : []
-    const recordedMilestones = milestones.filter((m: any) => m.recorded_at)
+    const recordedMilestones = milestones.filter((m: { recorded_at: string | null }) => m.recorded_at)
     
     if (recordedMilestones.length === 0) continue // Skip if no milestones at all
     
     // Find most recent activity
-    const lastActivity = recordedMilestones.reduce((latest: string | null, m: any) => {
-      if (!latest || m.recorded_at > latest) return m.recorded_at
+    const lastActivity = recordedMilestones.reduce((latest: string | null, m: { recorded_at: string | null }) => {
+      if (!latest || (m.recorded_at && m.recorded_at > latest)) return m.recorded_at
       return latest
     }, null)
     

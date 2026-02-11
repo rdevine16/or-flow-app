@@ -6,6 +6,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { StaffMember, CaseStaffAssignment } from '@/types/staff-assignment'
+import { logger } from '@/lib/logger'
+
+const log = logger('useStaffAssignment')
 
 interface UseStaffAssignmentProps {
   facilityId: string | null
@@ -68,7 +71,7 @@ export function useStaffAssignment({
       if (error) throw error
       setFacilityStaff((data as unknown as StaffMember[]) || [])
     } catch (error) {
-      console.error('Error fetching staff:', error)
+      log.error('Error fetching staff:', error)
     } finally {
       setStaffLoading(false)
     }
@@ -119,7 +122,7 @@ export function useStaffAssignment({
       
       setAssignmentsByCaseId(grouped)
     } catch (error) {
-      console.error('Error fetching assignments:', error)
+      log.error('Error fetching assignments:', error)
     } finally {
       setAssignmentsLoading(false)
     }
@@ -147,7 +150,7 @@ export function useStaffAssignment({
       )
       
       if (existing) {
-        console.log('Staff already assigned to this case')
+        log.info('Staff already assigned to this case')
         return false
       }
       
@@ -205,7 +208,7 @@ export function useStaffAssignment({
       
       return true
     } catch (error) {
-      console.error('Error assigning staff:', error)
+      log.error('Error assigning staff:', error)
       return false
     }
   }, [assignmentsByCaseId, facilityStaff, supabase])
@@ -258,7 +261,7 @@ export function useStaffAssignment({
       
       return true
     } catch (error) {
-      console.error('Error removing staff:', error)
+      log.error('Error removing staff:', error)
       return false
     }
   }, [supabase])
@@ -284,7 +287,7 @@ export function useStaffAssignment({
       
       return true
     } catch (error) {
-      console.error('Error permanently removing staff:', error)
+      log.error('Error permanently removing staff:', error)
       return false
     }
   }, [supabase])
@@ -303,7 +306,7 @@ export function useStaffAssignment({
       )
       
       if (!existingAssignment) {
-        console.log('No active assignment found to move')
+        log.info('No active assignment found to move')
         return false
       }
       
@@ -355,7 +358,7 @@ export function useStaffAssignment({
       
       return true
     } catch (error) {
-      console.error('Error moving staff:', error)
+      log.error('Error moving staff:', error)
       return false
     }
   }, [assignmentsByCaseId, facilityStaff, supabase])

@@ -1,3 +1,7 @@
+import { logger } from '@/lib/logger'
+
+const log = logger('date-utils')
+
 /**
  * Get today's date in YYYY-MM-DD format using local timezone
  */
@@ -124,7 +128,7 @@ export function formatTimeInTimezone(
       hour12: true,
     }).toLowerCase()
   } catch (error) {
-    console.error('Error formatting time:', error)
+    log.error('Error formatting time:', error)
     return '--:--'
   }
 }
@@ -150,7 +154,7 @@ export function formatDateInTimezone(
       year: 'numeric',
     })
   } catch (error) {
-    console.error('Error formatting date:', error)
+    log.error('Error formatting date:', error)
     return '--/--/----'
   }
 }
@@ -179,7 +183,7 @@ export function formatDateTimeInTimezone(
       hour12: true,
     }).toLowerCase()
   } catch (error) {
-    console.error('Error formatting datetime:', error)
+    log.error('Error formatting datetime:', error)
     return '--'
   }
 }
@@ -223,7 +227,7 @@ export function getDelayMinutes(
     const diffMs = actualInTZ.getTime() - scheduledInTZ.getTime()
     return Math.round(diffMs / 60000) // Convert to minutes
   } catch (error) {
-    console.error('Error calculating delay:', error)
+    log.error('Error calculating delay:', error)
     return null
   }
 }

@@ -3,6 +3,9 @@
 
 import { ReactNode, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
+import { logger } from '@/lib/logger'
+
+const log = logger('Alert')
 
 type AlertVariant = 'info' | 'success' | 'warning' | 'error'
 
@@ -149,7 +152,7 @@ export function Alert({
 <Alert 
   variant="info" 
   dismissible 
-  onDismiss={() => console.log('Dismissed')}
+  onDismiss={() => log.info('Dismissed')}
 >
   You can dismiss this message
 </Alert>

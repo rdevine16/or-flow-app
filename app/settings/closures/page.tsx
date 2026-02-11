@@ -32,6 +32,9 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Toggle } from '@/components/ui/Toggle'
 import { Button } from '@/components/ui/Button'
+import { logger } from '@/lib/logger'
+
+const log = logger('page')
 
 // Week options for dynamic holidays
 const WEEK_OPTIONS = [
@@ -97,7 +100,7 @@ export default function FacilityClosuresPage() {
           setFacilityName(facilityData?.name || '')
         }
       } catch (err) {
-        console.error('Failed to load user:', err)
+        log.error('Failed to load user:', err)
       } finally {
         setPageLoading(false)
       }

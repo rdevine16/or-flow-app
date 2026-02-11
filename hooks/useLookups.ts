@@ -3,6 +3,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { logger } from '@/lib/logger'
+
+const log = logger('useLookups')
 
 // ============================================
 // Types
@@ -79,7 +82,7 @@ function useLookup<T>(
       if (fetchError) throw fetchError
       setData((result || []) as T[])
     } catch (err) {
-      console.error(`Error fetching ${tableName}:`, err)
+      log.error(`Error fetching ${tableName}:`, err)
       setError(`Failed to load ${tableName}`)
     } finally {
       setLoading(false)
@@ -202,7 +205,7 @@ export function useSurgeons(facilityId: string | null | undefined) {
       if (fetchError) throw fetchError
       setData((surgeons || []) as Surgeon[])
     } catch (err) {
-      console.error('Error fetching surgeons:', err)
+      log.error('Error fetching surgeons:', err)
       setError('Failed to load surgeons')
     } finally {
       setLoading(false)
@@ -270,7 +273,7 @@ function useGlobalLookup<T>(
       if (fetchError) throw fetchError
       setData((result || []) as T[])
     } catch (err) {
-      console.error(`Error fetching ${tableName}:`, err)
+      log.error(`Error fetching ${tableName}:`, err)
       setError(`Failed to load ${tableName}`)
     } finally {
       setLoading(false)

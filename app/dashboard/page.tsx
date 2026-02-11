@@ -47,6 +47,9 @@ import StaffAssignmentPanel from '@/components/dashboard/StaffAssignmentPanel'
 import StaffDragOverlay from '@/components/dashboard/StaffDragOverlay'
 import { useStaffAssignment } from '@/hooks/useStaffAssignment'
 import { DragData, DropData } from '@/types/staff-assignment'
+import { logger } from '@/lib/logger'
+
+const log = logger('page')
 
 interface Room {
   id: string
@@ -267,7 +270,7 @@ export default function DashboardPage() {
       }
     } catch (error) {
       // Pace data is non-critical — log but don't show error banner
-      console.error('Error fetching pace data:', error)
+      log.error('Error fetching pace data:', error)
       return null
     }
   }, [supabase])

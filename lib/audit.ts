@@ -3,6 +3,9 @@
 // All actions are logged with who, what, when, and outcome
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
+
+const log = logger('audit')
 
 // Audit action categories
 export type AuditAction =
@@ -195,13 +198,13 @@ export async function insertAuditLog(
 
     if (error) {
       // Log to console as fallback - audit logs should never silently fail
-      console.error('[AUDIT LOG ERROR] Failed to insert audit log:', error)
-      console.error('[AUDIT LOG ENTRY]', JSON.stringify(entry, null, 2))
+      log.error('[AUDIT LOG ERROR] Failed to insert audit log:', error)
+      log.error('[AUDIT LOG ENTRY]', JSON.stringify(entry, null, 2))
     }
   } catch (err) {
     // Log to console as fallback
-    console.error('[AUDIT LOG ERROR] Exception inserting audit log:', err)
-    console.error('[AUDIT LOG ENTRY]', JSON.stringify(entry, null, 2))
+    log.error('[AUDIT LOG ERROR] Exception inserting audit log:', err)
+    log.error('[AUDIT LOG ENTRY]', JSON.stringify(entry, null, 2))
   }
 }
 
