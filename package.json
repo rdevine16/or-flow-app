@@ -18,6 +18,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@headlessui/tailwindcss": "^0.2.2",
     "@heroicons/react": "^2.2.0",
+    "@sentry/nextjs": "^10.38.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.0",
     "@tremor/react": "^3.18.7",
