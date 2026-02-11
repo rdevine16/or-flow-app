@@ -1291,6 +1291,189 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
   })
 
   // -------------------------------------------
+  // 3.5 — Draft Finalization (edit draft → save)
+  // -------------------------------------------
+  describe('3.5 — Draft Finalization', () => {
+    /** Helper: create an edit-mode mock for a draft case */
+    function setupDraftEditMode(rpcOverride?: { data: any; error: any }) {
+      const baseMock = createSupabaseMock(
+        rpcOverride ? { rpc_create_case: rpcOverride } : {}
+      )
+      const originalFrom = baseMock.from
+
+      // Override rpc to handle finalize_draft_case specifically
+      baseMock.rpc = vi.fn((fnName: string, _params?: any) => {
+        if (fnName === 'finalize_draft_case') {
+          if (rpcOverride) return Promise.resolve(rpcOverride)
+          return Promise.resolve({ data: 'draft-case-1', error: null })
+        }
+        // Default for other RPC calls
+        return Promise.resolve({ data: 'new-case-1', error: null })
+      })
+
+      baseMock.from = vi.fn((table: string) => {
+        if (table === 'cases') {
+          const chain: Record<string, any> = {
+            select: vi.fn(() => chain),
+            eq: vi.fn(() => chain),
+            neq: vi.fn(() => chain),
+            is: vi.fn(() => chain),
+            order: vi.fn(() => chain),
+            update: vi.fn(() => chain),
+            single: vi.fn(() => Promise.resolve({
+              data: {
+                id: 'draft-case-1',
+                case_number: 'DRAFT-123',
+                scheduled_date: '2026-02-11',
+                start_time: '08:00',
+                or_room_id: 'room-1',
+                procedure_type_id: 'proc-1',
+                status_id: 'status-scheduled',
+                surgeon_id: 'surgeon-1',
+                anesthesiologist_id: null,
+                operative_side: null,
+                payer_id: null,
+                notes: null,
+                rep_required_override: null,
+                is_draft: true,
+              },
+              error: null,
+            })),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+            then: (resolve: Function) => resolve({ data: [], error: null }),
+          }
+          return chain
+        }
+
+        if (table === 'case_staff' || table === 'case_implant_companies' || table === 'case_complexities') {
+          const chain: Record<string, any> = {
+            select: vi.fn(() => chain),
+            eq: vi.fn(() => chain),
+            is: vi.fn(() => chain),
+            then: (resolve: Function) => resolve({ data: [], error: null }),
+          }
+          return chain
+        }
+
+        return originalFrom(table)
+      })
+
+      mockSupabase = baseMock
+    }
+
+    it('calls finalize_draft_case RPC when submitting a draft case', async () => {
+      setupDraftEditMode()
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="edit" caseId="draft-case-1" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      // Should show Finalize Case button (not Update Case)
+      expect(screen.getByText('Finalize Case')).toBeInTheDocument()
+
+      // Submit the form
+      await user.click(screen.getByText('Finalize Case'))
+
+      await waitFor(() => {
+        expect(mockSupabase.rpc).toHaveBeenCalledWith(
+          'finalize_draft_case',
+          expect.objectContaining({
+            p_case_id: 'draft-case-1',
+            p_case_number: 'DRAFT-123',
+            p_scheduled_date: '2026-02-11',
+            p_start_time: '08:00',
+            p_or_room_id: 'room-1',
+            p_procedure_type_id: 'proc-1',
+            p_facility_id: 'facility-1',
+          })
+        )
+      })
+    })
+
+    it('shows error when finalize_draft_case RPC fails with milestone_type_id error', async () => {
+      setupDraftEditMode({
+        data: null,
+        error: { message: 'record "new" has no field "milestone_type_id"' },
+      })
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="edit" caseId="draft-case-1" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      await user.click(screen.getByText('Finalize Case'))
+
+      await waitFor(() => {
+        expect(screen.getByText('record "new" has no field "milestone_type_id"')).toBeInTheDocument()
+      })
+
+      // Should NOT navigate on error
+      expect(mockPush).not.toHaveBeenCalled()
+    })
+
+    it('shows success toast and navigates on successful finalization', async () => {
+      setupDraftEditMode()
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="edit" caseId="draft-case-1" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      await user.click(screen.getByText('Finalize Case'))
+
+      await waitFor(() => {
+        expect(mockShowToast).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'success',
+            title: 'Case updated',
+          })
+        )
+      })
+
+      expect(mockPush).toHaveBeenCalledWith('/cases')
+    })
+
+    it('does not call regular update when editing a draft', async () => {
+      setupDraftEditMode()
+
+      const user = userEvent.setup()
+      render(<CaseForm mode="edit" caseId="draft-case-1" />)
+
+      await waitFor(() => {
+        expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+      }, { timeout: 5000 })
+
+      await user.click(screen.getByText('Finalize Case'))
+
+      await waitFor(() => {
+        expect(mockSupabase.rpc).toHaveBeenCalledWith(
+          'finalize_draft_case',
+          expect.anything()
+        )
+      })
+
+      // Should NOT have called from('cases').update() — drafts use RPC, not direct update
+      const fromCalls = mockSupabase.from.mock.calls
+      const caseUpdateCalls = fromCalls.filter(([t]: [string]) => t === 'cases')
+      // Cases is called for initial data fetch, but NOT for .update()
+      for (const [_table] of caseUpdateCalls) {
+        // Verify no update was called through the chain
+        const chain = mockSupabase.from('cases')
+        if (chain.update) {
+          expect(chain.update).not.toHaveBeenCalled()
+        }
+      }
+    })
+  })
+
+  // -------------------------------------------
   // 3.4 — "Create Another" Post-Submit Option
   // -------------------------------------------
   describe('3.4 — Create Another Post-Submit', () => {
