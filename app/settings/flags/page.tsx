@@ -106,7 +106,7 @@ export default function FlagsSettingsPage() {
 
   const toggleRuleEnabled = async (rule: FlagRule) => {
     const newEnabled = !rule.is_enabled
-    setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_enabled: newEnabled } : r))
+    setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, is_enabled: newEnabled } : r))
     setSaving(rule.id)
 
     try {
@@ -118,7 +118,7 @@ export default function FlagsSettingsPage() {
       if (error) throw error
       showToast({ type: 'success', title: `${rule.name} ${newEnabled ? 'enabled' : 'disabled'}` })
     } catch (err) {
-      setRules(prev => prev.map(r => r.id === rule.id ? { ...r, is_enabled: !newEnabled } : r))
+      setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, is_enabled: !newEnabled } : r))
       showToast({ type: 'error', title: 'Failed to update rule' })
     } finally {
       setSaving(null)
@@ -126,7 +126,7 @@ export default function FlagsSettingsPage() {
   }
 
   const updateRuleSeverity = async (rule: FlagRule, severity: Severity) => {
-    setRules(prev => prev.map(r => r.id === rule.id ? { ...r, severity } : r))
+    setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, severity } : r))
     setSaving(rule.id)
 
     try {
@@ -138,7 +138,7 @@ export default function FlagsSettingsPage() {
       if (error) throw error
       showToast({ type: 'success', title: `Severity updated to ${severity}` })
     } catch (err) {
-      setRules(prev => prev.map(r => r.id === rule.id ? { ...r, severity: rule.severity } : r))
+      setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, severity: rule.severity } : r))
       showToast({ type: 'error', title: 'Failed to update severity' })
     } finally {
       setSaving(null)
@@ -146,7 +146,7 @@ export default function FlagsSettingsPage() {
   }
 
   const updateRuleThreshold = async (rule: FlagRule, thresholdType: ThresholdType, thresholdValue: number) => {
-    setRules(prev => prev.map(r => r.id === rule.id ? { ...r, threshold_type: thresholdType, threshold_value: thresholdValue } : r))
+    setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, threshold_type: thresholdType, threshold_value: thresholdValue } : r))
     setSaving(rule.id)
 
     try {
@@ -158,7 +158,7 @@ export default function FlagsSettingsPage() {
       if (error) throw error
       showToast({ type: 'success', title: 'Threshold updated' })
     } catch (err) {
-      setRules(prev => prev.map(r => r.id === rule.id ? { ...r, threshold_type: rule.threshold_type, threshold_value: rule.threshold_value } : r))
+      setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, threshold_type: rule.threshold_type, threshold_value: rule.threshold_value } : r))
       showToast({ type: 'error', title: 'Failed to update threshold' })
     } finally {
       setSaving(null)

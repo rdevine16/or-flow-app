@@ -239,7 +239,7 @@ export default function FinancialsSettingsPage() {
       setCurrentFacility(prev => prev ? { ...prev, or_hourly_rate: data.or_hourly_rate } : null)
       
       if (isGlobalAdmin) {
-        setFacilities(prev => prev.map(f => 
+        setFacilities(prev => (prev || []).map(f => 
           f.id === selectedFacilityId 
             ? { ...f, or_hourly_rate: data.or_hourly_rate }
             : f

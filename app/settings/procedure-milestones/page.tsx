@@ -141,7 +141,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
     if (isEnabled) {
       // Optimistically remove
-      setConfigs(prev => prev.filter(
+      setConfigs(prev => (prev || []).filter(
         c => !(c.procedure_type_id === procedureId && milestoneIds.includes(c.facility_milestone_id))
       ))
 
@@ -165,7 +165,7 @@ export default function ProcedureMilestonesSettingsPage() {
         procedure_type_id: procedureId,
         facility_milestone_id: mid
       }))
-      setConfigs(prev => [...prev, ...optimisticConfigs])
+      setConfigs(prev => [...(prev || []), ...optimisticConfigs])
 
       // For paired milestones, delete first to avoid 409
       if (milestoneIds.length > 1) {
@@ -244,7 +244,7 @@ export default function ProcedureMilestonesSettingsPage() {
       procedure_type_id: procedureId,
       facility_milestone_id: m.id
     }))
-    setConfigs(prev => [...prev, ...optimisticConfigs])
+    setConfigs(prev => [...(prev || []), ...optimisticConfigs])
 
     const rows = toEnable.map(m => ({
       facility_id: effectiveFacilityId,
@@ -284,7 +284,7 @@ export default function ProcedureMilestonesSettingsPage() {
     markSaving(procedureId, milestoneIds)
 
     // Optimistic
-    setConfigs(prev => prev.filter(c => c.procedure_type_id !== procedureId))
+    setConfigs(prev => (prev || []).filter(c => c.procedure_type_id !== procedureId))
 
     const { error } = await supabase
       .from('procedure_milestone_config')
