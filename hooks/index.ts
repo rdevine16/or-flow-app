@@ -1,6 +1,13 @@
 // hooks/index.ts
 // Clean exports for all custom hooks
 
+// ── Supabase Query hooks (data fetching) ──────────────────────────────
+export {
+  useSupabaseQuery,
+  useSupabaseList,
+  useSupabaseQueries,
+} from './useSupabaseQuery'
+
 // Lookup data hooks
 export {
   useProcedureTypes,
