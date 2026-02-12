@@ -224,20 +224,24 @@ export function formatDuration(
 // ========================================
 
 /**
- * Format an ISO timestamp to 12-hour display.
- * @example formatTimestamp('2025-01-15T14:30:00Z') => "2:30 PM"
+ * Format an ISO timestamp to 12-hour display in the specified timezone.
+ * @example formatTimestamp('2025-01-15T14:30:00Z', { timeZone: 'America/New_York' }) => "9:30 AM"
+ * @example formatTimestamp('2025-01-15T14:30:00Z') => "2:30 PM" (uses browser local time)
  */
 export function formatTimestamp(
   isoString: string | null | undefined,
-  options: { fallback?: string } = {}
+  options: { fallback?: string; timeZone?: string } = {}
 ): string {
-  const { fallback = '--:--' } = options
+  const { fallback = '--:--', timeZone } = options
   if (!isoString) return fallback
   try {
-    return new Date(isoString).toLocaleTimeString('en-US', {
+    const date = new Date(isoString)
+    if (isNaN(date.getTime())) return fallback
+    return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
+      ...(timeZone ? { timeZone } : {}),
     })
   } catch {
     return fallback
@@ -245,20 +249,24 @@ export function formatTimestamp(
 }
 
 /**
- * Format an ISO timestamp to 24-hour short display.
- * @example formatTimestamp24('2025-01-15T14:30:00Z') => "14:30"
+ * Format an ISO timestamp to 24-hour short display in the specified timezone.
+ * @example formatTimestamp24('2025-01-15T14:30:00Z', { timeZone: 'America/New_York' }) => "9:30"
+ * @example formatTimestamp24('2025-01-15T14:30:00Z') => "14:30" (uses browser local time)
  */
 export function formatTimestamp24(
   isoString: string | null | undefined,
-  options: { fallback?: string } = {}
+  options: { fallback?: string; timeZone?: string } = {}
 ): string {
-  const { fallback = '--:--' } = options
+  const { fallback = '--:--', timeZone } = options
   if (!isoString) return fallback
   try {
-    return new Date(isoString).toLocaleTimeString('en-US', {
+    const date = new Date(isoString)
+    if (isNaN(date.getTime())) return fallback
+    return date.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: false,
+      ...(timeZone ? { timeZone } : {}),
     })
   } catch {
     return fallback

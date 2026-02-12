@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Check, ChevronLeft, ChevronRight, Circle, CornerDownLeft, X } from 'lucide-react'
+import { formatTimestamp } from '@/lib/formatters'
 
 interface Milestone {
   id: string
@@ -30,6 +31,7 @@ interface PiPMilestonePanelProps {
   onUndoMilestone: (recordedId: string) => Promise<void>
   onClose: () => void
   onRefresh: () => void
+  timeZone?: string
 }
 
 function formatElapsed(ms: number): string {
@@ -37,20 +39,11 @@ function formatElapsed(ms: number): string {
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
-  
+
   if (hours > 0) {
     return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
-}
-
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
 }
 
 export default function PiPMilestonePanel({
@@ -65,6 +58,7 @@ export default function PiPMilestonePanel({
   onUndoMilestone,
   onClose,
   onRefresh,
+  timeZone,
 }: PiPMilestonePanelProps) {
   const [loading, setLoading] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
@@ -350,9 +344,9 @@ export default function PiPMilestonePanel({
 
         {activeItem.isComplete && activeItem.recorded && (
           <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', margin: '4px 0 16px 0' }}>
-            {activeItem.isPaired && activeItem.partnerRecorded 
-              ? `${formatTime(activeItem.recorded.recorded_at)} → ${formatTime(activeItem.partnerRecorded.recorded_at)}`
-              : formatTime(activeItem.recorded.recorded_at)
+            {activeItem.isPaired && activeItem.partnerRecorded
+              ? `${formatTimestamp(activeItem.recorded.recorded_at, { timeZone })} → ${formatTimestamp(activeItem.partnerRecorded.recorded_at, { timeZone })}`
+              : formatTimestamp(activeItem.recorded.recorded_at, { timeZone })
             }
           </p>
         )}

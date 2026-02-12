@@ -25,6 +25,7 @@ import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWra
 import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
 import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Check, ChevronLeft, ClipboardList, LogOut } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import { StatusBadgeDot } from '@/components/ui/StatusBadge'
@@ -161,6 +162,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [surgeonLeftAt, setSurgeonLeftAt] = useState<string | null>(null)
   const [isPiPOpen, setIsPiPOpen] = useState(false)
+
+  // Milestone recording in-flight state (debounce protection)
+  const [recordingMilestoneIds, setRecordingMilestoneIds] = useState<Set<string>>(new Set())
+
+  // Undo confirmation dialog
+  const { confirmDialog, showConfirm } = useConfirmDialog()
 
   // Incomplete case modal — dropdown options
   const [allSurgeons, setAllSurgeons] = useState<{ id: string; label: string }[]>([])
@@ -367,7 +374,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
         const { data: surgeonCases } = await supabase
           .from('cases')
-          .select('id, case_milestones (recorded_at, milestone_types (name))')
+          .select('id, case_milestones (recorded_at, facility_milestone_id, facility_milestones (name))')
           .eq('surgeon_id', surgeon.id)
           .neq('id', id)
           .eq('facility_id', effectiveFacilityId)
@@ -380,9 +387,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           surgeonCases.forEach((sc) => {
             const milestones: { [key: string]: string } = {}
             sc.case_milestones?.forEach((m) => {
-              const milestoneType = Array.isArray(m.milestone_types) ? m.milestone_types[0] : m.milestone_types
-              const name = milestoneType?.name
-              if (name) milestones[name] = m.recorded_at
+              const facilityMilestone = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+              const name = facilityMilestone?.name
+              if (name && m.recorded_at) milestones[name] = m.recorded_at
             })
 
             if (milestones.patient_in && milestones.patient_out) {
@@ -442,89 +449,135 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   const recordMilestone = async (milestoneTypeId: string) => {
-    const timestamp = new Date().toISOString()
-    const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
+    // Debounce: prevent double-tap by checking if this milestone is already in-flight
+    if (recordingMilestoneIds.has(milestoneTypeId)) return
+    setRecordingMilestoneIds(prev => new Set(prev).add(milestoneTypeId))
 
-    // Read current state to avoid stale closures
-    const currentMilestones = await new Promise<CaseMilestone[]>(resolve => {
-      setCaseMilestones(prev => { resolve(prev); return prev })
-    })
+    try {
+      const timestamp = new Date().toISOString()
+      const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
 
-    const existingMilestone = currentMilestones.find(cm => cm.facility_milestone_id === milestoneTypeId)
-    let savedMilestone: CaseMilestone | null = null
+      // Optimistic UI: update local state immediately
+      const currentMilestones = await new Promise<CaseMilestone[]>(resolve => {
+        setCaseMilestones(prev => { resolve(prev); return prev })
+      })
 
-    if (existingMilestone) {
-      const { data, error } = await supabase
-        .from('case_milestones')
-        .update({ recorded_at: timestamp })
-        .eq('id', existingMilestone.id)
-        .select()
-        .single()
+      const existingMilestone = currentMilestones.find(cm => cm.facility_milestone_id === milestoneTypeId)
 
-      if (!error && data) {
-        savedMilestone = data
+      // Apply optimistic update
+      if (existingMilestone) {
         setCaseMilestones(prev =>
           prev.map(cm => cm.id === existingMilestone.id ? { ...cm, recorded_at: timestamp } : cm)
         )
+      } else {
+        const optimisticId = `optimistic-${milestoneTypeId}`
+        setCaseMilestones(prev => [...prev, {
+          id: optimisticId,
+          facility_milestone_id: milestoneTypeId,
+          recorded_at: timestamp,
+        }])
       }
-    } else {
-      const { data, error } = await supabase
-        .from('case_milestones')
-        .insert({ case_id: id, facility_milestone_id: milestoneTypeId, recorded_at: timestamp })
-        .select()
-        .single()
 
-      if (!error && data) {
+      // DB write
+      let savedMilestone: CaseMilestone | null = null
+
+      if (existingMilestone) {
+        const { data, error } = await supabase
+          .from('case_milestones')
+          .update({ recorded_at: timestamp })
+          .eq('id', existingMilestone.id)
+          .select()
+          .single()
+
+        if (error) throw error
         savedMilestone = data
-        setCaseMilestones(prev => [...prev, data])
-      }
-    }
+      } else {
+        const { data, error } = await supabase
+          .from('case_milestones')
+          .insert({ case_id: id, facility_milestone_id: milestoneTypeId, recorded_at: timestamp })
+          .select()
+          .single()
 
-    if (savedMilestone) {
-      // Auto-update case status
-      if (milestoneType?.name === 'patient_in') {
-        await updateCaseStatus('in_progress')
-      } else if (milestoneType?.name === 'patient_out') {
-        await updateCaseStatus('completed')
+        if (error) throw error
+        savedMilestone = data
 
-        // Auto-detection: Run quality checks on completed case
-        try {
-          const issuesFound = await runDetectionForCase(supabase, id)
-
-          if (issuesFound === 0) {
-            await supabase
-              .from('cases')
-              .update({ data_validated: true, validated_at: new Date().toISOString(), validated_by: null })
-              .eq('id', id)
-            showToast({ type: 'info', title: 'Case auto-validated', message: 'No quality issues found' })
-          } else {
-            await supabase
-              .from('cases')
-              .update({ data_validated: false, validated_at: null, validated_by: null })
-              .eq('id', id)
-            showToast({
-              type: 'warning',
-              title: `Case has ${issuesFound} quality issues`,
-              message: 'Manual review required'
-            })
-          }
-        } catch (err) {
-          showToast({
-            type: 'error',
-            title: 'Detection Error',
-            message: err instanceof Error ? err.message : 'An error occurred during detection.'
-          })
+        // Replace optimistic entry with real DB row
+        if (data) {
+          setCaseMilestones(prev =>
+            prev.map(cm => cm.id === `optimistic-${milestoneTypeId}` ? data : cm)
+          )
         }
       }
 
-      // Audit logging
-      if (milestoneType && caseData) {
-        await milestoneAudit.recorded(supabase, caseData.case_number, milestoneType.display_name, savedMilestone.id, timestamp)
+      if (savedMilestone) {
+        // Auto-update case status
+        if (milestoneType?.name === 'patient_in') {
+          await updateCaseStatus('in_progress')
+        } else if (milestoneType?.name === 'patient_out') {
+          await updateCaseStatus('completed')
+
+          // Auto-detection: Run quality checks on completed case
+          try {
+            const issuesFound = await runDetectionForCase(supabase, id)
+
+            if (issuesFound === 0) {
+              await supabase
+                .from('cases')
+                .update({ data_validated: true, validated_at: new Date().toISOString(), validated_by: null })
+                .eq('id', id)
+              showToast({ type: 'info', title: 'Case auto-validated', message: 'No quality issues found' })
+            } else {
+              await supabase
+                .from('cases')
+                .update({ data_validated: false, validated_at: null, validated_by: null })
+                .eq('id', id)
+              showToast({
+                type: 'warning',
+                title: `Case has ${issuesFound} quality issues`,
+                message: 'Manual review required'
+              })
+            }
+          } catch (err) {
+            showToast({
+              type: 'error',
+              title: 'Detection Error',
+              message: err instanceof Error ? err.message : 'An error occurred during detection.'
+            })
+          }
+        }
+
+        // Audit logging
+        if (milestoneType && caseData) {
+          await milestoneAudit.recorded(supabase, caseData.case_number, milestoneType.display_name, savedMilestone.id, timestamp)
+        }
       }
+    } catch (err) {
+      // Roll back optimistic update on failure
+      const currentMilestones = await new Promise<CaseMilestone[]>(resolve => {
+        setCaseMilestones(prev => { resolve(prev); return prev })
+      })
+      const existingMilestone = currentMilestones.find(cm => cm.facility_milestone_id === milestoneTypeId)
+      if (existingMilestone) {
+        setCaseMilestones(prev =>
+          prev.map(cm => cm.id === existingMilestone.id ? { ...cm, recorded_at: null } : cm)
+            .filter(cm => !cm.id.startsWith('optimistic-'))
+        )
+      }
+      showToast({
+        type: 'error',
+        title: 'Failed to record milestone',
+        message: err instanceof Error ? err.message : 'Please try again',
+      })
+    } finally {
+      setRecordingMilestoneIds(prev => {
+        const next = new Set(prev)
+        next.delete(milestoneTypeId)
+        return next
+      })
     }
   }
 
-  const undoMilestone = async (milestoneId: string) => {
+  const performUndo = async (milestoneId: string) => {
     const currentMilestones = await new Promise<CaseMilestone[]>(resolve => {
       setCaseMilestones(prev => { resolve(prev); return prev })
     })
@@ -552,6 +605,17 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         await milestoneAudit.deleted(supabase, caseData.case_number, milestoneType.display_name, milestoneId)
       }
     }
+  }
+
+  const undoMilestone = async (milestoneId: string): Promise<void> => {
+    showConfirm({
+      variant: 'warning',
+      title: 'Undo milestone?',
+      message: 'Are you sure you want to undo this milestone?',
+      confirmText: 'Undo',
+      cancelText: 'Cancel',
+      onConfirm: () => performUndo(milestoneId),
+    })
   }
 
   const updateCaseStatus = async (statusName: string) => {
@@ -859,6 +923,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <DashboardLayout>
+      {/* Undo confirmation dialog */}
+      {confirmDialog}
+
       {/* Incomplete Case Modal — blocks interaction until required fields are filled */}
       {showIncompleteModal && (
         <IncompleteCaseModal
@@ -1045,6 +1112,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       onRecordEnd={() => card.partner && recordMilestone(card.partner.id)}
                       onUndo={() => card.recorded && undoMilestone(card.recorded.id)}
                       onUndoEnd={() => card.partnerRecorded && undoMilestone(card.partnerRecorded.id)}
+                      loading={recordingMilestoneIds.has(card.milestone.id) || (card.partner ? recordingMilestoneIds.has(card.partner.id) : false)}
+                      timeZone={userData.facilityTimezone}
                     />
                   ))}
                 </div>
@@ -1059,7 +1128,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                         <Check className="w-4 h-4 text-orange-500" />
                         <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
                       </div>
-                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt)}</p>
+                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
                     </div>
                     <button
                       onClick={clearSurgeonLeft}
@@ -1152,7 +1221,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                         <Check className="w-4 h-4 text-orange-500" />
                         <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
                       </div>
-                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt)}</p>
+                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
                     </div>
                     {!patientOutRecorded && (
                       <button
@@ -1284,6 +1353,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             }
             fetchMilestones()
           }}
+          timeZone={userData.facilityTimezone}
         />
       )}
     </DashboardLayout>

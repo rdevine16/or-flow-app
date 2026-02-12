@@ -33,6 +33,7 @@ interface PiPMilestoneWrapperProps {
   onRefresh: () => void
   isOpen: boolean
   onOpenChange: (open: boolean) => void
+  timeZone?: string
 }
 
 export default function PiPMilestoneWrapper({
@@ -48,6 +49,7 @@ export default function PiPMilestoneWrapper({
   onRefresh,
   isOpen,
   onOpenChange,
+  timeZone,
 }: PiPMilestoneWrapperProps) {
   const [pipWindow, setPipWindow] = useState<Window | null>(null)
   const [pipContainer, setPipContainer] = useState<HTMLElement | null>(null)
@@ -146,6 +148,7 @@ const { showToast } = useToast()
         onUndoMilestone={onUndoMilestone}
         onClose={closePiP}
         onRefresh={onRefresh}
+        timeZone={timeZone}
       />,
       pipContainer
     )

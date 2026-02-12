@@ -40,9 +40,11 @@ interface MilestoneCardProps {
   onRecordEnd: () => void
   onUndo: () => void
   onUndoEnd: () => void
+  loading?: boolean
+  timeZone?: string
 }
 
-export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd }: MilestoneCardProps) {
+export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd, loading = false, timeZone }: MilestoneCardProps) {
   const { recorded, isPaired, partnerRecorded, elapsedDisplay, displayName, isComplete, isInProgress } = card
 
   const isNotStarted = !recorded?.recorded_at
@@ -96,7 +98,8 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
           {showUndo && (
             <button
               onClick={isComplete && isPaired ? onUndoEnd : onUndo}
-              className="p-2 -m-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              disabled={loading}
+              className="p-2 -m-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="Undo"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,18 +124,18 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
             </svg>
             {isPaired ? (
               <span className="text-xs font-semibold">
-                {formatTimestamp24(recorded?.recorded_at)} → {formatTimestamp24(partnerRecorded?.recorded_at)}
+                {formatTimestamp24(recorded?.recorded_at, { timeZone })} → {formatTimestamp24(partnerRecorded?.recorded_at, { timeZone })}
                 <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-200/50 rounded text-emerald-800">{elapsedDisplay}</span>
               </span>
             ) : (
-              <span className="text-xs font-semibold">{formatTimestamp(recorded?.recorded_at)}</span>
+              <span className="text-xs font-semibold">{formatTimestamp(recorded?.recorded_at, { timeZone })}</span>
             )}
           </div>
         )}
 
         {isInProgress && (
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-blue-600">Started {formatTimestamp(recorded?.recorded_at)}</span>
+            <span className="text-xs text-blue-600">Started {formatTimestamp(recorded?.recorded_at, { timeZone })}</span>
             <span className="text-sm font-bold text-blue-700 tabular-nums animate-pulse">{elapsedDisplay}</span>
           </div>
         )}
@@ -145,18 +148,28 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
         {isNotStarted && (
           <button
             onClick={onRecord}
-            className="mt-4 w-full py-2.5 px-4 text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 active:scale-[0.98]"
+            disabled={loading}
+            className={`mt-4 w-full py-2.5 px-4 text-sm font-bold text-white rounded-xl transition-all active:scale-[0.98] ${
+              loading
+                ? 'bg-slate-400 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40'
+            }`}
           >
-            Record
+            {loading ? 'Recording...' : 'Record'}
           </button>
         )}
 
         {isInProgress && isPaired && (
           <button
             onClick={onRecordEnd}
-            className="mt-4 w-full py-2.5 px-4 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl hover:from-emerald-600 hover:to-teal-600 transition-all shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[0.98]"
+            disabled={loading}
+            className={`mt-4 w-full py-2.5 px-4 text-sm font-bold text-white rounded-xl transition-all active:scale-[0.98] ${
+              loading
+                ? 'bg-slate-400 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
+            }`}
           >
-            Complete
+            {loading ? 'Completing...' : 'Complete'}
           </button>
         )}
       </div>

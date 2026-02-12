@@ -2,23 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { Check, X } from 'lucide-react'
+import { formatTimestamp } from '@/lib/formatters'
 
 interface MilestoneButtonProps {
-  name: string
   displayName: string
   recordedAt?: string | null
   onRecord: () => void
   onUndo: () => void
   disabled?: boolean
-}
-
-function formatTime(dateString: string): string {
-  const date = new Date(dateString)
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
-  const ampm = hours >= 12 ? 'PM' : 'AM'
-  const displayHour = hours % 12 || 12
-  return `${displayHour}:${minutes.toString().padStart(2, '0')} ${ampm}`
+  loading?: boolean
+  timeZone?: string
 }
 
 function formatDuration(startTime: string, endTime: string): string {
@@ -42,7 +35,7 @@ function RunningTimer({ startTime }: { startTime: string }) {
       const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
       setElapsed(`${minutes}:${seconds.toString().padStart(2, '0')}`)
     }
-    
+
     updateTimer()
     const interval = setInterval(updateTimer, 1000)
     return () => clearInterval(interval)
@@ -53,14 +46,16 @@ function RunningTimer({ startTime }: { startTime: string }) {
 
 // Single milestone button - clean compact design
 export default function MilestoneButton({
-  name,
   displayName,
   recordedAt,
   onRecord,
   onUndo,
   disabled = false,
+  loading = false,
+  timeZone,
 }: MilestoneButtonProps) {
   const isRecorded = !!recordedAt
+  const isDisabled = disabled || loading
 
   if (isRecorded) {
     return (
@@ -69,13 +64,14 @@ export default function MilestoneButton({
           <Check className="w-4 h-4 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium opacity-90 truncate">{displayName}</p>
-            <p className="text-sm font-bold tabular-nums">{formatTime(recordedAt)}</p>
+            <p className="text-sm font-bold tabular-nums">{formatTimestamp(recordedAt, { timeZone })}</p>
           </div>
         </div>
         <button
           type="button"
           onClick={onUndo}
-          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200"
+          disabled={loading}
+          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
         >
           <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
         </button>
@@ -87,15 +83,15 @@ export default function MilestoneButton({
     <button
       type="button"
       onClick={onRecord}
-      disabled={disabled}
+      disabled={isDisabled}
       className={`w-full px-3 py-3 rounded-lg border-2 border-dashed transition-all text-left ${
-        disabled
+        isDisabled
           ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
           : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-600 hover:text-blue-600'
       }`}
     >
       <p className="text-xs font-medium opacity-70">{displayName}</p>
-      <p className="text-sm font-semibold">Tap to record</p>
+      <p className="text-sm font-semibold">{loading ? 'Recording...' : 'Tap to record'}</p>
     </button>
   )
 }
@@ -110,6 +106,8 @@ export function PairedMilestoneButton({
   onUndoStart,
   onUndoEnd,
   disabled = false,
+  loading = false,
+  timeZone,
 }: {
   displayName: string
   startRecordedAt?: string | null
@@ -119,11 +117,14 @@ export function PairedMilestoneButton({
   onUndoStart: () => void
   onUndoEnd: () => void
   disabled?: boolean
+  loading?: boolean
+  timeZone?: string
 }) {
   const hasStarted = !!startRecordedAt
   const hasEnded = !!endRecordedAt
   const isRunning = hasStarted && !hasEnded
   const isComplete = hasStarted && hasEnded
+  const isDisabled = disabled || loading
 
   // Complete state
   if (isComplete) {
@@ -135,16 +136,17 @@ export function PairedMilestoneButton({
             <p className="text-xs font-medium opacity-90">{displayName}</p>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="font-bold tabular-nums">{formatTime(startRecordedAt!)}</span>
-            <span className="text-emerald-200 text-xs">→</span>
-            <span className="font-bold tabular-nums">{formatTime(endRecordedAt!)}</span>
+            <span className="font-bold tabular-nums">{formatTimestamp(startRecordedAt!, { timeZone })}</span>
+            <span className="text-emerald-200 text-xs">&rarr;</span>
+            <span className="font-bold tabular-nums">{formatTimestamp(endRecordedAt!, { timeZone })}</span>
           </div>
           <p className="text-xs text-emerald-100 mt-1 tabular-nums">{formatDuration(startRecordedAt!, endRecordedAt!)}</p>
         </div>
         <button
           type="button"
           onClick={onUndoEnd}
-          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200"
+          disabled={loading}
+          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
         >
           <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
         </button>
@@ -162,7 +164,7 @@ export function PairedMilestoneButton({
             <p className="text-xs font-medium opacity-90">{displayName}</p>
           </div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold tabular-nums">{formatTime(startRecordedAt!)}</span>
+            <span className="text-sm font-bold tabular-nums">{formatTimestamp(startRecordedAt!, { timeZone })}</span>
             <span className="text-sm font-bold tabular-nums text-amber-100">
               <RunningTimer startTime={startRecordedAt!} />
             </span>
@@ -170,15 +172,17 @@ export function PairedMilestoneButton({
           <button
             type="button"
             onClick={onRecordEnd}
-            className="w-full py-1.5 bg-white/20 hover:bg-white/30 rounded text-xs font-semibold transition-colors"
+            disabled={loading}
+            className="w-full py-1.5 bg-white/20 hover:bg-white/30 rounded text-xs font-semibold transition-colors disabled:opacity-50"
           >
-            Stop
+            {loading ? 'Stopping...' : 'Stop'}
           </button>
         </div>
         <button
           type="button"
           onClick={onUndoStart}
-          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200"
+          disabled={loading}
+          className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
         >
           <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
         </button>
@@ -191,15 +195,15 @@ export function PairedMilestoneButton({
     <button
       type="button"
       onClick={onRecordStart}
-      disabled={disabled}
+      disabled={isDisabled}
       className={`w-full px-3 py-3 rounded-lg border-2 border-dashed transition-all text-left ${
-        disabled
+        isDisabled
           ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
           : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50 text-slate-600 hover:text-blue-600'
       }`}
     >
       <p className="text-xs font-medium opacity-70">{displayName}</p>
-      <p className="text-sm font-semibold">Tap to start</p>
+      <p className="text-sm font-semibold">{loading ? 'Recording...' : 'Tap to start'}</p>
     </button>
   )
 }
