@@ -39,6 +39,7 @@ import {
   formatMinutesHMS,
   getStatusConfig,
 } from '@/lib/formatters'
+import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
 
 // ============================================================================
 // TYPES
@@ -439,6 +440,14 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (effectiveFacilityId) fetchData()
     else if (!userLoading) setLoading(false)
   }, [effectiveFacilityId, fetchData, userLoading])
+
+  // Realtime subscription — syncs milestone changes from other devices
+  useMilestoneRealtime({
+    supabase,
+    caseId: id,
+    enabled: !loading && !!caseData,
+    setCaseMilestones,
+  })
 
   // ============================================================================
   // MILESTONE FUNCTIONS
