@@ -43,6 +43,7 @@ import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
 import { type SurgeonMilestoneStats, type CasePaceData } from '@/types/pace'
 import PaceProgressBar from '@/components/dashboard/PaceProgressBar'
 import { computeMilestonePace, MIN_SAMPLE_SIZE } from '@/lib/pace-utils'
+import { checkMilestoneOrder } from '@/lib/milestone-order'
 
 // ============================================================================
 // TYPES
@@ -451,7 +452,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     return caseMilestones.find(m => m.facility_milestone_id === typeId)
   }
 
-  const recordMilestone = async (milestoneTypeId: string) => {
+  const performRecord = async (milestoneTypeId: string) => {
     // Debounce: prevent double-tap by checking if this milestone is already in-flight
     if (recordingMilestoneIds.has(milestoneTypeId)) return
     setRecordingMilestoneIds(prev => new Set(prev).add(milestoneTypeId))
@@ -619,6 +620,30 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
       cancelText: 'Cancel',
       onConfirm: () => performUndo(milestoneId),
     })
+  }
+
+  // Out-of-order milestone warning — intercepts before recording
+  const recordMilestone = async (milestoneTypeId: string): Promise<void> => {
+    const { isOutOfOrder, skippedCount } = checkMilestoneOrder(
+      milestoneTypeId,
+      milestoneTypes,
+      caseMilestones,
+    )
+
+    if (isOutOfOrder) {
+      const milestoneType = milestoneTypes.find(mt => mt.id === milestoneTypeId)
+      showConfirm({
+        variant: 'warning',
+        title: 'Out-of-order milestone',
+        message: `You're recording ${milestoneType?.display_name || 'this milestone'} with ${skippedCount} earlier milestone${skippedCount === 1 ? '' : 's'} unrecorded. Continue anyway?`,
+        confirmText: 'Record anyway',
+        cancelText: 'Cancel',
+        onConfirm: () => performRecord(milestoneTypeId),
+      })
+      return
+    }
+
+    performRecord(milestoneTypeId)
   }
 
   const updateCaseStatus = async (statusName: string) => {
