@@ -19,7 +19,10 @@
 'use client'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useState, useEffect, useCallback } from 'react'
-import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Flag, Info, Plus, X } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Flag, Info, Pause, Play, Plus, Square, Timer, X } from 'lucide-react'
+import { useDelayTimer } from '@/lib/hooks/useDelayTimer'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { formatElapsedMs } from '@/lib/formatters'
 
 // =====================================================
 // TYPES
@@ -122,6 +125,16 @@ export default function CaseFlagsSection({
   const [delayDuration, setDelayDuration] = useState('')
   const [delayNote, setDelayNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [durationMode, setDurationMode] = useState<'manual' | 'timer'>('manual')
+
+  // Delay timer
+  const delayTimer = useDelayTimer()
+
+  // Toast (at component level — not inside callbacks)
+  const { showToast } = useToast()
+
+  // Confirm dialog for close-while-timer-running warning
+  const { confirmDialog: timerWarningDialog, showConfirm: showTimerWarning } = useConfirmDialog()
 
   // Expand/collapse for completed view with many flags
   const [expanded, setExpanded] = useState(false)
@@ -201,6 +214,43 @@ export default function CaseFlagsSection({
   const hasMore = sortedFlags.length > COLLAPSE_THRESHOLD
 
   // =====================================================
+  // FORM CLOSE (with timer warning)
+  // =====================================================
+
+  const resetForm = useCallback(() => {
+    setSelectedDelayType('')
+    setDelayDuration('')
+    setDelayNote('')
+    setDurationMode('manual')
+    delayTimer.reset()
+    setShowReportForm(false)
+  }, [delayTimer])
+
+  const handleCloseForm = useCallback(() => {
+    if (delayTimer.isActive) {
+      showTimerWarning({
+        variant: 'warning',
+        title: 'Timer is running',
+        message: 'A delay timer is active. Closing will discard it. Continue?',
+        confirmText: 'Discard',
+        cancelText: 'Keep timing',
+        onConfirm: () => resetForm(),
+      })
+    } else {
+      resetForm()
+    }
+  }, [delayTimer.isActive, showTimerWarning, resetForm])
+
+  // =====================================================
+  // TIMER CONTROLS
+  // =====================================================
+
+  const handleTimerStop = useCallback(() => {
+    const minutes = delayTimer.stop()
+    setDelayDuration(String(minutes))
+  }, [delayTimer])
+
+  // =====================================================
   // REPORT DELAY HANDLER
   // =====================================================
 
@@ -210,7 +260,7 @@ export default function CaseFlagsSection({
 
     const duration = delayDuration ? parseInt(delayDuration) : null
     const note = delayNote.trim() || null
-    const { showToast } = useToast()
+
     try {
       // 1. Write to case_flags (new system)
       await supabase.from('case_flags').insert({
@@ -235,10 +285,7 @@ export default function CaseFlagsSection({
       })
 
       // Reset form
-      setSelectedDelayType('')
-      setDelayDuration('')
-      setDelayNote('')
-      setShowReportForm(false)
+      resetForm()
 
       // Re-fetch flags
       await fetchFlags()
@@ -351,12 +398,7 @@ export default function CaseFlagsSection({
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-700">Report a Delay</span>
               <button
-                onClick={() => {
-                  setShowReportForm(false)
-                  setSelectedDelayType('')
-                  setDelayDuration('')
-                  setDelayNote('')
-                }}
+                onClick={handleCloseForm}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
@@ -377,34 +419,166 @@ export default function CaseFlagsSection({
               ))}
             </select>
 
-            {/* Duration + Note row */}
-            <div className="flex gap-2">
-              <div className="w-24">
+            {/* Duration mode segmented control */}
+            <div className="flex rounded-lg border border-slate-200 bg-white overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setDurationMode('manual')}
+                disabled={delayTimer.isActive}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors ${
+                  durationMode === 'manual'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                } ${delayTimer.isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <Clock className="w-3 h-3" />
+                Manual
+              </button>
+              <button
+                type="button"
+                onClick={() => setDurationMode('timer')}
+                disabled={delayTimer.isActive && durationMode === 'manual'}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 ${
+                  durationMode === 'timer'
+                    ? 'bg-slate-900 text-white'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                } ${delayTimer.isActive && durationMode === 'manual' ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <Timer className="w-3 h-3" />
+                Timer
+              </button>
+            </div>
+
+            {/* Duration input: Manual or Timer mode */}
+            {durationMode === 'manual' ? (
+              <div className="flex gap-2">
+                <div className="w-24">
+                  <input
+                    type="number"
+                    value={delayDuration}
+                    onChange={(e) => setDelayDuration(e.target.value)}
+                    placeholder="Min"
+                    min={0}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                </div>
                 <input
-                  type="number"
-                  value={delayDuration}
-                  onChange={(e) => setDelayDuration(e.target.value)}
-                  placeholder="Min"
-                  min={0}
-                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  type="text"
+                  value={delayNote}
+                  onChange={(e) => setDelayNote(e.target.value)}
+                  placeholder="Notes (optional)"
+                  className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && selectedDelayType) handleReportDelay()
+                  }}
                 />
               </div>
-              <input
-                type="text"
-                value={delayNote}
-                onChange={(e) => setDelayNote(e.target.value)}
-                placeholder="Notes (optional)"
-                className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && selectedDelayType) handleReportDelay()
-                }}
-              />
-            </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Timer display */}
+                <div className="flex items-center justify-between px-3 py-2.5 bg-white rounded-lg border border-slate-200">
+                  <div className="flex items-center gap-2">
+                    {delayTimer.state === 'running' && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                      </span>
+                    )}
+                    {delayTimer.state === 'paused' && (
+                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                    )}
+                    <span className={`text-lg font-mono font-semibold tabular-nums ${
+                      delayTimer.state === 'running' ? 'text-slate-900' :
+                      delayTimer.state === 'paused' ? 'text-amber-600' :
+                      'text-slate-400'
+                    }`}>
+                      {formatElapsedMs(delayTimer.elapsedMs)}
+                    </span>
+                  </div>
+                  {delayTimer.state === 'paused' && (
+                    <span className="text-[10px] font-medium text-amber-600 uppercase tracking-wider">Paused</span>
+                  )}
+                </div>
+
+                {/* Timer controls */}
+                <div className="flex gap-1.5">
+                  {delayTimer.state === 'idle' && (
+                    <button
+                      type="button"
+                      onClick={delayTimer.start}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+                    >
+                      <Play className="w-3 h-3" />
+                      Start
+                    </button>
+                  )}
+                  {delayTimer.state === 'running' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={delayTimer.pause}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-amber-700 bg-amber-100 rounded-lg hover:bg-amber-200 transition-colors"
+                      >
+                        <Pause className="w-3 h-3" />
+                        Pause
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTimerStop}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"
+                      >
+                        <Square className="w-3 h-3" />
+                        Stop
+                      </button>
+                    </>
+                  )}
+                  {delayTimer.state === 'paused' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={delayTimer.resume}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-100 rounded-lg hover:bg-emerald-200 transition-colors"
+                      >
+                        <Play className="w-3 h-3" />
+                        Resume
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTimerStop}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-red-700 bg-red-100 rounded-lg hover:bg-red-200 transition-colors"
+                      >
+                        <Square className="w-3 h-3" />
+                        Stop
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Show computed duration after timer stop (duration auto-filled) */}
+                {!delayTimer.isActive && delayDuration && (
+                  <p className="text-[11px] text-slate-500 text-center">
+                    Duration: {delayDuration} min
+                  </p>
+                )}
+
+                {/* Notes input (timer mode) */}
+                <input
+                  type="text"
+                  value={delayNote}
+                  onChange={(e) => setDelayNote(e.target.value)}
+                  placeholder="Notes (optional)"
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && selectedDelayType && !delayTimer.isActive) handleReportDelay()
+                  }}
+                />
+              </div>
+            )}
 
             {/* Save button */}
             <button
               onClick={handleReportDelay}
-              disabled={!selectedDelayType || saving}
+              disabled={!selectedDelayType || saving || delayTimer.isActive}
               className="w-full py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? 'Saving...' : 'Save Delay'}
@@ -508,6 +682,9 @@ export default function CaseFlagsSection({
           </div>
         )}
       </div>
+
+      {/* Timer close warning dialog */}
+      {timerWarningDialog}
     </div>
   )
 }
