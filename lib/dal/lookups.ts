@@ -30,6 +30,15 @@ export interface MilestoneType {
   is_active: boolean
 }
 
+export interface FacilityMilestone {
+  id: string
+  name: string
+  display_name: string | null
+  display_order: number
+  is_active: boolean
+  source_milestone_type_id: string | null
+}
+
 export interface DelayType {
   id: string
   name: string
@@ -91,31 +100,20 @@ export const lookupsDAL = {
   },
 
   /**
-   * Get milestone types for a facility
+   * Get facility milestones (v2.0 — facility_milestones are the primary entity)
    */
-  async milestoneTypes(
+  async facilityMilestones(
     supabase: AnySupabaseClient,
     facilityId: string,
-  ): Promise<DALListResult<MilestoneType>> {
+  ): Promise<DALListResult<FacilityMilestone>> {
     const { data, error } = await supabase
       .from('facility_milestones')
-      .select(`
-        milestone_type_id,
-        display_order,
-        is_active,
-        milestone_type:milestone_types(id, name, key, display_order, is_active)
-      `)
+      .select('id, name, display_name, display_order, is_active, source_milestone_type_id')
       .eq('facility_id', facilityId)
       .eq('is_active', true)
       .order('display_order')
 
-    // Flatten the join
-    const flattened = (data || []).map((row: Record<string, unknown>) => {
-      const mt = row.milestone_type as MilestoneType | null
-      return mt ? { ...mt, display_order: row.display_order as number } : null
-    }).filter(Boolean) as MilestoneType[]
-
-    return { data: flattened, error }
+    return { data: (data as unknown as FacilityMilestone[]) || [], error }
   },
 
   /**

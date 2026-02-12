@@ -139,7 +139,7 @@ export type BulkCaseSubmissionInput = z.infer<typeof bulkCaseSubmissionSchema>
 
 export const recordMilestoneSchema = z.object({
   case_id: uuidSchema,
-  milestone_id: uuidSchema,
+  facility_milestone_id: uuidSchema,
   timestamp: z.string().datetime('Must be ISO 8601 format'),
   recorded_by: uuidSchema.optional(),
   notes: z.string().max(500).optional(),

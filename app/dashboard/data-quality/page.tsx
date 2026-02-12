@@ -887,7 +887,7 @@ showToast({
           })
           .eq('id', existing.id)
       } else {
-        // Insert new - need to get milestone_type_id
+        // Insert new milestone row with facility_milestone_id
         await supabase
           .from('case_milestones')
           .insert({

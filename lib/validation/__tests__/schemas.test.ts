@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createCaseSchema, bulkCaseRowSchema, bulkCaseSubmissionSchema, validateField } from '../schemas'
+import { createCaseSchema, bulkCaseRowSchema, bulkCaseSubmissionSchema, recordMilestoneSchema, draftCaseSchema, validateField } from '../schemas'
 
 describe('createCaseSchema — Phase 1.3', () => {
   const validData = {
@@ -285,5 +285,114 @@ describe('bulkCaseSubmissionSchema — Phase 4.1', () => {
       rows: [{ ...validRow, start_time: '25:00' }], // invalid time
     })
     expect(result.success).toBe(false)
+  })
+})
+
+// ============================================
+// MILESTONE SCHEMA — Phase 5.3
+// ============================================
+
+describe('recordMilestoneSchema — Phase 5.3', () => {
+  // UUIDs must have valid version (pos 13 = 1-8) and variant (pos 17 = 8,9,a,b)
+  const validMilestone = {
+    case_id: 'a1111111-1111-4111-a111-111111111111',
+    facility_milestone_id: 'b2222222-2222-4222-b222-222222222222',
+    timestamp: '2026-03-15T07:30:00.000Z',
+  }
+
+  it('accepts valid milestone recording with facility_milestone_id', () => {
+    const result = recordMilestoneSchema.safeParse(validMilestone)
+    expect(result.success).toBe(true)
+  })
+
+  it('uses facility_milestone_id not milestone_id or milestone_type_id', () => {
+    const result = recordMilestoneSchema.safeParse(validMilestone)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.facility_milestone_id).toBe(validMilestone.facility_milestone_id)
+      expect('milestone_id' in result.data).toBe(false)
+      expect('milestone_type_id' in result.data).toBe(false)
+    }
+  })
+
+  it('rejects non-UUID case_id', () => {
+    const result = recordMilestoneSchema.safeParse({ ...validMilestone, case_id: 'not-a-uuid' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects non-UUID facility_milestone_id', () => {
+    const result = recordMilestoneSchema.safeParse({ ...validMilestone, facility_milestone_id: 'not-a-uuid' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects non-ISO timestamp', () => {
+    const result = recordMilestoneSchema.safeParse({ ...validMilestone, timestamp: '2026-03-15 07:30:00' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts optional recorded_by and notes', () => {
+    const result = recordMilestoneSchema.safeParse({
+      ...validMilestone,
+      recorded_by: 'c3333333-3333-4333-b333-333333333333',
+      notes: 'Patient arrived late',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects notes over 500 characters', () => {
+    const result = recordMilestoneSchema.safeParse({
+      ...validMilestone,
+      notes: 'x'.repeat(501),
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+// ============================================
+// DRAFT CASE SCHEMA — Phase 5.3
+// ============================================
+
+describe('draftCaseSchema — Phase 5.3', () => {
+  it('requires only scheduled_date', () => {
+    const result = draftCaseSchema.safeParse({ scheduled_date: '2026-03-15' })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects empty scheduled_date', () => {
+    const result = draftCaseSchema.safeParse({ scheduled_date: '' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts all fields as empty strings', () => {
+    const result = draftCaseSchema.safeParse({
+      scheduled_date: '2026-03-15',
+      case_number: '',
+      start_time: '',
+      surgeon_id: '',
+      procedure_type_id: '',
+      or_room_id: '',
+      status_id: '',
+      anesthesiologist_id: '',
+      operative_side: '',
+      payer_id: '',
+      notes: '',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('accepts a fully-populated draft', () => {
+    const result = draftCaseSchema.safeParse({
+      scheduled_date: '2026-03-15',
+      case_number: 'DRAFT-123',
+      start_time: '07:30',
+      surgeon_id: 'surgeon-1',
+      procedure_type_id: 'proc-1',
+      or_room_id: 'room-1',
+      status_id: 'status-1',
+      operative_side: 'left',
+      payer_id: 'payer-1',
+      notes: 'Draft notes',
+    })
+    expect(result.success).toBe(true)
   })
 })

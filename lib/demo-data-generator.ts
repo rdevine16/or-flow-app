@@ -38,6 +38,7 @@ export interface GenerationConfig {
   surgeonProfiles: SurgeonProfileInput[]
   monthsOfHistory: number
   purgeFirst: boolean
+  createdByUserId?: string
 }
 
 export interface GenerationResult {
@@ -320,7 +321,7 @@ export async function generateDemoData(
   supabase: SupabaseClient, config: GenerationConfig, onProgress?: ProgressCallback
 ): Promise<GenerationResult> {
   try {
-    const { facilityId, surgeonProfiles, monthsOfHistory, purgeFirst } = config
+    const { facilityId, surgeonProfiles, monthsOfHistory, purgeFirst, createdByUserId } = config
 
     // ── Purge ──
     if (purgeFirst) {
@@ -334,6 +335,16 @@ export async function generateDemoData(
 
     const { data: facility } = await supabase.from('facilities').select('id, name, case_number_prefix, timezone').eq('id', facilityId).single()
     if (!facility) return { success: false, casesGenerated: 0, error: 'Facility not found' }
+
+    // Resolve created_by: use provided user, or find the facility admin
+    let systemUserId: string | null = createdByUserId || null
+    if (!systemUserId) {
+      const { data: adminRole } = await supabase.from('user_roles').select('id').eq('name', 'facility_admin').single()
+      if (adminRole) {
+        const { data: adminUser } = await supabase.from('users').select('id').eq('facility_id', facilityId).eq('role_id', adminRole.id).eq('is_active', true).limit(1).single()
+        if (adminUser) systemUserId = adminUser.id
+      }
+    }
 
     const { data: procedureTypes } = await supabase.from('procedure_types').select('id, name').eq('facility_id', facilityId).eq('is_active', true)
     if (!procedureTypes?.length) return { success: false, casesGenerated: 0, error: 'No procedure types' }
@@ -488,7 +499,7 @@ export async function generateDemoData(
       const result = generateSurgeonCases(
         surgeon, startDate, endDate, procedureTypes, milestoneTypes, procMilestoneMap, payers,
         roomDayStaffMap, completedStatus.id, scheduledStatus?.id || completedStatus.id, prefix, caseNum,
-        facility.timezone || 'America/New_York', fmToMtMap
+        facility.timezone || 'America/New_York', fmToMtMap, systemUserId
       )
       allCases.push(...result.cases)
       allMilestones.push(...result.milestones)
@@ -656,7 +667,8 @@ function generateSurgeonCases(
   prefix: string,
   startingNumber: number,
   facilityTz: string,
-  fmToMtMap: Map<string, string>
+  fmToMtMap: Map<string, string>,
+  createdByUserId: string | null
 ) {
   const cases: any[] = []
   const milestones: any[] = []
@@ -764,6 +776,7 @@ function generateSurgeonCases(
         scheduled_duration_minutes: scheduledDuration,
         is_excluded_from_metrics: false,
         surgeon_left_at: null,
+        created_by: createdByUserId,
       }
 
       cases.push(caseData)

@@ -14,8 +14,6 @@ import type { AnySupabaseClient, DALResult, DALListResult, DateRange, Pagination
 export interface CaseListItem {
   id: string
   case_number: string
-  patient_name: string
-  patient_mrn: string | null
   scheduled_date: string
   start_time: string | null
   status: string | null
@@ -52,10 +50,10 @@ export interface CaseDetail extends CaseListItem {
 export interface CaseMilestone {
   id: string
   case_id: string
-  milestone_type_id: string
+  facility_milestone_id: string
   recorded_at: string
   recorded_by: string | null
-  milestone_type?: { name: string; key: string; display_order: number }
+  facility_milestone?: { name: string; display_name: string | null; display_order: number }
 }
 
 export interface CaseFlag {
@@ -105,7 +103,7 @@ export interface CaseForAnalytics {
 // ============================================
 
 const CASE_LIST_SELECT = `
-  id, case_number, patient_name, patient_mrn,
+  id, case_number,
   scheduled_date, start_time, status, or_room_id, surgeon_id, facility_id,
   created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
@@ -114,12 +112,12 @@ const CASE_LIST_SELECT = `
 ` as const
 
 const CASE_DETAIL_SELECT = `
-  *, 
+  *,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name, color),
-  case_milestones(id, case_id, milestone_type_id, recorded_at, recorded_by,
-    milestone_type:milestone_types(name, key, display_order)
+  case_milestones(id, case_id, facility_milestone_id, recorded_at, recorded_by,
+    facility_milestone:facility_milestones(name, display_name, display_order)
   ),
   case_flags(id, case_id, delay_type_id, flag_type, notes, minutes,
     delay_type:delay_types(name)
@@ -234,7 +232,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
   },
 
   /**
-   * Search cases by patient name or case number
+   * Search cases by case number
    */
   async search(
     supabase: AnySupabaseClient,
@@ -246,7 +244,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       .from('cases')
       .select(CASE_LIST_SELECT)
       .eq('facility_id', facilityId)
-      .or(`patient_name.ilike.%${searchTerm}%,case_number.ilike.%${searchTerm}%`)
+      .ilike('case_number', `%${searchTerm}%`)
       .order('scheduled_date', { ascending: false })
       .limit(limit)
 
@@ -282,7 +280,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
   async recordMilestone(
     supabase: AnySupabaseClient,
     caseId: string,
-    milestoneTypeId: string,
+    facilityMilestoneId: string,
     timestamp: string,
     recordedBy?: string,
   ): Promise<DALResult<CaseMilestone>> {
@@ -291,13 +289,13 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       .upsert(
         {
           case_id: caseId,
-          milestone_type_id: milestoneTypeId,
+          facility_milestone_id: facilityMilestoneId,
           recorded_at: timestamp,
           recorded_by: recordedBy,
         },
-        { onConflict: 'case_id,milestone_type_id' }
+        { onConflict: 'case_id,facility_milestone_id' }
       )
-      .select('id, case_id, milestone_type_id, recorded_at, recorded_by')
+      .select('id, case_id, facility_milestone_id, recorded_at, recorded_by')
       .single()
 
     return { data: data as CaseMilestone | null, error }
