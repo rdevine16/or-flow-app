@@ -44,6 +44,8 @@ import { type SurgeonMilestoneStats, type CasePaceData } from '@/types/pace'
 import PaceProgressBar from '@/components/dashboard/PaceProgressBar'
 import { computeMilestonePace, MIN_SAMPLE_SIZE } from '@/lib/pace-utils'
 import { checkMilestoneOrder } from '@/lib/milestone-order'
+import { useFlipRoom } from '@/lib/hooks/useFlipRoom'
+import FlipRoomCard from '@/components/cases/FlipRoomCard'
 
 // ============================================================================
 // TYPES
@@ -444,6 +446,18 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     setCaseMilestones,
   })
 
+  // Flip room — surgeon's next case in a different room
+  const { flipRoom, nextSameRoomCaseNumber, setCalledBackAt } = useFlipRoom({
+    supabase,
+    surgeonId: caseData?.surgeon_id || null,
+    currentCaseId: id,
+    currentRoomId: caseData?.or_room_id || null,
+    scheduledDate: caseData?.scheduled_date || null,
+    facilityId: effectiveFacilityId,
+    enabled: !loading && !!caseData,
+  })
+  const [flipRoomCallingBack, setFlipRoomCallingBack] = useState(false)
+
   // ============================================================================
   // MILESTONE FUNCTIONS
   // ============================================================================
@@ -674,6 +688,161 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const clearSurgeonLeft = async () => {
     const { error } = await supabase.from('cases').update({ surgeon_left_at: null }).eq('id', id)
     if (!error) setSurgeonLeftAt(null)
+  }
+
+  // ============================================================================
+  // FLIP ROOM CALLBACK FUNCTIONS
+  // ============================================================================
+
+  const callBackFlipRoom = async () => {
+    if (!flipRoom || !effectiveFacilityId || !userData.userId) return
+
+    setFlipRoomCallingBack(true)
+    const now = new Date().toISOString()
+
+    // Optimistic update
+    setCalledBackAt(now)
+
+    try {
+      // 1. Set called_back_at on the flip room case
+      const { error: updateError } = await supabase
+        .from('cases')
+        .update({ called_back_at: now, called_back_by: userData.userId })
+        .eq('id', flipRoom.caseId)
+
+      if (updateError) throw updateError
+
+      // 2. Create notification
+      const title = `${flipRoom.roomName} Can Go Back`
+      const message = `${flipRoom.caseNumber}: ${flipRoom.procedureName}`
+
+      await supabase
+        .from('notifications')
+        .insert({
+          facility_id: effectiveFacilityId,
+          type: 'patient_call',
+          title,
+          message,
+          room_id: caseData?.or_room_id,
+          case_id: flipRoom.caseId,
+          sent_by: userData.userId,
+        })
+
+      // 3. Send push notification
+      try {
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
+            facility_id: effectiveFacilityId,
+            title,
+            body: message,
+            exclude_user_id: userData.userId,
+          },
+        })
+      } catch {
+        // Push failure is non-blocking
+      }
+
+      // 4. Audit log
+      await supabase.from('audit_log').insert({
+        user_id: userData.userId,
+        user_email: userData.userEmail,
+        action: 'patient_call.created',
+        facility_id: effectiveFacilityId,
+        target_type: 'case',
+        target_id: flipRoom.caseId,
+        target_label: `Case #${flipRoom.caseNumber}`,
+        new_values: {
+          room_name: flipRoom.roomName,
+          procedure: flipRoom.procedureName,
+          source: 'flip_room_card',
+        },
+        metadata: { platform: 'web' },
+        success: true,
+      })
+
+      showToast({ type: 'success', title: 'Patient call sent!' })
+    } catch (err) {
+      // Rollback optimistic update
+      setCalledBackAt(null)
+      showToast({
+        type: 'error',
+        title: 'Failed to send call',
+        message: err instanceof Error ? err.message : 'Please try again',
+      })
+    } finally {
+      setFlipRoomCallingBack(false)
+    }
+  }
+
+  const undoCallBackFlipRoom = async () => {
+    if (!flipRoom || !effectiveFacilityId || !userData.userId) return
+
+    setFlipRoomCallingBack(true)
+    const previousCalledBackAt = flipRoom.calledBackAt
+
+    // Optimistic update
+    setCalledBackAt(null)
+
+    try {
+      // 1. Clear called_back_at
+      await supabase
+        .from('cases')
+        .update({ called_back_at: null, called_back_by: null })
+        .eq('id', flipRoom.caseId)
+
+      // 2. Delete recent notifications for this case
+      const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('case_id', flipRoom.caseId)
+        .eq('type', 'patient_call')
+        .gte('created_at', thirtyMinutesAgo)
+
+      // 3. Send cancellation push
+      try {
+        await supabase.functions.invoke('send-push-notification', {
+          body: {
+            facility_id: effectiveFacilityId,
+            title: `${flipRoom.roomName} Call Cancelled`,
+            body: `Patient call for ${flipRoom.caseNumber} has been cancelled`,
+            exclude_user_id: userData.userId,
+          },
+        })
+      } catch {
+        // Push failure is non-blocking
+      }
+
+      // 4. Audit log
+      await supabase.from('audit_log').insert({
+        user_id: userData.userId,
+        user_email: userData.userEmail,
+        action: 'patient_call.cancelled',
+        facility_id: effectiveFacilityId,
+        target_type: 'case',
+        target_id: flipRoom.caseId,
+        target_label: `Case #${flipRoom.caseNumber}`,
+        old_values: {
+          room_name: flipRoom.roomName,
+          procedure: flipRoom.procedureName,
+          source: 'flip_room_card',
+        },
+        metadata: { platform: 'web' },
+        success: true,
+      })
+
+      showToast({ type: 'success', title: 'Call cancelled' })
+    } catch (err) {
+      // Rollback optimistic update
+      setCalledBackAt(previousCalledBackAt)
+      showToast({
+        type: 'error',
+        title: 'Failed to cancel call',
+        message: err instanceof Error ? err.message : 'Please try again',
+      })
+    } finally {
+      setFlipRoomCallingBack(false)
+    }
   }
 
   // ============================================================================
@@ -1275,6 +1444,76 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           {/* SIDEBAR (1 col) */}
           <div className="space-y-4">
 
+            {/* FLIP ROOM — surgeon's next case in a different room */}
+            {flipRoom && (
+              <FlipRoomCard
+                caseNumber={flipRoom.caseNumber}
+                roomName={flipRoom.roomName}
+                procedureName={flipRoom.procedureName}
+                lastMilestoneDisplayName={flipRoom.lastMilestoneDisplayName}
+                lastMilestoneRecordedAt={flipRoom.lastMilestoneRecordedAt}
+                calledBackAt={flipRoom.calledBackAt}
+                currentTime={currentTime}
+                timeZone={userData.facilityTimezone}
+                onCallBack={callBackFlipRoom}
+                onUndoCallBack={undoCallBackFlipRoom}
+                callingBack={flipRoomCallingBack}
+              />
+            )}
+
+            {/* NEXT SAME ROOM — inline note when next case is same room */}
+            {!flipRoom && nextSameRoomCaseNumber && (
+              <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-2.5">
+                <p className="text-xs text-slate-500">
+                  <span className="font-medium text-slate-600">Next:</span> {nextSameRoomCaseNumber} (same room)
+                </p>
+              </div>
+            )}
+
+            {/* SURGEON LEFT — moved above team per user preference */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-900">Surgeon Status</h3>
+              </div>
+              <div className="p-3">
+                {!surgeonLeftAt ? (
+                  <button
+                    onClick={recordSurgeonLeft}
+                    disabled={!closingStarted || patientOutRecorded}
+                    className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                      closingStarted && !patientOutRecorded
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Surgeon Left OR
+                  </button>
+                ) : (
+                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-orange-500" />
+                        <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                      </div>
+                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
+                    </div>
+                    {!patientOutRecorded && (
+                      <button
+                        onClick={clearSurgeonLeft}
+                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!closingStarted && !surgeonLeftAt && (
+                  <p className="text-xs text-slate-400 text-center mt-2">Available after closing starts</p>
+                )}
+              </div>
+            </div>
+
             {/* TEAM */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -1321,50 +1560,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   >
                     + Add Staff
                   </button>
-                )}
-              </div>
-            </div>
-
-            {/* SURGEON LEFT */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100">
-                <h3 className="text-sm font-semibold text-slate-900">Surgeon Status</h3>
-              </div>
-              <div className="p-3">
-                {!surgeonLeftAt ? (
-                  <button
-                    onClick={recordSurgeonLeft}
-                    disabled={!closingStarted || patientOutRecorded}
-                    className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
-                      closingStarted && !patientOutRecorded
-                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'
-                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                    }`}
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Surgeon Left OR
-                  </button>
-                ) : (
-                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2.5">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-orange-500" />
-                        <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
-                      </div>
-                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
-                    </div>
-                    {!patientOutRecorded && (
-                      <button
-                        onClick={clearSurgeonLeft}
-                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
-                      >
-                        Undo
-                      </button>
-                    )}
-                  </div>
-                )}
-                {!closingStarted && !surgeonLeftAt && (
-                  <p className="text-xs text-slate-400 text-center mt-2">Available after closing starts</p>
                 )}
               </div>
             </div>
