@@ -5,6 +5,7 @@
 'use client'
 
 import { formatTimestamp, formatTimestamp24 } from '@/lib/formatters'
+import { type MilestonePaceInfo, MIN_SAMPLE_SIZE } from '@/lib/pace-utils'
 
 interface FacilityMilestone {
   id: string
@@ -42,9 +43,10 @@ interface MilestoneCardProps {
   onUndoEnd: () => void
   loading?: boolean
   timeZone?: string
+  paceInfo?: MilestonePaceInfo | null
 }
 
-export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd, loading = false, timeZone }: MilestoneCardProps) {
+export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onUndoEnd, loading = false, timeZone, paceInfo }: MilestoneCardProps) {
   const { recorded, isPaired, partnerRecorded, elapsedDisplay, displayName, isComplete, isInProgress } = card
 
   const isNotStarted = !recorded?.recorded_at
@@ -131,6 +133,25 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
               <span className="text-xs font-semibold">{formatTimestamp(recorded?.recorded_at, { timeZone })}</span>
             )}
           </div>
+        )}
+
+        {/* Per-milestone pace comparison */}
+        {isComplete && paceInfo && paceInfo.sampleSize >= MIN_SAMPLE_SIZE && (
+          <p className="text-[10px] text-slate-400 mt-1">
+            {paceInfo.actualMinutes}m vs {paceInfo.expectedMinutes}m exp
+            <span className={`font-semibold ml-1 ${
+              paceInfo.varianceMinutes > 5 ? 'text-emerald-600' :
+              paceInfo.varianceMinutes < -5 ? 'text-red-500' :
+              paceInfo.varianceMinutes < 0 ? 'text-amber-500' :
+              'text-blue-500'
+            }`}>
+              {paceInfo.varianceMinutes > 0
+                ? `${paceInfo.varianceMinutes}m ahead`
+                : paceInfo.varianceMinutes < 0
+                  ? `${Math.abs(paceInfo.varianceMinutes)}m behind`
+                  : 'on pace'}
+            </span>
+          </p>
         )}
 
         {isInProgress && (

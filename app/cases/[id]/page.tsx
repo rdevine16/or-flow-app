@@ -40,6 +40,9 @@ import {
   getStatusConfig,
 } from '@/lib/formatters'
 import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
+import { type SurgeonMilestoneStats, type CasePaceData } from '@/types/pace'
+import PaceProgressBar from '@/components/dashboard/PaceProgressBar'
+import { computeMilestonePace, MIN_SAMPLE_SIZE } from '@/lib/pace-utils'
 
 // ============================================================================
 // TYPES
@@ -136,19 +139,15 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [error, setError] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(Date.now())
 
-  // Averages
-  const [surgeonAverages, setSurgeonAverages] = useState<{ avgTotalTime: number | null; avgSurgicalTime: number | null }>({
-    avgTotalTime: null,
-    avgSurgicalTime: null,
-  })
-  const [surgeonProcedureAverage, setSurgeonProcedureAverage] = useState<{
-    avgTotalMinutes: number | null
+  // Pace stats (median-based, from surgeon_procedure_stats / surgeon_milestone_stats)
+  const [procedureStats, setProcedureStats] = useState<{
+    medianDuration: number
+    p25Duration: number | null
+    p75Duration: number | null
     sampleSize: number
   } | null>(null)
-  const [milestoneAverages, setMilestoneAverages] = useState<{
-    milestoneName: string
-    avgMinutesFromStart: number
-  }[]>([])
+  const [milestoneStats, setMilestoneStats] = useState<SurgeonMilestoneStats[]>([])
+  const [caseSequence, setCaseSequence] = useState<{ current: number; total: number } | null>(null)
 
   // Implants
   const [implants, setImplants] = useState<any>(null)
@@ -338,76 +337,71 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
       setPatientCallTime(caseResult?.call_time || null)
 
-      // Fetch surgeon averages
+      // Fetch surgeon pace stats (median-based, from materialized views)
       const surgeon = getJoinedValue(caseResult?.surgeon)
       if (caseResult?.procedure_type_id && surgeon) {
-        const { data: procAvg } = await supabase
-          .from('surgeon_procedure_averages')
-          .select('avg_total_minutes, sample_size')
+        // Procedure-level stats (total case duration)
+        const { data: procStats } = await supabase
+          .from('surgeon_procedure_stats')
+          .select('median_duration, p25_duration, p75_duration, sample_size')
           .eq('surgeon_id', surgeon.id)
           .eq('procedure_type_id', caseResult.procedure_type_id)
+          .eq('facility_id', effectiveFacilityId)
           .maybeSingle()
 
-        if (procAvg) {
-          setSurgeonProcedureAverage({
-            avgTotalMinutes: Number(procAvg.avg_total_minutes),
-            sampleSize: procAvg.sample_size
+        if (procStats) {
+          setProcedureStats({
+            medianDuration: Number(procStats.median_duration),
+            p25Duration: procStats.p25_duration != null ? Number(procStats.p25_duration) : null,
+            p75Duration: procStats.p75_duration != null ? Number(procStats.p75_duration) : null,
+            sampleSize: procStats.sample_size,
           })
         }
 
-        const { data: milestoneAvgs } = await supabase
-          .from('surgeon_milestone_averages')
-          .select('avg_minutes_from_start, milestone_type_id, milestone_types (name)')
+        // Per-milestone stats (time from start to each milestone)
+        const { data: msStatsData } = await supabase
+          .from('surgeon_milestone_stats')
+          .select('milestone_type_id, milestone_name, median_minutes_from_start, p25_minutes_from_start, p75_minutes_from_start, sample_size, avg_minutes_from_start, stddev_minutes_from_start')
           .eq('surgeon_id', surgeon.id)
           .eq('procedure_type_id', caseResult.procedure_type_id)
+          .eq('facility_id', effectiveFacilityId)
 
-        if (milestoneAvgs) {
-          setMilestoneAverages(milestoneAvgs.map(ma => ({
-            milestoneName: (ma.milestone_types as any)?.name || 'unknown',
-            avgMinutesFromStart: Number(ma.avg_minutes_from_start)
+        if (msStatsData) {
+          setMilestoneStats(msStatsData.map(ms => ({
+            facility_id: effectiveFacilityId,
+            surgeon_id: surgeon.id,
+            procedure_type_id: caseResult.procedure_type_id!,
+            milestone_type_id: ms.milestone_type_id,
+            milestone_name: ms.milestone_name,
+            sample_size: ms.sample_size,
+            median_minutes_from_start: Number(ms.median_minutes_from_start),
+            p25_minutes_from_start: ms.p25_minutes_from_start != null ? Number(ms.p25_minutes_from_start) : null,
+            p75_minutes_from_start: ms.p75_minutes_from_start != null ? Number(ms.p75_minutes_from_start) : null,
+            avg_minutes_from_start: ms.avg_minutes_from_start != null ? Number(ms.avg_minutes_from_start) : null,
+            stddev_minutes_from_start: ms.stddev_minutes_from_start != null ? Number(ms.stddev_minutes_from_start) : null,
           })))
         }
       }
 
-      if (surgeon) {
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-        const { data: surgeonCases } = await supabase
+      // Case sequence — "Case 3 of 5 today"
+      if (surgeon && caseResult?.scheduled_date) {
+        const { data: daysCases } = await supabase
           .from('cases')
-          .select('id, case_milestones (recorded_at, facility_milestone_id, facility_milestones (name))')
+          .select('id, start_time, case_statuses (name)')
           .eq('surgeon_id', surgeon.id)
-          .neq('id', id)
+          .eq('scheduled_date', caseResult.scheduled_date)
           .eq('facility_id', effectiveFacilityId)
-          .gte('scheduled_date', thirtyDaysAgo.toISOString().split('T')[0])
+          .order('start_time', { ascending: true })
 
-        if (surgeonCases && surgeonCases.length > 0) {
-          const totalTimes: number[] = []
-          const surgicalTimes: number[] = []
-
-          surgeonCases.forEach((sc) => {
-            const milestones: { [key: string]: string } = {}
-            sc.case_milestones?.forEach((m) => {
-              const facilityMilestone = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
-              const name = facilityMilestone?.name
-              if (name && m.recorded_at) milestones[name] = m.recorded_at
-            })
-
-            if (milestones.patient_in && milestones.patient_out) {
-              const diff = new Date(milestones.patient_out).getTime() - new Date(milestones.patient_in).getTime()
-              totalTimes.push(Math.round(diff / (1000 * 60)))
-            }
-
-            if (milestones.incision && milestones.closing) {
-              const diff = new Date(milestones.closing).getTime() - new Date(milestones.incision).getTime()
-              surgicalTimes.push(Math.round(diff / (1000 * 60)))
-            }
+        if (daysCases) {
+          const nonCancelled = daysCases.filter(c => {
+            const s = getJoinedValue(c.case_statuses as any)
+            return s?.name !== 'cancelled'
           })
-
-          setSurgeonAverages({
-            avgTotalTime: totalTimes.length > 0 ? Math.round(totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length) : null,
-            avgSurgicalTime: surgicalTimes.length > 0 ? Math.round(surgicalTimes.reduce((a, b) => a + b, 0) / surgicalTimes.length) : null,
-          })
+          const currentIndex = nonCancelled.findIndex(c => c.id === id)
+          if (currentIndex >= 0) {
+            setCaseSequence({ current: currentIndex + 1, total: nonCancelled.length })
+          }
         }
       }
 
@@ -737,8 +731,63 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const surgicalTime = formatElapsedMs(surgicalTimeMs)
   const surgicalMinutes = Math.round(surgicalTimeMs / 60000)
 
-  const totalVariance = surgeonAverages.avgTotalTime ? totalMinutes - surgeonAverages.avgTotalTime : null
-  const surgicalVariance = surgeonAverages.avgSurgicalTime ? surgicalMinutes - surgeonAverages.avgSurgicalTime : null
+  // Median-based comparisons for hero timer cards
+  const medianTotalMinutes = procedureStats?.medianDuration ?? null
+  const totalVariance = medianTotalMinutes !== null ? totalMinutes - medianTotalMinutes : null
+
+  // Surgical time median: closing milestone median - incision milestone median
+  const incisionStats = milestoneStats.find(ms => ms.milestone_name === 'incision')
+  const closingStats = milestoneStats.find(ms => ms.milestone_name === 'closing')
+  const medianSurgicalMinutes = (incisionStats && closingStats)
+    ? Math.round(closingStats.median_minutes_from_start - incisionStats.median_minutes_from_start)
+    : null
+  const surgicalVariance = medianSurgicalMinutes !== null ? surgicalMinutes - medianSurgicalMinutes : null
+
+  // Build CasePaceData for PaceProgressBar (overall case pace indicator)
+  const lastRecordedMilestone = [...milestoneTypes]
+    .filter(mt => getMilestoneByTypeId(mt.id)?.recorded_at)
+    .sort((a, b) => b.display_order - a.display_order)[0] || null
+
+  const paceData: CasePaceData | null = (() => {
+    if (!patientInTime || !procedureStats || !lastRecordedMilestone) return null
+
+    const patientInDate = new Date(patientInTime)
+
+    if (lastRecordedMilestone.name === 'patient_in') {
+      return {
+        scheduledStart: patientInDate,
+        expectedMinutesToMilestone: 0,
+        milestoneRangeLow: 0,
+        milestoneRangeHigh: 0,
+        expectedTotalMinutes: procedureStats.medianDuration,
+        totalRangeLow: procedureStats.p25Duration,
+        totalRangeHigh: procedureStats.p75Duration,
+        sampleSize: procedureStats.sampleSize,
+        currentMilestoneName: 'patient_in',
+      }
+    }
+
+    // Find milestone stats matching the last recorded facility milestone
+    const msStats = lastRecordedMilestone.source_milestone_type_id
+      ? milestoneStats.find(ms => ms.milestone_type_id === lastRecordedMilestone.source_milestone_type_id)
+      : null
+    if (!msStats) return null
+
+    return {
+      scheduledStart: patientInDate,
+      expectedMinutesToMilestone: msStats.median_minutes_from_start,
+      milestoneRangeLow: msStats.p25_minutes_from_start,
+      milestoneRangeHigh: msStats.p75_minutes_from_start,
+      expectedTotalMinutes: procedureStats.medianDuration,
+      totalRangeLow: procedureStats.p25Duration,
+      totalRangeHigh: procedureStats.p75Duration,
+      sampleSize: Math.min(procedureStats.sampleSize, msStats.sample_size),
+      currentMilestoneName: lastRecordedMilestone.name,
+    }
+  })()
+
+  // Insufficient data flag for pace display
+  const showInsufficientPaceData = procedureStats !== null && procedureStats.sampleSize < MIN_SAMPLE_SIZE
 
   const completedMilestones = caseMilestones.filter(cm => cm.recorded_at !== null).length
   const totalMilestoneCount = milestoneTypes.length
@@ -869,8 +918,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               }
             })}
             patientCallTime={patientCallTime}
-            surgeonAverage={surgeonProcedureAverage}
-            milestoneAverages={milestoneAverages}
+            surgeonAverage={procedureStats ? { avgTotalMinutes: procedureStats.medianDuration, sampleSize: procedureStats.sampleSize } : null}
+            milestoneAverages={milestoneStats.map(ms => ({ milestoneName: ms.milestone_name, avgMinutesFromStart: ms.median_minutes_from_start }))}
             implants={implants}
             implantCategory={implantCategory}
             facilityId={effectiveFacilityId!}
@@ -968,7 +1017,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
           {/* TIMERS (2 cols) - HERO SIZE */}
-          <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+          <div className="lg:col-span-2 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-4">
             {/* Total Time */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
               <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl" />
@@ -986,9 +1036,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   {totalTime}
                 </p>
                 <div className="flex items-center gap-2 mt-3">
-                  {surgeonAverages.avgTotalTime && (
+                  {medianTotalMinutes !== null && (
                     <>
-                      <span className="text-sm text-slate-500">Avg: {formatMinutesHMS(surgeonAverages.avgTotalTime)}</span>
+                      <span className="text-sm text-slate-500">Avg: {formatMinutesHMS(medianTotalMinutes)}</span>
                       {totalVariance !== null && patientInTime && (
                         <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                           totalVariance > 10 ? 'bg-red-500/20 text-red-400' :
@@ -1021,9 +1071,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   {surgicalTime}
                 </p>
                 <div className="flex items-center gap-2 mt-3">
-                  {surgeonAverages.avgSurgicalTime && (
+                  {medianSurgicalMinutes !== null && (
                     <>
-                      <span className="text-sm text-slate-500">Avg: {formatMinutesHMS(surgeonAverages.avgSurgicalTime)}</span>
+                      <span className="text-sm text-slate-500">Avg: {formatMinutesHMS(medianSurgicalMinutes)}</span>
                       {surgicalVariance !== null && incisionTime && (
                         <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                           surgicalVariance > 10 ? 'bg-red-500/20 text-red-400' :
@@ -1040,6 +1090,19 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
           </div>
 
+          {/* Pace Progress Bar — overall case pace indicator */}
+          {paceData && (
+            <div className="bg-white rounded-2xl border border-slate-200 px-5 py-3">
+              <PaceProgressBar paceData={paceData} />
+            </div>
+          )}
+          {!paceData && showInsufficientPaceData && (
+            <div className="bg-slate-50 rounded-xl px-4 py-2 text-center">
+              <p className="text-xs text-slate-400">Need {MIN_SAMPLE_SIZE}+ cases for pace tracking</p>
+            </div>
+          )}
+          </div>
+
           {/* QUICK INFO (1 col) */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5">
             <div className="flex items-start justify-between mb-3">
@@ -1051,6 +1114,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   <h1 className="text-lg font-bold text-slate-900">{caseData.case_number}</h1>
                 </div>
                 <p className="text-sm text-slate-600 mt-0.5">{procedure?.name || 'No procedure'}</p>
+                {caseSequence && (
+                  <p className="text-xs text-slate-400 mt-0.5">Case {caseSequence.current} of {caseSequence.total} today</p>
+                )}
               </div>
               <StatusBadgeDot status={status?.name || 'scheduled'} />
             </div>
@@ -1113,7 +1179,35 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 </div>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {milestoneCards.map((card) => (
+                  {milestoneCards.map((card) => {
+                    // Compute per-milestone pace info
+                    let cardPaceInfo = null
+                    if (patientInTime && card.isComplete && card.milestone.name !== 'patient_in') {
+                      if (card.isPaired && card.recorded?.recorded_at && card.partnerRecorded?.recorded_at) {
+                        // Paired milestone: show duration comparison
+                        const startStats = card.milestone.source_milestone_type_id
+                          ? milestoneStats.find(ms => ms.milestone_type_id === card.milestone.source_milestone_type_id)
+                          : null
+                        const endStats = card.partner?.source_milestone_type_id
+                          ? milestoneStats.find(ms => ms.milestone_type_id === card.partner!.source_milestone_type_id)
+                          : null
+                        if (startStats && endStats) {
+                          const expectedDuration = endStats.median_minutes_from_start - startStats.median_minutes_from_start
+                          const actualMs = new Date(card.partnerRecorded.recorded_at).getTime() - new Date(card.recorded.recorded_at).getTime()
+                          cardPaceInfo = computeMilestonePace(expectedDuration, actualMs / 60000, Math.min(startStats.sample_size, endStats.sample_size))
+                        }
+                      } else if (!card.isPaired && card.recorded?.recorded_at) {
+                        // Single milestone: show time-from-start comparison
+                        const msStats = card.milestone.source_milestone_type_id
+                          ? milestoneStats.find(ms => ms.milestone_type_id === card.milestone.source_milestone_type_id)
+                          : null
+                        if (msStats) {
+                          const actualMs = new Date(card.recorded.recorded_at).getTime() - new Date(patientInTime).getTime()
+                          cardPaceInfo = computeMilestonePace(msStats.median_minutes_from_start, actualMs / 60000, msStats.sample_size)
+                        }
+                      }
+                    }
+                    return (
                     <MilestoneCard
                       key={card.milestone.id}
                       card={card}
@@ -1123,8 +1217,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       onUndoEnd={() => card.partnerRecorded && undoMilestone(card.partnerRecorded.id)}
                       loading={recordingMilestoneIds.has(card.milestone.id) || (card.partner ? recordingMilestoneIds.has(card.partner.id) : false)}
                       timeZone={userData.facilityTimezone}
+                      paceInfo={cardPaceInfo}
                     />
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 

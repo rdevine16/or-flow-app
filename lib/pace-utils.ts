@@ -7,6 +7,36 @@ import { CasePaceData, PaceStatus, CasePhase } from '@/types/pace'
 export const MIN_SAMPLE_SIZE = 10
 
 /**
+ * Pace comparison data for an individual milestone.
+ * Used to show "Xm vs Ym expected — Zm ahead/behind" on MilestoneCards.
+ */
+export interface MilestonePaceInfo {
+  expectedMinutes: number    // median minutes from patient_in (or expected duration for paired)
+  actualMinutes: number      // actual minutes from patient_in (or actual duration for paired)
+  varianceMinutes: number    // positive = ahead (faster than expected), negative = behind
+  sampleSize: number
+}
+
+/**
+ * Compute pace info for a single milestone or paired milestone duration.
+ * @param expectedMinutes - surgeon's median time (from start to milestone, or pair duration)
+ * @param actualMinutes - actual elapsed time
+ * @param sampleSize - number of historical cases used for the median
+ */
+export function computeMilestonePace(
+  expectedMinutes: number,
+  actualMinutes: number,
+  sampleSize: number
+): MilestonePaceInfo {
+  return {
+    expectedMinutes: Math.round(expectedMinutes),
+    actualMinutes: Math.round(actualMinutes),
+    varianceMinutes: Math.round(expectedMinutes - actualMinutes),
+    sampleSize,
+  }
+}
+
+/**
  * Calculate progress through the case (0.0 - 1.0)
  * Based on how far into the estimated total time the current milestone represents
  * UPDATED: Now uses expectedTotalMinutes (median) instead of avgTotalMinutes
