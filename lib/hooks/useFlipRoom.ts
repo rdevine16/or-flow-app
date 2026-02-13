@@ -59,7 +59,7 @@ export function useFlipRoom({
   const [loading, setLoading] = useState(false)
 
   // Ref to latest fetchFlipRoom so Realtime callbacks don't cause subscription churn
-  const fetchRef = useRef<() => Promise<void>>()
+const fetchRef = useRef<() => Promise<void>>(null)
 
   const fetchFlipRoom = useCallback(async () => {
     if (!surgeonId || !scheduledDate || !facilityId || !enabled) return
