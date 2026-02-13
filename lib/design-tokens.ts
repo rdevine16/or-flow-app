@@ -599,6 +599,22 @@ export const varianceColors = {
 } as const
 
 // ============================================
+// CHART HEX COLORS
+// Raw hex values for inline styles, SVGs, and chart libraries
+// ============================================
+export const chartHex = {
+  /** Surgical phase breakdown colors (surgeon analytics) */
+  phases: {
+    preOp: '#2563EB',     // blue-600
+    surgical: '#60A5FA',  // blue-400
+    closing: '#10B981',   // green-500
+    emergence: '#FBBF24', // amber-400
+  },
+  /** Neutral dark text for stat numbers */
+  neutral: '#0F172A',     // slate-900
+} as const
+
+// ============================================
 // INPUT COLORS
 // ============================================
 export const inputColors = {

@@ -877,7 +877,7 @@ function BlockDayTimeline({
       {showLabels && (
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-medium text-slate-700">
+            <span className="text-sm font-medium text-slate-700">
               {new Date(day.date + 'T12:00:00').toLocaleDateString('en-US', {
                 weekday: 'short', month: 'short', day: 'numeric'
               })}
@@ -977,7 +977,7 @@ function WhatFitsPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-[13px] text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
+      <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-2">
         <Info className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
         <span>
           Based on <span className="font-semibold text-slate-800">{formatDuration(avgRemainingMinutes)}</span> avg remaining
@@ -992,7 +992,7 @@ function WhatFitsPanel({
               <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-medium text-slate-800 truncate">{opt.procedureName}</span>
+                  <span className="text-sm font-medium text-slate-800 truncate">{opt.procedureName}</span>
                   {opt.estimatedRevenue && (
                     <span className="text-xs font-semibold text-green-600 ml-2">
                       ${opt.estimatedRevenue.toLocaleString()}
@@ -1018,7 +1018,7 @@ function WhatFitsPanel({
                 <XCircle className="w-4 h-4 text-slate-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-medium text-slate-500 truncate">{opt.procedureName}</span>
+                    <span className="text-sm font-medium text-slate-500 truncate">{opt.procedureName}</span>
                     {opt.estimatedRevenue && (
                       <span className="text-xs text-slate-400 ml-2">
                         ${opt.estimatedRevenue.toLocaleString()}
@@ -1056,7 +1056,7 @@ function SurgeonUtilizationRow({
     >
       <td className="py-3 px-4">
         <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold text-slate-800">Dr. {data.surgeonName}</span>
+          <span className="text-sm font-semibold text-slate-800">Dr. {data.surgeonName}</span>
           <ChevronRight className="w-3.5 h-3.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </td>
@@ -1064,20 +1064,20 @@ function SurgeonUtilizationRow({
         <UtilizationBar pct={data.avgUtilizationPct} />
       </td>
       <td className="py-3 px-4 text-center">
-        <span className="text-[13px] text-slate-700 tabular-nums">{data.blockDayCount}</span>
+        <span className="text-sm text-slate-700 tabular-nums">{data.blockDayCount}</span>
       </td>
       <td className="py-3 px-4 text-center">
-        <span className="text-[13px] text-slate-700 tabular-nums">{data.totalCases}</span>
+        <span className="text-sm text-slate-700 tabular-nums">{data.totalCases}</span>
       </td>
       <td className="py-3 px-4 text-center">
-        <span className="text-[13px] text-slate-700 tabular-nums">{data.avgCasesPerBlockDay.toFixed(1)}</span>
+        <span className="text-sm text-slate-700 tabular-nums">{data.avgCasesPerBlockDay.toFixed(1)}</span>
       </td>
       <td className="py-3 px-4 text-right">
-        <span className="text-[13px] tabular-nums text-slate-700">{formatHours(data.totalUsedMinutes)}</span>
+        <span className="text-sm tabular-nums text-slate-700">{formatHours(data.totalUsedMinutes)}</span>
         <span className="text-xs text-slate-400 ml-1">/ {formatHours(data.totalBlockMinutes)}</span>
       </td>
       <td className="py-3 px-4 text-right">
-        <span className={`text-[13px] font-medium tabular-nums ${data.avgRemainingMinutes > 60 ? 'text-green-600' : 'text-slate-600'}`}>
+        <span className={`text-sm font-medium tabular-nums ${data.avgRemainingMinutes > 60 ? 'text-green-600' : 'text-slate-600'}`}>
           {formatDuration(data.avgRemainingMinutes)}
         </span>
       </td>
@@ -1113,25 +1113,25 @@ function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
               : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             }
             <DoorOpen className="w-4 h-4 text-slate-400" />
-            <span className="text-[13px] font-semibold text-slate-800">{data.roomName}</span>
+            <span className="text-sm font-semibold text-slate-800">{data.roomName}</span>
           </div>
         </td>
         <td className="py-3 px-4 w-56">
           <UtilizationBar pct={data.avgUtilizationPct} />
         </td>
         <td className="py-3 px-4 text-center">
-          <span className="text-[13px] text-slate-700 tabular-nums">{data.daysActive}</span>
+          <span className="text-sm text-slate-700 tabular-nums">{data.daysActive}</span>
           <span className="text-xs text-slate-400 ml-0.5">/ {data.days.length}</span>
         </td>
         <td className="py-3 px-4 text-center">
-          <span className="text-[13px] text-slate-700 tabular-nums">{data.totalCases}</span>
+          <span className="text-sm text-slate-700 tabular-nums">{data.totalCases}</span>
         </td>
         <td className="py-3 px-4 text-right">
-          <span className="text-[13px] tabular-nums text-slate-700">{formatHours(data.totalUsedMinutes)}</span>
+          <span className="text-sm tabular-nums text-slate-700">{formatHours(data.totalUsedMinutes)}</span>
           <span className="text-xs text-slate-400 ml-1">/ {formatHours(data.totalAvailableMinutes)}</span>
         </td>
         <td className="py-3 px-4 text-right">
-          <span className={`text-[13px] font-medium tabular-nums ${data.totalIdleMinutes / 60 > 10 ? 'text-green-600' : 'text-slate-600'}`}>
+          <span className={`text-sm font-medium tabular-nums ${data.totalIdleMinutes / 60 > 10 ? 'text-green-600' : 'text-slate-600'}`}>
             {formatHours(data.totalIdleMinutes)}
           </span>
         </td>
@@ -1248,7 +1248,7 @@ function CapacityInsightBanner({
         </div>
         <div>
           <h3 className="text-sm font-semibold text-blue-900 mb-1">Capacity Opportunity</h3>
-          <p className="text-[13px] text-blue-800 leading-relaxed">
+          <p className="text-sm text-blue-800 leading-relaxed">
             {insights.join(' ')}
           </p>
         </div>
@@ -1843,7 +1843,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                     <>
                       {selectedUtil.avgRemainingMinutes > 30 && (
                         <InsightCard icon={<Zap className="w-4 h-4" />} title="Capacity Available" type="info">
-                          <p className="text-[13px] text-slate-700">
+                          <p className="text-sm text-slate-700">
                             Dr. {selectedUtil.surgeonName} averages{' '}
                             <strong>{formatDuration(selectedUtil.avgRemainingMinutes)}</strong> of unused block time
                             per operating day across {selectedUtil.blockDayCount} block days.
@@ -1856,7 +1856,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
                       {selectedUtil.overrunDayCount > 0 && (
                         <InsightCard icon={<TimerOff className="w-4 h-4" />} title="Block Overruns Detected" type="warning">
-                          <p className="text-[13px] text-slate-700">
+                          <p className="text-sm text-slate-700">
                             Dr. {selectedUtil.surgeonName} ran past block end on{' '}
                             <strong>{selectedUtil.overrunDayCount} of {selectedUtil.blockDayCount}</strong> block days
                             ({formatDuration(selectedUtil.totalOverrunMinutes)} total overrun).
@@ -2058,7 +2058,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                   {/* Unblocked Capacity Insight */}
                   {roomUtilizations.some(r => r.unblockedMinutes > 120) && (
                     <InsightCard icon={<Info className="w-4 h-4" />} title="Unblocked Room Capacity" type="info">
-                      <p className="text-[13px] text-slate-700">
+                      <p className="text-sm text-slate-700">
                         {roomUtilizations.filter(r => r.unblockedMinutes > 120).map(r => (
                           <span key={r.roomId}>
                             <strong>{r.roomName}</strong> has {formatHours(r.unblockedMinutes)} of available time not assigned to any block schedule.{' '}

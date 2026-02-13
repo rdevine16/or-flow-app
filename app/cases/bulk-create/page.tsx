@@ -650,7 +650,7 @@ function BulkCreateContent() {
                             />
                             Rep Required
                             {row.rep_required_override !== null && row.rep_required_override !== procRequiresRep && (
-                              <span className="text-xs text-amber-600 font-medium">(overridden)</span>
+                              <span className="text-xs text-amber-700 font-medium">(overridden)</span>
                             )}
                           </label>
                         </div>

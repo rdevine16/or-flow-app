@@ -25,6 +25,7 @@ import {
   type ImprovementPlan,
   type ImprovementRecommendation,
 } from '@/lib/orbitScoreEngine'
+import { chartHex } from '@/lib/design-tokens'
 
 // ─── DATA FETCHING ────────────────────────────────────────────
 
@@ -474,8 +475,8 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
     <div className="grid grid-cols-4 gap-3 mb-6">
       {[
         { label: 'Facility Average', value: String(avg), color: getGrade(avg).text },
-        { label: 'Surgeons', value: String(scorecards.length), color: '#0F172A' },
-        { label: 'Total Cases', value: String(totalCases), color: '#0F172A' },
+        { label: 'Surgeons', value: String(scorecards.length), color: chartHex.neutral },
+        { label: 'Total Cases', value: String(totalCases), color: chartHex.neutral },
       ].map((stat, i) => (
         <div key={i} className="bg-white border border-slate-200/60 rounded-xl px-4 py-4 shadow-sm">
           <div className="text-xs font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">

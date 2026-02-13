@@ -11,6 +11,7 @@ import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 
 import { useSurgeons, useProcedureTypes } from '@/hooks'
+import { chartHex } from '@/lib/design-tokens'
 import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
 
 
@@ -150,12 +151,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 // PHASE COLORS (shared constants)
 // ============================================
 
-const PHASE_COLORS = {
-  preOp: '#2563EB',     // blue-600
-  surgical: '#60A5FA',  // blue-400
-  closing: '#10B981',   // green-500
-  emergence: '#FBBF24', // amber-400
-}
+const PHASE_COLORS = chartHex.phases
 
 const PHASE_LEGEND_ITEMS = [
   { label: 'Pre-Op', color: PHASE_COLORS.preOp },
