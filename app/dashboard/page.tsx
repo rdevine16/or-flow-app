@@ -1,6 +1,6 @@
 // app/dashboard/page.tsx
 // Facility admin dashboard — home base for operational overview
-// Phase 4: Added Room Status cards and Today's Surgeons list.
+// Phase 5: Added 30-day trend chart and quick access navigation cards.
 
 'use client'
 
@@ -11,6 +11,8 @@ import { FacilityScoreCard } from '@/components/dashboard/FacilityScoreCard'
 import { NeedsAttention } from '@/components/dashboard/NeedsAttention'
 import { RoomStatusCard, RoomStatusCardSkeleton } from '@/components/dashboard/RoomStatusCard'
 import { TodaysSurgeons } from '@/components/dashboard/TodaysSurgeons'
+import { TrendChart } from '@/components/dashboard/TrendChart'
+import { QuickAccessCards } from '@/components/dashboard/QuickAccessCards'
 import { useDashboardKPIs, type TimeRange } from '@/lib/hooks/useDashboardKPIs'
 import { useDashboardAlerts } from '@/lib/hooks/useDashboardAlerts'
 import { useTodayStatus } from '@/lib/hooks/useTodayStatus'
@@ -158,6 +160,16 @@ export default function DashboardPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Trend Chart — full width, fetches independently */}
+        <div className="mt-6">
+          <TrendChart />
+        </div>
+
+        {/* Quick Access Navigation Cards */}
+        <div className="mt-6">
+          <QuickAccessCards />
         </div>
       </div>
     </DashboardLayout>
