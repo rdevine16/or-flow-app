@@ -1,83 +1,101 @@
-# /review — Pre-Implementation Review & Questions
+# /review — Pre-Implementation Interview
 
-You are about to review a feature spec before implementation begins. Your job is to be the senior engineer doing a design review — find the gaps, ambiguities, and assumptions the spec makes that could cause problems during implementation.
+You are a senior engineer conducting a thorough design review before implementation begins. You will interview the developer **one question at a time** using the `TodoAskUserQuestionTool` to gather decisions that will shape the implementation.
 
-## Steps
+## How This Works
 
-### Step 1: Read the Feature Spec
-Read `docs/active-feature.md` carefully. Understand the full scope.
+1. Read `docs/active-feature.md` to understand the feature scope.
+2. Scan the relevant codebase — existing components, hooks, patterns, schema, styling, similar pages.
+3. Based on what you find, interview me **one question at a time**. Use `TodoAskUserQuestionTool` for every question — provide 2-4 concrete answer options based on what you found in the codebase, plus an "Other" option.
+4. After each answer, think about whether the answer changes what you should ask next. Adapt. Go deeper on topics I seem uncertain about. Skip questions my answers already resolve.
+5. When you've covered everything, save all Q&A to `docs/active-feature.md` and stop.
 
-### Step 2: Scan the Codebase
-Based on what the spec describes, examine the relevant parts of the codebase:
+## What to Investigate & Ask About
 
-- **Existing components**: Check `components/ui/` and `components/cases/` (or whatever the relevant domain folder is). What already exists that overlaps with what the spec wants to create? Are there patterns, utilities, or components that should be reused or extended rather than rebuilt?
-- **Existing hooks & data patterns**: Check `lib/hooks/` — how does the app currently fetch data? What patterns exist (useSupabaseQuery, direct Supabase client calls, SWR, React Query)? The new hooks MUST match the existing pattern.
-- **Database schema**: Check types, Supabase queries, or schema files to verify the spec's assumptions about table columns, relationships, and available data.
-- **Existing page structure**: Look at the current implementation of the page being redesigned. What state management, routing, and layout patterns are in place?
-- **Design tokens & styling**: Check for existing color constants, spacing patterns, component libraries (shadcn? custom?), and Tailwind conventions.
-- **Similar pages**: Look at other pages in the app that have similar patterns (tables, filters, drawers, tabs) — the new page should be consistent with them.
+You are not limited to these categories. Ask about **anything** you think matters. Be thorough. Be opinionated — if you see something in the codebase that looks like a better approach than what the spec describes, say so and ask if I agree.
 
-### Step 3: Generate Questions
+### Existing Code & Reuse
+- Components that already exist and overlap with what the spec wants to build (badges, drawers, modals, tables, tabs, cards)
+- Hooks and data fetching patterns already established
+- Utility functions, formatters, constants already in place
+- What should be reused vs rebuilt vs extended
 
-Organize your questions into these categories. Ask **only questions that would change implementation decisions.** Skip obvious things. Be specific — reference actual files and code you found.
+### Data & Schema Verification
+- Verify every table/column the spec references actually exists
+- Flag any assumptions the spec makes that don't match the schema
+- Identify missing data or columns that would be needed
+- Query patterns — are there existing queries that do similar things?
 
-**🔍 Existing Code & Patterns**
-Questions about existing components, hooks, utilities, or patterns that the spec doesn't mention but that you found in the codebase. Things like:
-- "I found `components/ui/Badge.tsx` — should the new StatusBadge extend this or replace it?"
-- "The app uses `useSupabaseQuery` everywhere — should the new hooks follow this pattern?"
-- "There's already a `CaseListView.tsx` — what happens to it?"
+### Technical Implementation
+- State management approach (local state, context, URL params, etc.)
+- Routing patterns for the drawer (URL-driven? local state?)
+- Data fetching strategy (per-component? page-level? cache strategy?)
+- Performance concerns with the data volume
+- Real-time considerations
+- Error boundary and error handling patterns
 
-**📊 Data & Schema**
-Questions about database assumptions, missing columns, query feasibility:
-- "The spec assumes `procedure_types.category` exists for icon mapping — I see [X] in the schema. Is this the right field?"
-- "case_completion_stats doesn't have [column] — how should the financials tab handle this?"
-- "The milestone progress calculation assumes all cases have milestones. What about cases created before milestone tracking was enabled?"
+### UI & UX Decisions
+- Layout specifics the spec leaves ambiguous
+- Interaction details (what happens when X? what does Y look like?)
+- Mobile/responsive behavior
+- Animation and transition details
+- Empty states, loading states, error states
+- Accessibility considerations
 
-**🎨 Design & UX Decisions**
-Questions about visual or interaction details the spec leaves ambiguous:
-- "Should the drawer push the table content left or overlay on top?"
-- "What happens when you click a row that's already open in the drawer — close it or stay open?"
-- "The spec says 'procedure icons by category' — your procedure_types table has [these categories]. Which ones get unique icons?"
+### Design & Styling
+- Design token usage — what colors, spacing, typography tokens exist?
+- Component library in use (shadcn? custom?)
+- Consistency with existing pages
+- Dark mode considerations
 
-**⚙️ Edge Cases & Error Handling**
-Questions about scenarios the spec doesn't cover:
-- "What happens if a surgeon has zero cases for a procedure type — no median available for projections?"
-- "How should the bulk validation handle a case that fails validation (e.g., missing required milestones)?"
-- "Should cancelled cases appear in any tab or be excluded entirely?"
+### Tradeoffs & Priorities
+- What to build now vs stub for later
+- Performance vs feature completeness
+- Complexity vs simplicity tradeoffs
+- Where to cut scope if phases run long
 
-**🔗 Integration & Side Effects**
-Questions about how this feature connects to other parts of the app:
-- "Validating a case triggers `record_case_stats` — should the drawer show a loading state while stats recompute?"
-- "The spec mentions linking surgeon name to their scorecard — what's the route? `/surgeons/[id]`? `/analytics/surgeons/[id]`?"
-- "Does the 'New Case' button open the existing case creation form or is that changing too?"
+### Edge Cases & Error Handling
+- What happens with bad/missing data?
+- Concurrent user scenarios
+- Trigger side effects (validation → stats recomputation)
+- Cases with zero milestones, zero costs, missing surgeon data
 
-### Step 4: Present Questions and STOP
+### Integration & Dependencies
+- How this connects to other pages and features
+- Navigation patterns (links to surgeon pages, case detail, etc.)
+- Shared state or context that other parts of the app depend on
+- iOS parity considerations
 
-Output all your questions organized by category. Use numbered questions so I can reference them in my answers (e.g., "For Q3, do X").
+## Rules
 
-**End with:**
-> Answer these questions and I'll incorporate your answers into the implementation plan when you run `/audit`.
+- **One question at a time.** Never batch questions.
+- **Always use `TodoAskUserQuestionTool`.** Provide concrete options based on what you actually found in the code, plus "Other" for freeform answers.
+- **Be specific.** Don't ask "how should the table work?" — ask "I found `DataTable.tsx` in `components/ui/` that uses tanstack-table with sorting and pagination. Should the cases table extend this component, or do we build a custom table? DataTable supports [X, Y, Z] but not [A, B] which the spec requires."
+- **Be opinionated.** If you see a better approach than what the spec describes, propose it as one of the options and explain why.
+- **Go deep.** 15-30 questions is normal for a feature this size. Don't rush.
+- **Adapt.** If I answer something that makes other questions irrelevant, skip them. If an answer reveals a new concern, ask about it.
+- **Reference actual code.** "I found X at path/to/file.tsx" — show me you've actually looked.
 
-Then **STOP**. Do not generate an implementation plan. Do not start coding. Do not create any files. Wait for answers.
+## When You're Done
 
-### Step 5: Save Answers
+When you've covered everything that matters, do the following:
 
-When I provide answers, append them to `docs/active-feature.md` under a new section:
+1. Summarize all questions and answers
+2. Append them to `docs/active-feature.md` under a new section:
 
 ```markdown
 ## Review Q&A
 
 > Generated by /review on [date]
 
-### Existing Code & Patterns
 **Q1:** [question]
-**A1:** [my answer]
+**A1:** [answer]
 
-### Data & Schema
 **Q2:** [question]
-**A2:** [my answer]
+**A2:** [answer]
 
 [... etc]
 ```
 
-Then say: "Answers saved. Run `/audit` to generate the implementation plan — it will incorporate these decisions."
+3. Then say: "All answers saved to active-feature.md. Run `/audit` to generate the implementation plan — it will incorporate these decisions."
+4. **STOP.** Do not generate an implementation plan. Do not start coding. Do not create files.
