@@ -352,7 +352,7 @@ function AllSurgeonsOverview({
                   </td>
                   <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
                   <td className="px-6 py-4 text-right">
-                    <span className="text-lg font-bold text-emerald-600 tabular-nums">
+                    <span className="text-lg font-bold text-green-600 tabular-nums">
                       {formatCurrency(surgeon.totalProfit)}
                     </span>
                   </td>
@@ -603,7 +603,7 @@ function SurgeonOverviewTab({
           tooltip="Weighted average comparing this surgeon's duration to facility median for each procedure type"
         >
           <div className={`text-2xl font-bold ${
-            surgeon.durationVsFacilityMinutes < 0 ? 'text-emerald-600' : 
+            surgeon.durationVsFacilityMinutes < 0 ? 'text-green-600' : 
             surgeon.durationVsFacilityMinutes > 10 ? 'text-red-500' : 'text-slate-900'
           }`}>
             {surgeon.durationVsFacilityMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsFacilityMinutes)} min
@@ -618,7 +618,7 @@ function SurgeonOverviewTab({
           tooltip="Estimated profit impact per case based on time efficiency"
         >
           <div className={`text-2xl font-bold ${
-            surgeon.profitImpact >= 0 ? 'text-emerald-600' : 'text-red-500'
+            surgeon.profitImpact >= 0 ? 'text-green-600' : 'text-red-500'
           }`}>
             {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
           </div>
@@ -669,7 +669,7 @@ function SurgeonOverviewTab({
           {costBreakdown.avgCredits > 0 && (
             <div className="flex items-center justify-between py-1.5 pl-4">
               <span className="text-sm text-slate-500">Credits (rebates, fees)</span>
-              <span className="text-sm font-medium text-emerald-600 tabular-nums">
+              <span className="text-sm font-medium text-green-600 tabular-nums">
                 +{formatCurrency(costBreakdown.avgCredits)}
               </span>
             </div>
@@ -682,7 +682,7 @@ function SurgeonOverviewTab({
           </div>
           <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-slate-200">
             <span className="text-sm font-semibold text-slate-900">Avg Profit/Case</span>
-            <span className={`text-sm font-bold tabular-nums ${costBreakdown.avgProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            <span className={`text-sm font-bold tabular-nums ${costBreakdown.avgProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(costBreakdown.avgProfit)}
             </span>
           </div>
@@ -753,7 +753,7 @@ function DailyActivityTab({
               </div>
               <div className="text-right">
                 <div className="text-xs text-slate-500 uppercase tracking-wide">Total Profit</div>
-                <div className="text-sm font-bold text-emerald-600">{formatCurrency(day.totalProfit)}</div>
+                <div className="text-sm font-bold text-green-600">{formatCurrency(day.totalProfit)}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-slate-500 uppercase tracking-wide">Avg/Case</div>
@@ -830,7 +830,7 @@ function ProceduresTab({
                       <span className="ml-1.5 text-amber-500 text-xs">*</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-right font-semibold text-emerald-600 tabular-nums">
+                  <td className="px-6 py-4 text-right font-semibold text-green-600 tabular-nums">
                     {formatCurrency(proc.totalProfit)}
                   </td>
                   <td className="px-6 py-4 text-right text-slate-900 tabular-nums">
@@ -1100,7 +1100,7 @@ showToast({
             {dayCases.length > 0 && !loadingMilestones && Object.keys(milestoneMap).length > 0 && (
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Pre-Op</div>
-                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Surgical</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500" /> Surgical</div>
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" /> Closing</div>
                 <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-violet-500" /> Emergence</div>
               </div>
@@ -1166,7 +1166,7 @@ showToast({
                       {phases && (
                         <div className="flex items-center gap-1.5 mt-2.5">
                           <PhasePill label="Pre-Op" minutes={phases.preOp} color="blue" />
-                          <PhasePill label="Surgical" minutes={phases.surgical} color="emerald" />
+                          <PhasePill label="Surgical" minutes={phases.surgical} color="green" />
                           <PhasePill label="Closing" minutes={phases.closing} color="amber" />
                           <PhasePill label="Emergence" minutes={phases.emergence} color="violet" />
                         </div>
@@ -1196,7 +1196,7 @@ showToast({
                       <div className="text-right min-w-[140px]">
                         <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Profit</div>
                         <div className="flex items-center justify-end gap-2">
-                          <span className="text-sm font-bold text-emerald-600">
+                          <span className="text-sm font-bold text-green-600">
                             {formatCurrency(caseData.profit || 0)}
                           </span>
                           {profitDiff !== null && (
@@ -1236,13 +1236,13 @@ function SummaryCard({
       <div className="flex items-center gap-3">
         <div className={`
           w-10 h-10 rounded-lg flex items-center justify-center
-          ${variant === 'success' ? 'bg-emerald-50' : 'bg-slate-50'}
+          ${variant === 'success' ? 'bg-green-50' : 'bg-slate-50'}
         `}>
-          <Icon className={`w-5 h-5 ${variant === 'success' ? 'text-emerald-600' : 'text-slate-600'}`} />
+          <Icon className={`w-5 h-5 ${variant === 'success' ? 'text-green-600' : 'text-slate-600'}`} />
         </div>
         <div>
           <p className="text-sm text-slate-500">{title}</p>
-          <p className={`text-xl font-bold ${variant === 'success' ? 'text-emerald-600' : 'text-slate-900'}`}>
+          <p className={`text-xl font-bold ${variant === 'success' ? 'text-green-600' : 'text-slate-900'}`}>
             {value}
           </p>
         </div>
@@ -1292,13 +1292,13 @@ function DayMetricCard({
   return (
     <div className={`
       rounded-xl p-4 
-      ${highlight ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200' : 'bg-slate-50'}
+      ${highlight ? 'bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200' : 'bg-slate-50'}
     `}>
       <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
         <Icon className="w-4 h-4" />
         {label}
       </div>
-      <div className={`text-2xl font-bold ${highlight ? 'text-emerald-600' : 'text-slate-900'}`}>
+      <div className={`text-2xl font-bold ${highlight ? 'text-green-600' : 'text-slate-900'}`}>
         {value}
       </div>
     </div>
@@ -1372,7 +1372,7 @@ function RankBadge({ rank }: { rank: number }) {
 
 function MarginBadge({ value }: { value: number }) {
   const color =
-    value >= 30 ? 'bg-emerald-50 text-emerald-700' :
+    value >= 30 ? 'bg-green-50 text-green-600' :
     value >= 15 ? 'bg-amber-50 text-amber-700' :
     value >= 0 ? 'bg-red-50 text-red-700' :
     'bg-red-100 text-red-800'
@@ -1425,7 +1425,7 @@ function ComparisonPill({
       inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold
       transition-all duration-200
       ${isGood 
-        ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 ring-1 ring-emerald-200/50' 
+        ? 'bg-gradient-to-r from-green-50 to-green-100 text-green-600 ring-1 ring-green-200/50' 
         : 'bg-gradient-to-r from-red-50 to-red-100 text-red-700 ring-1 ring-red-200/50'
       }
     `}>
@@ -1454,9 +1454,9 @@ function ConsistencyBadge({
     high: {
       label: 'High Consistency',
       icon: '⚡',
-      bg: 'bg-gradient-to-r from-emerald-50 to-emerald-100',
-      text: 'text-emerald-700',
-      ring: 'ring-emerald-200/50',
+      bg: 'bg-gradient-to-r from-green-50 to-green-100',
+      text: 'text-green-600',
+      ring: 'ring-green-200/50',
     },
     medium: {
       label: 'Moderate',
@@ -1503,11 +1503,11 @@ const phaseColorMap = {
     text: 'text-blue-700',
     ring: 'ring-blue-200/60',
   },
-  emerald: {
-    bg: 'bg-emerald-50',
-    dot: 'bg-emerald-500',
-    text: 'text-emerald-700',
-    ring: 'ring-emerald-200/60',
+  green: {
+    bg: 'bg-green-50',
+    dot: 'bg-green-500',
+    text: 'text-green-600',
+    ring: 'ring-green-200/60',
   },
   amber: {
     bg: 'bg-amber-50',

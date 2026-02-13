@@ -551,7 +551,7 @@ export default function DefaultProceduresPage() {
                                   onClick={(e) => handleToggleActive(procedure, e)}
                                   className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                                     procedure.is_active
-                                      ? 'border-emerald-500 bg-emerald-500'
+                                      ? 'border-green-500 bg-green-500'
                                       : 'border-slate-300 hover:border-slate-400'
                                   }`}
                                 >

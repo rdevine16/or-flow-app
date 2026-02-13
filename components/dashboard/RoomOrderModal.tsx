@@ -78,8 +78,8 @@ function SortableRoomItem({ room, index }: { room: OrderableRoom; index: number 
       </span>
 
       {/* Room Icon */}
-      <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-        <Building2 className="w-4.5 h-4.5 text-emerald-600" />
+      <div className="w-9 h-9 bg-green-50 rounded-lg flex items-center justify-center flex-shrink-0">
+        <Building2 className="w-4.5 h-4.5 text-green-600" />
       </div>
 
       {/* Room Name */}

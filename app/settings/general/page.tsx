@@ -366,7 +366,7 @@ showToast({
                       <p className="text-sm text-slate-500">Total Cases</p>
                     </div>
                     <div className="text-center">
-                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 mb-3">
+                      <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-green-50 text-green-600 mb-3">
                         {icons.calendar}
                       </div>
                       <p className="text-2xl font-semibold text-slate-900">{stats?.casesThisMonth.toLocaleString() || 0}</p>
@@ -600,8 +600,8 @@ showToast({
                     <div>
                       <label className="block text-sm font-medium text-slate-500 mb-2">Account Status</label>
                       <div className="px-4 py-2.5 bg-slate-50 rounded-lg">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium text-emerald-700 bg-emerald-100 rounded-full">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm font-medium text-green-600 bg-green-100 rounded-full">
+                          <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                           Active
                         </span>
                       </div>

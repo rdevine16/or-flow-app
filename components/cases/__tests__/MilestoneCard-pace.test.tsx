@@ -196,7 +196,7 @@ describe('MilestoneCard — pace info display', () => {
 // ============================================
 
 describe('MilestoneCard — pace color coding', () => {
-  it('should use emerald color for significantly ahead (>5 min)', () => {
+  it('should use green color for significantly ahead (>5 min)', () => {
     const paceInfo: MilestonePaceInfo = {
       expectedMinutes: 25,
       actualMinutes: 15,
@@ -213,7 +213,7 @@ describe('MilestoneCard — pace color coding', () => {
     )
 
     const aheadText = screen.getByText(/10m ahead/)
-    expect(aheadText.className).toContain('text-emerald-600')
+    expect(aheadText.className).toContain('text-green-600')
   })
 
   it('should use red color for significantly behind (>5 min)', () => {

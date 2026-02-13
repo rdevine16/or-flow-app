@@ -11,14 +11,14 @@ interface MetricCardProps {
 
 const variants = {
   default: 'bg-white border-slate-200',
-  success: 'bg-emerald-50 border-emerald-200',
+  success: 'bg-green-50 border-green-200',
   warning: 'bg-amber-50 border-amber-200',
   danger: 'bg-red-50 border-red-200',
 }
 
 const textVariants = {
   default: 'text-slate-900',
-  success: 'text-emerald-700',
+  success: 'text-green-600',
   warning: 'text-amber-700',
   danger: 'text-red-700',
 }
@@ -40,7 +40,7 @@ export default function MetricCard({
       <div className="flex items-end gap-2">
         <p className={`text-2xl font-bold ${textVariants[variant]}`}>{value}</p>
         {trend && (
-          <span className={`text-sm font-medium ${trend.positive ? 'text-emerald-600' : 'text-red-500'}`}>
+          <span className={`text-sm font-medium ${trend.positive ? 'text-green-600' : 'text-red-500'}`}>
             {trend.positive ? '↑' : '↓'} {Math.abs(trend.value)}%
           </span>
         )}

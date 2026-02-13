@@ -18,10 +18,10 @@ const statusConfig: Record<Status, {
 }> = {
   active: {
     label: 'ACTIVE',
-    dotColor: 'bg-emerald-500',
-    textColor: 'text-emerald-600',
-    bgColor: 'bg-emerald-50',
-    glowColor: 'shadow-emerald-500/50'
+    dotColor: 'bg-green-500',
+    textColor: 'text-green-600',
+    bgColor: 'bg-green-50',
+    glowColor: 'shadow-green-500/50'
   },
   upcoming: {
     label: 'NEXT UP',

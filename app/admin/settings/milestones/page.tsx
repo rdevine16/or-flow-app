@@ -538,7 +538,7 @@ export default function AdminMilestonesSettingsPage() {
                           disabled={saving}
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors disabled:opacity-50 ${
                             milestone.is_active
-                              ? 'border-emerald-500 bg-emerald-500'
+                              ? 'border-green-500 bg-green-500'
                               : 'border-slate-300 hover:border-slate-400'
                           }`}
                           title={milestone.is_active ? 'Deactivate' : 'Activate'}
@@ -554,7 +554,7 @@ export default function AdminMilestonesSettingsPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-slate-900">{milestone.display_name}</span>
                           {milestone.pair_position === 'start' && milestone.is_active && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-600">
                               Start
                             </span>
                           )}
@@ -591,7 +591,7 @@ export default function AdminMilestonesSettingsPage() {
                             <button
                               onClick={() => handleRestore(milestone)}
                               disabled={saving}
-                              className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                              className="px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
                             >
                               Restore
                             </button>
@@ -772,7 +772,7 @@ export default function AdminMilestonesSettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-emerald-100 text-emerald-700">Start</span>
+                    <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-600">Start</span>
                     <span className="text-sm text-slate-900">
                       {pairingMilestone.pair_position === 'start' ? pairingMilestone.display_name : getPairedName(pairingMilestone.pair_with_id)}
                     </span>

@@ -74,7 +74,7 @@ function getStatusColor(statusName: string): string {
     expected: 'bg-slate-100 text-slate-700 border-slate-200',
     checked_in: 'bg-blue-100 text-blue-700 border-blue-200',
     in_pre_op: 'bg-amber-100 text-amber-700 border-amber-200',
-    ready_for_or: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    ready_for_or: 'bg-green-100 text-green-600 border-green-200',
     in_surgery: 'bg-purple-100 text-purple-700 border-purple-200',
     in_recovery: 'bg-cyan-100 text-cyan-700 border-cyan-200',
     ready_for_discharge: 'bg-green-100 text-green-700 border-green-200',
@@ -385,7 +385,7 @@ function CheckInDetailModal({
                       <button
                         onClick={() => handleFieldChange(field.field_key, !localResponses[field.field_key])}
                         className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${Boolean(localResponses[field.field_key])
-                            ? 'bg-emerald-500 text-white'
+                            ? 'bg-green-500 text-white'
                             : 'bg-white border-2 border-slate-300'
                           }`}
                       >
@@ -772,25 +772,25 @@ export default function CheckInPage() {
               <h3 className="font-medium text-slate-900 mb-2">Features include:</h3>
               <ul className="space-y-2 text-sm text-slate-600">
                 <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Real-time patient status tracking
                 </li>
                 <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Customizable pre-op checklists
                 </li>
                 <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Shareable escort status links
                 </li>
                 <li className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Arrival time management

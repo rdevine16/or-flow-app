@@ -155,8 +155,8 @@ export default function ResetPasswordPage() {
         <div className="max-w-md w-full text-center">
           <LogoFullDark />
           <div className="mt-8 bg-white rounded-2xl shadow-xl p-8">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Check className="w-8 h-8 text-emerald-600" />
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Check className="w-8 h-8 text-green-600" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">Password Reset!</h2>
             <p className="text-slate-500">Redirecting to dashboard...</p>
@@ -225,7 +225,7 @@ export default function ResetPasswordPage() {
                               ? 'bg-amber-500'
                               : passwordStrength.level === 'good'
                               ? 'bg-blue-500'
-                              : 'bg-emerald-500'
+                              : 'bg-green-500'
                             : 'bg-slate-200'
                         }`}
                       />
@@ -235,7 +235,7 @@ export default function ResetPasswordPage() {
                     passwordStrength.level === 'weak' ? 'text-red-600' :
                     passwordStrength.level === 'fair' ? 'text-amber-600' :
                     passwordStrength.level === 'good' ? 'text-blue-600' :
-                    'text-emerald-600'
+                    'text-green-600'
                   }`}>
                     {passwordStrength.level.charAt(0).toUpperCase() + passwordStrength.level.slice(1)} password
                   </p>

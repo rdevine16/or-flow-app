@@ -324,10 +324,10 @@ export const CASE_STATUS_CONFIG: Record<CaseStatus, StatusConfig> = {
   },
   in_progress: {
     label: 'In Progress',
-    color: 'text-emerald-700',
-    bgColor: 'bg-emerald-50',
-    borderColor: 'border-emerald-200',
-    dotColor: 'bg-emerald-500'
+    color: 'text-green-600',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200',
+    dotColor: 'bg-green-500'
   },
   completed: {
     label: 'Completed',
@@ -357,7 +357,7 @@ export const CASE_STATUS_CONFIG: Record<CaseStatus, StatusConfig> = {
  * Handles various formats (spaces, different cases) gracefully.
  * 
  * @example
- * getStatusConfig('in_progress')  // { label: 'In Progress', color: 'text-emerald-700', ... }
+ * getStatusConfig('in_progress')  // { label: 'In Progress', color: 'text-green-600', ... }
  * getStatusConfig('In Progress')  // Same result
  * getStatusConfig(null)           // Returns 'scheduled' config as default
  */

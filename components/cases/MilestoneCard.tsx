@@ -56,7 +56,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
     <div className={`
       relative rounded-2xl transition-all duration-300 overflow-hidden
       ${isComplete 
-        ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 shadow-sm shadow-emerald-200/50' 
+        ? 'bg-gradient-to-br from-green-50 to-green-100/50 shadow-sm shadow-green-200/50' 
         : isInProgress 
           ? 'bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md shadow-blue-200/50 ring-2 ring-blue-400/30' 
           : 'bg-white shadow-sm hover:shadow-md border border-slate-200/60'
@@ -65,7 +65,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
       {/* Top accent bar */}
       <div className={`h-1 w-full ${
         isComplete 
-          ? 'bg-gradient-to-r from-emerald-400 to-teal-400' 
+          ? 'bg-gradient-to-r from-green-400 to-teal-400' 
           : isInProgress 
             ? 'bg-gradient-to-r from-blue-400 to-indigo-400' 
             : 'bg-slate-200'
@@ -77,7 +77,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
           <div className={`
             w-10 h-10 rounded-xl flex items-center justify-center shadow-sm
             ${isComplete 
-              ? 'bg-gradient-to-br from-emerald-500 to-teal-500' 
+              ? 'bg-gradient-to-br from-green-500 to-teal-500' 
               : isInProgress 
                 ? 'bg-gradient-to-br from-blue-500 to-indigo-500' 
                 : 'bg-slate-100'
@@ -113,21 +113,21 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
 
         {/* Title */}
         <h4 className={`text-sm font-bold mb-1 ${
-          isComplete ? 'text-emerald-900' : isInProgress ? 'text-blue-900' : 'text-slate-800'
+          isComplete ? 'text-green-900' : isInProgress ? 'text-blue-900' : 'text-slate-800'
         }`}>
           {displayName}
         </h4>
 
         {/* Time display */}
         {isComplete && (
-          <div className="flex items-center gap-1.5 text-emerald-700">
+          <div className="flex items-center gap-1.5 text-green-600">
             <svg className="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             {isPaired ? (
               <span className="text-xs font-semibold">
                 {formatTimestamp24(recorded?.recorded_at, { timeZone })} → {formatTimestamp24(partnerRecorded?.recorded_at, { timeZone })}
-                <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-200/50 rounded text-emerald-800">{elapsedDisplay}</span>
+                <span className="ml-1.5 px-1.5 py-0.5 bg-green-200/50 rounded text-green-800">{elapsedDisplay}</span>
               </span>
             ) : (
               <span className="text-xs font-semibold">{formatTimestamp(recorded?.recorded_at, { timeZone })}</span>
@@ -140,7 +140,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
           <p className="text-[10px] text-slate-400 mt-1">
             {paceInfo.actualMinutes}m vs {paceInfo.expectedMinutes}m exp
             <span className={`font-semibold ml-1 ${
-              paceInfo.varianceMinutes > 5 ? 'text-emerald-600' :
+              paceInfo.varianceMinutes > 5 ? 'text-green-600' :
               paceInfo.varianceMinutes < -5 ? 'text-red-500' :
               paceInfo.varianceMinutes < 0 ? 'text-amber-500' :
               'text-blue-500'
@@ -187,7 +187,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
             className={`mt-4 w-full py-2.5 px-4 text-sm font-bold text-white rounded-xl transition-all active:scale-[0.98] ${
               loading
                 ? 'bg-slate-400 cursor-not-allowed shadow-none'
-                : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40'
+                : 'bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 shadow-lg shadow-green-500/25 hover:shadow-green-500/40'
             }`}
           >
             {loading ? 'Completing...' : 'Complete'}

@@ -144,10 +144,10 @@ export function getPaceStatusColors(status: PaceStatus): {
   switch (status) {
     case 'ahead':
       return {
-        bg: 'bg-emerald-500',
-        text: 'text-emerald-600',
-        border: 'border-emerald-200',
-        gradient: 'from-emerald-500 to-emerald-400'
+        bg: 'bg-green-500',
+        text: 'text-green-600',
+        border: 'border-green-200',
+        gradient: 'from-green-500 to-green-400'
       }
     case 'onPace':
       return {

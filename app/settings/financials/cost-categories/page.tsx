@@ -527,7 +527,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                             onClick={() => handleToggleActive(cat)}
                             className={`p-2 rounded-lg transition-colors ${
                               cat.is_active 
-                                ? 'text-emerald-600 hover:bg-emerald-50' 
+                                ? 'text-green-600 hover:bg-green-50' 
                                 : 'text-slate-400 hover:bg-slate-100'
                             }`}
                             title={cat.is_active ? 'Deactivate' : 'Activate'}
@@ -559,7 +559,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
                     <h3 className="font-semibold text-slate-900">Credits (Offsets)</h3>
                     <span className="text-sm text-slate-500">({creditCategories.length})</span>
                   </div>
@@ -591,7 +591,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                             onClick={() => handleToggleActive(cat)}
                             className={`p-2 rounded-lg transition-colors ${
                               cat.is_active 
-                                ? 'text-emerald-600 hover:bg-emerald-50' 
+                                ? 'text-green-600 hover:bg-green-50' 
                                 : 'text-slate-400 hover:bg-slate-100'
                             }`}
                             title={cat.is_active ? 'Deactivate' : 'Activate'}
@@ -645,7 +645,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
                       return (
                         <div key={cat.id} className="px-4 py-3 flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <div className={`w-2.5 h-2.5 rounded-full ${cat.type === 'debit' ? 'bg-red-300' : 'bg-emerald-300'}`} />
+                            <div className={`w-2.5 h-2.5 rounded-full ${cat.type === 'debit' ? 'bg-red-300' : 'bg-green-300'}`} />
                             <div>
                               <span className="font-medium text-slate-600">{cat.name}</span>
                               <p className="text-xs text-slate-400">

@@ -893,7 +893,7 @@ if (insertError) {
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
                       s < step
-                        ? 'bg-emerald-500 text-white'
+                        ? 'bg-green-500 text-white'
                         : s === step
                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                         : 'bg-slate-200 text-slate-500'
@@ -916,7 +916,7 @@ if (insertError) {
                 {s < 4 && (
                   <div
                     className={`flex-1 h-1 mx-2 rounded transition-colors ${
-                      s < step ? 'bg-emerald-500' : 'bg-slate-200'
+                      s < step ? 'bg-green-500' : 'bg-slate-200'
                     }`}
                   />
                 )}
@@ -1102,7 +1102,7 @@ if (insertError) {
                     <label
                       className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-all ${
                         facilityData.subscriptionStatus === 'active'
-                          ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/20'
+                          ? 'border-green-500 bg-green-50 ring-2 ring-green-500/20'
                           : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
@@ -1116,12 +1116,12 @@ if (insertError) {
                       <div
                         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                           facilityData.subscriptionStatus === 'active'
-                            ? 'border-emerald-500'
+                            ? 'border-green-500'
                             : 'border-slate-300'
                         }`}
                       >
                         {facilityData.subscriptionStatus === 'active' && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
                         )}
                       </div>
                       <div>
@@ -1344,7 +1344,7 @@ if (insertError) {
                     <label
                       className={`flex items-start gap-4 p-4 border rounded-xl cursor-pointer transition-all ${
                         sendWelcomeEmail
-                          ? 'border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50'
+                          ? 'border-green-200 bg-green-50/50 hover:bg-green-50'
                           : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
@@ -1358,7 +1358,7 @@ if (insertError) {
                         <div
                           className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
                             sendWelcomeEmail
-                              ? 'bg-emerald-600 text-white'
+                              ? 'bg-green-600 text-white'
                               : 'border-2 border-slate-300 bg-white'
                           }`}
                         >
@@ -1371,7 +1371,7 @@ if (insertError) {
                       <div
                         className={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
                           sendWelcomeEmail
-                            ? 'bg-emerald-100 text-emerald-600'
+                            ? 'bg-green-100 text-green-600'
                             : 'bg-slate-100 text-slate-400'
                         }`}
                       >
@@ -1433,7 +1433,7 @@ if (insertError) {
                     <span
                       className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                         facilityData.subscriptionStatus === 'active'
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}
                     >
@@ -1474,7 +1474,7 @@ if (insertError) {
                             enabled ? 'text-slate-900' : 'text-slate-400'
                           }`}
                         >
-                          <span className={enabled ? 'text-emerald-500' : 'text-slate-300'}>
+                          <span className={enabled ? 'text-green-500' : 'text-slate-300'}>
                             {enabled ? '✓' : '○'}
                           </span>
                           {config.label}
@@ -1487,7 +1487,7 @@ if (insertError) {
                         sendWelcomeEmail ? 'text-slate-900' : 'text-slate-400'
                       }`}
                     >
-                      <span className={sendWelcomeEmail ? 'text-emerald-500' : 'text-slate-300'}>
+                      <span className={sendWelcomeEmail ? 'text-green-500' : 'text-slate-300'}>
                         {sendWelcomeEmail ? '✓' : '○'}
                       </span>
                       Welcome Email

@@ -316,7 +316,7 @@ export function BlockSidebar({
           {/* Holiday Checkbox */}
           <div
             className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-colors ${
-              showHolidays ? 'bg-emerald-500' : 'border-2 border-emerald-500'
+              showHolidays ? 'bg-green-500' : 'border-2 border-green-500'
             }`}
           >
             {showHolidays && <Check className="h-3 w-3 text-white" strokeWidth={3} />}

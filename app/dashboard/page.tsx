@@ -543,7 +543,7 @@ export default function DashboardPage() {
               )}
 
               {isToday && (
-                <span className="px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 rounded-full">
+                <span className="px-2 py-1 text-xs font-medium text-green-600 bg-green-50 rounded-full">
                   Today
                 </span>
               )}
@@ -637,8 +637,8 @@ export default function DashboardPage() {
               >
                 <h2 className="text-lg font-semibold text-slate-900">OR Rooms</h2>
                 {activeCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold">
-                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-600 rounded-full text-xs font-semibold">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                     {activeCount} Active
                   </span>
                 )}

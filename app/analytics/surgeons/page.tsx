@@ -114,7 +114,7 @@ function getConsistencyLabel(avgSeconds: number | null, stddevSeconds: number | 
     return { label: 'N/A', color: 'text-slate-400' }
   }
   const cv = (stddevSeconds / avgSeconds) * 100
-  if (cv < 10) return { label: 'Very Consistent', color: 'text-emerald-600' }
+  if (cv < 10) return { label: 'Very Consistent', color: 'text-green-600' }
   if (cv < 20) return { label: 'Consistent', color: 'text-blue-600' }
   return { label: 'Variable', color: 'text-amber-600' }
 }
@@ -153,7 +153,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 const PHASE_COLORS = {
   preOp: '#2563EB',     // blue-600
   surgical: '#60A5FA',  // blue-400
-  closing: '#10B981',   // emerald-500
+  closing: '#10B981',   // green-500
   emergence: '#FBBF24', // amber-400
 }
 
@@ -856,7 +856,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     <EnhancedMetricCard
                       title="Avg OR Time"
                       value={formatMinutesToHHMMSS(overviewMetrics.avgORTime)}
-                      accentColor="emerald"
+                      accentColor="green"
                       subtitle="per case"
                       icon={
                         <Clock className="w-4 h-4" />
@@ -918,7 +918,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       <SectionHeader
                         title="Procedure Breakdown"
                         subtitle="Performance by procedure type"
-                        accentColor="emerald"
+                        accentColor="green"
                         icon={
                           <Archive className="w-4 h-4" />
                         }
@@ -1096,7 +1096,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-emerald-500" />
+                          <Clock className="w-4 h-4 text-green-500" />
                           Total OR Time
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalORTime)}</div>
@@ -1257,7 +1257,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       <SectionHeader
                         title="Procedure Performance"
                         subtitle="Today vs 30-day average by procedure"
-                        accentColor="emerald"
+                        accentColor="green"
                         icon={
                           <BarChart3 className="w-4 h-4" />
                         }

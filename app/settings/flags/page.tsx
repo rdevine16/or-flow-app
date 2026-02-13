@@ -60,7 +60,7 @@ const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; bg: stri
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
   timing: { label: 'Timing', color: 'text-blue-600' },
-  efficiency: { label: 'Efficiency', color: 'text-emerald-600' },
+  efficiency: { label: 'Efficiency', color: 'text-green-600' },
   anesthesia: { label: 'Anesthesia', color: 'text-violet-600' },
   recovery: { label: 'Recovery', color: 'text-orange-600' },
 }

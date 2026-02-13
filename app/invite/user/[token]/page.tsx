@@ -319,7 +319,7 @@ try {
               { met: passwordRequirements.hasLowercase, text: 'Lowercase letter' },
               { met: passwordRequirements.hasNumber, text: 'Number' },
             ].map((req, i) => (
-              <div key={i} className={`flex items-center gap-1 text-xs ${req.met ? 'text-emerald-600' : 'text-slate-400'}`}>
+              <div key={i} className={`flex items-center gap-1 text-xs ${req.met ? 'text-green-600' : 'text-slate-400'}`}>
                 {req.met ? (
                   <Check className="w-3.5 h-3.5" />
                 ) : (
@@ -343,7 +343,7 @@ try {
             className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               confirmPassword.length > 0
                 ? passwordsMatch
-                  ? 'border-emerald-300 bg-emerald-50/50'
+                  ? 'border-green-300 bg-green-50/50'
                   : 'border-red-300 bg-red-50/50'
                 : 'border-slate-200'
             }`}

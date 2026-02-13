@@ -423,7 +423,7 @@ export default function SettingsLayout({ children, title, description }: Setting
     
     if (badge === 'new') {
       return (
-        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-emerald-100 text-emerald-700 rounded">
+        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-green-100 text-green-600 rounded">
           New
         </span>
       )

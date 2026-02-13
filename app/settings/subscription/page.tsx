@@ -225,7 +225,7 @@ export default function SubscriptionPage() {
 
                 <div className="flex items-center gap-4 pt-4 border-t border-slate-700">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-emerald-400 rounded-full" />
+                    <span className="w-2 h-2 bg-green-400 rounded-full" />
                     <span className="text-sm text-slate-300">Active</span>
                   </div>
                   <span className="text-slate-600">•</span>
@@ -281,7 +281,7 @@ export default function SubscriptionPage() {
                               ? 'bg-red-500'
                               : getUsagePercentage(stats?.activeUsers || 0, currentPlan.limits.users) > 75
                               ? 'bg-amber-500'
-                              : 'bg-emerald-500'
+                              : 'bg-green-500'
                           }`}
                           style={{ width: `${getUsagePercentage(stats?.activeUsers || 0, currentPlan.limits.users)}%` }}
                         />
@@ -372,7 +372,7 @@ export default function SubscriptionPage() {
                           <ul className="space-y-2 mb-4">
                             {plan.features.map((feature, idx) => (
                               <li key={idx} className="flex items-center gap-2 text-sm text-slate-600">
-                                <Check className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                                <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
                                 {feature}
                               </li>
                             ))}

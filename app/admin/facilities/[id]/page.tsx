@@ -167,13 +167,13 @@ interface StatCardProps {
   subtext?: string
   icon: React.ReactNode
   trend?: { value: number; isPositive: boolean }
-  color?: 'blue' | 'emerald' | 'amber' | 'purple' | 'slate'
+  color?: 'blue' | 'green' | 'amber' | 'purple' | 'slate'
 }
 
 function StatCard({ label, value, subtext, icon, trend, color = 'blue' }: StatCardProps) {
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
+    green: 'bg-green-50 text-green-600',
     amber: 'bg-amber-50 text-amber-600',
     purple: 'bg-purple-50 text-purple-600',
     slate: 'bg-slate-100 text-slate-600',
@@ -190,7 +190,7 @@ function StatCard({ label, value, subtext, icon, trend, color = 'blue' }: StatCa
       <div className="flex items-baseline gap-2">
         <span className="text-2xl font-bold text-slate-900">{value}</span>
         {trend && (
-          <span className={`text-xs font-medium ${trend.isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+          <span className={`text-xs font-medium ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
             {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
           </span>
         )}
@@ -820,7 +820,7 @@ export default function FacilityDetailPage() {
   // Get status badge config
   const getStatusConfig = (status: string) => {
     const configs: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-      active: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', label: 'Active' },
+      active: { bg: 'bg-green-50', text: 'text-green-600', dot: 'bg-green-500', label: 'Active' },
       trial: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500', label: 'Trial' },
       past_due: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', label: 'Past Due' },
       cancelled: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Cancelled' },
@@ -947,7 +947,7 @@ export default function FacilityDetailPage() {
                 <div className="relative flex items-center gap-6 pt-5 mt-5 border-t border-slate-700">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${
-                      facility.subscription_status === 'active' ? 'bg-emerald-400' :
+                      facility.subscription_status === 'active' ? 'bg-green-400' :
                       facility.subscription_status === 'trial' ? 'bg-blue-400' :
                       'bg-red-400'
                     }`} />
@@ -988,7 +988,7 @@ export default function FacilityDetailPage() {
                   label="Active Users"
                   value={stats?.activeUsers || 0}
                   subtext={`of ${stats?.totalUsers || 0} total`}
-                  color="emerald"
+                  color="green"
                   icon={
                     <Users className="w-5 h-5" />
                   }
@@ -1055,7 +1055,7 @@ export default function FacilityDetailPage() {
                       onClick={() => setActiveTab('rooms')}
                       className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-left transition-colors group"
                     >
-                      <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                      <div className="w-10 h-10 bg-green-100 text-green-600 rounded-lg flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                         <Building2 className="w-5 h-5" />
                       </div>
                       <p className="font-medium text-slate-900">Manage Rooms</p>
@@ -1102,7 +1102,7 @@ export default function FacilityDetailPage() {
                         className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
                       >
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          entry.success ? 'bg-emerald-500' : 'bg-red-500'
+                          entry.success ? 'bg-green-500' : 'bg-red-500'
                         }`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-slate-700 truncate">
@@ -1240,8 +1240,8 @@ export default function FacilityDetailPage() {
                             Pending
                           </span>
                         ) : user.is_active ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-600">
+                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
                             Active
                           </span>
                         ) : (
@@ -1259,7 +1259,7 @@ export default function FacilityDetailPage() {
                           className={`text-sm font-medium transition-colors ${
                             user.is_active
                               ? 'text-slate-500 hover:text-red-600'
-                              : 'text-emerald-600 hover:text-emerald-700'
+                              : 'text-green-600 hover:text-green-600'
                           }`}
                         >
                           {user.is_active ? 'Deactivate' : 'Reactivate'}
@@ -1300,8 +1300,8 @@ export default function FacilityDetailPage() {
               {rooms.map((room) => (
                 <div key={room.id} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-emerald-50 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-emerald-600" />
+                    <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-green-600" />
                     </div>
                     <span className="font-medium text-slate-900">{room.name}</span>
                   </div>
@@ -1390,7 +1390,7 @@ export default function FacilityDetailPage() {
               <div className="flex items-center gap-4 pt-4 border-t border-slate-700">
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${
-                    facility.subscription_status === 'active' ? 'bg-emerald-400' :
+                    facility.subscription_status === 'active' ? 'bg-green-400' :
                     facility.subscription_status === 'trial' ? 'bg-blue-400' : 'bg-red-400'
                   }`} />
                   <span className="text-sm text-slate-300">{statusConfig.label}</span>
@@ -1494,7 +1494,7 @@ export default function FacilityDetailPage() {
                 <div key={entry.id} className="px-4 py-3 flex items-start justify-between hover:bg-slate-50 transition-colors">
                   <div className="flex items-start gap-3">
                     <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                      entry.success ? 'bg-emerald-500' : 'bg-red-500'
+                      entry.success ? 'bg-green-500' : 'bg-red-500'
                     }`} />
                     <div>
                       <p className="text-sm text-slate-900">
@@ -1509,7 +1509,7 @@ export default function FacilityDetailPage() {
                     </div>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-medium flex-shrink-0 ${
-                    entry.success ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                    entry.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
                     {entry.success ? 'Success' : 'Failed'}
                   </span>

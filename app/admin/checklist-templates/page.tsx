@@ -110,7 +110,7 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             className={`p-2 rounded-lg transition-colors ${
               field.is_active
                 ? 'text-slate-400 hover:text-orange-600 hover:bg-orange-50'
-                : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                : 'text-slate-400 hover:text-green-600 hover:bg-green-50'
             }`}
             title={field.is_active ? 'Deactivate' : 'Activate'}
           >

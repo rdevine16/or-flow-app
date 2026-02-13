@@ -802,7 +802,7 @@ export default function FinancialsSettingsPage() {
                             <div className="col-span-2 text-right">
                               <span className={`text-sm font-medium ${
                                 baseMargin !== null
-                                  ? baseMargin >= 0 ? 'text-emerald-600' : 'text-red-600'
+                                  ? baseMargin >= 0 ? 'text-green-600' : 'text-red-600'
                                   : 'text-slate-400'
                               }`}>
                                 {formatCurrency(baseMargin)}

@@ -280,7 +280,7 @@ export default function LoginPage() {
           <div className="mt-12 flex items-center gap-3">
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-slate-600" />
             <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <ShieldCheck className="w-4 h-4 text-green-400" />
               <span>HIPAA Compliant</span>
             </div>
             <div className="h-px w-12 bg-gradient-to-l from-transparent to-slate-600" />

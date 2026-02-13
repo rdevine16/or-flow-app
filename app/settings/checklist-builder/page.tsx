@@ -106,7 +106,7 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             className={`p-2 rounded-lg transition-colors ${
               field.is_active 
                 ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                : 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50'
+                : 'text-green-500 hover:text-green-600 hover:bg-green-50'
             }`}
             title={field.is_active ? 'Disable' : 'Enable'}
           >
@@ -521,9 +521,9 @@ export default function ChecklistBuilderPage() {
 
         {/* Success Message */}
         {successMessage && (
-          <div className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-            <Check className="w-5 h-5 text-emerald-500" />
-            <span className="text-sm font-medium text-emerald-700">{successMessage}</span>
+          <div className="mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
+            <Check className="w-5 h-5 text-green-500" />
+            <span className="text-sm font-medium text-green-600">{successMessage}</span>
           </div>
         )}
 

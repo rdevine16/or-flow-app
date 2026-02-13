@@ -87,9 +87,9 @@ export function MetricCard({
       bg: 'bg-blue-50',
     },
     green: {
-      gradient: 'from-emerald-500 to-emerald-600',
-      light: 'text-emerald-600',
-      bg: 'bg-emerald-50',
+      gradient: 'from-green-500 to-green-600',
+      light: 'text-green-600',
+      bg: 'bg-green-50',
     },
     amber: {
       gradient: 'from-amber-500 to-amber-600',
@@ -162,7 +162,7 @@ export function MetricCard({
       {trend !== undefined && (
         <div className="mt-2 flex items-center gap-1.5">
           <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${sizeClasses[size].trend} font-medium ${
-            trend >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+            trend >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-700'
           }`}>
             {trend >= 0 ? (
               <ArrowUp className="w-3 h-3" />
@@ -188,7 +188,7 @@ export function MetricCardCompact({
 }: Omit<MetricCardProps, 'trend' | 'trendLabel' | 'size'>) {
   const colorClasses = {
     blue: 'text-blue-600',
-    green: 'text-emerald-600',
+    green: 'text-green-600',
     amber: 'text-amber-600',
     red: 'text-red-600',
     slate: 'text-slate-600',

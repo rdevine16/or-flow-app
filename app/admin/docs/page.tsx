@@ -81,7 +81,7 @@ const icons = {
 const TAG_COLORS: Record<string, string> = {
   blue: 'bg-blue-50 text-blue-700 border-blue-200',
   amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  green: 'bg-green-50 text-green-600 border-green-200',
   cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   purple: 'bg-violet-50 text-violet-700 border-violet-200',
   red: 'bg-red-50 text-red-700 border-red-200',
@@ -93,7 +93,7 @@ const CATEGORY_BADGE_COLORS: Record<string, string> = {
   blue: 'bg-blue-50 text-blue-700 border-blue-200',
   amber: 'bg-amber-50 text-amber-700 border-amber-200',
   red: 'bg-red-50 text-red-700 border-red-200',
-  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  green: 'bg-green-50 text-green-600 border-green-200',
   violet: 'bg-violet-50 text-violet-700 border-violet-200',
   cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   slate: 'bg-slate-100 text-slate-600 border-slate-200',
@@ -104,7 +104,7 @@ const CATEGORY_BADGE_COLORS: Record<string, string> = {
 
 const DOT_COLORS: Record<string, string> = {
   blue: 'bg-blue-500', amber: 'bg-amber-500', red: 'bg-red-500',
-  emerald: 'bg-emerald-500', violet: 'bg-violet-500', cyan: 'bg-cyan-500',
+  green: 'bg-green-500', violet: 'bg-violet-500', cyan: 'bg-cyan-500',
   slate: 'bg-slate-400', rose: 'bg-rose-500', orange: 'bg-orange-500', teal: 'bg-teal-500',
 }
 
@@ -1374,7 +1374,7 @@ function ScannerModal({
                   <span className="text-slate-500"> missing</span>
                 </div>
                 <div className="text-sm">
-                  <span className="font-semibold text-emerald-600">{syncedCount}</span>
+                  <span className="font-semibold text-green-600">{syncedCount}</span>
                   <span className="text-slate-500"> registered</span>
                 </div>
                 {driftCount > 0 && (
@@ -1434,11 +1434,11 @@ function ScannerModal({
                       <button
                         onClick={() => scanFile(file.filePath)}
                         className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors
-                          ${isRegistered ? 'bg-emerald-50/50 hover:bg-emerald-50' : 'bg-white hover:bg-slate-50'}`}
+                          ${isRegistered ? 'bg-green-50/50 hover:bg-green-50' : 'bg-white hover:bg-slate-50'}`}
                       >
                         {/* Status dot */}
                         <span className={`w-2 h-2 rounded-full flex-shrink-0
-                          ${drift.length > 0 ? 'bg-amber-500' : isRegistered ? 'bg-emerald-500' : 'bg-red-400'}`}
+                          ${drift.length > 0 ? 'bg-amber-500' : isRegistered ? 'bg-green-500' : 'bg-red-400'}`}
                         />
 
                         {/* Route */}
@@ -1467,7 +1467,7 @@ function ScannerModal({
                           ${drift.length > 0
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : isRegistered
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              ? 'bg-green-50 text-green-600 border-green-200'
                               : 'bg-red-50 text-red-600 border-red-200'
                           }`}
                         >
@@ -1499,7 +1499,7 @@ function ScannerModal({
                                       <span className="text-red-600">
                                         Registry: {Array.isArray(d.registryValue) ? d.registryValue.join(', ') || '(empty)' : String(d.registryValue ?? 'null')}
                                       </span>
-                                      <span className="text-emerald-700">
+                                      <span className="text-green-600">
                                         Code: {Array.isArray(d.scannedValue) ? d.scannedValue.join(', ') || '(empty)' : String(d.scannedValue ?? 'null')}
                                       </span>
                                     </div>
@@ -1510,10 +1510,10 @@ function ScannerModal({
                           )}
 
                           {isRegistered && drift.length === 0 && (
-                            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
                               <div className="flex items-center gap-2">
-                                <Icon d={icons.check} className="w-4 h-4 text-emerald-600" />
-                                <span className="text-xs font-medium text-emerald-700">
+                                <Icon d={icons.check} className="w-4 h-4 text-green-600" />
+                                <span className="text-xs font-medium text-green-600">
                                   Registry matches code — no drift detected
                                 </span>
                               </div>
@@ -1571,7 +1571,7 @@ function ScannerModal({
                                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Components</span>
                                 <div className="flex flex-wrap gap-1 mt-0.5">
                                   {meta.components.map(c => (
-                                    <code key={c} className="text-[11px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded font-mono">{c}</code>
+                                    <code key={c} className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-600 border border-green-200 rounded font-mono">{c}</code>
                                   ))}
                                 </div>
                               </div>
@@ -2326,7 +2326,7 @@ function PlatformTab({ page }: { page: PageEntry }) {
       <Section title="iOS Parity">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
-            <span className={`w-2.5 h-2.5 rounded-full ${page.ios_exists ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span className={`w-2.5 h-2.5 rounded-full ${page.ios_exists ? 'bg-green-500' : 'bg-slate-300'}`} />
             <span className="text-sm text-slate-600">
               {page.ios_exists ? 'iOS equivalent exists' : 'No iOS equivalent'}
             </span>
@@ -2334,7 +2334,7 @@ function PlatformTab({ page }: { page: PageEntry }) {
           {page.ios_exists && page.ios_view_name && (
             <div>
               <Label>SwiftUI View</Label>
-              <code className="text-sm px-2 py-1 bg-emerald-50 border border-emerald-200 rounded font-mono text-emerald-800">
+              <code className="text-sm px-2 py-1 bg-green-50 border border-green-200 rounded font-mono text-green-800">
                 {page.ios_view_name}
               </code>
             </div>
@@ -2480,10 +2480,10 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
                 <span
                   key={comp}
                   className={`text-xs px-2 py-1 rounded-lg border font-medium
-                    ${compEntry ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
+                    ${compEntry ? 'bg-green-50 text-green-600 border-green-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}
                 >
                   {comp}
-                  {compEntry && <span className="ml-1 text-emerald-400">✓</span>}
+                  {compEntry && <span className="ml-1 text-green-400">✓</span>}
                 </span>
               )
             }
@@ -2972,8 +2972,8 @@ function HealthPanel({
     return Math.max(0, Math.min(100, 100 - penalty))
   }, [pages.length, criticalCount, warningCount, infoCount])
 
-  const scoreColor = score >= 80 ? 'text-emerald-600' : score >= 50 ? 'text-amber-600' : 'text-red-600'
-  const scoreRingColor = score >= 80 ? 'stroke-emerald-500' : score >= 50 ? 'stroke-amber-500' : 'stroke-red-500'
+  const scoreColor = score >= 80 ? 'text-green-600' : score >= 50 ? 'text-amber-600' : 'text-red-600'
+  const scoreRingColor = score >= 80 ? 'stroke-green-500' : score >= 50 ? 'stroke-amber-500' : 'stroke-red-500'
 
   return (
     <div className="max-w-4xl mx-auto px-8 py-6">
@@ -3061,8 +3061,8 @@ function HealthPanel({
       {/* All clear state */}
       {issues.length === 0 && (
         <div className="text-center py-16 text-slate-400">
-          <Icon d={icons.check} className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-          <p className="text-lg font-medium text-emerald-600">All clear</p>
+          <Icon d={icons.check} className="w-10 h-10 text-green-400 mx-auto mb-3" />
+          <p className="text-lg font-medium text-green-600">All clear</p>
           <p className="text-sm mt-1">No issues detected across {pages.length} entries</p>
         </div>
       )}
@@ -3161,7 +3161,7 @@ function HealthPanel({
 }
 
 function StatusDot({ active }: { active: boolean }) {
-  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${active ? 'bg-green-500' : 'bg-slate-200'}`} />
 }
 
 function LoadingSpinner({ text }: { text: string }) {

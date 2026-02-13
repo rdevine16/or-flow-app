@@ -238,7 +238,7 @@ export default function OutlierDetailDrawer({
                           <div className="bg-slate-50 rounded-lg divide-y divide-slate-200">
                             <div className="p-3 flex justify-between">
                               <span className="text-sm text-slate-600">Reimbursement</span>
-                              <span className="text-sm font-medium text-emerald-600">
+                              <span className="text-sm font-medium text-green-600">
                                 +{formatCurrency(financials.reimbursement)}
                               </span>
                             </div>
@@ -267,7 +267,7 @@ export default function OutlierDetailDrawer({
                             </div>
                             <div className="p-3 flex justify-between bg-white rounded-b-lg">
                               <span className="text-sm font-semibold text-slate-900">Net Profit</span>
-                              <span className={`text-sm font-bold ${outlier.actualProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              <span className={`text-sm font-bold ${outlier.actualProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatCurrency(outlier.actualProfit)}
                               </span>
                             </div>

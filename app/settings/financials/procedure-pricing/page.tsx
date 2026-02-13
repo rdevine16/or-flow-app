@@ -559,14 +559,14 @@ export default function ProcedurePricingPage() {
                               </td>
                               <td className="px-6 py-4 text-right">
                                 {summary.totalCredits > 0 ? (
-                                  <span className="text-emerald-600">{formatCurrency(summary.totalCredits)}</span>
+                                  <span className="text-green-600">{formatCurrency(summary.totalCredits)}</span>
                                 ) : (
                                   <span className="text-slate-400">—</span>
                                 )}
                               </td>
                               <td className="px-6 py-4 text-right">
                                 {hasData ? (
-                                  <span className={`font-semibold ${summary.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  <span className={`font-semibold ${summary.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {formatCurrency(summary.margin)}
                                   </span>
                                 ) : (
@@ -652,10 +652,10 @@ export default function ProcedurePricingPage() {
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Margin Preview */}
-              <div className={`p-4 rounded-xl ${totals.margin >= 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className={`p-4 rounded-xl ${totals.margin >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-slate-700">Estimated Margin</span>
-                  <span className={`text-2xl font-bold ${totals.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <span className={`text-2xl font-bold ${totals.margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(totals.margin)}
                   </span>
                 </div>
@@ -670,7 +670,7 @@ export default function ProcedurePricingPage() {
                   </div>
                   <div>
                     <span className="text-slate-500">Credits</span>
-                    <p className="font-medium text-emerald-600">+{formatCurrency(totals.totalCredits)}</p>
+                    <p className="font-medium text-green-600">+{formatCurrency(totals.totalCredits)}</p>
                   </div>
                 </div>
               </div>
@@ -725,7 +725,7 @@ export default function ProcedurePricingPage() {
                   {costCategories.filter(c => c.type === 'credit').length > 0 && (
                     <div>
                       <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
                         Credits (Offsets)
                         <span className="text-xs font-normal text-slate-500">— increase margin</span>
                       </h4>

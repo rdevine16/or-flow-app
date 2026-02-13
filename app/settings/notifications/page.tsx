@@ -247,7 +247,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">Enabled</span>
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-100 rounded">
+                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-green-600 bg-green-100 rounded">
                       Active
                     </span>
                   </div>
@@ -266,7 +266,7 @@ export default function NotificationsPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-600">Enabled</span>
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-100 rounded">
+                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-green-600 bg-green-100 rounded">
                       Active
                     </span>
                   </div>

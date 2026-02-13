@@ -411,7 +411,7 @@ function InlineSearch({
         )
       case 'room':
         return (
-          <Building2 className="w-4 h-4 text-emerald-500" />
+          <Building2 className="w-4 h-4 text-green-500" />
         )
       case 'procedure':
         return (

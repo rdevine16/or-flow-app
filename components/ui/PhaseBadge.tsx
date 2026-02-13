@@ -40,8 +40,8 @@ const phaseConfig: Record<CasePhase, {
     icon: (
       <Heart className="w-3 h-3" />
     ),
-    bgColor: 'bg-emerald-500',
-    shadowColor: 'shadow-emerald-500/40'
+    bgColor: 'bg-green-500',
+    shadowColor: 'shadow-green-500/40'
   },
   'Closing': {
     icon: (

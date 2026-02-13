@@ -73,7 +73,7 @@ export function EnhancedIssueCard({ issue }: { issue: Issue }) {
               {/* Badges */}
               <span className={`px-2 py-1 rounded text-xs font-medium ${
                 issue.severity === 'safe' 
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                  ? 'bg-green-50 text-green-600 border border-green-200' 
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
               }`}>
                 {issue.severity === 'safe' ? 'Safe Fix' : 'Review'}
@@ -205,9 +205,9 @@ export function EnhancedIssueCard({ issue }: { issue: Issue }) {
                 </div>
                 
                 <div>
-                  <p className="text-xs text-emerald-600 font-medium mb-1">AFTER (Replace with):</p>
-                  <div className="bg-emerald-50 border border-emerald-200 rounded p-2">
-                    <code className="text-xs font-mono text-emerald-900 block whitespace-pre-wrap">
+                  <p className="text-xs text-green-600 font-medium mb-1">AFTER (Replace with):</p>
+                  <div className="bg-green-50 border border-green-200 rounded p-2">
+                    <code className="text-xs font-mono text-green-900 block whitespace-pre-wrap">
                       {issue.specificFix.after}
                     </code>
                   </div>
@@ -228,7 +228,7 @@ export function EnhancedIssueCard({ issue }: { issue: Issue }) {
                 Required Import (add to top of file)
               </h4>
               <div className="bg-slate-900 rounded p-3 flex items-center justify-between">
-                <code className="text-sm font-mono text-emerald-400">
+                <code className="text-sm font-mono text-green-400">
                   {issue.requiredImports}
                 </code>
                 <button
@@ -247,7 +247,7 @@ export function EnhancedIssueCard({ issue }: { issue: Issue }) {
               {issue.metadata?.confidence && (
                 <span>
                   Confidence: <span className={`font-semibold ${
-                    issue.metadata.confidence === 'high' ? 'text-emerald-600' :
+                    issue.metadata.confidence === 'high' ? 'text-green-600' :
                     issue.metadata.confidence === 'medium' ? 'text-amber-600' :
                     'text-red-600'
                   }`}>{issue.metadata.confidence}</span>
@@ -259,7 +259,7 @@ export function EnhancedIssueCard({ issue }: { issue: Issue }) {
               <button className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-white transition-colors">
                 Skip
               </button>
-              <button className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2">
+              <button className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
                 <CheckCircleIcon className="w-4 h-4" />
                 Mark as Fixed
               </button>

@@ -339,7 +339,7 @@ export default function DemoDataWizard() {
                   <button onClick={() => done && setStep(s)} disabled={!done}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                       active ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'
-                      : done ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
+                      : done ? 'bg-green-50 text-green-600 hover:bg-green-100 cursor-pointer'
                       : 'bg-slate-100 text-slate-400'
                     }`}>
                     {done && <Check className="w-3.5 h-3.5" />}
@@ -466,7 +466,7 @@ export default function DemoDataWizard() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                            p.speedProfile === 'fast' ? 'bg-emerald-50 text-emerald-700'
+                            p.speedProfile === 'fast' ? 'bg-green-50 text-green-600'
                             : p.speedProfile === 'slow' ? 'bg-amber-50 text-amber-700'
                             : 'bg-blue-50 text-blue-700'
                           }`}>{p.speedProfile}</span>
@@ -486,7 +486,7 @@ export default function DemoDataWizard() {
                                     <button key={sp.value} onClick={() => updateProfile(surgeon.id, { speedProfile: sp.value })}
                                       className={`flex-1 px-3 py-2.5 rounded-lg border text-sm transition-all ${
                                         p.speedProfile === sp.value
-                                          ? sp.value === 'fast' ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                                          ? sp.value === 'fast' ? 'border-green-300 bg-green-50 text-green-800'
                                           : sp.value === 'slow' ? 'border-amber-300 bg-amber-50 text-amber-800'
                                           : 'border-blue-300 bg-blue-50 text-blue-800'
                                           : 'border-slate-200 text-slate-500 hover:border-slate-300'
@@ -686,13 +686,13 @@ export default function DemoDataWizard() {
                       { l: 'Analytics Config', v: status.facilityAnalyticsSettings ? 1 : 0, r: false },
                     ] as const).map(item => (
                       <div key={item.l} className={`p-3 rounded-lg border ${
-                        item.v > 0 ? 'bg-emerald-50 border-emerald-200'
+                        item.v > 0 ? 'bg-green-50 border-green-200'
                         : item.r ? 'bg-red-50 border-red-200'
                         : 'bg-slate-50 border-slate-200'
                       }`}>
                         <div className="flex items-center gap-1.5 mb-1">
                           {item.v > 0 ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            <Check className="w-3.5 h-3.5 text-green-500" />
                           ) : item.r ? (
                             <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
                           ) : (
@@ -751,7 +751,7 @@ export default function DemoDataWizard() {
                         </div>
                         <div className="flex items-center gap-3 text-xs text-slate-500">
                           <span className={`px-2 py-0.5 rounded-full font-medium ${
-                            pr.speedProfile === 'fast' ? 'bg-emerald-50 text-emerald-700'
+                            pr.speedProfile === 'fast' ? 'bg-green-50 text-green-600'
                             : pr.speedProfile === 'slow' ? 'bg-amber-50 text-amber-700'
                             : 'bg-blue-50 text-blue-700'
                           }`}>{pr.speedProfile}</span>
@@ -817,9 +817,9 @@ export default function DemoDataWizard() {
                 </>
               ) : result ? (
                 <>
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${result.success ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${result.success ? 'bg-green-50' : 'bg-red-50'}`}>
                     {result.success
-                      ? <Check className="w-8 h-8 text-emerald-600" />
+                      ? <Check className="w-8 h-8 text-green-600" />
                       : <X className="w-8 h-8 text-red-600" />
                     }
                   </div>
@@ -1007,18 +1007,18 @@ function FieldGroup({ label, children }: { label: string; children: React.ReactN
 function ResultBanner({ result, onDismiss }: { result: GenerationResult; onDismiss: () => void }) {
   return (
     <div className={`mb-6 rounded-xl border p-4 flex items-start gap-3 ${
-      result.success ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
+      result.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
     }`}>
       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-        result.success ? 'bg-emerald-100' : 'bg-red-100'
+        result.success ? 'bg-green-100' : 'bg-red-100'
       }`}>
         {result.success
-          ? <Check className="w-4 h-4 text-emerald-600" />
+          ? <Check className="w-4 h-4 text-green-600" />
           : <X className="w-4 h-4 text-red-600" />
         }
       </div>
       <div className="flex-1 min-w-0">
-        <p className={`font-medium text-sm ${result.success ? 'text-emerald-800' : 'text-red-800'}`}>
+        <p className={`font-medium text-sm ${result.success ? 'text-green-800' : 'text-red-800'}`}>
           {result.success
             ? result.casesGenerated ? `Generated ${result.casesGenerated.toLocaleString()} cases` : (result.error || 'Done')
             : 'Operation failed'

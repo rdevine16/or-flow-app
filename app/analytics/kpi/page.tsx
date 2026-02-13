@@ -76,7 +76,7 @@ function KPICard({
   title: string
   kpi: KPIData
   icon?: React.ComponentType<{ className?: string }>
-  accentColor?: 'blue' | 'emerald' | 'amber' | 'rose' | 'violet'
+  accentColor?: 'blue' | 'green' | 'amber' | 'rose' | 'violet'
   showTracker?: boolean
   onClick?: () => void
   invertDelta?: boolean
@@ -99,10 +99,10 @@ function KPICard({
       ring: 'ring-blue-500/20',
       metricColor: 'text-slate-900',
     },
-    emerald: {
-      iconBg: 'bg-emerald-50',
-      iconColor: 'text-emerald-600',
-      ring: 'ring-emerald-500/20',
+    green: {
+      iconBg: 'bg-green-50',
+      iconColor: 'text-green-600',
+      ring: 'ring-green-500/20',
       metricColor: 'text-slate-900',
     },
     amber: {
@@ -173,7 +173,7 @@ function KPICard({
             <div className={`
               flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
               ${getDeltaType() === 'increase' 
-                ? 'bg-emerald-50 text-emerald-700' 
+                ? 'bg-green-50 text-green-600' 
                 : 'bg-rose-50 text-rose-700'
               }
             `}>
@@ -200,7 +200,7 @@ function KPICard({
             <div className={`
               flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium
               ${kpi.targetMet 
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' 
+                ? 'bg-green-50 text-green-600 border border-green-200/60' 
                 : 'bg-amber-50 text-amber-700 border border-amber-200/60'
               }
             `}>
@@ -266,7 +266,7 @@ function SurgeonIdleTimeCard({
   onClick?: () => void 
 }) {
   const statusConfig = {
-    on_track: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+    on_track: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200', dot: 'bg-green-500' },
     call_sooner: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
     call_later: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' },
     turnover_only: { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', dot: 'bg-slate-400' },
@@ -482,10 +482,10 @@ function SurgeonIdleTimeCard({
             )
           } else if (flipSurgeons.length > 0) {
             return (
-              <div className="mt-4 p-3 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/40">
+              <div className="mt-4 p-3 bg-green-50/80 backdrop-blur-sm rounded-lg border border-green-200/40">
                 <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5" />
-                  <Text className="text-emerald-800 text-sm font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5" />
+                  <Text className="text-green-800 text-sm font-medium">
                     All {onTrackCount} flip room surgeon{onTrackCount !== 1 ? 's have' : ' has'} well-timed callbacks
                   </Text>
                 </div>
@@ -876,11 +876,11 @@ function ORUtilizationModal({
               <div className="space-y-3">
                 {/* Summary bar */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200/60 text-center">
-                    <div className="text-2xl font-semibold text-emerald-700">
+                  <div className="p-3 bg-green-50 rounded-lg border border-green-200/60 text-center">
+                    <div className="text-2xl font-semibold text-green-600">
                       {roomBreakdown.filter(r => r.utilization >= 75).length}
                     </div>
-                    <div className="text-xs text-emerald-600 font-medium">Above Target</div>
+                    <div className="text-xs text-green-600 font-medium">Above Target</div>
                   </div>
                   <div className="p-3 bg-amber-50 rounded-lg border border-amber-200/60 text-center">
                     <div className="text-2xl font-semibold text-amber-700">
@@ -899,12 +899,12 @@ function ORUtilizationModal({
                 {/* Room rows */}
                 {roomBreakdown.map((room) => {
                   const barColor = room.utilization >= 75 
-                    ? 'bg-emerald-500' 
+                    ? 'bg-green-500' 
                     : room.utilization >= 60 
                     ? 'bg-amber-500' 
                     : 'bg-slate-400'
                   const textColor = room.utilization >= 75 
-                    ? 'text-emerald-700' 
+                    ? 'text-green-600' 
                     : room.utilization >= 60 
                     ? 'text-amber-700' 
                     : 'text-slate-600'
@@ -1294,7 +1294,7 @@ export default function AnalyticsOverviewPage() {
                     title="Median Same Room Turnover" 
                     kpi={analytics.turnoverTime}
                     icon={Clock}
-                    accentColor="emerald"
+                    accentColor="green"
                     tooltip="Time from Patient Out (Case A) to Patient In (Case B) in the same room. Measures room cleaning and prep efficiency."
                   />
                   <KPICard 

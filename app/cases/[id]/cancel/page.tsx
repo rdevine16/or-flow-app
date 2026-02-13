@@ -390,7 +390,7 @@ export default function CancelCasePage() {
                   <p className="text-slate-600 mt-1">{surgeon.name}</p>
                 </div>
                 <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                  isInProgress ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+                  isInProgress ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-700'
                 }`}>
                   {isInProgress ? 'In Progress' : 'Scheduled'}
                 </div>
@@ -439,8 +439,8 @@ export default function CancelCasePage() {
                   .sort((a, b) => (a.info?.display_order || 0) - (b.info?.display_order || 0))
                   .map((m, idx) => (
                     <div key={m.id} className="flex items-center gap-2">
-                      {idx > 0 && <div className="w-6 h-0.5 bg-emerald-300" />}
-                      <div className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">
+                      {idx > 0 && <div className="w-6 h-0.5 bg-green-300" />}
+                      <div className="px-3 py-1.5 bg-green-100 text-green-600 rounded-lg text-sm font-medium">
                         {m.info?.display_name || 'Unknown'}
                       </div>
                     </div>

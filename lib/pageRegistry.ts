@@ -29,7 +29,7 @@ export const CATEGORY_COLOR_OPTIONS = [
   { id: 'blue',    label: 'Blue' },
   { id: 'amber',   label: 'Amber' },
   { id: 'red',     label: 'Red' },
-  { id: 'emerald', label: 'Green' },
+  { id: 'green', label: 'Green' },
   { id: 'violet',  label: 'Violet' },
   { id: 'cyan',    label: 'Cyan' },
   { id: 'slate',   label: 'Slate' },

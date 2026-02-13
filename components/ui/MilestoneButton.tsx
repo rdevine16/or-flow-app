@@ -60,7 +60,7 @@ export default function MilestoneButton({
   if (isRecorded) {
     return (
       <div className="group relative">
-        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-lg">
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-500 text-white rounded-lg">
           <Check className="w-4 h-4 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium opacity-90 truncate">{displayName}</p>
@@ -130,17 +130,17 @@ export function PairedMilestoneButton({
   if (isComplete) {
     return (
       <div className="group relative">
-        <div className="px-3 py-2 bg-emerald-500 text-white rounded-lg">
+        <div className="px-3 py-2 bg-green-500 text-white rounded-lg">
           <div className="flex items-center gap-2 mb-1">
             <Check className="w-4 h-4 flex-shrink-0" />
             <p className="text-xs font-medium opacity-90">{displayName}</p>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="font-bold tabular-nums">{formatTimestamp(startRecordedAt!, { timeZone })}</span>
-            <span className="text-emerald-200 text-xs">&rarr;</span>
+            <span className="text-green-200 text-xs">&rarr;</span>
             <span className="font-bold tabular-nums">{formatTimestamp(endRecordedAt!, { timeZone })}</span>
           </div>
-          <p className="text-xs text-emerald-100 mt-1 tabular-nums">{formatDuration(startRecordedAt!, endRecordedAt!)}</p>
+          <p className="text-xs text-green-100 mt-1 tabular-nums">{formatDuration(startRecordedAt!, endRecordedAt!)}</p>
         </div>
         <button
           type="button"

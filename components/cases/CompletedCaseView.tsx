@@ -175,7 +175,7 @@ function getVarianceIndicator(actualMinutes: number, avgMinutes: number, thresho
   const absDiff = Math.abs(diff)
   
   if (absDiff <= thresholds.good) {
-    return { color: 'emerald', icon: '✓', label: 'On target', bgClass: 'bg-emerald-50', textClass: 'text-emerald-700', borderClass: 'border-emerald-200' }
+    return { color: 'green', icon: '✓', label: 'On target', bgClass: 'bg-green-50', textClass: 'text-green-600', borderClass: 'border-green-200' }
   } else if (absDiff <= thresholds.warning) {
     return { color: 'amber', icon: '~', label: diff > 0 ? 'Slightly over' : 'Slightly under', bgClass: 'bg-amber-50', textClass: 'text-amber-700', borderClass: 'border-amber-200' }
   } else {
@@ -215,7 +215,7 @@ function getRoleBadgeClass(role: string): string {
   const colors: Record<string, string> = {
     surgeon: 'bg-blue-100 text-blue-700',
     anesthesiologist: 'bg-amber-100 text-amber-700',
-    nurse: 'bg-emerald-100 text-emerald-700',
+    nurse: 'bg-green-100 text-green-600',
     tech: 'bg-purple-100 text-purple-700',
   }
   return colors[role] || 'bg-slate-100 text-slate-600'
@@ -236,9 +236,9 @@ function getTrayStatusConfig(status: string) {
       return {
         label: 'Consignment',
         icon: '✓',
-        bgColor: 'bg-emerald-50',
-        textColor: 'text-emerald-700',
-        borderColor: 'border-emerald-200',
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-600',
+        borderColor: 'border-green-200',
       }
     case 'loaners_confirmed':
       return {
@@ -252,9 +252,9 @@ function getTrayStatusConfig(status: string) {
       return {
         label: 'Delivered',
         icon: '✓',
-        bgColor: 'bg-emerald-50',
-        textColor: 'text-emerald-700',
-        borderColor: 'border-emerald-200',
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-600',
+        borderColor: 'border-green-200',
       }
     default:
       return {
@@ -360,7 +360,7 @@ function ImplantRow({
       <div className="text-center">
         <span className={`text-xs font-mono font-semibold ${
           sizesDiffer ? 'text-amber-600' : 
-          sizesMatch ? 'text-emerald-600' : 
+          sizesMatch ? 'text-green-600' : 
           final ? 'text-slate-700' : 'text-slate-400'
         }`}>
           {final || '—'}
@@ -368,7 +368,7 @@ function ImplantRow({
             <span className="ml-1 text-[10px] text-amber-500">↑</span>
           )}
           {sizesMatch && (
-            <span className="ml-1 text-[10px] text-emerald-500">✓</span>
+            <span className="ml-1 text-[10px] text-green-500">✓</span>
           )}
         </span>
       </div>
@@ -394,7 +394,7 @@ function MetricCard({
 }) {
   const variants = {
     default: 'bg-white border-slate-200',
-    success: 'bg-gradient-to-br from-emerald-600 to-teal-500 text-white border-transparent shadow-lg shadow-emerald-600/20',
+    success: 'bg-gradient-to-br from-green-600 to-teal-500 text-white border-transparent shadow-lg shadow-green-600/20',
     warning: 'bg-gradient-to-br from-amber-500 to-orange-500 text-white border-transparent shadow-lg shadow-amber-500/20',
     danger: 'bg-gradient-to-br from-red-500 to-rose-500 text-white border-transparent shadow-lg shadow-red-500/20',
     primary: 'bg-gradient-to-br from-blue-600 to-sky-500 text-white border-transparent shadow-lg shadow-blue-600/20',
@@ -431,7 +431,7 @@ function MetricCard({
                 comparison.neutral 
                   ? (isGradient ? 'text-white' : 'text-slate-700')
                   : comparison.isPositive 
-                    ? (isGradient ? 'text-emerald-200' : 'text-emerald-600')
+                    ? (isGradient ? 'text-green-200' : 'text-green-600')
                     : (isGradient ? 'text-red-200' : 'text-red-600')
               }`}>
                 {comparison.value}
@@ -726,7 +726,7 @@ export default function CompletedCaseView({
                 <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Started</p>
                 <p className={`text-sm font-semibold mt-0.5 font-mono ${
                   startVariance 
-                    ? (startVariance.isLate && startVariance.minutes > 5 ? 'text-red-600' : 'text-emerald-600')
+                    ? (startVariance.isLate && startVariance.minutes > 5 ? 'text-red-600' : 'text-green-600')
                     : 'text-slate-900'
                 }`}>{formatTimeShort(patientIn)}</p>
               </div>
@@ -770,7 +770,7 @@ export default function CompletedCaseView({
                     'Anesthesia': 'bg-amber-400',
                     'Prep': 'bg-purple-400',
                     'Surgery': 'bg-blue-500',
-                    'Recovery': 'bg-emerald-400',
+                    'Recovery': 'bg-green-400',
                   }
                   
                   return (
@@ -842,7 +842,7 @@ export default function CompletedCaseView({
             <HelpTooltip title="Understanding Insights">
               <p><strong>Color Indicators:</strong></p>
               <ul className="list-disc list-inside mt-1 space-y-1">
-                <li><span className="text-emerald-600">Green</span> = On target (within 5 min)</li>
+                <li><span className="text-green-600">Green</span> = On target (within 5 min)</li>
                 <li><span className="text-amber-600">Yellow</span> = Slight variance (5-15 min)</li>
                 <li><span className="text-red-600">Red</span> = Significant variance (&gt;15 min)</li>
               </ul>
@@ -864,19 +864,19 @@ export default function CompletedCaseView({
             <div className="space-y-2">
               {insights.map((insight, idx) => {
                 const bgColors = {
-                  success: 'bg-emerald-50 border-emerald-200',
+                  success: 'bg-green-50 border-green-200',
                   warning: 'bg-amber-50 border-amber-200',
                   danger: 'bg-red-50 border-red-200',
                   info: 'bg-slate-50 border-slate-200',
                 }
                 const textColors = {
-                  success: 'text-emerald-700',
+                  success: 'text-green-600',
                   warning: 'text-amber-700',
                   danger: 'text-red-700',
                   info: 'text-slate-600',
                 }
                 const iconColors = {
-                  success: 'text-emerald-500',
+                  success: 'text-green-500',
                   warning: 'text-amber-500',
                   danger: 'text-red-500',
                   info: 'text-slate-400',

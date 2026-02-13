@@ -506,7 +506,7 @@ export default function CaseFlagsSection({
                     <button
                       type="button"
                       onClick={delayTimer.start}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
                     >
                       <Play className="w-3 h-3" />
                       Start
@@ -537,7 +537,7 @@ export default function CaseFlagsSection({
                       <button
                         type="button"
                         onClick={delayTimer.resume}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-100 rounded-lg hover:bg-emerald-200 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-green-600 bg-green-100 rounded-lg hover:bg-green-200 transition-colors"
                       >
                         <Play className="w-3 h-3" />
                         Resume

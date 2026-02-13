@@ -16,14 +16,14 @@ interface SectionHeaderProps {
   title: string
   subtitle?: string
   icon?: React.ReactNode
-  accentColor?: string // tailwind color like 'blue' | 'emerald' | 'amber' | 'red'
+  accentColor?: string // tailwind color like 'blue' | 'green' | 'amber' | 'red'
   action?: React.ReactNode
 }
 
 export function SectionHeader({ title, subtitle, icon, accentColor = 'blue', action }: SectionHeaderProps) {
   const borderColors: Record<string, string> = {
     blue: 'border-l-blue-500',
-    emerald: 'border-l-emerald-500',
+    green: 'border-l-green-500',
     amber: 'border-l-amber-500',
     red: 'border-l-red-500',
     slate: 'border-l-slate-400',
@@ -31,7 +31,7 @@ export function SectionHeader({ title, subtitle, icon, accentColor = 'blue', act
   }
   const iconBgColors: Record<string, string> = {
     blue: 'bg-blue-50 text-blue-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
+    green: 'bg-green-50 text-green-600',
     amber: 'bg-amber-50 text-amber-600',
     red: 'bg-red-50 text-red-600',
     slate: 'bg-slate-100 text-slate-500',
@@ -74,7 +74,7 @@ interface EnhancedMetricCardProps {
     label?: string // e.g. "vs prev period"
   }
   icon?: React.ReactNode
-  accentColor?: 'blue' | 'emerald' | 'amber' | 'red' | 'slate' | 'violet'
+  accentColor?: 'blue' | 'green' | 'amber' | 'red' | 'slate' | 'violet'
   format?: 'number' | 'time' | 'percentage'
   // Optional radial progress for percentage values
   progress?: number // 0-100
@@ -88,7 +88,7 @@ export function EnhancedMetricCard({
 }: EnhancedMetricCardProps) {
   const accentStyles: Record<string, { bar: string; icon: string; value: string }> = {
     blue: { bar: 'bg-blue-500', icon: 'bg-blue-50 text-blue-600', value: 'text-blue-600' },
-    emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600', value: 'text-emerald-600' },
+    green: { bar: 'bg-green-500', icon: 'bg-green-50 text-green-600', value: 'text-green-600' },
     amber: { bar: 'bg-amber-500', icon: 'bg-amber-50 text-amber-600', value: 'text-amber-600' },
     red: { bar: 'bg-red-500', icon: 'bg-red-50 text-red-600', value: 'text-red-600' },
     slate: { bar: 'bg-slate-400', icon: 'bg-slate-100 text-slate-500', value: 'text-slate-700' },
@@ -158,7 +158,7 @@ export function TrendPill({ value, improved, size = 'sm' }: TrendPillProps) {
   return (
     <span className={`inline-flex items-center gap-1 font-semibold rounded-full ${sizeClass} ${
       improved
-        ? 'bg-emerald-50 text-emerald-700'
+        ? 'bg-green-50 text-green-600'
         : 'bg-red-50 text-red-700'
     }`}>
       {improved ? (
@@ -190,7 +190,7 @@ export function RadialProgress({ value, size = 48, strokeWidth = 4, color = 'blu
 
   const strokeColors: Record<string, string> = {
     blue: '#2563eb',
-    emerald: '#10b981',
+    green: '#10b981',
     amber: '#f59e0b',
     red: '#ef4444',
     slate: '#94a3b8',
@@ -360,7 +360,7 @@ interface ConsistencyBadgeProps {
 
 export function ConsistencyBadge({ label, level }: ConsistencyBadgeProps) {
   const styles: Record<string, { dot: string; text: string; bg: string }> = {
-    very_consistent: { dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50' },
+    very_consistent: { dot: 'bg-green-500', text: 'text-green-600', bg: 'bg-green-50' },
     consistent: { dot: 'bg-blue-500', text: 'text-blue-700', bg: 'bg-blue-50' },
     variable: { dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50' },
     na: { dot: 'bg-slate-300', text: 'text-slate-400', bg: 'bg-transparent' },
@@ -392,7 +392,7 @@ export function InlineBar({ value, max, color = 'blue', label }: InlineBarProps)
   
   const barColors: Record<string, string> = {
     blue: 'bg-blue-100',
-    emerald: 'bg-emerald-100',
+    green: 'bg-green-100',
     amber: 'bg-amber-100',
     slate: 'bg-slate-100',
   }
@@ -480,8 +480,8 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
 
           {/* Step 3: Ready */}
           <div className="flex flex-col items-center text-center" style={{ width: '22%' }}>
-            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center mb-2">
-              <Check className="w-4 h-4 text-emerald-600" />
+            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center mb-2">
+              <Check className="w-4 h-4 text-green-600" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Room Ready</span>
             {waitForSurgeon !== null && (
@@ -588,7 +588,7 @@ interface InsightCardProps {
 export function InsightCard({ icon, title, children, type = 'info' }: InsightCardProps) {
   const styles = {
     info: 'bg-blue-50 border-blue-200 [&_.insight-icon]:text-blue-600',
-    success: 'bg-emerald-50 border-emerald-200 [&_.insight-icon]:text-emerald-600',
+    success: 'bg-green-50 border-green-200 [&_.insight-icon]:text-green-600',
     warning: 'bg-amber-50 border-amber-200 [&_.insight-icon]:text-amber-600',
   }
 
@@ -909,7 +909,7 @@ function BulletBar({
           {avgValue > 0 && deltaAbs > 0 && (
             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
               isFaster 
-                ? 'text-emerald-700 bg-emerald-50' 
+                ? 'text-green-600 bg-green-50' 
                 : 'text-red-700 bg-red-50'
             }`}>
               {isFaster ? '↓' : '↑'} {deltaAbs}%

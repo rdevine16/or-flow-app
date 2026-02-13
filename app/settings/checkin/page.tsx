@@ -210,9 +210,9 @@ export default function CheckInSettingsPage() {
 
         {/* Success Message */}
         {successMessage && (
-          <div className="mb-6 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
-            <Check className="w-5 h-5 text-emerald-500" />
-            <span className="text-sm font-medium text-emerald-700">{successMessage}</span>
+          <div className="mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
+            <Check className="w-5 h-5 text-green-500" />
+            <span className="text-sm font-medium text-green-600">{successMessage}</span>
           </div>
         )}
 

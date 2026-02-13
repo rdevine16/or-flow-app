@@ -69,7 +69,7 @@ interface ReportCardProps {
   description: string
   href: string
   icon: React.ComponentType<{ className?: string }>
-  accentColor: 'blue' | 'emerald' | 'violet' | 'amber' | 'rose' | 'cyan'
+  accentColor: 'blue' | 'green' | 'violet' | 'amber' | 'rose' | 'cyan'
   badge?: string
   stats?: { label: string; value: string }[]
 }
@@ -83,12 +83,12 @@ function ReportCard({ title, description, href, icon: Icon, accentColor, badge, 
       badgeBg: 'bg-blue-50',
       badgeText: 'text-blue-700',
     },
-    emerald: {
-      iconBg: 'bg-emerald-100',
-      iconColor: 'text-emerald-600',
-      hoverBorder: 'hover:border-emerald-300',
-      badgeBg: 'bg-emerald-50',
-      badgeText: 'text-emerald-700',
+    green: {
+      iconBg: 'bg-green-100',
+      iconColor: 'text-green-600',
+      hoverBorder: 'hover:border-green-300',
+      badgeBg: 'bg-green-50',
+      badgeText: 'text-green-600',
     },
     violet: {
       iconBg: 'bg-violet-100',
@@ -201,7 +201,7 @@ function QuickStatCard({
             ${trend === 0 
               ? 'text-slate-500 bg-slate-100'
               : trendType === 'up' 
-                ? 'text-emerald-700 bg-emerald-50' 
+                ? 'text-green-600 bg-green-50' 
                 : 'text-rose-700 bg-rose-50'
             }
           `}>
@@ -594,7 +594,7 @@ case_milestones (
       .slice(0, 8) // Top 8 categories
   }, [cases])
 
-  const categoryChartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet', 'fuchsia', 'pink', 'emerald', 'amber']
+  const categoryChartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet', 'fuchsia', 'pink', 'green', 'amber']
 
   // Helper to get surgical time from milestones
   const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
@@ -742,14 +742,14 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       description: 'Profitability metrics, cost analysis, and revenue insights',
       href: '/analytics/financials',
       icon: DollarSign,
-      accentColor: 'emerald',
+      accentColor: 'green',
     },
     {
       title: 'Surgeon Performance',
       description: 'Compare surgeon metrics, case times, and efficiency across procedures',
       href: '/analytics/surgeons',
       icon: User,
-      accentColor: 'emerald',
+      accentColor: 'green',
     },
     {
       title: 'Block Utilization',

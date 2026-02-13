@@ -114,7 +114,7 @@ function ResultIcon({ type }: { type: SearchResult['type'] }) {
       )
     case 'room':
       return (
-        <Building2 className="w-4 h-4 text-emerald-500" />
+        <Building2 className="w-4 h-4 text-green-500" />
       )
     case 'page':
       return (
@@ -129,7 +129,7 @@ function ResultIcon({ type }: { type: SearchResult['type'] }) {
 
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    in_progress: 'bg-emerald-500',
+    in_progress: 'bg-green-500',
     scheduled: 'bg-blue-500',
     delayed: 'bg-amber-500',
     completed: 'bg-slate-400',

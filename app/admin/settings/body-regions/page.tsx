@@ -373,7 +373,7 @@ const handleDelete = (region: BodyRegion) => {
                             <button
                               onClick={() => handleRestore(region)}
                               disabled={saving}
-                              className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                              className="px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
                             >
                               Restore
                             </button>

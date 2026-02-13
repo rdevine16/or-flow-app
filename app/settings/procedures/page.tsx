@@ -626,7 +626,7 @@ deleted_by: currentUserId
                             <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${
                               showArchived 
                                 ? 'bg-slate-100 text-slate-500' 
-                                : 'bg-emerald-100 text-emerald-700'
+                                : 'bg-green-100 text-green-600'
                             }`}>
                               {getCategoryName(procedure)}
                             </span>
@@ -675,7 +675,7 @@ deleted_by: currentUserId
                             <button
                               onClick={() => handleRestore(procedure)}
                               disabled={saving}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
                             >
                               <Undo2 className="w-4 h-4" />
                               Restore

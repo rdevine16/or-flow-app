@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 
-export type TrackerColor = 'emerald' | 'yellow' | 'red' | 'slate' | 'blue'
+export type TrackerColor = 'green' | 'yellow' | 'red' | 'slate' | 'blue'
 
 export interface TrackerDataPoint {
   date: string
@@ -23,7 +23,7 @@ interface TrackerProps {
 }
 
 const colorMap: Record<TrackerColor, string> = {
-  emerald: 'bg-emerald-500 hover:bg-emerald-400',
+  green: 'bg-green-500 hover:bg-green-400',
   yellow: 'bg-yellow-400 hover:bg-yellow-300',
   red: 'bg-red-500 hover:bg-red-400',
   slate: 'bg-slate-300 hover:bg-slate-200',

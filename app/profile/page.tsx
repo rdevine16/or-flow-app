@@ -294,7 +294,7 @@ const handleChangePassword = async () => {
         {message && (
           <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${
             message.type === 'success' 
-              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+              ? 'bg-green-50 border border-green-200 text-green-800' 
               : 'bg-red-50 border border-red-200 text-red-800'
           }`}>
             {message.type === 'success' ? (
@@ -492,7 +492,7 @@ const handleChangePassword = async () => {
                                     ? 'bg-amber-500'
                                     : passwordStrength.level === 'good'
                                     ? 'bg-blue-500'
-                                    : 'bg-emerald-500'
+                                    : 'bg-green-500'
                                   : 'bg-slate-200'
                               }`}
                             />
@@ -502,7 +502,7 @@ const handleChangePassword = async () => {
                           passwordStrength.level === 'weak' ? 'text-red-600' :
                           passwordStrength.level === 'fair' ? 'text-amber-600' :
                           passwordStrength.level === 'good' ? 'text-blue-600' :
-                          'text-emerald-600'
+                          'text-green-600'
                         }`}>
                           {passwordStrength.level.charAt(0).toUpperCase() + passwordStrength.level.slice(1)} password
                         </p>

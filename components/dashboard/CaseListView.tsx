@@ -66,11 +66,11 @@ const getStatusConfig = (status: string | null) => {
     case 'in_progress':
       return {
         label: 'In Progress',
-        bgColor: 'bg-emerald-50',
-        textColor: 'text-emerald-700',
-        borderColor: 'border-emerald-200',
-        dotColor: 'bg-emerald-500',
-        lineColor: 'bg-emerald-500'
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-600',
+        borderColor: 'border-green-200',
+        dotColor: 'bg-green-500',
+        lineColor: 'bg-green-500'
       }
     case 'completed':
       return {

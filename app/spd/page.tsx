@@ -164,10 +164,10 @@ const getTrayStatusConfig = (status: TrayStatusFilter) => {
     case 'ready':
       return {
         label: 'Ready',
-        bgColor: 'bg-emerald-50',
-        textColor: 'text-emerald-700',
-        borderColor: 'border-emerald-200',
-        dotColor: 'bg-emerald-500',
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-600',
+        borderColor: 'border-green-200',
+        dotColor: 'bg-green-500',
         icon: '✓'
       }
     case 'no_rep_needed':
@@ -189,11 +189,11 @@ const getDeviceStatusConfig = (status: string) => {
     case 'pending':
       return { label: 'Pending', color: 'text-amber-600', bg: 'bg-amber-50', icon: '⏳' }
     case 'consignment':
-      return { label: 'Consignment', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: '✓' }
+      return { label: 'Consignment', color: 'text-green-600', bg: 'bg-green-50', icon: '✓' }
     case 'loaners_confirmed':
       return { label: 'Loaners Confirmed', color: 'text-blue-600', bg: 'bg-blue-50', icon: '📦' }
     case 'delivered':
-      return { label: 'Delivered', color: 'text-emerald-600', bg: 'bg-emerald-50', icon: '✓' }
+      return { label: 'Delivered', color: 'text-green-600', bg: 'bg-green-50', icon: '✓' }
     default:
       return { label: status, color: 'text-slate-600', bg: 'bg-slate-50', icon: '—' }
   }
@@ -422,7 +422,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
                         <div className="flex flex-col items-center">
                           <div className={`w-2.5 h-2.5 rounded-full ${
                             activity.activity_type === 'trays_delivered' || activity.activity_type === 'consignment_confirmed'
-                              ? 'bg-emerald-500'
+                              ? 'bg-green-500'
                               : activity.activity_type === 'loaners_confirmed'
                               ? 'bg-blue-500'
                               : activity.activity_type === 'status_reset'
@@ -662,7 +662,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
         {/* Quick Stats */}
         <div className="flex items-center gap-6">
           <div className="text-center">
-            <p className="text-2xl font-bold text-emerald-600">{stats.confirmed}</p>
+            <p className="text-2xl font-bold text-green-600">{stats.confirmed}</p>
             <p className="text-xs text-slate-500 uppercase tracking-wider">Ready</p>
           </div>
           <div className="text-center">
@@ -784,7 +784,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${
                     trayStatus === 'awaiting_response' ? 'bg-amber-500' :
                     trayStatus === 'awaiting_delivery' ? 'bg-blue-500' :
-                    trayStatus === 'ready' ? 'bg-emerald-500' : 'bg-slate-300'
+                    trayStatus === 'ready' ? 'bg-green-500' : 'bg-slate-300'
                   } opacity-0 group-hover:opacity-100 transition-opacity`}></div>
 
                   {/* Date */}
@@ -836,7 +836,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                               </span>
                             )}
                             {dc.tray_status === 'consignment' && (
-                              <span className="text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                              <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
                                 ✓ Consignment
                               </span>
                             )}
@@ -846,7 +846,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                               </span>
                             )}
                             {dc.tray_status === 'delivered' && (
-                              <span className="text-xs text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                              <span className="text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
                                 ✓ {dc.delivered_tray_count || dc.loaner_tray_count || ''} Delivered
                               </span>
                             )}
@@ -913,7 +913,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
               </span>
               <div className="flex items-center gap-4 text-sm text-slate-500">
                 <span className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   {stats.confirmed} ready
                 </span>
                 <span className="flex items-center gap-1.5">

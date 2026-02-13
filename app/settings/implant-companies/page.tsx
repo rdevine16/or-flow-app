@@ -351,7 +351,7 @@ const handleDelete = async (id: string) => {
                               {showArchived ? (
                                 <button
                                   onClick={() => handleRestore(company.id)}
-                                  className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                  className="px-3 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                 >
                                   Restore
                                 </button>

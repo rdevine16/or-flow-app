@@ -51,7 +51,7 @@ function DeltaBadge({
     : deltaType === 'increase'
   
   const colorClasses = isPositive
-    ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
+    ? 'bg-green-50 text-green-600 ring-green-600/20'
     : deltaType === 'unchanged'
     ? 'bg-slate-50 text-slate-600 ring-slate-500/20'
     : 'bg-red-50 text-red-700 ring-red-600/20'
@@ -72,12 +72,12 @@ function DeltaBadge({
 function TargetIndicator({ target, met, isMaxTarget = false }: { target: number; met: boolean; isMaxTarget?: boolean }) {
   return (
     <div className="flex items-center gap-2 mt-3">
-      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${met ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${met ? 'bg-green-500' : 'bg-amber-500'}`} />
       <span className="text-xs text-slate-500">
         Target: {isMaxTarget ? `<${target}%` : `${target}%`}
       </span>
       {met && (
-        <span className="text-xs text-emerald-600 font-medium">✓ Met</span>
+        <span className="text-xs text-green-600 font-medium">✓ Met</span>
       )}
     </div>
   )
@@ -232,8 +232,8 @@ export function SurgeonIdleTimeCard({ kpi, onClick }: SurgeonIdleTimeCardProps) 
       
       {/* Success state */}
       {(kpi.targetMet || kpi.value <= 5) && (
-        <div className="mt-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
-          <p className="text-sm text-emerald-700 font-medium">
+        <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+          <p className="text-sm text-green-600 font-medium">
             ✓ Excellent! Minimal surgeon wait time
           </p>
         </div>

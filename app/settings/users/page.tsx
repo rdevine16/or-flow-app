@@ -670,7 +670,7 @@ export default function UsersSettingsPage() {
                                 // Reactivate button for deactivated users
                                 <button
                                   onClick={() => handleReactivate(user.id)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-green-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                                 >
                                   <RefreshCw className="w-4 h-4" />
                                   Reactivate

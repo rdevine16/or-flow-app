@@ -110,9 +110,9 @@ function ProcedureDetail({
       {/* Summary Cards Row 1 — Financial KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Total Profit */}
-        <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-5">
-          <p className="text-sm font-medium text-emerald-700 mb-1">Total Profit</p>
-          <p className="text-2xl font-bold text-emerald-700">{formatCurrency(proc.totalProfit)}</p>
+        <div className="bg-green-50 rounded-xl border border-green-200 p-5">
+          <p className="text-sm font-medium text-green-600 mb-1">Total Profit</p>
+          <p className="text-2xl font-bold text-green-600">{formatCurrency(proc.totalProfit)}</p>
         </div>
         
         {/* Typical Profit with IQR */}
@@ -204,7 +204,7 @@ function ProcedurePL({ proc }: { proc: ProcedureStats }) {
         <PLRow label="OR Time Cost" value={-avgORCost} negative />
         <div className="flex items-center justify-between pt-2 mt-2 border-t border-slate-200">
           <span className="text-sm font-semibold text-slate-900">Net Profit</span>
-          <span className={`text-sm font-bold tabular-nums ${avgProfit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          <span className={`text-sm font-bold tabular-nums ${avgProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatCurrency(avgProfit)}
           </span>
         </div>
@@ -223,7 +223,7 @@ function PLRow({ label, value, negative, positive }: {
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-slate-500">{label}</span>
       <span className={`text-sm font-medium tabular-nums ${
-        positive ? 'text-emerald-600' : negative ? 'text-red-500' : 'text-slate-900'
+        positive ? 'text-green-600' : negative ? 'text-red-500' : 'text-slate-900'
       }`}>
         {value < 0 ? `(${formatCurrency(Math.abs(value))})` : formatCurrency(value)}
       </span>
@@ -295,14 +295,14 @@ function SurgeonBreakdownTable({ proc }: { proc: ProcedureStats }) {
                 </td>
                 <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
                 <td className="px-6 py-4 text-right">
-                  <span className="font-medium text-emerald-600">
+                  <span className="font-medium text-green-600">
                     {surgeon.medianProfit !== null 
                       ? formatCurrency(surgeon.medianProfit) 
                       : formatCurrency(surgeon.avgProfit)
                     }
                   </span>
                   {surgeon.profitVsFacility !== 0 && (
-                    <span className={`ml-2 text-xs ${surgeon.profitVsFacility >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                    <span className={`ml-2 text-xs ${surgeon.profitVsFacility >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                       ({surgeon.profitVsFacility >= 0 ? '+' : ''}{formatCurrency(surgeon.profitVsFacility)})
                     </span>
                   )}
@@ -406,7 +406,7 @@ function AllProceduresTable({
                   <span className="text-slate-400 ml-1.5 text-xs">{proc.surgeonCount} surgeons</span>
                 </td>
                 <td className="px-6 py-4 text-center text-slate-600">{proc.caseCount}</td>
-                <td className="px-6 py-4 text-right font-semibold text-emerald-600 tabular-nums">
+                <td className="px-6 py-4 text-right font-semibold text-green-600 tabular-nums">
                   {formatCurrency(proc.totalProfit)}
                 </td>
                 <td className="px-6 py-4 text-right text-slate-900 tabular-nums">
@@ -490,7 +490,7 @@ function Tooltip({ text }: { text: string }) {
 
 function MarginBadge({ value }: { value: number }) {
   const color =
-    value >= 30 ? 'bg-emerald-50 text-emerald-700' :
+    value >= 30 ? 'bg-green-50 text-green-600' :
     value >= 15 ? 'bg-amber-50 text-amber-700' :
     value >= 0 ? 'bg-red-50 text-red-700' :
     'bg-red-100 text-red-800'
@@ -505,7 +505,7 @@ function MarginBadge({ value }: { value: number }) {
 function MarginBar({ value }: { value: number }) {
   const width = Math.min(Math.max(value, 0), 100)
   const color =
-    value >= 30 ? 'bg-emerald-500' :
+    value >= 30 ? 'bg-green-500' :
     value >= 15 ? 'bg-amber-500' :
     'bg-red-500'
 
@@ -518,7 +518,7 @@ function MarginBar({ value }: { value: number }) {
 
 function DurationDiff({ minutes }: { minutes: number }) {
   const color =
-    minutes < -3 ? 'text-emerald-600' :
+    minutes < -3 ? 'text-green-600' :
     minutes > 10 ? 'text-red-500' :
     'text-slate-600'
 
@@ -539,7 +539,7 @@ function ImpactBadge({ value }: { value: number }) {
   const isPositive = value > 0
   return (
     <span className={`inline-flex items-center gap-1 text-sm font-medium ${
-      isPositive ? 'text-emerald-600' : 'text-red-500'
+      isPositive ? 'text-green-600' : 'text-red-500'
     }`}>
       {isPositive ? '+' : ''}{formatCurrency(value)}
     </span>
@@ -550,7 +550,7 @@ function ConsistencyBadge({ rating }: { rating: 'high' | 'medium' | 'low' | null
   if (!rating) return <span className="text-slate-400">—</span>
 
   const config = {
-    high: { label: '⚡ High', classes: 'bg-emerald-100 text-emerald-700' },
+    high: { label: '⚡ High', classes: 'bg-green-100 text-green-600' },
     medium: { label: '◐ Medium', classes: 'bg-amber-100 text-amber-700' },
     low: { label: '◯ Low', classes: 'bg-red-100 text-red-700' },
   }

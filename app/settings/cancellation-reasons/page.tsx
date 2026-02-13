@@ -311,7 +311,7 @@ export default function CancellationReasonsSettingsPage() {
                                 }`}
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className={`w-2 h-2 rounded-full ${reason.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                                  <div className={`w-2 h-2 rounded-full ${reason.is_active ? 'bg-green-500' : 'bg-slate-300'}`} />
                                   <div>
                                     <p className={`font-medium ${reason.is_active ? 'text-slate-900' : 'text-slate-400'}`}>
                                       {reason.display_name}
@@ -334,7 +334,7 @@ export default function CancellationReasonsSettingsPage() {
                                           </button>
                                         </>
                                     ) : (
-                                      <button onClick={() => handleRestore(reason)} className="text-sm text-emerald-600 hover:bg-emerald-50 px-3 py-1.5 rounded-lg">
+                                      <button onClick={() => handleRestore(reason)} className="text-sm text-green-600 hover:bg-green-50 px-3 py-1.5 rounded-lg">
                                         Restore
                                       </button>
                                     )}

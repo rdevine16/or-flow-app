@@ -306,7 +306,7 @@ export default function SurgeonPreferencesPage() {
                       </p>
                     </div>
                     {workflowSaved && (
-                      <span className="text-sm text-emerald-600 flex items-center gap-1">
+                      <span className="text-sm text-green-600 flex items-center gap-1">
                         <Check className="w-4 h-4" />
                         Saved
                       </span>

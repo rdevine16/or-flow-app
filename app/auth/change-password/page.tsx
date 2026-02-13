@@ -162,8 +162,8 @@ export default function ChangePasswordPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-emerald-600" />
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Check className="w-8 h-8 text-green-600" />
           </div>
           <h1 className="text-xl font-bold text-slate-900 mb-2">Password Changed!</h1>
           <p className="text-slate-600">Redirecting to dashboard...</p>
@@ -264,7 +264,7 @@ export default function ChangePasswordPage() {
                               ? 'bg-amber-500'
                               : passwordStrength.level === 'good'
                               ? 'bg-blue-500'
-                              : 'bg-emerald-500'
+                              : 'bg-green-500'
                             : 'bg-slate-200'
                         }`}
                       />
@@ -274,7 +274,7 @@ export default function ChangePasswordPage() {
                     passwordStrength.level === 'weak' ? 'text-red-600' :
                     passwordStrength.level === 'fair' ? 'text-amber-600' :
                     passwordStrength.level === 'good' ? 'text-blue-600' :
-                    'text-emerald-600'
+                    'text-green-600'
                   }`}>
                     {passwordStrength.level.charAt(0).toUpperCase() + passwordStrength.level.slice(1)} password
                   </p>

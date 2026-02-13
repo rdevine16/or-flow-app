@@ -1215,12 +1215,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           <div className="grid grid-cols-2 gap-4">
             {/* Total Time */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl" />
+              <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/10 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-green-500/5 rounded-full blur-2xl" />
               <div className="relative">
                 <div className="flex items-center gap-2 mb-2">
                   {patientInTime && !patientOutTime ? (
-                    <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+                    <div className="w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
                   ) : (
                     <div className="w-2.5 h-2.5 bg-slate-600 rounded-full" />
                   )}
@@ -1236,7 +1236,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       {totalVariance !== null && patientInTime && (
                         <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                           totalVariance > 10 ? 'bg-red-500/20 text-red-400' :
-                          totalVariance < -10 ? 'bg-emerald-500/20 text-emerald-400' :
+                          totalVariance < -10 ? 'bg-green-500/20 text-green-400' :
                           'bg-slate-700 text-slate-400'
                         }`}>
                           {totalVariance > 0 ? '+' : ''}{totalVariance}m
@@ -1271,7 +1271,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       {surgicalVariance !== null && incisionTime && (
                         <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
                           surgicalVariance > 10 ? 'bg-red-500/20 text-red-400' :
-                          surgicalVariance < -10 ? 'bg-emerald-500/20 text-emerald-400' :
+                          surgicalVariance < -10 ? 'bg-green-500/20 text-green-400' :
                           'bg-slate-700 text-slate-400'
                         }`}>
                           {surgicalVariance > 0 ? '+' : ''}{surgicalVariance}m
@@ -1353,7 +1353,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               <div className="flex items-center gap-3">
                 <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all duration-500 ease-out"
+                    className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
                     style={{ width: `${totalMilestoneCount > 0 ? (completedMilestones / totalMilestoneCount) * 100 : 0}%` }}
                   />
                 </div>

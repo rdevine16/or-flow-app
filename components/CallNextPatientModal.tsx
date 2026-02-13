@@ -627,7 +627,7 @@ await supabase
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 bg-emerald-500 rounded-full" />
+                                <span className="w-2 h-2 bg-green-500 rounded-full" />
                                 <span className="font-medium text-slate-900">{call.room_name}</span>
                                 <span className="text-slate-400">•</span>
                                 <span className="text-sm text-slate-500">{formatTimeAgo(call.created_at)}</span>
@@ -741,7 +741,7 @@ await supabase
               className={`w-full py-3 rounded-xl text-sm font-semibold transition-all
                 flex items-center justify-center gap-2
                 ${selectedRoom && nextCase && !isSending
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-xl'
+                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg hover:shadow-xl'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
             >

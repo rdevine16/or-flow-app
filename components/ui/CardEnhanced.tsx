@@ -305,7 +305,7 @@ interface StatsCardProps {
 
 export function StatsCard({ title, value, change, icon, loading }: StatsCardProps) {
   const trendColors = {
-    up: 'text-emerald-600',
+    up: 'text-green-600',
     down: 'text-red-600',
     neutral: 'text-slate-600',
   }

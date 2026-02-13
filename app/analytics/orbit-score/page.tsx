@@ -220,7 +220,7 @@ function TrendIndicator({ trend, current, previous }: {
   const delta = current - previous
   const isUp = trend === 'up'
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold font-mono ${isUp ? 'text-emerald-600' : trend === 'down' ? 'text-red-600' : 'text-slate-400'}`}>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold font-mono ${isUp ? 'text-green-600' : trend === 'down' ? 'text-red-600' : 'text-slate-400'}`}>
       {isUp ? '▲' : trend === 'down' ? '▼' : '–'} {isUp ? '+' : ''}{delta}
     </span>
   )
@@ -378,7 +378,7 @@ function SurgeonCard({ scorecard, settings }: { scorecard: ORbitScorecard; setti
               <div className="text-[9px] text-slate-400 uppercase tracking-wider">Annual Time Saved</div>
             </div>
             <div className="text-center">
-              <div className="text-sm font-bold text-emerald-600">${plan.totalProjectedDollars.toLocaleString()}</div>
+              <div className="text-sm font-bold text-green-600">${plan.totalProjectedDollars.toLocaleString()}</div>
               <div className="text-[9px] text-slate-400 uppercase tracking-wider">Annual Value</div>
             </div>
           </div>
@@ -386,10 +386,10 @@ function SurgeonCard({ scorecard, settings }: { scorecard: ORbitScorecard; setti
           {/* Strengths */}
           {plan.strengths.length > 0 && (
             <div className="px-6 py-3 border-b border-slate-100">
-              <div className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider mb-1.5">Strengths</div>
+              <div className="text-[10px] font-semibold text-green-600 uppercase tracking-wider mb-1.5">Strengths</div>
               <div className="flex flex-wrap gap-2">
                 {plan.strengths.map((s) => (
-                  <span key={s.pillarLabel} className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
+                  <span key={s.pillarLabel} className="text-xs text-green-600 bg-green-50 border border-green-100 px-2.5 py-1 rounded-lg">
                     {s.pillarLabel} ({s.score}) — {s.message}
                   </span>
                 ))}
@@ -431,7 +431,7 @@ function RecommendationCard({ rec }: { rec: ImprovementRecommendation }) {
           </div>
         </div>
         <div className="text-right flex-shrink-0 ml-4">
-          <div className="text-xs font-bold text-emerald-600">{rec.projectedAnnualHours} hrs</div>
+          <div className="text-xs font-bold text-green-600">{rec.projectedAnnualHours} hrs</div>
           <div className="text-[10px] text-slate-400">${rec.projectedAnnualDollars.toLocaleString()}/yr</div>
         </div>
       </div>

@@ -741,7 +741,7 @@ export function calculateSurgicalTurnovers(
       const dayMedian = calculateMedian(turnovers) ?? 0
       return {
         date,
-        color: (dayMedian <= 40 ? 'emerald' : dayMedian <= 50 ? 'yellow' : 'red') as Color,
+        color: (dayMedian <= 40 ? 'green' : dayMedian <= 50 ? 'yellow' : 'red') as Color,
         tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} turnovers)`
       }
     })
@@ -754,7 +754,7 @@ export function calculateSurgicalTurnovers(
       const dayMedian = calculateMedian(turnovers) ?? 0
       return {
         date,
-        color: (dayMedian <= 10 ? 'emerald' : dayMedian <= 20 ? 'yellow' : 'red') as Color,
+        color: (dayMedian <= 10 ? 'green' : dayMedian <= 20 ? 'yellow' : 'red') as Color,
         tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} flips)`
       }
     })
@@ -895,7 +895,7 @@ export function calculateFCOTS(
         : 100
       return {
         date,
-        color: dayRate >= 100 ? 'emerald' : dayRate >= 80 ? 'yellow' : 'red' as Color,
+        color: dayRate >= 100 ? 'green' : dayRate >= 80 ? 'yellow' : 'red' as Color,
         tooltip: `${date}: ${data.onTime}/${data.onTime + data.late} on-time`
       }
     })
@@ -1006,7 +1006,7 @@ export function calculateTurnoverTime(
       const dayMedian = calculateMedian(dayTurnovers) ?? 0
       return {
         date,
-        color: dayMedian <= 25 ? 'emerald' : dayMedian <= 30 ? 'yellow' : 'red' as Color,
+        color: dayMedian <= 25 ? 'green' : dayMedian <= 30 ? 'yellow' : 'red' as Color,
         tooltip: `${date}: ${Math.round(dayMedian)} min median`
       }
     })
@@ -1164,7 +1164,7 @@ export function calculateORUtilization(
       const dayAvg = calculateAverage(dayUtils)
       return {
         date,
-        color: dayAvg >= 75 ? 'emerald' : dayAvg >= 60 ? 'yellow' : 'slate' as Color,
+        color: dayAvg >= 75 ? 'green' : dayAvg >= 60 ? 'yellow' : 'slate' as Color,
         tooltip: `${date}: ${Math.round(dayAvg)}% utilization`
       }
     })
@@ -1276,7 +1276,7 @@ export function calculateCancellationRate(
     .slice(-30)
     .map(([date, data]) => ({
       date,
-      color: data.sameDay === 0 ? 'emerald' : data.sameDay === 1 ? 'yellow' : 'red' as Color,
+      color: data.sameDay === 0 ? 'green' : data.sameDay === 1 ? 'yellow' : 'red' as Color,
       tooltip: data.sameDay === 0 
         ? `${date}: No same-day cancellations` 
         : `${date}: ${data.sameDay} same-day, ${data.cancelled} total cancelled`
@@ -1329,7 +1329,7 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
     .slice(-30)
     .map(([date, minutes]) => ({
       date,
-      color: minutes <= 30 ? 'emerald' : minutes <= 45 ? 'yellow' : 'red' as Color,
+      color: minutes <= 30 ? 'green' : minutes <= 45 ? 'yellow' : 'red' as Color,
       tooltip: `${date}: ${Math.round(minutes)} min total delays`
     }))
   

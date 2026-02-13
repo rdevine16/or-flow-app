@@ -225,8 +225,8 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
           <p className="text-sm text-slate-500 mt-0.5">Auto-detected anomalies and reported delays</p>
         </div>
         <div className="p-8 text-center">
-          <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <FlagIcon className="w-6 h-6 text-emerald-500" />
+          <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mx-auto mb-3">
+            <FlagIcon className="w-6 h-6 text-green-500" />
           </div>
           <p className="text-sm font-medium text-slate-700">No flags in this period</p>
           <p className="text-xs text-slate-400 mt-1">All cases within expected thresholds</p>

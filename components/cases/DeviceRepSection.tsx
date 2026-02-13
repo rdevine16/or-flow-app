@@ -66,10 +66,10 @@ function getStatusConfig(status: string) {
       return {
         label: 'Consignment',
         icon: '✓',
-        bgColor: 'bg-emerald-50',
-        textColor: 'text-emerald-700',
-        borderColor: 'border-emerald-200',
-        dotColor: 'bg-emerald-500',
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-600',
+        borderColor: 'border-green-200',
+        dotColor: 'bg-green-500',
       }
     case 'loaners_confirmed':
       return {
@@ -84,10 +84,10 @@ function getStatusConfig(status: string) {
       return {
         label: 'Delivered',
         icon: '✓',
-        bgColor: 'bg-emerald-50',
-        textColor: 'text-emerald-700',
-        borderColor: 'border-emerald-200',
-        dotColor: 'bg-emerald-500',
+        bgColor: 'bg-green-50',
+        textColor: 'text-green-600',
+        borderColor: 'border-green-200',
+        dotColor: 'bg-green-500',
       }
     default:
       return {
@@ -150,7 +150,7 @@ function getActivityColor(type: string): string {
   switch (type) {
     case 'consignment_confirmed':
     case 'trays_delivered':
-      return 'text-emerald-600'
+      return 'text-green-600'
     case 'loaners_confirmed':
       return 'text-blue-600'
     case 'status_reset':

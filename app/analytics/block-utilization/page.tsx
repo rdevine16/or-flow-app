@@ -827,7 +827,7 @@ function calculateWeeklyTrends(blockDays: BlockDayWithCases[]): WeeklyTrend[] {
 // ============================================
 
 function utilizationColor(pct: number): { text: string; bg: string; bar: string; ring: string } {
-  if (pct >= 85) return { text: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500', ring: 'ring-emerald-200' }
+  if (pct >= 85) return { text: 'text-green-600', bg: 'bg-green-50', bar: 'bg-green-500', ring: 'ring-green-200' }
   if (pct >= 60) return { text: 'text-amber-700', bg: 'bg-amber-50', bar: 'bg-amber-500', ring: 'ring-amber-200' }
   return { text: 'text-red-700', bg: 'bg-red-50', bar: 'bg-red-500', ring: 'ring-red-200' }
 }
@@ -898,7 +898,7 @@ function BlockDayTimeline({
       <div className="relative h-9 bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
         {day.remainingMinutes > 0 && day.lastCaseEnd !== null && (
           <div
-            className="absolute top-0 bottom-0 bg-emerald-50 border-l border-dashed border-emerald-300"
+            className="absolute top-0 bottom-0 bg-green-50 border-l border-dashed border-green-300"
             style={{ left: `${toPercent(day.lastCaseEnd)}%`, right: '0%' }}
           />
         )}
@@ -941,7 +941,7 @@ function BlockDayTimeline({
       </div>
 
       {day.remainingMinutes > 30 && (
-        <div className="mt-1 text-[11px] text-emerald-600 font-medium">
+        <div className="mt-1 text-[11px] text-green-600 font-medium">
           {formatDuration(day.remainingMinutes)} available
         </div>
       )}
@@ -988,13 +988,13 @@ function WhatFitsPanel({
       {fittingOptions.length > 0 && (
         <div className="space-y-1.5">
           {fittingOptions.map(opt => (
-            <div key={opt.procedureTypeId} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-emerald-50/60 border border-emerald-100">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+            <div key={opt.procedureTypeId} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-green-50/60 border border-green-100">
+              <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-medium text-slate-800 truncate">{opt.procedureName}</span>
                   {opt.estimatedRevenue && (
-                    <span className="text-[12px] font-semibold text-emerald-700 ml-2">
+                    <span className="text-[12px] font-semibold text-green-600 ml-2">
                       ${opt.estimatedRevenue.toLocaleString()}
                     </span>
                   )}
@@ -1077,7 +1077,7 @@ function SurgeonUtilizationRow({
         <span className="text-[11px] text-slate-400 ml-1">/ {formatHours(data.totalBlockMinutes)}</span>
       </td>
       <td className="py-3 px-4 text-right">
-        <span className={`text-[13px] font-medium tabular-nums ${data.avgRemainingMinutes > 60 ? 'text-emerald-600' : 'text-slate-600'}`}>
+        <span className={`text-[13px] font-medium tabular-nums ${data.avgRemainingMinutes > 60 ? 'text-green-600' : 'text-slate-600'}`}>
           {formatDuration(data.avgRemainingMinutes)}
         </span>
       </td>
@@ -1131,7 +1131,7 @@ function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
           <span className="text-[11px] text-slate-400 ml-1">/ {formatHours(data.totalAvailableMinutes)}</span>
         </td>
         <td className="py-3 px-4 text-right">
-          <span className={`text-[13px] font-medium tabular-nums ${data.totalIdleMinutes / 60 > 10 ? 'text-emerald-600' : 'text-slate-600'}`}>
+          <span className={`text-[13px] font-medium tabular-nums ${data.totalIdleMinutes / 60 > 10 ? 'text-green-600' : 'text-slate-600'}`}>
             {formatHours(data.totalIdleMinutes)}
           </span>
         </td>
@@ -1749,7 +1749,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                       title="Avg Utilization"
                       value={`${summaryMetrics.avgUtil}%`}
                       icon={<Target className="w-4 h-4" />}
-                      accentColor={summaryMetrics.avgUtil >= 85 ? 'emerald' : summaryMetrics.avgUtil >= 60 ? 'amber' : 'red'}
+                      accentColor={summaryMetrics.avgUtil >= 85 ? 'green' : summaryMetrics.avgUtil >= 60 ? 'amber' : 'red'}
                       progress={summaryMetrics.avgUtil}
                       tooltip="Percentage of allocated block time used for surgery. Calculated as total case time (patient in → patient out) divided by total scheduled block hours."
                     />
@@ -1776,7 +1776,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                         ? `~$${summaryMetrics.financialImpact.toLocaleString()} opportunity`
                         : 'Available capacity'}
                       icon={<Clock className="w-4 h-4" />}
-                      accentColor="emerald"
+                      accentColor="green"
                       tooltip={`Time remaining after the last case ends until the block ends, summed across all block days.${
                         orHourlyRate
                           ? ` Cost estimate uses your facility's OR hourly rate of $${orHourlyRate.toLocaleString()}/hr (from facility settings).`
@@ -1882,7 +1882,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                       </div>
 
                       <div>
-                        <SectionHeader title="What Could Fit?" subtitle="Based on historical case durations and available block time" icon={<PlusCircle className="w-4 h-4" />} accentColor="emerald" />
+                        <SectionHeader title="What Could Fit?" subtitle="Based on historical case durations and available block time" icon={<PlusCircle className="w-4 h-4" />} accentColor="green" />
                         <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                           <WhatFitsPanel
                             options={whatFitsMap.get(selectedUtil.surgeonId) || []}
@@ -1981,7 +1981,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                       title="Avg Room Utilization"
                       value={`${roomSummary.avgUtil}%`}
                       icon={<Target className="w-4 h-4" />}
-                      accentColor={roomSummary.avgUtil >= 85 ? 'emerald' : roomSummary.avgUtil >= 60 ? 'amber' : 'red'}
+                      accentColor={roomSummary.avgUtil >= 85 ? 'green' : roomSummary.avgUtil >= 60 ? 'amber' : 'red'}
                       progress={roomSummary.avgUtil}
                       tooltip="Average percentage of available room time used for cases across all rooms. Calculated as total case time divided by total room open hours."
                     />
@@ -2006,7 +2006,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                       value={formatHours(roomSummary.totalIdle)}
                       subtitle={orHourlyRate ? `~$${Math.round((roomSummary.totalIdle / 60) * orHourlyRate).toLocaleString()} opportunity` : 'Unused capacity'}
                       icon={<Clock className="w-4 h-4" />}
-                      accentColor="emerald"
+                      accentColor="green"
                       tooltip={`Room time with no cases scheduled — the gap between available hours and used hours.${
                         orHourlyRate
                           ? ` Cost estimate uses your facility's OR hourly rate of $${orHourlyRate.toLocaleString()}/hr.`

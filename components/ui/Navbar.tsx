@@ -65,7 +65,7 @@ export default function Navbar() {
           <div className="flex items-center gap-4">
             {/* Facility Badge */}
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-lg">
-              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
               <span className="text-sm text-slate-600 font-medium">Memorial General</span>
             </div>
 

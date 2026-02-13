@@ -173,19 +173,19 @@ function SummaryCard({
 }) {
   return (
     <div className={`rounded-xl border p-5 shadow-sm ${
-      highlight ? 'bg-emerald-50 border-emerald-200' :
+      highlight ? 'bg-green-50 border-green-200' :
       'bg-white border-slate-200'
     }`}>
       <div className="flex items-center gap-2 mb-2">
         <Icon className={`w-4 h-4 ${
-          highlight ? 'text-emerald-600' :
+          highlight ? 'text-green-600' :
           negative ? 'text-red-400' :
           'text-slate-400'
         }`} />
         <p className="text-sm font-medium text-slate-500">{label}</p>
       </div>
       <p className={`text-2xl font-bold tabular-nums ${
-        highlight ? 'text-emerald-700' :
+        highlight ? 'text-green-600' :
         negative ? 'text-red-600' :
         'text-slate-900'
       }`}>
@@ -216,7 +216,7 @@ function KPICard({
   status?: 'good' | 'neutral' | 'bad'
 }) {
   const statusColors = {
-    good: 'text-emerald-600',
+    good: 'text-green-600',
     neutral: 'text-amber-600',
     bad: 'text-red-600',
   }
@@ -312,7 +312,7 @@ function TopProceduresTable({
                   <span className="text-slate-400 ml-1.5 text-xs">{proc.surgeonCount} surgeons</span>
                 </td>
                 <td className="px-5 py-3 text-center text-slate-600">{proc.caseCount}</td>
-                <td className="px-5 py-3 text-right font-semibold text-emerald-600 tabular-nums">
+                <td className="px-5 py-3 text-right font-semibold text-green-600 tabular-nums">
                   {formatCurrency(proc.totalProfit)}
                 </td>
                 <td className="px-5 py-3 text-right text-slate-900 tabular-nums">
@@ -405,7 +405,7 @@ function TopSurgeonsTable({
                   </div>
                 </td>
                 <td className="px-5 py-3 text-center text-slate-600">{surgeon.caseCount}</td>
-                <td className="px-5 py-3 text-right font-semibold text-emerald-600 tabular-nums">
+                <td className="px-5 py-3 text-right font-semibold text-green-600 tabular-nums">
                   {formatCurrency(surgeon.totalProfit)}
                 </td>
                 <td className="px-5 py-3 text-right text-slate-900 tabular-nums">
@@ -462,7 +462,7 @@ function ProfitTrend({ data }: { data: FinancialsMetrics['profitTrend'] }) {
         <h3 className="text-base font-semibold text-slate-900">Daily Profit Trend</h3>
         <div className="flex items-center gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-2 rounded-sm bg-emerald-500" />
+            <div className="w-3 h-2 rounded-sm bg-green-500" />
             <span>Profit</span>
           </div>
           <span>{validData.length} days</span>
@@ -498,7 +498,7 @@ function ProfitTrend({ data }: { data: FinancialsMetrics['profitTrend'] }) {
                   className={`w-full rounded-t transition-all duration-150 ${
                     isNeg 
                       ? isHovered ? 'bg-red-500' : 'bg-red-400/70'
-                      : isHovered ? 'bg-emerald-500' : 'bg-emerald-500/70'
+                      : isHovered ? 'bg-green-500' : 'bg-green-500/70'
                   }`}
                   style={{ 
                     height: `${barHeight}%`,
@@ -585,7 +585,7 @@ function RankBadge({ rank }: { rank: number }) {
 
 function MarginBadge({ value }: { value: number }) {
   const color =
-    value >= 30 ? 'bg-emerald-50 text-emerald-700' :
+    value >= 30 ? 'bg-green-50 text-green-600' :
     value >= 15 ? 'bg-amber-50 text-amber-700' :
     value >= 0 ? 'bg-red-50 text-red-700' :
     'bg-red-100 text-red-800'

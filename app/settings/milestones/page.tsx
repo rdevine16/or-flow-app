@@ -432,7 +432,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
           <p>Remove the pairing between these milestones?</p>
           <div className="mt-3 p-3 bg-slate-50 rounded-lg">
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">Start</span>
+              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-600">Start</span>
               <span className="font-medium text-slate-900">{milestone.pair_position === 'start' ? milestone.display_name : partner?.display_name}</span>
             </div>
             <div className="flex items-center gap-2 mt-2">
@@ -692,7 +692,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                           disabled={saving}
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors disabled:opacity-50 ${
                             milestone.is_active
-                              ? 'border-emerald-500 bg-emerald-500'
+                              ? 'border-green-500 bg-green-500'
                               : 'border-slate-300 hover:border-slate-400'
                           }`}
                           title={milestone.is_active ? 'Deactivate' : 'Activate'}
@@ -733,7 +733,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             {milestone.pair_position && milestone.is_active && (
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 milestone.pair_position === 'start' 
-                                  ? 'bg-emerald-100 text-emerald-700' 
+                                  ? 'bg-green-100 text-green-600' 
                                   : 'bg-amber-100 text-amber-700'
                               }`}>
                                 {milestone.pair_position === 'start' ? 'Start' : 'End'}
@@ -768,7 +768,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                               onClick={() => openPairModal(milestone)}
                               className={`p-2 rounded-lg transition-colors ${
                                 milestone.pair_with_id 
-                                  ? 'text-emerald-600 hover:bg-emerald-50' 
+                                  ? 'text-green-600 hover:bg-green-50' 
                                   : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
                               }`}
                               title={milestone.pair_with_id ? 'Manage pairing' : 'Set up pairing'}
@@ -856,7 +856,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                             <button
                               onClick={() => handleRestore(milestone)}
                               disabled={saving}
-                              className="px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition-colors disabled:opacity-50"
+                              className="px-3 py-1.5 text-sm font-medium text-green-600 bg-green-100 hover:bg-green-200 rounded-lg transition-colors disabled:opacity-50"
                             >
                               Restore
                             </button>
@@ -881,7 +881,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                     <span className="text-slate-500">Facility milestone</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Start</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-600 font-medium">Start</span>
                     <span className="text-slate-500">First button in pair</span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -958,9 +958,9 @@ const handleRestore = async (milestone: FacilityMilestone) => {
               </div>
 
               {editingMilestone.pair_with_id && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <p className="text-sm font-medium text-emerald-900">Paired Milestone</p>
-                  <p className="text-sm text-emerald-700 mt-1">
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm font-medium text-green-900">Paired Milestone</p>
+                  <p className="text-sm text-green-600 mt-1">
                     {editingMilestone.pair_position === 'start' ? 'Start' : 'End'} of pair with: <span className="font-medium">{getPairedName(editingMilestone.pair_with_id)}</span>
                   </p>
                 </div>
@@ -1066,7 +1066,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">Start</span>
+                    <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-600">Start</span>
                     <span className="text-sm text-slate-900">
                       {pairingMilestone.pair_position === 'start' 
                         ? pairingMilestone.display_name 

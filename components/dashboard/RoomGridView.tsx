@@ -47,7 +47,7 @@ const getStatusColor = (status: string | null): string => {
     case 'in_progress':
       return 'bg-amber-500'
     case 'completed':
-      return 'bg-emerald-500'
+      return 'bg-green-500'
     case 'delayed':
       return 'bg-red-500'
     case 'cancelled':
@@ -64,7 +64,7 @@ const getStatusBgColor = (status: string | null): string => {
     case 'in_progress':
       return 'bg-amber-50 border-amber-200'
     case 'completed':
-      return 'bg-emerald-50 border-emerald-200'
+      return 'bg-green-50 border-green-200'
     case 'delayed':
       return 'bg-red-50 border-red-200'
     default:
