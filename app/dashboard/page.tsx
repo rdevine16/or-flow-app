@@ -1,6 +1,6 @@
 // app/dashboard/page.tsx
 // Facility admin dashboard — home base for operational overview
-// Phase 5: Added 30-day trend chart and quick access navigation cards.
+// Phase 6: Global search (Cmd+K), notification bell, and final polish.
 
 'use client'
 
@@ -41,7 +41,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="p-6">
+      <div>
         {/* Header + Time toggle */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>

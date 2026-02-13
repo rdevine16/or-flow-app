@@ -7,7 +7,8 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import GlobalSearch from '../GlobalSearch'
 import { NavItem, isNavItemActive } from './navigation-config'
-import { Bell, ChevronDown, ChevronRight, Clock, Eye, LogOut, Settings, User, X } from 'lucide-react'
+import { NotificationBell } from '../global/NotificationBell'
+import { ChevronDown, ChevronRight, Clock, Eye, LogOut, Settings, User, X } from 'lucide-react'
 
 interface UserData {
   firstName: string
@@ -134,10 +135,7 @@ export default function Header({
         <div className="w-px h-8 bg-slate-200 mx-2 hidden md:block" />
 
         {/* Notifications */}
-        <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
-        </button>
+        <NotificationBell />
 
         <div className="w-px h-8 bg-slate-200 mx-2" />
 
