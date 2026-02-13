@@ -34,7 +34,7 @@ export default function SubNavigation({
       className="fixed top-0 h-full bg-white border-r border-slate-200 z-40 flex flex-col transition-all duration-300 ease-out"
     >
       {/* Header */}
-      <div className="h-16 flex items-center px-5 border-b border-slate-200">
+      <div className="h-16 flex items-center px-4 border-b border-slate-200">
         <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
       </div>
 

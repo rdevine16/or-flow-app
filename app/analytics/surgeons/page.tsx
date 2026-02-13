@@ -1263,7 +1263,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         }
                       />
 
-                      <div className="mt-5">
+                      <div className="mt-4">
                         <ProcedureComparisonChart 
                           data={procedurePerformance} 
                           formatValue={formatSecondsToHHMMSS}

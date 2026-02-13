@@ -179,7 +179,7 @@ export default function ResetPasswordPage() {
             <p className="text-slate-500">Enter a new password for your account.</p>
           </div>
 
-          <form onSubmit={handleResetPassword} className="space-y-5">
+          <form onSubmit={handleResetPassword} className="space-y-4">
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-2">
                 New Password

@@ -198,7 +198,7 @@ const { showToast } = useToast()
       {/* Metrics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Total Facilities */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <Building2 className="w-5 h-5 text-blue-600" />
@@ -211,7 +211,7 @@ const { showToast } = useToast()
         </div>
 
         {/* Active Facilities */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -224,7 +224,7 @@ const { showToast } = useToast()
         </div>
 
         {/* Total Users */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 text-purple-600" />
@@ -237,7 +237,7 @@ const { showToast } = useToast()
         </div>
 
         {/* Cases This Month */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
               <ClipboardList className="w-5 h-5 text-amber-600" />
@@ -255,7 +255,7 @@ const { showToast } = useToast()
         {/* Quick Actions */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-100">
+            <div className="px-4 py-4 border-b border-slate-100">
               <h2 className="font-semibold text-slate-900">Quick Actions</h2>
             </div>
             <div className="p-3 space-y-1">
@@ -361,7 +361,7 @@ const { showToast } = useToast()
           {/* Alerts */}
           {(facilityMetrics.pastDue > 0 || facilityMetrics.trial > 0) && (
             <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-              <div className="px-5 py-4 border-b border-slate-100">
+              <div className="px-4 py-4 border-b border-slate-100">
                 <h2 className="font-semibold text-slate-900">Attention Needed</h2>
               </div>
               <div className="p-4 space-y-3">
@@ -395,7 +395,7 @@ const { showToast } = useToast()
         {/* Recent Activity */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Recent Activity</h2>
               <Link
                 href="/admin/audit-log"
@@ -412,7 +412,7 @@ const { showToast } = useToast()
                 </div>
               ) : (
                 recentActivity.map((entry) => (
-                  <div key={entry.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                  <div key={entry.id} className="px-4 py-4 hover:bg-slate-50 transition-colors">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${

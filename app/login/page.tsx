@@ -342,7 +342,7 @@ export default function LoginPage() {
                       <p className="text-slate-500">Enter your email address and we&apos;ll send you instructions to reset your password.</p>
                     </div>
 
-                    <form onSubmit={handleForgotPassword} className="space-y-5">
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
                       <div>
                         <label htmlFor="reset-email" className="block text-sm font-medium text-slate-700 mb-2">
                           Email address
@@ -390,12 +390,12 @@ export default function LoginPage() {
             ) : (
               /* Login Form */
               <>
-                <div className="mb-10">
+                <div className="mb-8">
                   <h2 className="text-3xl font-semibold text-slate-900 mb-3">Welcome back</h2>
                   <p className="text-slate-500 leading-relaxed">Sign in to access your facility dashboard and analytics.</p>
                 </div>
 
-                <form onSubmit={handleLogin} className="space-y-5" noValidate>
+                <form onSubmit={handleLogin} className="space-y-4" noValidate>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-2">
                       Email address

@@ -90,7 +90,7 @@ export default function DeleteFacilityModal({
       {/* Modal */}
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
         {/* Header with warning icon */}
-        <div className="bg-red-50 px-6 py-5 border-b border-red-100">
+        <div className="bg-red-50 px-6 py-4 border-b border-red-100">
           <div className="flex items-start gap-4">
             <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
               <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -109,7 +109,7 @@ export default function DeleteFacilityModal({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5">
+        <div className="px-6 py-4">
           <p className="text-sm text-slate-600 mb-4">
             You are about to permanently delete:
           </p>
@@ -122,7 +122,7 @@ export default function DeleteFacilityModal({
           </div>
 
           {/* Warning list */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
             <p className="text-sm font-medium text-amber-800 mb-2">
               This will permanently delete:
             </p>

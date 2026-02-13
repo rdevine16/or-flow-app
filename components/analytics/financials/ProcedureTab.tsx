@@ -110,13 +110,13 @@ function ProcedureDetail({
       {/* Summary Cards Row 1 — Financial KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Total Profit */}
-        <div className="bg-green-50 rounded-xl border border-green-200 p-5">
+        <div className="bg-green-50 rounded-xl border border-green-200 p-4">
           <p className="text-sm font-medium text-green-600 mb-1">Total Profit</p>
           <p className="text-2xl font-bold text-green-600">{formatCurrency(proc.totalProfit)}</p>
         </div>
         
         {/* Typical Profit with IQR */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-1 mb-1">
             <p className="text-sm font-medium text-slate-500">Typical Profit</p>
             <Tooltip text={`Median profit · Avg: ${formatCurrency(proc.avgProfit)}`} />
@@ -132,7 +132,7 @@ function ProcedureDetail({
         </div>
 
         {/* Typical Duration with IQR */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
           <div className="flex items-center gap-1 mb-1">
             <p className="text-sm font-medium text-slate-500">Typical Duration</p>
             <Tooltip text={`Median duration · Avg: ${Math.round(proc.avgDurationMinutes)} min`} />
@@ -151,14 +151,14 @@ function ProcedureDetail({
         </div>
 
         {/* Margin */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-sm font-medium text-slate-500 mb-1">Margin</p>
           <p className="text-xl font-bold text-slate-900">{formatPercent(proc.avgMarginPercent)}</p>
           <MarginBar value={proc.avgMarginPercent} />
         </div>
 
         {/* Profit per OR Hour */}
-        <div className="bg-white rounded-xl border border-blue-200 ring-1 ring-blue-100 p-5">
+        <div className="bg-white rounded-xl border border-blue-200 ring-1 ring-blue-100 p-4">
           <div className="flex items-center gap-1 mb-1">
             <p className="text-sm font-medium text-slate-500">$/OR Hour</p>
             <Tooltip text="Total profit ÷ total OR hours for this procedure" />
@@ -193,7 +193,7 @@ function ProcedurePL({ proc }: { proc: ProcedureStats }) {
   const avgProfit = proc.caseCount > 0 ? proc.totalProfit / proc.caseCount : 0
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <h3 className="text-sm font-semibold text-slate-700 mb-3">Average Case Economics</h3>
       <div className="space-y-1.5">
         <PLRow label="Reimbursement" value={avgReimbursement} />

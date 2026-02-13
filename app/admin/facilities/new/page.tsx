@@ -935,7 +935,7 @@ if (insertError) {
               <h2 className="text-lg font-semibold text-slate-900 mb-1">Facility Details</h2>
               <p className="text-sm text-slate-500 mb-6">Basic information about the surgery center</p>
 
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {/* Name and Type */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -1163,7 +1163,7 @@ if (insertError) {
                 This person will manage the facility and can invite other staff
               </p>
 
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -1412,7 +1412,7 @@ if (insertError) {
 
               <div className="space-y-6">
                 {/* Facility Summary */}
-                <div className="bg-slate-50 rounded-xl p-5">
+                <div className="bg-slate-50 rounded-xl p-4">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                     Facility
                   </h3>
@@ -1445,7 +1445,7 @@ if (insertError) {
                 </div>
 
                 {/* Administrator Summary */}
-                <div className="bg-slate-50 rounded-xl p-5">
+                <div className="bg-slate-50 rounded-xl p-4">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                     Administrator
                   </h3>
@@ -1459,7 +1459,7 @@ if (insertError) {
                 </div>
 
                 {/* Configuration Summary */}
-                <div className="bg-slate-50 rounded-xl p-5">
+                <div className="bg-slate-50 rounded-xl p-4">
                   <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                     Configuration
                   </h3>
@@ -1506,14 +1506,14 @@ if (insertError) {
               <button
                 onClick={() => setStep(step - 1)}
                 disabled={submitting}
-                className="px-5 py-2.5 text-slate-600 hover:text-slate-900 font-medium transition-colors disabled:opacity-50"
+                className="px-4 py-2.5 text-slate-600 hover:text-slate-900 font-medium transition-colors disabled:opacity-50"
               >
                 ← Back
               </button>
             ) : (
               <button
                 onClick={() => router.push('/admin/facilities')}
-                className="px-5 py-2.5 text-slate-600 hover:text-slate-900 font-medium transition-colors"
+                className="px-4 py-2.5 text-slate-600 hover:text-slate-900 font-medium transition-colors"
               >
                 Cancel
               </button>

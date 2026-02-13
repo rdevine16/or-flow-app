@@ -385,7 +385,7 @@ export function BlockPopover({
         </div>
 
         {/* Header */}
-        <div className="px-5 pt-4 pb-3 cursor-move flex-shrink-0" onMouseDown={handleDragStart}>
+        <div className="px-4 pt-4 pb-3 cursor-move flex-shrink-0" onMouseDown={handleDragStart}>
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900">
@@ -403,7 +403,7 @@ export function BlockPopover({
 
         {/* Scrollable Form */}
         <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="px-5 pb-4 space-y-4">
+          <div className="px-4 pb-4 space-y-4">
             {/* Surgeon */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${surgeonColor}15` }}>
@@ -538,7 +538,7 @@ export function BlockPopover({
         </div>
 
         {/* Footer — always visible */}
-        <div className="px-5 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
+        <div className="px-4 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
           {isEditing ? (
             <div className="flex items-center gap-1">
                   <button onClick={() => setShowDelete(true)}
@@ -557,7 +557,7 @@ export function BlockPopover({
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors">Cancel</button>
             <button onClick={handleSave} disabled={loading || !surgeonId}
-              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
+              className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2">
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {isEditing ? 'Save' : 'Create'}
             </button>

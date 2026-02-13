@@ -33,7 +33,7 @@ export default function MetricCard({
 }: MetricCardProps) {
   return (
     <div 
-      className={`rounded-xl border p-5 transition-all ${variants[variant]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+      className={`rounded-xl border p-4 transition-all ${variants[variant]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
       onClick={onClick}
     >
       <p className="text-sm font-medium text-slate-600 mb-1">{title}</p>

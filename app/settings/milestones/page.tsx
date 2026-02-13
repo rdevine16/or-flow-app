@@ -998,7 +998,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
                     />
                   </div>
-                  <span className="text-slate-400 pt-5">—</span>
+                  <span className="text-slate-400 pt-4">—</span>
                   <div className="flex-1">
                     <label className="block text-xs text-slate-500 mb-1">Max (minutes)</label>
                     <input

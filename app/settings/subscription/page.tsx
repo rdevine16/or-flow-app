@@ -343,7 +343,7 @@ export default function SubscriptionPage() {
                       return (
                         <div 
                           key={plan.id} 
-                          className={`relative p-5 rounded-xl border-2 transition-colors ${
+                          className={`relative p-4 rounded-xl border-2 transition-colors ${
                             isCurrent 
                               ? 'border-blue-500 bg-blue-50/50' 
                               : 'border-slate-200 hover:border-slate-300'
@@ -438,7 +438,7 @@ export default function SubscriptionPage() {
                   </div>
                   <a
                     href="mailto:sales@orbitsurgical.com?subject=Enterprise%20Plan%20Inquiry"
-                    className="px-5 py-2.5 bg-white text-blue-600 font-medium rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
+                    className="px-4 py-2.5 bg-white text-blue-600 font-medium rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
                   >
                     Contact Sales
                   </a>

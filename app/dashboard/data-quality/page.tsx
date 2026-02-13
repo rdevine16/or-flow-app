@@ -1201,7 +1201,7 @@ showToast({
             {/* Summary Cards */}
             {summary && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">Quality Score</p>
                   <p className={`text-3xl font-bold mt-1 ${
                     summary.qualityScore >= 90 ? 'text-green-600' :
@@ -1220,7 +1220,7 @@ showToast({
                   </div>
                 </div>
                 
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">Open Issues</p>
                   <p className="text-3xl font-bold mt-1 text-slate-900">{summary.totalUnresolved}</p>
                   <p className="text-xs text-slate-500 mt-2">
@@ -1228,13 +1228,13 @@ showToast({
                   </p>
                 </div>
                 
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">Expiring Soon</p>
                   <p className="text-3xl font-bold mt-1 text-amber-700">{summary.expiringThisWeek}</p>
                   <p className="text-xs text-slate-500 mt-2">Within 7 days</p>
                 </div>
                 
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <p className="text-sm font-medium text-slate-500">By Severity</p>
                   <div className="flex items-center gap-4 mt-2">
                     <div className="flex items-center gap-1.5">

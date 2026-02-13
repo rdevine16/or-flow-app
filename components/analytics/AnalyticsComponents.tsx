@@ -102,7 +102,7 @@ export function EnhancedMetricCard({
       {/* Top accent bar */}
       <div className={`h-1 ${style.bar}`} />
       
-      <div className="p-5">
+      <div className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-1.5">
             <p className="text-[13px] font-medium text-slate-500 leading-tight">{title}</p>
@@ -669,7 +669,7 @@ export function SkeletonMetricCards({ count = 4 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="h-1 bg-slate-100" />
-          <div className="p-5">
+          <div className="p-4">
             <SkeletonPulse className="h-3 w-24 mb-4" />
             <SkeletonPulse className="h-8 w-16 mb-2" />
             <SkeletonPulse className="h-3 w-32" />
@@ -973,7 +973,7 @@ export function ProcedureComparisonChart({ data, formatValue: formatValueProp }:
   return (
     <div className="space-y-0 divide-y divide-slate-100">
       {data.map((proc, idx) => (
-        <div key={proc.procedureId} className={`${idx > 0 ? 'pt-5' : ''} pb-5`}>
+        <div key={proc.procedureId} className={`${idx > 0 ? 'pt-4' : ''} pb-4`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-blue-600" />
@@ -1005,7 +1005,7 @@ export function ProcedureComparisonChart({ data, formatValue: formatValueProp }:
         </div>
       ))}
 
-      <div className="pt-4 flex items-center gap-5 text-[11px]">
+      <div className="pt-4 flex items-center gap-4 text-[11px]">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-2.5 bg-blue-600 rounded-sm opacity-90" />
           <span className="text-slate-600 font-medium">Today</span>

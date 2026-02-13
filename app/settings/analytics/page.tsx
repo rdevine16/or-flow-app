@@ -209,7 +209,7 @@ export default function AnalyticsSettingsPage() {
                 <h3 className="text-sm font-semibold text-slate-900">First Case On-Time Start (FCOTS)</h3>
                 <p className="text-xs text-slate-500 mt-0.5">Define what &quot;on-time&quot; means for your facility</p>
               </div>
-              <div className="p-6 space-y-5">
+              <div className="p-6 space-y-4">
                 {/* Milestone Selection */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">

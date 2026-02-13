@@ -141,7 +141,7 @@ function KPICard({
       {/* Subtle top accent line */}
       <div className={`absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-${accentColor}-500/40 to-transparent`} />
       
-      <div className="p-5">
+      <div className="p-4">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
@@ -286,7 +286,7 @@ function SurgeonIdleTimeCard({
       <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -translate-y-1/2 translate-x-1/2" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500/5 rounded-full translate-y-1/2 -translate-x-1/2" />
       
-      <div className="relative p-5">
+      <div className="relative p-4">
         {/* Header with badge */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
@@ -714,7 +714,7 @@ function FlipRoomModal({
                   if (visibleGaps.length === 0) return null
                   
                   return (
-                    <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-5">
+                    <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
@@ -1191,7 +1191,7 @@ export default function AnalyticsOverviewPage() {
             <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
             <Link
               href="/admin/facilities"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               View Facilities
               <ArrowRight className="w-4 h-4" />

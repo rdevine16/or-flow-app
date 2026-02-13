@@ -1241,7 +1241,7 @@ function CapacityInsightBanner({
   if (insights.length === 0) return null
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
+    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 mb-6">
       <div className="flex gap-3">
         <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
           <Zap className="w-5 h-5 text-blue-600" />
@@ -1867,7 +1867,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
                       <div>
                         <SectionHeader title="Block Day Breakdown" subtitle={`${selectedUtil.blockDayCount} block days in period`} icon={<Calendar className="w-4 h-4" />} accentColor="blue" />
-                        <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-5">
+                        <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-4">
                           {selectedUtil.blockDays
                             .sort((a, b) => b.date.localeCompare(a.date))
                             .slice(0, 20)
@@ -1883,7 +1883,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
                       <div>
                         <SectionHeader title="What Could Fit?" subtitle="Based on historical case durations and available block time" icon={<PlusCircle className="w-4 h-4" />} accentColor="green" />
-                        <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                        <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                           <WhatFitsPanel
                             options={whatFitsMap.get(selectedUtil.surgeonId) || []}
                             avgRemainingMinutes={selectedUtil.avgRemainingMinutes}
@@ -1895,7 +1895,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                       {selectedUtil.casesOutsideBlock > 0 && (
                         <div>
                           <SectionHeader title="Cases Outside Block" subtitle="Operating days without allocated block time" icon={<AlertTriangle className="w-4 h-4" />} accentColor="amber" />
-                          <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                          <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                             <div className="flex flex-wrap gap-2">
                               {selectedUtil.outsideBlockDates.sort().map(d => (
                                 <span key={d} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
@@ -1919,7 +1919,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                   {filteredTrends.length > 1 && (
                     <div>
                       <SectionHeader title="Utilization Trend" subtitle="Weekly block utilization over time" icon={<TrendingUp className="w-4 h-4" />} accentColor="blue" />
-                      <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                      <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                         <AreaChart
                           className="h-56"
                           data={filteredTrends}

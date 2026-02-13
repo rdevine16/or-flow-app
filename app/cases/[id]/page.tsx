@@ -1286,7 +1286,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
           {/* Pace Progress Bar — overall case pace indicator */}
           {paceData && (
-            <div className="bg-white rounded-2xl border border-slate-200 px-5 py-3">
+            <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3">
               <PaceProgressBar paceData={paceData} />
             </div>
           )}
@@ -1298,7 +1298,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           {/* QUICK INFO (1 col) */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -1343,7 +1343,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
           {/* MILESTONE SECTION (2 cols) */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1364,7 +1364,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               </div>
             </div>
 
-            <div className="p-5">
+            <div className="p-4">
               {milestoneTypes.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
                   <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />

@@ -127,7 +127,7 @@ const plans = [
 
 function StatCardSkeleton() {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 animate-pulse">
       <div className="h-4 bg-slate-200 rounded w-24 mb-3" />
       <div className="h-8 bg-slate-200 rounded w-16 mb-2" />
       <div className="h-3 bg-slate-100 rounded w-32" />
@@ -180,7 +180,7 @@ function StatCard({ label, value, subtext, icon, trend, color = 'blue' }: StatCa
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
         <span className="text-sm font-medium text-slate-500">{label}</span>
         <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
@@ -944,7 +944,7 @@ export default function FacilityDetailPage() {
                   </div>
                 </div>
 
-                <div className="relative flex items-center gap-6 pt-5 mt-5 border-t border-slate-700">
+                <div className="relative flex items-center gap-6 pt-4 mt-4 border-t border-slate-700">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${
                       facility.subscription_status === 'active' ? 'bg-green-400' :
@@ -1014,7 +1014,7 @@ export default function FacilityDetailPage() {
               </div>
 
               {/* Usage Metrics */}
-              <div className="bg-slate-50 rounded-xl p-6 space-y-5">
+              <div className="bg-slate-50 rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-slate-900">Plan Usage</h3>
                   <span className="text-xs text-slate-500">Resets monthly</span>
@@ -1152,7 +1152,7 @@ export default function FacilityDetailPage() {
                     <button
                       onClick={handleSaveFacility}
                       disabled={saving}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
                     >
                       {saving ? 'Saving...' : 'Save Changes'}
                     </button>
@@ -1473,7 +1473,7 @@ export default function FacilityDetailPage() {
                 <button
                   onClick={handleSaveFacility}
                   disabled={saving}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg font-medium transition-colors"
                 >
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>

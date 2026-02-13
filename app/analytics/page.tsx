@@ -131,7 +131,7 @@ function ReportCard({ title, description, href, icon: Icon, accentColor, badge, 
         ${colors.hoverBorder}
       `}
     >
-      <div className="p-5">
+      <div className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className={`p-2.5 rounded-xl ${colors.iconBg}`}>
             <Icon className={`w-5 h-5 ${colors.iconColor}`} />
@@ -306,7 +306,7 @@ function FlipRoomModal({
             ) : (
               <div className="space-y-4">
                 {data.map((analysis, idx) => (
-                  <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-5">
+                  <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
@@ -790,7 +790,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
             <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>
             <Link
               href="/admin/facilities"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
             >
               View Facilities
               <ArrowRight className="w-4 h-4" />
@@ -1037,7 +1037,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     onClick={() => setShowFlipRoomModal(true)}
                     className="w-full text-left bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/60 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
                   >
-                    <div className="p-5">
+                    <div className="p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <div className="p-2 rounded-lg bg-blue-100">

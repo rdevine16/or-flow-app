@@ -264,7 +264,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
 
       <div className="p-6">
         {/* Severity Breakdown */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           {(['critical', 'warning', 'info'] as const).map((sev) => {
             const config = SEVERITY[sev]
             const count = stats.bySeverity[sev]
@@ -283,7 +283,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
         </div>
 
         {/* Type Breakdown */}
-        <div className="flex items-center gap-4 mb-5 text-xs text-slate-500">
+        <div className="flex items-center gap-4 mb-4 text-xs text-slate-500">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded bg-violet-400" />
             Auto-detected: <span className="font-semibold text-slate-700">{stats.byType.threshold}</span>

@@ -378,7 +378,7 @@ export default function DemoDataWizard() {
               <div className="grid gap-4">
                 {facilities.map(f => (
                   <button key={f.id} onClick={() => selectFacility(f.id)}
-                    className="bg-white rounded-xl border border-slate-200 p-5 text-left hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all group">
+                    className="bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-blue-300 hover:shadow-md hover:shadow-blue-50 transition-all group">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-11 h-11 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-200 transition-colors">
@@ -447,7 +447,7 @@ export default function DemoDataWizard() {
                     <div key={surgeon.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                       {/* ── Surgeon header ── */}
                       <button onClick={() => setExpanded(isOpen ? null : surgeon.id)}
-                        className="w-full px-5 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        className="w-full px-4 py-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-600">
                             {surgeon.first_name[0]}{surgeon.last_name[0]}
@@ -476,10 +476,10 @@ export default function DemoDataWizard() {
 
                       {/* ── Expanded config ── */}
                       {isOpen && (
-                        <div className="px-5 pb-5 border-t border-slate-100 pt-5">
+                        <div className="px-4 pb-4 border-t border-slate-100 pt-4">
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Left column */}
-                            <div className="space-y-5">
+                            <div className="space-y-4">
                               <FieldGroup label="Speed Profile">
                                 <div className="flex gap-2">
                                   {SPEED_PROFILES.map(sp => (
@@ -543,7 +543,7 @@ export default function DemoDataWizard() {
                             </div>
 
                             {/* Right column */}
-                            <div className="space-y-5">
+                            <div className="space-y-4">
                               <FieldGroup label="Room Assignment">
                                 <div className="flex items-center gap-3 mb-3">
                                   <button onClick={() => updateProfile(surgeon.id, { usesFlipRooms: !p.usesFlipRooms })}
@@ -619,7 +619,7 @@ export default function DemoDataWizard() {
                 {/* Navigation */}
                 <div className="flex justify-between pt-4">
                   <button onClick={() => { setStep('facility'); setSelectedFacilityId(null) }}
-                    className="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">← Back</button>
+                    className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">← Back</button>
                   <button onClick={() => setStep('configure')} disabled={!isValid}
                     className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-colors">
                     Continue →
@@ -641,7 +641,7 @@ export default function DemoDataWizard() {
             </div>
 
             <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <h3 className="text-sm font-semibold text-slate-700 mb-4">Data Scope</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -671,7 +671,7 @@ export default function DemoDataWizard() {
 
               {/* Facility config status */}
               {status && (
-                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
                   <h3 className="text-sm font-semibold text-slate-700 mb-4">Facility Configuration Status</h3>
                   <p className="text-xs text-slate-500 mb-3">Must be set up before generation. The script uses these as-is.</p>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -700,7 +700,7 @@ export default function DemoDataWizard() {
                           )}
                           <span className="text-xs font-medium text-slate-600">{item.l}</span>
                         </div>
-                        <p className="text-lg font-bold text-slate-900 ml-5">{item.v}</p>
+                        <p className="text-lg font-bold text-slate-900 ml-4">{item.v}</p>
                       </div>
                     ))}
                   </div>
@@ -708,7 +708,7 @@ export default function DemoDataWizard() {
               )}
 
               <div className="flex justify-between pt-4">
-                <button onClick={() => setStep('surgeons')} className="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-medium">← Back</button>
+                <button onClick={() => setStep('surgeons')} className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-medium">← Back</button>
                 <button onClick={() => setStep('review')} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">Continue →</button>
               </div>
             </div>
@@ -727,14 +727,14 @@ export default function DemoDataWizard() {
 
             <div className="space-y-4">
               {/* Facility */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Facility</h3>
                 <p className="text-lg font-semibold text-slate-900">{facility?.name}</p>
                 <p className="text-sm text-slate-500 mt-1">{months} months historical + 1 month future · {purgeFirst ? 'Purge first' : 'Append'}</p>
               </div>
 
               {/* Surgeons */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Surgeons ({surgeons.length})</h3>
                 <div className="space-y-2">
                   {surgeons.map(s => {
@@ -771,7 +771,7 @@ export default function DemoDataWizard() {
               </div>
 
               {/* Estimated output */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-5">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4">
                 <h3 className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-2">Estimated Output</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div><p className="text-2xl font-bold text-slate-900">~{estCases.toLocaleString()}</p><p className="text-xs text-slate-500">cases</p></div>
@@ -782,7 +782,7 @@ export default function DemoDataWizard() {
 
               <div className="flex justify-between pt-4">
                 <div className="flex gap-2">
-                  <button onClick={() => setStep('configure')} className="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-medium">← Back</button>
+                  <button onClick={() => setStep('configure')} className="px-4 py-2.5 text-sm text-slate-600 hover:text-slate-900 font-medium">← Back</button>
                   {status && status.cases > 0 && (
                     <button onClick={purgeOnly} className="px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors">Purge Only</button>
                   )}
@@ -805,7 +805,7 @@ export default function DemoDataWizard() {
             <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
               {progress && progress.phase !== 'complete' && !result ? (
                 <>
-                  <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-5">
+                  <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
                     <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                   </div>
                   <h3 className="text-lg font-semibold text-slate-900 mb-2">Generating Demo Data</h3>
@@ -817,7 +817,7 @@ export default function DemoDataWizard() {
                 </>
               ) : result ? (
                 <>
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5 ${result.success ? 'bg-green-50' : 'bg-red-50'}`}>
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${result.success ? 'bg-green-50' : 'bg-red-50'}`}>
                     {result.success
                       ? <Check className="w-8 h-8 text-green-600" />
                       : <X className="w-8 h-8 text-red-600" />
@@ -907,7 +907,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-700">Weekly OR Schedule</h3>
@@ -975,7 +975,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
 
       {/* Legend */}
       {surgeons.length > 0 && (
-        <div className="px-5 py-2.5 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="px-4 py-2.5 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-x-4 gap-y-1">
           {surgeons.map(s => {
             const color = SURGEON_COLORS[colorMap[s.id]]
             const p = profiles[s.id]

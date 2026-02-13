@@ -208,7 +208,7 @@ export default function IntegrationsPage() {
                 {integrations.map((integration) => (
                   <div
                     key={integration.id}
-                    className="relative p-5 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors"
+                    className="relative p-4 bg-slate-50 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors"
                   >
                     {/* Coming Soon Badge */}
                     <div className="absolute top-4 right-4">

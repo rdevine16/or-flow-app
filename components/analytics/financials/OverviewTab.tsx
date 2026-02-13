@@ -173,7 +173,7 @@ function SummaryCard({
   negative?: boolean
 }) {
   return (
-    <div className={`rounded-xl border p-5 shadow-sm ${
+    <div className={`rounded-xl border p-4 shadow-sm ${
       highlight ? 'bg-green-50 border-green-200' :
       'bg-white border-slate-200'
     }`}>
@@ -223,7 +223,7 @@ function KPICard({
   }
 
   return (
-    <div className={`bg-white rounded-xl border p-5 shadow-sm ${
+    <div className={`bg-white rounded-xl border p-4 shadow-sm ${
       highlight ? 'border-blue-200 ring-1 ring-blue-100' : 'border-slate-200'
     }`}>
       <div className="flex items-center gap-1.5 mb-2">
@@ -285,14 +285,14 @@ function TopProceduresTable({
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-200">
+      <div className="px-4 py-4 border-b border-slate-200">
         <h3 className="text-base font-semibold text-slate-900">Top Procedures</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50/80">
             <tr>
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 Procedure
               </th>
               <SortHeader label="Cases" sortKey="caseCount" current={sortKey} dir={sortDir} onClick={toggleSort} align="center" />
@@ -308,18 +308,18 @@ function TopProceduresTable({
                 className={`hover:bg-slate-50/50 ${onSelect ? 'cursor-pointer' : ''}`}
                 onClick={() => onSelect?.(proc.procedureId)}
               >
-                <td className="px-5 py-3">
+                <td className="px-4 py-3">
                   <span className="font-medium text-slate-900">{proc.procedureName}</span>
                   <span className="text-slate-400 ml-1.5 text-xs">{proc.surgeonCount} surgeons</span>
                 </td>
-                <td className="px-5 py-3 text-center text-slate-600">{proc.caseCount}</td>
-                <td className="px-5 py-3 text-right font-semibold text-green-600 tabular-nums">
+                <td className="px-4 py-3 text-center text-slate-600">{proc.caseCount}</td>
+                <td className="px-4 py-3 text-right font-semibold text-green-600 tabular-nums">
                   {formatCurrency(proc.totalProfit)}
                 </td>
-                <td className="px-5 py-3 text-right text-slate-900 tabular-nums">
+                <td className="px-4 py-3 text-right text-slate-900 tabular-nums">
                   {proc.profitPerORHour !== null ? formatCurrency(proc.profitPerORHour) : '—'}
                 </td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-4 py-3 text-right">
                   <MarginBadge value={proc.avgMarginPercent} />
                 </td>
               </tr>
@@ -369,14 +369,14 @@ function TopSurgeonsTable({
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-200">
+      <div className="px-4 py-4 border-b border-slate-200">
         <h3 className="text-base font-semibold text-slate-900">Top Surgeons</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50/80">
             <tr>
-              <th className="px-5 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                 Surgeon
               </th>
               <SortHeader label="Cases" sortKey="caseCount" current={sortKey} dir={sortDir} onClick={toggleSort} align="center" />
@@ -392,7 +392,7 @@ function TopSurgeonsTable({
                 className={`hover:bg-slate-50/50 ${onSelect ? 'cursor-pointer' : ''}`}
                 onClick={() => onSelect?.(surgeon.surgeonId)}
               >
-                <td className="px-5 py-3">
+                <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
                     <RankBadge rank={idx + 1} />
                     <div>
@@ -405,14 +405,14 @@ function TopSurgeonsTable({
                     </div>
                   </div>
                 </td>
-                <td className="px-5 py-3 text-center text-slate-600">{surgeon.caseCount}</td>
-                <td className="px-5 py-3 text-right font-semibold text-green-600 tabular-nums">
+                <td className="px-4 py-3 text-center text-slate-600">{surgeon.caseCount}</td>
+                <td className="px-4 py-3 text-right font-semibold text-green-600 tabular-nums">
                   {formatCurrency(surgeon.totalProfit)}
                 </td>
-                <td className="px-5 py-3 text-right text-slate-900 tabular-nums">
+                <td className="px-4 py-3 text-right text-slate-900 tabular-nums">
                   {surgeon.profitPerORHour !== null ? formatCurrency(surgeon.profitPerORHour) : '—'}
                 </td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-4 py-3 text-right">
                   <MarginBadge value={surgeon.avgMarginPercent} />
                 </td>
               </tr>
@@ -458,7 +458,7 @@ function ProfitTrend({ data }: { data: FinancialsMetrics['profitTrend'] }) {
   const labelInterval = Math.max(Math.ceil(validData.length / 6), 1)
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold text-slate-900">Daily Profit Trend</h3>
         <div className="flex items-center gap-4 text-xs text-slate-500">
@@ -551,7 +551,7 @@ function SortHeader<T extends string>({
 
   return (
     <th
-      className={`px-5 py-2.5 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 transition-colors ${alignClass} ${
+      className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none hover:text-slate-700 transition-colors ${alignClass} ${
         isActive ? 'text-slate-700' : 'text-slate-500'
       }`}
       onClick={() => onClick(sortKey)}

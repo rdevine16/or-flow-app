@@ -477,7 +477,7 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
         { label: 'Surgeons', value: String(scorecards.length), color: '#0F172A' },
         { label: 'Total Cases', value: String(totalCases), color: '#0F172A' },
       ].map((stat, i) => (
-        <div key={i} className="bg-white border border-slate-200/60 rounded-xl px-5 py-4 shadow-sm">
+        <div key={i} className="bg-white border border-slate-200/60 rounded-xl px-4 py-4 shadow-sm">
           <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">
             {stat.label}
           </div>
@@ -486,7 +486,7 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
           </div>
         </div>
       ))}
-      <div className="bg-white border border-slate-200/60 rounded-xl px-5 py-4 shadow-sm">
+      <div className="bg-white border border-slate-200/60 rounded-xl px-4 py-4 shadow-sm">
         <div className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase font-mono mb-1.5">
           Distribution
         </div>
@@ -514,7 +514,7 @@ function FacilitySummary({ scorecards }: { scorecards: ORbitScorecard[] }) {
 
 function PillarLegend() {
   return (
-    <div className="flex gap-4 flex-wrap py-3 mb-5 border-b border-slate-200">
+    <div className="flex gap-4 flex-wrap py-3 mb-4 border-b border-slate-200">
       {PILLARS.map((p) => (
         <div key={p.key} className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
@@ -742,7 +742,7 @@ export default function ORbitScorePage() {
 
           {/* Methodology footer */}
           {scorecards.length > 0 && (
-            <div className="mt-10 pt-5 border-t border-slate-200">
+            <div className="mt-8 pt-4 border-t border-slate-200">
               <p className="text-[11px] text-slate-400 leading-relaxed">
                 <span className="font-semibold text-slate-500">Methodology v2.2:</span> 4 pillars measuring
                 surgeon-controllable behaviors. Profitability (30%) and Consistency (25%) use median-anchored

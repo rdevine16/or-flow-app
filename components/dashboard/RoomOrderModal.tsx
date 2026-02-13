@@ -208,7 +208,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
     >
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Reorder OR Rooms</h2>
             <p className="text-sm text-slate-500 mt-0.5">Drag rooms to change display order on dashboard</p>
@@ -287,7 +287,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
                 onClick={handleSave}
                 disabled={!hasChanges || saving || loading}
                 className={`
-                  px-5 py-2.5 rounded-xl font-medium transition-all
+                  px-4 py-2.5 rounded-xl font-medium transition-all
                   ${hasChanges
                     ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'

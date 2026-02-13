@@ -796,7 +796,7 @@ function PageFormModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
           {/* Core Info */}
           <FormSection title="Core">
             <div className="grid grid-cols-2 gap-4">
@@ -1007,7 +1007,7 @@ function PageFormModal({
           <button
             onClick={handleSubmit}
             disabled={isSaving || !form.id || !form.name || !form.route}
-            className="px-5 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors
+            className="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors
                        disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSaving ? (
@@ -1313,7 +1313,7 @@ function ScannerModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {!hasScanned ? (
             <div className="text-center py-12">
               <Icon d={icons.scan} className="w-10 h-10 text-slate-300 mx-auto mb-4" />
@@ -1325,7 +1325,7 @@ function ScannerModal({
               <button
                 onClick={runScan}
                 disabled={isScanning}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50"
               >
                 {isScanning ? (
                   <>
@@ -1995,7 +1995,7 @@ function MultiCheckbox({ options, selected, onChange }: { options: string[]; sel
 
 function OverviewTab({ page }: { page: PageEntry }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Section title="Data Dependencies">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -2139,7 +2139,7 @@ function DatabaseTab({
   if (isLoading) return <LoadingSpinner text="Loading database metadata..." />
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {allTables.map(tableName => {
         const meta = metadata[tableName]
         const isRead = page.reads.includes(tableName)
@@ -2239,7 +2239,7 @@ function TriggersTab({
   const hasIndexes = allTables.some(t => metadata[t]?.indexes.length > 0)
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Section title="Triggers">
         {allTables.map(tableName => {
           const triggers = metadata[tableName]?.triggers || []
@@ -2322,7 +2322,7 @@ function TriggersTab({
 
 function PlatformTab({ page }: { page: PageEntry }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Section title="iOS Parity">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
@@ -2394,7 +2394,7 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
   const allTables = [...new Set([...page.reads, ...page.writes])]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Section title="Table Impact Map">
         <p className="text-sm text-slate-500 mb-4">
           Every table this entry touches and what else depends on it.
@@ -2508,7 +2508,7 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
 
 function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5">
+    <div className="bg-white border border-slate-200 rounded-xl p-4">
       <h3 className="text-sm font-semibold text-slate-700 mb-4">{title}</h3>
       {children}
     </div>

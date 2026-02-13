@@ -675,7 +675,7 @@ export default function FinancialsSettingsPage() {
           ) : activeTab === 'pricing' ? (
             <>
               {/* OR Hourly Rate Section */}
-              <div className="mb-6 p-5 bg-white rounded-xl border border-slate-200">
+              <div className="mb-6 p-4 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-medium text-slate-900">OR Hourly Rate</h3>

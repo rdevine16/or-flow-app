@@ -414,7 +414,7 @@ showToast({
                 {/* Cost Categories */}
                 <Link
                   href="/settings/financials/cost-categories"
-                  className="bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all group"
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -432,7 +432,7 @@ showToast({
                 {/* Payers */}
                 <Link
                   href="/settings/financials/payers"
-                  className="bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all group"
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -448,7 +448,7 @@ showToast({
                 {/* Procedure Pricing */}
                 <Link
                   href="/settings/financials/procedure-pricing"
-                  className="bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all group"
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -467,7 +467,7 @@ showToast({
                 {/* Surgeon Variance */}
                 <Link
                   href="/settings/financials/surgeon-variance"
-                  className="bg-white border border-slate-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-md transition-all group"
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">

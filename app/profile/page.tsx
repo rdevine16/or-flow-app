@@ -425,7 +425,7 @@ const handleChangePassword = async () => {
                 <button
                   onClick={handleSaveProfile}
                   disabled={saving || (firstName === profile.first_name && lastName === profile.last_name)}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-medium transition-colors disabled:cursor-not-allowed"
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-medium transition-colors disabled:cursor-not-allowed"
                 >
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -545,7 +545,7 @@ const handleChangePassword = async () => {
                     <button
                       onClick={handleChangePassword}
                       disabled={changingPassword || !currentPassword || !newPassword || newPassword !== confirmPassword}
-                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-medium transition-colors disabled:cursor-not-allowed"
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-xl font-medium transition-colors disabled:cursor-not-allowed"
                     >
                       {changingPassword ? 'Changing...' : 'Change Password'}
                     </button>
@@ -556,7 +556,7 @@ const handleChangePassword = async () => {
                         setNewPassword('')
                         setConfirmPassword('')
                       }}
-                      className="px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
+                      className="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors"
                     >
                       Cancel
                     </button>

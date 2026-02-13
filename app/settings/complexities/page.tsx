@@ -385,7 +385,7 @@ export default function FacilityComplexitiesPage() {
                           {/* Expanded Row - Category Assignment */}
                           {isExpanded && (
                             <div className="px-6 pb-4 bg-slate-50 border-t border-slate-100">
-                              <div className="pt-4 pl-11">
+                              <div className="pt-4 pl-12">
                                 <p className="text-sm font-medium text-slate-700 mb-3">
                                   {canEdit ? 'Applies to procedure categories (empty = all):' : 'Applies to:'}
                                 </p>

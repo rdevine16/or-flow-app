@@ -219,7 +219,7 @@ function StatCard({
   const isPlaceholder = value === '— : — : —' || value === '-- : -- : --'
   
   return (
-    <div className={`relative overflow-hidden rounded-xl p-5 ${colorClass}`}>
+    <div className={`relative overflow-hidden rounded-xl p-4 ${colorClass}`}>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.12),transparent)]" />
       <p className="text-xs font-semibold tracking-wider uppercase opacity-80 mb-1">{label}</p>
       <p className={`text-3xl font-bold tracking-tight font-mono tabular-nums ${isPlaceholder ? 'opacity-40' : ''}`}>
@@ -318,7 +318,7 @@ export default function CaseSummary({
             
             {/* Case Information Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                 <SectionHeader 
                   icon={
                     <FileText className="w-4 h-4" />
@@ -326,7 +326,7 @@ export default function CaseSummary({
                   title="Case Information"
                 />
               </div>
-              <div className="p-5">
+              <div className="p-4">
                 <DataRow label="Procedure" value={
                   <div className="text-right">
                     <span className="block">{caseData.procedure || '—'}</span>
@@ -344,7 +344,7 @@ export default function CaseSummary({
 
             {/* Surgical Team Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                 <SectionHeader 
                   icon={
                     <Users className="w-4 h-4" />
@@ -352,7 +352,7 @@ export default function CaseSummary({
                   title="Surgical Team"
                 />
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-4 space-y-4">
                 {/* Surgeon */}
                 <div className="flex items-center gap-3">
                   <SurgeonAvatar 
@@ -415,7 +415,7 @@ export default function CaseSummary({
             {/* Notes Card */}
             {caseData.notes && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                   <SectionHeader 
                     icon={
                       <PenLine className="w-4 h-4" />
@@ -423,7 +423,7 @@ export default function CaseSummary({
                     title="Case Notes"
                   />
                 </div>
-                <div className="p-5">
+                <div className="p-4">
                   <p className="text-sm text-slate-600 leading-relaxed">{caseData.notes}</p>
                 </div>
               </div>
@@ -453,7 +453,7 @@ export default function CaseSummary({
 
             {/* Timeline Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+              <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                 <SectionHeader 
                   icon={
                     <Clock className="w-4 h-4" />
@@ -462,7 +462,7 @@ export default function CaseSummary({
                   subtitle={`${recordedMilestones.length} milestones recorded`}
                 />
               </div>
-              <div className="p-5">
+              <div className="p-4">
                 {recordedMilestones.length === 0 ? (
                   <div className="text-center py-8">
                     <Clock className="w-12 h-12 mx-auto text-slate-300 mb-3" />
@@ -490,7 +490,7 @@ export default function CaseSummary({
             {/* Milestone Summary Table */}
             {recordedMilestones.length > 0 && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                   <SectionHeader 
                     icon={
                       <ClipboardList className="w-4 h-4" />
@@ -502,8 +502,8 @@ export default function CaseSummary({
                   <table className="w-full">
                     <thead>
                       <tr className="bg-slate-50/80">
-                        <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Milestone</th>
-                        <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Milestone</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -511,10 +511,10 @@ export default function CaseSummary({
                         const formatted = formatMilestoneTime(milestone.recordedAt)
                         return (
                           <tr key={milestone.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-5 py-3">
+                            <td className="px-4 py-3">
                               <span className="text-sm font-medium text-slate-900">{milestone.displayName}</span>
                             </td>
-                            <td className="px-5 py-3 text-right">
+                            <td className="px-4 py-3 text-right">
                               <span className="text-sm font-mono text-slate-600 tabular-nums">{formatted.time}</span>
                             </td>
                           </tr>
@@ -529,7 +529,7 @@ export default function CaseSummary({
             {/* Implants Card */}
             {implants.length > 0 && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                   <SectionHeader 
                     icon={
                       <FlaskConical className="w-4 h-4" />
@@ -537,7 +537,7 @@ export default function CaseSummary({
                     title="Implants Used"
                   />
                 </div>
-                <div className="p-5">
+                <div className="p-4">
                   <div className="grid grid-cols-2 gap-4">
                     {implants.map(implant => (
                       <div key={implant.id} className="p-3 rounded-xl bg-slate-50 border border-slate-100">

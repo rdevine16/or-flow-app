@@ -298,7 +298,7 @@ export default function SurgeonPreferencesPage() {
               {/* PHASE 1: Closing Workflow Section */}
               {selectedSurgeon && !prefsLoading && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                  <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
                     <div>
                       <h3 className="font-semibold text-slate-900">Closing Workflow</h3>
                       <p className="text-sm text-slate-500 mt-0.5">
@@ -313,7 +313,7 @@ export default function SurgeonPreferencesPage() {
                     )}
                   </div>
                   
-                  <div className="p-5 space-y-4">
+                  <div className="p-4 space-y-4">
                     {/* Option 1: Surgeon closes */}
                     <label className="flex items-start gap-3 cursor-pointer group">
                       <input

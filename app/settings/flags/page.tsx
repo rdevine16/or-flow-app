@@ -230,7 +230,7 @@ export default function FlagsSettingsPage() {
     <DashboardLayout>
       <Container>
         <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
-          <div className="space-y-10">
+          <div className="space-y-8">
 
             {/* ============================================= */}
             {/* SECTION 1: THRESHOLD FLAG RULES                */}
@@ -246,7 +246,7 @@ export default function FlagsSettingsPage() {
 
               <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
                 {(rules || []).length === 0 ? (
-                  <div className="px-6 py-10 text-center text-sm text-slate-400">
+                  <div className="px-6 py-8 text-center text-sm text-slate-400">
                     No flag rules found. Rules are seeded when your facility is created.
                   </div>
                 ) : (
@@ -257,7 +257,7 @@ export default function FlagsSettingsPage() {
                     return (
                       <div key={rule.id} className={`transition-colors ${!rule.is_enabled ? 'bg-slate-50/60' : ''}`}>
                         {/* Collapsed Row */}
-                        <div className="flex items-center gap-4 px-5 py-3.5">
+                        <div className="flex items-center gap-4 px-4 py-3.5">
                           {/* Enable Toggle */}
                           <button
                             onClick={() => toggleRuleEnabled(rule)}
@@ -324,7 +324,7 @@ export default function FlagsSettingsPage() {
 
                         {/* Expanded Editor */}
                         {isExpanded && (
-                          <div className="px-5 pb-5 pt-1 border-t border-slate-100 bg-slate-50/50">
+                          <div className="px-4 pb-4 pt-1 border-t border-slate-100 bg-slate-50/50">
                             <div className="grid grid-cols-3 gap-6 mt-3">
 
                               {/* Threshold Type + Value */}

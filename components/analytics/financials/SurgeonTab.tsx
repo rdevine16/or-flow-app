@@ -651,7 +651,7 @@ function SurgeonOverviewTab({
       </div>
 
       {/* Average Case Economics */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
         <h3 className="text-sm font-semibold text-slate-700 mb-3">Average Case Economics</h3>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between py-1.5">
@@ -1132,7 +1132,7 @@ showToast({
               const phases = milestoneMap[caseData.case_id]
 
               return (
-                <div key={caseData.case_id} className="px-6 py-5 hover:bg-slate-50/50 transition-colors">
+                <div key={caseData.case_id} className="px-6 py-4 hover:bg-slate-50/50 transition-colors">
                   <div className="flex items-start gap-4">
                     <div className="flex flex-col items-center gap-1">
                       <div className={`
@@ -1232,7 +1232,7 @@ function SummaryCard({
   variant?: 'success' | 'warning' | 'danger'
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-center gap-3">
         <div className={`
           w-10 h-10 rounded-lg flex items-center justify-center
@@ -1261,7 +1261,7 @@ function MetricCard({
   children: React.ReactNode 
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-center gap-1.5 mb-3">
         <p className="text-sm font-medium text-slate-500">{title}</p>
         {tooltip && (

@@ -100,7 +100,7 @@ export function KPICard({
   return (
     <div 
       className={`
-        rounded-xl border p-5 transition-all duration-200
+        rounded-xl border p-4 transition-all duration-200
         ${highlighted 
           ? 'bg-gradient-to-br from-blue-50 to-white border-blue-200 shadow-sm' 
           : 'bg-white border-slate-200'
@@ -201,7 +201,7 @@ interface SurgeonIdleTimeCardProps {
 export function SurgeonIdleTimeCard({ kpi, onClick }: SurgeonIdleTimeCardProps) {
   return (
     <div 
-      className="rounded-xl border-2 border-blue-500 bg-gradient-to-br from-blue-50 to-white p-5 cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 ring-4 ring-blue-100"
+      className="rounded-xl border-2 border-blue-500 bg-gradient-to-br from-blue-50 to-white p-4 cursor-pointer hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 ring-4 ring-blue-100"
       onClick={onClick}
     >
       {/* Header with badge */}
