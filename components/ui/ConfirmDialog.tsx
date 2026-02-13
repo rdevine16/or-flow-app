@@ -181,7 +181,7 @@ export function ConfirmDialog({
           aria-modal="true"
           aria-labelledby="confirm-dialog-title"
           aria-describedby="confirm-dialog-description"
-          className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200"
+          className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200"
         >
           {/* Icon */}
           <div className={`w-12 h-12 rounded-full ${config.iconBg} flex items-center justify-center mb-4`}>

@@ -625,7 +625,7 @@ function BulkCreateContent() {
                           <label className="block text-xs font-medium text-slate-600 mb-1">
                             Implant Company
                             {row.implant_company_ids.length > 0 && (
-                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded-full">
+                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
                                 {row.implant_company_ids.length}
                               </span>
                             )}
@@ -650,7 +650,7 @@ function BulkCreateContent() {
                             />
                             Rep Required
                             {row.rep_required_override !== null && row.rep_required_override !== procRequiresRep && (
-                              <span className="text-[10px] text-amber-600 font-medium">(overridden)</span>
+                              <span className="text-xs text-amber-600 font-medium">(overridden)</span>
                             )}
                           </label>
                         </div>

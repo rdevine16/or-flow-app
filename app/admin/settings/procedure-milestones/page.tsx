@@ -280,7 +280,7 @@ export default function AdminProcedureMilestonesPage() {
               <span>/</span>
               <span className="text-slate-900">Procedure Milestones</span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">Default Procedure Milestones</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Default Procedure Milestones</h1>
             <p className="text-slate-500 mt-1">
               Configure which milestones are assigned to each procedure type by default. 
               These settings are copied when creating new facilities.

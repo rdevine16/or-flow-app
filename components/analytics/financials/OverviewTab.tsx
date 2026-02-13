@@ -516,7 +516,7 @@ function ProfitTrend({ data }: { data: FinancialsMetrics['profitTrend'] }) {
         {validData.map((d, i) => (
           <div key={d.date} className="flex-1 text-center">
             {(i === 0 || i === validData.length - 1 || i % labelInterval === 0) ? (
-              <span className="text-[10px] text-slate-400 leading-tight block">
+              <span className="text-xs text-slate-400 leading-tight block">
                 {formatDate(d.date)}
               </span>
             ) : null}

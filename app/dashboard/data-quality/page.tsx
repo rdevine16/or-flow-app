@@ -1137,7 +1137,7 @@ showToast({
       <Container>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Data Quality</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Data Quality</h1>
             <p className="text-slate-500 mt-1">Monitor and resolve data quality issues</p>
           </div>
           <button
@@ -1507,7 +1507,7 @@ showToast({
         {/* Detection Progress Modal */}
         {runningDetection && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
               <div className="px-6 py-4 border-b border-slate-200">
                 <h3 className="text-lg font-semibold text-slate-900">Running Data Quality Check</h3>
               </div>
@@ -1564,7 +1564,7 @@ showToast({
         {/* Modal */}
         {modalState.isOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-slate-50 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+            <div className="bg-slate-50 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white rounded-t-2xl">
                 <div>
@@ -1858,12 +1858,12 @@ showToast({
                                     
                                     {/* Start/End badge for paired milestones */}
                                     {isStartOfPair && (
-                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-600 rounded">
+                                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded">
                                         Start
                                       </span>
                                     )}
                                     {isEndOfPair && (
-                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-600 rounded">
+                                      <span className="px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-600 rounded">
                                         End
                                       </span>
                                     )}
@@ -1937,7 +1937,7 @@ showToast({
 
               {/* Validation Warning Overlay */}
               {showValidationWarning && (
-                <div className="absolute inset-0 bg-white/95 flex items-center justify-center p-6 rounded-2xl">
+                <div className="absolute inset-0 bg-white/95 flex items-center justify-center p-6 rounded-xl">
                   <div className="max-w-md w-full">
                     <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6">
                       <h4 className="text-lg font-semibold text-amber-800 mb-3">Missing Milestones</h4>

@@ -332,10 +332,10 @@ function ImplantRow({
         }`}>
           {final || '—'}
           {sizesDiffer && (
-            <span className="ml-1 text-[10px] text-amber-500">↑</span>
+            <span className="ml-1 text-xs text-amber-500">↑</span>
           )}
           {sizesMatch && (
-            <span className="ml-1 text-[10px] text-green-500">✓</span>
+            <span className="ml-1 text-xs text-green-500">✓</span>
           )}
         </span>
       </div>
@@ -377,7 +377,7 @@ function MetricCard({
       )}
       <div className="relative">
         <div className="flex items-center justify-between mb-1">
-          <p className={`text-[10px] font-semibold tracking-wider uppercase ${isGradient ? 'opacity-80' : 'text-slate-400'}`}>
+          <p className={`text-xs font-semibold tracking-wider uppercase ${isGradient ? 'opacity-80' : 'text-slate-400'}`}>
             {label}
           </p>
           {icon}
@@ -386,13 +386,13 @@ function MetricCard({
           {value}
         </p>
         {subtitle && (
-          <p className={`text-[10px] mt-1 ${isGradient ? 'opacity-70' : 'text-slate-500'}`}>
+          <p className={`text-xs mt-1 ${isGradient ? 'opacity-70' : 'text-slate-500'}`}>
             {subtitle}
           </p>
         )}
         {comparison && (
           <div className={`mt-2 pt-2 ${isGradient ? 'border-t border-white/20' : 'border-t border-slate-100'}`}>
-            <p className={`text-[10px] ${isGradient ? 'opacity-80' : 'text-slate-500'}`}>
+            <p className={`text-xs ${isGradient ? 'opacity-80' : 'text-slate-500'}`}>
               vs avg:{' '}
               <span className={`font-semibold ${
                 comparison.neutral 
@@ -668,7 +668,7 @@ export default function CompletedCaseView({
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Case Details</h3>
           <div className="space-y-3">
             <div>
-              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Procedure</p>
+              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Procedure</p>
               <div className="flex items-center gap-2 mt-0.5">
                 <p className="text-sm font-semibold text-slate-900">{caseData.procedure || '—'}</p>
                 <OperativeSideBadge side={caseData.operativeSide} />
@@ -676,21 +676,21 @@ export default function CompletedCaseView({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Room</p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Room</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5">{caseData.room || '—'}</p>
               </div>
               <div>
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Scheduled</p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Scheduled</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono">{formatScheduledTime(caseData.startTime)}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Called</p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Called</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5 font-mono">{formatTimeShort(patientCallTime)}</p>
               </div>
               <div>
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Started</p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Started</p>
                 <p className={`text-sm font-semibold mt-0.5 font-mono ${
                   startVariance 
                     ? (startVariance.isLate && startVariance.minutes > 5 ? 'text-red-600' : 'text-green-600')
@@ -700,13 +700,13 @@ export default function CompletedCaseView({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Surgeon</p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Surgeon</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5">
                   {surgeon ? `Dr. ${surgeon.firstName} ${surgeon.lastName}` : '—'}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Anesthesiologist</p>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Anesthesiologist</p>
                 <p className="text-sm font-semibold text-slate-900 mt-0.5">
                   {anesthesiologist ? `Dr. ${anesthesiologist.firstName} ${anesthesiologist.lastName}` : '—'}
                 </p>
@@ -754,7 +754,7 @@ export default function CompletedCaseView({
                       </div>
                       {/* Tooltip on hover */}
                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-10">
-                        <div className="bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap">
+                        <div className="bg-slate-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
                           {phase.name}: {phase.durationMin ? formatDurationReadable(phase.durationMin) : '—'}
                         </div>
                       </div>
@@ -866,7 +866,7 @@ export default function CompletedCaseView({
                   <SurgeonAvatar name={`${surgeon.firstName} ${surgeon.lastName}`} size="sm" />
                   <span className="text-sm text-slate-700">Dr. {surgeon.firstName} {surgeon.lastName}</span>
                 </div>
-                <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getRoleBadgeClass('surgeon')}`}>
+                <span className={`px-2 py-0.5 text-xs font-semibold rounded ${getRoleBadgeClass('surgeon')}`}>
                   Surgeon
                 </span>
               </div>
@@ -879,7 +879,7 @@ export default function CompletedCaseView({
                   <SurgeonAvatar name={`${anesthesiologist.firstName} ${anesthesiologist.lastName}`} size="sm" />
                   <span className="text-sm text-slate-700">Dr. {anesthesiologist.firstName} {anesthesiologist.lastName}</span>
                 </div>
-                <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getRoleBadgeClass('anesthesiologist')}`}>
+                <span className={`px-2 py-0.5 text-xs font-semibold rounded ${getRoleBadgeClass('anesthesiologist')}`}>
                   Anesthesia
                 </span>
               </div>
@@ -892,7 +892,7 @@ export default function CompletedCaseView({
                   <SurgeonAvatar name={s.name} size="sm" />
                   <span className="text-sm text-slate-700">{s.name}</span>
                 </div>
-                <span className={`px-2 py-0.5 text-[10px] font-semibold rounded ${getRoleBadgeClass(s.role)}`}>
+                <span className={`px-2 py-0.5 text-xs font-semibold rounded ${getRoleBadgeClass(s.role)}`}>
                   {s.role}
                 </span>
               </div>
@@ -993,7 +993,7 @@ export default function CompletedCaseView({
           )}
 
           {/* Column Headers */}
-          <div className="grid grid-cols-4 gap-2 mb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="grid grid-cols-4 gap-2 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
             <div>Component</div>
             <div>Brand/Type</div>
             <div className="text-center">Templated</div>

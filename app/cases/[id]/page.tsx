@@ -1077,7 +1077,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </Link>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-slate-900">{caseData.case_number}</h1>
+                <h1 className="text-2xl font-semibold text-slate-900">{caseData.case_number}</h1>
                 <StatusBadgeDot status="completed" />
               </div>
             </div>
@@ -1214,7 +1214,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           <div className="lg:col-span-2 flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             {/* Total Time */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
               <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/10 rounded-full blur-3xl" />
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-green-500/5 rounded-full blur-2xl" />
               <div className="relative">
@@ -1249,7 +1249,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             {/* Surgical Time */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
               <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl" />
               <div className="relative">
@@ -1286,7 +1286,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
           {/* Pace Progress Bar — overall case pace indicator */}
           {paceData && (
-            <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3">
+            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
               <PaceProgressBar paceData={paceData} />
             </div>
           )}
@@ -1298,14 +1298,14 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           {/* QUICK INFO (1 col) */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <div className="flex items-center gap-2">
                   <Link href="/cases" className="text-slate-400 hover:text-slate-600 transition-colors">
                     <ChevronLeft className="w-4 h-4" />
                   </Link>
-                  <h1 className="text-lg font-bold text-slate-900">{caseData.case_number}</h1>
+                  <h1 className="text-lg font-semibold text-slate-900">{caseData.case_number}</h1>
                 </div>
                 <p className="text-sm text-slate-600 mt-0.5">{procedure?.name || 'No procedure'}</p>
                 {caseSequence && (
@@ -1342,7 +1342,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* MILESTONE SECTION (2 cols) */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
@@ -1471,7 +1471,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             )}
 
             {/* SURGEON LEFT — moved above team per user preference */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100">
                 <h3 className="text-sm font-semibold text-slate-900">Surgeon Status</h3>
               </div>
@@ -1515,7 +1515,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             {/* TEAM */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-slate-900">Team</h3>
                 <span className="text-xs text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0) + (anesthesiologist ? 1 : 0)} assigned</span>
@@ -1569,7 +1569,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
             {/* IMPLANTS */}
             {implants && implantCategory && (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100">
                   <h3 className="text-sm font-semibold text-slate-900">Implants</h3>
                 </div>
@@ -1598,7 +1598,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
             {/* NOTES */}
             {caseData.notes && (
-              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4">
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notes</h3>
                 <p className="text-sm text-slate-700">{caseData.notes}</p>
               </div>

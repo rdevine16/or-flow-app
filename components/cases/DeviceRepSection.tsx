@@ -396,7 +396,7 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-slate-700">{activity.message}</p>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     {formatTimeAgo(activity.created_at)}
                     {activity.users && (
                       <span> • {activity.users.first_name} {activity.users.last_name}</span>

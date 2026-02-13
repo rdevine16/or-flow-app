@@ -365,7 +365,7 @@ export function BlockPopover({
 
       <div
         ref={popoverRef}
-        className="fixed z-50 w-[360px] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="fixed z-50 w-[360px] bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col"
         style={{
           top: `${position.top}px`,
           left: `${position.left}px`,

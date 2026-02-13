@@ -92,7 +92,7 @@ export function RefactorDashboard({ initialIssues }: RefactorDashboardProps) {
       <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+          <h1 className="text-3xl font-semibold text-slate-900 mb-2">
             Refactor Dashboard
           </h1>
           <p className="text-slate-600">

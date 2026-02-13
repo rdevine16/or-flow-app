@@ -54,7 +54,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
 
   return (
     <div className={`
-      relative rounded-2xl transition-all duration-300 overflow-hidden
+      relative rounded-xl transition-all duration-300 overflow-hidden
       ${isComplete 
         ? 'bg-gradient-to-br from-green-50 to-green-100/50 shadow-sm shadow-green-200/50' 
         : isInProgress 
@@ -112,7 +112,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
         </div>
 
         {/* Title */}
-        <h4 className={`text-sm font-bold mb-1 ${
+        <h4 className={`text-sm font-semibold mb-1 ${
           isComplete ? 'text-green-900' : isInProgress ? 'text-blue-900' : 'text-slate-800'
         }`}>
           {displayName}
@@ -137,7 +137,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
 
         {/* Per-milestone pace comparison */}
         {isComplete && paceInfo && paceInfo.sampleSize >= MIN_SAMPLE_SIZE && (
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-xs text-slate-400 mt-1">
             {paceInfo.actualMinutes}m vs {paceInfo.expectedMinutes}m exp
             <span className={`font-semibold ml-1 ${
               paceInfo.varianceMinutes > 5 ? 'text-green-600' :

@@ -26,7 +26,7 @@ export default function CaseImplantCompanies({
   const remainingCount = companies.length - maxDisplay
 
   const sizeClasses = {
-    sm: 'px-1.5 py-0.5 text-[10px]',
+    sm: 'px-1.5 py-0.5 text-xs',
     md: 'px-2 py-1 text-xs',
   }
 

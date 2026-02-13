@@ -343,7 +343,7 @@ export default function CaseFlagsSection({
   // Loading skeleton
   if (loading) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <div className="h-4 w-24 bg-slate-100 rounded animate-pulse" />
         </div>
@@ -357,7 +357,7 @@ export default function CaseFlagsSection({
 
   // Determine header count badge
   const headerBadge = totalCount > 0 ? (
-    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
       sortedFlags.some(f => f.severity === 'critical')
         ? 'bg-red-100 text-red-600'
         : sortedFlags.some(f => f.severity === 'warning')
@@ -369,7 +369,7 @@ export default function CaseFlagsSection({
   ) : null
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -381,7 +381,7 @@ export default function CaseFlagsSection({
         {!showReportForm && (
           <button
             onClick={() => setShowReportForm(true)}
-            className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+            className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             Report Delay
@@ -496,7 +496,7 @@ export default function CaseFlagsSection({
                     </span>
                   </div>
                   {delayTimer.state === 'paused' && (
-                    <span className="text-[10px] font-medium text-amber-700 uppercase tracking-wider">Paused</span>
+                    <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">Paused</span>
                   )}
                 </div>
 
@@ -556,7 +556,7 @@ export default function CaseFlagsSection({
 
                 {/* Show computed duration after timer stop (duration auto-filled) */}
                 {!delayTimer.isActive && delayDuration && (
-                  <p className="text-[11px] text-slate-500 text-center">
+                  <p className="text-xs text-slate-500 text-center">
                     Duration: {delayDuration} min
                   </p>
                 )}
@@ -600,7 +600,7 @@ export default function CaseFlagsSection({
           <div className="space-y-1.5">
             {/* Threshold flags section header (completed only) */}
             {isCompleted && thresholdFlags.length > 0 && delayFlags.length > 0 && (
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1 pt-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1 pt-1">
                 Auto-Detected
               </p>
             )}
@@ -617,7 +617,7 @@ export default function CaseFlagsSection({
               return (
                 <div key={flag.id}>
                   {isFirstDelay && (
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1 pt-2">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1 pt-2">
                       Reported Delays
                     </p>
                   )}
@@ -640,19 +640,19 @@ export default function CaseFlagsSection({
 
                       {/* Detail line */}
                       {detail && (
-                        <p className="text-[11px] text-slate-500 mt-0.5">{detail}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{detail}</p>
                       )}
 
                       {/* Note */}
                       {flag.note && (
-                        <p className="text-[11px] text-slate-400 mt-0.5 italic truncate">
+                        <p className="text-xs text-slate-400 mt-0.5 italic truncate">
                           &ldquo;{flag.note}&rdquo;
                         </p>
                       )}
                     </div>
 
                     {/* Time */}
-                    <span className="text-[10px] text-slate-400 shrink-0 mt-0.5">
+                    <span className="text-xs text-slate-400 shrink-0 mt-0.5">
                       {formatTime(flag.created_at)}
                     </span>
                   </div>
@@ -664,7 +664,7 @@ export default function CaseFlagsSection({
             {hasMore && (
               <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
               >
                 {expanded ? (
                   <>

@@ -232,7 +232,7 @@ const TooltipContent = React.forwardRef<HTMLDivElement, TooltipContentProps>(
             <div className="flex items-center gap-2">
               <span>{content}</span>
               {shortcut && (
-                <kbd className="px-1.5 py-0.5 bg-slate-700 text-slate-200 text-[10px] rounded font-mono">
+                <kbd className="px-1.5 py-0.5 bg-slate-700 text-slate-200 text-xs rounded font-mono">
                   {shortcut}
                 </kbd>
               )}
@@ -469,7 +469,7 @@ export function InfoTooltip({ text, maxWidth = 280, iconSize = 'w-3.5 h-3.5' }: 
           }}
         >
           <div className="relative">
-            <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3.5 py-2.5 text-[12px] leading-relaxed text-slate-600">
+            <div className="bg-white border border-slate-200 rounded-lg shadow-lg px-3.5 py-2.5 text-xs leading-relaxed text-slate-600">
               {text}
             </div>
             {/* Arrow */}

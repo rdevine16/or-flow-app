@@ -430,7 +430,7 @@ export function WeekCalendar({
                 key={hour}
                 className="h-[60px] pr-3 text-right relative"
               >
-                <span className="absolute -top-2.5 right-3 text-[11px] text-slate-400 font-medium">
+                <span className="absolute -top-2.5 right-3 text-xs text-slate-400 font-medium">
                   {hour === 0 ? '' : formatTime12Hour(`${hour.toString().padStart(2, '0')}:00:00`).replace(':00', '')}
                 </span>
               </div>
@@ -464,7 +464,7 @@ export function WeekCalendar({
                       backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, currentColor 10px, currentColor 11px)',
                     }} />
                     <div className="flex items-start justify-center pt-2">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 bg-white/80 px-2 py-0.5 rounded">
                         Closed
                       </span>
                     </div>

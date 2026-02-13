@@ -273,7 +273,7 @@ function FlipRoomModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
         
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+        <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-100">
@@ -295,7 +295,7 @@ function FlipRoomModal({
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
             {data.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <CalendarDays className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900 mb-1">No flip room patterns detected</h3>
@@ -783,7 +783,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       <DashboardLayout>
         <Container className="py-12">
           <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
               <BarChart3 className="w-8 h-8 text-blue-500" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>

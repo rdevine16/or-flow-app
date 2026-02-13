@@ -169,7 +169,7 @@ export default function FlagsSettingsPage() {
   const renderSeverityBadge = (severity: string) => {
     const config = SEVERITY_CONFIG[severity as Severity] || SEVERITY_CONFIG.info
     return (
-      <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full ${config.bg} ${config.color} ring-1 ${config.ring}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full ${config.bg} ${config.color} ring-1 ${config.ring}`}>
         {config.label}
       </span>
     )
@@ -178,7 +178,7 @@ export default function FlagsSettingsPage() {
   const renderCategoryBadge = (category: string) => {
     const config = CATEGORY_CONFIG[category] || { label: category, color: 'text-slate-600' }
     return (
-      <span className={`text-[11px] font-medium ${config.color} uppercase tracking-wide`}>
+      <span className={`text-xs font-medium ${config.color} uppercase tracking-wide`}>
         {config.label}
       </span>
     )
@@ -306,7 +306,7 @@ export default function FlagsSettingsPage() {
 
                           {/* Scope */}
                           <div className="flex-shrink-0 w-20">
-                            <span className={`text-[11px] ${rule.is_enabled ? 'text-slate-500' : 'text-slate-400'}`}>
+                            <span className={`text-xs ${rule.is_enabled ? 'text-slate-500' : 'text-slate-400'}`}>
                               {rule.comparison_scope === 'personal' ? 'Personal' : 'Facility'}
                             </span>
                           </div>
@@ -422,7 +422,7 @@ export default function FlagsSettingsPage() {
                                   <span className="text-sm text-slate-700">
                                     {SCOPE_LABELS[rule.comparison_scope] || rule.comparison_scope}
                                   </span>
-                                  <p className="text-[11px] text-slate-400 mt-0.5">
+                                  <p className="text-xs text-slate-400 mt-0.5">
                                     {rule.comparison_scope === 'personal'
                                       ? 'Compares each surgeon against their own historical averages'
                                       : 'Compares against all cases at this facility'}
@@ -432,7 +432,7 @@ export default function FlagsSettingsPage() {
                             </div>
 
                             {/* Metric Details (informational) */}
-                            <div className="mt-4 flex items-center gap-4 text-[11px] text-slate-400">
+                            <div className="mt-4 flex items-center gap-4 text-xs text-slate-400">
                               <span>Metric: <span className="font-mono text-slate-500">{rule.metric}</span></span>
                               {rule.start_milestone && rule.end_milestone && (
                                 <span>

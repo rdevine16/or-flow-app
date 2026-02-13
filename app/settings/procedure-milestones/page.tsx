@@ -446,9 +446,9 @@ export default function ProcedureMilestonesSettingsPage() {
                                         <p className="text-xs text-slate-400">Start/End pair</p>
                                       )}
                                       {milestone.source_milestone_type_id ? (
-                                        <span className="inline-flex items-center text-[10px] text-blue-600">Global</span>
+                                        <span className="inline-flex items-center text-xs text-blue-600">Global</span>
                                       ) : (
-                                        <span className="inline-flex items-center text-[10px] text-purple-600">Custom</span>
+                                        <span className="inline-flex items-center text-xs text-purple-600">Custom</span>
                                       )}
                                     </div>
                                     {isBusy && (

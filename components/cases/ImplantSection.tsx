@@ -308,8 +308,8 @@ export default function ImplantSection({ caseId, procedureTypeId, supabase, read
 
         {/* Column Headers */}
         <div className="grid grid-cols-2 gap-2 mb-2 px-1">
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center">Templated</div>
-          <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-center">Final</div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Templated</div>
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Final</div>
         </div>
 
         {/* Hip Components */}

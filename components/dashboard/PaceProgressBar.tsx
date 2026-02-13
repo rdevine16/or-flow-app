@@ -101,7 +101,7 @@ export default function PaceProgressBar({ paceData }: PaceProgressBarProps) {
       </div>
       
       {/* Labels row */}
-      <div className="flex items-center justify-between text-[10px]">
+      <div className="flex items-center justify-between text-xs">
         <span className="text-slate-400 font-medium">
           Expected {expectedDuration}
           {durationRange && (

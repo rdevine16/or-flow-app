@@ -327,7 +327,7 @@ const toggleActive = async (category: DefaultCostCategory) => {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Default Cost Categories</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">Default Cost Categories</h1>
               <p className="text-slate-600 mt-1">
                 Template categories copied to new facilities during onboarding
               </p>

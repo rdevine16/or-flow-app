@@ -272,7 +272,7 @@ const handleDelete = (region: BodyRegion) => {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Body Regions</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Body Regions</h1>
             <p className="text-slate-500 mt-1">
               Manage body regions used to categorize procedures across facilities.
             </p>

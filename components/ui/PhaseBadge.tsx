@@ -29,7 +29,7 @@ export default function PhaseBadge({ phase }: PhaseBadgeProps) {
         inline-flex items-center gap-1.5
         px-2.5 py-1
         ${colors.bg}
-        text-white text-[10px] font-bold uppercase tracking-wide
+        text-white text-xs font-semibold uppercase tracking-wide
         rounded-md
         shadow-md ${colors.shadow}
       `}

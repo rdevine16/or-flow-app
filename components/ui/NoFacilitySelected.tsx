@@ -30,7 +30,7 @@ export function NoFacilitySelected({
   return (
     <div className={`min-h-[60vh] flex items-center justify-center ${className}`}>
       <div className="text-center max-w-md">
-        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+        <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-6">
           <BuildingOffice2Icon className="w-8 h-8 text-slate-400" />
         </div>
         <h2 className="text-xl font-semibold text-slate-900 mb-2">

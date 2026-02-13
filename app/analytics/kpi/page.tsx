@@ -358,11 +358,11 @@ function SurgeonIdleTimeCard({
                     <div className="col-span-3">
                       <p className="font-medium text-slate-900 text-sm truncate">{surgeon.surgeonName}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] text-violet-600 bg-violet-50 px-1 py-0.5 rounded">
+                        <span className="text-xs text-violet-600 bg-violet-50 px-1 py-0.5 rounded">
                           {surgeon.flipGapCount} flip{surgeon.flipGapCount !== 1 ? 's' : ''}
                         </span>
                         {surgeon.sameRoomGapCount > 0 && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
+                          <span className="text-xs text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
                             {surgeon.sameRoomGapCount} same
                           </span>
                         )}
@@ -424,7 +424,7 @@ function SurgeonIdleTimeCard({
                 <div key={surgeon.surgeonId} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors">
                   <div className="flex items-center gap-3">
                     <p className="font-medium text-slate-700 text-sm">{surgeon.surgeonName}</p>
-                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
+                    <span className="text-xs text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
                       {surgeon.sameRoomGapCount} gap{surgeon.sameRoomGapCount !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -632,7 +632,7 @@ function FlipRoomModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
         
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+        <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
@@ -690,7 +690,7 @@ function FlipRoomModal({
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
             {filteredData.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <CalendarDays className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900 mb-1">No idle gaps found</h3>
@@ -836,7 +836,7 @@ function ORUtilizationModal({
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
         
-        <div className="relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
+        <div className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
@@ -866,7 +866,7 @@ function ORUtilizationModal({
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
             {roomBreakdown.length === 0 ? (
               <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
                   <BarChart3 className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-base font-semibold text-slate-900 mb-1">No utilization data</h3>
@@ -1197,7 +1197,7 @@ export default function AnalyticsOverviewPage() {
       <DashboardLayout>
         <Container className="py-12">
           <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
               <BarChart3 className="w-8 h-8 text-blue-500" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>

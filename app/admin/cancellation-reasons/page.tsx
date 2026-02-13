@@ -271,7 +271,7 @@ export default function AdminCancellationReasonsPage() {
             <span>/</span>
             <span className="text-slate-900">Cancellation Reasons</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Cancellation Reason Templates</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Cancellation Reason Templates</h1>
           <p className="text-slate-500 mt-1">
             Manage default cancellation reasons copied to new facilities.
           </p>

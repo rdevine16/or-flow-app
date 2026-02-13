@@ -299,7 +299,7 @@ showToast({
               {/* OR Hourly Rate + Quick Actions */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* OR Hourly Rate Card */}
-                <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-6 text-white">
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-6 text-white">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-blue-100 text-sm font-medium mb-1">OR Hourly Rate</p>
@@ -363,7 +363,7 @@ showToast({
                 </div>
 
                 {/* Quick Actions */}
-                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-6">
+                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-slate-900">Quick Actions</h3>
                     <span className="text-xs text-slate-400 uppercase tracking-wide">Jump to</span>

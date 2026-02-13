@@ -61,7 +61,7 @@ export default function StatusIndicator({ status }: StatusIndicatorProps) {
       />
       <span
         className={`
-          text-[11px] font-bold tracking-wider
+          text-xs font-bold tracking-wider
           ${config.textColor}
         `}
       >

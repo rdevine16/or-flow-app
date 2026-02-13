@@ -248,9 +248,9 @@ if (facilityStatsRes.error) {
             description="Profitability metrics and insights"
             icon={DollarSign}
           />
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <DollarSign className="w-8 h-8 text-blue-500" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
@@ -280,9 +280,9 @@ if (facilityStatsRes.error) {
             description="Profitability metrics and insights"
             icon={DollarSignIcon}
           />
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 bg-amber-50 rounded-xl flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle className="w-8 h-8 text-amber-500" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-2">Financials Not Configured</h3>

@@ -423,7 +423,7 @@ export default function SettingsLayout({ children, title, description }: Setting
     
     if (badge === 'new') {
       return (
-        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-green-100 text-green-600 rounded">
+        <span className="ml-auto px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide bg-green-100 text-green-600 rounded">
           New
         </span>
       )
@@ -431,7 +431,7 @@ export default function SettingsLayout({ children, title, description }: Setting
     
     if (badge === 'admin') {
       return (
-        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 rounded">
+        <span className="ml-auto px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 rounded">
           Admin
         </span>
       )
@@ -439,7 +439,7 @@ export default function SettingsLayout({ children, title, description }: Setting
 
     if (badge === 'coming') {
       return (
-        <span className="ml-auto px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 rounded">
+        <span className="ml-auto px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide bg-slate-100 text-slate-500 rounded">
           Soon
         </span>
       )
@@ -485,7 +485,7 @@ export default function SettingsLayout({ children, title, description }: Setting
                 <div key={group.id}>
                   {/* Group Header */}
                   {!sidebarCollapsed && (
-                    <h3 className={`px-3 mb-2 text-[11px] font-semibold uppercase tracking-wider ${
+                    <h3 className={`px-3 mb-2 text-xs font-semibold uppercase tracking-wider ${
                       isInGroup(group.id) ? 'text-blue-600' : 'text-slate-400'
                     }`}>
                       {group.label}

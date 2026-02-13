@@ -95,7 +95,7 @@ export default function SetPasswordPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Check className="w-8 h-8 text-green-600" />
             </div>
@@ -115,12 +115,12 @@ export default function SetPasswordPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl mb-4">
             <Clock className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Welcome to ORbit</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Welcome to ORbit</h1>
           <p className="text-slate-500 mt-1">Set your password to get started</p>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Error Message */}
             {error && (

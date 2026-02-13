@@ -113,7 +113,7 @@ export function MetricCard({
 
   if (loading) {
     return (
-      <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 ${sizeClasses[size].padding}`}>
+      <div className={`bg-white rounded-xl shadow-sm border border-slate-100 ${sizeClasses[size].padding}`}>
         <div className="animate-pulse">
           <div className="h-4 w-24 bg-slate-200 rounded mb-3" />
           <div className="h-8 w-20 bg-slate-200 rounded mb-2" />
@@ -126,7 +126,7 @@ export function MetricCard({
   return (
     <div 
       ref={cardRef}
-      className={`bg-white rounded-2xl shadow-sm border border-slate-100 ${sizeClasses[size].padding} hover:shadow-md hover:border-slate-200 transition-all duration-300 group`}
+      className={`bg-white rounded-xl shadow-sm border border-slate-100 ${sizeClasses[size].padding} hover:shadow-md hover:border-slate-200 transition-all duration-300 group`}
     >
       <p className={`${sizeClasses[size].title} font-medium text-slate-500 mb-1`}>{title}</p>
       <div className="flex items-baseline gap-1">

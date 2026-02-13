@@ -366,7 +366,7 @@ export default function CancelCasePage() {
               <ArrowLeft className="w-4 h-4" />
               Back to Case
             </Link>
-            <h1 className="text-2xl font-bold text-slate-900">Cancel Case</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Cancel Case</h1>
             <p className="text-slate-500 mt-1">Review the case and select a cancellation reason.</p>
           </div>
 

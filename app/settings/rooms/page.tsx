@@ -109,10 +109,10 @@ function RoomScheduleEditor({
     <div className="space-y-1">
       {/* Header row */}
       <div className="grid grid-cols-[100px_1fr_1fr_60px] gap-2 px-2 pb-1">
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Day</span>
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Opens</span>
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Closes</span>
-        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">Open?</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Day</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Opens</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Closes</span>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">Open?</span>
       </div>
 
       {/* Day rows — weekdays first, then weekend */}

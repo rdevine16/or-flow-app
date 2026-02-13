@@ -83,7 +83,7 @@ function OperativeSideBadge({ side }: { side: string | null | undefined }) {
   if (!cfg) return null
   
   return (
-    <span className={`inline-flex items-center justify-center w-5 h-5 text-[10px] font-bold rounded border ${cfg.color}`}>
+    <span className={`inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded border ${cfg.color}`}>
       {cfg.label}
     </span>
   )
@@ -109,7 +109,7 @@ function ElapsedTimeDisplay({ startTime, isActive }: { startTime: Date | null; i
     return (
       <div className="text-right">
         <div className="text-lg font-bold font-mono text-slate-900">0:00</div>
-        <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">Starting</div>
+        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide">Starting</div>
       </div>
     )
   }
@@ -119,7 +119,7 @@ function ElapsedTimeDisplay({ startTime, isActive }: { startTime: Date | null; i
       <div className="text-xl font-bold font-mono text-green-600 tabular-nums">
         {formattedTime}
       </div>
-      <div className="text-[10px] font-medium text-green-500 uppercase tracking-wide">
+      <div className="text-xs font-medium text-green-500 uppercase tracking-wide">
         Elapsed
       </div>
     </div>
@@ -133,7 +133,7 @@ function ScheduledTimeDisplay({ time }: { time: string | null }) {
       <div className="text-lg font-semibold font-mono text-blue-600">
         {formatTime(time)}
       </div>
-      <div className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">
+      <div className="text-xs font-medium text-slate-400 uppercase tracking-wide">
         Scheduled
       </div>
     </div>
@@ -470,7 +470,7 @@ function EnhancedRoomCard({
   
   return (
     <div 
-      className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${
+      className={`bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 ${
         nextCaseCalledBack 
           ? 'border-2 border-amber-400 animate-pulse-border' 
           : 'border border-slate-200/80'
@@ -483,7 +483,7 @@ function EnhancedRoomCard({
           : 'bg-slate-50/80 border-slate-100'
       }`}>
         <div className="flex items-center gap-3">
-          <h3 className="text-lg font-bold text-slate-900">{room.name}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{room.name}</h3>
           {isActive && currentPhase && (
             <PhaseBadge phase={currentPhase} />
           )}
@@ -521,7 +521,7 @@ function EnhancedRoomCard({
       {otherCases.length > 0 && (
         <div className="border-t border-slate-100">
           <div className="px-4 py-2 bg-slate-50/50">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
               {isActive ? 'Up Next' : 'Schedule'} ({otherCases.length})
             </p>
           </div>

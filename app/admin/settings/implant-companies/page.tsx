@@ -373,7 +373,7 @@ const handleDelete = async (id: string) => {
       {/* Modal */}
       {modal.isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-900 mb-4">
               {modal.mode === 'add' ? 'Add Implant Company' : 'Edit Implant Company'}
             </h3>

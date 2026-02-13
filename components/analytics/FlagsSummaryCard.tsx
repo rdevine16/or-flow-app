@@ -272,7 +272,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
               <div key={sev} className={`rounded-lg px-3 py-2.5 ${config.bg} ring-1 ${config.ring}`}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <div className={`w-2 h-2 rounded-full ${config.dot}`} />
-                  <span className={`text-[11px] font-semibold uppercase tracking-wide ${config.text}`}>
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${config.text}`}>
                     {config.label}
                   </span>
                 </div>
@@ -297,7 +297,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
         {/* Top Flagged Cases */}
         {stats.topCases.length > 0 && (
           <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
               Most Flagged Cases
             </p>
             <div className="space-y-1.5">
@@ -319,17 +319,17 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
                     {/* Severity dots */}
                     <div className="flex items-center gap-1">
                       {c.severities.critical && (
-                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold ring-1 ring-red-200">
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-xs font-semibold ring-1 ring-red-200">
                           {c.severities.critical}
                         </span>
                       )}
                       {c.severities.warning && (
-                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-semibold ring-1 ring-amber-200">
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold ring-1 ring-amber-200">
                           {c.severities.warning}
                         </span>
                       )}
                       {c.severities.info && (
-                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold ring-1 ring-blue-200">
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold ring-1 ring-blue-200">
                           {c.severities.info}
                         </span>
                       )}

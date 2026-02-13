@@ -216,7 +216,7 @@ export default function FacilitiesListPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Facilities</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Facilities</h1>
           <p className="text-slate-500 mt-1">Manage all customer facilities</p>
         </div>
         <Link

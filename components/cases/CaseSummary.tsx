@@ -288,7 +288,7 @@ export default function CaseSummary({
               </Link>
               <div>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-xl font-bold text-slate-900 tracking-tight">{caseData.caseNumber}</h1>
+                  <h1 className="text-xl font-semibold text-slate-900 tracking-tight">{caseData.caseNumber}</h1>
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
                     <Check className="w-3.5 h-3.5" />
                     Completed
@@ -317,7 +317,7 @@ export default function CaseSummary({
           <div className="lg:col-span-1 space-y-6">
             
             {/* Case Information Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                 <SectionHeader 
                   icon={
@@ -343,7 +343,7 @@ export default function CaseSummary({
             </div>
 
             {/* Surgical Team Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                 <SectionHeader 
                   icon={
@@ -414,7 +414,7 @@ export default function CaseSummary({
 
             {/* Notes Card */}
             {caseData.notes && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                   <SectionHeader 
                     icon={
@@ -452,7 +452,7 @@ export default function CaseSummary({
             </div>
 
             {/* Timeline Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                 <SectionHeader 
                   icon={
@@ -489,7 +489,7 @@ export default function CaseSummary({
 
             {/* Milestone Summary Table */}
             {recordedMilestones.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                   <SectionHeader 
                     icon={
@@ -528,7 +528,7 @@ export default function CaseSummary({
 
             {/* Implants Card */}
             {implants.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-4 border-b border-slate-100 bg-slate-50/50">
                   <SectionHeader 
                     icon={

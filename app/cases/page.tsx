@@ -388,7 +388,7 @@ function CasesPageContent() {
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Cases</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Cases</h1>
           <p className="text-slate-500 text-sm mt-1">Manage surgical cases and track progress</p>
         </div>
         {canCreateCases && (
@@ -431,14 +431,14 @@ function CasesPageContent() {
           <>
             {/* Table Header */}
             <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50/80 border-b border-slate-200/80">
-              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Date</div>
-              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Time</div>
-              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Case</div>
-              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Room</div>
-              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
-              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
-              <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</div>
-              <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
+              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</div>
+              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</div>
+              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Case</div>
+              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</div>
+              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
+              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
+              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</div>
+              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
             </div>
 
             {/* Table Body */}
@@ -480,7 +480,7 @@ function CasesPageContent() {
                         Case #{c.case_number}
                       </Link>
                       {c.is_draft && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded-md">
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded-md">
                           Draft
                         </span>
                       )}

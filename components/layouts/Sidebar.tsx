@@ -149,7 +149,7 @@ function AdminNavigation({
         <div key={group.id}>
           {/* Group Header */}
           {isExpanded && (
-            <h3 className="px-4 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <h3 className="px-4 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
               {group.label}
             </h3>
           )}

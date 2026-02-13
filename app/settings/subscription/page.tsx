@@ -214,7 +214,7 @@ export default function SubscriptionPage() {
                 <div className="flex items-start justify-between mb-6">
                   <div>
                     <p className="text-slate-400 text-sm mb-1">Current Plan</p>
-                    <h2 className="text-2xl font-bold">{currentPlan.name}</h2>
+                    <h2 className="text-2xl font-semibold">{currentPlan.name}</h2>
                     <p className="text-slate-400 mt-1">{currentPlan.description}</p>
                   </div>
                   <div className="text-right">

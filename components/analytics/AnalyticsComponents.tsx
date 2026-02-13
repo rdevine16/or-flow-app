@@ -298,7 +298,7 @@ export function SurgeonSelector({ surgeons, selectedId, onChange, placeholder = 
         {selected ? (
           <>
             <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-md flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] font-bold text-white">
+              <span className="text-xs font-bold text-white">
                 {selected.first_name.charAt(0)}{selected.last_name.charAt(0)}
               </span>
             </div>
@@ -330,7 +330,7 @@ export function SurgeonSelector({ surgeons, selectedId, onChange, placeholder = 
                   ? 'bg-gradient-to-br from-blue-500 to-blue-600'
                   : 'bg-slate-200'
               }`}>
-                <span className={`text-[10px] font-bold ${surgeon.id === selectedId ? 'text-white' : 'text-slate-500'}`}>
+                <span className={`text-xs font-bold ${surgeon.id === selectedId ? 'text-white' : 'text-slate-500'}`}>
                   {surgeon.first_name.charAt(0)}{surgeon.last_name.charAt(0)}
                 </span>
               </div>
@@ -454,7 +454,7 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
               <Phone className="w-4 h-4 text-blue-600" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Call Sent</span>
-            <span className="text-[11px] text-slate-400 mt-0.5">{callEarliness} min before</span>
+            <span className="text-xs text-slate-400 mt-0.5">{callEarliness} min before</span>
           </div>
 
           {/* Arrow */}
@@ -469,7 +469,7 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
               <Clock className="w-4 h-4 text-amber-600" />
             </div>
             <span className="text-xs font-semibold text-slate-900">Team Prep</span>
-            <span className="text-[11px] text-slate-400 mt-0.5">{prepDuration} min</span>
+            <span className="text-xs text-slate-400 mt-0.5">{prepDuration} min</span>
           </div>
 
           {/* Arrow */}
@@ -485,7 +485,7 @@ export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon
             </div>
             <span className="text-xs font-semibold text-slate-900">Room Ready</span>
             {waitForSurgeon !== null && (
-              <span className="text-[11px] text-slate-400 mt-0.5">{waitForSurgeon} min wait</span>
+              <span className="text-xs text-slate-400 mt-0.5">{waitForSurgeon} min wait</span>
             )}
           </div>
 
@@ -563,7 +563,7 @@ export function DelayDonut({ delays, totalDelays, totalMinutes }: DelayDonutProp
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-lg font-bold text-slate-900">{totalDelays}</span>
-          <span className="text-[10px] text-slate-400 uppercase tracking-wide">delays</span>
+          <span className="text-xs text-slate-400 uppercase tracking-wide">delays</span>
         </div>
       </div>
       {totalMinutes > 0 && (
@@ -805,7 +805,7 @@ export function CasePhaseBar({ caseNumber, procedureName, phases, totalValue, ma
               >
                 {/* Show label if wide enough */}
                 {phasePct > 18 && (
-                  <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white/90 truncate px-1">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white/90 truncate px-1">
                     {fmt(phase.value)}
                   </span>
                 )}
@@ -903,11 +903,11 @@ function BulletBar({
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">{label}</span>
+        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</span>
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-slate-900 tabular-nums">{formatValue(todayValue)}</span>
           {avgValue > 0 && deltaAbs > 0 && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
               isFaster 
                 ? 'text-green-600 bg-green-50' 
                 : 'text-red-600 bg-red-50'
@@ -943,7 +943,7 @@ function BulletBar({
       </div>
       {avgValue > 0 && (
         <div className="flex justify-end">
-          <span className="text-[10px] text-slate-400">avg: {formatValue(avgValue)}</span>
+          <span className="text-xs text-slate-400">avg: {formatValue(avgValue)}</span>
         </div>
       )}
     </div>
@@ -1005,7 +1005,7 @@ export function ProcedureComparisonChart({ data, formatValue: formatValueProp }:
         </div>
       ))}
 
-      <div className="pt-4 flex items-center gap-4 text-[11px]">
+      <div className="pt-4 flex items-center gap-4 text-xs">
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-2.5 bg-blue-600 rounded-sm opacity-90" />
           <span className="text-slate-600 font-medium">Today</span>

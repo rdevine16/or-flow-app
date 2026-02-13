@@ -265,7 +265,7 @@ const { data, error } = await supabase
         <div className="py-8">
           {/* Page Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-900">Case Complexity Templates</h1>
+            <h1 className="text-2xl font-semibold text-slate-900">Case Complexity Templates</h1>
             <p className="text-slate-500 mt-1">Global templates copied to new facilities</p>
           </div>
 

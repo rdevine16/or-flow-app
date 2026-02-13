@@ -288,7 +288,7 @@ const handleChangePassword = async () => {
     <DashboardLayout>
       <ErrorBanner message={error} />
       <div className="max-w-4xl mx-auto py-8 px-4">
-        <h1 className="text-2xl font-bold text-slate-900 mb-8">Profile Settings</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-8">Profile Settings</h1>
 
         {/* Message */}
         {message && (
@@ -315,7 +315,7 @@ const handleChangePassword = async () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column - Profile Card */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               {/* Avatar */}
               <div className="flex flex-col items-center text-center mb-6">
                 <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-500/25">
@@ -380,7 +380,7 @@ const handleChangePassword = async () => {
           {/* Right Column - Edit Forms */}
           <div className="lg:col-span-2 space-y-6">
             {/* Personal Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h3 className="text-lg font-semibold text-slate-900 mb-4">Personal Information</h3>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -433,7 +433,7 @@ const handleChangePassword = async () => {
             </div>
 
             {/* Password Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-slate-900">Password</h3>
                 {!showPasswordSection && (
@@ -570,7 +570,7 @@ const handleChangePassword = async () => {
             </div>
 
             {/* Account Info */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h3 className="text-lg font-semibold text-slate-900 mb-4">Account Information</h3>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">

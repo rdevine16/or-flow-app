@@ -797,7 +797,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </span>
                     </div>
                     <div>
-                      <h2 className="text-lg font-bold text-slate-900">
+                      <h2 className="text-lg font-semibold text-slate-900">
                         Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
                       </h2>
                       <p className="text-sm text-slate-500">

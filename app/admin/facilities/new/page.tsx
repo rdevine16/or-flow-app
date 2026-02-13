@@ -880,7 +880,7 @@ if (insertError) {
       <div className="max-w-3xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Create New Facility</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Create New Facility</h1>
           <p className="text-slate-500 mt-1">Set up a new customer in ORbit</p>
         </div>
 
@@ -926,7 +926,7 @@ if (insertError) {
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           {/* ================================================================ */}
           {/* STEP 1: FACILITY DETAILS */}
           {/* ================================================================ */}

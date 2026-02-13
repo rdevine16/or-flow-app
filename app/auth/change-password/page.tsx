@@ -161,11 +161,11 @@ export default function ChangePasswordPage() {
   if (success) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+        <div className="max-w-md w-full bg-white rounded-xl shadow-xl p-8 text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-8 h-8 text-green-600" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Password Changed!</h1>
+          <h1 className="text-xl font-semibold text-slate-900 mb-2">Password Changed!</h1>
           <p className="text-slate-600">Redirecting to dashboard...</p>
         </div>
       </div>
@@ -177,10 +177,10 @@ export default function ChangePasswordPage() {
       <div className="max-w-md w-full">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
+          <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mx-auto shadow-lg shadow-blue-500/25">
             <Clock className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-4">
+          <h1 className="text-2xl font-semibold text-slate-900 mt-4">
             {mustChange ? 'Change Your Password' : 'Update Password'}
           </h1>
           <p className="text-slate-600 mt-1">
@@ -192,7 +192,7 @@ export default function ChangePasswordPage() {
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
+        <div className="bg-white rounded-xl shadow-xl p-8">
           {/* User Info */}
           {userName && (
             <div className="mb-6 pb-6 border-b border-slate-100">

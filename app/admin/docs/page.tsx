@@ -551,7 +551,7 @@ export default function AdminDocsPage() {
                   <div key={categoryName}>
                     <button
                       onClick={() => toggleCategory(categoryName)}
-                      className="w-full flex items-center gap-2 px-2 py-2 text-[11px] font-semibold uppercase tracking-wider
+                      className="w-full flex items-center gap-2 px-2 py-2 text-xs font-semibold uppercase tracking-wider
                                  text-slate-400 hover:text-slate-600 transition-colors rounded group"
                       title={catInfo?.description || ''}
                     >
@@ -563,10 +563,10 @@ export default function AdminDocsPage() {
                       </svg>
                       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${DOT_COLORS[catInfo?.color || 'slate'] || DOT_COLORS.slate}`} />
                       <span className="truncate">{categoryName}</span>
-                      <span className="ml-auto text-slate-300 text-[10px]">{catPages.length}</span>
+                      <span className="ml-auto text-slate-300 text-xs">{catPages.length}</span>
                     </button>
                     {expandedCategories.has(categoryName) && catInfo?.description && (
-                      <p className="px-2 ml-7 mb-1 text-[10px] text-slate-400 leading-tight">{catInfo.description}</p>
+                      <p className="px-2 ml-7 mb-1 text-xs text-slate-400 leading-tight">{catInfo.description}</p>
                     )}
                     {expandedCategories.has(categoryName) && (
                       <div className="ml-3 space-y-0.5 mb-1">
@@ -585,7 +585,7 @@ export default function AdminDocsPage() {
                               }`}
                           >
                             <div className="leading-snug">{page.name}</div>
-                            <div className="text-[11px] text-slate-400 mt-0.5 truncate font-mono">{page.route}</div>
+                            <div className="text-xs text-slate-400 mt-0.5 truncate font-mono">{page.route}</div>
                           </button>
                         ))}
                       </div>
@@ -596,7 +596,7 @@ export default function AdminDocsPage() {
             )}
           </nav>
 
-          <div className="px-4 py-3 border-t border-slate-200 text-[11px] text-slate-400">
+          <div className="px-4 py-3 border-t border-slate-200 text-xs text-slate-400">
             <div className="flex items-center justify-between mb-2">
               <span>{pages.length} entries</span>
               <span>{getAllUniqueTablesCount(pages)} tables</span>
@@ -604,13 +604,13 @@ export default function AdminDocsPage() {
             <div className="flex gap-1.5">
               <button
                 onClick={() => handleExport('json')}
-                className="flex-1 px-2 py-1.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors text-center"
+                className="flex-1 px-2 py-1.5 text-xs font-medium text-slate-500 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors text-center"
               >
                 Export JSON
               </button>
               <button
                 onClick={() => handleExport('md')}
-                className="flex-1 px-2 py-1.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors text-center"
+                className="flex-1 px-2 py-1.5 text-xs font-medium text-slate-500 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-colors text-center"
               >
                 Export MD
               </button>
@@ -650,8 +650,8 @@ export default function AdminDocsPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-3 mb-1.5">
-                      <h2 className="text-xl font-bold text-slate-800 tracking-tight">{selectedPage.name}</h2>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${getCategoryColor(categories, selectedPage.category)}`}>
+                      <h2 className="text-xl font-semibold text-slate-800 tracking-tight">{selectedPage.name}</h2>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getCategoryColor(categories, selectedPage.category)}`}>
                         {selectedPage.category}
                       </span>
                     </div>
@@ -1445,25 +1445,25 @@ function ScannerModal({
                         <code className="font-mono text-xs text-slate-600 flex-1 truncate">{file.route}</code>
 
                         {/* File path */}
-                        <span className="text-[11px] text-slate-400 hidden sm:block truncate max-w-[180px]">
+                        <span className="text-xs text-slate-400 hidden sm:block truncate max-w-[180px]">
                           {file.filePath}
                         </span>
 
                         {/* Scope badge */}
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium border bg-slate-50 text-slate-500 border-slate-200 flex-shrink-0 uppercase tracking-wider">
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium border bg-slate-50 text-slate-500 border-slate-200 flex-shrink-0 uppercase tracking-wider">
                           {file.scope}
                         </span>
 
                         {/* Stale indicator */}
                         {stale && isRegistered && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium flex-shrink-0"
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium flex-shrink-0"
                                 title="File modified after last registry update">
                             STALE
                           </span>
                         )}
 
                         {/* Status badge */}
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border flex-shrink-0
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border flex-shrink-0
                           ${drift.length > 0
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : isRegistered
@@ -1523,55 +1523,55 @@ function ScannerModal({
                           {/* Scanned data preview */}
                           <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-4">
                             <div>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Name</span>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Name</span>
                               <div className="text-sm text-slate-700">{meta.name}</div>
                             </div>
                             <div>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Category</span>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Category</span>
                               <div className="text-sm text-slate-700">{meta.category}</div>
                             </div>
                             <div>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Reads</span>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reads</span>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {meta.reads.length > 0 ? meta.reads.map(t => (
-                                  <code key={t} className="text-[11px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-mono">{t}</code>
+                                  <code key={t} className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-mono">{t}</code>
                                 )) : <span className="text-xs text-slate-400">none</span>}
                               </div>
                             </div>
                             <div>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Writes</span>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Writes</span>
                               <div className="flex flex-wrap gap-1 mt-0.5">
                                 {meta.writes.length > 0 ? meta.writes.map(t => (
-                                  <code key={t} className="text-[11px] px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-mono">{t}</code>
+                                  <code key={t} className="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded font-mono">{t}</code>
                                 )) : <span className="text-xs text-slate-400">none</span>}
                               </div>
                             </div>
                             {meta.rpcs.length > 0 && (
                               <div>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">RPCs</span>
+                                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">RPCs</span>
                                 <div className="flex flex-wrap gap-1 mt-0.5">
                                   {meta.rpcs.map(r => (
-                                    <code key={r} className="text-[11px] px-1.5 py-0.5 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded font-mono">{r}</code>
+                                    <code key={r} className="text-xs px-1.5 py-0.5 bg-cyan-50 text-cyan-700 border border-cyan-200 rounded font-mono">{r}</code>
                                   ))}
                                 </div>
                               </div>
                             )}
                             {meta.http_methods.length > 0 && (
                               <div>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">HTTP Methods</span>
+                                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">HTTP Methods</span>
                                 <div className="flex flex-wrap gap-1 mt-0.5">
                                   {meta.http_methods.map(m => (
-                                    <span key={m} className="text-[11px] px-1.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded font-semibold">{m}</span>
+                                    <span key={m} className="text-xs px-1.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 rounded font-semibold">{m}</span>
                                   ))}
                                 </div>
                               </div>
                             )}
                             {meta.components.length > 0 && (
                               <div>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Components</span>
+                                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Components</span>
                                 <div className="flex flex-wrap gap-1 mt-0.5">
                                   {meta.components.map(c => (
-                                    <code key={c} className="text-[11px] px-1.5 py-0.5 bg-green-50 text-green-600 border border-green-200 rounded font-mono">{c}</code>
+                                    <code key={c} className="text-xs px-1.5 py-0.5 bg-green-50 text-green-600 border border-green-200 rounded font-mono">{c}</code>
                                   ))}
                                 </div>
                               </div>
@@ -1597,7 +1597,7 @@ function ScannerModal({
                                 Import to Registry
                               </button>
                             ) : null}
-                            <span className="text-[11px] text-slate-400">
+                            <span className="text-xs text-slate-400">
                               {meta._source_lines} lines
                               {isRegistered && drift.length > 0 && ' • Only code-detected fields will update'}
                               {!isRegistered && ' • Review before saving'}
@@ -1712,7 +1712,7 @@ function CategoryManagerModal({
   // Color picker inline component
   const ColorPicker = () => (
     <div className="flex items-center gap-3">
-      <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider flex-shrink-0">Color</label>
+      <label className="text-xs font-medium text-slate-500 uppercase tracking-wider flex-shrink-0">Color</label>
       <div className="flex gap-1.5 flex-wrap">
         {CATEGORY_COLOR_OPTIONS.map(opt => (
           <button
@@ -1731,7 +1731,7 @@ function CategoryManagerModal({
   const EditForm = ({ isNew }: { isNew: boolean }) => (
     <div className={`p-4 border rounded-lg space-y-3 ${isNew ? 'border-dashed border-slate-300 bg-slate-50/50' : 'border-slate-300 bg-slate-50'}`}>
       <div>
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1 block">Name</label>
+        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1 block">Name</label>
         <input
           type="text"
           value={form.name}
@@ -1742,7 +1742,7 @@ function CategoryManagerModal({
         />
       </div>
       <div>
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider mb-1 block">Description</label>
+        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1 block">Description</label>
         <textarea
           value={form.description}
           onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))}
@@ -1753,7 +1753,7 @@ function CategoryManagerModal({
       </div>
       <ColorPicker />
       <div className="flex items-center gap-3">
-        <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wider flex-shrink-0">Sort Order</label>
+        <label className="text-xs font-medium text-slate-500 uppercase tracking-wider flex-shrink-0">Sort Order</label>
         <input
           type="number"
           value={form.display_order}
@@ -1812,7 +1812,7 @@ function CategoryManagerModal({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-slate-700">{cat.name}</span>
-                      <span className="text-[10px] text-slate-400 font-mono">{cat.id}</span>
+                      <span className="text-xs text-slate-400 font-mono">{cat.id}</span>
                     </div>
                     {cat.description && (
                       <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{cat.description}</p>
@@ -2165,7 +2165,7 @@ function DatabaseTab({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wider">
+                    <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
                       <th className="pb-2 pr-4">Column</th>
                       <th className="pb-2 pr-4">Type</th>
                       <th className="pb-2 pr-4">Nullable</th>
@@ -2357,7 +2357,7 @@ function PlatformTab({ page }: { page: PageEntry }) {
       <Section title="Feature Matrix">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-[11px] text-slate-400 uppercase tracking-wider">
+            <tr className="text-left text-xs text-slate-400 uppercase tracking-wider">
               <th className="pb-2 pr-4">Feature</th>
               <th className="pb-2 pr-4">Web</th>
               <th className="pb-2">iOS</th>
@@ -2414,12 +2414,12 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
                     <code className="text-sm font-mono font-semibold text-slate-700">{table}</code>
                     <div className="flex gap-1">
                       {isRead && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-medium">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-medium">
                           READ
                         </span>
                       )}
                       {isWrite && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
                           WRITE
                         </span>
                       )}
@@ -2427,7 +2427,7 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
                   </div>
                   {dependents.length > 0 ? (
                     <div>
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                         Also used by ({dependents.length})
                       </span>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -2540,7 +2540,7 @@ function LayoutWrapperCollapse({ wrappers, color }: { wrappers: string[]; color?
     <div className="mt-2">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
+        className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors"
       >
         <ChevronRight className={`w-3 h-3 transition-transform ${open ? 'rotate-90' : ''}`} />
         Layout Wrappers ({wrappers.length})
@@ -2555,7 +2555,7 @@ function LayoutWrapperCollapse({ wrappers, color }: { wrappers: string[]; color?
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1.5">{children}</div>
+  return <div className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5">{children}</div>
 }
 
 function TagList({ items, color }: { items: string[]; color: string }) {
@@ -2573,7 +2573,7 @@ function TagList({ items, color }: { items: string[]; color: string }) {
 
 function MiniTag({ children, color }: { children: React.ReactNode; color: string }) {
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider border ${TAG_COLORS[color] || TAG_COLORS.slate}`}>
+    <span className={`text-xs px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider border ${TAG_COLORS[color] || TAG_COLORS.slate}`}>
       {children}
     </span>
   )
@@ -2982,7 +2982,7 @@ function HealthPanel({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 mb-1">
             <Icon d={icons.health} className="w-6 h-6 text-rose-500" />
-            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Registry Health</h2>
+            <h2 className="text-xl font-semibold text-slate-800 tracking-tight">Registry Health</h2>
           </div>
           <button
             onClick={onRescanAll}
@@ -3021,7 +3021,7 @@ function HealthPanel({
               {score}
             </span>
           </div>
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Score</span>
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Score</span>
         </div>
 
         {/* Severity cards */}
@@ -3031,7 +3031,7 @@ function HealthPanel({
             ${filterSeverity === 'critical' ? 'border-red-300 bg-red-50 ring-2 ring-red-200' : 'border-slate-200 bg-white hover:border-red-200'}`}
         >
           <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
-          <div className="text-[11px] font-medium text-red-600 uppercase tracking-wider">Critical</div>
+          <div className="text-xs font-medium text-red-600 uppercase tracking-wider">Critical</div>
         </button>
 
         <button
@@ -3040,7 +3040,7 @@ function HealthPanel({
             ${filterSeverity === 'warning' ? 'border-amber-300 bg-amber-50 ring-2 ring-amber-200' : 'border-slate-200 bg-white hover:border-amber-200'}`}
         >
           <div className="text-2xl font-bold text-amber-700">{warningCount}</div>
-          <div className="text-[11px] font-medium text-amber-500 uppercase tracking-wider">Warnings</div>
+          <div className="text-xs font-medium text-amber-500 uppercase tracking-wider">Warnings</div>
         </button>
 
         <button
@@ -3049,12 +3049,12 @@ function HealthPanel({
             ${filterSeverity === 'info' ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 bg-white hover:border-blue-200'}`}
         >
           <div className="text-2xl font-bold text-blue-600">{infoCount}</div>
-          <div className="text-[11px] font-medium text-blue-600 uppercase tracking-wider">Info</div>
+          <div className="text-xs font-medium text-blue-600 uppercase tracking-wider">Info</div>
         </button>
 
         <div className="p-4 rounded-xl border border-slate-200 bg-white">
           <div className="text-2xl font-bold text-slate-700">{totalAffected}</div>
-          <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Affected</div>
+          <div className="text-xs font-medium text-slate-400 uppercase tracking-wider">Affected</div>
         </div>
       </div>
 
@@ -3100,7 +3100,7 @@ function HealthPanel({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={`text-sm font-semibold ${style.text}`}>{issue.title}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${style.bg} ${style.text} ${style.border}`}>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium border ${style.bg} ${style.text} ${style.border}`}>
                             {issue.entries.length}
                           </span>
                         </div>
@@ -3122,7 +3122,7 @@ function HealthPanel({
                             onClick={() => onNavigate(entry.id)}
                             className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50 transition-colors group"
                           >
-                            <span className="w-5 text-[10px] text-slate-300 font-mono text-right flex-shrink-0">
+                            <span className="w-5 text-xs text-slate-300 font-mono text-right flex-shrink-0">
                               {idx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
@@ -3151,7 +3151,7 @@ function HealthPanel({
       {/* Footer meta */}
       {issues.length > 0 && (
         <div className="mt-8 pt-4 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-400">
+          <p className="text-xs text-slate-400">
             {issues.length} checks · {totalAffected} affected entries · Analysis based on registry data only
           </p>
         </div>

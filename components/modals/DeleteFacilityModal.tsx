@@ -88,7 +88,7 @@ export default function DeleteFacilityModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+      <div className="relative bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
         {/* Header with warning icon */}
         <div className="bg-red-50 px-6 py-4 border-b border-red-100">
           <div className="flex items-start gap-4">

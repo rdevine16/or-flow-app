@@ -18,7 +18,7 @@ export default function TeamMember({ name, role, roleName, onRemove }: TeamMembe
     <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-slate-50 group">
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-sm font-medium text-slate-800 truncate">{name}</span>
-        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${colors.bg} ${colors.text}`}>
+        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${colors.bg} ${colors.text}`}>
           {role}
         </span>
       </div>

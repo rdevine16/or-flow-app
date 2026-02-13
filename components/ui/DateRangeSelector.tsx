@@ -260,7 +260,7 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
             <div className="p-3 space-y-3 max-h-[400px] overflow-y-auto">
               {presetGroups.map(group => (
                 <div key={group.label}>
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-2 mb-1.5">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2 mb-1.5">
                     {group.label}
                   </p>
                   <div className="grid grid-cols-2 gap-1">

@@ -149,7 +149,7 @@ export function Modal({
           aria-modal="true"
           aria-labelledby="modal-title"
           className={`
-            bg-white rounded-2xl shadow-xl w-full ${sizeClasses[size]}
+            bg-white rounded-xl shadow-xl w-full ${sizeClasses[size]}
             animate-in zoom-in-95 duration-200
             ${scrollable ? 'max-h-[85vh] overflow-hidden flex flex-col' : ''}
           `}

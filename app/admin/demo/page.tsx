@@ -492,7 +492,7 @@ export default function DemoDataWizard() {
                                           : 'border-slate-200 text-slate-500 hover:border-slate-300'
                                       }`}>
                                       <span className="font-medium block">{sp.label}</span>
-                                      <span className="text-[10px] opacity-70 block mt-0.5">{sp.desc}</span>
+                                      <span className="text-xs opacity-70 block mt-0.5">{sp.desc}</span>
                                     </button>
                                   ))}
                                 </div>
@@ -559,7 +559,7 @@ export default function DemoDataWizard() {
                                 {p.usesFlipRooms ? (
                                   <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                      <label className="text-[11px] text-slate-400 font-medium mb-1 block">Room A</label>
+                                      <label className="text-xs text-slate-400 font-medium mb-1 block">Room A</label>
                                       <select value={p.primaryRoomId || ''} onChange={e => updateProfile(surgeon.id, { primaryRoomId: e.target.value })}
                                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                                         <option value="">Select…</option>
@@ -567,7 +567,7 @@ export default function DemoDataWizard() {
                                       </select>
                                     </div>
                                     <div>
-                                      <label className="text-[11px] text-slate-400 font-medium mb-1 block">Room B</label>
+                                      <label className="text-xs text-slate-400 font-medium mb-1 block">Room B</label>
                                       <select value={p.flipRoomId || ''} onChange={e => updateProfile(surgeon.id, { flipRoomId: e.target.value })}
                                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                                         <option value="">Select…</option>
@@ -594,7 +594,7 @@ export default function DemoDataWizard() {
                                         <input type="checkbox" checked={sel} onChange={() => toggleProc(surgeon.id, proc.id)}
                                           className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                                         <span className={`text-sm ${sel ? 'text-blue-800 font-medium' : 'text-slate-600'}`}>{proc.name}</span>
-                                        {rec && !sel && <span className="text-[10px] text-slate-400 ml-auto">recommended</span>}
+                                        {rec && !sel && <span className="text-xs text-slate-400 ml-auto">recommended</span>}
                                       </label>
                                     )
                                   })}
@@ -912,7 +912,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
           <CalendarDays className="w-4 h-4 text-slate-400" />
           <h3 className="text-sm font-semibold text-slate-700">Weekly OR Schedule</h3>
         </div>
-        <p className="text-[11px] text-slate-400">Updates live as you configure surgeons below</p>
+        <p className="text-xs text-slate-400">Updates live as you configure surgeons below</p>
       </div>
 
       <div className="overflow-x-auto">
@@ -943,7 +943,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
                           const color = SURGEON_COLORS[colorMap[sId]]
                           const isFlip = p?.usesFlipRooms && p.flipRoomId === room.id
                           return (
-                            <div key={sId} className={`px-2 py-1 rounded-md border text-[11px] font-medium leading-tight ${color.bg} ${color.text} ${color.border}`}>
+                            <div key={sId} className={`px-2 py-1 rounded-md border text-xs font-medium leading-tight ${color.bg} ${color.text} ${color.border}`}>
                               <span>{surgeon.last_name}</span>
                               {isFlip && <span className="opacity-60 ml-1">↔</span>}
                             </div>
@@ -957,7 +957,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
             ))}
             {unassignedRooms.length > 0 && activeRooms.length > 0 && (
               <tr className="border-t border-slate-100">
-                <td colSpan={6} className="px-3 py-2 text-[11px] text-slate-400 italic">
+                <td colSpan={6} className="px-3 py-2 text-xs text-slate-400 italic">
                   {unassignedRooms.length} room{unassignedRooms.length > 1 ? 's' : ''} unassigned: {unassignedRooms.map(r => r.name).join(', ')}
                 </td>
               </tr>
@@ -982,7 +982,7 @@ function ScheduleGrid({ rooms, surgeons, profiles }: {
             return (
               <div key={s.id} className="flex items-center gap-1.5">
                 <div className={`w-3 h-3 rounded-sm ${color.bg} ${color.border} border`} />
-                <span className="text-[11px] text-slate-500">
+                <span className="text-xs text-slate-500">
                   {s.last_name}
                   {p?.usesFlipRooms && <span className="text-slate-400"> (flip)</span>}
                 </span>

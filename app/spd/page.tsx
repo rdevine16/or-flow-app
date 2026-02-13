@@ -629,7 +629,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+          <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mb-4">
             <Building2 className="w-8 h-8 text-slate-400" />
           </div>
           <h2 className="text-xl font-semibold text-slate-800 mb-2">No Facility Selected</h2>
@@ -655,7 +655,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">SPD Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">SPD Dashboard</h1>
           <p className="text-slate-500 mt-1">Track instrument tray status for upcoming cases</p>
         </div>
         
@@ -730,7 +730,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {/* Table Header */}
         <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-200">
           <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</div>

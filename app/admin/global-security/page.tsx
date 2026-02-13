@@ -193,7 +193,7 @@ export default function GlobalSecurityDashboard() {
       {/* Page Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Global Security Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Global Security Dashboard</h1>
           <p className="text-slate-500 mt-1">
             Monitor security, errors, and activity across all facilities
           </p>

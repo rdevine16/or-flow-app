@@ -395,7 +395,7 @@ export default function AnalyticsSettingsPage() {
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-slate-900">ORbit Score</h3>
-                  <span className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                  <span className="text-xs font-bold tracking-wide px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
                     v2
                   </span>
                 </div>
@@ -408,7 +408,7 @@ export default function AnalyticsSettingsPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-2 h-2 rounded-full bg-pink-500" />
                     <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Schedule Adherence</h4>
-                    <span className="text-[10px] text-slate-400 font-mono">25% weight</span>
+                    <span className="text-xs text-slate-400 font-mono">25% weight</span>
                   </div>
                   <p className="text-xs text-slate-500 mb-4">
                     Measures whether cases start at or before their scheduled time. All cases (first and subsequent) are scored identically using graduated decay.
@@ -501,7 +501,7 @@ export default function AnalyticsSettingsPage() {
 
                   {/* Visual preview */}
                   <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                    <p className="text-xs text-slate-500 leading-relaxed">
                       <span className="font-semibold text-slate-600">Example:</span>{' '}
                       Case scheduled 7:00 AM → within {form.start_time_grace_minutes} min grace = score 1.0.{' '}
                       At {parseInt(form.start_time_grace_minutes || '3') + Math.round((parseInt(form.start_time_floor_minutes || '20')) / 2)} min late = score 0.50.{' '}
@@ -517,7 +517,7 @@ export default function AnalyticsSettingsPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-2 h-2 rounded-full bg-violet-500" />
                     <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Surgeon Availability</h4>
-                    <span className="text-[10px] text-slate-400 font-mono">20% weight</span>
+                    <span className="text-xs text-slate-400 font-mono">20% weight</span>
                   </div>
                   <p className="text-xs text-slate-500 mb-4">
                     Measures time between prep/drape complete and incision. Steeper decay because a full surgical team is standing idle.
@@ -565,7 +565,7 @@ export default function AnalyticsSettingsPage() {
 
                   {/* Visual preview */}
                   <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                    <p className="text-xs text-slate-500 leading-relaxed">
                       <span className="font-semibold text-slate-600">Example:</span>{' '}
                       Prep/drape done → within {form.waiting_on_surgeon_minutes} min = score 1.0.{' '}
                       At {parseInt(form.waiting_on_surgeon_minutes || '3') + Math.round((parseInt(form.waiting_on_surgeon_floor_minutes || '10')) / 2)} min gap = score 0.50.{' '}

@@ -862,7 +862,7 @@ export default function FacilityDetailPage() {
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-slate-900">{facility.name}</h1>
+              <h1 className="text-2xl font-semibold text-slate-900">{facility.name}</h1>
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${statusConfig.bg}`}>
                 <span className={`w-2 h-2 rounded-full ${statusConfig.dot}`} />
                 <span className={`text-sm font-medium ${statusConfig.text}`}>

@@ -771,7 +771,7 @@ export default function FinancialsSettingsPage() {
                             <div className="col-span-3 flex items-center gap-2">
                               <p className="font-medium text-slate-900">{procedure.name}</p>
                               {!configured && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-700">
+                                <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-700">
                                   Not configured
                                 </span>
                               )}

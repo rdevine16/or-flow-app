@@ -166,8 +166,8 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
 
   if (visibleCases.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center shadow-sm">
-        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-12 text-center shadow-sm">
+        <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
           <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
@@ -213,16 +213,16 @@ export default function CaseListView({ cases, selectedDate, showFilters = true }
       )}
 
       {/* Case List */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200/80 overflow-hidden shadow-sm">
         {/* Table Header - UPDATED: Added Side column */}
         <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50/80 border-b border-slate-200/80">
-          <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Time</div>
-          <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Case</div>
-          <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Room</div>
-          <div className="col-span-1 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Side</div>
-          <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
-          <div className="col-span-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
-          <div className="col-span-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Status</div>
+          <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</div>
+          <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Case</div>
+          <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</div>
+          <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Side</div>
+          <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
+          <div className="col-span-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
+          <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</div>
         </div>
 
         {/* Case Rows */}

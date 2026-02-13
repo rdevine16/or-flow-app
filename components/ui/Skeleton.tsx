@@ -58,7 +58,7 @@ export function SkeletonText({ lines = 3, className = '' }: { lines?: number; cl
 
 export function SkeletonMetricCard() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-100 p-6 shadow-sm">
       <Skeleton className="h-4 w-24 mb-3" />
       <Skeleton className="h-9 w-20 mb-2" />
       <Skeleton className="h-3 w-16" />
@@ -90,7 +90,7 @@ export function SkeletonTableRow({ columns = 5 }: { columns?: number }) {
 
 export function SkeletonTable({ rows = 5, columns = 5 }: { rows?: number; columns?: number }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       {/* Header */}
       <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
         <div className="flex gap-4">
@@ -113,7 +113,7 @@ export function SkeletonTable({ rows = 5, columns = 5 }: { rows?: number; column
 
 export function SkeletonCaseCard() {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
       <div className="flex items-start justify-between mb-3">
         <div className="space-y-2">
           <Skeleton className="h-5 w-32" />
@@ -142,7 +142,7 @@ export function SkeletonCaseList({ count = 5 }: { count?: number }) {
 
 export function SkeletonChart({ height = 300 }: { height?: number }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <Skeleton className="h-6 w-40" />
         <Skeleton className="h-8 w-24 rounded-lg" />
@@ -221,7 +221,7 @@ export function ErrorState({
 }: ErrorStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4">
-      <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center mb-4 text-red-600">
+      <div className="w-16 h-16 rounded-xl bg-red-50 flex items-center justify-center mb-4 text-red-600">
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>

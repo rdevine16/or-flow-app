@@ -89,7 +89,7 @@ export default function IncompleteCaseModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="incomplete-case-title"
-          className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6"
+          className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6"
         >
           {/* Header */}
           <div className="flex items-start gap-4 mb-6">

@@ -882,11 +882,11 @@ function BlockDayTimeline({
                 weekday: 'short', month: 'short', day: 'numeric'
               })}
             </span>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-xs text-slate-400">
               {minutesToTimeStr(blockStart)} – {minutesToTimeStr(blockEnd)}
             </span>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
             <span>{day.cases.length} case{day.cases.length !== 1 ? 's' : ''}</span>
             <span className={`font-semibold ${utilizationColor(day.utilizationPct).text}`}>
               {day.utilizationPct}%
@@ -905,7 +905,7 @@ function BlockDayTimeline({
 
         {isEmpty && (
           <div className="absolute inset-0 bg-red-50 flex items-center justify-center">
-            <span className="text-[10px] font-medium text-red-400 uppercase tracking-wide">No Cases</span>
+            <span className="text-xs font-medium text-red-400 uppercase tracking-wide">No Cases</span>
           </div>
         )}
 
@@ -920,7 +920,7 @@ function BlockDayTimeline({
               title={`${c.caseNumber}: ${c.procedureName}\n${minutesToTimeStr(c.startMinute)} – ${minutesToTimeStr(c.endMinute)} (${formatDuration(c.durationMinutes)})`}
             >
               {width > 8 && (
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white truncate px-1">
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white truncate px-1">
                   {c.procedureName.length > 15 ? c.caseNumber : c.procedureName}
                 </span>
               )}
@@ -941,12 +941,12 @@ function BlockDayTimeline({
       </div>
 
       {day.remainingMinutes > 30 && (
-        <div className="mt-1 text-[11px] text-green-600 font-medium">
+        <div className="mt-1 text-xs text-green-600 font-medium">
           {formatDuration(day.remainingMinutes)} available
         </div>
       )}
       {day.overrunMinutes > 0 && (
-        <div className="mt-1 text-[11px] text-red-600 font-medium">
+        <div className="mt-1 text-xs text-red-600 font-medium">
           Ran {formatDuration(day.overrunMinutes)} past block end
         </div>
       )}
@@ -994,12 +994,12 @@ function WhatFitsPanel({
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-medium text-slate-800 truncate">{opt.procedureName}</span>
                   {opt.estimatedRevenue && (
-                    <span className="text-[12px] font-semibold text-green-600 ml-2">
+                    <span className="text-xs font-semibold text-green-600 ml-2">
                       ${opt.estimatedRevenue.toLocaleString()}
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
+                <div className="text-xs text-slate-500 mt-0.5">
                   Median {formatDuration(opt.medianCaseMinutes)} + {Math.round(opt.turnoverBuffer)}m turnover = {formatDuration(opt.totalNeeded)} needed
                   <span className="text-slate-400 ml-1">({opt.caseCount} historical cases)</span>
                 </div>
@@ -1020,12 +1020,12 @@ function WhatFitsPanel({
                   <div className="flex items-center justify-between">
                     <span className="text-[13px] font-medium text-slate-500 truncate">{opt.procedureName}</span>
                     {opt.estimatedRevenue && (
-                      <span className="text-[12px] text-slate-400 ml-2">
+                      <span className="text-xs text-slate-400 ml-2">
                         ${opt.estimatedRevenue.toLocaleString()}
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">
+                  <div className="text-xs text-slate-400 mt-0.5">
                     Needs {formatDuration(opt.totalNeeded)} — <span className="text-red-400">{formatDuration(deficit)} short</span>
                     <span className="ml-1">({opt.caseCount} historical cases)</span>
                   </div>
@@ -1074,7 +1074,7 @@ function SurgeonUtilizationRow({
       </td>
       <td className="py-3 px-4 text-right">
         <span className="text-[13px] tabular-nums text-slate-700">{formatHours(data.totalUsedMinutes)}</span>
-        <span className="text-[11px] text-slate-400 ml-1">/ {formatHours(data.totalBlockMinutes)}</span>
+        <span className="text-xs text-slate-400 ml-1">/ {formatHours(data.totalBlockMinutes)}</span>
       </td>
       <td className="py-3 px-4 text-right">
         <span className={`text-[13px] font-medium tabular-nums ${data.avgRemainingMinutes > 60 ? 'text-green-600' : 'text-slate-600'}`}>
@@ -1083,11 +1083,11 @@ function SurgeonUtilizationRow({
       </td>
       <td className="py-3 px-4 text-center">
         {data.casesOutsideBlock > 0 ? (
-          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
             {data.casesOutsideBlock}
           </span>
         ) : (
-          <span className="text-[12px] text-slate-300">—</span>
+          <span className="text-xs text-slate-300">—</span>
         )}
       </td>
     </tr>
@@ -1121,14 +1121,14 @@ function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
         </td>
         <td className="py-3 px-4 text-center">
           <span className="text-[13px] text-slate-700 tabular-nums">{data.daysActive}</span>
-          <span className="text-[11px] text-slate-400 ml-0.5">/ {data.days.length}</span>
+          <span className="text-xs text-slate-400 ml-0.5">/ {data.days.length}</span>
         </td>
         <td className="py-3 px-4 text-center">
           <span className="text-[13px] text-slate-700 tabular-nums">{data.totalCases}</span>
         </td>
         <td className="py-3 px-4 text-right">
           <span className="text-[13px] tabular-nums text-slate-700">{formatHours(data.totalUsedMinutes)}</span>
-          <span className="text-[11px] text-slate-400 ml-1">/ {formatHours(data.totalAvailableMinutes)}</span>
+          <span className="text-xs text-slate-400 ml-1">/ {formatHours(data.totalAvailableMinutes)}</span>
         </td>
         <td className="py-3 px-4 text-right">
           <span className={`text-[13px] font-medium tabular-nums ${data.totalIdleMinutes / 60 > 10 ? 'text-green-600' : 'text-slate-600'}`}>
@@ -1140,7 +1140,7 @@ function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
             <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${Math.min(data.blockAllocationPct, 100)}%` }} />
             </div>
-            <span className="text-[11px] text-slate-500 tabular-nums">{data.blockAllocationPct}%</span>
+            <span className="text-xs text-slate-500 tabular-nums">{data.blockAllocationPct}%</span>
           </div>
         </td>
       </tr>
@@ -1167,7 +1167,7 @@ function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
                       title={`${dateLabel}: ${day.caseCount} cases, ${day.utilizationPct}% util, ${formatDuration(day.usedMinutes)} used of ${formatDuration(day.availableMinutes)}`}
                     >
                       <div className="text-[9px] text-slate-400 font-medium">{dayLabel}</div>
-                      <div className={`text-[11px] font-bold ${day.caseCount === 0 ? 'text-slate-300' : c.text}`}>
+                      <div className={`text-xs font-bold ${day.caseCount === 0 ? 'text-slate-300' : c.text}`}>
                         {day.utilizationPct}%
                       </div>
                       <div className="text-[9px] text-slate-400">{day.caseCount}c</div>
@@ -1176,7 +1176,7 @@ function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
                 })}
               </div>
               {data.days.length > 28 && (
-                <p className="text-[10px] text-slate-400 text-center mt-2">Showing last 28 of {data.days.length} open days</p>
+                <p className="text-xs text-slate-400 text-center mt-2">Showing last 28 of {data.days.length} open days</p>
               )}
             </div>
           </td>
@@ -1247,7 +1247,7 @@ function CapacityInsightBanner({
           <Zap className="w-5 h-5 text-blue-600" />
         </div>
         <div>
-          <h3 className="text-[14px] font-semibold text-blue-900 mb-1">Capacity Opportunity</h3>
+          <h3 className="text-sm font-semibold text-blue-900 mb-1">Capacity Opportunity</h3>
           <p className="text-[13px] text-blue-800 leading-relaxed">
             {insights.join(' ')}
           </p>
@@ -1692,7 +1692,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                   {selectedUtil && (
                     <button
                       onClick={() => setSelectedSurgeonId('all')}
-                      className="text-[12px] text-blue-600 hover:text-blue-800 font-medium"
+                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                     >
                       ← All Surgeons
                     </button>
@@ -1817,14 +1817,14 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                           <table className="w-full">
                             <thead>
                               <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Surgeon</th>
-                                <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-56">Utilization</th>
-                                <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Block Days</th>
-                                <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
-                                <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Avg/Day</th>
-                                <th className="text-right py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Used / Alloc</th>
-                                <th className="text-right py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Avg Remaining</th>
-                                <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Outside</th>
+                                <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</th>
+                                <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-56">Utilization</th>
+                                <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Block Days</th>
+                                <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
+                                <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg/Day</th>
+                                <th className="text-right py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Used / Alloc</th>
+                                <th className="text-right py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Remaining</th>
+                                <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Outside</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -1874,7 +1874,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                             .map(day => <BlockDayTimeline key={day.date} day={day} />)
                           }
                           {selectedUtil.blockDays.length > 20 && (
-                            <p className="text-[12px] text-slate-400 text-center pt-2">
+                            <p className="text-xs text-slate-400 text-center pt-2">
                               Showing most recent 20 of {selectedUtil.blockDays.length} block days
                             </p>
                           )}
@@ -1898,13 +1898,13 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                           <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                             <div className="flex flex-wrap gap-2">
                               {selectedUtil.outsideBlockDates.sort().map(d => (
-                                <span key={d} className="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
+                                <span key={d} className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">
                                   <Calendar className="w-3 h-3" />
                                   {new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
                                 </span>
                               ))}
                             </div>
-                            <p className="text-[12px] text-slate-500 mt-3">
+                            <p className="text-xs text-slate-500 mt-3">
                               {selectedUtil.casesOutsideBlock} total case{selectedUtil.casesOutsideBlock > 1 ? 's' : ''} on{' '}
                               {selectedUtil.outsideBlockDates.length} non-block day{selectedUtil.outsideBlockDates.length > 1 ? 's' : ''}.
                               This may indicate demand for additional block time.
@@ -2036,13 +2036,13 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
                         <table className="w-full">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                              <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Room</th>
-                              <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider w-56">Utilization</th>
-                              <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Active Days</th>
-                              <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
-                              <th className="text-right py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Used / Available</th>
-                              <th className="text-right py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Idle Hours</th>
-                              <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Block Alloc</th>
+                              <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</th>
+                              <th className="text-left py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider w-56">Utilization</th>
+                              <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Days</th>
+                              <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Cases</th>
+                              <th className="text-right py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Used / Available</th>
+                              <th className="text-right py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Idle Hours</th>
+                              <th className="text-center py-2.5 px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Block Alloc</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">

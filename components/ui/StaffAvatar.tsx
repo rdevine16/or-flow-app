@@ -287,12 +287,12 @@ export function GroupedStaffTooltip({
                   {fullName}
                 </span>
                 {staff.roleName && (
-                  <span className="text-slate-400 text-[10px]">
+                  <span className="text-slate-400 text-xs">
                     {staff.roleName}
                   </span>
                 )}
                 {staff.isFaded && (
-                  <span className="text-amber-400 text-[10px]">removed</span>
+                  <span className="text-amber-400 text-xs">removed</span>
                 )}
               </div>
             )

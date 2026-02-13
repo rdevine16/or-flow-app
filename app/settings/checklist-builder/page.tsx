@@ -82,12 +82,12 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
           <div className="flex items-center gap-2">
             <span className="font-medium text-slate-900">{field.display_label}</span>
             {field.is_required && (
-              <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-red-100 text-red-600 rounded">
+              <span className="px-1.5 py-0.5 text-xs font-semibold uppercase bg-red-100 text-red-600 rounded">
                 Required
               </span>
             )}
             {field.show_on_escort_page && (
-              <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-blue-100 text-blue-600 rounded">
+              <span className="px-1.5 py-0.5 text-xs font-semibold uppercase bg-blue-100 text-blue-600 rounded">
                 Escort
               </span>
             )}
@@ -549,7 +549,7 @@ export default function ChecklistBuilderPage() {
           </div>
         ) : (fields || []).length === 0 ? (
           <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="w-16 h-16 bg-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
               <ClipboardCheck className="w-8 h-8 text-slate-400" />
             </div>
             <h3 className="text-lg font-medium text-slate-900 mb-1">No checklist fields</h3>

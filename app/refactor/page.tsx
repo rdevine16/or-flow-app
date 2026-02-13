@@ -153,7 +153,7 @@ try {
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            <h1 className="text-3xl font-semibold text-slate-900 mb-2">
               Refactoring Assistant
             </h1>
             <p className="text-slate-600">

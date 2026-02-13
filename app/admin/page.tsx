@@ -183,7 +183,7 @@ const { showToast } = useToast()
       {/* Page Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Admin Dashboard</h1>
           <p className="text-slate-500 mt-1">Monitor and manage your ORbit platform</p>
         </div>
         <Link

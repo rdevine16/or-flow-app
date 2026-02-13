@@ -147,7 +147,7 @@ export default function Header({
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-3 p-1.5 pr-3 hover:bg-slate-50 rounded-xl transition-all"
           >
-            <div className="w-9 h-9 bg-slate-700 rounded-xl flex items-center justify-center text-white text-sm font-bold">
+            <div className="w-9 h-9 bg-slate-700 rounded-xl flex items-center justify-center text-white text-sm font-semibold">
               {userInitials}
             </div>
             <div className="text-left hidden sm:block">
@@ -165,11 +165,11 @@ export default function Header({
 
           {/* Dropdown Menu */}
           {userMenuOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200/80 py-2 z-50">
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200/80 py-2 z-50">
               {/* User Info */}
               <div className="px-4 py-3 border-b border-slate-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 bg-slate-700 rounded-xl flex items-center justify-center text-white font-bold">
+                  <div className="w-11 h-11 bg-slate-700 rounded-xl flex items-center justify-center text-white font-semibold">
                     {userInitials}
                   </div>
                   <div className="flex-1 min-w-0">

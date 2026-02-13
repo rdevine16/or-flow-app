@@ -205,7 +205,7 @@ function LoadingSkeleton() {
           <div className="h-4 bg-slate-100 rounded w-32 mx-auto" />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 mb-6 animate-pulse">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6 mb-6 animate-pulse">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-slate-200 rounded-xl" />
             <div className="flex-1">
@@ -227,8 +227,8 @@ function LoadingSkeleton() {
 function ErrorState({ message }: { message: string }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-8 text-center">
-        <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg border border-slate-200 p-8 text-center">
+        <div className="w-16 h-16 bg-red-100 rounded-xl flex items-center justify-center mx-auto mb-4">
           <AlertTriangle className="w-8 h-8 text-red-600" />
         </div>
         <h2 className="text-xl font-semibold text-slate-900 mb-2">Link Unavailable</h2>
@@ -327,7 +327,7 @@ export default function EscortStatusPage() {
         </div>
 
         {/* Main Status Card */}
-        <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden mb-6">
+        <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden mb-6">
           {/* Status Header */}
           <div className={`p-6 ${statusColors.bg}`}>
             <div className="flex items-center gap-4">
@@ -335,7 +335,7 @@ export default function EscortStatusPage() {
                 {getStatusIcon(data.patient_status.icon)}
               </div>
               <div>
-                <h2 className={`text-2xl font-bold ${statusColors.text}`}>
+                <h2 className={`text-2xl font-semibold ${statusColors.text}`}>
                   {data.patient_status.display_name}
                 </h2>
                 <p className={`text-sm ${statusColors.text} opacity-80`}>
