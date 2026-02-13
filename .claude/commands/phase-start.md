@@ -1,6 +1,6 @@
 ---
 description: Execute the next pending phase from the implementation plan. One phase per session — stops after completion.
-argument-hint: (no arguments needed — auto-detects next phase from Tasks)
+argument-hint: (no arguments needed — auto-detects next phase from implementation plan)
 ---
 
 ## Step 1: Identify the Next Phase
@@ -41,14 +41,14 @@ npm run typecheck
 
 If there are uncommitted changes from an interrupted session:
 - Review what's there
-- Either commit as WIP (`git commit -m "wip: phase N partial"`) or stash (`git stash`)
+- Either commit as WIP (`git commit -m "wip: phase N partial"`) or stash (`git stash -u`)
 - Then proceed
 
 If typecheck fails on pre-existing errors, note them but don't fix unless they're blocking this phase.
 
 ## Step 4: Execute the Phase
 
-Update the Task status to "in_progress" and implement the phase as described in the plan.
+Implement the phase as described in the plan.
 
 Rules:
 - Follow all patterns in CLAUDE.md (useSupabaseQuery, facility_id filtering, structured logging, etc.)
@@ -91,7 +91,7 @@ Use the commit message specified in the implementation plan for this phase.
 
 ## Step 7: Report and STOP
 
-Mark the Task as "completed." Then report:
+Report the results:
 
 ```
 ## Phase [N] Complete

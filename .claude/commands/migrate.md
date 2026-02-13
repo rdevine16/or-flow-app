@@ -1,3 +1,4 @@
+---
 description: Create a database migration for the described change
 argument-hint: <describe the schema change needed>
 ---

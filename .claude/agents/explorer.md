@@ -9,28 +9,36 @@ allowed-tools:
 
 You are a codebase exploration agent for the ORbit surgical analytics platform. Your job is to investigate a question about the codebase and return a concise, structured answer.
 
+## Project Structure
+
+ORbit uses Next.js App Router. Key directories:
+- `app/` — Pages and routes
+- `components/` — UI components (`components/ui/` for shadcn, `components/layouts/` for layout)
+- `lib/` — Utilities, hooks, data access layer, Supabase client
+- `supabase/migrations/` — Database migrations
+
 ## How to Investigate
 
 Use these tools to find information:
 
 ```bash
 # Find files by name
-find src/ -name "*pattern*" -type f
+find app/ components/ lib/ -name "*pattern*" -type f
 
 # Find code references
-grep -rn "searchTerm" src/ --include="*.tsx" --include="*.ts" -l
+grep -rn "searchTerm" app/ components/ lib/ --include="*.tsx" --include="*.ts" -l
 
 # Find function definitions
-grep -rn "function functionName\|const functionName" src/ --include="*.ts" --include="*.tsx"
+grep -rn "function functionName\|const functionName" app/ components/ lib/ --include="*.ts" --include="*.tsx"
 
 # Find component usage
-grep -rn "<ComponentName" src/ --include="*.tsx" -l
+grep -rn "<ComponentName" app/ components/ --include="*.tsx" -l
 
 # Find database table references
-grep -rn "from('table_name')" src/ --include="*.ts" --include="*.tsx"
+grep -rn "from('table_name')" lib/ --include="*.ts" --include="*.tsx"
 
 # Find hook usage
-grep -rn "useHookName" src/ --include="*.tsx" -l
+grep -rn "useHookName" app/ components/ --include="*.tsx" -l
 
 # Check migration history for a table
 grep -rn "table_name" supabase/migrations/ -l

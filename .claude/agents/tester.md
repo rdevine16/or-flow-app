@@ -80,8 +80,8 @@ Is there at least one test that walks through the real user journey this feature
 ### Stage 3: Coverage Analysis
 
 **Changed files:**
-- `src/components/CaseForm.tsx`
-- `src/hooks/useCaseDetail.ts`
+- `components/CaseForm.tsx`
+- `lib/hooks/useCaseDetail.ts`
 
 **Unit test coverage:**
 - ✅ CaseForm.test.tsx exists (8 tests)
@@ -109,7 +109,7 @@ Is there at least one test that walks through the real user journey this feature
 - Always check what CONSUMES the changed code, not just what PRODUCES it
 - If you can't determine what downstream code uses the changed files, search for imports:
   ```bash
-  grep -rn "from.*changed-file" src/ --include="*.ts" --include="*.tsx" -l
+  grep -rn "from.*changed-file" app/ components/ lib/ --include="*.ts" --include="*.tsx" -l
   ```
 - For Stage 3, be specific about what's missing. Don't just say "needs more tests" — say exactly which downstream path is untested
 - Keep output concise. The main session needs a clear picture, not a novel.

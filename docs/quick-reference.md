@@ -47,7 +47,7 @@ Subagents run on Sonnet (focused tasks). Main session runs on Opus (reasoning + 
 | Starting the next phase | New session → `/phase-start` |
 | Context getting heavy (~60%) | `/wrap-up` → new session → `/phase-start` |
 | Terminal crashed mid-phase | `claude --continue` → say "keep going" |
-| Ended session cleanly | New session → `/phase-start` (reads Tasks automatically) |
+| Ended session cleanly | New session → `/phase-start` (reads implementation plan automatically) |
 | Want to undo a phase | `git revert HEAD` |
 | All phases done | `/wrap-up` → merge branch to main |
 

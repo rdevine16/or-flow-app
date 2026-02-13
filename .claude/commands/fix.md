@@ -1,3 +1,4 @@
+---
 description: Quick targeted fix — skip planning overhead for small changes
 argument-hint: <describe the fix needed>
 ---
@@ -11,7 +12,7 @@ Read the user's description: $ARGUMENTS
 
 Identify the file(s) that need to change. If you're unsure which file, search:
 ```bash
-grep -r "searchTerm" src/ --include="*.tsx" --include="*.ts" -l
+grep -r "searchTerm" app/ components/ lib/ --include="*.tsx" --include="*.ts" -l
 ```
 
 ## Step 2: Make the Fix

@@ -52,12 +52,7 @@ Append a session log entry to `docs/implementation-plan.md`:
 - **Next action:** Start new session, run /phase-start
 ```
 
-## Step 4: Update Task Status
-
-- If phase complete: mark Task as "completed"
-- If phase partial: keep Task as "in_progress" with a note about what's remaining
-
-## Step 5: Print Session Summary
+## Step 4: Print Session Summary
 
 ```
 ## Session Complete

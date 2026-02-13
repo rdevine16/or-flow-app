@@ -64,8 +64,6 @@ Each phase must include:
 - What the 3-stage test gate should verify
 - Estimated complexity (small / medium / large)
 
-Also create Tasks (one per phase) with proper dependencies so `/phase-start` can auto-detect the next phase.
-
 ## Step 5: Present the Plan
 
 Print the complete plan to the terminal. List every phase with a one-line summary. Then ask:
