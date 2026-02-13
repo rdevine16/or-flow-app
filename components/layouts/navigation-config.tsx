@@ -2,7 +2,7 @@
 // Centralized navigation configuration for DashboardLayout
 
 import { ReactNode } from 'react'
-import { AlertTriangle, Ban, BarChart3, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, FileText, FlaskConical, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, BookOpen, Box, Building2, Calculator, CalendarDays, ClipboardCheck, ClipboardList, Clock, FileText, FlaskConical, Home, LayoutGrid, Package, Settings, ShieldCheck, User, Wrench } from 'lucide-react'
 
 // ============================================
 // Types
@@ -44,6 +44,7 @@ export const SUBNAV_WIDTH = 256
 const iconClass = "w-5 h-5"
 
 export const navIcons = {
+  home: <Home className={iconClass} />,
   dashboard: <LayoutGrid className={iconClass} />,
   facilities: <Building2 className={iconClass} />,
   procedures: <ClipboardList className={iconClass} />,
@@ -215,6 +216,12 @@ export const facilityNavigation: NavItem[] = [
   {
     name: 'Dashboard',
     href: '/dashboard',
+    icon: navIcons.home,
+    allowedRoles: ['global_admin', 'facility_admin', 'user'],
+  },
+  {
+    name: 'Rooms',
+    href: '/rooms',
     icon: navIcons.dashboard,
     allowedRoles: ['global_admin', 'facility_admin', 'user'],
   },
@@ -271,7 +278,8 @@ export function getFilteredNavigation(accessLevel: string): NavItem[] {
 }
 
 export function isNavItemActive(href: string, pathname: string): boolean {
-  if (href === '/dashboard') return pathname === '/dashboard'
+  if (href === '/dashboard') return pathname === '/dashboard' || pathname.startsWith('/dashboard/')
+  if (href === '/rooms') return pathname === '/rooms'
   if (href === '/admin') return pathname === '/admin'
   return pathname.startsWith(href)
 }
