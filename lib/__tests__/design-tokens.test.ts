@@ -15,6 +15,7 @@ import {
   categoryColors,
   trayStatusColors,
   varianceColors,
+  chartHex,
   components,
   a11y,
   zIndex,
@@ -320,6 +321,33 @@ describe('getNextSurgeonColor', () => {
 
   it('returns first color for empty set', () => {
     expect(getNextSurgeonColor(new Set())).toBe('#3B82F6')
+  })
+})
+
+// ============================================
+// CHART HEX COLORS (Phase 10)
+// ============================================
+describe('chartHex', () => {
+  it('has phase colors as valid hex', () => {
+    for (const hex of Object.values(chartHex.phases)) {
+      expect(hex).toMatch(/^#[0-9A-Fa-f]{6}$/)
+    }
+  })
+
+  it('has track and trackDark as valid hex', () => {
+    expect(chartHex.track).toMatch(/^#[0-9a-f]{6}$/)
+    expect(chartHex.trackDark).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('has stroke colors for common chart palettes', () => {
+    const expectedKeys = ['blue', 'green', 'amber', 'red', 'slate', 'violet']
+    for (const key of expectedKeys) {
+      expect(chartHex.stroke[key as keyof typeof chartHex.stroke]).toMatch(/^#[0-9a-f]{6}$/)
+    }
+  })
+
+  it('neutral is valid hex', () => {
+    expect(chartHex.neutral).toMatch(/^#[0-9A-Fa-f]{6}$/)
   })
 })
 

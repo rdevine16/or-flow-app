@@ -7,6 +7,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { InfoTooltip } from '@/components/ui/Tooltip'
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Clock, Phone, X, Zap } from 'lucide-react'
+import { chartHex } from '@/lib/design-tokens'
 
 // ============================================
 // SECTION HEADER — Accented section dividers
@@ -188,14 +189,7 @@ export function RadialProgress({ value, size = 48, strokeWidth = 4, color = 'blu
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (value / 100) * circumference
 
-  const strokeColors: Record<string, string> = {
-    blue: '#2563eb',
-    green: '#10b981',
-    amber: '#f59e0b',
-    red: '#ef4444',
-    slate: '#94a3b8',
-    violet: '#8b5cf6',
-  }
+  const strokeColors: Record<string, string> = chartHex.stroke
 
   return (
     <svg width={size} height={size} className="flex-shrink-0 -rotate-90">
@@ -204,7 +198,7 @@ export function RadialProgress({ value, size = 48, strokeWidth = 4, color = 'blu
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#f1f5f9"
+        stroke={chartHex.track}
         strokeWidth={strokeWidth}
       />
       <circle
@@ -536,7 +530,7 @@ export function DelayDonut({ delays, totalDelays, totalMinutes }: DelayDonutProp
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="#f1f5f9"
+            stroke={chartHex.track}
             strokeWidth={strokeWidth}
           />
           {delays.map((delay, idx) => {

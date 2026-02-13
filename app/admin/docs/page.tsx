@@ -40,6 +40,7 @@ import {
   getTablesMetadata,
   type TableMetadata,
 } from '@/lib/supabaseIntrospection'
+import { chartHex } from '@/lib/design-tokens'
 
 // =============================================================================
 // Icons
@@ -3008,7 +3009,7 @@ function HealthPanel({
         <div className="col-span-1 flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl">
           <div className="relative w-16 h-16 mb-1">
             <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="15.5" fill="none" stroke="#e2e8f0" strokeWidth="3" />
+              <circle cx="18" cy="18" r="15.5" fill="none" stroke={chartHex.trackDark} strokeWidth="3" />
               <circle
                 cx="18" cy="18" r="15.5" fill="none"
                 className={scoreRingColor}

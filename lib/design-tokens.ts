@@ -612,6 +612,18 @@ export const chartHex = {
   },
   /** Neutral dark text for stat numbers */
   neutral: '#0F172A',     // slate-900
+  /** SVG track / background strokes */
+  track: '#f1f5f9',       // slate-100
+  trackDark: '#e2e8f0',   // slate-200
+  /** Radial progress stroke colors (for SVG elements) */
+  stroke: {
+    blue: '#2563eb',      // blue-600
+    green: '#10b981',     // green-500
+    amber: '#f59e0b',     // amber-500
+    red: '#ef4444',       // red-500
+    slate: '#94a3b8',     // slate-400
+    violet: '#8b5cf6',    // violet-500
+  },
 } as const
 
 // ============================================
