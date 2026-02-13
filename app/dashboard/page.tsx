@@ -1,6 +1,6 @@
 // app/dashboard/page.tsx
 // Facility admin dashboard — home base for operational overview
-// Phase 2: KPI cards with time context toggle and real data.
+// Phase 3: Added Needs Attention list + two-column layout.
 
 'use client'
 
@@ -8,7 +8,9 @@ import { useState } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { MetricCard } from '@/components/ui/MetricCard'
 import { FacilityScoreCard } from '@/components/dashboard/FacilityScoreCard'
+import { NeedsAttention } from '@/components/dashboard/NeedsAttention'
 import { useDashboardKPIs, type TimeRange } from '@/lib/hooks/useDashboardKPIs'
+import { useDashboardAlerts } from '@/lib/hooks/useDashboardAlerts'
 
 const TIME_RANGE_OPTIONS: { label: string; value: TimeRange }[] = [
   { label: 'Today', value: 'today' },
@@ -27,6 +29,7 @@ function getTrendLabel(timeRange: TimeRange): string {
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('today')
   const { data: kpis, loading, error } = useDashboardKPIs(timeRange)
+  const { data: alerts, loading: alertsLoading } = useDashboardAlerts()
 
   const trendLabel = getTrendLabel(timeRange)
 
@@ -112,10 +115,13 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Placeholder for upcoming phases */}
+        {/* Two-column layout: Needs Attention (left) + Room Status placeholder (right) */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-6 flex items-center justify-center min-h-[200px]">
-            <p className="text-sm text-slate-400">Needs Attention list coming in Phase 3</p>
+          <div className="lg:col-span-3">
+            <NeedsAttention
+              alerts={alerts ?? []}
+              loading={alertsLoading}
+            />
           </div>
           <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 flex items-center justify-center min-h-[200px]">
             <p className="text-sm text-slate-400">Room Status coming in Phase 4</p>
