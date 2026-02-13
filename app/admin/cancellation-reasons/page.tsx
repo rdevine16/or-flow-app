@@ -323,7 +323,7 @@ export default function AdminCancellationReasonsPage() {
           {/* Content */}
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+              <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
             </div>
           ) : (reasons || []).length === 0 ? (
             <div className="px-6 py-12 text-center">

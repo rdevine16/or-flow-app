@@ -321,8 +321,8 @@ export default function CancelCasePage() {
     return (
       <DashboardLayout>
         <Container className="py-8">
-          <div className="flex justify-center py-20">
-            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+          <div className="flex justify-center py-16">
+            <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
           </div>
         </Container>
       </DashboardLayout>

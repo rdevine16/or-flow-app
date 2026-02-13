@@ -420,7 +420,7 @@ showToast({
                     <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                       <Tag className="w-5 h-5 text-purple-600" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Cost Categories</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.costCategories.total}</p>
@@ -438,7 +438,7 @@ showToast({
                     <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                       <Building2 className="w-5 h-5 text-green-600" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Payers</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.payers}</p>
@@ -454,7 +454,7 @@ showToast({
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                       <Calculator className="w-5 h-5 text-blue-600" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Procedure Pricing</h3>
                   <p className="text-2xl font-bold text-slate-900">
@@ -473,7 +473,7 @@ showToast({
                     <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
                       <User className="w-5 h-5 text-orange-600" />
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
                   </div>
                   <h3 className="font-semibold text-slate-900 mb-1">Surgeon Variance</h3>
                   <p className="text-2xl font-bold text-slate-900">{stats.surgeonVariances}</p>
@@ -536,7 +536,7 @@ showToast({
                             <p className="text-xs text-slate-400 mt-1">{step.count} defined</p>
                           ) : null}
                         </div>
-                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors flex-shrink-0" />
+                        <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors flex-shrink-0" />
                       </Link>
                     ))}
                   </div>

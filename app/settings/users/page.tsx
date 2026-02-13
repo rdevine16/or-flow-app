@@ -713,7 +713,7 @@ export default function UsersSettingsPage() {
                                     <button
                                       onClick={() => handleSendInvite(user)}
                                       disabled={sendingInvite === user.id}
-                                      className="p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                                      className="p-2 text-blue-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
                                       title="Send invite"
                                     >
                                       {sendingInvite === user.id ? (

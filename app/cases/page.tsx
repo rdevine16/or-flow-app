@@ -425,7 +425,7 @@ function CasesPageContent() {
             icon={EmptyStateIcons.Clipboard}
             title="No cases found"
             description="Try adjusting your filters or create a new case"
-            className="py-20"
+            className="py-16"
           />
         ) : (
           <>

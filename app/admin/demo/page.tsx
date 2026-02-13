@@ -382,14 +382,14 @@ export default function DemoDataWizard() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-11 h-11 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-200 transition-colors">
-                          <Building2 className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                          <Building2 className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-slate-900">{f.name}</h3>
                           <p className="text-xs text-slate-400 mt-0.5">{f.timezone} · {f.id.slice(0, 8)}…</p>
                         </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                      <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-600 transition-colors" />
                     </div>
                   </button>
                 ))}

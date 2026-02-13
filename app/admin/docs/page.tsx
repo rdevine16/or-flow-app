@@ -2065,7 +2065,7 @@ function OverviewTab({ page }: { page: PageEntry }) {
             )}
             {page.timezone_aware && (
               <div className="text-sm text-slate-500 flex items-center gap-2">
-                <span className="text-blue-500">&#128336;</span>
+                <span className="text-blue-600">&#128336;</span>
                 Handles facility-specific timezone logic
               </div>
             )}

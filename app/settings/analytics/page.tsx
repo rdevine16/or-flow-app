@@ -175,7 +175,7 @@ export default function AnalyticsSettingsPage() {
       <DashboardLayout>
         <Container>
           <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
           </SettingsLayout>
@@ -189,7 +189,7 @@ export default function AnalyticsSettingsPage() {
       <DashboardLayout>
         <Container>
           <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
-            <div className="text-center py-20 text-slate-500">
+            <div className="text-center py-16 text-slate-500">
               <p>No facility selected. Please select a facility to configure analytics settings.</p>
             </div>
           </SettingsLayout>

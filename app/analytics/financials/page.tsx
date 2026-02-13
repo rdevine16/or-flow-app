@@ -251,7 +251,7 @@ if (facilityStatsRes.error) {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-                <DollarSign className="w-8 h-8 text-blue-500" />
+                <DollarSign className="w-8 h-8 text-blue-600" />
               </div>
               <h3 className="text-lg font-semibold text-slate-900 mb-2">No Facility Selected</h3>
               <p className="text-slate-500 mb-6 max-w-sm mx-auto">

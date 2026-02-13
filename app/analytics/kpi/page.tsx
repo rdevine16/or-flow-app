@@ -1198,7 +1198,7 @@ export default function AnalyticsOverviewPage() {
         <Container className="py-12">
           <div className="max-w-md mx-auto text-center">
             <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <BarChart3 className="w-8 h-8 text-blue-500" />
+              <BarChart3 className="w-8 h-8 text-blue-600" />
             </div>
             <h2 className="text-xl font-semibold text-slate-900 mb-2">No Facility Selected</h2>
             <p className="text-slate-500 mb-6">Select a facility to view analytics and performance metrics.</p>

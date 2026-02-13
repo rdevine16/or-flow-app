@@ -286,7 +286,7 @@ export default function GlobalSecurityDashboard() {
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-medium text-slate-600">User Actions</h3>
-                      <FileText className="w-5 h-5 text-blue-500" />
+                      <FileText className="w-5 h-5 text-blue-600" />
                     </div>
                     <div className="text-3xl font-bold text-slate-900 mb-2">{aggregateStats.totalAudits}</div>
                     <div className="flex gap-3 text-sm">

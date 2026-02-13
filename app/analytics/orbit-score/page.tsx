@@ -678,7 +678,7 @@ export default function ORbitScorePage() {
           {loading ? (
             <PageLoader message="Calculating ORbit Scores..." />
           ) : scorecards.length === 0 ? (
-            <div className="text-center py-20">
+            <div className="text-center py-16">
               <p className="text-slate-500 mb-2">
                 No surgeons met the minimum threshold of {MIN_CASE_THRESHOLD} cases.
               </p>

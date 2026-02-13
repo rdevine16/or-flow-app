@@ -313,7 +313,7 @@ export default function AuditLogPage() {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+                <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
               </div>
             ) : filteredLogs.length === 0 ? (
               <div className="p-12 text-center">

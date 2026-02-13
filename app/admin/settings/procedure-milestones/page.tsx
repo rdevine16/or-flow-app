@@ -255,7 +255,7 @@ export default function AdminProcedureMilestonesPage() {
         <Container className="py-8">
           <ErrorBanner message={error} />
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+            <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
           </div>
         </Container>
       </DashboardLayout>

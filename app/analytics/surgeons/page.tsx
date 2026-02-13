@@ -1065,7 +1065,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     <div className="grid grid-cols-4 gap-4 mt-6">
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-blue-500" />
+                          <Clock className="w-4 h-4 text-blue-600" />
                           First Case Start
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">
@@ -1085,7 +1085,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
                       <div className="bg-slate-50/80 rounded-lg p-4">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <ClipboardList className="w-4 h-4 text-blue-500" />
+                          <ClipboardList className="w-4 h-4 text-blue-600" />
                           Cases
                         </div>
                         <div className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.totalCases}</div>
@@ -1159,7 +1159,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       {/* Uptime vs Downtime */}
                       <div className="bg-slate-50/80 rounded-lg p-4 col-span-2">
                         <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <BarChart3 className="w-4 h-4 text-blue-500" />
+                          <BarChart3 className="w-4 h-4 text-blue-600" />
                           Uptime vs Downtime
                         </div>
                         
