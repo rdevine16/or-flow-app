@@ -39,7 +39,7 @@
 import { ReactNode, useEffect, useCallback } from 'react'
 import { X } from 'lucide-react'
 import { Spinner } from '@/components/ui/Loading'
-import { tokens } from '@/lib/design-tokens'
+import { tokens, buttonVariants } from '@/lib/design-tokens'
 
 // ============================================
 // TYPES
@@ -259,19 +259,18 @@ function ModalAction({
   variant = 'primary',
   children,
 }: ModalActionProps) {
-  const colorClasses =
-    variant === 'danger'
-      ? 'bg-red-600 hover:bg-red-700'
-      : variant === 'warning'
-      ? 'bg-amber-500 hover:bg-amber-600'
-      : 'bg-blue-600 hover:bg-blue-700'
+  const variantMap = {
+    primary: buttonVariants.primary,
+    danger: buttonVariants.danger,
+    warning: buttonVariants.warning,
+  } as const
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={loading || disabled}
-      className={`px-4 py-2 text-sm font-medium text-white ${colorClasses} rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
+      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${variantMap[variant]}`}
     >
       {loading && <Spinner size="sm" color="white" />}
       {children}

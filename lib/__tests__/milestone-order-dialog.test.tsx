@@ -18,14 +18,12 @@ vi.mock('@/components/ui/Toast/ToastProvider', () => ({
   }),
 }))
 
-vi.mock('@/lib/design-tokens', () => ({
-  tokens: {
-    zIndex: {
-      modalBackdrop: 1040,
-      modal: 1050,
-    },
-  },
-}))
+vi.mock('@/lib/design-tokens', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/design-tokens')>()
+  return {
+    ...actual,
+  }
+})
 
 // ============================================
 // TEST WRAPPER — mimics page.tsx recordMilestone + showConfirm interaction

@@ -1,16 +1,9 @@
+import { badgeVariants } from '@/lib/design-tokens'
+
 interface BadgeProps {
   children: React.ReactNode
-  variant?: 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple'
+  variant?: keyof typeof badgeVariants
   size?: 'sm' | 'md'
-}
-
-const variantClasses = {
-  default: 'bg-slate-100 text-slate-700',
-  success: 'bg-green-50 text-green-600',
-  warning: 'bg-amber-50 text-amber-700',
-  error: 'bg-red-50 text-red-600',
-  info: 'bg-blue-50 text-blue-700',
-  purple: 'bg-purple-50 text-purple-700',
 }
 
 const sizeClasses = {
@@ -21,7 +14,7 @@ const sizeClasses = {
 export default function Badge({ children, variant = 'default', size = 'md' }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center font-medium rounded ${variantClasses[variant]} ${sizeClasses[size]}`}
+      className={`inline-flex items-center font-medium rounded ${badgeVariants[variant]} ${sizeClasses[size]}`}
     >
       {children}
     </span>

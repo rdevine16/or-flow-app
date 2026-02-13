@@ -8,6 +8,8 @@
 
 'use client'
 
+import { toggleColors } from '@/lib/design-tokens'
+
 type ToggleSize = 'sm' | 'md'
 
 interface ToggleProps {
@@ -52,7 +54,7 @@ export function Toggle({
       disabled={disabled}
       className={`
         relative ${trackSizes[size]} rounded-full transition-colors
-        ${checked ? 'bg-blue-600' : 'bg-slate-300'}
+        ${checked ? toggleColors.checked : toggleColors.unchecked}
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className}
       `}

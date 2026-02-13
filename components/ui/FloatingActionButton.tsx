@@ -100,16 +100,16 @@ export default function FloatingActionButton({
                   onClick={() => handleActionClick(action)}
                   disabled={action.disabled}
                   className={`w-full px-4 py-3 flex items-center gap-3 text-left transition-all
-                    ${action.disabled 
-                      ? 'opacity-50 cursor-not-allowed bg-slate-50' 
+                    ${action.disabled
+                      ? 'opacity-50 cursor-not-allowed bg-slate-50'
                       : 'hover:bg-blue-50 active:bg-blue-100'
                     }
                     ${index !== actions.length - 1 ? 'border-b border-slate-100' : ''}
                   `}
                 >
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors
-                    ${action.disabled 
-                      ? 'bg-slate-200 text-slate-400' 
+                    ${action.disabled
+                      ? 'bg-slate-200 text-slate-400'
                       : 'bg-blue-100 text-blue-600 group-hover:bg-blue-200'
                     }`}
                   >

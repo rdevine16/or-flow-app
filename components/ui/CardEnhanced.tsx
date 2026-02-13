@@ -3,7 +3,7 @@
 // Replaces basic Card.tsx with full-featured version
 
 import React, { ReactNode, forwardRef } from 'react'
-import { tokens } from '@/lib/design-tokens'
+import { tokens, trendColors, alertColors } from '@/lib/design-tokens'
 
 /**
  * USAGE:
@@ -304,10 +304,10 @@ interface StatsCardProps {
 }
 
 export function StatsCard({ title, value, change, icon, loading }: StatsCardProps) {
-  const trendColors = {
-    up: 'text-green-600',
-    down: 'text-red-600',
-    neutral: 'text-slate-600',
+  const trendTextColors = {
+    up: trendColors.up.text,
+    down: trendColors.down.text,
+    neutral: trendColors.neutral.text,
   }
 
   const trendIcons = {
@@ -324,13 +324,13 @@ export function StatsCard({ title, value, change, icon, loading }: StatsCardProp
             <p className="text-sm font-medium text-slate-600 mb-1">{title}</p>
             <p className="text-3xl font-bold text-slate-900 mb-2">{value}</p>
             {change && (
-              <p className={`text-sm font-medium ${trendColors[change.trend]}`}>
+              <p className={`text-sm font-medium ${trendTextColors[change.trend]}`}>
                 <span>{trendIcons[change.trend]}</span> {change.value}
               </p>
             )}
           </div>
           {icon && (
-            <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+            <div className={`w-12 h-12 rounded-xl ${alertColors.info.bg} flex items-center justify-center ${alertColors.info.text}`}>
               {icon}
             </div>
           )}

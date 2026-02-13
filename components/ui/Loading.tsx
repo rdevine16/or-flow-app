@@ -2,17 +2,17 @@
 'use client'
 
 import { ReactNode } from 'react'
+import { spinnerColors } from '@/lib/design-tokens'
 
 // ============================================
 // Spinner
 // ============================================
 
 type SpinnerSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-type SpinnerColor = 'blue' | 'white' | 'slate' | 'green' | 'red'
 
 interface SpinnerProps {
   size?: SpinnerSize
-  color?: SpinnerColor
+  color?: keyof typeof spinnerColors
   className?: string
 }
 
@@ -24,20 +24,12 @@ const sizeClasses: Record<SpinnerSize, string> = {
   xl: 'w-16 h-16 border-4',
 }
 
-const colorClasses: Record<SpinnerColor, string> = {
-  blue: 'border-blue-600 border-t-transparent',
-  white: 'border-white border-t-transparent',
-  slate: 'border-slate-600 border-t-transparent',
-  green: 'border-green-600 border-t-transparent',
-  red: 'border-red-600 border-t-transparent',
-}
-
 export function Spinner({ size = 'md', color = 'blue', className = '' }: SpinnerProps) {
   return (
     <div
       className={`
         ${sizeClasses[size]}
-        ${colorClasses[color]}
+        ${spinnerColors[color]}
         rounded-full
         animate-spin
         ${className}

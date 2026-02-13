@@ -417,6 +417,133 @@ export const animationDuration = {
 } as const
 
 // ============================================
+// BUTTON VARIANT COLORS
+// Single source of truth for button styles across Button, Modal.Action, EmptyState
+// ============================================
+export const buttonVariants = {
+  primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500/20 shadow-sm',
+  secondary: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 focus:ring-slate-500/20',
+  danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/20 shadow-sm',
+  dangerGhost: 'text-red-600 hover:bg-red-50 focus:ring-red-500/20',
+  warning: 'bg-amber-500 text-white hover:bg-amber-600 focus:ring-amber-500/20 shadow-sm',
+  ghost: 'text-slate-600 hover:bg-slate-100 focus:ring-slate-500/20',
+  outline: 'border border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500/20',
+} as const
+
+export type ButtonVariant = keyof typeof buttonVariants
+
+// Spinner color per button variant (for proper contrast)
+export const buttonSpinnerColors = {
+  primary: 'white',
+  secondary: 'slate',
+  danger: 'white',
+  dangerGhost: 'red',
+  warning: 'white',
+  ghost: 'slate',
+  outline: 'blue',
+} as const satisfies Record<ButtonVariant, string>
+
+// ============================================
+// BADGE VARIANT COLORS
+// ============================================
+export const badgeVariants = {
+  default: 'bg-slate-100 text-slate-700',
+  success: 'bg-green-50 text-green-600',
+  warning: 'bg-amber-50 text-amber-700',
+  error: 'bg-red-50 text-red-600',
+  info: 'bg-blue-50 text-blue-700',
+  purple: 'bg-purple-50 text-purple-700',
+} as const
+
+// ============================================
+// METRIC / DATA VIZ COLORS
+// Used by MetricCard, MetricCardCompact, StatsCard
+// ============================================
+export const metricColors = {
+  blue: {
+    gradient: 'from-blue-500 to-blue-600',
+    light: 'text-blue-600',
+    bg: 'bg-blue-50',
+  },
+  green: {
+    gradient: 'from-green-500 to-green-600',
+    light: 'text-green-600',
+    bg: 'bg-green-50',
+  },
+  amber: {
+    gradient: 'from-amber-500 to-amber-600',
+    light: 'text-amber-600',
+    bg: 'bg-amber-50',
+  },
+  red: {
+    gradient: 'from-red-500 to-red-600',
+    light: 'text-red-600',
+    bg: 'bg-red-50',
+  },
+  slate: {
+    gradient: 'from-slate-600 to-slate-700',
+    light: 'text-slate-600',
+    bg: 'bg-slate-50',
+  },
+} as const
+
+// ============================================
+// TREND INDICATOR COLORS
+// Used by MetricCard, StatsCard for up/down/neutral trends
+// ============================================
+export const trendColors = {
+  up: { text: 'text-green-600', bg: 'bg-green-50 text-green-600' },
+  down: { text: 'text-red-600', bg: 'bg-red-50 text-red-600' },
+  neutral: { text: 'text-slate-600', bg: 'bg-slate-100 text-slate-600' },
+} as const
+
+// ============================================
+// SPINNER COLORS
+// ============================================
+export const spinnerColors = {
+  blue: 'border-blue-600 border-t-transparent',
+  white: 'border-white border-t-transparent',
+  slate: 'border-slate-600 border-t-transparent',
+  green: 'border-green-600 border-t-transparent',
+  red: 'border-red-600 border-t-transparent',
+} as const
+
+// ============================================
+// SURGICAL PHASE COLORS
+// Used by PhaseBadge for live case phase display
+// ============================================
+export const phaseColors = {
+  'Patient In': { bg: 'bg-blue-500', shadow: 'shadow-blue-500/40' },
+  'In Anesthesia': { bg: 'bg-amber-500', shadow: 'shadow-amber-500/40' },
+  'Prepping': { bg: 'bg-purple-500', shadow: 'shadow-purple-500/40' },
+  'In Surgery': { bg: 'bg-green-500', shadow: 'shadow-green-500/40' },
+  'Closing': { bg: 'bg-yellow-500', shadow: 'shadow-yellow-500/40' },
+  'Complete': { bg: 'bg-slate-500', shadow: 'shadow-slate-500/40' },
+} as const
+
+// ============================================
+// INPUT COLORS
+// ============================================
+export const inputColors = {
+  normal: {
+    border: 'border-slate-200',
+    focus: 'focus:border-blue-500 focus:ring-blue-500/20',
+  },
+  error: {
+    border: 'border-red-300',
+    focus: 'focus:border-red-500 focus:ring-red-500/20',
+  },
+} as const
+
+// ============================================
+// TOGGLE COLORS
+// ============================================
+export const toggleColors = {
+  checked: 'bg-blue-600',
+  unchecked: 'bg-slate-300',
+} as const
+
+// ============================================
 // COMBINED EXPORT
 // ============================================
 export const tokens = {

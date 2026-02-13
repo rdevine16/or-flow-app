@@ -7,6 +7,7 @@
 //   <Textarea rows={4} />
 
 import { InputHTMLAttributes, TextareaHTMLAttributes, forwardRef } from 'react'
+import { inputColors } from '@/lib/design-tokens'
 
 // ============================================
 // Input
@@ -28,9 +29,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           transition-colors duration-150
           focus:outline-none focus:ring-2 focus:ring-offset-0
           disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
-          ${error 
-            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' 
-            : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500/20'
+          ${error
+            ? `${inputColors.error.border} ${inputColors.error.focus}`
+            : `${inputColors.normal.border} ${inputColors.normal.focus}`
           }
           ${className}
         `}
@@ -62,9 +63,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           focus:outline-none focus:ring-2 focus:ring-offset-0
           disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
           resize-none
-          ${error 
-            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' 
-            : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500/20'
+          ${error
+            ? `${inputColors.error.border} ${inputColors.error.focus}`
+            : `${inputColors.normal.border} ${inputColors.normal.focus}`
           }
           ${className}
         `}
@@ -95,9 +96,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           transition-colors duration-150
           focus:outline-none focus:ring-2 focus:ring-offset-0
           disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed
-          ${error 
-            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' 
-            : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500/20'
+          ${error
+            ? `${inputColors.error.border} ${inputColors.error.focus}`
+            : `${inputColors.normal.border} ${inputColors.normal.focus}`
           }
           ${className}
         `}

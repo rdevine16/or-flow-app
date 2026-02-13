@@ -12,6 +12,7 @@
 //   />
 
 import { AlertCircle, X } from 'lucide-react'
+import { alertColors } from '@/lib/design-tokens'
 
 
 interface ErrorBannerProps {
@@ -38,17 +39,17 @@ export function ErrorBanner({
 
   return (
     <div
-      className={`p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 ${className}`}
+      className={`p-4 ${alertColors.error.bg} border ${alertColors.error.border} rounded-xl flex items-start gap-3 ${className}`}
       role="alert"
     >
-      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+      <AlertCircle className={`w-5 h-5 ${alertColors.error.icon} flex-shrink-0 mt-0.5`} />
 
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-red-800">{message}</p>
         {onRetry && (
           <button
             onClick={onRetry}
-            className="mt-1.5 text-sm text-red-600 underline hover:text-red-700 transition-colors"
+            className={`mt-1.5 text-sm ${alertColors.error.button} underline transition-colors`}
           >
             {retryLabel}
           </button>

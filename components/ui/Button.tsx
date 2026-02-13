@@ -11,8 +11,8 @@
 
 import { ButtonHTMLAttributes, forwardRef } from 'react'
 import { Spinner } from '@/components/ui/Loading'
+import { buttonVariants, buttonSpinnerColors, type ButtonVariant } from '@/lib/design-tokens'
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'dangerGhost' | 'warning' | 'ghost' | 'outline'
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -20,27 +20,6 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: ButtonSize
   loading?: boolean
   fullWidth?: boolean
-}
-
-const variants: Record<ButtonVariant, string> = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500/20 shadow-sm',
-  secondary: 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 focus:ring-slate-500/20',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500/20 shadow-sm',
-  dangerGhost: 'text-red-600 hover:bg-red-50 focus:ring-red-500/20',
-  warning: 'bg-amber-500 text-white hover:bg-amber-600 focus:ring-amber-500/20 shadow-sm',
-  ghost: 'text-slate-600 hover:bg-slate-100 focus:ring-slate-500/20',
-  outline: 'border border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500/20',
-}
-
-// Map variant to spinner color for proper contrast
-const spinnerColors: Record<ButtonVariant, 'white' | 'blue' | 'red' | 'slate'> = {
-  primary: 'white',
-  secondary: 'slate',
-  danger: 'white',
-  dangerGhost: 'red',
-  warning: 'white',
-  ghost: 'slate',
-  outline: 'blue',
 }
 
 const sizes: Record<ButtonSize, string> = {
@@ -75,7 +54,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           transition-colors duration-150
           focus:outline-none focus:ring-2 focus:ring-offset-2
           disabled:opacity-50 disabled:cursor-not-allowed
-          ${variants[variant]}
+          ${buttonVariants[variant]}
           ${sizes[size]}
           ${fullWidth ? 'w-full' : ''}
           ${className}
@@ -83,7 +62,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {loading && (
-          <Spinner size="sm" color={spinnerColors[variant]} />
+          <Spinner size="sm" color={buttonSpinnerColors[variant]} />
         )}
         {children}
       </button>
@@ -125,7 +104,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
           transition-colors duration-150
           focus:outline-none focus:ring-2 focus:ring-offset-2
           disabled:opacity-50 disabled:cursor-not-allowed
-          ${variants[variant]}
+          ${buttonVariants[variant]}
           ${iconSizes[size]}
           ${className}
         `}
