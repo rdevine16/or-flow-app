@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
 import CaseFlagsSection from './CaseFlagsSection'
+import { getRoleColors, alertColors, getTrayStatusColors, getVarianceColors } from '@/lib/design-tokens'
 
 // ============================================================================
 // TYPES
@@ -172,15 +173,12 @@ function minutesBetween(start: string | null, end: string | null): number | null
 // Get variance indicator color and icon
 function getVarianceIndicator(actualMinutes: number, avgMinutes: number, thresholds = { good: 5, warning: 15 }) {
   const diff = actualMinutes - avgMinutes
-  const absDiff = Math.abs(diff)
-  
-  if (absDiff <= thresholds.good) {
-    return { color: 'green', icon: '✓', label: 'On target', bgClass: 'bg-green-50', textClass: 'text-green-600', borderClass: 'border-green-200' }
-  } else if (absDiff <= thresholds.warning) {
-    return { color: 'amber', icon: '~', label: diff > 0 ? 'Slightly over' : 'Slightly under', bgClass: 'bg-amber-50', textClass: 'text-amber-700', borderClass: 'border-amber-200' }
-  } else {
-    return { color: 'red', icon: '!', label: diff > 0 ? 'Over average' : 'Under average', bgClass: 'bg-red-50', textClass: 'text-red-600', borderClass: 'border-red-200' }
-  }
+  const { color, bg, text, border } = getVarianceColors(actualMinutes, avgMinutes, thresholds)
+
+  const labels = { good: 'On target', warning: diff > 0 ? 'Slightly over' : 'Slightly under', bad: diff > 0 ? 'Over average' : 'Under average' }
+  const icons = { good: '✓', warning: '~', bad: '!' }
+
+  return { color, icon: icons[color], label: labels[color], bgClass: bg, textClass: text, borderClass: border }
 }
 
 // Get start variance (scheduled vs actual patient in)
@@ -210,60 +208,29 @@ function getStartVariance(scheduledTime: string | null, patientInTime: string | 
   }
 }
 
-// Get role badge styling
+// Get role badge styling — delegates to design-tokens.ts
 function getRoleBadgeClass(role: string): string {
-  const colors: Record<string, string> = {
-    surgeon: 'bg-blue-100 text-blue-700',
-    anesthesiologist: 'bg-amber-100 text-amber-700',
-    nurse: 'bg-green-100 text-green-600',
-    tech: 'bg-purple-100 text-purple-700',
-  }
-  return colors[role] || 'bg-slate-100 text-slate-600'
+  const colors = getRoleColors(role)
+  return `${colors.bg} ${colors.text}`
 }
 
-// Tray status configuration
+// Tray status configuration — colors from design-tokens.ts
+const TRAY_STATUS_LABELS: Record<string, { label: string; icon: string }> = {
+  pending: { label: 'Pending', icon: '⏳' },
+  consignment: { label: 'Consignment', icon: '✓' },
+  loaners_confirmed: { label: 'Loaners Confirmed', icon: '📦' },
+  delivered: { label: 'Delivered', icon: '✓' },
+}
+
 function getTrayStatusConfig(status: string) {
-  switch (status) {
-    case 'pending':
-      return {
-        label: 'Pending',
-        icon: '⏳',
-        bgColor: 'bg-amber-50',
-        textColor: 'text-amber-700',
-        borderColor: 'border-amber-200',
-      }
-    case 'consignment':
-      return {
-        label: 'Consignment',
-        icon: '✓',
-        bgColor: 'bg-green-50',
-        textColor: 'text-green-600',
-        borderColor: 'border-green-200',
-      }
-    case 'loaners_confirmed':
-      return {
-        label: 'Loaners Confirmed',
-        icon: '📦',
-        bgColor: 'bg-blue-50',
-        textColor: 'text-blue-700',
-        borderColor: 'border-blue-200',
-      }
-    case 'delivered':
-      return {
-        label: 'Delivered',
-        icon: '✓',
-        bgColor: 'bg-green-50',
-        textColor: 'text-green-600',
-        borderColor: 'border-green-200',
-      }
-    default:
-      return {
-        label: status,
-        icon: '•',
-        bgColor: 'bg-slate-50',
-        textColor: 'text-slate-700',
-        borderColor: 'border-slate-200',
-      }
+  const labels = TRAY_STATUS_LABELS[status] || { label: status, icon: '•' }
+  const colors = getTrayStatusColors(status)
+  return {
+    label: labels.label,
+    icon: labels.icon,
+    bgColor: colors.bg,
+    textColor: colors.text,
+    borderColor: colors.border,
   }
 }
 
@@ -863,31 +830,15 @@ export default function CompletedCaseView({
           ) : (
             <div className="space-y-2">
               {insights.map((insight, idx) => {
-                const bgColors = {
-                  success: 'bg-green-50 border-green-200',
-                  warning: 'bg-amber-50 border-amber-200',
-                  danger: 'bg-red-50 border-red-200',
-                  info: 'bg-slate-50 border-slate-200',
-                }
-                const textColors = {
-                  success: 'text-green-600',
-                  warning: 'text-amber-700',
-                  danger: 'text-red-600',
-                  info: 'text-slate-600',
-                }
-                const iconColors = {
-                  success: 'text-green-500',
-                  warning: 'text-amber-500',
-                  danger: 'text-red-600',
-                  info: 'text-slate-400',
-                }
+                const alertMap = { success: alertColors.success, warning: alertColors.warning, danger: alertColors.error, info: alertColors.info }
+                const alert = alertMap[insight.type]
                 return (
-                  <div 
-                    key={idx} 
-                    className={`flex items-start gap-2 px-3 py-2 rounded-lg border ${bgColors[insight.type]}`}
+                  <div
+                    key={idx}
+                    className={`flex items-start gap-2 px-3 py-2 rounded-lg border ${alert.bg} ${alert.border}`}
                   >
-                    <span className={`text-sm ${iconColors[insight.type]}`}>{insight.icon}</span>
-                    <span className={`text-xs ${textColors[insight.type]}`}>{insight.text}</span>
+                    <span className={`text-sm ${alert.icon}`}>{insight.icon}</span>
+                    <span className={`text-xs ${alert.text}`}>{insight.text}</span>
                   </div>
                 )
               })}

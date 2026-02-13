@@ -16,6 +16,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { AlertCircle, Archive, Ban, Check, Info, Pencil, Plus } from 'lucide-react'
+import { categoryColors } from '@/lib/design-tokens'
 
 // ============================================================================
 // TYPES
@@ -38,10 +39,10 @@ interface CancellationReason {
 // ============================================================================
 
 const CATEGORIES = [
-  { value: 'patient', label: 'Patient', color: 'bg-blue-100 text-blue-700 border-blue-200', desc: 'Patient-related' },
-  { value: 'scheduling', label: 'Scheduling', color: 'bg-purple-100 text-purple-700 border-purple-200', desc: 'Administrative' },
-  { value: 'clinical', label: 'Clinical', color: 'bg-amber-100 text-amber-700 border-amber-200', desc: 'Resources & staffing' },
-  { value: 'external', label: 'External', color: 'bg-slate-100 text-slate-700 border-slate-200', desc: 'External factors' },
+  { value: 'patient', label: 'Patient', color: `${categoryColors.patient.bg} ${categoryColors.patient.text} ${categoryColors.patient.border}`, desc: 'Patient-related' },
+  { value: 'scheduling', label: 'Scheduling', color: `${categoryColors.scheduling.bg} ${categoryColors.scheduling.text} ${categoryColors.scheduling.border}`, desc: 'Administrative' },
+  { value: 'clinical', label: 'Clinical', color: `${categoryColors.clinical.bg} ${categoryColors.clinical.text} ${categoryColors.clinical.border}`, desc: 'Resources & staffing' },
+  { value: 'external', label: 'External', color: `${categoryColors.external.bg} ${categoryColors.external.text} ${categoryColors.external.border}`, desc: 'External factors' },
 ]
 
 // ============================================================================

@@ -522,6 +522,83 @@ export const phaseColors = {
 } as const
 
 // ============================================
+// PACE STATUS COLORS
+// Used by PaceProgressBar for ahead/onPace/behind display
+// ============================================
+export const paceColors = {
+  ahead: {
+    bg: 'bg-green-500',
+    text: 'text-green-600',
+    border: 'border-green-200',
+    gradient: 'from-green-500 to-green-400',
+  },
+  onPace: {
+    bg: 'bg-blue-500',
+    text: 'text-blue-600',
+    border: 'border-blue-200',
+    gradient: 'from-blue-500 to-blue-400',
+  },
+  slightlyBehind: {
+    bg: 'bg-amber-500',
+    text: 'text-amber-700',
+    border: 'border-amber-200',
+    gradient: 'from-amber-500 to-amber-400',
+  },
+  behind: {
+    bg: 'bg-red-500',
+    text: 'text-red-600',
+    border: 'border-red-200',
+    gradient: 'from-red-500 to-red-400',
+  },
+} as const
+
+// ============================================
+// SEVERITY COLORS
+// Used by flag rules settings (info/warning/critical)
+// ============================================
+export const severityColors = {
+  info: { label: 'Info', color: 'text-blue-700', bg: 'bg-blue-50', ring: 'ring-blue-200' },
+  warning: { label: 'Warning', color: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
+  critical: { label: 'Critical', color: 'text-red-600', bg: 'bg-red-50', ring: 'ring-red-200' },
+} as const
+
+// ============================================
+// CATEGORY COLORS
+// Used by cancellation reasons and flag rule categories
+// ============================================
+export const categoryColors = {
+  patient: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  scheduling: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200' },
+  clinical: { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+  external: { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  timing: { bg: 'bg-blue-100', text: 'text-blue-600', border: 'border-blue-200' },
+  efficiency: { bg: 'bg-green-100', text: 'text-green-600', border: 'border-green-200' },
+  anesthesia: { bg: 'bg-violet-100', text: 'text-violet-600', border: 'border-violet-200' },
+  recovery: { bg: 'bg-orange-100', text: 'text-orange-600', border: 'border-orange-200' },
+} as const
+
+// ============================================
+// TRAY STATUS COLORS
+// Used by device rep / tray status display
+// ============================================
+export const trayStatusColors = {
+  pending: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  consignment: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
+  loaners_confirmed: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  delivered: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
+} as const
+
+// ============================================
+// VARIANCE COLORS
+// Used for actual vs expected comparisons
+// ============================================
+export const varianceColors = {
+  good: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
+  warning: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  bad: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200' },
+} as const
+
+// ============================================
 // INPUT COLORS
 // ============================================
 export const inputColors = {
@@ -621,4 +698,48 @@ export function getSurgeonColor(index: number) {
  */
 export function getNextSurgeonColor(usedColors: Set<string>): string {
   return surgeonPalette.hex.find(c => !usedColors.has(c)) || surgeonPalette.hex[0]
+}
+
+/**
+ * Get pace status color classes
+ * @example getPaceColors('ahead') => { bg: 'bg-green-500', text: 'text-green-600', ... }
+ */
+export function getPaceColors(status: keyof typeof paceColors) {
+  return paceColors[status]
+}
+
+/**
+ * Get variance indicator colors based on actual vs expected
+ * @example getVarianceColors(actualMin, avgMin) => { bg, text, border }
+ */
+export function getVarianceColors(
+  actualMinutes: number,
+  avgMinutes: number,
+  thresholds = { good: 5, warning: 15 }
+): { color: keyof typeof varianceColors; bg: string; text: string; border: string } {
+  const absDiff = Math.abs(actualMinutes - avgMinutes)
+  if (absDiff <= thresholds.good) {
+    return { color: 'good', ...varianceColors.good }
+  } else if (absDiff <= thresholds.warning) {
+    return { color: 'warning', ...varianceColors.warning }
+  }
+  return { color: 'bad', ...varianceColors.bad }
+}
+
+/**
+ * Get tray status color classes
+ * @example getTrayStatusColors('delivered') => { bg, text, border }
+ */
+export function getTrayStatusColors(status: string) {
+  const normalized = status as keyof typeof trayStatusColors
+  return trayStatusColors[normalized] || { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' }
+}
+
+/**
+ * Get category color classes
+ * @example getCategoryColors('timing') => { bg, text, border }
+ */
+export function getCategoryColors(category: string) {
+  const normalized = category as keyof typeof categoryColors
+  return categoryColors[normalized] || { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' }
 }

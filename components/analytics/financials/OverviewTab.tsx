@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import { FinancialsMetrics, ProcedureStats, SurgeonStats } from './types'
 import { formatCurrency } from './utils'
 import { ArrowDown, Banknote, BanknoteIcon, ChevronDown, ChevronUp, Clock, DollarSign, DollarSignIcon, Info, Receipt, TrendingDown } from 'lucide-react'
+import { varianceColors } from '@/lib/design-tokens'
 
 // ============================================
 // PROPS
@@ -215,10 +216,10 @@ function KPICard({
   highlight?: boolean
   status?: 'good' | 'neutral' | 'bad'
 }) {
-  const statusColors = {
-    good: 'text-green-600',
-    neutral: 'text-amber-700',
-    bad: 'text-red-600',
+  const kpiStatusColors: Record<string, string> = {
+    good: varianceColors.good.text,
+    neutral: varianceColors.warning.text,
+    bad: varianceColors.bad.text,
   }
 
   return (
@@ -237,7 +238,7 @@ function KPICard({
         )}
       </div>
       <p className={`text-2xl font-bold tabular-nums ${
-        status ? statusColors[status] :
+        status ? kpiStatusColors[status] :
         highlight ? 'text-blue-700' : 'text-slate-900'
       }`}>
         {value}

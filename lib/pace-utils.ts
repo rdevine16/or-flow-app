@@ -2,6 +2,7 @@
 // Pace calculation utilities - UPDATED for median-based statistics
 
 import { CasePaceData, PaceStatus, CasePhase } from '@/types/pace'
+import { paceColors } from '@/lib/design-tokens'
 
 // Minimum sample size required to show pace data
 export const MIN_SAMPLE_SIZE = 10
@@ -134,6 +135,7 @@ export function formatElapsedTime(seconds: number): string {
 
 /**
  * Get pace status color classes for Tailwind
+ * Delegates to design-tokens.ts paceColors for single source of truth
  */
 export function getPaceStatusColors(status: PaceStatus): {
   bg: string
@@ -141,36 +143,7 @@ export function getPaceStatusColors(status: PaceStatus): {
   border: string
   gradient: string
 } {
-  switch (status) {
-    case 'ahead':
-      return {
-        bg: 'bg-green-500',
-        text: 'text-green-600',
-        border: 'border-green-200',
-        gradient: 'from-green-500 to-green-400'
-      }
-    case 'onPace':
-      return {
-        bg: 'bg-blue-500',
-        text: 'text-blue-600',
-        border: 'border-blue-200',
-        gradient: 'from-blue-500 to-blue-400'
-      }
-    case 'slightlyBehind':
-      return {
-        bg: 'bg-amber-500',
-        text: 'text-amber-700',
-        border: 'border-amber-200',
-        gradient: 'from-amber-500 to-amber-400'
-      }
-    case 'behind':
-      return {
-        bg: 'bg-red-500',
-        text: 'text-red-600',
-        border: 'border-red-200',
-        gradient: 'from-red-500 to-red-400'
-      }
-  }
+  return paceColors[status]
 }
 
 /**

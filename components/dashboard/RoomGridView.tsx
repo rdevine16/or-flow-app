@@ -2,6 +2,7 @@
 
 import { extractName } from '@/lib/formatters'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { getStatusColors } from '@/lib/design-tokens'
 
 interface Case {
   id: string
@@ -42,34 +43,15 @@ const formatTime = (time: string | null): string => {
   return `${displayHour}:${minutes} ${ampm}`
 }
 
-const getStatusColor = (status: string | null): string => {
-  switch (status) {
-    case 'in_progress':
-      return 'bg-amber-500'
-    case 'completed':
-      return 'bg-green-500'
-    case 'delayed':
-      return 'bg-red-500'
-    case 'cancelled':
-      return 'bg-slate-400'
-    case 'scheduled':
-      return 'bg-blue-500'
-    default:
-      return 'bg-slate-300'
-  }
+const getStatusDot = (status: string | null): string => {
+  if (!status) return 'bg-slate-300'
+  return getStatusColors(status).dot
 }
 
-const getStatusBgColor = (status: string | null): string => {
-  switch (status) {
-    case 'in_progress':
-      return 'bg-amber-50 border-amber-200'
-    case 'completed':
-      return 'bg-green-50 border-green-200'
-    case 'delayed':
-      return 'bg-red-50 border-red-200'
-    default:
-      return 'bg-white border-slate-200'
-  }
+const getStatusBg = (status: string | null): string => {
+  if (!status) return 'bg-white border-slate-200'
+  const colors = getStatusColors(status)
+  return `${colors.bg} ${colors.border}`
 }
 
 export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
@@ -121,10 +103,10 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
             <div className="p-4 space-y-4">
               {/* Active Case */}
               {activeCase ? (
-                <div className={`rounded-lg border p-3 ${getStatusBgColor(extractName(activeCase.case_statuses))}`}>
+                <div className={`rounded-lg border p-3 ${getStatusBg(extractName(activeCase.case_statuses))}`}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">Active</span>
-                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(extractName(activeCase.case_statuses))}`} title="In Progress" />
+                    <div className={`w-2.5 h-2.5 rounded-full ${getStatusDot(extractName(activeCase.case_statuses))}`} title="In Progress" />
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -162,7 +144,7 @@ export default function RoomGridView({ rooms, cases }: RoomGridViewProps) {
                           key={c.id}
                           className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors group"
                         >
-                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getStatusColor(status)}`} title={status || 'Unknown'} />
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${getStatusDot(status)}`} title={status || 'Unknown'} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <a

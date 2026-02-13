@@ -18,6 +18,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { ChevronDown } from 'lucide-react'
+import { severityColors, categoryColors } from '@/lib/design-tokens'
 
 // =====================================================
 // TYPES
@@ -52,17 +53,13 @@ type ThresholdType = 'median_plus_sd' | 'absolute'
 // CONSTANTS
 // =====================================================
 
-const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; bg: string; ring: string }> = {
-  info: { label: 'Info', color: 'text-blue-700', bg: 'bg-blue-50', ring: 'ring-blue-200' },
-  warning: { label: 'Warning', color: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
-  critical: { label: 'Critical', color: 'text-red-600', bg: 'bg-red-50', ring: 'ring-red-200' },
-}
+const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; bg: string; ring: string }> = severityColors
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {
-  timing: { label: 'Timing', color: 'text-blue-600' },
-  efficiency: { label: 'Efficiency', color: 'text-green-600' },
-  anesthesia: { label: 'Anesthesia', color: 'text-violet-600' },
-  recovery: { label: 'Recovery', color: 'text-orange-600' },
+  timing: { label: 'Timing', color: categoryColors.timing.text },
+  efficiency: { label: 'Efficiency', color: categoryColors.efficiency.text },
+  anesthesia: { label: 'Anesthesia', color: categoryColors.anesthesia.text },
+  recovery: { label: 'Recovery', color: categoryColors.recovery.text },
 }
 
 const SCOPE_LABELS: Record<string, string> = {

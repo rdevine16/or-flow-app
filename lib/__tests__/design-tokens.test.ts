@@ -10,6 +10,11 @@ import {
   alertColors,
   roleColors,
   surgeonPalette,
+  paceColors,
+  severityColors,
+  categoryColors,
+  trayStatusColors,
+  varianceColors,
   components,
   a11y,
   zIndex,
@@ -23,6 +28,10 @@ import {
   getRoleColors,
   getSurgeonColor,
   getNextSurgeonColor,
+  getPaceColors,
+  getVarianceColors,
+  getTrayStatusColors,
+  getCategoryColors,
 } from '@/lib/design-tokens'
 
 // ============================================
@@ -40,6 +49,11 @@ describe('design-tokens shape', () => {
     expect(alertColors).toBeDefined()
     expect(roleColors).toBeDefined()
     expect(surgeonPalette).toBeDefined()
+    expect(paceColors).toBeDefined()
+    expect(severityColors).toBeDefined()
+    expect(categoryColors).toBeDefined()
+    expect(trayStatusColors).toBeDefined()
+    expect(varianceColors).toBeDefined()
     expect(components).toBeDefined()
     expect(a11y).toBeDefined()
     expect(zIndex).toBeDefined()
@@ -306,5 +320,151 @@ describe('getNextSurgeonColor', () => {
 
   it('returns first color for empty set', () => {
     expect(getNextSurgeonColor(new Set())).toBe('#3B82F6')
+  })
+})
+
+// ============================================
+// PACE COLORS (Phase 5)
+// ============================================
+describe('paceColors', () => {
+  const requiredStatuses = ['ahead', 'onPace', 'slightlyBehind', 'behind'] as const
+
+  it.each(requiredStatuses)('has bg, text, border, gradient for %s', (status) => {
+    const colors = paceColors[status]
+    expect(colors.bg).toBeDefined()
+    expect(colors.text).toBeDefined()
+    expect(colors.border).toBeDefined()
+    expect(colors.gradient).toBeDefined()
+  })
+
+  it('uses green for ahead', () => {
+    expect(paceColors.ahead.text).toContain('green')
+  })
+
+  it('uses blue for onPace', () => {
+    expect(paceColors.onPace.text).toContain('blue')
+  })
+
+  it('uses amber for slightlyBehind', () => {
+    expect(paceColors.slightlyBehind.text).toContain('amber')
+  })
+
+  it('uses red for behind', () => {
+    expect(paceColors.behind.text).toContain('red')
+  })
+})
+
+describe('getPaceColors', () => {
+  it('returns correct colors for each status', () => {
+    expect(getPaceColors('ahead')).toEqual(paceColors.ahead)
+    expect(getPaceColors('behind')).toEqual(paceColors.behind)
+  })
+})
+
+// ============================================
+// SEVERITY COLORS (Phase 5)
+// ============================================
+describe('severityColors', () => {
+  it('has info, warning, critical', () => {
+    expect(severityColors.info).toBeDefined()
+    expect(severityColors.warning).toBeDefined()
+    expect(severityColors.critical).toBeDefined()
+  })
+
+  it('each severity has label, color, bg, ring', () => {
+    for (const sev of Object.values(severityColors)) {
+      expect(sev.label).toBeDefined()
+      expect(sev.color).toBeDefined()
+      expect(sev.bg).toBeDefined()
+      expect(sev.ring).toBeDefined()
+    }
+  })
+})
+
+// ============================================
+// CATEGORY COLORS (Phase 5)
+// ============================================
+describe('categoryColors', () => {
+  const categories = ['patient', 'scheduling', 'clinical', 'external', 'timing', 'efficiency', 'anesthesia', 'recovery'] as const
+
+  it.each(categories)('has bg, text, border for %s', (cat) => {
+    const colors = categoryColors[cat]
+    expect(colors.bg).toBeDefined()
+    expect(colors.text).toBeDefined()
+    expect(colors.border).toBeDefined()
+  })
+})
+
+describe('getCategoryColors', () => {
+  it('returns correct colors for known category', () => {
+    const colors = getCategoryColors('timing')
+    expect(colors.text).toContain('blue')
+  })
+
+  it('falls back for unknown category', () => {
+    const colors = getCategoryColors('unknown')
+    expect(colors.bg).toBe('bg-slate-100')
+  })
+})
+
+// ============================================
+// TRAY STATUS COLORS (Phase 5)
+// ============================================
+describe('trayStatusColors', () => {
+  const statuses = ['pending', 'consignment', 'loaners_confirmed', 'delivered'] as const
+
+  it.each(statuses)('has bg, text, border for %s', (status) => {
+    const colors = trayStatusColors[status]
+    expect(colors.bg).toBeDefined()
+    expect(colors.text).toBeDefined()
+    expect(colors.border).toBeDefined()
+  })
+})
+
+describe('getTrayStatusColors', () => {
+  it('returns correct colors for known status', () => {
+    expect(getTrayStatusColors('delivered').text).toContain('green')
+    expect(getTrayStatusColors('pending').text).toContain('amber')
+  })
+
+  it('falls back for unknown status', () => {
+    const colors = getTrayStatusColors('unknown')
+    expect(colors.bg).toBe('bg-slate-50')
+  })
+})
+
+// ============================================
+// VARIANCE COLORS (Phase 5)
+// ============================================
+describe('varianceColors', () => {
+  it('has good, warning, bad', () => {
+    expect(varianceColors.good).toBeDefined()
+    expect(varianceColors.warning).toBeDefined()
+    expect(varianceColors.bad).toBeDefined()
+  })
+})
+
+describe('getVarianceColors', () => {
+  it('returns good when within threshold', () => {
+    const result = getVarianceColors(50, 52)
+    expect(result.color).toBe('good')
+    expect(result.text).toContain('green')
+  })
+
+  it('returns warning for moderate variance', () => {
+    const result = getVarianceColors(50, 60)
+    expect(result.color).toBe('warning')
+    expect(result.text).toContain('amber')
+  })
+
+  it('returns bad for large variance', () => {
+    const result = getVarianceColors(50, 70)
+    expect(result.color).toBe('bad')
+    expect(result.text).toContain('red')
+  })
+
+  it('respects custom thresholds', () => {
+    const result = getVarianceColors(50, 55, { good: 10, warning: 20 })
+    expect(result.color).toBe('good')
   })
 })
