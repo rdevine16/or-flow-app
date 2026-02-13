@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
+import { getRoleColors } from '@/lib/design-tokens'
 
 interface StaffUser {
   id: string
@@ -26,10 +27,10 @@ interface StaffMultiSelectProps {
 }
 
 /** Role display config — order determines section order */
-const ROLE_SECTIONS: { key: string; label: string; color: string }[] = [
-  { key: 'nurse', label: 'Nurses', color: 'bg-emerald-100 text-emerald-700' },
-  { key: 'tech', label: 'Techs', color: 'bg-purple-100 text-purple-700' },
-  { key: 'anesthesiologist', label: 'Anesthesiologists', color: 'bg-orange-100 text-orange-700' },
+const ROLE_SECTIONS: { key: string; label: string }[] = [
+  { key: 'nurse', label: 'Nurses' },
+  { key: 'tech', label: 'Techs' },
+  { key: 'anesthesiologist', label: 'Anesthesiologists' },
 ]
 
 export default function StaffMultiSelect({
@@ -123,8 +124,8 @@ export default function StaffMultiSelect({
   const selectedUsers = staff.filter(s => selectedIds.includes(s.id))
 
   const getRoleBadge = (roleName: string) => {
-    const section = ROLE_SECTIONS.find(s => s.key === roleName)
-    return section?.color || 'bg-slate-100 text-slate-700'
+    const colors = getRoleColors(roleName)
+    return `${colors.bg} ${colors.text}`
   }
 
   if (loading) {

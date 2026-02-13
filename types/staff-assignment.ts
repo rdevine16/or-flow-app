@@ -52,35 +52,6 @@ export interface DropData {
   caseNumber: string
 }
 
-// Role colors for avatars
-export const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  surgeon: {
-    bg: 'bg-blue-100',
-    text: 'text-blue-700',
-    border: 'border-blue-300'
-  },
-  anesthesiologist: {
-    bg: 'bg-orange-100',
-    text: 'text-orange-700',
-    border: 'border-orange-300'
-  },
-  nurse: {
-    bg: 'bg-emerald-100',
-    text: 'text-emerald-700',
-    border: 'border-emerald-300'
-  },
-  tech: {
-    bg: 'bg-purple-100',
-    text: 'text-purple-700',
-    border: 'border-purple-300'
-  },
-  admin: {
-    bg: 'bg-slate-100',
-    text: 'text-slate-700',
-    border: 'border-slate-300'
-  }
-}
-
 // Helper to get initials from name
 export function getInitials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
@@ -91,10 +62,3 @@ export function getFullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`
 }
 
-// Helper to get role color config
-export function getRoleColor(roleName: string | undefined): { bg: string; text: string; border: string } {
-  if (!roleName) {
-    return ROLE_COLORS.admin
-  }
-  return ROLE_COLORS[roleName.toLowerCase()] || ROLE_COLORS.admin
-}

@@ -1521,8 +1521,8 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 <span className="text-xs text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0) + (anesthesiologist ? 1 : 0)} assigned</span>
               </div>
               <div className="p-3 space-y-1">
-                {surgeon && <TeamMember name={`Dr. ${surgeon.last_name}`} role="Surgeon" color="blue" />}
-                {anesthesiologist && <TeamMember name={`Dr. ${anesthesiologist.last_name}`} role="Anesthesia" color="amber" />}
+                {surgeon && <TeamMember name={`Dr. ${surgeon.last_name}`} role="Surgeon" roleName="surgeon" />}
+                {anesthesiologist && <TeamMember name={`Dr. ${anesthesiologist.last_name}`} role="Anesthesia" roleName="anesthesiologist" />}
                 {assignedStaff.map(cs => {
                   const user = getJoinedValue(cs.users)
                   const role = getJoinedValue(cs.user_roles)
@@ -1531,7 +1531,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       key={cs.id}
                       name={user ? `${user.first_name} ${user.last_name}` : 'Unknown'}
                       role={role?.name || 'Staff'}
-                      color={role?.name === 'nurse' ? 'emerald' : 'purple'}
+                      roleName={role?.name || 'admin'}
                       onRemove={() => removeStaff(cs.id)}
                     />
                   )

@@ -4,11 +4,15 @@
 
 /**
  * USAGE:
- * import { tokens, statusColors } from '@/lib/design-tokens'
- * 
+ * import { tokens, statusColors, getRoleColors } from '@/lib/design-tokens'
+ *
  * // In components:
- * className={`${tokens.spacing.md} ${tokens.radius.lg}`}
  * className={statusColors.in_progress.bg}
+ * className={getRoleColors('surgeon').bg}
+ *
+ * // Surgeon visualization:
+ * import { getSurgeonColor } from '@/lib/design-tokens'
+ * const color = getSurgeonColor(index)
  */
 
 // ============================================
@@ -32,8 +36,8 @@ export const radius = {
   none: '0',
   sm: '0.375rem',   // 6px
   md: '0.5rem',     // 8px
-  lg: '0.75rem',    // 12px
-  xl: '1rem',       // 16px
+  lg: '0.75rem',    // 12px — buttons, badges, inputs
+  xl: '1rem',       // 16px — cards, modals, containers
   '2xl': '1.5rem',  // 24px
   full: '9999px',
 } as const
@@ -79,6 +83,8 @@ export const transitionClasses = {
 
 // ============================================
 // STATUS COLORS (Unified across app)
+// Canonical: blue=scheduled, green=in_progress/active,
+//   slate=completed/inactive, amber=delayed/pending, red=cancelled
 // ============================================
 export const statusColors = {
   scheduled: {
@@ -93,15 +99,15 @@ export const statusColors = {
     gradient: 'bg-gradient-to-br from-blue-50 to-blue-100/50',
   },
   in_progress: {
-    bg: 'bg-emerald-50',
-    bgHover: 'hover:bg-emerald-100',
-    text: 'text-emerald-700',
-    textDark: 'text-emerald-900',
-    border: 'border-emerald-200',
-    borderDark: 'border-emerald-300',
-    dot: 'bg-emerald-500',
-    ring: 'ring-emerald-500/20',
-    gradient: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50',
+    bg: 'bg-green-50',
+    bgHover: 'hover:bg-green-100',
+    text: 'text-green-600',
+    textDark: 'text-green-900',
+    border: 'border-green-200',
+    borderDark: 'border-green-300',
+    dot: 'bg-green-500',
+    ring: 'ring-green-500/20',
+    gradient: 'bg-gradient-to-br from-green-50 to-green-100/50',
   },
   completed: {
     bg: 'bg-slate-100',
@@ -128,7 +134,7 @@ export const statusColors = {
   cancelled: {
     bg: 'bg-red-50',
     bgHover: 'hover:bg-red-100',
-    text: 'text-red-700',
+    text: 'text-red-600',
     textDark: 'text-red-900',
     border: 'border-red-200',
     borderDark: 'border-red-300',
@@ -137,15 +143,15 @@ export const statusColors = {
     gradient: 'bg-gradient-to-br from-red-50 to-red-100/50',
   },
   active: {
-    bg: 'bg-emerald-50',
-    bgHover: 'hover:bg-emerald-100',
-    text: 'text-emerald-700',
-    textDark: 'text-emerald-900',
-    border: 'border-emerald-200',
-    borderDark: 'border-emerald-300',
-    dot: 'bg-emerald-500',
-    ring: 'ring-emerald-500/20',
-    gradient: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50',
+    bg: 'bg-green-50',
+    bgHover: 'hover:bg-green-100',
+    text: 'text-green-600',
+    textDark: 'text-green-900',
+    border: 'border-green-200',
+    borderDark: 'border-green-300',
+    dot: 'bg-green-500',
+    ring: 'ring-green-500/20',
+    gradient: 'bg-gradient-to-br from-green-50 to-green-100/50',
   },
   inactive: {
     bg: 'bg-slate-100',
@@ -173,32 +179,33 @@ export const statusColors = {
 
 // ============================================
 // ALERT/NOTIFICATION COLORS
+// Canonical text shades: blue-600, green-600, amber-700, red-600
 // ============================================
 export const alertColors = {
   info: {
     bg: 'bg-blue-50',
-    text: 'text-blue-800',
+    text: 'text-blue-600',
     border: 'border-blue-200',
     icon: 'text-blue-500',
     button: 'text-blue-600 hover:text-blue-700',
   },
   success: {
     bg: 'bg-green-50',
-    text: 'text-green-800',
+    text: 'text-green-600',
     border: 'border-green-200',
     icon: 'text-green-500',
     button: 'text-green-600 hover:text-green-700',
   },
   warning: {
     bg: 'bg-amber-50',
-    text: 'text-amber-800',
+    text: 'text-amber-700',
     border: 'border-amber-200',
     icon: 'text-amber-500',
     button: 'text-amber-600 hover:text-amber-700',
   },
   error: {
     bg: 'bg-red-50',
-    text: 'text-red-800',
+    text: 'text-red-600',
     border: 'border-red-200',
     icon: 'text-red-500',
     button: 'text-red-600 hover:text-red-700',
@@ -207,43 +214,137 @@ export const alertColors = {
 
 // ============================================
 // ROLE COLORS (for badges)
+// Canonical: design-tokens.ts wins, 50-level bg, amber for anesthesiologist
 // ============================================
 export const roleColors = {
   surgeon: {
     bg: 'bg-blue-50',
     text: 'text-blue-700',
+    border: 'border-blue-200',
     dot: 'bg-blue-500',
   },
   anesthesiologist: {
     bg: 'bg-amber-50',
     text: 'text-amber-700',
+    border: 'border-amber-200',
     dot: 'bg-amber-500',
   },
   nurse: {
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-700',
-    dot: 'bg-emerald-500',
+    bg: 'bg-green-50',
+    text: 'text-green-600',
+    border: 'border-green-200',
+    dot: 'bg-green-500',
   },
   tech: {
     bg: 'bg-purple-50',
     text: 'text-purple-700',
+    border: 'border-purple-200',
     dot: 'bg-purple-500',
   },
   admin: {
     bg: 'bg-slate-100',
     text: 'text-slate-700',
+    border: 'border-slate-300',
     dot: 'bg-slate-500',
   },
   global_admin: {
     bg: 'bg-red-50',
-    text: 'text-red-700',
+    text: 'text-red-600',
+    border: 'border-red-200',
     dot: 'bg-red-500',
   },
   facility_admin: {
     bg: 'bg-indigo-50',
     text: 'text-indigo-700',
+    border: 'border-indigo-200',
     dot: 'bg-indigo-500',
   },
+} as const
+
+// ============================================
+// SURGEON DATA VISUALIZATION PALETTE
+// Consolidated from types/block-scheduling.ts,
+// hooks/useSurgeonColors.ts, app/admin/demo/page.tsx
+// ============================================
+export const surgeonPalette = {
+  hex: [
+    '#3B82F6', // blue
+    '#10B981', // green
+    '#F59E0B', // amber
+    '#8B5CF6', // purple
+    '#EC4899', // pink
+    '#06B6D4', // cyan
+    '#F97316', // orange
+    '#6366F1', // indigo
+    '#14B8A6', // teal
+    '#EF4444', // red
+    '#84CC16', // lime
+    '#A855F7', // violet
+  ],
+  tailwind: [
+    { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
+    { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-200' },
+    { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
+    { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
+    { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
+    { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-200' },
+    { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200' },
+    { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-200' },
+    { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-200' },
+    { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-200' },
+    { bg: 'bg-lime-100', text: 'text-lime-800', border: 'border-lime-200' },
+    { bg: 'bg-violet-100', text: 'text-violet-800', border: 'border-violet-200' },
+  ],
+} as const
+
+// ============================================
+// COMPONENT SIZING
+// ============================================
+export const components = {
+  button: {
+    sm: { height: '32px', padding: 'px-3 py-1.5', fontSize: 'text-xs' },
+    md: { height: '36px', padding: 'px-4 py-2', fontSize: 'text-sm' },
+    lg: { height: '44px', padding: 'px-6 py-2.5', fontSize: 'text-base' },
+  },
+  input: {
+    sm: { height: '32px', padding: 'px-3 py-1.5', fontSize: 'text-xs' },
+    md: { height: '36px', padding: 'px-3 py-2', fontSize: 'text-sm' },
+    lg: { height: '44px', padding: 'px-4 py-2.5', fontSize: 'text-base' },
+  },
+  table: {
+    headerHeight: '36px',
+    rowHeight: '40px',
+    cellPaddingX: 'px-3',
+    cellPaddingY: 'py-2',
+  },
+  badge: {
+    height: '20px',
+    padding: 'px-2 py-0.5',
+    fontSize: 'text-xs',
+  },
+  card: {
+    padding: 'p-4',
+    gap: 'gap-6',
+  },
+  modal: {
+    padding: 'p-6',
+    maxWidth: 'max-w-lg',
+  },
+  sidebar: {
+    width: '256px',
+    itemPadding: 'px-3 py-2',
+  },
+} as const
+
+// ============================================
+// ACCESSIBILITY MINIMUMS
+// ============================================
+export const a11y = {
+  minClickTarget: 32,            // px — 32px minimum for surgical users
+  minTextContrast: 4.5,          // ratio for body text (WCAG AA)
+  minLargeTextContrast: 3,       // ratio for 18px+ text
+  minUIContrast: 3,              // ratio for UI components
+  focusRingWidth: 2,             // px
 } as const
 
 // ============================================
@@ -316,7 +417,7 @@ export const animationDuration = {
 } as const
 
 // ============================================
-// EXPORT ALL AS DEFAULT
+// COMBINED EXPORT
 // ============================================
 export const tokens = {
   spacing,
@@ -329,6 +430,8 @@ export const tokens = {
   typography,
   breakpoints,
   animationDuration,
+  components,
+  a11y,
 } as const
 
 // ============================================
@@ -337,7 +440,7 @@ export const tokens = {
 
 /**
  * Get status color classes by status string
- * @example getStatusColors('in_progress') => { bg: 'bg-emerald-50', ... }
+ * @example getStatusColors('in_progress') => { bg: 'bg-green-50', ... }
  */
 export function getStatusColors(status: string) {
   const normalizedStatus = status.toLowerCase() as keyof typeof statusColors
@@ -366,10 +469,29 @@ export function getAlertColors(variant: keyof typeof alertColors) {
 }
 
 /**
- * Get role color classes by role
- * @example getRoleColors('surgeon') => { bg: 'bg-blue-50', ... }
+ * Get role color classes by role string
+ * @example getRoleColors('surgeon') => { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', dot: 'bg-blue-500' }
  */
-export function getRoleColors(role: string) {
+export function getRoleColors(role: string): { bg: string; text: string; border: string; dot: string } {
   const normalizedRole = role.toLowerCase() as keyof typeof roleColors
   return roleColors[normalizedRole] || roleColors.admin
+}
+
+/**
+ * Get surgeon palette color by index (wraps around)
+ * @example getSurgeonColor(0) => { hex: '#3B82F6', bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' }
+ */
+export function getSurgeonColor(index: number) {
+  return {
+    hex: surgeonPalette.hex[index % surgeonPalette.hex.length],
+    ...surgeonPalette.tailwind[index % surgeonPalette.tailwind.length],
+  }
+}
+
+/**
+ * Get next available surgeon color hex that hasn't been used
+ * @example getNextSurgeonColor(new Set(['#3B82F6'])) => '#10B981'
+ */
+export function getNextSurgeonColor(usedColors: Set<string>): string {
+  return surgeonPalette.hex.find(c => !usedColors.has(c)) || surgeonPalette.hex[0]
 }

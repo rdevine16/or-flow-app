@@ -130,20 +130,9 @@ export const MONTH_LABELS: Record<number, string> = {
   12: 'December',
 }
 
-export const SURGEON_COLOR_PALETTE = [
-  '#3B82F6', // Blue
-  '#10B981', // Green
-  '#F59E0B', // Amber
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-  '#F97316', // Orange
-  '#6366F1', // Indigo
-  '#14B8A6', // Teal
-  '#EF4444', // Red
-  '#84CC16', // Lime
-  '#A855F7', // Violet
-]
+// Re-export from canonical source (lib/design-tokens.ts)
+import { surgeonPalette, getNextSurgeonColor } from '@/lib/design-tokens'
+export const SURGEON_COLOR_PALETTE = surgeonPalette.hex
 
 // =====================================================
 // INPUT TYPES (for create/update)
@@ -249,6 +238,5 @@ function getOrdinalSuffix(n: number): string {
 
 export function getNextAvailableColor(usedColors: string[]): string {
   const usedSet = new Set(usedColors)
-  const available = SURGEON_COLOR_PALETTE.find(c => !usedSet.has(c))
-  return available || SURGEON_COLOR_PALETTE[usedColors.length % SURGEON_COLOR_PALETTE.length]
+  return getNextSurgeonColor(usedSet)
 }

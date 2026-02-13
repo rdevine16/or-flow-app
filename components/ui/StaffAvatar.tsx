@@ -5,7 +5,8 @@
 'use client'
 
 import { useState } from 'react'
-import { getInitials, getRoleColor, getFullName } from '@/types/staff-assignment'
+import { getInitials, getFullName } from '@/types/staff-assignment'
+import { getRoleColors } from '@/lib/design-tokens'
 
 interface StaffAvatarProps {
   firstName: string
@@ -37,7 +38,7 @@ export default function StaffAvatar({
   const [imageError, setImageError] = useState(false)
   const initials = getInitials(firstName, lastName)
   const fullName = getFullName(firstName, lastName)
-  const colors = getRoleColor(roleName)
+  const colors = getRoleColors(roleName || '')
   
   const showImage = profileImageUrl && !imageError
   
@@ -107,7 +108,7 @@ export function DraggableStaffAvatarDisplay({
 }: StaffAvatarProps & { isDragging?: boolean }) {
   const [imageError, setImageError] = useState(false)
   const initials = getInitials(firstName, lastName)
-  const colors = getRoleColor(roleName)
+  const colors = getRoleColors(roleName || '')
   
   const showImage = profileImageUrl && !imageError
   
@@ -160,7 +161,7 @@ export function AssignedStaffAvatar({
   const [imageError, setImageError] = useState(false)
   const initials = getInitials(firstName, lastName)
   const fullName = getFullName(firstName, lastName)
-  const colors = getRoleColor(roleName)
+  const colors = getRoleColors(roleName || '')
   
   const showImage = profileImageUrl && !imageError
   

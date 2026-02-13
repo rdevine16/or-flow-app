@@ -15,8 +15,8 @@ import {
   DAY_OF_WEEK_LABELS,
   RECURRENCE_LABELS,
   formatTime12Hour,
-  SURGEON_COLOR_PALETTE,
 } from '@/types/block-scheduling'
+import { surgeonPalette } from '@/lib/design-tokens'
 import { CustomRecurrenceModal, CustomRecurrenceConfig, getCustomRecurrenceDescription } from './CustomRecurrenceModal'
 
 interface Surgeon {
@@ -352,7 +352,7 @@ export function BlockPopover({
   if (!open) return null
 
   const isEditing = !!editingBlock
-  const surgeonColor = surgeonId ? (colorMap[surgeonId] || SURGEON_COLOR_PALETTE[0]) : SURGEON_COLOR_PALETTE[0]
+  const surgeonColor = surgeonId ? (colorMap[surgeonId] || surgeonPalette.hex[0]) : surgeonPalette.hex[0]
   const [startH, startM] = startTime.split(':').map(Number)
   const [endH, endM] = endTime.split(':').map(Number)
   const durationHours = (endH + endM / 60) - (startH + startM / 60)

@@ -851,16 +851,9 @@ export default function DemoDataWizard() {
 // SUB-COMPONENTS
 // ============================================================================
 
-const SURGEON_COLORS = [
-  { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' },
-  { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200' },
-  { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200' },
-  { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200' },
-  { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' },
-  { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-200' },
-  { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200' },
-  { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-200' },
-]
+// Surgeon colors from canonical design tokens
+import { surgeonPalette } from '@/lib/design-tokens'
+const SURGEON_COLORS = surgeonPalette.tailwind
 
 function ScheduleGrid({ rooms, surgeons, profiles }: {
   rooms: ORRoom[]

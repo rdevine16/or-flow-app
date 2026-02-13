@@ -4,22 +4,12 @@
 import { useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { logger } from '@/lib/logger'
+import { surgeonPalette } from '@/lib/design-tokens'
 
 const log = logger('useSurgeonColors')
 
-// Default color palette - assigned to surgeons in order
-const DEFAULT_COLORS = [
-  '#3B82F6', // blue
-  '#10B981', // emerald
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // violet
-  '#EC4899', // pink
-  '#06B6D4', // cyan
-  '#84CC16', // lime
-  '#F97316', // orange
-  '#6366F1', // indigo
-]
+// Canonical palette from design-tokens.ts
+const DEFAULT_COLORS = surgeonPalette.hex
 
 interface UseSurgeonColorsOptions {
   facilityId: string | null
