@@ -5,17 +5,27 @@ argument-hint: (no arguments needed — auto-detects next phase from Tasks)
 
 ## Step 1: Identify the Next Phase
 
-Check the Task list for the next task with status "pending" whose blockers (if any) are all "completed."
+Read `docs/implementation-plan.md`. This is the single source of truth for what phases exist and what each one does.
 
-If no implementation plan exists, tell the user: **"No implementation plan found. Run /audit first."**
+Then check which phases are already done by reading git history:
 
-If all tasks are completed, tell the user: **"All phases complete. Run /wrap-up for final verification, then merge to main."**
+```bash
+git log --oneline --all | head -20
+```
+
+Match commit messages (e.g., `feat(scope): phase 1 - ...`) to phases in the plan. The next phase is the first one without a matching commit.
+
+Also check the Session Log section at the bottom of the implementation plan — it tracks completed and partial phases from `/wrap-up`.
+
+If `docs/implementation-plan.md` doesn't exist, tell the user: **"No implementation plan found. Run /audit first."**
+
+If all phases have matching commits, tell the user: **"All phases complete. Run /wrap-up for final verification, then merge to main."**
 
 ## Step 2: Load Minimal Context
 
 Read only what this phase needs:
 - `docs/active-feature.md` — the feature spec
-- `docs/implementation-plan.md` — but ONLY the section for the current phase
+- The section in `docs/implementation-plan.md` for the current phase ONLY
 - The specific files listed for this phase in the plan
 
 Do NOT read `docs/architecture.md` unless this phase involves database work.
