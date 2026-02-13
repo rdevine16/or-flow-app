@@ -598,7 +598,7 @@ export default function SurgeonVariancePage() {
                     disabled={!selectedSurgeonId}
                   />
                   {selectedSurgeonId && getAvailableProcedures().length === 0 && (
-                    <p className="text-sm text-amber-600">
+                    <p className="text-sm text-amber-700">
                       This surgeon already has overrides for all procedures.
                     </p>
                   )}

@@ -277,7 +277,7 @@ export default function GlobalSecurityDashboard() {
                   <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-medium text-slate-600">System Errors</h3>
-                      <AlertCircle className="w-5 h-5 text-red-500" />
+                      <AlertCircle className="w-5 h-5 text-red-600" />
                     </div>
                     <div className="text-3xl font-bold text-slate-900 mb-2">{aggregateStats.totalErrors}</div>
                     <div className="text-sm text-red-600">{aggregateStats.criticalErrors} critical/error</div>
@@ -361,7 +361,7 @@ export default function GlobalSecurityDashboard() {
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                     log.severity === 'critical' ? 'bg-red-100 text-red-800' :
                                     log.severity === 'error' ? 'bg-orange-100 text-orange-800' :
-                                    log.severity === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                                    log.severity === 'warning' ? 'bg-amber-100 text-amber-800' :
                                     'bg-blue-100 text-blue-800'
                                   }`}>
                                     {log.severity}
@@ -651,7 +651,7 @@ export default function GlobalSecurityDashboard() {
                           const healthScore = Math.max(0, 100 - (stat.criticalErrors * 10) - (stat.failedLogins * 5))
                           const healthColor = 
                             healthScore >= 90 ? 'text-green-600' :
-                            healthScore >= 70 ? 'text-yellow-600' :
+                            healthScore >= 70 ? 'text-amber-600' :
                             'text-red-600'
                           
                           return (

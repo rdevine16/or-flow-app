@@ -84,7 +84,7 @@ const TAG_COLORS: Record<string, string> = {
   green: 'bg-green-50 text-green-600 border-green-200',
   cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
   purple: 'bg-violet-50 text-violet-700 border-violet-200',
-  red: 'bg-red-50 text-red-700 border-red-200',
+  red: 'bg-red-50 text-red-600 border-red-200',
   slate: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
@@ -92,7 +92,7 @@ const TAG_COLORS: Record<string, string> = {
 const CATEGORY_BADGE_COLORS: Record<string, string> = {
   blue: 'bg-blue-50 text-blue-700 border-blue-200',
   amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  red: 'bg-red-50 text-red-700 border-red-200',
+  red: 'bg-red-50 text-red-600 border-red-200',
   green: 'bg-green-50 text-green-600 border-green-200',
   violet: 'bg-violet-50 text-violet-700 border-violet-200',
   cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200',
@@ -1379,7 +1379,7 @@ function ScannerModal({
                 </div>
                 {driftCount > 0 && (
                   <div className="text-sm">
-                    <span className="font-semibold text-amber-600">{driftCount}</span>
+                    <span className="font-semibold text-amber-700">{driftCount}</span>
                     <span className="text-slate-500"> drifted</span>
                   </div>
                 )}
@@ -1456,7 +1456,7 @@ function ScannerModal({
 
                         {/* Stale indicator */}
                         {stale && isRegistered && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium flex-shrink-0"
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium flex-shrink-0"
                                 title="File modified after last registry update">
                             STALE
                           </span>
@@ -1828,7 +1828,7 @@ function CategoryManagerModal({
                     </button>
                     <button
                       onClick={() => handleDelete(cat)}
-                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                      className="p-1 text-slate-400 hover:text-red-600 transition-colors"
                       title="Delete"
                     >
                       <Icon d={icons.trash} className="w-3.5 h-3.5" />
@@ -1934,7 +1934,7 @@ function TagInput({
             <button
               type="button"
               onClick={() => remove(item)}
-              className="text-slate-400 hover:text-red-500 transition-colors"
+              className="text-slate-400 hover:text-red-600 transition-colors"
             >
               &times;
             </button>
@@ -2179,7 +2179,7 @@ function DatabaseTab({
                         <td className="py-1.5 pr-4 text-xs text-slate-500">{col.data_type}</td>
                         <td className="py-1.5 pr-4 text-xs">
                           {col.is_nullable === 'YES'
-                            ? <span className="text-amber-600">nullable</span>
+                            ? <span className="text-amber-700">nullable</span>
                             : <span className="text-slate-400">required</span>
                           }
                         </td>
@@ -2419,7 +2419,7 @@ function DependenciesTab({ page, allPages }: { page: PageEntry; allPages: PageEn
                         </span>
                       )}
                       {isWrite && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 font-medium">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium">
                           WRITE
                         </span>
                       )}
@@ -2926,7 +2926,7 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
 }
 
 const SEVERITY_STYLES = {
-  critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500', label: 'Critical' },
+  critical: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-600', dot: 'bg-red-500', label: 'Critical' },
   warning: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500', label: 'Warning' },
   info: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-600', dot: 'bg-blue-400', label: 'Info' },
 }
@@ -2972,7 +2972,7 @@ function HealthPanel({
     return Math.max(0, Math.min(100, 100 - penalty))
   }, [pages.length, criticalCount, warningCount, infoCount])
 
-  const scoreColor = score >= 80 ? 'text-green-600' : score >= 50 ? 'text-amber-600' : 'text-red-600'
+  const scoreColor = score >= 80 ? 'text-green-600' : score >= 50 ? 'text-amber-700' : 'text-red-600'
   const scoreRingColor = score >= 80 ? 'stroke-green-500' : score >= 50 ? 'stroke-amber-500' : 'stroke-red-500'
 
   return (
@@ -3031,7 +3031,7 @@ function HealthPanel({
             ${filterSeverity === 'critical' ? 'border-red-300 bg-red-50 ring-2 ring-red-200' : 'border-slate-200 bg-white hover:border-red-200'}`}
         >
           <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
-          <div className="text-[11px] font-medium text-red-500 uppercase tracking-wider">Critical</div>
+          <div className="text-[11px] font-medium text-red-600 uppercase tracking-wider">Critical</div>
         </button>
 
         <button
@@ -3039,7 +3039,7 @@ function HealthPanel({
           className={`p-4 rounded-xl border transition-all text-left
             ${filterSeverity === 'warning' ? 'border-amber-300 bg-amber-50 ring-2 ring-amber-200' : 'border-slate-200 bg-white hover:border-amber-200'}`}
         >
-          <div className="text-2xl font-bold text-amber-600">{warningCount}</div>
+          <div className="text-2xl font-bold text-amber-700">{warningCount}</div>
           <div className="text-[11px] font-medium text-amber-500 uppercase tracking-wider">Warnings</div>
         </button>
 
@@ -3049,7 +3049,7 @@ function HealthPanel({
             ${filterSeverity === 'info' ? 'border-blue-300 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 bg-white hover:border-blue-200'}`}
         >
           <div className="text-2xl font-bold text-blue-600">{infoCount}</div>
-          <div className="text-[11px] font-medium text-blue-500 uppercase tracking-wider">Info</div>
+          <div className="text-[11px] font-medium text-blue-600 uppercase tracking-wider">Info</div>
         </button>
 
         <div className="p-4 rounded-xl border border-slate-200 bg-white">

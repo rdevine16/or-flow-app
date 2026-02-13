@@ -276,7 +276,7 @@ export function FormField({ label, error, touched, required, children }: FormFie
     <div className="space-y-1">
       <label className="block text-sm font-medium text-slate-700">
         {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
+        {required && <span className="text-red-600 ml-1">*</span>}
       </label>
       {children}
       {showError && (

@@ -537,7 +537,7 @@ export default function UsersSettingsPage() {
                         <>
                           {activeUsers.length} total
                           {activeCount > 0 && <span className="text-green-600"> · {activeCount} active</span>}
-                          {pendingCount > 0 && <span className="text-amber-600"> · {pendingCount} pending</span>}
+                          {pendingCount > 0 && <span className="text-amber-700"> · {pendingCount} pending</span>}
                           {noAccountCount > 0 && <span> · {noAccountCount} without account</span>}
                         </>
                       )}
@@ -616,7 +616,7 @@ export default function UsersSettingsPage() {
                                   isDeactivated
                                     ? 'bg-slate-100 text-slate-400'
                                     : accountStatus === 'pending' 
-                                    ? 'bg-amber-100 text-amber-600' 
+                                    ? 'bg-amber-100 text-amber-700' 
                                     : accountStatus === 'no_account'
                                     ? 'bg-slate-100 text-slate-400'
                                     : 'bg-slate-200 text-slate-600'

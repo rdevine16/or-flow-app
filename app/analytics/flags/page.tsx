@@ -364,7 +364,7 @@ function SurgeonIdleTimeCard({
                           {surgeon.flipGapCount} flip{surgeon.flipGapCount !== 1 ? 's' : ''}
                         </span>
                         {surgeon.sameRoomGapCount > 0 && (
-                          <span className="text-[10px] text-amber-600 bg-amber-50 px-1 py-0.5 rounded">
+                          <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
                             {surgeon.sameRoomGapCount} same
                           </span>
                         )}
@@ -376,7 +376,7 @@ function SurgeonIdleTimeCard({
                     <div className="col-span-2 text-center">
                       <span className={`text-sm font-semibold ${
                         surgeon.medianFlipIdle > 15 ? 'text-rose-600' : 
-                        surgeon.medianFlipIdle > 10 ? 'text-amber-600' : 
+                        surgeon.medianFlipIdle > 10 ? 'text-amber-700' : 
                         'text-slate-700'
                       }`}>
                         {Math.round(surgeon.medianFlipIdle)} min
@@ -426,7 +426,7 @@ function SurgeonIdleTimeCard({
                 <div key={surgeon.surgeonId} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/40 transition-colors">
                   <div className="flex items-center gap-3">
                     <p className="font-medium text-slate-700 text-sm">{surgeon.surgeonName}</p>
-                    <span className="text-[10px] text-amber-600 bg-amber-50 px-1 py-0.5 rounded">
+                    <span className="text-[10px] text-amber-700 bg-amber-50 px-1 py-0.5 rounded">
                       {surgeon.sameRoomGapCount} gap{surgeon.sameRoomGapCount !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -734,7 +734,7 @@ function FlipRoomModal({
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
-                          <p className="text-2xl font-semibold text-amber-600">{Math.round(analysis.totalIdleTime)} min</p>
+                          <p className="text-2xl font-semibold text-amber-700">{Math.round(analysis.totalIdleTime)} min</p>
                         </div>
                       </div>
                       
@@ -785,7 +785,7 @@ function FlipRoomModal({
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
                                   <p className="text-xs text-slate-400">Idle</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 15 ? 'text-rose-600' : gap.idleMinutes > 10 ? 'text-amber-600' : 'text-slate-700'}`}>
+                                  <p className={`font-semibold ${gap.idleMinutes > 15 ? 'text-rose-600' : gap.idleMinutes > 10 ? 'text-amber-700' : 'text-slate-700'}`}>
                                     {Math.round(gap.idleMinutes)} min
                                   </p>
                                 </div>
@@ -888,7 +888,7 @@ function ORUtilizationModal({
                     <div className="text-2xl font-semibold text-amber-700">
                       {roomBreakdown.filter(r => r.utilization >= 60 && r.utilization < 75).length}
                     </div>
-                    <div className="text-xs text-amber-600 font-medium">Near Target</div>
+                    <div className="text-xs text-amber-700 font-medium">Near Target</div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/60 text-center">
                     <div className="text-2xl font-semibold text-slate-600">

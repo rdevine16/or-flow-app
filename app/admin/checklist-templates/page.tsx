@@ -76,7 +76,7 @@ function FieldRow({ field, onEdit, onDelete, onToggleActive }: FieldRowProps) {
             <div className="flex items-center gap-2">
               <h3 className="font-medium text-slate-900 truncate">{field.display_label}</h3>
               {field.is_required && (
-                <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                <span className="px-1.5 py-0.5 text-xs font-medium bg-red-100 text-red-600 rounded">
                   Required
                 </span>
               )}
@@ -230,7 +230,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
           {/* Display Label */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Display Label <span className="text-red-500">*</span>
+              Display Label <span className="text-red-600">*</span>
             </label>
             <input
               type="text"
@@ -245,7 +245,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
           {/* Field Type */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">
-              Field Type <span className="text-red-500">*</span>
+              Field Type <span className="text-red-600">*</span>
             </label>
             <select
               value={formData.field_type}

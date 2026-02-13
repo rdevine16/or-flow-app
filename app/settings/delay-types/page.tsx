@@ -281,7 +281,7 @@ export default function AdminDelayTypesPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name <span className="text-red-500">*</span>
+                  Display Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"

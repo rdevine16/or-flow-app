@@ -89,7 +89,7 @@ export function EnhancedMetricCard({
   const accentStyles: Record<string, { bar: string; icon: string; value: string }> = {
     blue: { bar: 'bg-blue-500', icon: 'bg-blue-50 text-blue-600', value: 'text-blue-600' },
     green: { bar: 'bg-green-500', icon: 'bg-green-50 text-green-600', value: 'text-green-600' },
-    amber: { bar: 'bg-amber-500', icon: 'bg-amber-50 text-amber-600', value: 'text-amber-600' },
+    amber: { bar: 'bg-amber-500', icon: 'bg-amber-50 text-amber-600', value: 'text-amber-700' },
     red: { bar: 'bg-red-500', icon: 'bg-red-50 text-red-600', value: 'text-red-600' },
     slate: { bar: 'bg-slate-400', icon: 'bg-slate-100 text-slate-500', value: 'text-slate-700' },
     violet: { bar: 'bg-violet-500', icon: 'bg-violet-50 text-violet-600', value: 'text-violet-600' },
@@ -159,7 +159,7 @@ export function TrendPill({ value, improved, size = 'sm' }: TrendPillProps) {
     <span className={`inline-flex items-center gap-1 font-semibold rounded-full ${sizeClass} ${
       improved
         ? 'bg-green-50 text-green-600'
-        : 'bg-red-50 text-red-700'
+        : 'bg-red-50 text-red-600'
     }`}>
       {improved ? (
         <ArrowUp className="w-3 h-3" />
@@ -910,7 +910,7 @@ function BulletBar({
             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
               isFaster 
                 ? 'text-green-600 bg-green-50' 
-                : 'text-red-700 bg-red-50'
+                : 'text-red-600 bg-red-50'
             }`}>
               {isFaster ? '↓' : '↑'} {deltaAbs}%
             </span>

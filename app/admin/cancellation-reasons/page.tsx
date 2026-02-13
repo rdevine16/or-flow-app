@@ -437,7 +437,7 @@ export default function AdminCancellationReasonsPage() {
       >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Display Name <span className="text-red-500">*</span>
+                  Display Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -462,7 +462,7 @@ export default function AdminCancellationReasonsPage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Category <span className="text-red-500">*</span>
+                  Category <span className="text-red-600">*</span>
                 </label>
                 <select
                   value={formData.category}

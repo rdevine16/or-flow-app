@@ -274,7 +274,7 @@ export function getBeforeAfter(category: CSSPatternIssue['category']) {
       notes: 'Badge colors and sizes centralized. Easy to maintain consistent badge styling.',
     },
     alert: {
-      before: '<div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">Error!</div>',
+      before: '<div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg">Error!</div>',
       after: '<div className="alert-error">Error!</div>',
       notes: 'Alert variants (info, success, warning, error) all centralized in global.css.',
     },

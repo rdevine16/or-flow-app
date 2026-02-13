@@ -112,7 +112,7 @@ export default function OutlierDetailDrawer({
                       }`}>
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            isBoth ? 'bg-red-100 text-red-700' :
+                            isBoth ? 'bg-red-100 text-red-600' :
                             isPersonalOnly ? 'bg-blue-100 text-blue-700' :
                             isFacilityOnly ? 'bg-orange-100 text-orange-700' :
                             'bg-slate-100 text-slate-700'
@@ -120,7 +120,7 @@ export default function OutlierDetailDrawer({
                             {isBoth ? 'Critical' : isPersonalOnly ? 'Personal' : isFacilityOnly ? 'Facility' : 'Unknown'}
                           </span>
                           <span className={`text-sm font-medium ${
-                            isBoth ? 'text-red-700' : isPersonalOnly ? 'text-blue-700' : 'text-orange-700'
+                            isBoth ? 'text-red-600' : isPersonalOnly ? 'text-blue-700' : 'text-orange-700'
                           }`}>
                             Outlier
                           </span>
@@ -244,13 +244,13 @@ export default function OutlierDetailDrawer({
                             </div>
                             <div className="p-3 flex justify-between">
                               <span className="text-sm text-slate-600">Soft Goods Cost</span>
-                              <span className="text-sm font-medium text-red-500">
+                              <span className="text-sm font-medium text-red-600">
                                 −{formatCurrency(financials.softGoodsCost)}
                               </span>
                             </div>
                             <div className="p-3 flex justify-between">
                               <span className="text-sm text-slate-600">Hard Goods Cost</span>
-                              <span className="text-sm font-medium text-red-500">
+                              <span className="text-sm font-medium text-red-600">
                                 −{formatCurrency(financials.hardGoodsCost)}
                               </span>
                             </div>
@@ -261,7 +261,7 @@ export default function OutlierDetailDrawer({
                                   {Math.round(outlier.actualDuration)} min × {formatCurrency(financials.orRate)}/hr
                                 </p>
                               </div>
-                              <span className="text-sm font-medium text-red-500">
+                              <span className="text-sm font-medium text-red-600">
                                 −{formatCurrency(financials.orCost)}
                               </span>
                             </div>
@@ -285,7 +285,7 @@ export default function OutlierDetailDrawer({
                                 {issue.type === 'overTime' && (
                                   <div>
                                     <p className="text-sm font-medium text-amber-800">Over Time</p>
-                                    <p className="text-xs text-amber-600 mt-1">
+                                    <p className="text-xs text-amber-700 mt-1">
                                       {Math.round(issue.actualMinutes)} min actual vs {Math.round(issue.expectedMinutes)} min typical
                                       <br />
                                       Threshold: {Math.round(issue.thresholdMinutes)} min • {Math.round(issue.minutesOver)} min over
@@ -295,7 +295,7 @@ export default function OutlierDetailDrawer({
                                 {issue.type === 'lowProfit' && (
                                   <div>
                                     <p className="text-sm font-medium text-amber-800">Low Profit</p>
-                                    <p className="text-xs text-amber-600 mt-1">
+                                    <p className="text-xs text-amber-700 mt-1">
                                       {formatCurrency(issue.actualProfit)} actual vs {formatCurrency(issue.expectedProfit)} typical
                                       <br />
                                       Threshold: {formatCurrency(issue.thresholdProfit)} • {formatCurrency(issue.amountBelow)} below
@@ -305,7 +305,7 @@ export default function OutlierDetailDrawer({
                                 {issue.type === 'delay' && (
                                   <div>
                                     <p className="text-sm font-medium text-amber-800">Recorded Delays</p>
-                                    <p className="text-xs text-amber-600 mt-1">
+                                    <p className="text-xs text-amber-700 mt-1">
                                       Total: {issue.totalMinutes} min
                                       {issue.delays.map((d, i) => (
                                         <span key={i}> • {d.name}{d.minutes ? ` (${d.minutes} min)` : ''}</span>
@@ -316,7 +316,7 @@ export default function OutlierDetailDrawer({
                                 {issue.type === 'lowPayer' && (
                                   <div>
                                     <p className="text-sm font-medium text-amber-800">Low Payer Rate</p>
-                                    <p className="text-xs text-amber-600 mt-1">
+                                    <p className="text-xs text-amber-700 mt-1">
                                       {issue.payerName}: {formatCurrency(issue.payerRate)} vs {formatCurrency(issue.defaultRate)} default
                                       <br />
                                       {Math.round(issue.percentBelow)}% below standard rate

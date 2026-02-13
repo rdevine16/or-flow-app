@@ -161,7 +161,7 @@ export default function DeleteFacilityModal({
               autoFocus
             />
             {confirmText.length > 0 && !isConfirmed && (
-              <p className="text-xs text-red-500 mt-1.5">
+              <p className="text-xs text-red-600 mt-1.5">
                 Text doesn't match facility name
               </p>
             )}
@@ -170,7 +170,7 @@ export default function DeleteFacilityModal({
           {/* Error message */}
           {error && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <p className="text-sm text-red-700">{error}</p>
+              <p className="text-sm text-red-600">{error}</p>
             </div>
           )}
         </div>

@@ -829,7 +829,7 @@ function calculateWeeklyTrends(blockDays: BlockDayWithCases[]): WeeklyTrend[] {
 function utilizationColor(pct: number): { text: string; bg: string; bar: string; ring: string } {
   if (pct >= 85) return { text: 'text-green-600', bg: 'bg-green-50', bar: 'bg-green-500', ring: 'ring-green-200' }
   if (pct >= 60) return { text: 'text-amber-700', bg: 'bg-amber-50', bar: 'bg-amber-500', ring: 'ring-amber-200' }
-  return { text: 'text-red-700', bg: 'bg-red-50', bar: 'bg-red-500', ring: 'ring-red-200' }
+  return { text: 'text-red-600', bg: 'bg-red-50', bar: 'bg-red-500', ring: 'ring-red-200' }
 }
 
 function UtilizationBar({ pct, height = 8 }: { pct: number; height?: number }) {
@@ -946,7 +946,7 @@ function BlockDayTimeline({
         </div>
       )}
       {day.overrunMinutes > 0 && (
-        <div className="mt-1 text-[11px] text-red-500 font-medium">
+        <div className="mt-1 text-[11px] text-red-600 font-medium">
           Ran {formatDuration(day.overrunMinutes)} past block end
         </div>
       )}

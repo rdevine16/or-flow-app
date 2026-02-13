@@ -187,7 +187,7 @@ const getTrayStatusConfig = (status: TrayStatusFilter) => {
 const getDeviceStatusConfig = (status: string) => {
   switch (status) {
     case 'pending':
-      return { label: 'Pending', color: 'text-amber-600', bg: 'bg-amber-50', icon: '⏳' }
+      return { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-50', icon: '⏳' }
     case 'consignment':
       return { label: 'Consignment', color: 'text-green-600', bg: 'bg-green-50', icon: '✓' }
     case 'loaners_confirmed':
@@ -338,7 +338,7 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
                   </div>
                   <div>
                     <p className="font-medium text-amber-800">No Device Company Assigned</p>
-                    <p className="text-sm text-amber-600 mt-1">This case requires rep but no company has been assigned.</p>
+                    <p className="text-sm text-amber-700 mt-1">This case requires rep but no company has been assigned.</p>
                   </div>
                 </div>
               </div>
@@ -666,7 +666,7 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
             <p className="text-xs text-slate-500 uppercase tracking-wider">Ready</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+            <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
             <p className="text-xs text-slate-500 uppercase tracking-wider">Pending</p>
           </div>
           <div className="text-center">
@@ -824,14 +824,14 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
                     {!requiresRep ? (
                       <span className="text-sm text-slate-400 italic">No rep required</span>
                     ) : deviceCompanies.length === 0 ? (
-                      <span className="text-sm text-amber-600 font-medium">⚠️ None assigned</span>
+                      <span className="text-sm text-amber-700 font-medium">⚠️ None assigned</span>
                     ) : (
                       <div className="space-y-1">
                         {deviceCompanies.map((dc) => (
                           <div key={dc.id} className="flex items-center gap-2">
                             <span className="text-sm font-medium text-slate-700">{dc.implant_companies?.name}</span>
                             {dc.tray_status === 'pending' && (
-                              <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                              <span className="text-xs text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
                                 ⏳ Pending
                               </span>
                             )}

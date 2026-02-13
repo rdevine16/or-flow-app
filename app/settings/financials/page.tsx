@@ -502,7 +502,7 @@ showToast({
                             ? 'bg-green-100 text-green-600'
                             : step.optional
                               ? 'bg-slate-100 text-slate-400'
-                              : 'bg-amber-100 text-amber-600'
+                              : 'bg-amber-100 text-amber-700'
                           }
                         `}>
                           {step.complete && !step.optional ? (
@@ -527,7 +527,7 @@ showToast({
                             <p className="text-xs text-slate-400 mt-1">
                               {step.count} of {step.total} configured
                               {step.count < step.total && (
-                                <span className="text-amber-600 ml-1">
+                                <span className="text-amber-700 ml-1">
                                   • {step.total - step.count} remaining
                                 </span>
                               )}

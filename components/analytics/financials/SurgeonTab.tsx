@@ -604,7 +604,7 @@ function SurgeonOverviewTab({
         >
           <div className={`text-2xl font-bold ${
             surgeon.durationVsFacilityMinutes < 0 ? 'text-green-600' : 
-            surgeon.durationVsFacilityMinutes > 10 ? 'text-red-500' : 'text-slate-900'
+            surgeon.durationVsFacilityMinutes > 10 ? 'text-red-600' : 'text-slate-900'
           }`}>
             {surgeon.durationVsFacilityMinutes > 0 ? '+' : ''}{Math.round(surgeon.durationVsFacilityMinutes)} min
           </div>
@@ -618,7 +618,7 @@ function SurgeonOverviewTab({
           tooltip="Estimated profit impact per case based on time efficiency"
         >
           <div className={`text-2xl font-bold ${
-            surgeon.profitImpact >= 0 ? 'text-green-600' : 'text-red-500'
+            surgeon.profitImpact >= 0 ? 'text-green-600' : 'text-red-600'
           }`}>
             {surgeon.profitImpact >= 0 ? '+' : ''}{formatCurrency(surgeon.profitImpact)}/case
           </div>
@@ -662,7 +662,7 @@ function SurgeonOverviewTab({
           </div>
           <div className="flex items-center justify-between py-1.5 pl-4">
             <span className="text-sm text-slate-500">Debits (implants, supplies)</span>
-            <span className="text-sm font-medium text-red-500 tabular-nums">
+            <span className="text-sm font-medium text-red-600 tabular-nums">
               ({formatCurrency(costBreakdown.avgDebits)})
             </span>
           </div>
@@ -676,7 +676,7 @@ function SurgeonOverviewTab({
           )}
           <div className="flex items-center justify-between py-1.5 pl-4">
             <span className="text-sm text-slate-500">OR Time Cost</span>
-            <span className="text-sm font-medium text-red-500 tabular-nums">
+            <span className="text-sm font-medium text-red-600 tabular-nums">
               ({formatCurrency(costBreakdown.avgORCost)})
             </span>
           </div>
@@ -1145,7 +1145,7 @@ showToast({
                         {idx + 1}
                       </div>
                       {idx === 0 && (
-                        <span className="text-xs font-medium text-amber-600">First</span>
+                        <span className="text-xs font-medium text-amber-700">First</span>
                       )}
                     </div>
 
@@ -1374,7 +1374,7 @@ function MarginBadge({ value }: { value: number }) {
   const color =
     value >= 30 ? 'bg-green-50 text-green-600' :
     value >= 15 ? 'bg-amber-50 text-amber-700' :
-    value >= 0 ? 'bg-red-50 text-red-700' :
+    value >= 0 ? 'bg-red-50 text-red-600' :
     'bg-red-100 text-red-800'
 
   return (
@@ -1426,7 +1426,7 @@ function ComparisonPill({
       transition-all duration-200
       ${isGood 
         ? 'bg-gradient-to-r from-green-50 to-green-100 text-green-600 ring-1 ring-green-200/50' 
-        : 'bg-gradient-to-r from-red-50 to-red-100 text-red-700 ring-1 ring-red-200/50'
+        : 'bg-gradient-to-r from-red-50 to-red-100 text-red-600 ring-1 ring-red-200/50'
       }
     `}>
       {isGood ? (
@@ -1469,7 +1469,7 @@ function ConsistencyBadge({
       label: 'Variable',
       icon: '◯',
       bg: 'bg-gradient-to-r from-red-50 to-red-100',
-      text: 'text-red-700',
+      text: 'text-red-600',
       ring: 'ring-red-200/50',
     },
   }

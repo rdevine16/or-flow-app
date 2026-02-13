@@ -94,7 +94,7 @@ const getStatusConfig = (status: string | null) => {
       return {
         label: 'Cancelled',
         bgColor: 'bg-red-50',
-        textColor: 'text-red-700',
+        textColor: 'text-red-600',
         borderColor: 'border-red-200',
         dotColor: 'bg-red-500',
         lineColor: 'bg-red-500'

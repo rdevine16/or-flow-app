@@ -225,7 +225,7 @@ export default function FacilityClosuresPage() {
 
           {/* Error Display */}
           {error && (
-            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
               <AlertCircle className="h-5 w-5 flex-shrink-0" />
               <p className="text-sm">{error}</p>
             </div>
@@ -555,7 +555,7 @@ function ClosureRow({
             <span className={`text-xs font-medium ${past ? 'text-slate-500' : 'text-red-600'}`}>
               {date.toLocaleDateString('en-US', { month: 'short' })}
             </span>
-            <span className={`text-lg font-bold ${past ? 'text-slate-600' : 'text-red-700'}`}>
+            <span className={`text-lg font-bold ${past ? 'text-slate-600' : 'text-red-600'}`}>
               {date.getDate()}
             </span>
           </div>
@@ -574,7 +574,7 @@ function ClosureRow({
           {!past && (
             <div className="hidden sm:block">
               {daysUntil === 0 ? (
-                <span className="px-2 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-full">
+                <span className="px-2 py-1 text-xs font-medium text-red-600 bg-red-100 rounded-full">
                   Today
                 </span>
               ) : daysUntil === 1 ? (

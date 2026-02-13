@@ -373,7 +373,7 @@ export default function CancelCasePage() {
           {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
               <p className="text-sm font-medium text-red-800">{error}</p>
             </div>
           )}
@@ -480,7 +480,7 @@ export default function CancelCasePage() {
           {/* Reason Selection */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
             <h3 className="font-medium text-slate-900 mb-4">
-              Cancellation Reason <span className="text-red-500">*</span>
+              Cancellation Reason <span className="text-red-600">*</span>
             </h3>
             
             {reasons.length === 0 ? (

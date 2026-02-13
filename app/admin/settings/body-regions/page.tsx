@@ -429,7 +429,7 @@ const handleDelete = (region: BodyRegion) => {
       >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name <span className="text-red-500">*</span>
+                  Display Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -498,7 +498,7 @@ const handleDelete = (region: BodyRegion) => {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name <span className="text-red-500">*</span>
+                  Display Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"

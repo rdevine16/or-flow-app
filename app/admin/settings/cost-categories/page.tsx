@@ -585,7 +585,7 @@ const toggleActive = async (category: DefaultCostCategory) => {
       >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Category Name <span className="text-red-500">*</span>
+                  Category Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -599,7 +599,7 @@ const toggleActive = async (category: DefaultCostCategory) => {
               
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Type <span className="text-red-500">*</span>
+                  Type <span className="text-red-600">*</span>
                 </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">

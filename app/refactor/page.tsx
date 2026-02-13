@@ -235,10 +235,10 @@ try {
                     <div className="text-2xl font-bold text-amber-700">
                       {stats.byRisk.review}
                     </div>
-                    <div className="text-sm text-amber-600">Review needed</div>
+                    <div className="text-sm text-amber-700">Review needed</div>
                   </div>
                   <div className="text-center p-4 bg-red-50 rounded-lg">
-                    <div className="text-2xl font-bold text-red-700">
+                    <div className="text-2xl font-bold text-red-600">
                       {stats.byRisk.manual}
                     </div>
                     <div className="text-sm text-red-600">Manual only</div>

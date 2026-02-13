@@ -822,7 +822,7 @@ export default function FacilityDetailPage() {
     const configs: Record<string, { bg: string; text: string; dot: string; label: string }> = {
       active: { bg: 'bg-green-50', text: 'text-green-600', dot: 'bg-green-500', label: 'Active' },
       trial: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500', label: 'Trial' },
-      past_due: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', label: 'Past Due' },
+      past_due: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500', label: 'Past Due' },
       cancelled: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Cancelled' },
       disabled: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400', label: 'Disabled' },
     }
@@ -1245,7 +1245,7 @@ export default function FacilityDetailPage() {
                             Active
                           </span>
                         ) : (
-                          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">
                             Deactivated
                           </span>
                         )}
@@ -1449,7 +1449,7 @@ export default function FacilityDetailPage() {
                       : 'bg-slate-50 border border-slate-200'
                   }`}>
                     <p className={`text-sm ${
-                      daysRemaining !== null && daysRemaining <= 7 ? 'text-red-700' : 'text-slate-600'
+                      daysRemaining !== null && daysRemaining <= 7 ? 'text-red-600' : 'text-slate-600'
                     }`}>
                       Trial ends: <strong>{formatDate(facility.trial_ends_at)}</strong>
                       {daysRemaining !== null && (

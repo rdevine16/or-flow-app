@@ -162,7 +162,7 @@ export function MetricCard({
       {trend !== undefined && (
         <div className="mt-2 flex items-center gap-1.5">
           <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${sizeClasses[size].trend} font-medium ${
-            trend >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-700'
+            trend >= 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
           }`}>
             {trend >= 0 ? (
               <ArrowUp className="w-3 h-3" />

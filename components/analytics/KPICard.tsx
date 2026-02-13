@@ -54,7 +54,7 @@ function DeltaBadge({
     ? 'bg-green-50 text-green-600 ring-green-600/20'
     : deltaType === 'unchanged'
     ? 'bg-slate-50 text-slate-600 ring-slate-500/20'
-    : 'bg-red-50 text-red-700 ring-red-600/20'
+    : 'bg-red-50 text-red-600 ring-red-600/20'
 
   const arrow = deltaType === 'increase' ? '↑' : deltaType === 'decrease' ? '↓' : '→'
 

@@ -704,7 +704,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Name <span className="text-red-500">*</span>
+                  Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"

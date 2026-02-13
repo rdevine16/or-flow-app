@@ -357,7 +357,7 @@ export default function AdminProcedureMilestonesPage() {
                           )}
                           <span className={`text-xs ${
                             milestoneCount === 0 
-                              ? 'text-amber-600 font-medium' 
+                              ? 'text-amber-700 font-medium' 
                               : 'text-slate-500'
                           }`}>
                             {milestoneCount === 0 

@@ -46,7 +46,7 @@ const variantStyles: Record<AlertVariant, {
     container: 'bg-red-50 border-red-200',
     icon: 'text-red-600',
     title: 'text-red-900',
-    text: 'text-red-700',
+    text: 'text-red-600',
   },
 }
 

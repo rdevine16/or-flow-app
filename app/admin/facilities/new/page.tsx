@@ -940,7 +940,7 @@ if (insertError) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Facility Name <span className="text-red-500">*</span>
+                      Facility Name <span className="text-red-600">*</span>
                     </label>
                     <input
                       type="text"
@@ -1046,7 +1046,7 @@ if (insertError) {
                 {/* Timezone */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Timezone <span className="text-red-500">*</span>
+                    Timezone <span className="text-red-600">*</span>
                   </label>
                   <select
                     value={facilityData.timezone}
@@ -1167,7 +1167,7 @@ if (insertError) {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      First Name <span className="text-red-500">*</span>
+                      First Name <span className="text-red-600">*</span>
                     </label>
                     <input
                       type="text"
@@ -1178,7 +1178,7 @@ if (insertError) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Last Name <span className="text-red-500">*</span>
+                      Last Name <span className="text-red-600">*</span>
                     </label>
                     <input
                       type="text"
@@ -1191,7 +1191,7 @@ if (insertError) {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Email <span className="text-red-500">*</span>
+                    Email <span className="text-red-600">*</span>
                   </label>
                   <input
                     type="email"
@@ -1204,7 +1204,7 @@ if (insertError) {
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Role <span className="text-red-500">*</span>
+                    Role <span className="text-red-600">*</span>
                   </label>
                   <select
                     value={adminData.roleId}
@@ -1332,7 +1332,7 @@ if (insertError) {
                           </div>
                           <p className="text-sm text-slate-500 mt-0.5">{config.description}</p>
                           {noTemplates && (
-                            <p className="text-xs text-amber-600 mt-1">No templates configured</p>
+                            <p className="text-xs text-amber-700 mt-1">No templates configured</p>
                           )}
                         </div>
                       </label>

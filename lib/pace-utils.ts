@@ -159,7 +159,7 @@ export function getPaceStatusColors(status: PaceStatus): {
     case 'slightlyBehind':
       return {
         bg: 'bg-amber-500',
-        text: 'text-amber-600',
+        text: 'text-amber-700',
         border: 'border-amber-200',
         gradient: 'from-amber-500 to-amber-400'
       }

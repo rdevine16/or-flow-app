@@ -848,7 +848,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                                   </span>
                                 )}
                               </div>
-                             <p className="text-xs text-amber-600 mt-0.5">
+                             <p className="text-xs text-amber-700 mt-0.5">
                                 Archived {milestone.deleted_at ? formatDeletedDate(milestone.deleted_at) : ''}
                               </p>
                             </div>
@@ -903,7 +903,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
       >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name <span className="text-red-500">*</span>
+                  Display Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -946,7 +946,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
             <>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Display Name <span className="text-red-500">*</span>
+                  Display Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"

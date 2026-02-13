@@ -73,7 +73,7 @@ export default function MilestoneButton({
           disabled={loading}
           className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
         >
-          <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
+          <X className="w-3 h-3 text-slate-400 hover:text-red-600" />
         </button>
       </div>
     )
@@ -148,7 +148,7 @@ export function PairedMilestoneButton({
           disabled={loading}
           className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
         >
-          <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
+          <X className="w-3 h-3 text-slate-400 hover:text-red-600" />
         </button>
       </div>
     )
@@ -184,7 +184,7 @@ export function PairedMilestoneButton({
           disabled={loading}
           className="absolute -top-1 -right-1 w-5 h-5 bg-white border border-slate-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-50 hover:border-red-200 disabled:opacity-50"
         >
-          <X className="w-3 h-3 text-slate-400 hover:text-red-500" />
+          <X className="w-3 h-3 text-slate-400 hover:text-red-600" />
         </button>
       </div>
     )

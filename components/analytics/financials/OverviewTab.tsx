@@ -217,7 +217,7 @@ function KPICard({
 }) {
   const statusColors = {
     good: 'text-green-600',
-    neutral: 'text-amber-600',
+    neutral: 'text-amber-700',
     bad: 'text-red-600',
   }
 
@@ -587,7 +587,7 @@ function MarginBadge({ value }: { value: number }) {
   const color =
     value >= 30 ? 'bg-green-50 text-green-600' :
     value >= 15 ? 'bg-amber-50 text-amber-700' :
-    value >= 0 ? 'bg-red-50 text-red-700' :
+    value >= 0 ? 'bg-red-50 text-red-600' :
     'bg-red-100 text-red-800'
 
   return (

@@ -223,7 +223,7 @@ function PLRow({ label, value, negative, positive }: {
     <div className="flex items-center justify-between py-1.5">
       <span className="text-sm text-slate-500">{label}</span>
       <span className={`text-sm font-medium tabular-nums ${
-        positive ? 'text-green-600' : negative ? 'text-red-500' : 'text-slate-900'
+        positive ? 'text-green-600' : negative ? 'text-red-600' : 'text-slate-900'
       }`}>
         {value < 0 ? `(${formatCurrency(Math.abs(value))})` : formatCurrency(value)}
       </span>
@@ -290,7 +290,7 @@ function SurgeonBreakdownTable({ proc }: { proc: ProcedureStats }) {
                 <td className="px-6 py-4">
                   <span className="font-medium text-slate-900">{surgeon.surgeonName}</span>
                   {surgeon.caseCount < 10 && (
-                    <span className="ml-2 text-xs text-amber-600">*</span>
+                    <span className="ml-2 text-xs text-amber-700">*</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-center text-slate-600">{surgeon.caseCount}</td>
@@ -492,7 +492,7 @@ function MarginBadge({ value }: { value: number }) {
   const color =
     value >= 30 ? 'bg-green-50 text-green-600' :
     value >= 15 ? 'bg-amber-50 text-amber-700' :
-    value >= 0 ? 'bg-red-50 text-red-700' :
+    value >= 0 ? 'bg-red-50 text-red-600' :
     'bg-red-100 text-red-800'
 
   return (
@@ -519,7 +519,7 @@ function MarginBar({ value }: { value: number }) {
 function DurationDiff({ minutes }: { minutes: number }) {
   const color =
     minutes < -3 ? 'text-green-600' :
-    minutes > 10 ? 'text-red-500' :
+    minutes > 10 ? 'text-red-600' :
     'text-slate-600'
 
   return (
@@ -539,7 +539,7 @@ function ImpactBadge({ value }: { value: number }) {
   const isPositive = value > 0
   return (
     <span className={`inline-flex items-center gap-1 text-sm font-medium ${
-      isPositive ? 'text-green-600' : 'text-red-500'
+      isPositive ? 'text-green-600' : 'text-red-600'
     }`}>
       {isPositive ? '+' : ''}{formatCurrency(value)}
     </span>
@@ -552,7 +552,7 @@ function ConsistencyBadge({ rating }: { rating: 'high' | 'medium' | 'low' | null
   const config = {
     high: { label: '⚡ High', classes: 'bg-green-100 text-green-600' },
     medium: { label: '◐ Medium', classes: 'bg-amber-100 text-amber-700' },
-    low: { label: '◯ Low', classes: 'bg-red-100 text-red-700' },
+    low: { label: '◯ Low', classes: 'bg-red-100 text-red-600' },
   }
 
   const c = config[rating]

@@ -1205,7 +1205,7 @@ showToast({
                   <p className="text-sm font-medium text-slate-500">Quality Score</p>
                   <p className={`text-3xl font-bold mt-1 ${
                     summary.qualityScore >= 90 ? 'text-green-600' :
-                    summary.qualityScore >= 70 ? 'text-amber-600' : 'text-red-600'
+                    summary.qualityScore >= 70 ? 'text-amber-700' : 'text-red-600'
                   }`}>
                     {summary.qualityScore}%
                   </p>
@@ -1230,7 +1230,7 @@ showToast({
                 
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                   <p className="text-sm font-medium text-slate-500">Expiring Soon</p>
-                  <p className="text-3xl font-bold mt-1 text-amber-600">{summary.expiringThisWeek}</p>
+                  <p className="text-3xl font-bold mt-1 text-amber-700">{summary.expiringThisWeek}</p>
                   <p className="text-xs text-slate-500 mt-2">Within 7 days</p>
                 </div>
                 
@@ -1288,7 +1288,7 @@ showToast({
                     <span className="text-sm text-slate-600">{selectedIds.size} selected</span>
                     <button
                       onClick={() => openBulkModal(Array.from(selectedIds))}
-                      className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
+                      className="px-3 py-1.5 bg-red-100 text-red-600 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors"
                     >
                       Exclude Selected
                     </button>
@@ -1478,7 +1478,7 @@ showToast({
                               <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 flex-wrap">
                                 <span>{unresolvedIssues.length} issue{unresolvedIssues.length !== 1 ? 's' : ''}</span>
                                 {!isResolved && earliestExpiry !== undefined && (
-                                  <span className={earliestExpiry <= 7 ? 'text-amber-600 font-medium' : ''}>
+                                  <span className={earliestExpiry <= 7 ? 'text-amber-700 font-medium' : ''}>
                                     Expires in {earliestExpiry} day{earliestExpiry !== 1 ? 's' : ''}
                                   </span>
                                 )}
@@ -1586,7 +1586,7 @@ showToast({
                 {modalState.isBulk && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                     <h4 className="text-sm font-semibold text-red-800 mb-2">Exclude from Metrics</h4>
-                    <p className="text-sm text-red-700">
+                    <p className="text-sm text-red-600">
                       You are about to exclude {modalState.bulkIds.length} cases from all analytics calculations.
                       This action marks the issues as resolved but removes the cases from aggregate metrics.
                     </p>
@@ -1706,7 +1706,7 @@ showToast({
                                 </p>
                               </>
                             )}
-                            <p className="text-xs text-amber-600 mt-2">
+                            <p className="text-xs text-amber-700 mt-2">
                               Detected {formatTimeAgo(modalState.issue.detected_at)}
                             </p>
                           </div>
@@ -1725,7 +1725,7 @@ showToast({
                             <ul className="space-y-1">
                               {impact.cannotCalculate.map(metric => (
                                 <li key={metric} className="flex items-center gap-2 text-sm text-slate-600">
-                                  <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                  <X className="w-4 h-4 text-red-600 flex-shrink-0" />
                                   {metric}
                                 </li>
                               ))}
@@ -1870,7 +1870,7 @@ showToast({
                                     
                                     {/* Issue indicator */}
                                     {hasIssue && (
-                                      <span className="text-xs text-amber-600 font-medium">(Issue)</span>
+                                      <span className="text-xs text-amber-700 font-medium">(Issue)</span>
                                     )}
                                     
                                     {/* Modified indicator */}
@@ -1959,8 +1959,8 @@ showToast({
                       <p className="text-sm text-amber-700 mb-2">The following metrics will <strong>NOT</strong> be saved to analytics:</p>
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                         {affectedMetrics.map(m => (
-                          <div key={m} className="flex items-center gap-2 text-sm text-red-700">
-                            <X className="w-4 h-4 text-red-500" />
+                          <div key={m} className="flex items-center gap-2 text-sm text-red-600">
+                            <X className="w-4 h-4 text-red-600" />
                             {m}
                           </div>
                         ))}

@@ -248,7 +248,7 @@ export function EnhancedIssueCard({ issue }: { issue: Issue }) {
                 <span>
                   Confidence: <span className={`font-semibold ${
                     issue.metadata.confidence === 'high' ? 'text-green-600' :
-                    issue.metadata.confidence === 'medium' ? 'text-amber-600' :
+                    issue.metadata.confidence === 'medium' ? 'text-amber-700' :
                     'text-red-600'
                   }`}>{issue.metadata.confidence}</span>
                 </span>

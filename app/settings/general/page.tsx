@@ -422,7 +422,7 @@ showToast({
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-slate-700 mb-2">
                         Facility Name
-                        <span className="text-red-500 ml-1">*</span>
+                        <span className="text-red-600 ml-1">*</span>
                       </label>
                       {editMode ? (
                         <input

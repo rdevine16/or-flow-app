@@ -511,7 +511,7 @@ const csvContent = [
                         )}
                         {log.error_message && (
                           <div className="col-span-2">
-                            <p className="text-xs font-medium text-red-500 uppercase tracking-wider mb-1">Error Message</p>
+                            <p className="text-xs font-medium text-red-600 uppercase tracking-wider mb-1">Error Message</p>
                             <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{log.error_message}</p>
                           </div>
                         )}

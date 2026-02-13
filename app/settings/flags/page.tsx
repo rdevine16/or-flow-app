@@ -55,7 +55,7 @@ type ThresholdType = 'median_plus_sd' | 'absolute'
 const SEVERITY_CONFIG: Record<Severity, { label: string; color: string; bg: string; ring: string }> = {
   info: { label: 'Info', color: 'text-blue-700', bg: 'bg-blue-50', ring: 'ring-blue-200' },
   warning: { label: 'Warning', color: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' },
-  critical: { label: 'Critical', color: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
+  critical: { label: 'Critical', color: 'text-red-600', bg: 'bg-red-50', ring: 'ring-red-200' },
 }
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string }> = {

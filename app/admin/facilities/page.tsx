@@ -325,7 +325,7 @@ export default function FacilitiesListPage() {
                             {daysUntilEnd !== null && (
                               <p className={`text-xs mt-0.5 ${
                                 daysUntilEnd <= 3 ? 'text-red-600 font-medium' :
-                                daysUntilEnd <= 7 ? 'text-amber-600' :
+                                daysUntilEnd <= 7 ? 'text-amber-700' :
                                 'text-slate-500'
                               }`}>
                                 {daysUntilEnd <= 0 ? 'Expired' : `${daysUntilEnd} days left`}

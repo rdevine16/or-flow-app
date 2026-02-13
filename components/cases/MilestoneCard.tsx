@@ -101,7 +101,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
             <button
               onClick={isComplete && isPaired ? onUndoEnd : onUndo}
               disabled={loading}
-              className="p-2 -m-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 -m-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title="Undo"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,9 +141,9 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
             {paceInfo.actualMinutes}m vs {paceInfo.expectedMinutes}m exp
             <span className={`font-semibold ml-1 ${
               paceInfo.varianceMinutes > 5 ? 'text-green-600' :
-              paceInfo.varianceMinutes < -5 ? 'text-red-500' :
+              paceInfo.varianceMinutes < -5 ? 'text-red-600' :
               paceInfo.varianceMinutes < 0 ? 'text-amber-500' :
-              'text-blue-500'
+              'text-blue-600'
             }`}>
               {paceInfo.varianceMinutes > 0
                 ? `${paceInfo.varianceMinutes}m ahead`

@@ -128,10 +128,10 @@ export function RefactorDashboard({ initialIssues }: RefactorDashboardProps) {
             </div>
             <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
               <div className="text-2xl font-bold text-amber-700">{stats.review}</div>
-              <div className="text-sm text-amber-600">Review</div>
+              <div className="text-sm text-amber-700">Review</div>
             </div>
             <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-              <div className="text-2xl font-bold text-red-700">{stats.manual}</div>
+              <div className="text-2xl font-bold text-red-600">{stats.manual}</div>
               <div className="text-sm text-red-600">Manual</div>
             </div>
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">

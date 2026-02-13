@@ -179,7 +179,7 @@ function getVarianceIndicator(actualMinutes: number, avgMinutes: number, thresho
   } else if (absDiff <= thresholds.warning) {
     return { color: 'amber', icon: '~', label: diff > 0 ? 'Slightly over' : 'Slightly under', bgClass: 'bg-amber-50', textClass: 'text-amber-700', borderClass: 'border-amber-200' }
   } else {
-    return { color: 'red', icon: '!', label: diff > 0 ? 'Over average' : 'Under average', bgClass: 'bg-red-50', textClass: 'text-red-700', borderClass: 'border-red-200' }
+    return { color: 'red', icon: '!', label: diff > 0 ? 'Over average' : 'Under average', bgClass: 'bg-red-50', textClass: 'text-red-600', borderClass: 'border-red-200' }
   }
 }
 
@@ -359,7 +359,7 @@ function ImplantRow({
       </div>
       <div className="text-center">
         <span className={`text-xs font-mono font-semibold ${
-          sizesDiffer ? 'text-amber-600' : 
+          sizesDiffer ? 'text-amber-700' : 
           sizesMatch ? 'text-green-600' : 
           final ? 'text-slate-700' : 'text-slate-400'
         }`}>
@@ -843,7 +843,7 @@ export default function CompletedCaseView({
               <p><strong>Color Indicators:</strong></p>
               <ul className="list-disc list-inside mt-1 space-y-1">
                 <li><span className="text-green-600">Green</span> = On target (within 5 min)</li>
-                <li><span className="text-amber-600">Yellow</span> = Slight variance (5-15 min)</li>
+                <li><span className="text-amber-700">Yellow</span> = Slight variance (5-15 min)</li>
                 <li><span className="text-red-600">Red</span> = Significant variance (&gt;15 min)</li>
               </ul>
               <p className="mt-2"><strong>How we calculate averages:</strong></p>
@@ -872,13 +872,13 @@ export default function CompletedCaseView({
                 const textColors = {
                   success: 'text-green-600',
                   warning: 'text-amber-700',
-                  danger: 'text-red-700',
+                  danger: 'text-red-600',
                   info: 'text-slate-600',
                 }
                 const iconColors = {
                   success: 'text-green-500',
                   warning: 'text-amber-500',
-                  danger: 'text-red-500',
+                  danger: 'text-red-600',
                   info: 'text-slate-400',
                 }
                 return (

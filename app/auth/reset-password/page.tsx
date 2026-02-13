@@ -233,7 +233,7 @@ export default function ResetPasswordPage() {
                   </div>
                   <p className={`text-xs ${
                     passwordStrength.level === 'weak' ? 'text-red-600' :
-                    passwordStrength.level === 'fair' ? 'text-amber-600' :
+                    passwordStrength.level === 'fair' ? 'text-amber-700' :
                     passwordStrength.level === 'good' ? 'text-blue-600' :
                     'text-green-600'
                   }`}>
@@ -268,7 +268,7 @@ export default function ResetPasswordPage() {
 
             {error && (
               <div className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}

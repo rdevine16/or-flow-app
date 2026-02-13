@@ -345,7 +345,7 @@ export const CASE_STATUS_CONFIG: Record<CaseStatus, StatusConfig> = {
   },
   cancelled: {
     label: 'Cancelled',
-    color: 'text-red-700',
+    color: 'text-red-600',
     bgColor: 'bg-red-50',
     borderColor: 'border-red-200',
     dotColor: 'bg-red-500'

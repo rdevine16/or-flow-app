@@ -28,7 +28,7 @@ const riskConfig = {
   },
   manual: {
     label: 'Manual',
-    color: 'text-red-700',
+    color: 'text-red-600',
     bg: 'bg-red-50',
     border: 'border-red-200',
     icon: '🔴',
@@ -163,7 +163,7 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
           {otherWarnings.length > 0 && (
             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <div className="flex items-start gap-2">
-                <span className="text-amber-600 text-sm font-medium">⚠️ Warning:</span>
+                <span className="text-amber-700 text-sm font-medium">⚠️ Warning:</span>
                 <div className="text-sm text-amber-700 space-y-1">
                   {otherWarnings.map((warning, i) => (
                     <div key={i}>{warning}</div>

@@ -79,7 +79,7 @@ function getStatusColor(statusName: string): string {
     in_recovery: 'bg-cyan-100 text-cyan-700 border-cyan-200',
     ready_for_discharge: 'bg-green-100 text-green-700 border-green-200',
     discharged: 'bg-gray-100 text-gray-500 border-gray-200',
-    no_show: 'bg-red-100 text-red-700 border-red-200',
+    no_show: 'bg-red-100 text-red-600 border-red-200',
   }
   return colors[statusName] || 'bg-slate-100 text-slate-700 border-slate-200'
 }
@@ -398,7 +398,7 @@ function CheckInDetailModal({
                     )}
                     <span className={`text-sm ${Boolean(localResponses[field.field_key]) ? 'text-slate-900' : 'text-slate-600'}`}>
                       {field.display_label}
-                      {field.is_required && <span className="text-red-500 ml-1">*</span>}
+                      {field.is_required && <span className="text-red-600 ml-1">*</span>}
                     </span>
                   </div>
                 </div>

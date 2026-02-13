@@ -372,7 +372,7 @@ const { showToast } = useToast()
                     </div>
                     <div>
                       <p className="text-sm font-medium text-red-900">{facilityMetrics.pastDue} past due</p>
-                      <p className="text-xs text-red-700">Payment issues</p>
+                      <p className="text-xs text-red-600">Payment issues</p>
                     </div>
                   </div>
                 )}

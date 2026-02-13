@@ -233,7 +233,7 @@ describe('MilestoneCard — pace color coding', () => {
     )
 
     const behindText = screen.getByText(/10m behind/)
-    expect(behindText.className).toContain('text-red-500')
+    expect(behindText.className).toContain('text-red-600')
   })
 
   it('should use amber color for slightly behind (1-5 min)', () => {
@@ -273,7 +273,7 @@ describe('MilestoneCard — pace color coding', () => {
     )
 
     const aheadText = screen.getByText(/2m ahead/)
-    expect(aheadText.className).toContain('text-blue-500')
+    expect(aheadText.className).toContain('text-blue-600')
   })
 })
 

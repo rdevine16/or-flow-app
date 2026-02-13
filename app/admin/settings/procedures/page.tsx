@@ -604,7 +604,7 @@ export default function DefaultProceduresPage() {
                                       style={{ width: `${totalMilestones > 0 ? (milestoneCount / totalMilestones) * 100 : 0}%` }}
                                     />
                                   </div>
-                                  <span className={`text-xs ${milestoneCount === 0 ? 'text-amber-600 font-medium' : 'text-slate-500'}`}>
+                                  <span className={`text-xs ${milestoneCount === 0 ? 'text-amber-700 font-medium' : 'text-slate-500'}`}>
                                     {milestoneCount}/{totalMilestones}
                                   </span>
                                 </div>
@@ -745,7 +745,7 @@ export default function DefaultProceduresPage() {
       >
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Procedure Name <span className="text-red-500">*</span>
+                  Procedure Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"

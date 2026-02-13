@@ -207,7 +207,7 @@ export const alertColors = {
     bg: 'bg-red-50',
     text: 'text-red-600',
     border: 'border-red-200',
-    icon: 'text-red-500',
+    icon: 'text-red-600',
     button: 'text-red-600 hover:text-red-700',
   },
 } as const

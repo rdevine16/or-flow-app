@@ -154,7 +154,7 @@ function getActivityColor(type: string): string {
     case 'loaners_confirmed':
       return 'text-blue-600'
     case 'status_reset':
-      return 'text-amber-600'
+      return 'text-amber-700'
     default:
       return 'text-slate-600'
   }

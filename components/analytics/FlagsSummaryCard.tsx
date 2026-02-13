@@ -66,7 +66,7 @@ const SEVERITY = {
     label: 'Critical',
     icon: ExclamationCircleIcon,
     bg: 'bg-red-50',
-    text: 'text-red-700',
+    text: 'text-red-600',
     ring: 'ring-red-200',
     dot: 'bg-red-500',
   },
@@ -319,7 +319,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
                     {/* Severity dots */}
                     <div className="flex items-center gap-1">
                       {c.severities.critical && (
-                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 text-[10px] font-semibold ring-1 ring-red-200">
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold ring-1 ring-red-200">
                           {c.severities.critical}
                         </span>
                       )}

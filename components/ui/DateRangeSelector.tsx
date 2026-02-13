@@ -341,7 +341,7 @@ export default function DateRangeSelector({ value, onChange }: DateRangeSelector
               </button>
 
               {customStart && customEnd && customStart > customEnd && (
-                <p className="text-xs text-red-500 text-center">Start date must be before end date</p>
+                <p className="text-xs text-red-600 text-center">Start date must be before end date</p>
               )}
             </div>
           )}

@@ -319,7 +319,7 @@ function FlipRoomModal({
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
-                        <p className="text-2xl font-semibold text-amber-600">{Math.round(analysis.totalIdleTime)} min</p>
+                        <p className="text-2xl font-semibold text-amber-700">{Math.round(analysis.totalIdleTime)} min</p>
                       </div>
                     </div>
                     
@@ -354,7 +354,7 @@ function FlipRoomModal({
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
                                   <p className="text-xs text-slate-400">Idle</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-rose-600' : 'text-amber-600'}`}>
+                                  <p className={`font-semibold ${gap.idleMinutes > 10 ? 'text-rose-600' : 'text-amber-700'}`}>
                                     {Math.round(gap.idleMinutes)} min
                                   </p>
                                 </div>

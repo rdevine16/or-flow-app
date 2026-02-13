@@ -116,7 +116,7 @@ function getConsistencyLabel(avgSeconds: number | null, stddevSeconds: number | 
   const cv = (stddevSeconds / avgSeconds) * 100
   if (cv < 10) return { label: 'Very Consistent', color: 'text-green-600' }
   if (cv < 20) return { label: 'Consistent', color: 'text-blue-600' }
-  return { label: 'Variable', color: 'text-amber-600' }
+  return { label: 'Variable', color: 'text-amber-700' }
 }
 
 function getConsistencyLevel(avgSeconds: number | null, stddevSeconds: number | null): 'very_consistent' | 'consistent' | 'variable' | 'na' {

@@ -1084,7 +1084,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
   if (error && !userFacilityId) {
     return (
       <div className="p-6 bg-red-50 border border-red-200 rounded-xl">
-        <p className="text-red-700">{error}</p>
+        <p className="text-red-600">{error}</p>
       </div>
     )
   }
@@ -1093,7 +1093,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-          <p className="text-red-700 text-sm">{error}</p>
+          <p className="text-red-600 text-sm">{error}</p>
         </div>
       )}
 
@@ -1101,7 +1101,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            Scheduled Date <span className="text-red-500">*</span>
+            Scheduled Date <span className="text-red-600">*</span>
           </label>
           <input
             type="date"
@@ -1119,7 +1119,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
-            Start Time <span className="text-red-500">*</span>
+            Start Time <span className="text-red-600">*</span>
           </label>
           <input
             type="time"
@@ -1240,7 +1240,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       {/* 5. Case Number — with real-time uniqueness check */}
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-2">
-          Case Number <span className="text-red-500">*</span>
+          Case Number <span className="text-red-600">*</span>
         </label>
         <div className="relative">
           <input
@@ -1266,7 +1266,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
               </svg>
             )}
             {!checkingCaseNumber && caseNumberUnique === false && (
-              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             )}
@@ -1338,7 +1338,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Implant Companies
-                {effectiveRepRequired && <span className="text-amber-600 ml-1">*</span>}
+                {effectiveRepRequired && <span className="text-amber-700 ml-1">*</span>}
               </label>
               <ImplantCompanySelect
                 facilityId={userFacilityId}

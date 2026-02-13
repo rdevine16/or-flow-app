@@ -643,7 +643,7 @@ describe('CaseForm — Phase 1: Transaction Safety + Validation', () => {
       const caseNumberInput = screen.getByPlaceholderText('e.g., C-2025-001')
       const inputContainer = caseNumberInput.closest('.relative')
       expect(inputContainer?.querySelector('.text-green-500')).not.toBeInTheDocument()
-      expect(inputContainer?.querySelector('.text-red-500')).not.toBeInTheDocument()
+      expect(inputContainer?.querySelector('.text-red-600')).not.toBeInTheDocument()
     })
   })
 })

@@ -272,7 +272,7 @@ export default function ChangePasswordPage() {
                   </div>
                   <p className={`text-xs ${
                     passwordStrength.level === 'weak' ? 'text-red-600' :
-                    passwordStrength.level === 'fair' ? 'text-amber-600' :
+                    passwordStrength.level === 'fair' ? 'text-amber-700' :
                     passwordStrength.level === 'good' ? 'text-blue-600' :
                     'text-green-600'
                   }`}>

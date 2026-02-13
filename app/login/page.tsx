@@ -363,7 +363,7 @@ export default function LoginPage() {
 
                       {error && (
                         <div id="reset-error" role="alert" className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                           <p className="text-sm text-red-600">{error}</p>
                         </div>
                       )}
@@ -479,11 +479,11 @@ export default function LoginPage() {
 
                   {error && (
                     <div id="login-error" role="alert" className="p-4 rounded-xl bg-red-50 border border-red-100 flex items-start gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
-                      <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="text-sm text-red-600">{error}</p>
                         {isRateLimited && rateLimitUntil && (
-                          <p className="text-xs text-red-500 mt-1">{getRateLimitMessage()}</p>
+                          <p className="text-xs text-red-600 mt-1">{getRateLimitMessage()}</p>
                         )}
                       </div>
                     </div>

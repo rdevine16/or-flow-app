@@ -356,7 +356,7 @@ export default function AuditLogPage() {
 
                       {/* Success/Fail indicator */}
                       {!log.success && (
-                        <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded">Failed</span>
+                        <span className="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded">Failed</span>
                       )}
 
                       {/* Expand Arrow */}
@@ -407,7 +407,7 @@ export default function AuditLogPage() {
                           )}
                           {log.error_message && (
                             <div>
-                              <p className="text-xs font-medium text-red-500 uppercase tracking-wider">Error</p>
+                              <p className="text-xs font-medium text-red-600 uppercase tracking-wider">Error</p>
                               <p className="text-sm text-red-600">{log.error_message}</p>
                             </div>
                           )}

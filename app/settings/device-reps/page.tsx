@@ -326,7 +326,7 @@ export default function DeviceRepsPage() {
                   <div>
                     <h3 className="font-medium text-slate-900">Device Representatives</h3>
                     <p className="text-sm text-slate-500">
-                      {activeCount} active{pendingCount > 0 && <span className="text-amber-600"> · {pendingCount} pending</span>}
+                      {activeCount} active{pendingCount > 0 && <span className="text-amber-700"> · {pendingCount} pending</span>}
                     </p>
                   </div>
                   <Button onClick={openInviteModal}>

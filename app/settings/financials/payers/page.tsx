@@ -411,7 +411,7 @@ await genericAuditLog(supabase, 'payer.restored', {
             <div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Payer Name <span className="text-red-500">*</span>
+                  Payer Name <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"

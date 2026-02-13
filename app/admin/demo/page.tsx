@@ -611,7 +611,7 @@ export default function DemoDataWizard() {
                 {/* Validation errors */}
                 {errors.length > 0 && (
                   <div className="p-4 rounded-xl bg-red-50 border border-red-200">
-                    <p className="text-xs font-semibold text-red-700 mb-2">Fix before continuing:</p>
+                    <p className="text-xs font-semibold text-red-600 mb-2">Fix before continuing:</p>
                     {errors.map((e, i) => <p key={i} className="text-xs text-red-600 ml-2">• {e}</p>)}
                   </div>
                 )}
@@ -694,7 +694,7 @@ export default function DemoDataWizard() {
                           {item.v > 0 ? (
                             <Check className="w-3.5 h-3.5 text-green-500" />
                           ) : item.r ? (
-                            <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
                           ) : (
                             <div className="w-3.5 h-3.5 rounded-full bg-slate-300" />
                           )}
@@ -1024,7 +1024,7 @@ function ResultBanner({ result, onDismiss }: { result: GenerationResult; onDismi
             : 'Operation failed'
           }
         </p>
-        {!result.success && result.error && <p className="text-sm text-red-700 mt-1">{result.error}</p>}
+        {!result.success && result.error && <p className="text-sm text-red-600 mt-1">{result.error}</p>}
       </div>
       <button onClick={onDismiss} className="text-slate-400 hover:text-slate-600 p-1">
         <X className="w-4 h-4" />

@@ -347,7 +347,7 @@ export default function CheckInSettingsPage() {
                             />
                             <button
                               onClick={() => handleClearOverride(procedure.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               title="Remove override"
                             >
                               <X className="w-4 h-4" />
