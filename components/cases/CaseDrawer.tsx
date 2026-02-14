@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -189,12 +189,14 @@ export default function CaseDrawer({
   onCancelCase,
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
+  const prevCaseIdRef = useRef(caseId)
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
 
-  // Reset to default tab when switching cases
-  useEffect(() => {
+  // Reset to default tab when switching cases (render-time, no extra cycle)
+  if (caseId !== prevCaseIdRef.current) {
+    prevCaseIdRef.current = caseId
     setActiveTab('flags')
-  }, [caseId])
+  }
 
   // Whether this case has DQ issues (drives conditional Validation tab)
   const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))

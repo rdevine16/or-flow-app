@@ -426,4 +426,62 @@ describe('CaseDrawer — tab switching', () => {
     await user.click(screen.getByText('Flags'))
     expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
   })
+
+  it('resets to Flags tab when caseId changes (prevents stale validation content)', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const dqSet = new Set(['case-123'])
+
+    // Render with case-123 which has DQ issues
+    const { rerender } = render(
+      <CaseDrawer caseId="case-123" onClose={onClose} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+
+    // Switch to Validation tab
+    await user.click(screen.getByText('Validation'))
+    expect(screen.getByText('No validation issues')).toBeDefined()
+
+    // Now switch to case-456 which has NO DQ issues
+    const case456 = {
+      ...MOCK_CASE_DETAIL,
+      id: 'case-456',
+      case_number: 'CASE-2024-002',
+    }
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: case456 }))
+    rerender(
+      <CaseDrawer caseId="case-456" onClose={onClose} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+
+    // Should reset to Flags tab — show flag content, no Validation tab
+    expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
+    expect(screen.queryByText('Validation')).toBeNull()
+    expect(screen.queryByText('No validation issues')).toBeNull()
+  })
+
+  it('resets to Flags tab when switching between two non-validation tabs too', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+
+    const { rerender } = render(
+      <CaseDrawer caseId="case-123" onClose={onClose} categoryNameById={CATEGORY_MAP} />
+    )
+
+    // Switch to Financials tab
+    await user.click(screen.getByText('Financials'))
+    expect(screen.getByText('No financial data available for this case')).toBeDefined()
+
+    // Switch to different case
+    const case456 = {
+      ...MOCK_CASE_DETAIL,
+      id: 'case-456',
+      case_number: 'CASE-2024-002',
+    }
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: case456 }))
+    rerender(
+      <CaseDrawer caseId="case-456" onClose={onClose} categoryNameById={CATEGORY_MAP} />
+    )
+
+    // Should reset to Flags tab, not stay on Financials
+    expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
+  })
 })
