@@ -57,7 +57,7 @@ export function useCaseDrawer(caseId: string | null): UseCaseDrawerReturn {
     async (supabase) => {
       if (!caseId) return null as unknown as CaseDetail
       const { data: detail, error: fetchError } = await casesDAL.getById(supabase, caseId)
-      if (fetchError) throw fetchError
+      if (fetchError) throw new Error(fetchError.message)
       return detail as CaseDetail
     },
     {
@@ -99,7 +99,7 @@ export function useMilestoneComparisons(
         .eq('surgeon_id', surgeonId)
         .eq('procedure_type_id', procedureTypeId)
         .maybeSingle()
-      if (error) throw error
+      if (error) throw new Error(error.message)
       return data as SurgeonProcedureStats | null
     },
     {
@@ -117,7 +117,7 @@ export function useMilestoneComparisons(
         .eq('facility_id', facilityId)
         .eq('procedure_type_id', procedureTypeId)
         .maybeSingle()
-      if (error) throw error
+      if (error) throw new Error(error.message)
       return data as FacilityProcedureStats | null
     },
     {

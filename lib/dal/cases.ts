@@ -136,6 +136,7 @@ const CASE_DETAIL_SELECT = `
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name),
+  procedure_type:procedure_types(id, name, procedure_category_id),
   case_milestones(id, case_id, facility_milestone_id, recorded_at, recorded_by,
     facility_milestone:facility_milestones(name, display_name, display_order)
   ),
@@ -145,9 +146,7 @@ const CASE_DETAIL_SELECT = `
   case_staff(id, case_id, user_id, role,
     user:users(first_name, last_name)
   ),
-  case_implant_companies(id, case_id, implant_company_id,
-    implant_company:implant_companies(name)
-  )
+  case_implant_companies(implant_company_id)
 ` as const
 
 const CASE_ANALYTICS_SELECT = `
