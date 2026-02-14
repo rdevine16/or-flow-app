@@ -8,6 +8,7 @@ import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import CasesStatusTabs from '@/components/cases/CasesStatusTabs'
 import CasesTable from '@/components/cases/CasesTable'
 import CasesFilterBar from '@/components/cases/CasesFilterBar'
+import CasesSummaryCards from '@/components/cases/CasesSummaryCards'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
@@ -91,6 +92,8 @@ function CasesPageContent() {
     tabCountsLoading,
     dateRange,
     setDateRange,
+    statusIds,
+    statusIdsReady,
     // Filters
     filters,
     searchInput,
@@ -163,6 +166,17 @@ function CasesPageContent() {
         counts={tabCounts}
         loading={tabCountsLoading}
       />
+
+      {/* Summary Metric Cards */}
+      <div className="mt-4">
+        <CasesSummaryCards
+          facilityId={effectiveFacilityId}
+          activeTab={activeTab}
+          dateRange={dateRange}
+          statusIds={statusIds}
+          statusIdsReady={statusIdsReady}
+        />
+      </div>
 
       {/* Search & Filter Bar */}
       <div className="mt-4">
