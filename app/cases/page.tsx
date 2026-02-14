@@ -304,6 +304,7 @@ function CasesPageContent() {
         caseId={drawerCaseId}
         onClose={() => setDrawerCaseId(null)}
         categoryNameById={categoryNameById}
+        dqCaseIds={dqCaseIds}
         onCaseUpdated={refreshAll}
         onCancelCase={handleCancelFromDrawer}
       />

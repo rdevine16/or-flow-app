@@ -29,6 +29,19 @@ vi.mock('@/lib/hooks/useCaseFinancials', () => ({
   useCaseFinancials: (...args: unknown[]) => mockUseCaseFinancials(...args),
 }))
 
+// Mock useSupabaseQuery (used by validation tab lazy-loading)
+vi.mock('@/hooks/useSupabaseQuery', () => ({
+  useSupabaseQuery: () => ({ data: null, loading: false, error: null, refetch: vi.fn(), setData: vi.fn() }),
+}))
+
+// Mock fetchMetricIssues
+vi.mock('@/lib/dataQuality', () => ({
+  fetchMetricIssues: vi.fn().mockResolvedValue([]),
+  getSeverityColor: () => 'bg-slate-100 text-slate-900 border-slate-200',
+  formatTimeAgo: () => 'just now',
+  formatDetectedValue: () => 'N/A',
+}))
+
 // Mock ProcedureIcon to avoid Lucide rendering complexity
 vi.mock('@/components/ui/ProcedureIcon', () => ({
   default: ({ categoryName }: { categoryName: string | null }) => (

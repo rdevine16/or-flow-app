@@ -5,9 +5,10 @@
 
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useCaseDrawer, useMilestoneComparisons } from '@/lib/hooks/useCaseDrawer'
 import { useCaseFinancials } from '@/lib/hooks/useCaseFinancials'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
@@ -16,6 +17,8 @@ import ProcedureIcon from '@/components/ui/ProcedureIcon'
 import CaseDrawerFlags from '@/components/cases/CaseDrawerFlags'
 import CaseDrawerFinancials from '@/components/cases/CaseDrawerFinancials'
 import CaseDrawerMilestones from '@/components/cases/CaseDrawerMilestones'
+import CaseDrawerValidation from '@/components/cases/CaseDrawerValidation'
+import { fetchMetricIssues, type MetricIssue } from '@/lib/dataQuality'
 import type { CaseDetail, CaseMilestone } from '@/lib/dal/cases'
 import {
   X,
@@ -27,6 +30,7 @@ import {
   Milestone as MilestoneIcon,
   Flag,
   Ban,
+  ShieldAlert,
 } from 'lucide-react'
 
 // ============================================
@@ -37,13 +41,15 @@ interface CaseDrawerProps {
   caseId: string | null
   onClose: () => void
   categoryNameById: Map<string, string>
+  /** Case IDs with unresolved DQ issues — enables conditional Validation tab */
+  dqCaseIds?: Set<string>
   /** Called after a case update to refresh table data */
   onCaseUpdated?: () => void
   /** Called when cancel button is clicked */
   onCancelCase?: (caseId: string, caseNumber: string) => void
 }
 
-type DrawerTab = 'financials' | 'milestones' | 'flags'
+type DrawerTab = 'financials' | 'milestones' | 'flags' | 'validation'
 
 // ============================================
 // HELPERS
@@ -107,11 +113,15 @@ function computeTotalFromMilestones(milestones: CaseMilestone[]): number | null 
 // TAB CONFIG
 // ============================================
 
-const TABS: { key: DrawerTab; label: string; icon: typeof Flag }[] = [
+const BASE_TABS: { key: DrawerTab; label: string; icon: typeof Flag }[] = [
   { key: 'financials', label: 'Financials', icon: DollarSign },
   { key: 'milestones', label: 'Milestones', icon: MilestoneIcon },
   { key: 'flags', label: 'Flags', icon: Flag },
 ]
+
+const VALIDATION_TAB: { key: DrawerTab; label: string; icon: typeof Flag } = {
+  key: 'validation', label: 'Validation', icon: ShieldAlert,
+}
 
 // ============================================
 // SUB-COMPONENTS
@@ -174,11 +184,41 @@ export default function CaseDrawer({
   caseId,
   onClose,
   categoryNameById,
+  dqCaseIds,
   onCaseUpdated,
   onCancelCase,
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
+
+  // Whether this case has DQ issues (drives conditional Validation tab)
+  const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))
+
+  // Build tabs dynamically — include Validation only when case has DQ issues
+  const tabs = useMemo(() => {
+    if (hasValidationIssues) return [...BASE_TABS, VALIDATION_TAB]
+    return BASE_TABS
+  }, [hasValidationIssues])
+
+  // Reset to flags tab if validation tab disappears while active
+  const handleTabChange = useCallback((tab: DrawerTab) => {
+    setActiveTab(tab)
+  }, [])
+
+  // Lazy-load metric issues only when validation tab is active
+  const { data: validationIssues, loading: validationLoading } = useSupabaseQuery<MetricIssue[]>(
+    async (supabase) => {
+      if (!caseDetail?.facility_id || !caseId) return []
+      return fetchMetricIssues(supabase, caseDetail.facility_id, {
+        caseId,
+        unresolvedOnly: true,
+      })
+    },
+    {
+      deps: [caseDetail?.facility_id, caseId, activeTab],
+      enabled: activeTab === 'validation' && !!caseDetail && hasValidationIssues,
+    }
+  )
 
   // Lazy-load milestone comparison data only when milestones tab is active
   const {
@@ -354,13 +394,13 @@ export default function CaseDrawer({
 
                 {/* Tab bar */}
                 <div className="flex border-t border-slate-100">
-                  {TABS.map((tab) => {
+                  {tabs.map((tab) => {
                     const isActive = activeTab === tab.key
                     const TabIcon = tab.icon
                     return (
                       <button
                         key={tab.key}
-                        onClick={() => setActiveTab(tab.key)}
+                        onClick={() => handleTabChange(tab.key)}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors border-b-2 ${
                           isActive
                             ? 'text-blue-600 border-blue-600'
@@ -373,6 +413,9 @@ export default function CaseDrawer({
                           <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 text-[10px] font-bold">
                             {caseDetail.case_flags.length}
                           </span>
+                        )}
+                        {tab.key === 'validation' && (
+                          <span className="ml-1 inline-flex items-center justify-center w-2 h-2 rounded-full bg-amber-400" />
                         )}
                       </button>
                     )
@@ -409,6 +452,14 @@ export default function CaseDrawer({
                     loading={financialsLoading}
                     error={financialsError}
                     surgeonName={surgeonName}
+                  />
+                )}
+
+                {activeTab === 'validation' && caseId && (
+                  <CaseDrawerValidation
+                    issues={validationIssues ?? []}
+                    loading={validationLoading}
+                    caseId={caseId}
                   />
                 )}
               </div>
