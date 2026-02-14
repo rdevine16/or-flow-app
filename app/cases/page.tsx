@@ -6,14 +6,14 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import CasesStatusTabs from '@/components/cases/CasesStatusTabs'
+import CasesTable from '@/components/cases/CasesTable'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 import { PageLoader } from '@/components/ui/Loading'
-import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState'
 import { useCasesPage } from '@/lib/hooks/useCasesPage'
 import { Plus, ChevronDown, List } from 'lucide-react'
-import type { CasesPageTab } from '@/lib/dal'
+import type { CaseListItem } from '@/lib/dal/cases'
 
 // ============================================================================
 // SPLIT BUTTON — New Case / Bulk Create
@@ -70,19 +70,6 @@ function CreateCaseSplitButton() {
 }
 
 // ============================================================================
-// EMPTY STATES PER TAB
-// ============================================================================
-
-const TAB_EMPTY_STATES: Record<CasesPageTab, { title: string; description: string }> = {
-  all: { title: 'No cases found', description: 'Try adjusting your date range or create a new case' },
-  today: { title: 'No cases today', description: 'There are no cases scheduled for today' },
-  scheduled: { title: 'No scheduled cases', description: 'No scheduled cases in this period' },
-  in_progress: { title: 'No cases in progress', description: 'No cases are currently in progress' },
-  completed: { title: 'No completed cases', description: 'No completed cases in this period' },
-  needs_validation: { title: 'All cases validated!', description: 'No cases need validation at this time' },
-}
-
-// ============================================================================
 // MAIN CONTENT COMPONENT
 // ============================================================================
 
@@ -103,10 +90,31 @@ function CasesPageContent() {
     tabCountsLoading,
     dateRange,
     setDateRange,
+    cases,
+    casesLoading,
+    casesError,
+    totalCount,
+    sort,
+    setSort,
+    page,
+    pageSize,
+    totalPages,
+    setPage,
+    flagSummaries,
+    categoryNameById,
+    selectedRows,
+    toggleRow,
+    toggleAllRows,
   } = useCasesPage(effectiveFacilityId)
 
   // Call Next Patient modal
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
+
+  // Row click handler — Phase 6 will wire to drawer
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleRowClick = (caseItem: CaseListItem) => {
+    // Phase 6 will open the CaseDrawer here
+  }
 
   // --- No Facility Selected ---
   if (isGlobalAdmin && !isImpersonating) {
@@ -142,16 +150,31 @@ function CasesPageContent() {
         loading={tabCountsLoading}
       />
 
-      {/* Table Area — Phase 3 will replace this placeholder with CasesTable */}
-      <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+      {/* Data Table */}
+      <div className="mt-6">
         {!effectiveFacilityId || userLoading ? (
-          <PageLoader message="Loading cases..." />
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            <PageLoader message="Loading cases..." />
+          </div>
         ) : (
-          <EmptyState
-            icon={EmptyStateIcons.Clipboard}
-            title={TAB_EMPTY_STATES[activeTab].title}
-            description={TAB_EMPTY_STATES[activeTab].description}
-            className="py-16"
+          <CasesTable
+            cases={cases}
+            loading={casesLoading}
+            error={casesError}
+            activeTab={activeTab}
+            sort={sort}
+            onSortChange={setSort}
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            flagSummaries={flagSummaries}
+            categoryNameById={categoryNameById}
+            selectedRows={selectedRows}
+            onToggleRow={toggleRow}
+            onToggleAllRows={toggleAllRows}
+            onRowClick={handleRowClick}
           />
         )}
       </div>

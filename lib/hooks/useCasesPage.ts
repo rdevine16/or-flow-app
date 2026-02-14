@@ -1,14 +1,18 @@
 // lib/hooks/useCasesPage.ts
 // Main page hook for the Cases page.
-// Manages tab state (URL-synced), date range, status ID mapping, and tab counts.
+// Manages tab state (URL-synced), date range, status ID mapping, tab counts,
+// table data fetching, sort/pagination state, and flag summaries.
 
 'use client'
 
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { casesDAL, type CasesPageTab } from '@/lib/dal'
+import { casesDAL, type CasesPageTab, type CaseFlagSummary } from '@/lib/dal'
+import type { CaseListItem } from '@/lib/dal/cases'
+import type { SortParams } from '@/lib/dal'
 import { useCaseStatuses } from '@/hooks/useLookups'
+import { useProcedureCategories } from '@/hooks/useLookups'
 import { getPresetDates } from '@/components/ui/DateRangeSelector'
 
 // ============================================
@@ -37,6 +41,36 @@ export interface UseCasesPageReturn {
   // Status lookup (for passing to DAL)
   statusIds: Record<string, string>
   statusIdsReady: boolean
+
+  // Table data
+  cases: CaseListItem[]
+  casesLoading: boolean
+  casesError: string | null
+  totalCount: number
+  refetchCases: () => Promise<void>
+
+  // Sort state
+  sort: SortParams
+  setSort: (sort: SortParams) => void
+
+  // Pagination state
+  page: number
+  pageSize: number
+  setPage: (page: number) => void
+  totalPages: number
+
+  // Flags
+  flagSummaries: Map<string, CaseFlagSummary>
+
+  // Procedure category lookup (id → name) for icons
+  categoryNameById: Map<string, string>
+
+  // Row selection
+  selectedRows: Set<string>
+  setSelectedRows: (rows: Set<string>) => void
+  toggleRow: (id: string) => void
+  toggleAllRows: () => void
+  clearSelection: () => void
 }
 
 // ============================================
@@ -55,6 +89,8 @@ const EMPTY_COUNTS: Record<CasesPageTab, number> = {
   all: 0, today: 0, scheduled: 0, in_progress: 0, completed: 0, needs_validation: 0,
 }
 
+const DEFAULT_PAGE_SIZE = 25
+
 // ============================================
 // HOOK
 // ============================================
@@ -63,6 +99,37 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
+
+  // --- Row Selection (declared first because other callbacks reference setSelectedRows) ---
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set())
+
+  const toggleRow = useCallback((id: string) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    setSelectedRows(new Set())
+  }, [])
+
+  // --- Sort State ---
+  const [sort, setSort] = useState<SortParams>({ sortBy: 'date', sortDirection: 'desc' })
+
+  // --- Pagination State (declared before callbacks that reference setPage) ---
+  const [page, setPageState] = useState(1)
+  const pageSize = DEFAULT_PAGE_SIZE
+
+  const setPage = useCallback((newPage: number) => {
+    setPageState(newPage)
+    setSelectedRows(new Set())
+  }, [])
 
   // --- Tab State (URL-synced via ?tab= query param) ---
   const activeTab: CasesPageTab = useMemo(() => {
@@ -77,8 +144,11 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     } else {
       params.set('tab', tab)
     }
+    // Reset to page 1 when switching tabs
+    params.delete('page')
     const qs = params.toString()
     router.push(qs ? `${pathname}?${qs}` : pathname)
+    setSelectedRows(new Set())
   }, [router, pathname, searchParams])
 
   // --- Date Range State (default: Last 30 Days) ---
@@ -90,7 +160,9 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
 
   const setDateRange = useCallback((preset: string, start: string, end: string) => {
     setDateRangeState({ preset, start, end })
-  }, [])
+    setPage(1)
+    setSelectedRows(new Set())
+  }, [setPage])
 
   // --- Status ID Mapping (case_statuses name → UUID) ---
   const { data: caseStatuses } = useCaseStatuses()
@@ -105,6 +177,19 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
   }, [caseStatuses])
 
   const statusIdsReady = Object.keys(statusIds).length > 0
+
+  // --- Procedure Categories Lookup (for icon mapping) ---
+  const { data: procedureCategories } = useProcedureCategories()
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    if (procedureCategories) {
+      for (const cat of procedureCategories) {
+        map.set(cat.id, cat.name)
+      }
+    }
+    return map
+  }, [procedureCategories])
 
   // --- Tab Counts ---
   const { data: tabCounts, loading: tabCountsLoading } = useSupabaseQuery<Record<CasesPageTab, number>>(
@@ -126,6 +211,73 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     }
   )
 
+  // --- Table Data ---
+  const {
+    data: casesResult,
+    loading: casesLoading,
+    error: casesError,
+    refetch: refetchCases,
+  } = useSupabaseQuery<{ items: CaseListItem[]; total: number }>(
+    async (supabase) => {
+      if (!facilityId || !statusIdsReady) return { items: [], total: 0 }
+
+      const { data, error, count } = await casesDAL.listForCasesPage(
+        supabase,
+        facilityId,
+        { start: dateRange.start, end: dateRange.end },
+        activeTab,
+        { page, pageSize },
+        sort,
+        statusIds,
+      )
+      if (error) throw error
+      return { items: data, total: count ?? 0 }
+    },
+    {
+      deps: [facilityId, dateRange.start, dateRange.end, activeTab, page, sort.sortBy, sort.sortDirection, statusIdsReady],
+      enabled: !!facilityId && statusIdsReady,
+    }
+  )
+
+  const cases = useMemo(() => casesResult?.items ?? [], [casesResult])
+  const totalCount = casesResult?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+
+  // --- Flag Summaries (batch query for visible case IDs) ---
+  const caseIds = useMemo(() => cases.map(c => c.id), [cases])
+
+  const { data: flagSummariesData } = useSupabaseQuery<CaseFlagSummary[]>(
+    async (supabase) => {
+      if (caseIds.length === 0) return []
+      const { data, error } = await casesDAL.flagsByCase(supabase, caseIds)
+      if (error) throw error
+      return data
+    },
+    {
+      deps: [caseIds.join(',')],
+      enabled: caseIds.length > 0,
+    }
+  )
+
+  const flagSummaries = useMemo(() => {
+    const map = new Map<string, CaseFlagSummary>()
+    if (flagSummariesData) {
+      for (const f of flagSummariesData) {
+        map.set(f.case_id, f)
+      }
+    }
+    return map
+  }, [flagSummariesData])
+
+  // --- Toggle All Rows (on current page) ---
+  const toggleAllRows = useCallback(() => {
+    if (selectedRows.size === cases.length) {
+      setSelectedRows(new Set())
+    } else {
+      setSelectedRows(new Set(cases.map(c => c.id)))
+    }
+  }, [cases, selectedRows.size])
+
   return {
     activeTab,
     setActiveTab,
@@ -135,5 +287,23 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setDateRange,
     statusIds,
     statusIdsReady,
+    cases,
+    casesLoading,
+    casesError,
+    totalCount,
+    refetchCases,
+    sort,
+    setSort,
+    page,
+    pageSize,
+    setPage,
+    totalPages,
+    flagSummaries,
+    categoryNameById,
+    selectedRows,
+    setSelectedRows,
+    toggleRow,
+    toggleAllRows,
+    clearSelection,
   }
 }
