@@ -16,7 +16,7 @@ export interface CaseListItem {
   case_number: string
   scheduled_date: string
   start_time: string | null
-  status: string | null
+  status_id: string | null
   data_validated: boolean
   or_room_id: string | null
   surgeon_id: string | null
@@ -25,7 +25,7 @@ export interface CaseListItem {
   created_by: string | null
   surgeon?: { first_name: string; last_name: string } | null
   or_room?: { name: string } | null
-  case_status?: { name: string; color: string } | null
+  case_status?: { name: string } | null
   procedure_type?: { id: string; name: string; procedure_category_id: string | null } | null
 }
 
@@ -123,11 +123,11 @@ export interface CaseForAnalytics {
 
 const CASE_LIST_SELECT = `
   id, case_number,
-  scheduled_date, start_time, status, data_validated, or_room_id, surgeon_id, facility_id,
+  scheduled_date, start_time, status_id, data_validated, or_room_id, surgeon_id, facility_id,
   created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
-  case_status:case_statuses(name, color),
+  case_status:case_statuses(name),
   procedure_type:procedure_types(id, name, procedure_category_id)
 ` as const
 
@@ -135,7 +135,7 @@ const CASE_DETAIL_SELECT = `
   *,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
-  case_status:case_statuses(name, color),
+  case_status:case_statuses(name),
   case_milestones(id, case_id, facility_milestone_id, recorded_at, recorded_by,
     facility_milestone:facility_milestones(name, display_name, display_order)
   ),
@@ -358,7 +358,6 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       .from('cases')
       .select(CASE_LIST_SELECT, { count: 'exact' })
       .eq('facility_id', facilityId)
-      .eq('is_active', true)
 
     // Date range — "today" tab overrides to today's date
     if (tab === 'today') {
@@ -372,14 +371,14 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
 
     // Tab-specific status filtering
     if (tab === 'scheduled' && statusIds?.scheduled) {
-      query = query.eq('status', statusIds.scheduled)
+      query = query.eq('status_id', statusIds.scheduled)
     } else if (tab === 'in_progress' && statusIds?.in_progress) {
-      query = query.eq('status', statusIds.in_progress)
+      query = query.eq('status_id', statusIds.in_progress)
     } else if (tab === 'completed' && statusIds?.completed) {
-      query = query.eq('status', statusIds.completed)
+      query = query.eq('status_id', statusIds.completed)
     } else if (tab === 'needs_validation' && statusIds?.completed) {
       query = query
-        .eq('status', statusIds.completed)
+        .eq('status_id', statusIds.completed)
         .eq('data_validated', false)
     }
 
@@ -437,7 +436,6 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
         .from('cases')
         .select('id', { count: 'exact', head: true })
         .eq('facility_id', facilityId)
-        .eq('is_active', true)
 
       // Apply entity filters to counts so badges reflect filtered state
       if (filters?.search) {
@@ -466,16 +464,16 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
         dateRangeFilter(),
         baseFilter().eq('scheduled_date', today),
         statusIds.scheduled
-          ? dateRangeFilter().eq('status', statusIds.scheduled)
+          ? dateRangeFilter().eq('status_id', statusIds.scheduled)
           : Promise.resolve({ count: 0, error: null }),
         statusIds.in_progress
-          ? dateRangeFilter().eq('status', statusIds.in_progress)
+          ? dateRangeFilter().eq('status_id', statusIds.in_progress)
           : Promise.resolve({ count: 0, error: null }),
         statusIds.completed
-          ? dateRangeFilter().eq('status', statusIds.completed)
+          ? dateRangeFilter().eq('status_id', statusIds.completed)
           : Promise.resolve({ count: 0, error: null }),
         statusIds.completed
-          ? dateRangeFilter().eq('status', statusIds.completed).eq('data_validated', false)
+          ? dateRangeFilter().eq('status_id', statusIds.completed).eq('data_validated', false)
           : Promise.resolve({ count: 0, error: null }),
       ])
 
