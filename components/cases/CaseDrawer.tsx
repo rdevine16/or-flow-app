@@ -8,11 +8,12 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useCaseDrawer } from '@/lib/hooks/useCaseDrawer'
+import { useCaseDrawer, useMilestoneComparisons } from '@/lib/hooks/useCaseDrawer'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
 import { statusColors } from '@/lib/design-tokens'
 import ProcedureIcon from '@/components/ui/ProcedureIcon'
 import CaseDrawerFlags from '@/components/cases/CaseDrawerFlags'
+import CaseDrawerMilestones from '@/components/cases/CaseDrawerMilestones'
 import type { CaseDetail, CaseMilestone } from '@/lib/dal/cases'
 import {
   X,
@@ -173,6 +174,18 @@ export default function CaseDrawer({
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
+
+  // Lazy-load milestone comparison data only when milestones tab is active
+  const {
+    surgeonStats,
+    facilityStats,
+    loading: comparisonLoading,
+  } = useMilestoneComparisons(
+    caseDetail?.facility_id ?? null,
+    caseDetail?.surgeon_id ?? null,
+    caseDetail?.procedure_type?.id ?? null,
+    activeTab === 'milestones' && !!caseDetail,
+  )
 
   // Resolve display status
   const displayStatus = useMemo(() => {
@@ -343,13 +356,17 @@ export default function CaseDrawer({
                 )}
 
                 {activeTab === 'milestones' && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                      <MilestoneIcon className="w-6 h-6 text-slate-400" />
-                    </div>
-                    <p className="text-sm font-medium text-slate-600">Milestones Tab</p>
-                    <p className="text-xs text-slate-400 mt-1">Coming in Phase 7</p>
-                  </div>
+                  <CaseDrawerMilestones
+                    milestones={caseDetail.case_milestones}
+                    surgeonStats={surgeonStats}
+                    facilityStats={facilityStats}
+                    comparisonLoading={comparisonLoading}
+                    surgeonName={
+                      caseDetail.surgeon
+                        ? `${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
+                        : null
+                    }
+                  />
                 )}
 
                 {activeTab === 'financials' && (

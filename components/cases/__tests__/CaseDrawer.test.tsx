@@ -15,10 +15,12 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-// Mock useCaseDrawer
+// Mock useCaseDrawer and useMilestoneComparisons
 const mockUseCaseDrawer = vi.fn()
+const mockUseMilestoneComparisons = vi.fn()
 vi.mock('@/lib/hooks/useCaseDrawer', () => ({
   useCaseDrawer: (...args: unknown[]) => mockUseCaseDrawer(...args),
+  useMilestoneComparisons: (...args: unknown[]) => mockUseMilestoneComparisons(...args),
 }))
 
 // Mock ProcedureIcon to avoid Lucide rendering complexity
@@ -119,6 +121,15 @@ function defaultDrawerReturn(overrides: Partial<ReturnType<typeof mockUseCaseDra
   }
 }
 
+function defaultComparisonReturn() {
+  return {
+    surgeonStats: null,
+    facilityStats: null,
+    loading: false,
+    error: null,
+  }
+}
+
 // ============================================
 // TESTS
 // ============================================
@@ -126,6 +137,7 @@ function defaultDrawerReturn(overrides: Partial<ReturnType<typeof mockUseCaseDra
 describe('CaseDrawer — unit', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
+    mockUseMilestoneComparisons.mockReturnValue(defaultComparisonReturn())
   })
 
   it('does not render dialog when caseId is null', () => {
@@ -260,9 +272,10 @@ describe('CaseDrawer — unit', () => {
 describe('CaseDrawer — tab switching', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
+    mockUseMilestoneComparisons.mockReturnValue(defaultComparisonReturn())
   })
 
-  it('switches to Milestones stub tab', async () => {
+  it('switches to Milestones tab and renders milestone timeline', async () => {
     const user = userEvent.setup()
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
@@ -272,7 +285,11 @@ describe('CaseDrawer — tab switching', () => {
     const tabButton = milestonesElements.find(el => el.closest('button'))
     expect(tabButton).toBeDefined()
     await user.click(tabButton!)
-    expect(screen.getByText('Coming in Phase 7')).toBeDefined()
+    // Should show milestone names from case_milestones
+    expect(screen.getByText('Patient In')).toBeDefined()
+    expect(screen.getByText('Incision')).toBeDefined()
+    expect(screen.getByText('Closing')).toBeDefined()
+    expect(screen.getByText('Patient Out')).toBeDefined()
   })
 
   it('switches to Financials stub tab', async () => {
