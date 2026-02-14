@@ -1,33 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import SurgeonAvatar from '@/components/ui/SurgeonAvatar'
+import DateRangeSelector from '@/components/ui/DateRangeSelector'
+import CasesStatusTabs from '@/components/cases/CasesStatusTabs'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
-import CasesFilterBar, { FilterState } from '@/components/filters/CaseFilterBar'
-import { Pagination } from '@/components/ui/Pagination'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Plus, Trash2, ChevronDown, List } from 'lucide-react'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 import { PageLoader } from '@/components/ui/Loading'
-import { StatusBadgeDot } from '@/components/ui/StatusBadge'
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState'
-import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { getLocalDateString } from '@/lib/date-utils'
-import {
-  extractName,
-  formatSurgeonName,
-  formatDisplayTime,
-  formatRelativeDate,
-} from '@/lib/formatters'
-import { useSurgeons, useProcedureTypes, useRooms } from '@/hooks'
-
+import { useCasesPage } from '@/lib/hooks/useCasesPage'
+import { Plus, ChevronDown, List } from 'lucide-react'
+import type { CasesPageTab } from '@/lib/dal'
 
 // ============================================================================
 // SPLIT BUTTON — New Case / Bulk Create
@@ -50,7 +36,6 @@ function CreateCaseSplitButton() {
   return (
     <div className="relative" ref={ref}>
       <div className="inline-flex rounded-xl shadow-sm">
-        {/* Primary action */}
         <Link
           href="/cases/new"
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-l-xl hover:bg-blue-700 transition-all duration-200"
@@ -58,7 +43,6 @@ function CreateCaseSplitButton() {
           <Plus className="w-4 h-4" />
           New Case
         </Link>
-        {/* Dropdown toggle */}
         <button
           type="button"
           onClick={() => setOpen(prev => !prev)}
@@ -86,67 +70,23 @@ function CreateCaseSplitButton() {
 }
 
 // ============================================================================
-// TYPES
+// EMPTY STATES PER TAB
 // ============================================================================
 
-interface Case {
-  id: string
-  case_number: string
-  scheduled_date: string
-  start_time: string | null
-  operative_side: string | null
-  is_draft: boolean
-  or_rooms: { name: string }[] | { name: string } | null
-  procedure_types: { name: string }[] | { name: string } | null
-  case_statuses: { name: string }[] | { name: string } | null
-  surgeon: { first_name: string; last_name: string }[] | { first_name: string; last_name: string } | null
+const TAB_EMPTY_STATES: Record<CasesPageTab, { title: string; description: string }> = {
+  all: { title: 'No cases found', description: 'Try adjusting your date range or create a new case' },
+  today: { title: 'No cases today', description: 'There are no cases scheduled for today' },
+  scheduled: { title: 'No scheduled cases', description: 'No scheduled cases in this period' },
+  in_progress: { title: 'No cases in progress', description: 'No cases are currently in progress' },
+  completed: { title: 'No completed cases', description: 'No completed cases in this period' },
+  needs_validation: { title: 'All cases validated!', description: 'No cases need validation at this time' },
 }
 
 // ============================================================================
-// HELPERS
-// ============================================================================
-
-function getDateRange(filter: string): { start?: string; end?: string } {
-  const today = getLocalDateString()
-  const todayDate = new Date()
-
-  switch (filter) {
-    case 'today':
-      return { start: today, end: today }
-    case 'yesterday': {
-      const yesterday = new Date(todayDate)
-      yesterday.setDate(yesterday.getDate() - 1)
-      return { start: getLocalDateString(yesterday), end: getLocalDateString(yesterday) }
-    }
-    case 'week': {
-      const weekStart = new Date(todayDate)
-      weekStart.setDate(weekStart.getDate() - 7)
-      return { start: getLocalDateString(weekStart), end: today }
-    }
-    case 'month': {
-      const monthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)
-      return { start: getLocalDateString(monthStart), end: today }
-    }
-    case 'quarter': {
-      const quarterStart = new Date(todayDate.getFullYear(), Math.floor(todayDate.getMonth() / 3) * 3, 1)
-      return { start: getLocalDateString(quarterStart), end: today }
-    }
-    case 'all':
-    default:
-      return {}
-  }
-}
-
-// ============================================================================
-// MAIN COMPONENT
+// MAIN CONTENT COMPONENT
 // ============================================================================
 
 function CasesPageContent() {
-  const router = useRouter()
-  const supabase = createClient()
-  const { showToast } = useToast()
-
-  // User context — replaces manual facility init boilerplate
   const {
     userData,
     loading: userLoading,
@@ -156,210 +96,19 @@ function CasesPageContent() {
     canCreateCases,
   } = useUser()
 
-  // Core state
-  const [cases, setCases] = useState<Case[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Case | null>(null)
-
-  // Filter options (fetched from DB)
-  const { data: surgeons } = useSurgeons(effectiveFacilityId)
-  const { data: rooms } = useRooms(effectiveFacilityId)
-  const { data: procedureTypes } = useProcedureTypes(effectiveFacilityId)
-
-  // Current filters (managed by CasesFilterBar)
-  const [currentFilters, setCurrentFilters] = useState<FilterState>({
-    dateRange: 'week',
-    status: [],
-    surgeonIds: [],
-    roomIds: [],
-    procedureIds: [],
-    search: '',
-  })
+  const {
+    activeTab,
+    setActiveTab,
+    tabCounts,
+    tabCountsLoading,
+    dateRange,
+    setDateRange,
+  } = useCasesPage(effectiveFacilityId)
 
   // Call Next Patient modal
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1)
-  const [perPage, setPerPage] = useState(25)
-
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(cases.length / perPage)),
-    [cases.length, perPage]
-  )
-
-  // Clamp currentPage if it exceeds totalPages (e.g. after filter reduces results)
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages)
-  }, [totalPages, currentPage])
-
-  const paginatedCases = useMemo(() => {
-    const start = (currentPage - 1) * perPage
-    return cases.slice(start, start + perPage)
-  }, [cases, currentPage, perPage])
-
-  // ============================================================================
-  // FETCH CASES
-  // ============================================================================
-
-  const fetchCases = useCallback(async (filters: FilterState) => {
-    if (!effectiveFacilityId) return
-
-    try {
-      setLoading(true)
-      setError(null)
-
-      let query = supabase
-        .from('cases')
-        .select(`
-          id,
-          case_number,
-          scheduled_date,
-          start_time,
-          operative_side,
-          is_draft,
-          or_rooms (name),
-          procedure_types (name),
-          case_statuses (name),
-          surgeon:users!cases_surgeon_id_fkey (first_name, last_name)
-        `)
-        .eq('facility_id', effectiveFacilityId)
-        .order('scheduled_date', { ascending: false })
-        .order('start_time', { ascending: true })
-
-      // Apply date range
-      const dateRange = getDateRange(filters.dateRange)
-      if (dateRange.start && dateRange.end) {
-        query = query.gte('scheduled_date', dateRange.start).lte('scheduled_date', dateRange.end)
-      }
-
-      // Apply status filter (handle "draft" pseudo-status separately)
-      const draftFilter = filters.status.includes('draft')
-      const realStatuses = filters.status.filter(s => s !== 'draft')
-
-      if (draftFilter && realStatuses.length === 0) {
-        // Only drafts requested
-        query = query.eq('is_draft', true)
-      } else if (realStatuses.length > 0) {
-        const { data: statusData, error: statusError } = await supabase
-          .from('case_statuses')
-          .select('id, name')
-          .in('name', realStatuses)
-
-        if (statusError) throw statusError
-
-        if (statusData && statusData.length > 0) {
-          if (draftFilter) {
-            // Drafts + specific statuses: use .or() to combine
-            const statusIds = statusData.map(s => `status_id.eq.${s.id}`).join(',')
-            query = query.or(`is_draft.eq.true,${statusIds}`)
-          } else {
-            query = query.in('status_id', statusData.map(s => s.id))
-          }
-        }
-      }
-
-      // Apply surgeon filter
-      if (filters.surgeonIds.length > 0) {
-        query = query.in('surgeon_id', filters.surgeonIds)
-      }
-
-      // Apply room filter
-      if (filters.roomIds.length > 0) {
-        query = query.in('or_room_id', filters.roomIds)
-      }
-
-      // Apply procedure filter
-      if (filters.procedureIds.length > 0) {
-        query = query.in('procedure_type_id', filters.procedureIds)
-      }
-
-      const { data, error: casesError } = await query
-
-      if (casesError) throw casesError
-
-      let filteredData = (data as unknown as Case[]) || []
-
-      // Apply text search (client-side for flexibility)
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase()
-        filteredData = filteredData.filter(c => {
-          const caseNumber = c.case_number.toLowerCase()
-          const procedure = extractName(c.procedure_types)?.toLowerCase() || ''
-          const surgeon = formatSurgeonName(c.surgeon, { format: 'full' }).toLowerCase()
-          const room = extractName(c.or_rooms)?.toLowerCase() || ''
-
-          return (
-            caseNumber.includes(searchLower) ||
-            procedure.includes(searchLower) ||
-            surgeon.includes(searchLower) ||
-            room.includes(searchLower)
-          )
-        })
-      }
-
-      setCases(filteredData)
-    } catch (err) {
-      setError('Failed to load cases. Please try again.')
-      showToast({
-        type: 'error',
-        title: 'Failed to load cases',
-        message: 'Please try again or contact support',
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [effectiveFacilityId, supabase, showToast])
-
-  // Fetch cases when facility or filters change
-  useEffect(() => {
-    if (effectiveFacilityId) {
-      fetchCases(currentFilters)
-    } else if (!userLoading) {
-      setLoading(false)
-    }
-  }, [effectiveFacilityId, currentFilters, fetchCases, userLoading])
-
-  // ============================================================================
-  // HANDLERS
-  // ============================================================================
-
-  const handleFiltersChange = useCallback((filters: FilterState) => {
-    setCurrentFilters(filters)
-    setCurrentPage(1)
-  }, [])
-
-  const handleDelete = async (id: string) => {
-    try {
-      const { error: deleteError } = await supabase
-        .from('cases')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) throw deleteError
-
-      setCases(prev => prev.filter(c => c.id !== id))
-      setDeleteTarget(null)
-
-      showToast({
-        type: 'success',
-        title: 'Case deleted',
-        message: 'The case has been removed successfully',
-      })
-    } catch (err) {
-      showToast({
-        type: 'error',
-        title: 'Failed to delete case',
-        message: 'Please try again',
-      })
-    }
-  }
-
-  // ============================================================================
-  // RENDER — NO FACILITY STATE
-  // ============================================================================
-
+  // --- No Facility Selected ---
   if (isGlobalAdmin && !isImpersonating) {
     return (
       <DashboardLayout>
@@ -368,180 +117,42 @@ function CasesPageContent() {
     )
   }
 
-  // ============================================================================
-  // RENDER — MAIN
-  // ============================================================================
-
   return (
     <DashboardLayout>
-      {/* Error Banner */}
-      <ErrorBanner
-        message={error}
-        onRetry={() => {
-          setError(null)
-          fetchCases(currentFilters)
-        }}
-        onDismiss={() => setError(null)}
-        className="mb-6"
-      />
-
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Cases</h1>
           <p className="text-slate-500 text-sm mt-1">Manage surgical cases and track progress</p>
         </div>
-        {canCreateCases && (
-          <CreateCaseSplitButton />
-        )}
+        <div className="flex items-center gap-3">
+          <DateRangeSelector
+            value={dateRange.preset}
+            onChange={setDateRange}
+          />
+          {canCreateCases && <CreateCaseSplitButton />}
+        </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="mb-6">
-        <CasesFilterBar
-          surgeons={surgeons}
-          rooms={rooms}
-          procedureTypes={procedureTypes}
-          cases={cases.map(c => ({
-            id: c.id,
-            case_number: c.case_number,
-            procedure_name: extractName(c.procedure_types) || undefined,
-            surgeon_name: formatSurgeonName(c.surgeon),
-            room_name: extractName(c.or_rooms) || undefined,
-          }))}
-          totalCount={cases.length}
-          filteredCount={cases.length}
-          onFiltersChange={handleFiltersChange}
-          onCaseSelect={(id) => router.push(`/cases/${id}`)}
-        />
-      </div>
+      {/* Status Tabs */}
+      <CasesStatusTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        counts={tabCounts}
+        loading={tabCountsLoading}
+      />
 
-      {/* Cases Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        {loading ? (
+      {/* Table Area — Phase 3 will replace this placeholder with CasesTable */}
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        {!effectiveFacilityId || userLoading ? (
           <PageLoader message="Loading cases..." />
-        ) : cases.length === 0 ? (
+        ) : (
           <EmptyState
             icon={EmptyStateIcons.Clipboard}
-            title="No cases found"
-            description="Try adjusting your filters or create a new case"
+            title={TAB_EMPTY_STATES[activeTab].title}
+            description={TAB_EMPTY_STATES[activeTab].description}
             className="py-16"
           />
-        ) : (
-          <>
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50/80 border-b border-slate-200/80">
-              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</div>
-              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Time</div>
-              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Case</div>
-              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Room</div>
-              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Surgeon</div>
-              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Procedure</div>
-              <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</div>
-              <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
-            </div>
-
-            {/* Table Body */}
-            <div className="divide-y divide-slate-100">
-              {paginatedCases.map((c) => {
-                const roomName = extractName(c.or_rooms)
-                const procedureName = extractName(c.procedure_types)
-                const statusName = extractName(c.case_statuses)
-                const surgeonShort = formatSurgeonName(c.surgeon)
-                const surgeonFull = formatSurgeonName(c.surgeon, { format: 'full' })
-
-                return (
-                  <div
-                    key={c.id}
-                    className={`grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-slate-50/80 transition-all duration-200 group ${
-                      c.is_draft ? 'border-l-2 border-dashed border-l-amber-400 bg-amber-50/30' : ''
-                    }`}
-                  >
-                    {/* Date */}
-                    <div className="col-span-1">
-                      <span className="text-sm font-medium text-slate-600">
-                        {formatRelativeDate(c.scheduled_date)}
-                      </span>
-                    </div>
-
-                    {/* Time */}
-                    <div className="col-span-1">
-                      <span className="text-sm text-slate-700 font-mono">
-                        {formatDisplayTime(c.start_time, { fallback: '--:--' })}
-                      </span>
-                    </div>
-
-                    {/* Case Number + Draft Badge */}
-                    <div className="col-span-2 flex items-center gap-2">
-                      <Link
-                        href={c.is_draft ? `/cases/${c.id}/edit` : `/cases/${c.id}`}
-                        className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                      >
-                        Case #{c.case_number}
-                      </Link>
-                      {c.is_draft && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded-md">
-                          Draft
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Room */}
-                    <div className="col-span-1">
-                      <span className="text-sm text-slate-600">{roomName || '—'}</span>
-                    </div>
-
-                    {/* Surgeon */}
-                    <div className="col-span-2 flex items-center gap-2">
-                      <SurgeonAvatar name={surgeonFull} size="sm" />
-                      <span className="text-sm text-slate-700">{surgeonShort}</span>
-                    </div>
-
-                    {/* Procedure */}
-                    <div className="col-span-2">
-                      <span className="text-sm text-slate-700">{procedureName || '—'}</span>
-                    </div>
-
-                    {/* Status */}
-                    <div className="col-span-2">
-                      {c.is_draft ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          Draft
-                        </span>
-                      ) : (
-                        <StatusBadgeDot status={statusName || 'scheduled'} />
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="col-span-1 flex justify-end">
-                      <button
-                        onClick={() => setDeleteTarget(c)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
-                        title="Delete case"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Pagination */}
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={cases.length}
-              perPage={perPage}
-              onPageChange={setCurrentPage}
-              onPerPageChange={(n) => {
-                setPerPage(n)
-                setCurrentPage(1)
-              }}
-            />
-          </>
         )}
       </div>
 
@@ -569,22 +180,12 @@ function CasesPageContent() {
           userEmail={userData.userEmail}
         />
       )}
-
-      <DeleteConfirm
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={async () => {
-          if (deleteTarget) await handleDelete(deleteTarget.id)
-        }}
-        itemName={deleteTarget ? `Case #${deleteTarget.case_number}` : ''}
-        itemType="case"
-      />
     </DashboardLayout>
   )
 }
 
 // ============================================================================
-// EXPORT WITH SUSPENSE BOUNDARY
+// EXPORT WITH SUSPENSE BOUNDARY (required for useSearchParams)
 // ============================================================================
 
 export default function CasesPage() {
