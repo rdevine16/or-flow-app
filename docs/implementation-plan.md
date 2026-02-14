@@ -369,3 +369,21 @@ In `lib/constants/caseStatusConfig.ts`:
 - [ ] `npm run typecheck` passes
 - [ ] `npm run lint` passes
 - [ ] `npm run test` passes
+
+---
+
+## Session Log
+
+### Session — 2026-02-14, afternoon
+- **Phase:** Enhancement (beyond plan) — completed
+- **What was done:** Added conditional Validation tab to CaseDrawer that shows unresolved DQ metric issues with severity badges, affected milestones, detected vs expected values, and a link to the DQ page. Fixed stale tab state bug when switching cases (render-time ref-based reset).
+- **Files changed:**
+  - `components/cases/CaseDrawerValidation.tsx` (NEW) — validation tab content component
+  - `components/cases/CaseDrawer.tsx` — added dqCaseIds prop, dynamic tabs, lazy-loading, tab reset on case switch
+  - `app/cases/page.tsx` — passes dqCaseIds to CaseDrawer
+  - `components/cases/__tests__/CaseDrawer.test.tsx` — 7 new tests (conditional tab, tab switching, rerender reset)
+  - `components/cases/__tests__/CaseDrawerValidation.test.tsx` (NEW) — 13 unit tests
+- **Commits:** `27149c4`, `c83ba70`, `9261810`, `da0d3a0`
+- **Test results:** 814/814 pass, 49 test files, 0 TS errors in changed files
+- **Known issues discovered:** None
+- **Context usage:** Low
