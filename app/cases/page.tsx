@@ -119,6 +119,7 @@ function CasesPageContent() {
     totalPages,
     setPage,
     flagSummaries,
+    dqCaseIds,
     categoryNameById,
     selectedRows,
     toggleRow,
@@ -268,6 +269,7 @@ function CasesPageContent() {
             onRowClick={handleRowClick}
             onCancelCase={handleCancelCase}
             onExportSelected={handleExportSelected}
+            dqCaseIds={dqCaseIds}
           />
         )}
       </div>

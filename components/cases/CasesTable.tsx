@@ -32,7 +32,6 @@ import {
   ChevronRight as ChevronRightIcon,
   Ban,
   Download,
-  ExternalLink,
 } from 'lucide-react'
 
 // ============================================
@@ -59,6 +58,7 @@ interface CasesTableProps {
   onRowClick: (caseItem: CaseListItem) => void
   onCancelCase: (caseItem: CaseListItem) => void
   onExportSelected: () => void
+  dqCaseIds: Set<string>
 }
 
 // ============================================
@@ -110,6 +110,43 @@ function StatusBadge({ statusName }: { statusName: string | null | undefined }) 
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${colors.bg} ${colors.text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
       {config.label}
+    </span>
+  )
+}
+
+// ============================================
+// VALIDATION BADGE
+// ============================================
+
+function ValidationBadge({ caseItem, dqCaseIds }: { caseItem: CaseListItem; dqCaseIds: Set<string> }) {
+  const status = caseItem.case_status?.name?.toLowerCase()
+
+  // Scheduled and Cancelled cases: dash (validation not applicable)
+  if (status === 'scheduled' || status === 'cancelled') {
+    return <span className="text-sm text-slate-400">{'\u2014'}</span>
+  }
+
+  // Has unresolved DQ issues
+  if (dqCaseIds.has(caseItem.id)) {
+    const colors = statusColors.needs_validation
+    return (
+      <Link
+        href={`/dashboard/data-quality?caseId=${caseItem.id}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${colors.bg} ${colors.text} hover:opacity-80 transition-opacity`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+          Needs Validation
+        </span>
+      </Link>
+    )
+  }
+
+  // Validated (completed/in_progress with no DQ issues)
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-50 text-green-700">
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+      Validated
     </span>
   )
 }
@@ -291,6 +328,7 @@ export default function CasesTable({
   onRowClick,
   onCancelCase,
   onExportSelected,
+  dqCaseIds,
 }: CasesTableProps) {
   // ---- Column Definitions ----
   const columns = useMemo<ColumnDef<CaseListItem, unknown>[]>(() => [
@@ -430,6 +468,18 @@ export default function CasesTable({
       size: 100,
     },
 
+    // Validation
+    {
+      id: 'validation',
+      header: () => (
+        <SortableHeader label="Validation" columnKey="validation" currentSort={sort} onSort={onSortChange} />
+      ),
+      cell: ({ row }) => (
+        <ValidationBadge caseItem={row.original} dqCaseIds={dqCaseIds} />
+      ),
+      size: 140,
+    },
+
     // Flags
     {
       id: 'flags',
@@ -452,16 +502,6 @@ export default function CasesTable({
         const isCancellable = statusName === 'scheduled' || statusName === 'in_progress'
         return (
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-            {activeTab === 'needs_validation' && (
-              <Link
-                href={`/dashboard/data-quality?caseId=${row.original.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="p-1 rounded hover:bg-blue-50 text-blue-600 transition-colors"
-                title="View issues in Data Quality"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </Link>
-            )}
             {isCancellable && (
               <button
                 onClick={(e) => {
@@ -490,7 +530,7 @@ export default function CasesTable({
       size: 90,
       enableSorting: false,
     },
-  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab])
+  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab, dqCaseIds])
 
   // ---- Table Instance ----
   // Sorting is handled server-side, so we use manual sorting
