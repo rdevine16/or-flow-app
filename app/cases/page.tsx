@@ -11,12 +11,10 @@ import CasesFilterBar from '@/components/cases/CasesFilterBar'
 import CasesSummaryCards from '@/components/cases/CasesSummaryCards'
 import CaseDrawer from '@/components/cases/CaseDrawer'
 import CancelCaseModal from '@/components/cases/CancelCaseModal'
-import BulkValidateProgress from '@/components/cases/BulkValidateProgress'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 import { PageLoader } from '@/components/ui/Loading'
-import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useCasesPage } from '@/lib/hooks/useCasesPage'
 import { Plus, ChevronDown, List, Download } from 'lucide-react'
 import type { CaseListItem } from '@/lib/dal/cases'
@@ -88,8 +86,6 @@ function CasesPageContent() {
     isImpersonating,
     canCreateCases,
   } = useUser()
-  const { showToast } = useToast()
-
   const {
     activeTab,
     setActiveTab,
@@ -125,11 +121,9 @@ function CasesPageContent() {
     flagSummaries,
     categoryNameById,
     selectedRows,
-    setSelectedRows,
     toggleRow,
     toggleAllRows,
     // Actions
-    validateCase,
     refreshAll,
     exportCases,
   } = useCasesPage(effectiveFacilityId)
@@ -143,23 +137,9 @@ function CasesPageContent() {
   // Cancel modal state
   const [cancelTarget, setCancelTarget] = useState<{ caseId: string; caseNumber: string } | null>(null)
 
-  // Bulk validate state
-  const [showBulkValidate, setShowBulkValidate] = useState(false)
-  const [bulkValidateIds, setBulkValidateIds] = useState<string[]>([])
-
   const handleRowClick = (caseItem: CaseListItem) => {
     setDrawerCaseId(caseItem.id)
   }
-
-  // Single validate from table hover
-  const handleValidateCase = useCallback(async (caseId: string) => {
-    const success = await validateCase(caseId)
-    if (success) {
-      showToast({ type: 'success', title: 'Case Validated', message: 'Case has been marked as validated.' })
-    } else {
-      showToast({ type: 'error', title: 'Validation Failed', message: 'Failed to validate the case.' })
-    }
-  }, [validateCase, showToast])
 
   // Cancel from table hover or drawer
   const handleCancelCase = useCallback((caseItem: CaseListItem) => {
@@ -170,14 +150,6 @@ function CasesPageContent() {
   const handleCancelFromDrawer = useCallback((caseId: string, caseNumber: string) => {
     setCancelTarget({ caseId, caseNumber })
   }, [])
-
-  // Bulk validate
-  const handleBulkValidate = useCallback(() => {
-    const ids = Array.from(selectedRows)
-    if (ids.length === 0) return
-    setBulkValidateIds(ids)
-    setShowBulkValidate(true)
-  }, [selectedRows])
 
   // Export selected
   const handleExportSelected = useCallback(() => {
@@ -196,14 +168,6 @@ function CasesPageContent() {
     setDrawerCaseId(null)
     refreshAll()
   }, [refreshAll])
-
-  // After bulk validate completes
-  const handleBulkValidateComplete = useCallback(() => {
-    setShowBulkValidate(false)
-    setBulkValidateIds([])
-    setSelectedRows(new Set())
-    refreshAll()
-  }, [refreshAll, setSelectedRows])
 
   // --- No Facility Selected ---
   if (isGlobalAdmin && !isImpersonating) {
@@ -302,9 +266,7 @@ function CasesPageContent() {
             onToggleRow={toggleRow}
             onToggleAllRows={toggleAllRows}
             onRowClick={handleRowClick}
-            onValidateCase={handleValidateCase}
             onCancelCase={handleCancelCase}
-            onBulkValidate={handleBulkValidate}
             onExportSelected={handleExportSelected}
           />
         )}
@@ -341,7 +303,6 @@ function CasesPageContent() {
         onClose={() => setDrawerCaseId(null)}
         categoryNameById={categoryNameById}
         onCaseUpdated={refreshAll}
-        onValidateCase={validateCase}
         onCancelCase={handleCancelFromDrawer}
       />
 
@@ -355,13 +316,6 @@ function CasesPageContent() {
         onCancelled={handleCancelComplete}
       />
 
-      {/* Bulk Validate Progress */}
-      <BulkValidateProgress
-        caseIds={bulkValidateIds}
-        open={showBulkValidate}
-        onClose={() => setShowBulkValidate(false)}
-        onComplete={handleBulkValidateComplete}
-      />
     </DashboardLayout>
   )
 }

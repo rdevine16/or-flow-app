@@ -23,12 +23,10 @@ import {
   Clock,
   Timer,
   RotateCcw,
-  CheckCircle2,
   DollarSign,
   Milestone as MilestoneIcon,
   Flag,
   Ban,
-  Loader2,
 } from 'lucide-react'
 
 // ============================================
@@ -39,10 +37,8 @@ interface CaseDrawerProps {
   caseId: string | null
   onClose: () => void
   categoryNameById: Map<string, string>
-  /** Called after a validate action succeeds to refresh table data */
+  /** Called after a case update to refresh table data */
   onCaseUpdated?: () => void
-  /** Called when validate button is clicked */
-  onValidateCase?: (caseId: string) => Promise<boolean>
   /** Called when cancel button is clicked */
   onCancelCase?: (caseId: string, caseNumber: string) => void
 }
@@ -179,12 +175,10 @@ export default function CaseDrawer({
   onClose,
   categoryNameById,
   onCaseUpdated,
-  onValidateCase,
   onCancelCase,
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
-  const [validating, setValidating] = useState(false)
-  const { caseDetail, loading, error, refetch } = useCaseDrawer(caseId)
+  const { caseDetail, loading, error } = useCaseDrawer(caseId)
 
   // Lazy-load milestone comparison data only when milestones tab is active
   const {
@@ -337,31 +331,17 @@ export default function CaseDrawer({
                   <QuickStats caseDetail={caseDetail} />
                 </div>
 
-                {/* Action buttons for unvalidated / cancellable cases */}
+                {/* Action buttons for cases needing review or cancellation */}
                 {(displayStatus === 'needs_validation' || displayStatus === 'scheduled' || displayStatus === 'in_progress') && (
                   <div className="px-4 pb-3 flex gap-2">
-                    {displayStatus === 'needs_validation' && onValidateCase && (
-                      <button
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                        disabled={validating}
-                        onClick={async () => {
-                          if (!caseDetail) return
-                          setValidating(true)
-                          const success = await onValidateCase(caseDetail.id)
-                          setValidating(false)
-                          if (success) {
-                            await refetch()
-                            onCaseUpdated?.()
-                          }
-                        }}
+                    {displayStatus === 'needs_validation' && caseDetail && (
+                      <Link
+                        href={`/dashboard/data-quality?caseId=${caseDetail.id}`}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
                       >
-                        {validating ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="w-4 h-4" />
-                        )}
-                        {validating ? 'Validating...' : 'Validate Case'}
-                      </button>
+                        <ExternalLink className="w-4 h-4" />
+                        Review in Data Quality
+                      </Link>
                     )}
                     {(displayStatus === 'scheduled' || displayStatus === 'in_progress') && onCancelCase && caseDetail && (
                       <button

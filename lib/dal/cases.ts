@@ -361,11 +361,11 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       .select(CASE_LIST_SELECT, { count: 'exact' })
       .eq('facility_id', facilityId)
 
-    // Date range — "today" tab overrides to today's date
+    // Date range — "today" tab overrides to today's date, "needs_validation" has no date filter
     if (tab === 'today') {
       const today = new Date().toISOString().split('T')[0]
       query = query.eq('scheduled_date', today)
-    } else {
+    } else if (tab !== 'needs_validation') {
       query = query
         .gte('scheduled_date', dateRange.start)
         .lte('scheduled_date', dateRange.end)
@@ -378,10 +378,13 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       query = query.eq('status_id', statusIds.in_progress)
     } else if (tab === 'completed' && statusIds?.completed) {
       query = query.eq('status_id', statusIds.completed)
-    } else if (tab === 'needs_validation' && statusIds?.completed) {
-      query = query
-        .eq('status_id', statusIds.completed)
-        .eq('data_validated', false)
+    } else if (tab === 'needs_validation') {
+      // DQ engine: get case IDs with unresolved metric_issues
+      const { data: caseIds } = await this.getCaseIdsWithUnresolvedIssues(supabase, facilityId)
+      if (!caseIds || caseIds.length === 0) {
+        return { data: [], error: null, count: 0 }
+      }
+      query = query.in('id', caseIds)
     }
 
     // Entity filters
@@ -461,7 +464,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
         .gte('scheduled_date', dateRange.start)
         .lte('scheduled_date', dateRange.end)
 
-    const [allResult, todayResult, scheduledResult, inProgressResult, completedResult, needsValidationResult] =
+    const [allResult, todayResult, scheduledResult, inProgressResult, completedResult, dqResult] =
       await Promise.all([
         dateRangeFilter(),
         baseFilter().eq('scheduled_date', today),
@@ -474,14 +477,13 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
         statusIds.completed
           ? dateRangeFilter().eq('status_id', statusIds.completed)
           : Promise.resolve({ count: 0, error: null }),
-        statusIds.completed
-          ? dateRangeFilter().eq('status_id', statusIds.completed).eq('data_validated', false)
-          : Promise.resolve({ count: 0, error: null }),
+        // Needs validation: count unique cases with unresolved metric_issues
+        this.getCaseIdsWithUnresolvedIssues(supabase, facilityId),
       ])
 
     // Return first error encountered
-    const firstError = [allResult, todayResult, scheduledResult, inProgressResult, completedResult, needsValidationResult]
-      .find(r => r.error)?.error ?? null
+    const firstError = [allResult, todayResult, scheduledResult, inProgressResult, completedResult]
+      .find(r => r.error)?.error ?? dqResult.error ?? null
 
     return {
       data: {
@@ -490,7 +492,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
         scheduled: (scheduledResult.count ?? 0) as number,
         in_progress: (inProgressResult.count ?? 0) as number,
         completed: (completedResult.count ?? 0) as number,
-        needs_validation: (needsValidationResult.count ?? 0) as number,
+        needs_validation: dqResult.data?.length ?? 0,
       },
       error: firstError,
     }
@@ -563,29 +565,6 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
 
     const caseIds = [...new Set((data as { case_id: string }[]).map(d => d.case_id))]
     return { data: caseIds, error: null }
-  },
-
-  /**
-   * Validate a single case (set data_validated = true).
-   * DB triggers handle downstream stats computation.
-   */
-  async validateCase(
-    supabase: AnySupabaseClient,
-    caseId: string,
-    userId: string | null,
-  ): Promise<DALResult<{ id: string }>> {
-    const { data, error } = await supabase
-      .from('cases')
-      .update({
-        data_validated: true,
-        validated_at: new Date().toISOString(),
-        validated_by: userId,
-      })
-      .eq('id', caseId)
-      .select('id')
-      .single()
-
-    return { data: data as { id: string } | null, error }
   },
 
   /**

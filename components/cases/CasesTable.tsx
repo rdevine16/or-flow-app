@@ -6,6 +6,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
+import Link from 'next/link'
 import {
   useReactTable,
   getCoreRowModel,
@@ -28,10 +29,10 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  CheckCircle2,
   ChevronRight as ChevronRightIcon,
   Ban,
   Download,
+  ExternalLink,
 } from 'lucide-react'
 
 // ============================================
@@ -56,9 +57,7 @@ interface CasesTableProps {
   onToggleRow: (id: string) => void
   onToggleAllRows: () => void
   onRowClick: (caseItem: CaseListItem) => void
-  onValidateCase: (caseId: string) => void
   onCancelCase: (caseItem: CaseListItem) => void
-  onBulkValidate: () => void
   onExportSelected: () => void
 }
 
@@ -293,9 +292,7 @@ export default function CasesTable({
   onToggleRow,
   onToggleAllRows,
   onRowClick,
-  onValidateCase,
   onCancelCase,
-  onBulkValidate,
   onExportSelected,
 }: CasesTableProps) {
   // ---- Column Definitions ----
@@ -458,21 +455,18 @@ export default function CasesTable({
       header: () => null,
       cell: ({ row }) => {
         const statusName = row.original.case_status?.name?.toLowerCase()
-        const needsValidation = statusName === 'completed' && !row.original.data_validated
         const isCancellable = statusName === 'scheduled' || statusName === 'in_progress'
         return (
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-            {needsValidation && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onValidateCase(row.original.id)
-                }}
-                className="p-1 rounded hover:bg-green-50 text-green-600 transition-colors"
-                title="Validate case"
+            {activeTab === 'needs_validation' && (
+              <Link
+                href={`/dashboard/data-quality?caseId=${row.original.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="p-1 rounded hover:bg-blue-50 text-blue-600 transition-colors"
+                title="View issues in Data Quality"
               >
-                <CheckCircle2 className="w-4 h-4" />
-              </button>
+                <ExternalLink className="w-4 h-4" />
+              </Link>
             )}
             {isCancellable && (
               <button
@@ -502,7 +496,7 @@ export default function CasesTable({
       size: 90,
       enableSorting: false,
     },
-  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onValidateCase, onCancelCase])
+  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab])
 
   // ---- Table Instance ----
   // Sorting is handled server-side, so we use manual sorting
@@ -573,13 +567,6 @@ export default function CasesTable({
             {selectedRows.size} selected
           </span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={onBulkValidate}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
-            >
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Validate Selected ({selectedRows.size})
-            </button>
             <button
               onClick={onExportSelected}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"

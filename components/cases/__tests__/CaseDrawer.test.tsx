@@ -254,7 +254,7 @@ describe('CaseDrawer — unit', () => {
     expect(screen.getByText('Network error')).toBeDefined()
   })
 
-  it('shows Validate button for needs_validation status when handler provided', () => {
+  it('shows Review in Data Quality link for needs_validation status', () => {
     const unvalidatedCase = {
       ...MOCK_CASE_DETAIL,
       data_validated: false,
@@ -266,23 +266,11 @@ describe('CaseDrawer — unit', () => {
         caseId="case-123"
         onClose={vi.fn()}
         categoryNameById={CATEGORY_MAP}
-        onValidateCase={vi.fn()}
       />
     )
-    expect(screen.getByText('Validate Case')).toBeDefined()
-  })
-
-  it('does not show Validate button for needs_validation when handler not provided', () => {
-    const unvalidatedCase = {
-      ...MOCK_CASE_DETAIL,
-      data_validated: false,
-      case_status: { name: 'Completed' },
-    }
-    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: unvalidatedCase }))
-    render(
-      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
-    )
-    expect(screen.queryByText('Validate Case')).toBeNull()
+    const link = screen.getByText('Review in Data Quality')
+    expect(link).toBeDefined()
+    expect(link.closest('a')?.getAttribute('href')).toBe('/dashboard/data-quality?caseId=case-123')
   })
 
   it('shows Cancel button for scheduled cases when handler provided', () => {

@@ -97,7 +97,6 @@ export interface UseCasesPageReturn {
   clearSelection: () => void
 
   // Actions
-  validateCase: (caseId: string) => Promise<boolean>
   refreshAll: () => Promise<void>
   exportCases: (selectedCaseIds?: string[]) => Promise<void>
 }
@@ -420,16 +419,6 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     await Promise.all([refetchCases(), refetchTabCounts()])
   }, [refetchCases, refetchTabCounts])
 
-  const validateCase = useCallback(async (caseId: string): Promise<boolean> => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await casesDAL.validateCase(supabase, caseId, user?.id ?? null)
-    if (!error) {
-      await refreshAll()
-    }
-    return !error
-  }, [refreshAll])
-
   const exportCases = useCallback(async (selectedCaseIds?: string[]) => {
     const supabase = createClient()
     if (!facilityId || !statusIdsReady) return
@@ -522,7 +511,6 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     toggleRow,
     toggleAllRows,
     clearSelection,
-    validateCase,
     refreshAll,
     exportCases,
   }

@@ -52,42 +52,35 @@ function sortAlerts(alerts: DashboardAlert[]): DashboardAlert[] {
 
 type SupabaseClient = Parameters<Parameters<typeof useSupabaseQuery>[0]>[0]
 
-/** Cases completed but not yet validated */
+/** Cases with unresolved data quality issues */
 async function queryUnvalidatedCases(
   supabase: SupabaseClient,
   facilityId: string
 ): Promise<DashboardAlert | null> {
-  // Get 'completed' status ID
-  const { data: statusData } = await supabase
-    .from('case_statuses')
-    .select('id')
-    .eq('name', 'completed')
-    .single()
-
-  if (!statusData) return null
-
-  const { count, error } = await supabase
-    .from('cases')
-    .select('id', { count: 'exact', head: true })
+  const { data, error } = await supabase
+    .from('metric_issues')
+    .select('case_id')
     .eq('facility_id', facilityId)
-    .eq('status_id', statusData.id)
-    .eq('data_validated', false)
+    .is('resolved_at', null)
 
   if (error) {
-    log.error('Failed to query unvalidated cases', { error: error.message })
+    log.error('Failed to query unresolved metric issues', { error: error.message })
     return null
   }
 
-  if (!count || count === 0) return null
+  const uniqueCaseIds = new Set((data ?? []).map((d: { case_id: string }) => d.case_id))
+  const count = uniqueCaseIds.size
+
+  if (count === 0) return null
 
   return {
     id: 'alert-validation',
     type: 'validation',
     priority: 'medium',
-    title: `${count} case${count === 1 ? '' : 's'} need validation`,
-    description: 'Completed cases with all milestones recorded but not yet validated.',
+    title: `${count} case${count === 1 ? '' : 's'} flagged for review`,
+    description: 'Cases with data quality issues that need review.',
     count,
-    linkTo: '/cases?filter=needs_validation',
+    linkTo: '/dashboard/data-quality',
   }
 }
 
