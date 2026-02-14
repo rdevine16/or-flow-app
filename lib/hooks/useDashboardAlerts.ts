@@ -172,7 +172,7 @@ async function queryBehindSchedule(
       id,
       or_room_id,
       start_time,
-      estimated_duration_minutes,
+      scheduled_duration_minutes,
       or_rooms (name),
       case_milestones (
         recorded_at,
@@ -206,7 +206,7 @@ async function queryBehindSchedule(
 
     if (!patientIn?.recorded_at) continue
 
-    const estimatedDuration = c.estimated_duration_minutes ?? 120
+    const estimatedDuration = (c as unknown as { scheduled_duration_minutes: number | null }).scheduled_duration_minutes ?? 120
     const startTime = new Date(patientIn.recorded_at)
     const expectedEnd = new Date(startTime.getTime() + (estimatedDuration + GRACE_MINUTES) * 60000)
 

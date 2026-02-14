@@ -53,7 +53,7 @@ export interface CaseDetail extends CaseListItem {
   patient_phone: string | null
   laterality: string | null
   anesthesia_type: string | null
-  estimated_duration_minutes: number | null
+  scheduled_duration_minutes: number | null
   actual_duration_minutes: number | null
   notes: string | null
   rep_required_override: boolean | null

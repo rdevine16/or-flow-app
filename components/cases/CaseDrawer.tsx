@@ -210,7 +210,7 @@ export default function CaseDrawer({
     caseDetail?.facility_id ?? null,
     caseDetail?.surgeon_id ?? null,
     caseDetail?.procedure_type?.id ?? null,
-    caseDetail?.estimated_duration_minutes ?? null,
+    caseDetail?.scheduled_duration_minutes ?? null,
     caseDetail?.surgeon
       ? `Dr. ${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
       : null,

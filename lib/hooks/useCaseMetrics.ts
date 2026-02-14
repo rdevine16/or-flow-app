@@ -297,17 +297,17 @@ async function fetchScheduledMetrics(
   }
 
   const casesR = await supabase.from('cases')
-    .select('surgeon_id, estimated_duration_minutes')
+    .select('surgeon_id, scheduled_duration_minutes')
     .eq('facility_id', facilityId)
     .gte('scheduled_date', start).lte('scheduled_date', end)
     .eq('status_id', statusIds.scheduled)
 
   const cases = (casesR.data ?? []) as Array<{
     surgeon_id: string | null
-    estimated_duration_minutes: number | null
+    scheduled_duration_minutes: number | null
   }>
   const totalScheduled = cases.length
-  const totalMinutes = cases.reduce((sum, c) => sum + (c.estimated_duration_minutes ?? 0), 0)
+  const totalMinutes = cases.reduce((sum, c) => sum + (c.scheduled_duration_minutes ?? 0), 0)
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10
   const uniqueSurgeons = new Set(cases.map(c => c.surgeon_id).filter(Boolean)).size
 

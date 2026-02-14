@@ -114,7 +114,7 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       patient_phone: null,
       laterality: null,
       anesthesia_type: null,
-      estimated_duration_minutes: null,
+      scheduled_duration_minutes: null,
       actual_duration_minutes: null,
       notes: null,
       rep_required_override: null,

@@ -60,7 +60,7 @@ const MOCK_CASE_DETAIL: CaseDetail = {
   patient_phone: null,
   laterality: null,
   anesthesia_type: null,
-  estimated_duration_minutes: 120,
+  scheduled_duration_minutes: 120,
   actual_duration_minutes: 95,
   notes: null,
   rep_required_override: null,

@@ -18,7 +18,6 @@ export interface ProcedureType {
   name: string
   category: string | null
   body_region: string | null
-  estimated_duration_minutes: number | null
   is_active: boolean
 }
 
@@ -87,7 +86,7 @@ export const lookupsDAL = {
   ): Promise<DALListResult<ProcedureType>> {
     let query = supabase
       .from('procedure_types')
-      .select('id, name, category, body_region, estimated_duration_minutes, is_active')
+      .select('id, name, category, body_region, is_active')
       .eq('facility_id', facilityId)
       .order('name')
 
