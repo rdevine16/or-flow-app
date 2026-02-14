@@ -73,7 +73,6 @@ const MOCK_CASE_DETAIL: CaseDetail = {
   patient_phone: null,
   laterality: null,
   anesthesia_type: null,
-  scheduled_duration_minutes: 120,
   scheduled_duration_minutes: 95,
   notes: null,
   rep_required_override: null,
@@ -221,7 +220,7 @@ describe('CaseDrawer — unit', () => {
     expect(screen.getByText('4/4')).toBeDefined()
   })
 
-  it('renders 3 tabs: Financials, Milestones, Flags', () => {
+  it('renders 3 tabs: Financials, Milestones, Flags (no dqCaseIds)', () => {
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
     )
@@ -229,6 +228,31 @@ describe('CaseDrawer — unit', () => {
     // "Milestones" appears in both quick stats and tab bar — use getAllByText
     expect(screen.getAllByText('Milestones').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Flags')).toBeDefined()
+    expect(screen.queryByText('Validation')).toBeNull()
+  })
+
+  it('shows Validation tab when case is in dqCaseIds', () => {
+    const dqSet = new Set(['case-123'])
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+    expect(screen.getByText('Validation')).toBeDefined()
+  })
+
+  it('hides Validation tab when case is NOT in dqCaseIds', () => {
+    const dqSet = new Set(['other-case'])
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+    expect(screen.queryByText('Validation')).toBeNull()
+  })
+
+  it('hides Validation tab when dqCaseIds is empty', () => {
+    const dqSet = new Set<string>()
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+    expect(screen.queryByText('Validation')).toBeNull()
   })
 
   it('shows flag count badge on Flags tab when flags exist', () => {
@@ -369,6 +393,34 @@ describe('CaseDrawer — tab switching', () => {
     const milestonesElements = screen.getAllByText('Milestones')
     const tabButton = milestonesElements.find(el => el.closest('button'))
     await user.click(tabButton!)
+    expect(screen.queryByText('Late start — 10 min behind schedule')).toBeNull()
+    // Switch back to Flags
+    await user.click(screen.getByText('Flags'))
+    expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
+  })
+
+  it('switches to Validation tab when present and shows validation content', async () => {
+    const user = userEvent.setup()
+    const dqSet = new Set(['case-123'])
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+    // Validation tab should be present
+    const validationTab = screen.getByText('Validation')
+    expect(validationTab).toBeDefined()
+    await user.click(validationTab)
+    // With null data from mock, shows "No validation issues" empty state
+    expect(screen.getByText('No validation issues')).toBeDefined()
+  })
+
+  it('switches from Validation back to Flags and restores content', async () => {
+    const user = userEvent.setup()
+    const dqSet = new Set(['case-123'])
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
+    )
+    // Switch to Validation
+    await user.click(screen.getByText('Validation'))
     expect(screen.queryByText('Late start — 10 min behind schedule')).toBeNull()
     // Switch back to Flags
     await user.click(screen.getByText('Flags'))
