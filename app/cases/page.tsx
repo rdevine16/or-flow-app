@@ -9,6 +9,7 @@ import CasesStatusTabs from '@/components/cases/CasesStatusTabs'
 import CasesTable from '@/components/cases/CasesTable'
 import CasesFilterBar from '@/components/cases/CasesFilterBar'
 import CasesSummaryCards from '@/components/cases/CasesSummaryCards'
+import CaseDrawer from '@/components/cases/CaseDrawer'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
@@ -127,10 +128,11 @@ function CasesPageContent() {
   // Call Next Patient modal
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
 
-  // Row click handler — Phase 6 will wire to drawer
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // Drawer state
+  const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
+
   const handleRowClick = (caseItem: CaseListItem) => {
-    // Phase 6 will open the CaseDrawer here
+    setDrawerCaseId(caseItem.id)
   }
 
   // --- No Facility Selected ---
@@ -250,6 +252,13 @@ function CasesPageContent() {
           userEmail={userData.userEmail}
         />
       )}
+
+      {/* Case Detail Drawer */}
+      <CaseDrawer
+        caseId={drawerCaseId}
+        onClose={() => setDrawerCaseId(null)}
+        categoryNameById={categoryNameById}
+      />
     </DashboardLayout>
   )
 }

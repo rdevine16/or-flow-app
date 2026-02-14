@@ -576,6 +576,46 @@ textarea::placeholder {
 }
 
 /* ============================================ */
+/* DRAWER / SHEET ANIMATIONS (Radix Dialog)     */
+/* ============================================ */
+
+@keyframes drawer-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes drawer-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes drawer-slide-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes drawer-slide-out {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.drawer-overlay[data-state='open'] {
+  animation: drawer-overlay-in 200ms ease-out;
+}
+
+.drawer-overlay[data-state='closed'] {
+  animation: drawer-overlay-out 200ms ease-in;
+}
+
+.drawer-content[data-state='open'] {
+  animation: drawer-slide-in 300ms ease-out;
+}
+
+.drawer-content[data-state='closed'] {
+  animation: drawer-slide-out 200ms ease-in;
+}
+
+/* ============================================ */
 /* TREMOR COMPONENT STYLES                      */
 /* ============================================ */
 
