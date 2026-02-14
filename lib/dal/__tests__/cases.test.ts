@@ -422,3 +422,82 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
     expect(chainable.in).not.toHaveBeenCalled()
   })
 })
+
+// ============================================
+// getCaseIdsWithUnresolvedIssues TESTS
+// ============================================
+
+describe('casesDAL.getCaseIdsWithUnresolvedIssues', () => {
+  const makeChainable = (resolvedValue: { data: unknown; error: unknown }) => {
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue(resolvedValue),
+    }
+    return chain
+  }
+
+  it('returns deduplicated case IDs', async () => {
+    const chain = makeChainable({
+      data: [
+        { case_id: 'case-1' },
+        { case_id: 'case-2' },
+        { case_id: 'case-1' }, // duplicate
+        { case_id: 'case-3' },
+        { case_id: 'case-2' }, // duplicate
+      ],
+      error: null,
+    })
+    const mockSupabase = { from: vi.fn().mockReturnValue(chain) }
+
+    const result = await casesDAL.getCaseIdsWithUnresolvedIssues(
+      mockSupabase as unknown as Parameters<typeof casesDAL.getCaseIdsWithUnresolvedIssues>[0],
+      'facility-1',
+    )
+
+    expect(result.error).toBeNull()
+    expect(result.data).toEqual(['case-1', 'case-2', 'case-3'])
+  })
+
+  it('returns empty array when no unresolved issues exist', async () => {
+    const chain = makeChainable({ data: [], error: null })
+    const mockSupabase = { from: vi.fn().mockReturnValue(chain) }
+
+    const result = await casesDAL.getCaseIdsWithUnresolvedIssues(
+      mockSupabase as unknown as Parameters<typeof casesDAL.getCaseIdsWithUnresolvedIssues>[0],
+      'facility-1',
+    )
+
+    expect(result.error).toBeNull()
+    expect(result.data).toEqual([])
+  })
+
+  it('queries metric_issues with correct filters', async () => {
+    const chain = makeChainable({ data: [], error: null })
+    const mockSupabase = { from: vi.fn().mockReturnValue(chain) }
+
+    await casesDAL.getCaseIdsWithUnresolvedIssues(
+      mockSupabase as unknown as Parameters<typeof casesDAL.getCaseIdsWithUnresolvedIssues>[0],
+      'facility-abc',
+    )
+
+    expect(mockSupabase.from).toHaveBeenCalledWith('metric_issues')
+    expect(chain.select).toHaveBeenCalledWith('case_id')
+    expect(chain.eq).toHaveBeenCalledWith('facility_id', 'facility-abc')
+    expect(chain.is).toHaveBeenCalledWith('resolved_at', null)
+  })
+
+  it('returns error when query fails', async () => {
+    const mockError = { message: 'DB error', details: '', hint: '', code: '500' }
+    const chain = makeChainable({ data: null, error: mockError })
+    const mockSupabase = { from: vi.fn().mockReturnValue(chain) }
+
+    const result = await casesDAL.getCaseIdsWithUnresolvedIssues(
+      mockSupabase as unknown as Parameters<typeof casesDAL.getCaseIdsWithUnresolvedIssues>[0],
+      'facility-1',
+    )
+
+    expect(result.data).toBeNull()
+    expect(result.error).toBe(mockError)
+  })
+})

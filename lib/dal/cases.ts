@@ -546,6 +546,26 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
   },
 
   /**
+   * Get deduplicated case IDs that have at least one unresolved metric issue.
+   * Used to determine which cases "need validation" from the DQ perspective.
+   */
+  async getCaseIdsWithUnresolvedIssues(
+    supabase: AnySupabaseClient,
+    facilityId: string,
+  ): Promise<DALResult<string[]>> {
+    const { data, error } = await supabase
+      .from('metric_issues')
+      .select('case_id')
+      .eq('facility_id', facilityId)
+      .is('resolved_at', null)
+
+    if (error) return { data: null, error }
+
+    const caseIds = [...new Set((data as { case_id: string }[]).map(d => d.case_id))]
+    return { data: caseIds, error: null }
+  },
+
+  /**
    * Validate a single case (set data_validated = true).
    * DB triggers handle downstream stats computation.
    */

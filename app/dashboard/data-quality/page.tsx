@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useSearchParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { dataQualityAudit } from '@/lib/audit-logger'
@@ -201,6 +202,8 @@ function storeLastScan(date: Date): void {
 export default function DataQualityPage() {
   const supabase = createClient()
   const { loading: userLoading, effectiveFacilityId } = useUser()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   
   // Get current user ID from auth
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -224,6 +227,7 @@ export default function DataQualityPage() {
   // Filter state
   const [filterType, setFilterType] = useState<string>('all')
   const [showResolved, setShowResolved] = useState(false)
+  const filterCaseId = searchParams.get('caseId') || null
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -266,6 +270,14 @@ export default function DataQualityPage() {
   const [detectionStep, setDetectionStep] = useState(0)
   const [lastScanTime, setLastScanTime] = useState<Date | null>(null)
 
+  // Derive case number from loaded issues when filtered by caseId
+  const filterCaseNumber = useMemo(() => {
+    if (!filterCaseId || issues.length === 0) return null
+    const firstIssue = issues[0]
+    const cases = firstIssue.cases as { case_number?: string } | null
+    return cases?.case_number || filterCaseId.slice(0, 8)
+  }, [filterCaseId, issues])
+
   // Load last scan time from localStorage on mount
   useEffect(() => {
     setLastScanTime(getStoredLastScan())
@@ -284,6 +296,7 @@ export default function DataQualityPage() {
       fetchMetricIssues(supabase, effectiveFacilityId, {
         unresolvedOnly: !showResolved,
         issueTypeName: filterType !== 'all' ? filterType : undefined,
+        caseId: filterCaseId || undefined,
         limit: 100
       }),
       fetchIssueTypes(supabase),
@@ -297,7 +310,7 @@ export default function DataQualityPage() {
     setSummary(summaryData)
     setSelectedIds(new Set())
     setLoading(false)
-  }, [effectiveFacilityId, showResolved, filterType, supabase])
+  }, [effectiveFacilityId, showResolved, filterType, filterCaseId, supabase])
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {
@@ -1280,8 +1293,29 @@ showToast({
                     />
                     <span className="text-sm text-slate-700">Show resolved</span>
                   </label>
+
+                  {/* Case filter chip (from URL param) */}
+                  {filterCaseId && (
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-medium border border-blue-200">
+                      <span>Case: {filterCaseNumber || '...'}</span>
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams(searchParams.toString())
+                          params.delete('caseId')
+                          const newUrl = params.toString()
+                            ? `${window.location.pathname}?${params.toString()}`
+                            : window.location.pathname
+                          router.replace(newUrl)
+                        }}
+                        className="ml-1 p-0.5 hover:bg-blue-200 rounded transition-colors"
+                        aria-label="Clear case filter"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                
+
                 {/* Bulk actions */}
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2">
