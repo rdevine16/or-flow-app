@@ -27,12 +27,15 @@ export default function CasesSummaryCards({
 
   const isLoading = loading || !statusIdsReady
 
+  const columns = (activeTab === 'all' || activeTab === 'today') ? 4 : 3
+  const skeletonCount = columns
+
   if (isLoading) {
     return (
-      <MetricCardGrid columns={3}>
-        <MetricCard title="" value={0} loading size="sm" />
-        <MetricCard title="" value={0} loading size="sm" />
-        <MetricCard title="" value={0} loading size="sm" />
+      <MetricCardGrid columns={columns}>
+        {Array.from({ length: skeletonCount }, (_, i) => (
+          <MetricCard key={i} title="" value={0} loading size="sm" />
+        ))}
       </MetricCardGrid>
     )
   }
@@ -40,7 +43,7 @@ export default function CasesSummaryCards({
   if (metrics.length === 0) return null
 
   return (
-    <MetricCardGrid columns={3}>
+    <MetricCardGrid columns={columns as 3 | 4}>
       {metrics.map((m, i) => (
         <MetricCard
           key={`${activeTab}-${i}`}

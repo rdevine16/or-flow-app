@@ -55,23 +55,23 @@ describe('CasesSummaryCards — unit', () => {
     mockUseCaseMetrics.mockReset()
   })
 
-  it('renders 3 loading skeletons when statusIdsReady is false', () => {
+  it('renders 4 loading skeletons on all tab when statusIdsReady is false', () => {
     mockUseCaseMetrics.mockReturnValue({ metrics: [], loading: true })
     const { container } = render(
       <CasesSummaryCards {...DEFAULT_PROPS} statusIdsReady={false} />
     )
-    // Loading skeleton cards have animate-pulse class
+    // Loading skeleton cards have animate-pulse class; all/today tabs show 4
     const skeletons = container.querySelectorAll('.animate-pulse')
-    expect(skeletons.length).toBe(3)
+    expect(skeletons.length).toBe(4)
   })
 
-  it('renders 3 loading skeletons when hook is loading', () => {
+  it('renders 4 loading skeletons on all tab when hook is loading', () => {
     mockUseCaseMetrics.mockReturnValue({ metrics: [], loading: true })
     const { container } = render(
       <CasesSummaryCards {...DEFAULT_PROPS} />
     )
     const skeletons = container.querySelectorAll('.animate-pulse')
-    expect(skeletons.length).toBe(3)
+    expect(skeletons.length).toBe(4)
   })
 
   it('renders nothing when metrics array is empty and not loading', () => {
@@ -83,10 +83,11 @@ describe('CasesSummaryCards — unit', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders 3 metric cards with correct titles', () => {
+  it('renders 4 metric cards with correct titles on all tab', () => {
     mockUseCaseMetrics.mockReturnValue({
       metrics: [
-        { title: 'Completed / Scheduled', value: 10, suffix: ' / 20', color: 'blue' },
+        { title: 'Completed', value: 10, color: 'green' },
+        { title: 'Scheduled', value: 20, color: 'blue' },
         { title: 'Median Duration', value: 45, suffix: ' min', color: 'green' },
         { title: 'On-Time Start', value: 85, suffix: '%', color: 'amber' },
       ],
@@ -95,7 +96,8 @@ describe('CasesSummaryCards — unit', () => {
 
     render(<CasesSummaryCards {...DEFAULT_PROPS} />)
 
-    expect(screen.getByText('Completed / Scheduled')).toBeDefined()
+    expect(screen.getByText('Completed')).toBeDefined()
+    expect(screen.getByText('Scheduled')).toBeDefined()
     expect(screen.getByText('Median Duration')).toBeDefined()
     expect(screen.getByText('On-Time Start')).toBeDefined()
   })
@@ -160,7 +162,8 @@ describe('CasesSummaryCards — integration', () => {
     // First render: all tab
     mockUseCaseMetrics.mockReturnValue({
       metrics: [
-        { title: 'Completed / Scheduled', value: 10, suffix: ' / 20', color: 'blue' },
+        { title: 'Completed', value: 10, color: 'green' },
+        { title: 'Scheduled', value: 20, color: 'blue' },
         { title: 'Median Duration', value: 45, suffix: ' min', color: 'green' },
         { title: 'On-Time Start', value: 85, suffix: '%', color: 'amber' },
       ],
@@ -168,7 +171,7 @@ describe('CasesSummaryCards — integration', () => {
     })
 
     const { rerender } = render(<CasesSummaryCards {...DEFAULT_PROPS} activeTab="all" />)
-    expect(screen.getByText('Completed / Scheduled')).toBeDefined()
+    expect(screen.getByText('Completed')).toBeDefined()
 
     // Second render: scheduled tab
     mockUseCaseMetrics.mockReturnValue({

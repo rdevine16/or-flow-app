@@ -167,7 +167,8 @@ async function fetchAllTodayMetrics(
   const onTimePct = rows.length > 0 ? Math.round((onTimeCount / rows.length) * 100) : 0
 
   return [
-    { title: 'Completed / Scheduled', value: completedCount, suffix: ` / ${scheduledCount}`, color: 'blue' },
+    { title: 'Completed', value: completedCount, color: 'green' },
+    { title: 'Scheduled', value: scheduledCount, color: 'blue' },
     { title: 'Median Duration', value: medianDuration, suffix: ' min', color: 'green' },
     { title: 'On-Time Start', value: onTimePct, suffix: '%', color: 'amber' },
   ]
