@@ -23,7 +23,7 @@
  */
 
 export { casesDAL } from './cases'
-export type { CasesPageTab, CaseFlagSummary } from './cases'
+export type { CasesPageTab, CaseFlagSummary, CasesFilterParams } from './cases'
 export { usersDAL } from './users'
 export { facilitiesDAL } from './facilities'
 export { lookupsDAL } from './lookups'

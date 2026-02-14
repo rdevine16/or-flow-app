@@ -7,6 +7,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import CasesStatusTabs from '@/components/cases/CasesStatusTabs'
 import CasesTable from '@/components/cases/CasesTable'
+import CasesFilterBar from '@/components/cases/CasesFilterBar'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
@@ -90,6 +91,19 @@ function CasesPageContent() {
     tabCountsLoading,
     dateRange,
     setDateRange,
+    // Filters
+    filters,
+    searchInput,
+    setSearchInput,
+    setSurgeonIds,
+    setRoomIds,
+    setProcedureIds,
+    clearAllFilters,
+    hasActiveFilters,
+    surgeons,
+    rooms,
+    procedureTypes,
+    // Table
     cases,
     casesLoading,
     casesError,
@@ -150,8 +164,27 @@ function CasesPageContent() {
         loading={tabCountsLoading}
       />
 
+      {/* Search & Filter Bar */}
+      <div className="mt-4">
+        <CasesFilterBar
+          searchInput={searchInput}
+          onSearchChange={setSearchInput}
+          surgeonIds={filters.surgeonIds}
+          onSurgeonIdsChange={setSurgeonIds}
+          roomIds={filters.roomIds}
+          onRoomIdsChange={setRoomIds}
+          procedureIds={filters.procedureIds}
+          onProcedureIdsChange={setProcedureIds}
+          surgeons={surgeons}
+          rooms={rooms}
+          procedureTypes={procedureTypes}
+          hasActiveFilters={hasActiveFilters}
+          onClearAll={clearAllFilters}
+        />
+      </div>
+
       {/* Data Table */}
-      <div className="mt-6">
+      <div className="mt-4">
         {!effectiveFacilityId || userLoading ? (
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             <PageLoader message="Loading cases..." />

@@ -32,6 +32,14 @@ export interface CaseListItem {
 /** Tab identifiers for the cases page status tabs */
 export type CasesPageTab = 'all' | 'today' | 'scheduled' | 'in_progress' | 'completed' | 'needs_validation'
 
+/** Filter params for the cases page (search, entity filters) */
+export interface CasesFilterParams {
+  search?: string          // ilike on case_number
+  surgeonIds?: string[]    // in surgeon_id
+  roomIds?: string[]       // in or_room_id
+  procedureIds?: string[]  // in procedure_type_id
+}
+
 /** Flag severity summary for a single case (used in table flag indicators) */
 export interface CaseFlagSummary {
   case_id: string
@@ -344,6 +352,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
     pagination?: PaginationParams,
     sort?: SortParams,
     statusIds?: Record<string, string>,
+    filters?: CasesFilterParams,
   ): Promise<DALListResult<CaseListItem>> {
     let query = supabase
       .from('cases')
@@ -372,6 +381,20 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       query = query
         .eq('status', statusIds.completed)
         .eq('data_validated', false)
+    }
+
+    // Entity filters
+    if (filters?.search) {
+      query = query.ilike('case_number', `%${filters.search}%`)
+    }
+    if (filters?.surgeonIds && filters.surgeonIds.length > 0) {
+      query = query.in('surgeon_id', filters.surgeonIds)
+    }
+    if (filters?.roomIds && filters.roomIds.length > 0) {
+      query = query.in('or_room_id', filters.roomIds)
+    }
+    if (filters?.procedureIds && filters.procedureIds.length > 0) {
+      query = query.in('procedure_type_id', filters.procedureIds)
     }
 
     // Sorting
@@ -405,15 +428,33 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
     facilityId: string,
     dateRange: DateRange,
     statusIds: Record<string, string>,
+    filters?: CasesFilterParams,
   ): Promise<{ data: Record<CasesPageTab, number>; error: PostgrestError | null }> {
     const today = new Date().toISOString().split('T')[0]
 
-    const baseFilter = () =>
-      supabase
+    const baseFilter = () => {
+      let q = supabase
         .from('cases')
         .select('id', { count: 'exact', head: true })
         .eq('facility_id', facilityId)
         .eq('is_active', true)
+
+      // Apply entity filters to counts so badges reflect filtered state
+      if (filters?.search) {
+        q = q.ilike('case_number', `%${filters.search}%`)
+      }
+      if (filters?.surgeonIds && filters.surgeonIds.length > 0) {
+        q = q.in('surgeon_id', filters.surgeonIds)
+      }
+      if (filters?.roomIds && filters.roomIds.length > 0) {
+        q = q.in('or_room_id', filters.roomIds)
+      }
+      if (filters?.procedureIds && filters.procedureIds.length > 0) {
+        q = q.in('procedure_type_id', filters.procedureIds)
+      }
+
+      return q
+    }
 
     const dateRangeFilter = () =>
       baseFilter()

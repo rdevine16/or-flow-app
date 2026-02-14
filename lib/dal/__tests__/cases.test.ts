@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { CaseListItem, CaseDetail, CaseMilestone } from '../cases'
+import type { CaseListItem, CaseDetail, CaseMilestone, CasesFilterParams } from '../cases'
 import { casesDAL } from '../cases'
 
 // ============================================
@@ -249,5 +249,176 @@ describe('casesDAL.search — Phase 5.2', () => {
     expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%C-001%')
     // Should NOT use .or() with patient_name
     expect(chainable.eq).toHaveBeenCalledWith('facility_id', 'facility-1')
+  })
+})
+
+// ============================================
+// FILTER PARAMS TYPE TESTS — Phase 4
+// ============================================
+
+describe('CasesFilterParams — Phase 4 type alignment', () => {
+  it('CasesFilterParams accepts all filter fields', () => {
+    const filters: CasesFilterParams = {
+      search: 'C-001',
+      surgeonIds: ['surgeon-1', 'surgeon-2'],
+      roomIds: ['room-1'],
+      procedureIds: ['proc-1'],
+    }
+
+    expect(filters.search).toBe('C-001')
+    expect(filters.surgeonIds).toHaveLength(2)
+    expect(filters.roomIds).toHaveLength(1)
+    expect(filters.procedureIds).toHaveLength(1)
+  })
+
+  it('CasesFilterParams allows all fields to be undefined', () => {
+    const filters: CasesFilterParams = {}
+    expect(filters.search).toBeUndefined()
+    expect(filters.surgeonIds).toBeUndefined()
+    expect(filters.roomIds).toBeUndefined()
+    expect(filters.procedureIds).toBeUndefined()
+  })
+})
+
+// ============================================
+// DAL FILTER METHOD TESTS — Phase 4
+// ============================================
+
+describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
+  const chainable = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lte: vi.fn().mockReturnThis(),
+    ilike: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    range: vi.fn(),
+  }
+
+  const mockSupabase = {
+    from: vi.fn().mockReturnValue(chainable),
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSupabase.from.mockReturnValue(chainable)
+    chainable.select.mockReturnThis()
+    chainable.eq.mockReturnThis()
+    chainable.gte.mockReturnThis()
+    chainable.lte.mockReturnThis()
+    chainable.ilike.mockReturnThis()
+    chainable.in.mockReturnThis()
+    chainable.order.mockReturnThis()
+    chainable.range.mockResolvedValue({ data: [], error: null, count: 0 })
+  })
+
+  it('applies search filter as ilike on case_number', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      { search: 'C-001' },
+    )
+
+    expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%C-001%')
+  })
+
+  it('applies surgeon filter as in on surgeon_id', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      { surgeonIds: ['surgeon-1', 'surgeon-2'] },
+    )
+
+    expect(chainable.in).toHaveBeenCalledWith('surgeon_id', ['surgeon-1', 'surgeon-2'])
+  })
+
+  it('applies room filter as in on or_room_id', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      { roomIds: ['room-1'] },
+    )
+
+    expect(chainable.in).toHaveBeenCalledWith('or_room_id', ['room-1'])
+  })
+
+  it('applies procedure filter as in on procedure_type_id', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      { procedureIds: ['proc-1'] },
+    )
+
+    expect(chainable.in).toHaveBeenCalledWith('procedure_type_id', ['proc-1'])
+  })
+
+  it('applies all filters together', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      { search: 'test', surgeonIds: ['s-1'], roomIds: ['r-1'], procedureIds: ['p-1'] },
+    )
+
+    expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%test%')
+    expect(chainable.in).toHaveBeenCalledWith('surgeon_id', ['s-1'])
+    expect(chainable.in).toHaveBeenCalledWith('or_room_id', ['r-1'])
+    expect(chainable.in).toHaveBeenCalledWith('procedure_type_id', ['p-1'])
+  })
+
+  it('does not apply filters when undefined', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      undefined,
+    )
+
+    expect(chainable.ilike).not.toHaveBeenCalled()
+    expect(chainable.in).not.toHaveBeenCalled()
+  })
+
+  it('does not apply filters when empty arrays', async () => {
+    await casesDAL.listForCasesPage(
+      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      'facility-1',
+      { start: '2026-01-01', end: '2026-01-31' },
+      'all',
+      { page: 1, pageSize: 25 },
+      { sortBy: 'date', sortDirection: 'desc' },
+      {},
+      { surgeonIds: [], roomIds: [], procedureIds: [] },
+    )
+
+    expect(chainable.in).not.toHaveBeenCalled()
   })
 })

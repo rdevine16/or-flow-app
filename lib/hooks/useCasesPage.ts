@@ -5,13 +5,13 @@
 
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { casesDAL, type CasesPageTab, type CaseFlagSummary } from '@/lib/dal'
-import type { CaseListItem } from '@/lib/dal/cases'
+import type { CaseListItem, CasesFilterParams } from '@/lib/dal/cases'
 import type { SortParams } from '@/lib/dal'
-import { useCaseStatuses } from '@/hooks/useLookups'
+import { useCaseStatuses, useSurgeons, useRooms, useProcedureTypes } from '@/hooks/useLookups'
 import { useProcedureCategories } from '@/hooks/useLookups'
 import { getPresetDates } from '@/components/ui/DateRangeSelector'
 
@@ -23,6 +23,14 @@ export interface DateRangeState {
   preset: string
   start: string
   end: string
+}
+
+/** Filter state for the search and filter bar */
+export interface CasesFilterState {
+  search: string
+  surgeonIds: string[]
+  roomIds: string[]
+  procedureIds: string[]
 }
 
 export interface UseCasesPageReturn {
@@ -41,6 +49,21 @@ export interface UseCasesPageReturn {
   // Status lookup (for passing to DAL)
   statusIds: Record<string, string>
   statusIdsReady: boolean
+
+  // Filter state
+  filters: CasesFilterState
+  searchInput: string
+  setSearchInput: (value: string) => void
+  setSurgeonIds: (ids: string[]) => void
+  setRoomIds: (ids: string[]) => void
+  setProcedureIds: (ids: string[]) => void
+  clearAllFilters: () => void
+  hasActiveFilters: boolean
+
+  // Lookup data (for filter dropdowns)
+  surgeons: Array<{ id: string; first_name: string; last_name: string }>
+  rooms: Array<{ id: string; name: string }>
+  procedureTypes: Array<{ id: string; name: string }>
 
   // Table data
   cases: CaseListItem[]
@@ -164,6 +187,112 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setSelectedRows(new Set())
   }, [setPage])
 
+  // --- Filter State (search + entity filters, URL-synced) ---
+  const [searchInput, setSearchInputState] = useState(() => searchParams.get('q') || '')
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get('q') || '')
+  const [surgeonIds, setSurgeonIdsState] = useState<string[]>(() => searchParams.getAll('surgeon'))
+  const [roomIds, setRoomIdsState] = useState<string[]>(() => searchParams.getAll('room'))
+  const [procedureIds, setProcedureIdsState] = useState<string[]>(() => searchParams.getAll('procedure'))
+
+  // Debounce search input (300ms)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const setSearchInput = useCallback((value: string) => {
+    setSearchInputState(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(value)
+      setPage(1)
+      setSelectedRows(new Set())
+    }, 300)
+  }, [setPage])
+
+  // Cleanup debounce timer
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
+
+  const setSurgeonIds = useCallback((ids: string[]) => {
+    setSurgeonIdsState(ids)
+    setPage(1)
+    setSelectedRows(new Set())
+  }, [setPage])
+
+  const setRoomIds = useCallback((ids: string[]) => {
+    setRoomIdsState(ids)
+    setPage(1)
+    setSelectedRows(new Set())
+  }, [setPage])
+
+  const setProcedureIds = useCallback((ids: string[]) => {
+    setProcedureIdsState(ids)
+    setPage(1)
+    setSelectedRows(new Set())
+  }, [setPage])
+
+  const clearAllFilters = useCallback(() => {
+    setSearchInputState('')
+    setDebouncedSearch('')
+    setSurgeonIdsState([])
+    setRoomIdsState([])
+    setProcedureIdsState([])
+    setPage(1)
+    setSelectedRows(new Set())
+  }, [setPage])
+
+  const hasActiveFilters = debouncedSearch !== '' || surgeonIds.length > 0 || roomIds.length > 0 || procedureIds.length > 0
+
+  // Build filter params for DAL queries
+  const dalFilters: CasesFilterParams | undefined = useMemo(() => {
+    if (!hasActiveFilters) return undefined
+    return {
+      search: debouncedSearch || undefined,
+      surgeonIds: surgeonIds.length > 0 ? surgeonIds : undefined,
+      roomIds: roomIds.length > 0 ? roomIds : undefined,
+      procedureIds: procedureIds.length > 0 ? procedureIds : undefined,
+    }
+  }, [debouncedSearch, surgeonIds, roomIds, procedureIds, hasActiveFilters])
+
+  // URL sync for filters (replaceState to avoid navigation)
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+
+    // Clear old filter params
+    params.delete('q')
+    params.delete('surgeon')
+    params.delete('room')
+    params.delete('procedure')
+
+    // Set new filter params
+    if (debouncedSearch) params.set('q', debouncedSearch)
+    surgeonIds.forEach(id => params.append('surgeon', id))
+    roomIds.forEach(id => params.append('room', id))
+    procedureIds.forEach(id => params.append('procedure', id))
+
+    const qs = params.toString()
+    const newUrl = qs ? `${pathname}?${qs}` : pathname
+    window.history.replaceState(null, '', newUrl)
+  }, [debouncedSearch, surgeonIds, roomIds, procedureIds, pathname, searchParams])
+
+  // Aggregate filter state for the component
+  const filters: CasesFilterState = useMemo(() => ({
+    search: debouncedSearch,
+    surgeonIds,
+    roomIds,
+    procedureIds,
+  }), [debouncedSearch, surgeonIds, roomIds, procedureIds])
+
+  // --- Lookup Data (for filter dropdowns) ---
+  const { data: surgeonsData } = useSurgeons(facilityId)
+  const { data: roomsData } = useRooms(facilityId)
+  const { data: procedureTypesData } = useProcedureTypes(facilityId)
+
+  const surgeons = useMemo(() => surgeonsData ?? [], [surgeonsData])
+  const rooms = useMemo(() => roomsData ?? [], [roomsData])
+  const procedureTypes = useMemo(() => procedureTypesData ?? [], [procedureTypesData])
+
   // --- Status ID Mapping (case_statuses name → UUID) ---
   const { data: caseStatuses } = useCaseStatuses()
 
@@ -201,12 +330,13 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
         facilityId,
         { start: dateRange.start, end: dateRange.end },
         statusIds,
+        dalFilters,
       )
       if (error) throw error
       return data
     },
     {
-      deps: [facilityId, dateRange.start, dateRange.end, statusIdsReady],
+      deps: [facilityId, dateRange.start, dateRange.end, statusIdsReady, debouncedSearch, surgeonIds.join(','), roomIds.join(','), procedureIds.join(',')],
       enabled: !!facilityId && statusIdsReady,
     }
   )
@@ -229,12 +359,13 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
         { page, pageSize },
         sort,
         statusIds,
+        dalFilters,
       )
       if (error) throw error
       return { items: data, total: count ?? 0 }
     },
     {
-      deps: [facilityId, dateRange.start, dateRange.end, activeTab, page, sort.sortBy, sort.sortDirection, statusIdsReady],
+      deps: [facilityId, dateRange.start, dateRange.end, activeTab, page, sort.sortBy, sort.sortDirection, statusIdsReady, debouncedSearch, surgeonIds.join(','), roomIds.join(','), procedureIds.join(',')],
       enabled: !!facilityId && statusIdsReady,
     }
   )
@@ -287,6 +418,17 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setDateRange,
     statusIds,
     statusIdsReady,
+    filters,
+    searchInput,
+    setSearchInput,
+    setSurgeonIds,
+    setRoomIds,
+    setProcedureIds,
+    clearAllFilters,
+    hasActiveFilters,
+    surgeons,
+    rooms,
+    procedureTypes,
     cases,
     casesLoading,
     casesError,
