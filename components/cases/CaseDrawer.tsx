@@ -214,10 +214,7 @@ export default function CaseDrawer({
   // Resolve display status
   const displayStatus = useMemo(() => {
     if (!caseDetail) return 'scheduled'
-    return resolveDisplayStatus(
-      caseDetail.case_status?.name ?? null,
-      caseDetail.data_validated,
-    )
+    return resolveDisplayStatus(caseDetail.case_status?.name ?? null)
   }, [caseDetail])
 
   const statusConfig = getCaseStatusConfig(displayStatus)
@@ -332,9 +329,9 @@ export default function CaseDrawer({
                 </div>
 
                 {/* Action buttons for cases needing review or cancellation */}
-                {(displayStatus === 'needs_validation' || displayStatus === 'scheduled' || displayStatus === 'in_progress') && (
+                {((displayStatus === 'completed' && !caseDetail?.data_validated) || displayStatus === 'scheduled' || displayStatus === 'in_progress') && (
                   <div className="px-4 pb-3 flex gap-2">
-                    {displayStatus === 'needs_validation' && caseDetail && (
+                    {displayStatus === 'completed' && !caseDetail?.data_validated && caseDetail && (
                       <Link
                         href={`/dashboard/data-quality?caseId=${caseDetail.id}`}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"

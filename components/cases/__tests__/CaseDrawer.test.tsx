@@ -254,7 +254,7 @@ describe('CaseDrawer — unit', () => {
     expect(screen.getByText('Network error')).toBeDefined()
   })
 
-  it('shows Review in Data Quality link for needs_validation status', () => {
+  it('shows Review in Data Quality link for completed + unvalidated case', () => {
     const unvalidatedCase = {
       ...MOCK_CASE_DETAIL,
       data_validated: false,

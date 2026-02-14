@@ -1,7 +1,6 @@
 // lib/constants/caseStatusConfig.ts
 // Status → display configuration for case status badges and tabs.
-// Includes compound display states (needs_validation, on_hold) that are
-// derived from case data, not stored as separate DB statuses.
+// Maps DB status names to display labels and color keys.
 
 import { statusColors } from '@/lib/design-tokens'
 
@@ -12,9 +11,9 @@ export interface CaseStatusDisplayConfig {
 }
 
 /**
- * Maps case_statuses.name values (and compound display states) to display config.
- * Compound states like 'needs_validation' are resolved at the display layer
- * based on case data (e.g., completed + !data_validated → needs_validation).
+ * Maps case_statuses.name values to display config.
+ * Status column now shows pure DB status — DQ validation state
+ * is displayed separately in the Validation column.
  */
 export const CASE_STATUS_CONFIG: Record<string, CaseStatusDisplayConfig> = {
   scheduled: {
@@ -37,29 +36,16 @@ export const CASE_STATUS_CONFIG: Record<string, CaseStatusDisplayConfig> = {
     label: 'On Hold',
     colorKey: 'inactive',
   },
-  // Compound display state: completed + !data_validated
-  needs_validation: {
-    label: 'Needs Validation',
-    colorKey: 'needs_validation',
-  },
 }
 
 /**
  * Resolve the display status for a case.
- * Handles compound states like needs_validation (completed + !data_validated).
+ * Returns the lowercased DB status name, defaulting to 'scheduled'.
  */
 export function resolveDisplayStatus(
   statusName: string | null | undefined,
-  dataValidated: boolean,
 ): string {
-  const status = statusName?.toLowerCase() ?? 'scheduled'
-
-  // Compound state: completed but not validated
-  if (status === 'completed' && !dataValidated) {
-    return 'needs_validation'
-  }
-
-  return status
+  return statusName?.toLowerCase() ?? 'scheduled'
 }
 
 /**

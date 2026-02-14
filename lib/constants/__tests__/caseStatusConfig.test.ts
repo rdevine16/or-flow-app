@@ -11,11 +11,11 @@ describe('CASE_STATUS_CONFIG', () => {
     expect(CASE_STATUS_CONFIG.in_progress).toBeDefined()
     expect(CASE_STATUS_CONFIG.completed).toBeDefined()
     expect(CASE_STATUS_CONFIG.cancelled).toBeDefined()
+    expect(CASE_STATUS_CONFIG.on_hold).toBeDefined()
   })
 
-  it('includes compound display states', () => {
-    expect(CASE_STATUS_CONFIG.needs_validation).toBeDefined()
-    expect(CASE_STATUS_CONFIG.on_hold).toBeDefined()
+  it('does not include compound display states', () => {
+    expect(CASE_STATUS_CONFIG.needs_validation).toBeUndefined()
   })
 
   it('each config has label and colorKey', () => {
@@ -24,36 +24,30 @@ describe('CASE_STATUS_CONFIG', () => {
       expect(config.colorKey).toBeTruthy()
     }
   })
-
-  it('needs_validation uses orange color key', () => {
-    expect(CASE_STATUS_CONFIG.needs_validation.colorKey).toBe('needs_validation')
-    expect(CASE_STATUS_CONFIG.needs_validation.label).toBe('Needs Validation')
-  })
 })
 
 describe('resolveDisplayStatus', () => {
-  it('returns needs_validation for completed + !dataValidated', () => {
-    expect(resolveDisplayStatus('completed', false)).toBe('needs_validation')
+  it('returns completed for completed status (regardless of validation)', () => {
+    expect(resolveDisplayStatus('completed')).toBe('completed')
   })
 
-  it('returns completed for completed + dataValidated', () => {
-    expect(resolveDisplayStatus('completed', true)).toBe('completed')
-  })
-
-  it('returns status as-is for non-completed statuses', () => {
-    expect(resolveDisplayStatus('scheduled', false)).toBe('scheduled')
-    expect(resolveDisplayStatus('in_progress', false)).toBe('in_progress')
-    expect(resolveDisplayStatus('cancelled', false)).toBe('cancelled')
+  it('returns status as-is for all statuses', () => {
+    expect(resolveDisplayStatus('scheduled')).toBe('scheduled')
+    expect(resolveDisplayStatus('in_progress')).toBe('in_progress')
+    expect(resolveDisplayStatus('completed')).toBe('completed')
+    expect(resolveDisplayStatus('cancelled')).toBe('cancelled')
+    expect(resolveDisplayStatus('on_hold')).toBe('on_hold')
   })
 
   it('defaults to scheduled for null/undefined status', () => {
-    expect(resolveDisplayStatus(null, false)).toBe('scheduled')
-    expect(resolveDisplayStatus(undefined, true)).toBe('scheduled')
+    expect(resolveDisplayStatus(null)).toBe('scheduled')
+    expect(resolveDisplayStatus(undefined)).toBe('scheduled')
   })
 
   it('is case-insensitive', () => {
-    expect(resolveDisplayStatus('Completed', false)).toBe('needs_validation')
-    expect(resolveDisplayStatus('SCHEDULED', true)).toBe('scheduled')
+    expect(resolveDisplayStatus('Completed')).toBe('completed')
+    expect(resolveDisplayStatus('SCHEDULED')).toBe('scheduled')
+    expect(resolveDisplayStatus('In_Progress')).toBe('in_progress')
   })
 })
 
@@ -69,9 +63,9 @@ describe('getCaseStatusConfig', () => {
     expect(config.label).toBe('Scheduled')
   })
 
-  it('returns needs_validation config', () => {
-    const config = getCaseStatusConfig('needs_validation')
-    expect(config.label).toBe('Needs Validation')
-    expect(config.colorKey).toBe('needs_validation')
+  it('returns completed config for completed status', () => {
+    const config = getCaseStatusConfig('completed')
+    expect(config.label).toBe('Completed')
+    expect(config.colorKey).toBe('completed')
   })
 })

@@ -24,7 +24,7 @@ import {
 // TYPES
 // ============================================
 
-type CaseStatus = 'scheduled' | 'in_progress' | 'completed' | 'needs_validation' | 'cancelled' | 'on_hold'
+type CaseStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'on_hold'
 
 interface CaseDrawerFinancialsProps {
   displayStatus: CaseStatus | string
@@ -42,7 +42,7 @@ interface CaseDrawerFinancialsProps {
 
 /** Is this a "completed" case that should show actual data? */
 function isCompletedStatus(status: string): boolean {
-  return status === 'completed' || status === 'needs_validation'
+  return status === 'completed'
 }
 
 /** Is the delta favorable? For revenue/credits: positive is good. For costs: negative is good. */

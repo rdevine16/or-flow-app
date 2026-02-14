@@ -101,11 +101,8 @@ function getSurgeonName(surgeon: { first_name: string; last_name: string } | nul
 // STATUS BADGE
 // ============================================
 
-function StatusBadge({ statusName, dataValidated }: { statusName: string | null | undefined; dataValidated: boolean }) {
-  const displayStatus = resolveDisplayStatus(
-    statusName ?? null,
-    dataValidated,
-  )
+function StatusBadge({ statusName }: { statusName: string | null | undefined }) {
+  const displayStatus = resolveDisplayStatus(statusName)
   const config = getCaseStatusConfig(displayStatus)
   const colors = statusColors[config.colorKey]
 
@@ -403,10 +400,7 @@ export default function CasesTable({
         <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Status</span>
       ),
       cell: ({ row }) => (
-        <StatusBadge
-          statusName={row.original.case_status?.name}
-          dataValidated={row.original.data_validated}
-        />
+        <StatusBadge statusName={row.original.case_status?.name} />
       ),
       size: 140,
       enableSorting: false,
