@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   useReactTable,
@@ -95,6 +95,22 @@ function formatTime(timeStr: string | null): string {
 function getSurgeonName(surgeon: { first_name: string; last_name: string } | null | undefined): string {
   if (!surgeon) return '\u2014'
   return `Dr. ${surgeon.last_name}`
+}
+
+function formatDuration(minutes: number | null): string {
+  if (minutes == null || minutes <= 0) return '\u2014'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}m`
+  return `${h}h ${m}m`
+}
+
+function getElapsedMinutes(startTime: string | null, scheduledDate: string): number | null {
+  if (!startTime) return null
+  const start = new Date(`${scheduledDate}T${startTime}`)
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - start.getTime()) / 60000)
+  return diff > 0 ? diff : 0
 }
 
 // ============================================
@@ -330,6 +346,16 @@ export default function CasesTable({
   onExportSelected,
   dqCaseIds,
 }: CasesTableProps) {
+  // ---- 60s tick for live elapsed timers on in-progress cases ----
+  const hasInProgress = cases.some(c => c.case_status?.name?.toLowerCase() === 'in_progress')
+  const [tick, setTick] = useState(0)
+
+  useEffect(() => {
+    if (!hasInProgress) return
+    const id = setInterval(() => setTick(t => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [hasInProgress])
+
   // ---- Column Definitions ----
   const columns = useMemo<ColumnDef<CaseListItem, unknown>[]>(() => [
     // Checkbox
@@ -451,15 +477,19 @@ export default function CasesTable({
         <SortableHeader label="Duration" columnKey="duration" currentSort={sort} onSort={onSortChange} />
       ),
       cell: ({ row }) => {
-        // For completed cases, show actual_duration if available via case_status check
-        // For in-progress, compute elapsed from start_time
-        // For scheduled, show "\u2014"
         const status = row.original.case_status?.name?.toLowerCase()
-        if (status === 'completed' || status === 'in_progress') {
-          // actual_duration_minutes is not in CaseListItem, so we show start_time-based estimate
+        if (status === 'completed') {
           return (
             <span className="text-sm text-slate-600 tabular-nums">
-              {formatTime(row.original.start_time)}
+              {formatDuration(row.original.actual_duration_minutes)}
+            </span>
+          )
+        }
+        if (status === 'in_progress') {
+          const elapsed = getElapsedMinutes(row.original.start_time, row.original.scheduled_date)
+          return (
+            <span className="text-sm text-green-600 tabular-nums">
+              {formatDuration(elapsed)}
             </span>
           )
         }
@@ -530,7 +560,8 @@ export default function CasesTable({
       size: 90,
       enableSorting: false,
     },
-  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab, dqCaseIds])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- tick forces re-render for live elapsed timers
+  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab, dqCaseIds, tick])
 
   // ---- Table Instance ----
   // Sorting is handled server-side, so we use manual sorting
