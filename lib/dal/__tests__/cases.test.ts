@@ -18,6 +18,7 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       or_room_id: 'room-1',
       surgeon_id: 'surgeon-1',
       facility_id: 'facility-1',
+      actual_duration_minutes: null,
       created_at: '2026-03-15T00:00:00Z',
       created_by: 'user-1',
     }
@@ -39,6 +40,7 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       or_room_id: 'room-1',
       surgeon_id: 'surgeon-1',
       facility_id: 'facility-1',
+      actual_duration_minutes: null,
       created_at: '2026-03-15T00:00:00Z',
       created_by: 'user-1',
     }
@@ -57,6 +59,7 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       or_room_id: null,
       surgeon_id: null,
       facility_id: 'facility-1',
+      actual_duration_minutes: null,
       created_at: '2026-03-15T00:00:00Z',
       created_by: null,
     }

@@ -86,6 +86,9 @@ export interface UseCasesPageReturn {
   // Flags
   flagSummaries: Map<string, CaseFlagSummary>
 
+  // DQ validation state (case IDs with unresolved metric_issues)
+  dqCaseIds: Set<string>
+
   // Procedure category lookup (id → name) for icons
   categoryNameById: Map<string, string>
 
@@ -405,6 +408,22 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     return map
   }, [flagSummariesData])
 
+  // --- DQ Validation Status (case IDs with unresolved metric_issues) ---
+  const { data: dqCaseIdsData } = useSupabaseQuery<string[]>(
+    async (supabase) => {
+      if (!facilityId) return []
+      const { data, error } = await casesDAL.getCaseIdsWithUnresolvedIssues(supabase, facilityId)
+      if (error) throw error
+      return data ?? []
+    },
+    {
+      deps: [facilityId],
+      enabled: !!facilityId,
+    }
+  )
+
+  const dqCaseIds = useMemo(() => new Set(dqCaseIdsData ?? []), [dqCaseIdsData])
+
   // --- Toggle All Rows (on current page) ---
   const toggleAllRows = useCallback(() => {
     if (selectedRows.size === cases.length) {
@@ -505,6 +524,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     setPage,
     totalPages,
     flagSummaries,
+    dqCaseIds,
     categoryNameById,
     selectedRows,
     setSelectedRows,
