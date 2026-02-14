@@ -13,8 +13,9 @@ function makeFlag(overrides: Partial<CaseFlag> = {}): CaseFlag {
     case_id: 'case-1',
     delay_type_id: null,
     flag_type: 'warning',
-    notes: null,
-    minutes: null,
+    severity: 'warning',
+    note: null,
+    duration_minutes: null,
     delay_type: undefined,
     ...overrides,
   }
@@ -33,8 +34,8 @@ describe('CaseDrawerFlags — unit', () => {
 
   it('renders flag cards for each flag', () => {
     const flags: CaseFlag[] = [
-      makeFlag({ id: 'f1', flag_type: 'critical', notes: 'Exceeded max time' }),
-      makeFlag({ id: 'f2', flag_type: 'warning', notes: 'Late start' }),
+      makeFlag({ id: 'f1', flag_type: 'critical', severity: 'critical', note: 'Exceeded max time' }),
+      makeFlag({ id: 'f2', flag_type: 'warning', severity: 'warning', note: 'Late start' }),
     ]
     render(<CaseDrawerFlags flags={flags} />)
     expect(screen.getByText('Exceeded max time')).toBeDefined()
@@ -43,9 +44,9 @@ describe('CaseDrawerFlags — unit', () => {
 
   it('shows severity label for each flag', () => {
     const flags = [
-      makeFlag({ id: 'f1', flag_type: 'critical' }),
-      makeFlag({ id: 'f2', flag_type: 'warning' }),
-      makeFlag({ id: 'f3', flag_type: 'info' }),
+      makeFlag({ id: 'f1', flag_type: 'critical', severity: 'critical' }),
+      makeFlag({ id: 'f2', flag_type: 'warning', severity: 'warning' }),
+      makeFlag({ id: 'f3', flag_type: 'info', severity: 'info' }),
     ]
     render(<CaseDrawerFlags flags={flags} />)
     expect(screen.getByText('critical')).toBeDefined()
@@ -55,20 +56,20 @@ describe('CaseDrawerFlags — unit', () => {
 
   it('shows delay type name when present', () => {
     const flags = [
-      makeFlag({ id: 'f1', delay_type_id: 'dt-1', delay_type: { name: 'Equipment Delay' } }),
+      makeFlag({ id: 'f1', delay_type_id: 'dt-1', delay_type: { name: 'Equipment Delay', display_name: null } }),
     ]
     render(<CaseDrawerFlags flags={flags} />)
     expect(screen.getByText('Equipment Delay')).toBeDefined()
   })
 
   it('shows delay minutes when present and > 0', () => {
-    const flags = [makeFlag({ id: 'f1', minutes: 15, notes: 'Waited for implants' })]
+    const flags = [makeFlag({ id: 'f1', duration_minutes: 15, note: 'Waited for implants' })]
     render(<CaseDrawerFlags flags={flags} />)
     expect(screen.getByText('15 min delay')).toBeDefined()
   })
 
   it('does not show delay minutes when 0', () => {
-    const flags = [makeFlag({ id: 'f1', minutes: 0, notes: 'No delay' })]
+    const flags = [makeFlag({ id: 'f1', duration_minutes: 0, note: 'No delay' })]
     render(<CaseDrawerFlags flags={flags} />)
     expect(screen.queryByText(/min delay/)).toBeNull()
   })

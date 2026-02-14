@@ -42,7 +42,7 @@ export default function CaseDrawerFlags({ flags }: CaseDrawerFlagsProps) {
   return (
     <div className="space-y-3">
       {flags.map((flag) => {
-        const severityKey = getSeverityKey(flag.flag_type)
+        const severityKey = flag.severity ? getSeverityKey(flag.severity) : getSeverityKey(flag.flag_type)
         const colors = severityColors[severityKey]
         const Icon = SEVERITY_ICONS[severityKey] ?? Info
 
@@ -58,18 +58,18 @@ export default function CaseDrawerFlags({ flags }: CaseDrawerFlagsProps) {
                   <span className={`text-xs font-semibold uppercase ${colors.color}`}>
                     {severityKey}
                   </span>
-                  {flag.delay_type?.name && (
+                  {(flag.delay_type?.display_name || flag.delay_type?.name) && (
                     <span className="text-xs text-slate-500">
-                      {flag.delay_type.name}
+                      {flag.delay_type.display_name || flag.delay_type.name}
                     </span>
                   )}
                 </div>
-                {flag.notes && (
-                  <p className="text-sm text-slate-700 mt-1">{flag.notes}</p>
+                {flag.note && (
+                  <p className="text-sm text-slate-700 mt-1">{flag.note}</p>
                 )}
-                {flag.minutes != null && flag.minutes > 0 && (
+                {flag.duration_minutes != null && flag.duration_minutes > 0 && (
                   <p className="text-xs text-slate-500 mt-1">
-                    {flag.minutes} min delay
+                    {flag.duration_minutes} min delay
                   </p>
                 )}
               </div>

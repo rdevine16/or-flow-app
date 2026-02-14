@@ -80,17 +80,19 @@ export interface CaseFlag {
   case_id: string
   delay_type_id: string | null
   flag_type: string
-  notes: string | null
-  minutes: number | null
-  delay_type?: { name: string }
+  severity: string | null
+  note: string | null
+  duration_minutes: number | null
+  delay_type?: { name: string; display_name: string | null }
 }
 
 export interface CaseStaffMember {
   id: string
   case_id: string
   user_id: string
-  role: string
+  role_id: string | null
   user?: { first_name: string; last_name: string }
+  user_role?: { name: string }
 }
 
 export interface CaseImplantCompany {
@@ -140,11 +142,12 @@ const CASE_DETAIL_SELECT = `
   case_milestones(id, case_id, facility_milestone_id, recorded_at, recorded_by,
     facility_milestone:facility_milestones(name, display_name, display_order)
   ),
-  case_flags(id, case_id, delay_type_id, flag_type, notes, minutes,
-    delay_type:delay_types(name)
+  case_flags(id, case_id, delay_type_id, flag_type, severity, note, duration_minutes,
+    delay_type:delay_types(name, display_name)
   ),
-  case_staff(id, case_id, user_id, role,
-    user:users(first_name, last_name)
+  case_staff(id, case_id, user_id, role_id,
+    user:users!case_staff_user_id_fkey(first_name, last_name),
+    user_role:user_roles!case_staff_role_id_fkey(name)
   ),
   case_implant_companies(implant_company_id)
 ` as const
