@@ -23,6 +23,12 @@ vi.mock('@/lib/hooks/useCaseDrawer', () => ({
   useMilestoneComparisons: (...args: unknown[]) => mockUseMilestoneComparisons(...args),
 }))
 
+// Mock useCaseFinancials to avoid Supabase client initialization in tests
+const mockUseCaseFinancials = vi.fn()
+vi.mock('@/lib/hooks/useCaseFinancials', () => ({
+  useCaseFinancials: (...args: unknown[]) => mockUseCaseFinancials(...args),
+}))
+
 // Mock ProcedureIcon to avoid Lucide rendering complexity
 vi.mock('@/components/ui/ProcedureIcon', () => ({
   default: ({ categoryName }: { categoryName: string | null }) => (
@@ -139,6 +145,13 @@ describe('CaseDrawer — unit', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
     mockUseMilestoneComparisons.mockReturnValue(defaultComparisonReturn())
+    mockUseCaseFinancials.mockReturnValue({
+      projection: null,
+      comparison: null,
+      actual: null,
+      loading: false,
+      error: null,
+    })
   })
 
   it('does not render dialog when caseId is null', () => {
@@ -274,6 +287,13 @@ describe('CaseDrawer — tab switching', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
     mockUseMilestoneComparisons.mockReturnValue(defaultComparisonReturn())
+    mockUseCaseFinancials.mockReturnValue({
+      projection: null,
+      comparison: null,
+      actual: null,
+      loading: false,
+      error: null,
+    })
   })
 
   it('switches to Milestones tab and renders milestone timeline', async () => {
@@ -293,13 +313,14 @@ describe('CaseDrawer — tab switching', () => {
     expect(screen.getByText('Patient Out')).toBeDefined()
   })
 
-  it('switches to Financials stub tab', async () => {
+  it('switches to Financials tab and shows content', async () => {
     const user = userEvent.setup()
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
     )
     await user.click(screen.getByText('Financials'))
-    expect(screen.getByText('Coming in Phase 8')).toBeDefined()
+    // With null projection, shows "no data" message
+    expect(screen.getByText('No financial data available for this case')).toBeDefined()
   })
 
   it('switches back to Flags tab', async () => {

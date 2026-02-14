@@ -9,10 +9,12 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useCaseDrawer, useMilestoneComparisons } from '@/lib/hooks/useCaseDrawer'
+import { useCaseFinancials } from '@/lib/hooks/useCaseFinancials'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
 import { statusColors } from '@/lib/design-tokens'
 import ProcedureIcon from '@/components/ui/ProcedureIcon'
 import CaseDrawerFlags from '@/components/cases/CaseDrawerFlags'
+import CaseDrawerFinancials from '@/components/cases/CaseDrawerFinancials'
 import CaseDrawerMilestones from '@/components/cases/CaseDrawerMilestones'
 import type { CaseDetail, CaseMilestone } from '@/lib/dal/cases'
 import {
@@ -185,6 +187,25 @@ export default function CaseDrawer({
     caseDetail?.surgeon_id ?? null,
     caseDetail?.procedure_type?.id ?? null,
     activeTab === 'milestones' && !!caseDetail,
+  )
+
+  // Lazy-load financial data only when financials tab is active
+  const {
+    projection: financialProjection,
+    comparison: financialComparison,
+    actual: financialActual,
+    loading: financialsLoading,
+    error: financialsError,
+  } = useCaseFinancials(
+    caseDetail?.id ?? null,
+    caseDetail?.facility_id ?? null,
+    caseDetail?.surgeon_id ?? null,
+    caseDetail?.procedure_type?.id ?? null,
+    caseDetail?.estimated_duration_minutes ?? null,
+    caseDetail?.surgeon
+      ? `Dr. ${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
+      : null,
+    activeTab === 'financials' && !!caseDetail,
   )
 
   // Resolve display status
@@ -370,13 +391,15 @@ export default function CaseDrawer({
                 )}
 
                 {activeTab === 'financials' && (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                      <DollarSign className="w-6 h-6 text-slate-400" />
-                    </div>
-                    <p className="text-sm font-medium text-slate-600">Financials Tab</p>
-                    <p className="text-xs text-slate-400 mt-1">Coming in Phase 8</p>
-                  </div>
+                  <CaseDrawerFinancials
+                    displayStatus={displayStatus}
+                    projection={financialProjection}
+                    comparison={financialComparison}
+                    actual={financialActual}
+                    loading={financialsLoading}
+                    error={financialsError}
+                    surgeonName={surgeonName}
+                  />
                 )}
               </div>
 
