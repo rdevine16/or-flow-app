@@ -481,7 +481,7 @@ export default function CasesTable({
         if (status === 'completed') {
           return (
             <span className="text-sm text-slate-600 tabular-nums">
-              {formatDuration(row.original.actual_duration_minutes)}
+              {formatDuration(row.original.scheduled_duration_minutes)}
             </span>
           )
         }

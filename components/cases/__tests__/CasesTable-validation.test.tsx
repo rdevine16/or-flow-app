@@ -21,7 +21,7 @@ function makeCaseItem(overrides: Partial<CaseListItem> = {}): CaseListItem {
     facility_id: 'facility-1',
     created_at: '2026-02-14T00:00:00Z',
     created_by: 'user-1',
-    actual_duration_minutes: 120,
+    scheduled_duration_minutes: 120,
     surgeon: { first_name: 'John', last_name: 'Smith' },
     or_room: { name: 'OR-1' },
     case_status: { name: 'Completed' },

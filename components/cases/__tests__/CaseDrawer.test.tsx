@@ -61,7 +61,7 @@ const MOCK_CASE_DETAIL: CaseDetail = {
   laterality: null,
   anesthesia_type: null,
   scheduled_duration_minutes: 120,
-  actual_duration_minutes: 95,
+  scheduled_duration_minutes: 95,
   notes: null,
   rep_required_override: null,
   called_back_at: null,
@@ -200,7 +200,7 @@ describe('CaseDrawer — unit', () => {
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
     )
-    // Total duration = 95 minutes (actual_duration_minutes)
+    // Total duration = 95 minutes (scheduled_duration_minutes)
     expect(screen.getByText('1h 35m')).toBeDefined()
     // Surgical time = Incision (8:50) to Closing (9:45) = 55 min
     expect(screen.getByText('55m')).toBeDefined()

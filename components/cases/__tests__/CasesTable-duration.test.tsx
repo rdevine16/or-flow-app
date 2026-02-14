@@ -21,7 +21,7 @@ function makeCaseItem(overrides: Partial<CaseListItem> = {}): CaseListItem {
     facility_id: 'facility-1',
     created_at: '2026-02-14T00:00:00Z',
     created_by: 'user-1',
-    actual_duration_minutes: 120,
+    scheduled_duration_minutes: 120,
     surgeon: { first_name: 'John', last_name: 'Smith' },
     or_room: { name: 'OR-1' },
     case_status: { name: 'Completed' },
@@ -64,22 +64,22 @@ function renderTable(cases: CaseListItem[]) {
 // ============================================
 
 describe('CasesTable — Duration column', () => {
-  it('shows formatted duration for completed case with actual_duration_minutes', () => {
-    const cases = [makeCaseItem({ actual_duration_minutes: 135 })]
+  it('shows formatted duration for completed case with scheduled_duration_minutes', () => {
+    const cases = [makeCaseItem({ scheduled_duration_minutes: 135 })]
     renderTable(cases)
 
     expect(screen.getByText('2h 15m')).toBeInTheDocument()
   })
 
   it('shows minutes-only format for durations under 1 hour', () => {
-    const cases = [makeCaseItem({ actual_duration_minutes: 45 })]
+    const cases = [makeCaseItem({ scheduled_duration_minutes: 45 })]
     renderTable(cases)
 
     expect(screen.getByText('45m')).toBeInTheDocument()
   })
 
-  it('shows dash for completed case with null actual_duration_minutes', () => {
-    const cases = [makeCaseItem({ actual_duration_minutes: null })]
+  it('shows dash for completed case with null scheduled_duration_minutes', () => {
+    const cases = [makeCaseItem({ scheduled_duration_minutes: null })]
     const { container } = renderTable(cases)
 
     // Duration cell should have a dash (em-dash)
@@ -89,7 +89,7 @@ describe('CasesTable — Duration column', () => {
   })
 
   it('shows dash for scheduled cases', () => {
-    const cases = [makeCaseItem({ case_status: { name: 'Scheduled' }, actual_duration_minutes: null })]
+    const cases = [makeCaseItem({ case_status: { name: 'Scheduled' }, scheduled_duration_minutes: null })]
     renderTable(cases)
 
     // Should not show any time value
@@ -98,7 +98,7 @@ describe('CasesTable — Duration column', () => {
   })
 
   it('shows dash for cancelled cases', () => {
-    const cases = [makeCaseItem({ case_status: { name: 'Cancelled' }, actual_duration_minutes: null })]
+    const cases = [makeCaseItem({ case_status: { name: 'Cancelled' }, scheduled_duration_minutes: null })]
     renderTable(cases)
 
     expect(screen.queryByText(/\d+h/)).not.toBeInTheDocument()
@@ -115,7 +115,7 @@ describe('CasesTable — Duration column', () => {
       case_status: { name: 'in_progress' },
       start_time: '08:00:00',
       scheduled_date: '2026-02-14',
-      actual_duration_minutes: null,
+      scheduled_duration_minutes: null,
     })]
     const { container } = renderTable(cases)
 
@@ -130,7 +130,7 @@ describe('CasesTable — Duration column', () => {
   })
 
   it('shows exact hours for round-hour durations', () => {
-    const cases = [makeCaseItem({ actual_duration_minutes: 120 })]
+    const cases = [makeCaseItem({ scheduled_duration_minutes: 120 })]
     renderTable(cases)
 
     expect(screen.getByText('2h 0m')).toBeInTheDocument()

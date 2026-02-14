@@ -123,10 +123,10 @@ async function fetchAllTodayMetrics(
       : Promise.resolve({ count: 0, error: null }),
     // Completed case durations for median calculation
     (() => {
-      let q = supabase.from('cases').select('actual_duration_minutes')
+      let q = supabase.from('cases').select('scheduled_duration_minutes')
         .eq('facility_id', facilityId)
         .gte('scheduled_date', start).lte('scheduled_date', end)
-        .not('actual_duration_minutes', 'is', null)
+        .not('scheduled_duration_minutes', 'is', null)
       if (statusIds.completed) q = q.eq('status_id', statusIds.completed)
       return q
     })(),
@@ -146,8 +146,8 @@ async function fetchAllTodayMetrics(
   const scheduledCount = (scheduledR.count ?? 0) as number
 
   // Median duration
-  const durations = ((durationsR.data ?? []) as Array<{ actual_duration_minutes: number }>)
-    .map(d => d.actual_duration_minutes)
+  const durations = ((durationsR.data ?? []) as Array<{ scheduled_duration_minutes: number }>)
+    .map(d => d.scheduled_duration_minutes)
   const medianDuration = computeMedian(durations)
 
   // On-Time Start %: patient arrived within 15 min of scheduled start
@@ -194,14 +194,14 @@ async function fetchCompletedMetrics(
 
   // Fetch completed cases (IDs + durations)
   const casesR = await supabase.from('cases')
-    .select('id, actual_duration_minutes')
+    .select('id, scheduled_duration_minutes')
     .eq('facility_id', facilityId)
     .gte('scheduled_date', start).lte('scheduled_date', end)
     .eq('status_id', statusIds.completed)
 
-  const cases = (casesR.data ?? []) as Array<{ id: string; actual_duration_minutes: number | null }>
+  const cases = (casesR.data ?? []) as Array<{ id: string; scheduled_duration_minutes: number | null }>
   const totalCount = cases.length
-  const durations = cases.map(c => c.actual_duration_minutes).filter((d): d is number => d !== null)
+  const durations = cases.map(c => c.scheduled_duration_minutes).filter((d): d is number => d !== null)
   const medianDuration = computeMedian(durations)
 
   // Fetch profits from case_completion_stats for these cases

@@ -26,7 +26,7 @@ export interface CaseListItem {
   surgeon?: { first_name: string; last_name: string } | null
   or_room?: { name: string } | null
   case_status?: { name: string } | null
-  actual_duration_minutes: number | null
+  scheduled_duration_minutes: number | null
   procedure_type?: { id: string; name: string; procedure_category_id: string | null } | null
 }
 
@@ -55,7 +55,6 @@ export interface CaseDetail extends CaseListItem {
   laterality: string | null
   anesthesia_type: string | null
   scheduled_duration_minutes: number | null
-  actual_duration_minutes: number | null
   notes: string | null
   rep_required_override: boolean | null
   called_back_at: string | null
@@ -116,7 +115,6 @@ export interface CaseForAnalytics {
   incision_at: string | null
   prep_drape_complete_at: string | null
   closing_at: string | null
-  actual_duration_minutes: number | null
   procedure_type?: { name: string }
 }
 
@@ -127,7 +125,7 @@ export interface CaseForAnalytics {
 const CASE_LIST_SELECT = `
   id, case_number,
   scheduled_date, start_time, status_id, data_validated, or_room_id, surgeon_id, facility_id,
-  actual_duration_minutes, created_at, created_by,
+  scheduled_duration_minutes, created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
   case_status:case_statuses(name),
@@ -156,7 +154,6 @@ const CASE_DETAIL_SELECT = `
 const CASE_ANALYTICS_SELECT = `
   id, surgeon_id, procedure_type_id, scheduled_date, start_time, or_room_id,
   patient_in_at, patient_out_at, incision_at, prep_drape_complete_at, closing_at,
-  actual_duration_minutes,
   procedure_type:procedure_types(name)
 ` as const
 
@@ -630,7 +627,7 @@ const SORT_COLUMN_MAP: Record<string, string> = {
   date: 'scheduled_date',
   surgeon: 'surgeon_id',
   procedure: 'procedure_type_id',
-  duration: 'actual_duration_minutes',
+  duration: 'scheduled_duration_minutes',
   room: 'or_room_id',
   case_number: 'case_number',
   start_time: 'start_time',

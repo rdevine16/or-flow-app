@@ -118,7 +118,7 @@ const TABS: { key: DrawerTab; label: string; icon: typeof Flag }[] = [
 // ============================================
 
 function QuickStats({ caseDetail }: { caseDetail: CaseDetail }) {
-  const totalDuration = caseDetail.actual_duration_minutes
+  const totalDuration = caseDetail.scheduled_duration_minutes
     ?? computeTotalFromMilestones(caseDetail.case_milestones)
   const surgicalTime = computeSurgicalTime(caseDetail.case_milestones)
 
