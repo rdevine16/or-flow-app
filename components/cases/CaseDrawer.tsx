@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -191,6 +191,11 @@ export default function CaseDrawer({
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
 
+  // Reset to default tab when switching cases
+  useEffect(() => {
+    setActiveTab('flags')
+  }, [caseId])
+
   // Whether this case has DQ issues (drives conditional Validation tab)
   const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))
 
@@ -199,11 +204,6 @@ export default function CaseDrawer({
     if (hasValidationIssues) return [...BASE_TABS, VALIDATION_TAB]
     return BASE_TABS
   }, [hasValidationIssues])
-
-  // Reset to flags tab if validation tab disappears while active
-  const handleTabChange = useCallback((tab: DrawerTab) => {
-    setActiveTab(tab)
-  }, [])
 
   // Lazy-load metric issues only when validation tab is active
   const { data: validationIssues, loading: validationLoading } = useSupabaseQuery<MetricIssue[]>(
@@ -400,7 +400,7 @@ export default function CaseDrawer({
                     return (
                       <button
                         key={tab.key}
-                        onClick={() => handleTabChange(tab.key)}
+                        onClick={() => setActiveTab(tab.key)}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors border-b-2 ${
                           isActive
                             ? 'text-blue-600 border-blue-600'
