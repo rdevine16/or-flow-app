@@ -1,883 +1,389 @@
-# ORbit Permissions System — Implementation Plan
+# Implementation Plan: Cases Page — Separate Status, Validation & Fix Duration
 
-## Overview
+> Feature spec: `docs/active-feature.md`
 
-This document is the complete specification for implementing a granular, feature-level permissions system in ORbit's web application. It covers database schema, RLS policy updates, a Supabase RPC for permission resolution, frontend integration (Next.js), and two admin UI pages (global admin template + facility admin permissions).
+## Summary
 
-> **Note:** iOS parity will be implemented separately. The database RPC function (`get_user_permissions`) built here will serve as the single source of truth for both platforms. iOS implementation requires only consuming this existing RPC.
+The cases page Status column currently uses a compound display that overrides "Completed" → "Needs Validation" for cases with unresolved DQ issues. This causes confusion on the "Needs Validation" tab where cases show mixed statuses (In Progress, Completed, Scheduled) because the DQ engine returns cases of ANY status with unresolved `metric_issues`, but the status badge only overrides completed cases. Additionally, the Duration column shows start_time instead of actual duration due to a missing field.
 
-**Architecture summary:** Template → Facility → Resolution
+This plan: (1) makes the Status column show pure DB status, (2) adds a new Validation column with DQ state, (3) fixes Duration to show actual duration with a live timer for in-progress cases, and (4) renames the "Needs Validation" tab to "Data Quality".
 
-- **Global Admin** configures permission templates (defaults per `access_level`)
-- When a facility is created, it receives a **copy** of the current template
-- **Facility Admins** customize their facility's permissions independently
-- A single **Supabase RPC function** resolves the final permission set for any user
-- **Next.js** consumes this function and gates UI accordingly
-- `facility_admin` and `global_admin` **always bypass** the permission system (full access)
+## Key Decisions
+
+| Decision | Choice |
+|----------|--------|
+| Status column | Pure DB status only — no compound "Needs Validation" override |
+| Validation column | Green "Validated" pill / orange "Needs Validation" pill / dash for scheduled/cancelled |
+| Validation click | Navigates to `/dashboard/data-quality?caseId=<id>` |
+| Validation visibility | All tabs |
+| Validation sorting | Yes, sortable |
+| Duration format | "Xh Ym" (e.g., "2h 15m", "45m") |
+| In-progress duration | Live ticking timer, page-level 60s interval |
+| Tab rename | "Needs Validation" → "Data Quality" |
+| Tab filter logic | Unchanged — still queries `metric_issues` via DQ engine |
+| Tab counts | Unchanged |
 
 ---
 
-## Phase 1: Database Schema
+## Phase 1: Data Layer — Add `actual_duration_minutes` and DQ Status to CaseListItem
 
-### 1.1 Create `permissions` Table (Master Registry)
+**What it does:** Extends the `CaseListItem` type and select query to include `actual_duration_minutes` (needed for Duration column fix) and adds a utility to determine per-case DQ validation status for the new Validation column. No UI changes yet.
 
-This is the canonical list of all permissions in the system. Adding a row here automatically makes it appear in both admin UIs.
+**Files touched:**
+- `lib/dal/cases.ts` — add `actual_duration_minutes` to type + select, add DQ status enrichment
+- `lib/hooks/useCasesPage.ts` — enrich cases with DQ validation status
 
-```sql
-CREATE TABLE IF NOT EXISTS permissions (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  key TEXT NOT NULL UNIQUE,              -- e.g. 'cases.view', 'financials.view'
-  label TEXT NOT NULL,                    -- e.g. 'View Cases'
-  description TEXT,                       -- Optional tooltip text
-  category TEXT NOT NULL,                 -- Grouping: 'Cases', 'Financials', 'Analytics', etc.
-  resource TEXT NOT NULL,                 -- Groups CRUD columns: 'cases', 'milestones', etc.
-  resource_type TEXT NOT NULL DEFAULT 'page',  -- 'page', 'tab', 'action'
-  action TEXT NOT NULL,                   -- 'view', 'create', 'edit', 'delete'
-  sort_order INTEGER NOT NULL DEFAULT 0,  -- Controls display order within category
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+**Details:**
 
-CREATE INDEX idx_permissions_category ON permissions(category, sort_order);
-CREATE INDEX idx_permissions_key ON permissions(key);
+### 1a. Add `actual_duration_minutes` to CaseListItem
 
--- RLS: Everyone authenticated can read permissions (it's a reference table)
-ALTER TABLE permissions ENABLE ROW LEVEL SECURITY;
+In `lib/dal/cases.ts`:
+- Add `actual_duration_minutes: number | null` to `CaseListItem` interface (line 14-30)
+- Add `actual_duration_minutes` to `CASE_LIST_SELECT` string (line 126-134)
 
-CREATE POLICY "Authenticated users can view permissions"
-  ON permissions FOR SELECT
-  USING (auth.uid() IS NOT NULL);
+### 1b. Add DQ validation status enrichment
 
-CREATE POLICY "Global admins can manage permissions"
-  ON permissions FOR ALL
-  USING (get_my_access_level() = 'global_admin')
-  WITH CHECK (get_my_access_level() = 'global_admin');
-```
+The cases page already calls `getCaseIdsWithUnresolvedIssues()` for the needs_validation tab. We need this data available on ALL tabs to populate the Validation column.
 
-### 1.2 Create `permission_templates` Table (Global Admin Blueprints)
+In `lib/hooks/useCasesPage.ts`:
+- After fetching cases, also call `casesDAL.getCaseIdsWithUnresolvedIssues(supabase, facilityId)` for every tab load
+- Store result as `dqCaseIds: Set<string>` in hook state
+- Expose `dqCaseIds` from the hook return value so the table can check `dqCaseIds.has(case.id)`
 
-```sql
-CREATE TABLE IF NOT EXISTS permission_templates (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  access_level TEXT NOT NULL,             -- 'user', 'device_rep'
-  permission_key TEXT NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
-  granted BOOLEAN NOT NULL DEFAULT false,
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_by UUID REFERENCES users(id),
-  UNIQUE(access_level, permission_key)
-);
+### 1c. Add `validation` to SORT_COLUMN_MAP
 
-CREATE INDEX idx_permission_templates_access ON permission_templates(access_level);
+In `lib/dal/cases.ts` (line 628-633):
+- Add `validation: 'data_validated'` to `SORT_COLUMN_MAP` — this enables server-side sorting by validation state
 
-ALTER TABLE permission_templates ENABLE ROW LEVEL SECURITY;
+**Commit message:** `feat(cases-columns): phase 1 - add actual_duration_minutes and DQ status to CaseListItem`
 
-CREATE POLICY "Global admins can manage permission templates"
-  ON permission_templates FOR ALL
-  USING (get_my_access_level() = 'global_admin')
-  WITH CHECK (get_my_access_level() = 'global_admin');
+**3-stage test gate:**
+1. **Unit:** `CaseListItem` includes `actual_duration_minutes`. `CASE_LIST_SELECT` includes the column. `dqCaseIds` set is populated.
+2. **Integration:** `listForCasesPage()` returns `actual_duration_minutes` values for completed cases. `dqCaseIds` correctly identifies cases with unresolved issues.
+3. **Workflow:** Load cases page → hook fetches cases with `actual_duration_minutes` + DQ status enrichment → no UI changes visible yet but data is available.
 
--- Facility admins can read templates (for reference)
-CREATE POLICY "Facility admins can view permission templates"
-  ON permission_templates FOR SELECT
-  USING (get_my_access_level() = 'facility_admin');
-```
-
-### 1.3 Create `facility_permissions` Table (Per-Facility Configuration)
-
-```sql
-CREATE TABLE IF NOT EXISTS facility_permissions (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  facility_id UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
-  access_level TEXT NOT NULL,             -- 'user', 'device_rep'
-  permission_key TEXT NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
-  granted BOOLEAN NOT NULL DEFAULT false,
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_by UUID REFERENCES users(id),
-  UNIQUE(facility_id, access_level, permission_key)
-);
-
-CREATE INDEX idx_facility_permissions_lookup
-  ON facility_permissions(facility_id, access_level);
-
-ALTER TABLE facility_permissions ENABLE ROW LEVEL SECURITY;
-
--- Global admins can do everything
-CREATE POLICY "Global admins can manage all facility permissions"
-  ON facility_permissions FOR ALL
-  USING (get_my_access_level() = 'global_admin')
-  WITH CHECK (get_my_access_level() = 'global_admin');
-
--- Facility admins can manage their own facility's permissions
-CREATE POLICY "Facility admins can manage own facility permissions"
-  ON facility_permissions FOR ALL
-  USING (
-    get_my_access_level() = 'facility_admin'
-    AND facility_id = get_my_facility_id()
-  )
-  WITH CHECK (
-    get_my_access_level() = 'facility_admin'
-    AND facility_id = get_my_facility_id()
-  );
-
--- Users can read their own facility's permissions (needed for frontend gating)
-CREATE POLICY "Users can view own facility permissions"
-  ON facility_permissions FOR SELECT
-  USING (facility_id = get_my_facility_id());
-```
-
-### 1.4 Seed Permissions Data
-
-```sql
-INSERT INTO permissions (key, label, description, category, resource, resource_type, action, sort_order) VALUES
-  -- Cases (core)
-  ('cases.view',           'View Cases',             'View the cases list and case detail pages',       'Cases',      'cases',      'page',   'view',   1),
-  ('cases.create',         'Create Cases',           'Create new surgical cases',                        'Cases',      'cases',      'page',   'create', 2),
-  ('cases.edit',           'Edit Cases',             'Edit case info (procedure, surgeon, times)',        'Cases',      'cases',      'page',   'edit',   3),
-  ('cases.delete',         'Delete Cases',           'Delete/archive cases',                             'Cases',      'cases',      'page',   'delete', 4),
-
-  -- Case Operations (granular)
-  ('milestones.view',      'View Milestones',        'View milestone timestamps on cases',               'Case Operations', 'milestones', 'action', 'view',   10),
-  ('milestones.record',    'Record Milestones',      'Record milestone timestamps during cases',          'Case Operations', 'milestones', 'action', 'create', 11),
-  ('milestones.edit',      'Edit Milestones',        'Edit previously recorded milestones',               'Case Operations', 'milestones', 'action', 'edit',   12),
-  ('flags.view',           'View Flags',             'View case flags',                                   'Case Operations', 'flags',      'action', 'view',   13),
-  ('flags.create',         'Create Flags',           'Create case flags',                                 'Case Operations', 'flags',      'action', 'create', 14),
-  ('flags.edit',           'Edit Flags',             'Edit case flags',                                   'Case Operations', 'flags',      'action', 'edit',   15),
-  ('flags.delete',         'Delete Flags',           'Delete case flags',                                 'Case Operations', 'flags',      'action', 'delete', 16),
-  ('delays.view',          'View Delays',            'View case delays',                                  'Case Operations', 'delays',     'action', 'view',   17),
-  ('delays.create',        'Create Delays',          'Create case delays',                                'Case Operations', 'delays',     'action', 'create', 18),
-  ('delays.edit',          'Edit Delays',            'Edit case delays',                                  'Case Operations', 'delays',     'action', 'edit',   19),
-  ('delays.delete',        'Delete Delays',          'Delete case delays',                                'Case Operations', 'delays',     'action', 'delete', 20),
-  ('staff.view',           'View Staff',             'View case staff assignments',                       'Case Operations', 'staff',      'action', 'view',   21),
-  ('staff.create',         'Assign Staff',           'Assign staff to cases',                             'Case Operations', 'staff',      'action', 'create', 22),
-  ('staff.delete',         'Remove Staff',           'Remove staff from cases',                           'Case Operations', 'staff',      'action', 'delete', 23),
-  ('complexity.view',      'View Complexity',        'View case complexity ratings',                      'Case Operations', 'complexity', 'action', 'view',   24),
-  ('complexity.create',    'Set Complexity',         'Set case complexity ratings',                       'Case Operations', 'complexity', 'action', 'create', 25),
-  ('complexity.edit',      'Edit Complexity',        'Edit case complexity ratings',                      'Case Operations', 'complexity', 'action', 'edit',   26),
-  ('implants.view',        'View Implants',          'View implant and device info on cases',             'Case Operations', 'implants',   'action', 'view',   27),
-  ('implants.create',      'Add Implants',           'Add implant and device info to cases',              'Case Operations', 'implants',   'action', 'create', 28),
-  ('implants.edit',        'Edit Implants',          'Edit implant and device info',                      'Case Operations', 'implants',   'action', 'edit',   29),
-  ('implants.delete',      'Delete Implants',        'Delete implant and device info',                    'Case Operations', 'implants',   'action', 'delete', 30),
-
-  -- Case Drawer Tabs
-  ('tab.case_overview',    'Case Overview Tab',      'View the overview tab on case detail/drawer',       'Case Tabs',  'tab_case_overview',  'tab', 'view', 40),
-  ('tab.case_financials',  'Case Financials Tab',    'View the financials tab on case detail/drawer',     'Case Tabs',  'tab_case_financials','tab', 'view', 41),
-  ('tab.case_milestones',  'Case Milestones Tab',    'View the milestones tab on case detail/drawer',     'Case Tabs',  'tab_case_milestones','tab', 'view', 42),
-  ('tab.case_implants',    'Case Implants Tab',      'View the implants tab on case detail/drawer',       'Case Tabs',  'tab_case_implants', 'tab', 'view', 43),
-  ('tab.case_staff',       'Case Staff Tab',         'View the staff tab on case detail/drawer',          'Case Tabs',  'tab_case_staff',    'tab', 'view', 44),
-
-  -- Financials
-  ('financials.view',      'View Financials',        'View financial data, revenue projections, costs',   'Financials', 'financials', 'page',   'view', 50),
-
-  -- Analytics
-  ('analytics.view',       'View Analytics',         'Access the analytics dashboard',                    'Analytics',  'analytics',  'page',   'view', 60),
-  ('scores.view',          'View ORbit Scores',      'View ORbit Score scorecards',                       'Analytics',  'scores',     'page',   'view', 61),
-
-  -- Scheduling
-  ('scheduling.view',      'View Schedule',          'View block schedule and room schedules',             'Scheduling', 'scheduling', 'page',   'view',   70),
-  ('scheduling.create',    'Create Blocks',          'Create block schedule entries',                      'Scheduling', 'scheduling', 'page',   'create', 71),
-  ('scheduling.edit',      'Edit Blocks',            'Edit block schedule entries',                        'Scheduling', 'scheduling', 'page',   'edit',   72),
-  ('scheduling.delete',    'Delete Blocks',          'Delete block schedule entries',                      'Scheduling', 'scheduling', 'page',   'delete', 73),
-
-  -- Settings
-  ('settings.view',        'View Settings',          'View settings pages (read-only)',                    'Settings',   'settings',   'page',   'view',   80),
-  ('settings.manage',      'Manage Settings',        'Manage facility settings, procedures, config',       'Settings',   'settings',   'page',   'edit',   81),
-  ('users.view',           'View Users',             'View user list',                                     'Settings',   'users_mgmt', 'page',   'view',   82),
-  ('users.manage',         'Manage Users',           'Invite, deactivate, change user access levels',      'Settings',   'users_mgmt', 'page',   'edit',   83),
-
-  -- Admin
-  ('audit.view',           'View Audit Log',         'View the audit log',                                 'Admin',      'audit',      'page',   'view', 90)
-ON CONFLICT (key) DO NOTHING;
-```
-
-### 1.5 Seed Default Permission Templates
-
-```sql
--- Default permissions for 'user' access level
-INSERT INTO permission_templates (access_level, permission_key, granted) VALUES
-  -- Cases: can view, create, edit — not delete
-  ('user', 'cases.view', true),
-  ('user', 'cases.create', true),
-  ('user', 'cases.edit', true),
-  ('user', 'cases.delete', false),
-
-  -- Case Operations: can do most things
-  ('user', 'milestones.view', true),
-  ('user', 'milestones.record', true),
-  ('user', 'milestones.edit', true),
-  ('user', 'flags.view', true),
-  ('user', 'flags.create', true),
-  ('user', 'flags.edit', true),
-  ('user', 'flags.delete', false),
-  ('user', 'delays.view', true),
-  ('user', 'delays.create', true),
-  ('user', 'delays.edit', true),
-  ('user', 'delays.delete', false),
-  ('user', 'staff.view', true),
-  ('user', 'staff.create', false),
-  ('user', 'staff.delete', false),
-  ('user', 'complexity.view', true),
-  ('user', 'complexity.create', false),
-  ('user', 'complexity.edit', false),
-  ('user', 'implants.view', true),
-  ('user', 'implants.create', false),
-  ('user', 'implants.edit', false),
-  ('user', 'implants.delete', false),
-
-  -- Case Tabs: can see overview, milestones, staff — not financials or implants
-  ('user', 'tab.case_overview', true),
-  ('user', 'tab.case_financials', false),
-  ('user', 'tab.case_milestones', true),
-  ('user', 'tab.case_implants', false),
-  ('user', 'tab.case_staff', true),
-
-  -- Financials: denied
-  ('user', 'financials.view', false),
-
-  -- Analytics: denied
-  ('user', 'analytics.view', false),
-  ('user', 'scores.view', false),
-
-  -- Scheduling: can view, not manage
-  ('user', 'scheduling.view', true),
-  ('user', 'scheduling.create', false),
-  ('user', 'scheduling.edit', false),
-  ('user', 'scheduling.delete', false),
-
-  -- Settings: denied
-  ('user', 'settings.view', false),
-  ('user', 'settings.manage', false),
-  ('user', 'users.view', false),
-  ('user', 'users.manage', false),
-
-  -- Admin: denied
-  ('user', 'audit.view', false)
-ON CONFLICT (access_level, permission_key) DO NOTHING;
-
--- Default permissions for 'device_rep' access level
-INSERT INTO permission_templates (access_level, permission_key, granted) VALUES
-  ('device_rep', 'cases.view', true),
-  ('device_rep', 'cases.create', false),
-  ('device_rep', 'cases.edit', false),
-  ('device_rep', 'cases.delete', false),
-  ('device_rep', 'milestones.view', true),
-  ('device_rep', 'milestones.record', false),
-  ('device_rep', 'milestones.edit', false),
-  ('device_rep', 'flags.view', false),
-  ('device_rep', 'flags.create', false),
-  ('device_rep', 'flags.edit', false),
-  ('device_rep', 'flags.delete', false),
-  ('device_rep', 'delays.view', false),
-  ('device_rep', 'delays.create', false),
-  ('device_rep', 'delays.edit', false),
-  ('device_rep', 'delays.delete', false),
-  ('device_rep', 'staff.view', false),
-  ('device_rep', 'staff.create', false),
-  ('device_rep', 'staff.delete', false),
-  ('device_rep', 'complexity.view', false),
-  ('device_rep', 'complexity.create', false),
-  ('device_rep', 'complexity.edit', false),
-  ('device_rep', 'implants.view', true),
-  ('device_rep', 'implants.create', true),
-  ('device_rep', 'implants.edit', true),
-  ('device_rep', 'implants.delete', false),
-  ('device_rep', 'tab.case_overview', true),
-  ('device_rep', 'tab.case_financials', false),
-  ('device_rep', 'tab.case_milestones', true),
-  ('device_rep', 'tab.case_implants', true),
-  ('device_rep', 'tab.case_staff', false),
-  ('device_rep', 'financials.view', false),
-  ('device_rep', 'analytics.view', false),
-  ('device_rep', 'scores.view', false),
-  ('device_rep', 'scheduling.view', false),
-  ('device_rep', 'scheduling.create', false),
-  ('device_rep', 'scheduling.edit', false),
-  ('device_rep', 'scheduling.delete', false),
-  ('device_rep', 'settings.view', false),
-  ('device_rep', 'settings.manage', false),
-  ('device_rep', 'users.view', false),
-  ('device_rep', 'users.manage', false),
-  ('device_rep', 'audit.view', false)
-ON CONFLICT (access_level, permission_key) DO NOTHING;
-```
-
-### 1.6 Function: Copy Template to New Facility
-
-This should be called whenever a new facility is created (either manually or via a trigger).
-
-```sql
-CREATE OR REPLACE FUNCTION copy_permission_template_to_facility(p_facility_id UUID)
-RETURNS void AS $$
-BEGIN
-  INSERT INTO facility_permissions (facility_id, access_level, permission_key, granted)
-  SELECT p_facility_id, pt.access_level, pt.permission_key, pt.granted
-  FROM permission_templates pt
-  ON CONFLICT (facility_id, access_level, permission_key) DO NOTHING;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-### 1.7 Function: Resolve User Permissions (Single RPC)
-
-```sql
-CREATE OR REPLACE FUNCTION get_user_permissions(p_user_id UUID DEFAULT NULL)
-RETURNS JSONB AS $$
-DECLARE
-  v_user_id UUID;
-  v_access_level TEXT;
-  v_facility_id UUID;
-  v_result JSONB;
-BEGIN
-  -- Default to current auth user if no user_id provided
-  v_user_id := COALESCE(p_user_id, auth.uid());
-
-  -- Get user's access level and facility
-  SELECT access_level, facility_id
-  INTO v_access_level, v_facility_id
-  FROM users
-  WHERE id = v_user_id;
-
-  -- Global admin and facility admin bypass everything
-  IF v_access_level IN ('global_admin', 'facility_admin') THEN
-    SELECT jsonb_object_agg(p.key, true)
-    INTO v_result
-    FROM permissions p
-    WHERE p.is_active = true;
-    RETURN v_result;
-  END IF;
-
-  -- For 'user' and 'device_rep': resolve from facility_permissions
-  SELECT jsonb_object_agg(p.key, COALESCE(fp.granted, false))
-  INTO v_result
-  FROM permissions p
-  LEFT JOIN facility_permissions fp
-    ON fp.permission_key = p.key
-    AND fp.facility_id = v_facility_id
-    AND fp.access_level = v_access_level
-  WHERE p.is_active = true;
-
-  RETURN COALESCE(v_result, '{}'::jsonb);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
-```
-
-### 1.8 Helper Function for RLS Policies
-
-```sql
-CREATE OR REPLACE FUNCTION user_has_permission(p_key TEXT)
-RETURNS BOOLEAN AS $$
-DECLARE
-  v_access_level TEXT;
-  v_facility_id UUID;
-  v_granted BOOLEAN;
-BEGIN
-  SELECT access_level, facility_id INTO v_access_level, v_facility_id
-  FROM users WHERE id = auth.uid();
-
-  IF v_access_level IN ('global_admin', 'facility_admin') THEN
-    RETURN true;
-  END IF;
-
-  SELECT granted INTO v_granted
-  FROM facility_permissions
-  WHERE facility_id = v_facility_id
-    AND access_level = v_access_level
-    AND permission_key = p_key;
-
-  RETURN COALESCE(v_granted, false);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
-```
-
-### 1.9 Backfill Existing Facilities
-
-```sql
--- Copy template to all existing facilities
-DO $$
-DECLARE
-  f RECORD;
-BEGIN
-  FOR f IN SELECT id FROM facilities LOOP
-    PERFORM copy_permission_template_to_facility(f.id);
-  END LOOP;
-END $$;
-```
-
-### 1.10 Tests for Phase 1
-
-After running the migration:
-
-```sql
--- Verify permissions seeded
-SELECT COUNT(*) FROM permissions;  -- Should be 41
-
--- Verify templates seeded
-SELECT COUNT(*) FROM permission_templates;  -- Should be 82 (41 per access_level x 2)
-
--- Verify facility backfill
-SELECT f.name, COUNT(fp.id) AS permission_count
-FROM facilities f
-LEFT JOIN facility_permissions fp ON fp.facility_id = f.id
-GROUP BY f.name;
--- Each facility should have 82 rows
-
--- Test RPC for a global_admin user
-SELECT get_user_permissions('405a7e92-9434-4535-89aa-f4ecc3e3ac7b'::UUID);
--- Should return all permissions as true
-
--- Test RPC for a regular user
-SELECT get_user_permissions('<any_user_with_access_level_user>'::UUID);
--- Should return mix of true/false based on facility_permissions
-
--- Test helper function
-SELECT user_has_permission('cases.view');  -- Should return true/false based on current user
-```
+**Complexity:** Light
 
 ---
 
-## Phase 2: Web Frontend — Permission Hook & Context
+## Phase 2: Status Column — Remove Compound Display
 
-### 2.1 Create `usePermissions` Hook
+**What it does:** Makes the Status column show pure DB status. Removes the `needs_validation` compound state from `resolveDisplayStatus()` and `caseStatusConfig`. The Status badge always shows what the database says.
 
-**File: `lib/hooks/usePermissions.ts`**
+**Files touched:**
+- `lib/constants/caseStatusConfig.ts` — remove `needs_validation` entry, simplify `resolveDisplayStatus()`
+- `components/cases/CasesTable.tsx` — simplify `StatusBadge` to use raw status name
 
-```typescript
-import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase'
-import { useUser } from '@/lib/UserContext'
+**Details:**
 
-interface UsePermissionsReturn {
-  permissions: Record<string, boolean>
-  can: (key: string) => boolean
-  canAny: (...keys: string[]) => boolean
-  canAll: (...keys: string[]) => boolean
-  loading: boolean
-}
+### 2a. Simplify `resolveDisplayStatus()`
 
-export function usePermissions(): UsePermissionsReturn {
-  const { user, accessLevel, loading: userLoading } = useUser()
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({})
-  const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+In `lib/constants/caseStatusConfig.ts`:
+- Remove lines 40-44: the `needs_validation` entry from `CASE_STATUS_CONFIG`
+- Simplify `resolveDisplayStatus()` (lines 51-63): remove the compound `if (status === 'completed' && !dataValidated)` block. The function just returns the raw status.
+- Since `dataValidated` param is no longer needed, simplify the function signature to only take `statusName`
 
-  useEffect(() => {
-    if (userLoading || !user) return
-    fetchPermissions()
-  }, [user, userLoading, accessLevel])
+### 2b. Update `StatusBadge` in CasesTable
 
-  async function fetchPermissions() {
-    try {
-      const { data, error } = await supabase.rpc('get_user_permissions')
-      if (error) throw error
-      setPermissions(data || {})
-    } catch (err) {
-      console.error('Failed to fetch permissions:', err)
-      // On error, deny everything for safety
-      setPermissions({})
-    } finally {
-      setLoading(false)
-    }
+In `components/cases/CasesTable.tsx` (lines 104-118):
+- Remove `dataValidated` prop from `StatusBadge`
+- Call `resolveDisplayStatus(statusName)` with just the status name
+- Update the usage at line 405-410: remove `dataValidated={row.original.data_validated}`
+
+### 2c. Check other consumers of `resolveDisplayStatus`
+
+Search for any other callers of `resolveDisplayStatus` or `getCaseStatusConfig('needs_validation')` and update them. Known consumer: `CaseDrawer.tsx` — update similarly.
+
+**Commit message:** `feat(cases-columns): phase 2 - status column shows pure DB status only`
+
+**3-stage test gate:**
+1. **Unit:** `resolveDisplayStatus('completed')` returns `'completed'` (not `'needs_validation'`). No `needs_validation` key in `CASE_STATUS_CONFIG`.
+2. **Integration:** Cases page Status column shows "Completed" for completed cases regardless of `data_validated` value.
+3. **Workflow:** Navigate to Data Quality tab → all cases show their real DB status (Completed, In Progress, Scheduled) — no orange "Needs Validation" badges in the Status column.
+
+**Complexity:** Light
+
+---
+
+## Phase 3: Validation Column — New Column with DQ Status Badges
+
+**What it does:** Adds the new Validation column between Duration and Flags. Shows green "Validated" pill, orange "Needs Validation" pill, or dash based on case state and DQ issues.
+
+**Files touched:**
+- `components/cases/CasesTable.tsx` — add Validation column definition, accept `dqCaseIds` prop
+- `app/cases/page.tsx` — pass `dqCaseIds` to CasesTable
+- `lib/design-tokens.ts` — ensure `validated` color key exists (green)
+
+**Details:**
+
+### 3a. Add `dqCaseIds` prop to CasesTable
+
+In `components/cases/CasesTable.tsx`:
+- Add `dqCaseIds: Set<string>` to `CasesTableProps` interface (line 42-62)
+- Accept it in the component function signature
+
+### 3b. Create `ValidationBadge` component
+
+New internal component in `CasesTable.tsx` (next to `StatusBadge`):
+```tsx
+function ValidationBadge({ caseItem, dqCaseIds }: { caseItem: CaseListItem; dqCaseIds: Set<string> }) {
+  const status = caseItem.case_status?.name?.toLowerCase()
+
+  // Scheduled and Cancelled cases: dash (validation not applicable)
+  if (status === 'scheduled' || status === 'cancelled') {
+    return <span className="text-sm text-slate-400">—</span>
   }
 
-  const can = useCallback(
-    (key: string) => {
-      if (accessLevel === 'global_admin' || accessLevel === 'facility_admin') return true
-      return permissions[key] === true
-    },
-    [permissions, accessLevel]
-  )
-
-  const canAny = useCallback(
-    (...keys: string[]) => keys.some(k => can(k)),
-    [can]
-  )
-
-  const canAll = useCallback(
-    (...keys: string[]) => keys.every(k => can(k)),
-    [can]
-  )
-
-  return { permissions, can, canAny, canAll, loading }
-}
-```
-
-### 2.2 Add Permissions to UserContext
-
-Add to existing `lib/UserContext.tsx` so every component can use `can()` without separate hooks:
-
-```typescript
-// Add to context value:
-const permissions = usePermissions()
-
-// Expose in context:
-value={{
-  ...existingValues,
-  can: permissions.can,
-  canAny: permissions.canAny,
-  canAll: permissions.canAll,
-  permissionsLoading: permissions.loading,
-}}
-```
-
-### 2.3 Usage Examples in Components
-
-**Case Drawer — conditionally render financials tab:**
-```tsx
-const { can } = useUser()
-
-const tabs = [
-  can('tab.case_overview') && { key: 'overview', label: 'Overview' },
-  can('tab.case_financials') && { key: 'financials', label: 'Financials' },
-  can('tab.case_milestones') && { key: 'milestones', label: 'Milestones' },
-  can('tab.case_implants') && { key: 'implants', label: 'Implants' },
-  can('tab.case_staff') && { key: 'staff', label: 'Staff' },
-].filter(Boolean)
-```
-
-**Cases page — conditionally render create button:**
-```tsx
-{can('cases.create') && (
-  <Button onClick={() => router.push('/cases/new')}>New Case</Button>
-)}
-```
-
-**Navigation — conditionally render nav items:**
-```tsx
-{can('analytics.view') && <NavLink href="/analytics">Analytics</NavLink>}
-{can('scores.view') && <NavLink href="/scorecards">ORbit Scores</NavLink>}
-{canAny('settings.view', 'settings.manage') && <NavLink href="/settings">Settings</NavLink>}
-```
-
-### 2.4 Wire Initial Proof-of-Concept (3-5 Key Elements)
-
-Apply `can()` gating to these components as proof of concept:
-- Case drawer financials tab (`tab.case_financials`)
-- Analytics nav link (`analytics.view`)
-- Settings nav link (`settings.view` or `settings.manage`)
-- Cases "New Case" button (`cases.create`)
-- Block schedule edit controls (`scheduling.manage`)
-
-### 2.5 Tests for Phase 2
-
-- Unit test `usePermissions` hook with mocked RPC responses
-- Test `can()` returns true for all permissions when accessLevel is `facility_admin`
-- Test `can()` returns false for denied permissions when accessLevel is `user`
-- Test that components correctly hide/show elements based on `can()`
-- Test error fallback: when RPC fails, all permissions default to false
-
----
-
-## Phase 3: Admin Pages
-
-### 3.1 Global Admin — Permission Template Page
-
-**File: `app/admin/permission-templates/page.tsx`**
-
-**Layout:**
-- Page title: "Permission Templates"
-- Subtitle: "Configure default permissions for new facilities. Changes do not affect existing facilities."
-- Access level selector: dropdown or tabs for `user` | `device_rep`
-- Permission matrix grouped by category
-
-**Matrix Layout:**
-```
-Category: Cases
-┌──────────────────┬────────┬────────┬──────┬────────┐
-│ Resource         │ View   │ Create │ Edit │ Delete │
-├──────────────────┼────────┼────────┼──────┼────────┤
-│ Cases            │  ✅    │  ✅    │  ✅  │  ❌    │
-├──────────────────┼────────┼────────┼──────┼────────┤
-
-Category: Case Operations
-│ Milestones       │  ✅    │  ✅    │  ✅  │   —    │
-│ Flags            │  ✅    │  ✅    │  ✅  │  ❌    │
-│ Delays           │  ✅    │  ✅    │  ✅  │  ❌    │
-│ Staff            │  ✅    │  ❌    │   —  │  ❌    │
-│ Complexity       │  ✅    │  ❌    │  ❌  │   —    │
-│ Implants         │  ✅    │  ❌    │  ❌  │  ❌    │
-
-Category: Case Tabs
-│ Overview Tab     │  ✅    │   —    │   —  │   —    │
-│ Financials Tab   │  ❌    │   —    │   —  │   —    │
-│ Milestones Tab   │  ✅    │   —    │   —  │   —    │
-│ Implants Tab     │  ❌    │   —    │   —  │   —    │
-│ Staff Tab        │  ✅    │   —    │   —  │   —    │
-
-Category: Financials
-│ Financials       │  ❌    │   —    │   —  │   —    │
-
-Category: Analytics
-│ Analytics        │  ❌    │   —    │   —  │   —    │
-│ ORbit Scores     │  ❌    │   —    │   —  │   —    │
-
-Category: Scheduling
-│ Schedule         │  ✅    │  ❌    │  ❌  │  ❌    │
-
-Category: Settings
-│ Settings         │  ❌    │   —    │  ❌  │   —    │
-│ Users            │  ❌    │   —    │  ❌  │   —    │
-
-Category: Admin
-│ Audit Log        │  ❌    │   —    │   —  │   —    │
-└──────────────────┴────────┴────────┴──────┴────────┘
-```
-
-**Key behaviors:**
-- "—" cells are not rendered (no checkbox) when the action doesn't apply to that resource
-- Checkboxes toggle individual permissions
-- Save button at bottom (or auto-save with debounce)
-- Toast confirmation on save
-- The matrix renders dynamically from the `permissions` table — adding a new row to `permissions` automatically adds a row in this UI
-
-**How to render the matrix dynamically:**
-1. Fetch all `permissions` rows, grouped by `category`
-2. Within each category, group by `resource` to create rows
-3. For each resource row, render checkboxes for actions that exist (view/create/edit/delete)
-4. If a resource has no permission for a given action, render "—"
-5. Fetch `permission_templates` for the selected `access_level`
-6. Map granted values to checkbox state
-
-**Data Fetching:**
-```typescript
-// Fetch all permissions (for matrix structure)
-const { data: allPermissions } = await supabase
-  .from('permissions')
-  .select('*')
-  .eq('is_active', true)
-  .order('sort_order')
-
-// Fetch templates for selected access level
-const { data: templates } = await supabase
-  .from('permission_templates')
-  .select('*')
-  .eq('access_level', selectedAccessLevel)
-```
-
-**Save Logic:**
-```typescript
-async function handleToggle(permissionKey: string, granted: boolean) {
-  await supabase
-    .from('permission_templates')
-    .upsert({
-      access_level: selectedAccessLevel,
-      permission_key: permissionKey,
-      granted,
-      updated_by: userId,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'access_level,permission_key' })
-}
-```
-
-### 3.2 Facility Admin — Permissions Page
-
-**File: `app/settings/permissions/page.tsx`**
-
-Nearly identical to the Global Admin template page, but:
-- Title: "Roles & Permissions"
-- Subtitle: "Configure what each access level can do at your facility."
-- Reads/writes `facility_permissions` instead of `permission_templates`
-- Scoped to the facility admin's facility (automatic via RLS)
-- Same matrix layout, same dynamic rendering from `permissions` table
-- Only accessible to `facility_admin` and `global_admin`
-
-**Data Fetching:**
-```typescript
-// Fetch facility permissions for selected access level
-const { data: facilityPerms } = await supabase
-  .from('facility_permissions')
-  .select('*')
-  .eq('access_level', selectedAccessLevel)
-  // RLS automatically scopes to facility
-```
-
-**Save Logic:**
-```typescript
-async function handleToggle(permissionKey: string, granted: boolean) {
-  await supabase
-    .from('facility_permissions')
-    .upsert({
-      facility_id: userFacilityId,
-      access_level: selectedAccessLevel,
-      permission_key: permissionKey,
-      granted,
-      updated_by: userId,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'facility_id,access_level,permission_key' })
-}
-```
-
-### 3.3 Shared Matrix Component
-
-Since both pages use the same matrix UI, extract a shared component:
-
-**File: `components/permissions/PermissionMatrix.tsx`**
-
-Props:
-- `permissions: Permission[]` — all permission rows
-- `grants: Record<string, boolean>` — current granted state
-- `onToggle: (key: string, granted: boolean) => void`
-- `readOnly?: boolean`
-
-Both pages import this component and pass different data sources / save handlers.
-
-### 3.4 Add Navigation Links
-
-- Global admin: Add "Permission Templates" to the admin sidebar
-- Facility admin: Add "Roles & Permissions" to the Settings navigation
-- Both links gated by access level (global_admin for templates, facility_admin+ for facility permissions)
-
-### 3.5 Tests for Phase 3
-
-- Test that the matrix renders all permission categories and resources
-- Test that toggling a checkbox calls the correct upsert
-- Test that access level tabs switch the displayed data
-- Test that "—" cells render for non-applicable actions
-- Test that facility admin can only see/edit their own facility's permissions
-- Test that global admin can access both pages
-
----
-
-## Phase 4: Full UI Integration
-
-### 4.1 Audit All Pages and Components
-
-Go through every page and component in the app and apply `can()` gating where appropriate:
-
-**Navigation / Sidebar:**
-- Each nav link should check `can()` for the relevant permission
-- Entire sections (e.g., Settings) should be hidden if no sub-permissions are granted
-
-**Pages (route-level guards):**
-- Analytics page: `can('analytics.view')`
-- Scorecards page: `can('scores.view')`
-- Settings pages: `canAny('settings.view', 'settings.manage')`
-- Audit log: `can('audit.view')`
-- Block schedule: `can('scheduling.view')`
-
-**Action buttons throughout the app:**
-- "New Case" button: `can('cases.create')`
-- "Edit" buttons on cases: `can('cases.edit')`
-- "Delete" buttons: `can('cases.delete')`
-- Block schedule CRUD: `scheduling.create`, `scheduling.edit`, `scheduling.delete`
-- Milestone recording: `milestones.record`
-
-**Case detail / drawer:**
-- Tab visibility: each `tab.*` permission
-- Flag add button: `flags.create`
-- Delay add button: `delays.create`
-- Staff assign: `staff.create`
-- Implant add: `implants.create`
-
-### 4.2 Create Permission Guard Component (Optional)
-
-For route-level protection, consider a reusable guard:
-
-```tsx
-function PermissionGuard({ permission, children, fallback }: {
-  permission: string
-  children: React.ReactNode
-  fallback?: React.ReactNode
-}) {
-  const { can, permissionsLoading } = useUser()
-
-  if (permissionsLoading) return <LoadingSpinner />
-  if (!can(permission)) return fallback || <AccessDenied />
-  return <>{children}</>
-}
-
-// Usage:
-<PermissionGuard permission="analytics.view">
-  <AnalyticsDashboard />
-</PermissionGuard>
-```
-
-### 4.3 Tests for Phase 4
-
-- Test each page renders AccessDenied when permission is false
-- Test each page renders normally when permission is true
-- Test navigation items show/hide correctly
-- Test action buttons show/hide correctly
-- Full workflow test: login as restricted user, verify cannot access gated features
-
----
-
-## Phase 5: RLS Hardening
-
-### 5.1 Enable RLS on Tables That Currently Have It Disabled
-
-```sql
--- These tables have RLS disabled and need policies:
-ALTER TABLE case_implant_companies ENABLE ROW LEVEL SECURITY;
--- NOTE: Already has policies defined, just not enforced!
-
-ALTER TABLE device_rep_invites ENABLE ROW LEVEL SECURITY;
-ALTER TABLE facility_device_reps ENABLE ROW LEVEL SECURITY;
-ALTER TABLE implant_companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE surgeon_preference_companies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE surgeon_preferences ENABLE ROW LEVEL SECURITY;
-
--- Add basic policies for tables missing them (scope to facility + global admin override)
--- Exact policies depend on each table's usage — review individually
-```
-
-### 5.2 Add Permission-Based RLS to Sensitive Tables (Optional Enhancement)
-
-For defense-in-depth, sensitive tables can check the permissions system at the RLS level:
-
-```sql
--- Example: financial data tables
-CREATE POLICY "Users need financials.view permission"
-  ON procedure_reimbursements FOR SELECT
-  USING (
-    get_my_access_level() IN ('global_admin', 'facility_admin')
-    OR (
-      facility_id = get_my_facility_id()
-      AND user_has_permission('financials.view')
+  // Has unresolved DQ issues
+  if (dqCaseIds.has(caseItem.id)) {
+    return (
+      <Link href={`/dashboard/data-quality?caseId=${caseItem.id}`} onClick={(e) => e.stopPropagation()}>
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full ${statusColors.needs_validation.bg} ${statusColors.needs_validation.text} hover:opacity-80 transition-opacity`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${statusColors.needs_validation.dot}`} />
+          Needs Validation
+        </span>
+      </Link>
     )
-  );
+  }
+
+  // Validated (completed/in_progress with no DQ issues)
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-green-50 text-green-700`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+      Validated
+    </span>
+  )
+}
 ```
 
-### 5.3 Standardize Policy Patterns
+### 3c. Add Validation column definition
 
-Audit existing policies and standardize on using helper functions (`get_my_access_level()`, `get_my_facility_id()`, `user_has_permission()`) instead of inline subqueries for consistency.
+Insert new column between Duration (line 415-437) and Flags (line 439-450):
+```tsx
+{
+  id: 'validation',
+  header: () => (
+    <SortableHeader label="Validation" columnKey="validation" currentSort={sort} onSort={onSortChange} />
+  ),
+  cell: ({ row }) => (
+    <ValidationBadge caseItem={row.original} dqCaseIds={dqCaseIds} />
+  ),
+  size: 140,
+}
+```
 
-### 5.4 Tests for Phase 5
+### 3d. Pass `dqCaseIds` from page
 
-- Test that previously unprotected tables now enforce RLS
-- Test that permission-gated RLS returns empty for users without the permission
-- Test that admin users still have full access to all tables
-- Test that existing functionality is not broken by policy changes
+In `app/cases/page.tsx`:
+- Destructure `dqCaseIds` from `useCasesPage()` hook
+- Pass `dqCaseIds={dqCaseIds}` to `<CasesTable>`
+
+### 3e. Remove DQ link from actions column
+
+Since clicking the "Needs Validation" badge now navigates to the DQ page, remove the `ExternalLink` icon from the actions column (lines 461-470 in CasesTable.tsx) — the navigation is now built into the Validation badge.
+
+**Commit message:** `feat(cases-columns): phase 3 - add Validation column with DQ status badges`
+
+**3-stage test gate:**
+1. **Unit:** `ValidationBadge` renders "Validated" (green) when case has no DQ issues, "Needs Validation" (orange) when it does, dash for scheduled/cancelled.
+2. **Integration:** Validation column visible on all tabs. Clicking "Needs Validation" badge navigates to `/dashboard/data-quality?caseId=<id>`. Column is sortable.
+3. **Workflow:** Cases page → All Cases tab → see Validation column → cases with DQ issues show orange badge → click badge → DQ page opens filtered to that case → go back → Data Quality tab → all cases show orange badges.
+
+**Complexity:** Medium
 
 ---
 
-## Implementation Order (Claude Code Sessions)
+## Phase 4: Duration Column — Fix Display + Live Timer
 
-| Session | Phase | Description | Estimated Complexity |
-|---------|-------|-------------|---------------------|
-| 1 | Phase 1 | Database schema, seed data, RPC functions, backfill | Light (all SQL) |
-| 2 | Phase 2 | usePermissions hook, UserContext integration, 5 proof-of-concept elements | Medium |
-| 3 | Phase 3 | Shared PermissionMatrix component + both admin pages | Heavy (substantial UI) |
-| 4 | Phase 4 | Full UI integration audit across all pages and components | Medium-Heavy |
-| 5 | Phase 5 | RLS hardening, enable disabled tables, permission-based policies | Medium |
+**What it does:** Fixes the Duration column to show `actual_duration_minutes` formatted as "Xh Ym" for completed cases, a live ticking elapsed timer for in-progress cases (60s page-level interval), and a dash for scheduled/cancelled/on_hold.
 
-**Commit after each session:**
-1. `feat: permissions system database schema, seed data, and RPC functions`
-2. `feat: usePermissions hook and initial UI gating`
-3. `feat: permission management admin pages with shared matrix component`
-4. `feat: comprehensive permission gating across all pages and components`
-5. `feat: RLS hardening with permission-based policies`
+**Files touched:**
+- `components/cases/CasesTable.tsx` — rewrite Duration column cell, add timer state
+- `lib/hooks/useCasesPage.ts` — (already has `dqCaseIds` from Phase 1; no additional changes needed if timer lives in table)
+
+**Details:**
+
+### 4a. Add `formatDuration` helper
+
+In `CasesTable.tsx`, add helper function near existing helpers (line 80-98):
+```tsx
+function formatDuration(minutes: number | null): string {
+  if (minutes == null || minutes <= 0) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}m`
+  return `${h}h ${m}m`
+}
+
+function getElapsedMinutes(startTime: string | null, scheduledDate: string): number | null {
+  if (!startTime) return null
+  const start = new Date(`${scheduledDate}T${startTime}`)
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - start.getTime()) / 60000)
+  return diff > 0 ? diff : 0
+}
+```
+
+### 4b. Add page-level 60s timer
+
+In the `CasesTable` component function body (after table instance, ~line 518):
+- Add a `tick` state: `const [tick, setTick] = useState(0)`
+- Add `useEffect` with 60s `setInterval` that increments `tick`
+- Only run when there are in-progress cases: check `cases.some(c => c.case_status?.name?.toLowerCase() === 'in_progress')`
+- Clean up on unmount
+
+### 4c. Rewrite Duration column cell
+
+Replace the current Duration column (lines 415-437) with:
+```tsx
+{
+  id: 'duration',
+  header: () => (
+    <SortableHeader label="Duration" columnKey="duration" currentSort={sort} onSort={onSortChange} />
+  ),
+  cell: ({ row }) => {
+    const status = row.original.case_status?.name?.toLowerCase()
+    if (status === 'completed') {
+      return (
+        <span className="text-sm text-slate-600 tabular-nums">
+          {formatDuration(row.original.actual_duration_minutes)}
+        </span>
+      )
+    }
+    if (status === 'in_progress') {
+      const elapsed = getElapsedMinutes(row.original.start_time, row.original.scheduled_date)
+      return (
+        <span className="text-sm text-green-600 tabular-nums">
+          {formatDuration(elapsed)}
+        </span>
+      )
+    }
+    return <span className="text-sm text-slate-400">—</span>
+  },
+  size: 100,
+}
+```
+
+Note: the `tick` state in the dependency array of `useMemo` for columns ensures the elapsed time re-renders every 60s.
+
+**Commit message:** `feat(cases-columns): phase 4 - fix duration display with live timer for in-progress cases`
+
+**3-stage test gate:**
+1. **Unit:** `formatDuration(135)` returns `"2h 15m"`. `formatDuration(45)` returns `"45m"`. `formatDuration(null)` returns `"—"`. `getElapsedMinutes` computes correct diff.
+2. **Integration:** Completed cases show actual duration. In-progress cases show elapsed time in green. Scheduled cases show dash. Timer ticks every 60s.
+3. **Workflow:** Open cases page → see completed case "1h 45m" → see in-progress case "2h 10m" in green → wait 60s → elapsed increments → switch tabs → timer stops/starts appropriately.
+
+**Complexity:** Medium
 
 ---
 
-## Key Design Decisions (Reference)
+## Phase 5: Tab Rename + Cleanup
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Permission resolution | Facility-level per access_level | Simplicity; no per-user overrides |
-| Admin bypass | facility_admin + global_admin always full access | Reduces complexity; admins need everything |
-| Template push behavior | New facilities only | Facility independence; no surprise changes |
-| Permission registry | Database-driven, dynamic | Add permissions without code changes |
-| Default deny | If no row exists, denied | Safe by default; explicit grants required |
-| CRUD granularity | Per-resource where applicable | Maximum flexibility without overwhelming UI |
-| Tab gating | Separate permissions per tab | Tabs are a distinct UX concern from page access |
-| Shared matrix component | One component, two pages | DRY; consistent UX between global and facility admin |
-| iOS | Deferred | Database RPC is platform-agnostic; iOS consumes same function later |
+**What it does:** Renames the "Needs Validation" tab to "Data Quality", updates the tab key references, updates empty states, and cleans up any remaining references to the old compound status.
+
+**Files touched:**
+- `lib/dal/cases.ts` — update `CasesPageTab` type: `'needs_validation'` → `'data_quality'`, update `countByTab` and `listForCasesPage`
+- `components/cases/CasesStatusTabs.tsx` — rename tab label and key
+- `components/cases/CasesTable.tsx` — update `TAB_EMPTY_STATES` key, update any `needs_validation` references
+- `app/cases/page.tsx` — update default tab reference if needed
+- `lib/hooks/useCasesPage.ts` — update tab references
+
+**Details:**
+
+### 5a. Update `CasesPageTab` type
+
+In `lib/dal/cases.ts` (line 33):
+- Change `'needs_validation'` to `'data_quality'` in the union type
+
+### 5b. Update tab config
+
+In `components/cases/CasesStatusTabs.tsx` (line 26):
+- Change `{ key: 'needs_validation', label: 'Needs Validation', colorKey: 'needs_validation' }` to `{ key: 'data_quality', label: 'Data Quality', colorKey: 'needs_validation' }`
+- Keep `colorKey: 'needs_validation'` (orange) since that's the design token color
+
+### 5c. Update empty state
+
+In `components/cases/CasesTable.tsx` (line 74):
+- Change `needs_validation` key to `data_quality` in `TAB_EMPTY_STATES`
+- Update text: `{ title: 'No data quality issues', description: 'All cases have clean data — no issues to review' }`
+
+### 5d. Update DAL references
+
+In `lib/dal/cases.ts`:
+- In `listForCasesPage` (line 381): change `tab === 'needs_validation'` to `tab === 'data_quality'`
+- In `countByTab` (line 495): change key from `needs_validation` to `data_quality`
+- In date range check (line 368): change `tab !== 'needs_validation'` to `tab !== 'data_quality'`
+
+### 5e. Update hooks and page
+
+In `lib/hooks/useCasesPage.ts`:
+- Update any references to `'needs_validation'` tab to `'data_quality'`
+
+In `app/cases/page.tsx`:
+- Update any references to `'needs_validation'` tab to `'data_quality'`
+
+### 5f. Clean up caseStatusConfig
+
+In `lib/constants/caseStatusConfig.ts`:
+- If not already done in Phase 2, ensure `needs_validation` is removed from `CASE_STATUS_CONFIG`
+- Verify `resolveDisplayStatus` no longer references it
+
+**Commit message:** `feat(cases-columns): phase 5 - rename tab to Data Quality and final cleanup`
+
+**3-stage test gate:**
+1. **Unit:** `CasesPageTab` type includes `'data_quality'`, not `'needs_validation'`. Tab config has correct label. Empty state text updated.
+2. **Integration:** Tab shows "Data Quality" label with correct count. Clicking tab loads cases with DQ issues. Sorting and pagination work on renamed tab.
+3. **Workflow:** Full flow: Cases page → click "Data Quality" tab → see cases with DQ issues → each shows real status (Completed, In Progress) in Status column + "Needs Validation" in Validation column → click validation badge → navigate to DQ page → resolve issue → return → case shows "Validated" → Duration shows correct values.
+
+**Complexity:** Light
+
+---
+
+## Existing Code Reused
+
+| Function/Component | File | How Used |
+|---|---|---|
+| `getCaseIdsWithUnresolvedIssues()` | `lib/dal/cases.ts:554` | Already exists — used to populate `dqCaseIds` set |
+| `statusColors` | `lib/design-tokens.ts` | Existing color tokens for badge styling |
+| `SortableHeader` | `components/cases/CasesTable.tsx:145` | Existing sort header component — reused for Validation column |
+| `useCasesPage` | `lib/hooks/useCasesPage.ts` | Existing hook — extended to expose `dqCaseIds` |
+| `SORT_COLUMN_MAP` | `lib/dal/cases.ts:628` | Existing map — add `validation` entry |
+
+## Verification Checklist
+
+- [ ] Status column shows only DB statuses (Scheduled, In Progress, Completed, Cancelled, On Hold)
+- [ ] No orange "Needs Validation" badge in Status column anywhere
+- [ ] Validation column shows green "Validated" pill for clean cases
+- [ ] Validation column shows orange "Needs Validation" pill for cases with DQ issues
+- [ ] Validation column shows dash for Scheduled and Cancelled cases
+- [ ] Clicking "Needs Validation" pill navigates to `/dashboard/data-quality?caseId=<id>`
+- [ ] Validation column visible on all tabs
+- [ ] Validation column is sortable
+- [ ] Duration shows "Xh Ym" format for completed cases
+- [ ] Duration shows live ticking elapsed for in-progress cases (green text)
+- [ ] Duration shows dash for scheduled/cancelled
+- [ ] Live timer updates every 60 seconds
+- [ ] Tab renamed from "Needs Validation" to "Data Quality"
+- [ ] Tab count unchanged (still counts cases with unresolved metric_issues)
+- [ ] Column order: Procedure, Surgeon, Room, Date, Status, Duration, Validation, Flags
+- [ ] `npm run typecheck` passes
+- [ ] `npm run lint` passes
+- [ ] `npm run test` passes
+
+---
+
+## Session Log
+
+### Session — 2026-02-14, afternoon
+- **Phase:** Enhancement (beyond plan) — completed
+- **What was done:** Added conditional Validation tab to CaseDrawer that shows unresolved DQ metric issues with severity badges, affected milestones, detected vs expected values, and a link to the DQ page. Fixed stale tab state bug when switching cases (render-time ref-based reset).
+- **Files changed:**
+  - `components/cases/CaseDrawerValidation.tsx` (NEW) — validation tab content component
+  - `components/cases/CaseDrawer.tsx` — added dqCaseIds prop, dynamic tabs, lazy-loading, tab reset on case switch
+  - `app/cases/page.tsx` — passes dqCaseIds to CaseDrawer
+  - `components/cases/__tests__/CaseDrawer.test.tsx` — 7 new tests (conditional tab, tab switching, rerender reset)
+  - `components/cases/__tests__/CaseDrawerValidation.test.tsx` (NEW) — 13 unit tests
+- **Commits:** `27149c4`, `c83ba70`, `9261810`, `da0d3a0`
+- **Test results:** 814/814 pass, 49 test files, 0 TS errors in changed files
+- **Known issues discovered:** None
+- **Context usage:** Low

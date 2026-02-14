@@ -23,7 +23,7 @@ const TABS: TabConfig[] = [
   { key: 'scheduled', label: 'Scheduled', colorKey: 'scheduled' },
   { key: 'in_progress', label: 'In Progress', colorKey: 'in_progress' },
   { key: 'completed', label: 'Completed', colorKey: 'completed' },
-  { key: 'needs_validation', label: 'Needs Validation', colorKey: 'needs_validation' },
+  { key: 'data_quality', label: 'Data Quality', colorKey: 'needs_validation' },
 ]
 
 // ============================================

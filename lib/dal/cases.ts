@@ -31,7 +31,7 @@ export interface CaseListItem {
 }
 
 /** Tab identifiers for the cases page status tabs */
-export type CasesPageTab = 'all' | 'today' | 'scheduled' | 'in_progress' | 'completed' | 'needs_validation'
+export type CasesPageTab = 'all' | 'today' | 'scheduled' | 'in_progress' | 'completed' | 'data_quality'
 
 /** Filter params for the cases page (search, entity filters) */
 export interface CasesFilterParams {
@@ -359,11 +359,11 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       .select(CASE_LIST_SELECT, { count: 'exact' })
       .eq('facility_id', facilityId)
 
-    // Date range — "today" tab overrides to today's date, "needs_validation" has no date filter
+    // Date range — "today" tab overrides to today's date, "data_quality" has no date filter
     if (tab === 'today') {
       const today = new Date().toISOString().split('T')[0]
       query = query.eq('scheduled_date', today)
-    } else if (tab !== 'needs_validation') {
+    } else if (tab !== 'data_quality') {
       query = query
         .gte('scheduled_date', dateRange.start)
         .lte('scheduled_date', dateRange.end)
@@ -376,7 +376,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
       query = query.eq('status_id', statusIds.in_progress)
     } else if (tab === 'completed' && statusIds?.completed) {
       query = query.eq('status_id', statusIds.completed)
-    } else if (tab === 'needs_validation') {
+    } else if (tab === 'data_quality') {
       // DQ engine: get case IDs with unresolved metric_issues
       const { data: caseIds } = await this.getCaseIdsWithUnresolvedIssues(supabase, facilityId)
       if (!caseIds || caseIds.length === 0) {
@@ -490,7 +490,7 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
         scheduled: (scheduledResult.count ?? 0) as number,
         in_progress: (inProgressResult.count ?? 0) as number,
         completed: (completedResult.count ?? 0) as number,
-        needs_validation: dqResult.data?.length ?? 0,
+        data_quality: dqResult.data?.length ?? 0,
       },
       error: firstError,
     }

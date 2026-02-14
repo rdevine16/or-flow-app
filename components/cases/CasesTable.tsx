@@ -71,7 +71,7 @@ const TAB_EMPTY_STATES: Record<CasesPageTab, { title: string; description: strin
   scheduled: { title: 'No scheduled cases', description: 'No scheduled cases in this period' },
   in_progress: { title: 'No cases in progress', description: 'No cases are currently in progress' },
   completed: { title: 'No completed cases', description: 'No completed cases in this period' },
-  needs_validation: { title: 'All cases validated!', description: 'No cases need validation at this time' },
+  data_quality: { title: 'No data quality issues', description: 'All cases have clean data — no issues to review' },
 }
 
 // ============================================

@@ -76,7 +76,7 @@ export function useCaseMetrics(
           return fetchAllTodayMetrics(client, facilityId, start, end, statusIds)
         case 'completed':
           return fetchCompletedMetrics(client, facilityId, start, end, statusIds)
-        case 'needs_validation':
+        case 'data_quality':
           return fetchNeedsValidationMetrics(client, facilityId, start, end, statusIds)
         case 'scheduled':
           return fetchScheduledMetrics(client, facilityId, start, end, statusIds)

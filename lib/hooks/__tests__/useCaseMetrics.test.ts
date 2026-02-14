@@ -115,7 +115,7 @@ describe('metric card shapes per tab', () => {
     expect(COMPLETED_TITLES).toContain('Total Profit')
   })
 
-  it('needs_validation tab has correct metric titles', () => {
+  it('data_quality tab has correct metric titles', () => {
     expect(NEEDS_VALIDATION_TITLES).toHaveLength(3)
     expect(NEEDS_VALIDATION_TITLES).toContain('Needs Validation')
     expect(NEEDS_VALIDATION_TITLES).toContain('Oldest Unvalidated')

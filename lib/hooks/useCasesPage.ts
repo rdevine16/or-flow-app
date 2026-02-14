@@ -109,7 +109,7 @@ export interface UseCasesPageReturn {
 // ============================================
 
 const VALID_TABS: CasesPageTab[] = [
-  'all', 'today', 'scheduled', 'in_progress', 'completed', 'needs_validation',
+  'all', 'today', 'scheduled', 'in_progress', 'completed', 'data_quality',
 ]
 
 function isValidTab(value: string | null): value is CasesPageTab {
@@ -117,7 +117,7 @@ function isValidTab(value: string | null): value is CasesPageTab {
 }
 
 const EMPTY_COUNTS: Record<CasesPageTab, number> = {
-  all: 0, today: 0, scheduled: 0, in_progress: 0, completed: 0, needs_validation: 0,
+  all: 0, today: 0, scheduled: 0, in_progress: 0, completed: 0, data_quality: 0,
 }
 
 const DEFAULT_PAGE_SIZE = 25

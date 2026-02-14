@@ -141,7 +141,7 @@ describe('CasesSummaryCards — integration', () => {
     expect(screen.getByText('Total Profit')).toBeDefined()
   })
 
-  it('renders needs_validation tab metrics', () => {
+  it('renders data_quality tab metrics', () => {
     mockUseCaseMetrics.mockReturnValue({
       metrics: [
         { title: 'Needs Validation', value: 12, color: 'amber' },
@@ -151,7 +151,7 @@ describe('CasesSummaryCards — integration', () => {
       loading: false,
     })
 
-    render(<CasesSummaryCards {...DEFAULT_PROPS} activeTab="needs_validation" />)
+    render(<CasesSummaryCards {...DEFAULT_PROPS} activeTab="data_quality" />)
 
     expect(screen.getByText('Needs Validation')).toBeDefined()
     expect(screen.getByText('Oldest Unvalidated')).toBeDefined()
