@@ -52,6 +52,9 @@ function formatError(err: unknown): LogEntry['error'] | undefined {
   if (err instanceof Error) {
     return { name: err.name, message: err.message, stack: err.stack }
   }
+  if (typeof err === 'object') {
+    return { name: 'Unknown', message: JSON.stringify(err) }
+  }
   return { name: 'Unknown', message: String(err) }
 }
 

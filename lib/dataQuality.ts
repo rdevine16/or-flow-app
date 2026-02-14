@@ -64,7 +64,7 @@ export interface MetricIssue {
     case_milestones?: Array<{
       id: string
       recorded_at: string
-      milestone_types?: { name: string; display_name: string } | null
+      facility_milestone?: { name: string; display_name: string } | null
     }>
   } | null
   resolved_by_user?: {
@@ -166,7 +166,7 @@ export async function fetchMetricIssues(
         case_milestones(
           id,
           recorded_at,
-          milestone_types(name, display_name)
+          facility_milestone:facility_milestones(name, display_name)
         )
       ),
       resolved_by_user:users!metric_issues_resolved_by_fkey(first_name, last_name)
