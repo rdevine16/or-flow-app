@@ -544,6 +544,81 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
 
     return { data: summaries, error: null }
   },
+
+  /**
+   * Validate a single case (set data_validated = true).
+   * DB triggers handle downstream stats computation.
+   */
+  async validateCase(
+    supabase: AnySupabaseClient,
+    caseId: string,
+    userId: string | null,
+  ): Promise<DALResult<{ id: string }>> {
+    const { data, error } = await supabase
+      .from('cases')
+      .update({
+        data_validated: true,
+        validated_at: new Date().toISOString(),
+        validated_by: userId,
+      })
+      .eq('id', caseId)
+      .select('id')
+      .single()
+
+    return { data: data as { id: string } | null, error }
+  },
+
+  /**
+   * Cancel a case (set status to cancelled with reason).
+   */
+  async cancelCase(
+    supabase: AnySupabaseClient,
+    caseId: string,
+    cancelledStatusId: string,
+    cancellationReasonId: string,
+    userId: string | null,
+    notes?: string,
+  ): Promise<DALResult<{ id: string }>> {
+    const { data, error } = await supabase
+      .from('cases')
+      .update({
+        status_id: cancelledStatusId,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: userId,
+        cancellation_reason_id: cancellationReasonId,
+        cancellation_notes: notes || null,
+      })
+      .eq('id', caseId)
+      .select('id')
+      .single()
+
+    return { data: data as { id: string } | null, error }
+  },
+
+  /**
+   * Fetch all cases matching current filters for CSV export.
+   * Limited to 5000 rows for safety.
+   */
+  async listForExport(
+    supabase: AnySupabaseClient,
+    facilityId: string,
+    dateRange: DateRange,
+    tab: CasesPageTab,
+    sort?: SortParams,
+    statusIds?: Record<string, string>,
+    filters?: CasesFilterParams,
+  ): Promise<DALListResult<CaseListItem>> {
+    return this.listForCasesPage(
+      supabase,
+      facilityId,
+      dateRange,
+      tab,
+      { page: 1, pageSize: 5000 },
+      sort,
+      statusIds,
+      filters,
+    )
+  },
 }
 
 // ============================================

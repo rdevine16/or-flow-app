@@ -27,6 +27,8 @@ import {
   DollarSign,
   Milestone as MilestoneIcon,
   Flag,
+  Ban,
+  Loader2,
 } from 'lucide-react'
 
 // ============================================
@@ -39,6 +41,10 @@ interface CaseDrawerProps {
   categoryNameById: Map<string, string>
   /** Called after a validate action succeeds to refresh table data */
   onCaseUpdated?: () => void
+  /** Called when validate button is clicked */
+  onValidateCase?: (caseId: string) => Promise<boolean>
+  /** Called when cancel button is clicked */
+  onCancelCase?: (caseId: string, caseNumber: string) => void
 }
 
 type DrawerTab = 'financials' | 'milestones' | 'flags'
@@ -172,10 +178,13 @@ export default function CaseDrawer({
   caseId,
   onClose,
   categoryNameById,
-  onCaseUpdated: _onCaseUpdated,
+  onCaseUpdated,
+  onValidateCase,
+  onCancelCase,
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
-  const { caseDetail, loading, error } = useCaseDrawer(caseId)
+  const [validating, setValidating] = useState(false)
+  const { caseDetail, loading, error, refetch } = useCaseDrawer(caseId)
 
   // Lazy-load milestone comparison data only when milestones tab is active
   const {
@@ -328,17 +337,41 @@ export default function CaseDrawer({
                   <QuickStats caseDetail={caseDetail} />
                 </div>
 
-                {/* Validate button for unvalidated completed cases */}
-                {displayStatus === 'needs_validation' && (
-                  <div className="px-4 pb-3">
-                    <button
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      disabled
-                      title="Validate action coming in Phase 9"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      Validate Case
-                    </button>
+                {/* Action buttons for unvalidated / cancellable cases */}
+                {(displayStatus === 'needs_validation' || displayStatus === 'scheduled' || displayStatus === 'in_progress') && (
+                  <div className="px-4 pb-3 flex gap-2">
+                    {displayStatus === 'needs_validation' && onValidateCase && (
+                      <button
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled={validating}
+                        onClick={async () => {
+                          if (!caseDetail) return
+                          setValidating(true)
+                          const success = await onValidateCase(caseDetail.id)
+                          setValidating(false)
+                          if (success) {
+                            await refetch()
+                            onCaseUpdated?.()
+                          }
+                        }}
+                      >
+                        {validating ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
+                        {validating ? 'Validating...' : 'Validate Case'}
+                      </button>
+                    )}
+                    {(displayStatus === 'scheduled' || displayStatus === 'in_progress') && onCancelCase && caseDetail && (
+                      <button
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors"
+                        onClick={() => onCancelCase(caseDetail.id, caseDetail.case_number || '')}
+                      >
+                        <Ban className="w-4 h-4" />
+                        Cancel Case
+                      </button>
+                    )}
                   </div>
                 )}
 

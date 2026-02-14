@@ -30,6 +30,8 @@ import {
   ChevronsRight,
   CheckCircle2,
   ChevronRight as ChevronRightIcon,
+  Ban,
+  Download,
 } from 'lucide-react'
 
 // ============================================
@@ -54,6 +56,10 @@ interface CasesTableProps {
   onToggleRow: (id: string) => void
   onToggleAllRows: () => void
   onRowClick: (caseItem: CaseListItem) => void
+  onValidateCase: (caseId: string) => void
+  onCancelCase: (caseItem: CaseListItem) => void
+  onBulkValidate: () => void
+  onExportSelected: () => void
 }
 
 // ============================================
@@ -287,6 +293,10 @@ export default function CasesTable({
   onToggleRow,
   onToggleAllRows,
   onRowClick,
+  onValidateCase,
+  onCancelCase,
+  onBulkValidate,
+  onExportSelected,
 }: CasesTableProps) {
   // ---- Column Definitions ----
   const columns = useMemo<ColumnDef<CaseListItem, unknown>[]>(() => [
@@ -447,20 +457,33 @@ export default function CasesTable({
       id: 'actions',
       header: () => null,
       cell: ({ row }) => {
-        const needsValidation =
-          row.original.case_status?.name?.toLowerCase() === 'completed' && !row.original.data_validated
+        const statusName = row.original.case_status?.name?.toLowerCase()
+        const needsValidation = statusName === 'completed' && !row.original.data_validated
+        const isCancellable = statusName === 'scheduled' || statusName === 'in_progress'
         return (
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
             {needsValidation && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  // Validate action — Phase 9 will wire this
+                  onValidateCase(row.original.id)
                 }}
                 className="p-1 rounded hover:bg-green-50 text-green-600 transition-colors"
                 title="Validate case"
               >
                 <CheckCircle2 className="w-4 h-4" />
+              </button>
+            )}
+            {isCancellable && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onCancelCase(row.original)
+                }}
+                className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors"
+                title="Cancel case"
+              >
+                <Ban className="w-4 h-4" />
               </button>
             )}
             <button
@@ -476,10 +499,10 @@ export default function CasesTable({
           </div>
         )
       },
-      size: 70,
+      size: 90,
       enableSorting: false,
     },
-  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick])
+  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onValidateCase, onCancelCase])
 
   // ---- Table Instance ----
   // Sorting is handled server-side, so we use manual sorting
@@ -550,7 +573,20 @@ export default function CasesTable({
             {selectedRows.size} selected
           </span>
           <div className="flex items-center gap-2">
-            {/* Bulk actions — Phase 9 will add validate/export buttons */}
+            <button
+              onClick={onBulkValidate}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Validate Selected ({selectedRows.size})
+            </button>
+            <button
+              onClick={onExportSelected}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export Selected
+            </button>
           </div>
         </div>
       )}

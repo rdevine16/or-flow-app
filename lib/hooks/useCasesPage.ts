@@ -14,6 +14,7 @@ import type { SortParams } from '@/lib/dal'
 import { useCaseStatuses, useSurgeons, useRooms, useProcedureTypes } from '@/hooks/useLookups'
 import { useProcedureCategories } from '@/hooks/useLookups'
 import { getPresetDates } from '@/components/ui/DateRangeSelector'
+import { createClient } from '@/lib/supabase'
 
 // ============================================
 // TYPES
@@ -94,6 +95,11 @@ export interface UseCasesPageReturn {
   toggleRow: (id: string) => void
   toggleAllRows: () => void
   clearSelection: () => void
+
+  // Actions
+  validateCase: (caseId: string) => Promise<boolean>
+  refreshAll: () => Promise<void>
+  exportCases: (selectedCaseIds?: string[]) => Promise<void>
 }
 
 // ============================================
@@ -321,7 +327,7 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
   }, [procedureCategories])
 
   // --- Tab Counts ---
-  const { data: tabCounts, loading: tabCountsLoading } = useSupabaseQuery<Record<CasesPageTab, number>>(
+  const { data: tabCounts, loading: tabCountsLoading, refetch: refetchTabCounts } = useSupabaseQuery<Record<CasesPageTab, number>>(
     async (supabase) => {
       if (!facilityId || !statusIdsReady) return EMPTY_COUNTS
 
@@ -409,6 +415,75 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     }
   }, [cases, selectedRows.size])
 
+  // --- Actions ---
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refetchCases(), refetchTabCounts()])
+  }, [refetchCases, refetchTabCounts])
+
+  const validateCase = useCallback(async (caseId: string): Promise<boolean> => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await casesDAL.validateCase(supabase, caseId, user?.id ?? null)
+    if (!error) {
+      await refreshAll()
+    }
+    return !error
+  }, [refreshAll])
+
+  const exportCases = useCallback(async (selectedCaseIds?: string[]) => {
+    const supabase = createClient()
+    if (!facilityId || !statusIdsReady) return
+
+    // If specific IDs selected, filter from current data; otherwise fetch all
+    let exportData: CaseListItem[]
+    if (selectedCaseIds && selectedCaseIds.length > 0) {
+      exportData = cases.filter(c => selectedCaseIds.includes(c.id))
+    } else {
+      const { data } = await casesDAL.listForExport(
+        supabase,
+        facilityId,
+        { start: dateRange.start, end: dateRange.end },
+        activeTab,
+        sort,
+        statusIds,
+        dalFilters,
+      )
+      exportData = data
+    }
+
+    if (exportData.length === 0) return
+
+    // Format as CSV
+    const headers = ['Case ID', 'Case Number', 'Procedure', 'Surgeon', 'Room', 'Date', 'Time', 'Status', 'Validated']
+    const rows = exportData.map(c => [
+      c.id,
+      c.case_number,
+      c.procedure_type?.name ?? '',
+      c.surgeon ? `Dr. ${c.surgeon.last_name}` : '',
+      c.or_room?.name ?? '',
+      c.scheduled_date,
+      c.start_time ?? '',
+      c.case_status?.name ?? '',
+      c.data_validated ? 'Yes' : 'No',
+    ])
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n')
+
+    // Trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `cases-${activeTab}-${dateRange.start}-to-${dateRange.end}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [facilityId, statusIdsReady, cases, activeTab, dateRange, sort, statusIds, dalFilters])
+
   return {
     activeTab,
     setActiveTab,
@@ -447,5 +522,8 @@ export function useCasesPage(facilityId: string | null): UseCasesPageReturn {
     toggleRow,
     toggleAllRows,
     clearSelection,
+    validateCase,
+    refreshAll,
+    exportCases,
   }
 }

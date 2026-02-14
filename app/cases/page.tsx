@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -10,12 +10,15 @@ import CasesTable from '@/components/cases/CasesTable'
 import CasesFilterBar from '@/components/cases/CasesFilterBar'
 import CasesSummaryCards from '@/components/cases/CasesSummaryCards'
 import CaseDrawer from '@/components/cases/CaseDrawer'
+import CancelCaseModal from '@/components/cases/CancelCaseModal'
+import BulkValidateProgress from '@/components/cases/BulkValidateProgress'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import { NoFacilitySelected } from '@/components/ui/NoFacilitySelected'
 import { PageLoader } from '@/components/ui/Loading'
+import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useCasesPage } from '@/lib/hooks/useCasesPage'
-import { Plus, ChevronDown, List } from 'lucide-react'
+import { Plus, ChevronDown, List, Download } from 'lucide-react'
 import type { CaseListItem } from '@/lib/dal/cases'
 
 // ============================================================================
@@ -85,6 +88,7 @@ function CasesPageContent() {
     isImpersonating,
     canCreateCases,
   } = useUser()
+  const { showToast } = useToast()
 
   const {
     activeTab,
@@ -121,8 +125,13 @@ function CasesPageContent() {
     flagSummaries,
     categoryNameById,
     selectedRows,
+    setSelectedRows,
     toggleRow,
     toggleAllRows,
+    // Actions
+    validateCase,
+    refreshAll,
+    exportCases,
   } = useCasesPage(effectiveFacilityId)
 
   // Call Next Patient modal
@@ -131,9 +140,70 @@ function CasesPageContent() {
   // Drawer state
   const [drawerCaseId, setDrawerCaseId] = useState<string | null>(null)
 
+  // Cancel modal state
+  const [cancelTarget, setCancelTarget] = useState<{ caseId: string; caseNumber: string } | null>(null)
+
+  // Bulk validate state
+  const [showBulkValidate, setShowBulkValidate] = useState(false)
+  const [bulkValidateIds, setBulkValidateIds] = useState<string[]>([])
+
   const handleRowClick = (caseItem: CaseListItem) => {
     setDrawerCaseId(caseItem.id)
   }
+
+  // Single validate from table hover
+  const handleValidateCase = useCallback(async (caseId: string) => {
+    const success = await validateCase(caseId)
+    if (success) {
+      showToast({ type: 'success', title: 'Case Validated', message: 'Case has been marked as validated.' })
+    } else {
+      showToast({ type: 'error', title: 'Validation Failed', message: 'Failed to validate the case.' })
+    }
+  }, [validateCase, showToast])
+
+  // Cancel from table hover or drawer
+  const handleCancelCase = useCallback((caseItem: CaseListItem) => {
+    setCancelTarget({ caseId: caseItem.id, caseNumber: caseItem.case_number })
+  }, [])
+
+  // Cancel from drawer (receives id + number directly)
+  const handleCancelFromDrawer = useCallback((caseId: string, caseNumber: string) => {
+    setCancelTarget({ caseId, caseNumber })
+  }, [])
+
+  // Bulk validate
+  const handleBulkValidate = useCallback(() => {
+    const ids = Array.from(selectedRows)
+    if (ids.length === 0) return
+    setBulkValidateIds(ids)
+    setShowBulkValidate(true)
+  }, [selectedRows])
+
+  // Export selected
+  const handleExportSelected = useCallback(() => {
+    const ids = Array.from(selectedRows)
+    exportCases(ids)
+  }, [selectedRows, exportCases])
+
+  // Export all (from header button)
+  const handleExportAll = useCallback(() => {
+    exportCases()
+  }, [exportCases])
+
+  // After cancel completes
+  const handleCancelComplete = useCallback(() => {
+    setCancelTarget(null)
+    setDrawerCaseId(null)
+    refreshAll()
+  }, [refreshAll])
+
+  // After bulk validate completes
+  const handleBulkValidateComplete = useCallback(() => {
+    setShowBulkValidate(false)
+    setBulkValidateIds([])
+    setSelectedRows(new Set())
+    refreshAll()
+  }, [refreshAll, setSelectedRows])
 
   // --- No Facility Selected ---
   if (isGlobalAdmin && !isImpersonating) {
@@ -153,6 +223,14 @@ function CasesPageContent() {
           <p className="text-slate-500 text-sm mt-1">Manage surgical cases and track progress</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportAll}
+            className="inline-flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
+            title="Export current view as CSV"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
           <DateRangeSelector
             value={dateRange.preset}
             onChange={setDateRange}
@@ -224,6 +302,10 @@ function CasesPageContent() {
             onToggleRow={toggleRow}
             onToggleAllRows={toggleAllRows}
             onRowClick={handleRowClick}
+            onValidateCase={handleValidateCase}
+            onCancelCase={handleCancelCase}
+            onBulkValidate={handleBulkValidate}
+            onExportSelected={handleExportSelected}
           />
         )}
       </div>
@@ -258,6 +340,27 @@ function CasesPageContent() {
         caseId={drawerCaseId}
         onClose={() => setDrawerCaseId(null)}
         categoryNameById={categoryNameById}
+        onCaseUpdated={refreshAll}
+        onValidateCase={validateCase}
+        onCancelCase={handleCancelFromDrawer}
+      />
+
+      {/* Cancel Case Modal */}
+      <CancelCaseModal
+        caseId={cancelTarget?.caseId ?? null}
+        caseNumber={cancelTarget?.caseNumber ?? null}
+        facilityId={effectiveFacilityId}
+        cancelledStatusId={statusIds.cancelled ?? null}
+        onClose={() => setCancelTarget(null)}
+        onCancelled={handleCancelComplete}
+      />
+
+      {/* Bulk Validate Progress */}
+      <BulkValidateProgress
+        caseIds={bulkValidateIds}
+        open={showBulkValidate}
+        onClose={() => setShowBulkValidate(false)}
+        onComplete={handleBulkValidateComplete}
       />
     </DashboardLayout>
   )

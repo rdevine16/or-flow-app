@@ -254,7 +254,25 @@ describe('CaseDrawer — unit', () => {
     expect(screen.getByText('Network error')).toBeDefined()
   })
 
-  it('shows Validate button for needs_validation status', () => {
+  it('shows Validate button for needs_validation status when handler provided', () => {
+    const unvalidatedCase = {
+      ...MOCK_CASE_DETAIL,
+      data_validated: false,
+      case_status: { name: 'Completed' },
+    }
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: unvalidatedCase }))
+    render(
+      <CaseDrawer
+        caseId="case-123"
+        onClose={vi.fn()}
+        categoryNameById={CATEGORY_MAP}
+        onValidateCase={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Validate Case')).toBeDefined()
+  })
+
+  it('does not show Validate button for needs_validation when handler not provided', () => {
     const unvalidatedCase = {
       ...MOCK_CASE_DETAIL,
       data_validated: false,
@@ -264,7 +282,25 @@ describe('CaseDrawer — unit', () => {
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
     )
-    expect(screen.getByText('Validate Case')).toBeDefined()
+    expect(screen.queryByText('Validate Case')).toBeNull()
+  })
+
+  it('shows Cancel button for scheduled cases when handler provided', () => {
+    const scheduledCase = {
+      ...MOCK_CASE_DETAIL,
+      data_validated: false,
+      case_status: { name: 'Scheduled' },
+    }
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: scheduledCase }))
+    render(
+      <CaseDrawer
+        caseId="case-123"
+        onClose={vi.fn()}
+        categoryNameById={CATEGORY_MAP}
+        onCancelCase={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Cancel Case')).toBeDefined()
   })
 
   it('does not show Validate button for validated cases', () => {
