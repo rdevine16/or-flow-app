@@ -79,9 +79,11 @@ function getCaseStatusName(caseItem: CaseListItem): string {
 }
 
 function getProcedureName(caseItem: CaseListItem): string {
-  const procs = caseItem.procedure_types
-  if (!procs || procs.length === 0) return 'Unknown procedure'
-  return procs[0].name
+  const proc = caseItem.procedure_type
+  if (!proc) return 'Unknown procedure'
+  // Supabase join may return array or object
+  const p = Array.isArray(proc) ? proc[0] : proc
+  return p?.name ?? 'Unknown procedure'
 }
 
 function deriveRoomStatus(

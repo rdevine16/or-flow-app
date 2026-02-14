@@ -4,7 +4,7 @@
  * Centralizes all `cases` table queries. Previously scattered across 82+ files.
  */
 
-import type { AnySupabaseClient, DALResult, DALListResult, DateRange, PaginationParams } from './index'
+import type { AnySupabaseClient, DALResult, DALListResult, DateRange, PaginationParams, SortParams } from './index'
 
 // ============================================
 // TYPES
@@ -17,6 +17,7 @@ export interface CaseListItem {
   scheduled_date: string
   start_time: string | null
   status: string | null
+  data_validated: boolean
   or_room_id: string | null
   surgeon_id: string | null
   facility_id: string
@@ -25,7 +26,17 @@ export interface CaseListItem {
   surgeon?: { first_name: string; last_name: string } | null
   or_room?: { name: string } | null
   case_status?: { name: string; color: string } | null
-  procedure_types?: { id: string; name: string }[]
+  procedure_type?: { id: string; name: string; procedure_category_id: string | null } | null
+}
+
+/** Tab identifiers for the cases page status tabs */
+export type CasesPageTab = 'all' | 'today' | 'scheduled' | 'in_progress' | 'completed' | 'needs_validation'
+
+/** Flag severity summary for a single case (used in table flag indicators) */
+export interface CaseFlagSummary {
+  case_id: string
+  max_severity: string
+  flag_count: number
 }
 
 /** Full case with all milestones for detail/edit views */
@@ -104,11 +115,12 @@ export interface CaseForAnalytics {
 
 const CASE_LIST_SELECT = `
   id, case_number,
-  scheduled_date, start_time, status, or_room_id, surgeon_id, facility_id,
+  scheduled_date, start_time, status, data_validated, or_room_id, surgeon_id, facility_id,
   created_at, created_by,
   surgeon:users!cases_surgeon_id_fkey(first_name, last_name),
   or_room:or_rooms(name),
-  case_status:case_statuses(name, color)
+  case_status:case_statuses(name, color),
+  procedure_type:procedure_types(id, name, procedure_category_id)
 ` as const
 
 const CASE_DETAIL_SELECT = `
@@ -319,6 +331,193 @@ return { data: (data as unknown as CaseListItem[]) || [], error }
 
     return { data: data as { id: string } | null, error }
   },
+
+  /**
+   * List cases for the cases page with tab filtering, sorting, and pagination.
+   * Extends listByDateRange with tab-aware status filtering and sort params.
+   */
+  async listForCasesPage(
+    supabase: AnySupabaseClient,
+    facilityId: string,
+    dateRange: DateRange,
+    tab: CasesPageTab,
+    pagination?: PaginationParams,
+    sort?: SortParams,
+    statusIds?: Record<string, string>,
+  ): Promise<DALListResult<CaseListItem>> {
+    let query = supabase
+      .from('cases')
+      .select(CASE_LIST_SELECT, { count: 'exact' })
+      .eq('facility_id', facilityId)
+      .eq('is_active', true)
+
+    // Date range — "today" tab overrides to today's date
+    if (tab === 'today') {
+      const today = new Date().toISOString().split('T')[0]
+      query = query.eq('scheduled_date', today)
+    } else {
+      query = query
+        .gte('scheduled_date', dateRange.start)
+        .lte('scheduled_date', dateRange.end)
+    }
+
+    // Tab-specific status filtering
+    if (tab === 'scheduled' && statusIds?.scheduled) {
+      query = query.eq('status', statusIds.scheduled)
+    } else if (tab === 'in_progress' && statusIds?.in_progress) {
+      query = query.eq('status', statusIds.in_progress)
+    } else if (tab === 'completed' && statusIds?.completed) {
+      query = query.eq('status', statusIds.completed)
+    } else if (tab === 'needs_validation' && statusIds?.completed) {
+      query = query
+        .eq('status', statusIds.completed)
+        .eq('data_validated', false)
+    }
+
+    // Sorting
+    const sortColumn = sort ? SORT_COLUMN_MAP[sort.sortBy] || 'scheduled_date' : 'scheduled_date'
+    const ascending = sort ? sort.sortDirection === 'asc' : false
+    query = query.order(sortColumn, { ascending })
+
+    // Secondary sort for stability
+    if (sortColumn !== 'start_time') {
+      query = query.order('start_time', { ascending: true })
+    }
+
+    // Pagination
+    if (pagination) {
+      const page = pagination.page || 1
+      const size = pagination.pageSize || 25
+      const from = (page - 1) * size
+      query = query.range(from, from + size - 1)
+    }
+
+    const { data, error, count } = await query
+    return { data: (data as unknown as CaseListItem[]) || [], error, count: count ?? undefined }
+  },
+
+  /**
+   * Get case counts for all tabs in a single set of queries.
+   * Returns a map of tab → count.
+   */
+  async countByTab(
+    supabase: AnySupabaseClient,
+    facilityId: string,
+    dateRange: DateRange,
+    statusIds: Record<string, string>,
+  ): Promise<{ data: Record<CasesPageTab, number>; error: PostgrestError | null }> {
+    const today = new Date().toISOString().split('T')[0]
+
+    const baseFilter = () =>
+      supabase
+        .from('cases')
+        .select('id', { count: 'exact', head: true })
+        .eq('facility_id', facilityId)
+        .eq('is_active', true)
+
+    const dateRangeFilter = () =>
+      baseFilter()
+        .gte('scheduled_date', dateRange.start)
+        .lte('scheduled_date', dateRange.end)
+
+    const [allResult, todayResult, scheduledResult, inProgressResult, completedResult, needsValidationResult] =
+      await Promise.all([
+        dateRangeFilter(),
+        baseFilter().eq('scheduled_date', today),
+        statusIds.scheduled
+          ? dateRangeFilter().eq('status', statusIds.scheduled)
+          : Promise.resolve({ count: 0, error: null }),
+        statusIds.in_progress
+          ? dateRangeFilter().eq('status', statusIds.in_progress)
+          : Promise.resolve({ count: 0, error: null }),
+        statusIds.completed
+          ? dateRangeFilter().eq('status', statusIds.completed)
+          : Promise.resolve({ count: 0, error: null }),
+        statusIds.completed
+          ? dateRangeFilter().eq('status', statusIds.completed).eq('data_validated', false)
+          : Promise.resolve({ count: 0, error: null }),
+      ])
+
+    // Return first error encountered
+    const firstError = [allResult, todayResult, scheduledResult, inProgressResult, completedResult, needsValidationResult]
+      .find(r => r.error)?.error ?? null
+
+    return {
+      data: {
+        all: allResult.count ?? 0,
+        today: todayResult.count ?? 0,
+        scheduled: (scheduledResult.count ?? 0) as number,
+        in_progress: (inProgressResult.count ?? 0) as number,
+        completed: (completedResult.count ?? 0) as number,
+        needs_validation: (needsValidationResult.count ?? 0) as number,
+      },
+      error: firstError,
+    }
+  },
+
+  /**
+   * Get flag summaries for a batch of case IDs.
+   * Returns max severity and count per case (for table flag indicator dots).
+   */
+  async flagsByCase(
+    supabase: AnySupabaseClient,
+    caseIds: string[],
+  ): Promise<DALListResult<CaseFlagSummary>> {
+    if (caseIds.length === 0) {
+      return { data: [], error: null }
+    }
+
+    const { data, error } = await supabase
+      .from('case_flags')
+      .select('case_id, flag_type')
+      .in('case_id', caseIds)
+
+    if (error || !data) {
+      return { data: [], error }
+    }
+
+    // Aggregate in JS: group by case_id, find max severity, count flags
+    const severityRank: Record<string, number> = { critical: 3, warning: 2, info: 1 }
+    const grouped = new Map<string, { maxSeverity: string; maxRank: number; count: number }>()
+
+    for (const flag of data as { case_id: string; flag_type: string }[]) {
+      const existing = grouped.get(flag.case_id)
+      const rank = severityRank[flag.flag_type] ?? 0
+
+      if (existing) {
+        existing.count++
+        if (rank > existing.maxRank) {
+          existing.maxSeverity = flag.flag_type
+          existing.maxRank = rank
+        }
+      } else {
+        grouped.set(flag.case_id, { maxSeverity: flag.flag_type, maxRank: rank, count: 1 })
+      }
+    }
+
+    const summaries: CaseFlagSummary[] = Array.from(grouped.entries()).map(([caseId, info]) => ({
+      case_id: caseId,
+      max_severity: info.maxSeverity,
+      flag_count: info.count,
+    }))
+
+    return { data: summaries, error: null }
+  },
+}
+
+// ============================================
+// SORT COLUMN MAPPING
+// ============================================
+
+/** Maps UI column names to database column names for server-side sorting */
+const SORT_COLUMN_MAP: Record<string, string> = {
+  date: 'scheduled_date',
+  surgeon: 'surgeon_id',
+  procedure: 'procedure_type_id',
+  duration: 'actual_duration_minutes',
+  room: 'or_room_id',
+  case_number: 'case_number',
+  start_time: 'start_time',
 }
 
 // Re-export PostgrestError for consumers

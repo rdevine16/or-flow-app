@@ -175,6 +175,28 @@ export const statusColors = {
     ring: 'ring-amber-500/20',
     gradient: 'bg-gradient-to-br from-amber-50 to-amber-100/50',
   },
+  needs_validation: {
+    bg: 'bg-orange-50',
+    bgHover: 'hover:bg-orange-100',
+    text: 'text-orange-700',
+    textDark: 'text-orange-900',
+    border: 'border-orange-200',
+    borderDark: 'border-orange-300',
+    dot: 'bg-orange-500',
+    ring: 'ring-orange-500/20',
+    gradient: 'bg-gradient-to-br from-orange-50 to-orange-100/50',
+  },
+  on_hold: {
+    bg: 'bg-slate-100',
+    bgHover: 'hover:bg-slate-200',
+    text: 'text-slate-500',
+    textDark: 'text-slate-700',
+    border: 'border-slate-200',
+    borderDark: 'border-slate-300',
+    dot: 'bg-slate-400',
+    ring: 'ring-slate-400/20',
+    gradient: 'bg-gradient-to-br from-slate-50 to-slate-100/50',
+  },
 } as const
 
 // ============================================

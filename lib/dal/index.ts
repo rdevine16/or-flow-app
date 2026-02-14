@@ -23,6 +23,7 @@
  */
 
 export { casesDAL } from './cases'
+export type { CasesPageTab, CaseFlagSummary } from './cases'
 export { usersDAL } from './users'
 export { facilitiesDAL } from './facilities'
 export { lookupsDAL } from './lookups'
@@ -53,6 +54,12 @@ export interface DALListResult<T> {
 export interface PaginationParams {
   page?: number
   pageSize?: number
+}
+
+/** Sort params for server-side sorting */
+export interface SortParams {
+  sortBy: string
+  sortDirection: 'asc' | 'desc'
 }
 
 /** Date range filter */
