@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useSearchParams, useRouter } from 'next/navigation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
@@ -199,7 +199,7 @@ function storeLastScan(date: Date): void {
 // MAIN COMPONENT
 // ============================================
 
-export default function DataQualityPage() {
+function DataQualityContent() {
   const supabase = createClient()
   const { loading: userLoading, effectiveFacilityId } = useUser()
   const searchParams = useSearchParams()
@@ -2102,5 +2102,13 @@ showToast({
         )}
       </Container>
     </DashboardLayout>
+  )
+}
+
+export default function DataQualityPage() {
+  return (
+    <Suspense>
+      <DataQualityContent />
+    </Suspense>
   )
 }
