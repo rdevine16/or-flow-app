@@ -13,6 +13,8 @@ export interface NavItem {
   href: string
   icon: ReactNode
   allowedRoles: string[]
+  /** Permission key for can() gating. When set, takes precedence over allowedRoles. */
+  permission?: string
 }
 
 export interface NavGroup {
@@ -236,6 +238,7 @@ export const facilityNavigation: NavItem[] = [
     href: '/block-schedule',
     icon: navIcons.calendar,
     allowedRoles: ['global_admin', 'facility_admin'],
+    permission: 'scheduling.view',
   },
   {
     name: 'Cases',
@@ -254,6 +257,7 @@ export const facilityNavigation: NavItem[] = [
     href: '/analytics',
     icon: navIcons.analytics,
     allowedRoles: ['global_admin', 'facility_admin'],
+    permission: 'analytics.view',
   },
   {
     name: 'Data Quality',
@@ -266,6 +270,7 @@ export const facilityNavigation: NavItem[] = [
     href: '/settings',
     icon: navIcons.settings,
     allowedRoles: ['global_admin', 'facility_admin'],
+    permission: 'settings.view',
   },
 ]
 
@@ -273,8 +278,16 @@ export const facilityNavigation: NavItem[] = [
 // Helpers
 // ============================================
 
-export function getFilteredNavigation(accessLevel: string): NavItem[] {
-  return facilityNavigation.filter(item => item.allowedRoles.includes(accessLevel))
+export function getFilteredNavigation(
+  accessLevel: string,
+  can?: (key: string) => boolean,
+): NavItem[] {
+  return facilityNavigation.filter(item => {
+    // If a permission key is set and can() is provided, use permission gating
+    if (item.permission && can) return can(item.permission)
+    // Fallback to role-based filtering
+    return item.allowedRoles.includes(accessLevel)
+  })
 }
 
 export function isNavItemActive(href: string, pathname: string): boolean {

@@ -84,7 +84,7 @@ function CasesPageContent() {
     effectiveFacilityId,
     isGlobalAdmin,
     isImpersonating,
-    canCreateCases,
+    can,
   } = useUser()
   const {
     activeTab,
@@ -200,7 +200,7 @@ function CasesPageContent() {
             value={dateRange.preset}
             onChange={setDateRange}
           />
-          {canCreateCases && <CreateCaseSplitButton />}
+          {can('cases.create') && <CreateCaseSplitButton />}
         </div>
       </div>
 

@@ -12,14 +12,15 @@ import { ChevronLeft } from 'lucide-react'
 
 export default function NewCasePage() {
   const router = useRouter()
-  const { canCreateCases, loading } = useUser()
+  const { can, loading } = useUser()
+  const canCreate = can('cases.create')
 
   // Redirect unauthorized users
   useEffect(() => {
-    if (!loading && !canCreateCases) {
+    if (!loading && !canCreate) {
       router.replace('/cases')
     }
-  }, [loading, canCreateCases, router])
+  }, [loading, canCreate, router])
 
   if (loading) {
     return (
@@ -29,7 +30,7 @@ export default function NewCasePage() {
     )
   }
 
-  if (!canCreateCases) {
+  if (!canCreate) {
     return (
       <DashboardLayout>
         <PageLoader />

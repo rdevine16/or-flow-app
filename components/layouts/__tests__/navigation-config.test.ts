@@ -95,3 +95,43 @@ describe('getFilteredNavigation', () => {
     }
   })
 })
+
+// ============================================
+// PERMISSION-BASED FILTERING
+// ============================================
+describe('getFilteredNavigation — permission gating', () => {
+  it('uses can() for items with a permission field', () => {
+    const canDeny = () => false
+    const items = getFilteredNavigation('user', canDeny)
+    // Analytics, Settings, Block Schedule have permission keys — denied by can()
+    expect(items.find(i => i.name === 'Analytics')).toBeUndefined()
+    expect(items.find(i => i.name === 'Settings')).toBeUndefined()
+    expect(items.find(i => i.name === 'Block Schedule')).toBeUndefined()
+  })
+
+  it('includes permission-gated items when can() returns true', () => {
+    const canAllow = () => true
+    const items = getFilteredNavigation('user', canAllow)
+    // Items with permission keys should be included via can()
+    expect(items.find(i => i.name === 'Analytics')).toBeDefined()
+    expect(items.find(i => i.name === 'Settings')).toBeDefined()
+    expect(items.find(i => i.name === 'Block Schedule')).toBeDefined()
+  })
+
+  it('falls back to allowedRoles when can() is not provided', () => {
+    // Without can(), items with permission keys use allowedRoles
+    const adminItems = getFilteredNavigation('global_admin')
+    expect(adminItems.find(i => i.name === 'Analytics')).toBeDefined()
+
+    const userItems = getFilteredNavigation('user')
+    expect(userItems.find(i => i.name === 'Analytics')).toBeUndefined()
+  })
+
+  it('does not affect items without a permission field', () => {
+    const canDeny = () => false
+    const items = getFilteredNavigation('user', canDeny)
+    // Dashboard and Cases have no permission key — use allowedRoles (user is in their list)
+    expect(items.find(i => i.name === 'Dashboard')).toBeDefined()
+    expect(items.find(i => i.name === 'Cases')).toBeDefined()
+  })
+})

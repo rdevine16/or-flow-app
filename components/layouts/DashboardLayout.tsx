@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const supabase = createClient()
 
   // User data from context
-  const { userData, loading, isGlobalAdmin, isAdmin } = useUser()
+  const { userData, loading, isGlobalAdmin, isAdmin, can } = useUser()
 
   // Sub-nav from context
   const { items: subNavItems, title: subNavTitle, isVisible: hasSubNav } = useSubNav()
@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // Derived state
   const effectiveIsGlobalAdmin = userAccessLevel === 'global_admin' || isGlobalAdmin
   const isAdminMode = effectiveIsGlobalAdmin && !impersonation
-  const navigation = isAdminMode ? [] : getFilteredNavigation(userData.accessLevel)
+  const navigation = isAdminMode ? [] : getFilteredNavigation(userData.accessLevel, can)
   const sidebarWidth = sidebarExpanded ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED
   const contentMarginLeft = sidebarWidth + (hasSubNav ? SUBNAV_WIDTH : 0)
   // ============================================

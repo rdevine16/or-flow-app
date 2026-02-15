@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { useRouter } from 'next/navigation'
 import { createClient } from './supabase'
 import { getImpersonationState } from './impersonation'
+import { usePermissions } from '@/lib/hooks/usePermissions'
 
 interface UserData {
   userId: string | null
@@ -21,15 +22,24 @@ interface UserContextType {
   userData: UserData
   loading: boolean
   isGlobalAdmin: boolean
-  isFacilityAdmin: boolean
-  isCoordinator: boolean
   isAdmin: boolean
-  canCreateCases: boolean
   isImpersonating: boolean
   impersonatedFacilityId: string | null
   impersonatedFacilityName: string | null
   effectiveFacilityId: string | null
   refreshImpersonation: () => void
+  // Permission system (Phase 2)
+  can: (key: string) => boolean
+  canAny: (...keys: string[]) => boolean
+  canAll: (...keys: string[]) => boolean
+  permissionsLoading: boolean
+  // Deprecated — use can() instead. Kept for backward compat until Phase 4.
+  /** @deprecated Use can() instead */
+  isFacilityAdmin: boolean
+  /** @deprecated Use can() instead */
+  isCoordinator: boolean
+  /** @deprecated Use can('cases.create') instead */
+  canCreateCases: boolean
 }
 
 const defaultUserData: UserData = {
@@ -43,19 +53,27 @@ const defaultUserData: UserData = {
   facilityTimezone: 'America/New_York',
 }
 
+const defaultCan = () => false
+const defaultCanMulti = (..._keys: string[]) => false
+
 const UserContext = createContext<UserContextType>({
   userData: defaultUserData,
   loading: true,
   isGlobalAdmin: false,
-  isFacilityAdmin: false,
-  isCoordinator: false,
   isAdmin: false,
-  canCreateCases: false,
   isImpersonating: false,
   impersonatedFacilityId: null,
   impersonatedFacilityName: null,
   effectiveFacilityId: null,
   refreshImpersonation: () => {},
+  can: defaultCan,
+  canAny: defaultCanMulti,
+  canAll: defaultCanMulti,
+  permissionsLoading: true,
+  // Deprecated
+  isFacilityAdmin: false,
+  isCoordinator: false,
+  canCreateCases: false,
 })
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -182,20 +200,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const isImpersonating = isGlobalAdmin && impersonatedFacilityId !== null
   const effectiveFacilityId = isImpersonating ? impersonatedFacilityId : userData.facilityId
 
+  // Permissions: fetch when user data is loaded
+  const {
+    can,
+    canAny,
+    canAll,
+    loading: permissionsLoading,
+  } = usePermissions(userData.accessLevel, !loading && !!userData.userId)
+
   return (
     <UserContext.Provider value={{
       userData,
       loading,
       isGlobalAdmin,
-      isFacilityAdmin,
-      isCoordinator,
       isAdmin,
-      canCreateCases,
       isImpersonating,
       impersonatedFacilityId,
       impersonatedFacilityName,
       effectiveFacilityId,
       refreshImpersonation,
+      can,
+      canAny,
+      canAll,
+      permissionsLoading,
+      // Deprecated — kept for backward compat
+      isFacilityAdmin,
+      isCoordinator,
+      canCreateCases,
     }}>
       {children}
     </UserContext.Provider>

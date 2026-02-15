@@ -9,6 +9,7 @@ import { useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
+import { useUser } from '@/lib/UserContext'
 import { useCaseDrawer, useMilestoneComparisons } from '@/lib/hooks/useCaseDrawer'
 import { useCaseFinancials } from '@/lib/hooks/useCaseFinancials'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
@@ -190,6 +191,7 @@ export default function CaseDrawer({
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('flags')
   const prevCaseIdRef = useRef(caseId)
+  const { can } = useUser()
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
 
   // Reset to default tab when switching cases (render-time, no extra cycle)
@@ -201,11 +203,15 @@ export default function CaseDrawer({
   // Whether this case has DQ issues (drives conditional Validation tab)
   const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))
 
-  // Build tabs dynamically — include Validation only when case has DQ issues
+  // Build tabs dynamically — filter by permissions + include Validation when case has DQ issues
   const tabs = useMemo(() => {
-    if (hasValidationIssues) return [...BASE_TABS, VALIDATION_TAB]
-    return BASE_TABS
-  }, [hasValidationIssues])
+    const visible = BASE_TABS.filter((tab) => {
+      if (tab.key === 'financials') return can('tab.case_financials')
+      return true
+    })
+    if (hasValidationIssues) return [...visible, VALIDATION_TAB]
+    return visible
+  }, [hasValidationIssues, can])
 
   // Lazy-load metric issues only when validation tab is active
   const { data: validationIssues, loading: validationLoading } = useSupabaseQuery<MetricIssue[]>(
