@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { AlertTriangle, Ban, BarChart3, Bell, Building2, Calculator, ChevronsLeft, ClipboardCheck, ClipboardList, Clock, CreditCard, DollarSign, FileText, Flag, FlaskConical, Info, LayoutGrid, Puzzle, Tag, User, Users, Zap } from 'lucide-react'
+import { AlertTriangle, Ban, BarChart3, Bell, Building2, Calculator, ChevronsLeft, ClipboardCheck, ClipboardList, Clock, CreditCard, DollarSign, FileText, Flag, FlaskConical, Info, KeyRound, LayoutGrid, Puzzle, Tag, User, Users, Zap } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -102,6 +102,9 @@ const icons = {
   flags: (
     <Flag className="w-5 h-5" />
   ),
+  permissions: (
+    <KeyRound className="w-5 h-5" />
+  ),
 }
 
 // =====================================================
@@ -173,6 +176,14 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/users',
         description: 'Staff accounts and permissions',
         icon: icons.users,
+      },
+      {
+        id: 'permissions',
+        label: 'Roles & Permissions',
+        href: '/settings/permissions',
+        description: 'Configure access per role',
+        icon: icons.permissions,
+        requiredAccess: ['global_admin', 'facility_admin'],
       },
     ],
   },
