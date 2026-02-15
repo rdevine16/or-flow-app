@@ -32,11 +32,24 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify caller is authenticated
+    // Verify caller is authenticated (validate JWT, not just check header exists)
     const authHeader = req.headers.get('authorization')
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'unauthorized', message: 'Missing authorization header' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 },
+      )
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data: { user }, error: authError } = await authClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'unauthorized', message: 'Invalid or expired token' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 },
       )
     }
@@ -57,7 +70,6 @@ Deno.serve(async (req) => {
     const facilityId = facility_id.toLowerCase()
 
     // Service role client for data access (peer comparison needs ALL facility surgeons)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
