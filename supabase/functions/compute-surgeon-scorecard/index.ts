@@ -52,6 +52,10 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Normalize UUIDs to lowercase — iOS sends uppercase, Postgres returns lowercase
+    const surgeonId = surgeon_id.toLowerCase()
+    const facilityId = facility_id.toLowerCase()
+
     // Service role client for data access (peer comparison needs ALL facility surgeons)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -78,7 +82,7 @@ Deno.serve(async (req) => {
     const { data: facilityData } = await supabase
       .from('facilities')
       .select('timezone')
-      .eq('id', facility_id)
+      .eq('id', facilityId)
       .single()
 
     const timezone = facilityData?.timezone || 'America/Chicago'
@@ -87,7 +91,7 @@ Deno.serve(async (req) => {
     const { data: settingsData } = await supabase
       .from('facility_analytics_settings')
       .select('*')
-      .eq('facility_id', facility_id)
+      .eq('facility_id', facilityId)
       .single()
 
     const settings: ScorecardSettings = {
@@ -100,14 +104,14 @@ Deno.serve(async (req) => {
     }
 
     // 3. Fetch ALL facility completed cases for both periods (peer comparison needs everyone)
-    const allCases = await fetchCases(supabase, facility_id, prevStartDt, endDt)
+    const allCases = await fetchCases(supabase, facilityId, prevStartDt, endDt)
 
     // Split into current and previous periods
     const currentCases = allCases.filter(c => c.scheduled_date >= startDt && c.scheduled_date <= endDt)
     const previousCases = allCases.filter(c => c.scheduled_date >= prevStartDt && c.scheduled_date < startDt)
 
     // Early exit: check if target surgeon has enough cases
-    const surgeonCaseCount = currentCases.filter(c => c.surgeon_id === surgeon_id).length
+    const surgeonCaseCount = currentCases.filter(c => c.surgeon_id === surgeonId).length
     if (surgeonCaseCount < MIN_CASE_THRESHOLD) {
       return new Response(
         JSON.stringify({
@@ -146,7 +150,7 @@ Deno.serve(async (req) => {
     const scorecards = calculateORbitScores(input)
 
     // 7. Find target surgeon's scorecard
-    const surgeonScorecard = scorecards.find(s => s.surgeonId === surgeon_id)
+    const surgeonScorecard = scorecards.find(s => s.surgeonId === surgeonId)
 
     if (!surgeonScorecard) {
       return new Response(
@@ -162,8 +166,8 @@ Deno.serve(async (req) => {
     // 8. Map to iOS SurgeonScorecard CodingKeys format
     const response = {
       id: crypto.randomUUID(),
-      facility_id,
-      surgeon_id,
+      facility_id: facilityId,
+      surgeon_id: surgeonId,
       composite_score: surgeonScorecard.composite,
       profitability_score: surgeonScorecard.pillars.profitability,
       consistency_score: surgeonScorecard.pillars.consistency,
