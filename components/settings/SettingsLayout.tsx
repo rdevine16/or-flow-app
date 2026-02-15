@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
 import { AlertTriangle, Ban, BarChart3, Bell, Building2, Calculator, ChevronsLeft, ClipboardCheck, ClipboardList, Clock, CreditCard, DollarSign, FileText, Flag, FlaskConical, Info, KeyRound, LayoutGrid, Puzzle, Tag, User, Users, Zap } from 'lucide-react'
 
 // =====================================================
@@ -17,7 +17,9 @@ interface SettingsItem {
   icon: React.ReactNode
   description: string
   badge?: 'new' | 'admin' | 'coming'
-  requiredAccess?: ('global_admin' | 'facility_admin' | 'user')[]
+  /** Permission key for can() gating. When set, takes precedence over requiredAccess. */
+  permission?: string
+  requiredAccess?: ('global_admin' | 'facility_admin' | 'coordinator' | 'user')[]
 }
 
 interface SettingsGroup {
@@ -131,7 +133,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Configure alert preferences',
         icon: icons.notifications,
         badge: 'coming',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'subscription',
@@ -140,7 +142,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Plan, usage, and billing',
         icon: icons.subscription,
         badge: 'coming',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
     ],
   },
@@ -154,7 +156,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/checkin',
         description: 'Configure arrival times',
         icon: icons.checkin,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'checklist-builder',
@@ -162,7 +164,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/checklist-builder',
         description: 'Customize pre-op checklist',
         icon: icons.checkin,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
     ],
   },
@@ -183,7 +185,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/permissions',
         description: 'Configure access per role',
         icon: icons.permissions,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'users.manage',
       },
     ],
   },
@@ -211,7 +213,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/procedure-milestones',
         description: 'Which milestones appear per procedure',
         icon: icons.milestones,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'surgeon-preferences',
@@ -220,7 +222,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Quick-fill templates for surgeons',
         icon: icons.surgeonPrefs,
         badge: 'new',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'delay-types',
@@ -228,7 +230,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/delay-types',
         description: 'Categorize surgical delays',
         icon: icons.delays,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'cancellation-reasons',
@@ -236,7 +238,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/cancellation-reasons',
         description: 'Track why cases are cancelled',
         icon: icons.cancellations,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'complexities',
@@ -244,7 +246,7 @@ const settingsGroups: SettingsGroup[] = [
         href: '/settings/complexities',
         description: 'Complexity factors for cases',
         icon: icons.delays,
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
     ],
   },
@@ -266,7 +268,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'FCOTS, utilization & metric targets',
         icon: icons.analytics,
         badge: 'new',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'flags',
@@ -275,7 +277,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Auto-detection rules & delay types',
         icon: icons.flags,
         badge: 'new',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'implant-companies',
@@ -284,7 +286,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Surgical implant vendors',
         icon: icons.implantCompanies,
         badge: 'new',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
       {
         id: 'integrations',
@@ -293,7 +295,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Connect external systems',
         icon: icons.integrations,
         badge: 'coming',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
     ],
   },
@@ -307,7 +309,7 @@ const settingsGroups: SettingsGroup[] = [
       href: '/settings/financials',
       description: 'Financial settings dashboard',
       icon: icons.financials,
-      requiredAccess: ['global_admin', 'facility_admin'],
+      permission: 'financials.view',
     },
     {
       id: 'cost-categories',
@@ -315,7 +317,7 @@ const settingsGroups: SettingsGroup[] = [
       href: '/settings/financials/cost-categories',
       description: 'Debit and credit categories',
       icon: icons.costCategories,
-      requiredAccess: ['global_admin', 'facility_admin'],
+      permission: 'financials.view',
     },
     {
       id: 'payers',
@@ -323,7 +325,7 @@ const settingsGroups: SettingsGroup[] = [
       href: '/settings/financials/payers',
       description: 'Insurance companies and contracts',
       icon: icons.payers,
-      requiredAccess: ['global_admin', 'facility_admin'],
+      permission: 'financials.view',
     },
     {
       id: 'procedure-pricing',
@@ -331,7 +333,7 @@ const settingsGroups: SettingsGroup[] = [
       href: '/settings/financials/procedure-pricing',
       description: 'Costs and reimbursements per procedure',
       icon: icons.pricing,
-      requiredAccess: ['global_admin', 'facility_admin'],
+      permission: 'financials.view',
     },
     {
       id: 'surgeon-variance',
@@ -339,7 +341,7 @@ const settingsGroups: SettingsGroup[] = [
       href: '/settings/financials/surgeon-variance',
       description: 'Surgeon-specific cost overrides',
       icon: icons.surgeonVariance,
-      requiredAccess: ['global_admin', 'facility_admin'],
+      permission: 'financials.view',
     },
   ],
 },
@@ -354,7 +356,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'Manage implant company rep access',
         icon: icons.deviceReps,
         badge: 'new',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'settings.manage',
       },
     ],
   },
@@ -369,7 +371,7 @@ const settingsGroups: SettingsGroup[] = [
         description: 'System activity history',
         icon: icons.auditLog,
         badge: 'admin',
-        requiredAccess: ['global_admin', 'facility_admin'],
+        permission: 'audit.view',
       },
     ],
   },
@@ -387,37 +389,19 @@ interface SettingsLayoutProps {
 
 export default function SettingsLayout({ children, title, description }: SettingsLayoutProps) {
   const pathname = usePathname()
-  const supabase = createClient()
-  const [accessLevel, setAccessLevel] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { userData, loading, can } = useUser()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  useEffect(() => {
-    async function fetchAccessLevel() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data } = await supabase
-          .from('users')
-          .select('access_level')
-          .eq('id', user.id)
-          .single()
-        
-        if (data) {
-          setAccessLevel(data.access_level)
-        }
-      }
-      setLoading(false)
-    }
-    fetchAccessLevel()
-  }, [])
-
-  // Filter groups and items based on user's access level
+  // Filter groups and items based on permissions (preferred) or access level (fallback)
   const visibleGroups = settingsGroups.map(group => ({
     ...group,
     items: group.items.filter(item => {
+      // Permission key takes precedence — use can() for dynamic resolution
+      if (item.permission) return can(item.permission)
+      // Fallback to role-based filtering for items without permission keys
       if (!item.requiredAccess) return true
-      if (!accessLevel) return false
-      return item.requiredAccess.includes(accessLevel as 'global_admin' | 'facility_admin' | 'user')
+      if (!userData.accessLevel) return false
+      return item.requiredAccess.includes(userData.accessLevel)
     })
   })).filter(group => group.items.length > 0)
 

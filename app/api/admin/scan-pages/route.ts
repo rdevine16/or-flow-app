@@ -516,7 +516,7 @@ function extractMetadata(source: string, filePath: string, scope: FileScope): Ex
   // ---- Roles ----
   const roles: string[] = []
   if (/isGlobalAdmin/.test(source)) roles.push('global_admin')
-  if (/isFacilityAdmin|isAdmin/.test(source)) {
+  if (/isFacilityAdmin|isAdmin|can\(/.test(source)) {
     roles.push('facility_admin')
     if (!roles.includes('global_admin')) roles.push('global_admin')
   }

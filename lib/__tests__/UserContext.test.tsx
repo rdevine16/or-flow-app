@@ -44,6 +44,12 @@ vi.mock('../supabase', () => ({
         })
       ),
     })),
+    rpc: vi.fn(() =>
+      Promise.resolve({
+        data: { 'cases.view': true, 'cases.create': true, 'analytics.view': false },
+        error: null,
+      })
+    ),
   }),
 }))
 
@@ -51,19 +57,17 @@ vi.mock('../supabase', () => ({
 function TestConsumer() {
   const {
     isGlobalAdmin,
-    isFacilityAdmin,
-    isCoordinator,
     isAdmin,
-    canCreateCases,
+    can,
   } = useUser()
 
   return (
     <div>
       <span data-testid="isGlobalAdmin">{String(isGlobalAdmin)}</span>
-      <span data-testid="isFacilityAdmin">{String(isFacilityAdmin)}</span>
-      <span data-testid="isCoordinator">{String(isCoordinator)}</span>
       <span data-testid="isAdmin">{String(isAdmin)}</span>
-      <span data-testid="canCreateCases">{String(canCreateCases)}</span>
+      <span data-testid="can-cases-view">{String(can('cases.view'))}</span>
+      <span data-testid="can-cases-create">{String(can('cases.create'))}</span>
+      <span data-testid="can-analytics-view">{String(can('analytics.view'))}</span>
     </div>
   )
 }
@@ -72,13 +76,13 @@ function TestConsumer() {
 // TESTS
 // ============================================
 
-describe('UserContext — Phase 2.3 Role-Based Access', () => {
+describe('UserContext — Role & Permission Access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUserRecord = null
   })
 
-  it('sets canCreateCases=true for global_admin', async () => {
+  it('sets isAdmin=true and all can()=true for global_admin (bypass)', async () => {
     mockUserRecord = {
       first_name: 'Admin',
       last_name: 'User',
@@ -95,12 +99,15 @@ describe('UserContext — Phase 2.3 Role-Based Access', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('isGlobalAdmin').textContent).toBe('true')
-      expect(screen.getByTestId('canCreateCases').textContent).toBe('true')
       expect(screen.getByTestId('isAdmin').textContent).toBe('true')
+      // Admin bypass: all permissions return true regardless of DB
+      expect(screen.getByTestId('can-cases-view').textContent).toBe('true')
+      expect(screen.getByTestId('can-cases-create').textContent).toBe('true')
+      expect(screen.getByTestId('can-analytics-view').textContent).toBe('true')
     })
   })
 
-  it('sets canCreateCases=true for facility_admin', async () => {
+  it('sets isAdmin=true and all can()=true for facility_admin (bypass)', async () => {
     mockUserRecord = {
       first_name: 'Facility',
       last_name: 'Admin',
@@ -116,13 +123,14 @@ describe('UserContext — Phase 2.3 Role-Based Access', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('isFacilityAdmin').textContent).toBe('true')
-      expect(screen.getByTestId('canCreateCases').textContent).toBe('true')
       expect(screen.getByTestId('isAdmin').textContent).toBe('true')
+      // Admin bypass: all permissions return true
+      expect(screen.getByTestId('can-cases-view').textContent).toBe('true')
+      expect(screen.getByTestId('can-analytics-view').textContent).toBe('true')
     })
   })
 
-  it('sets canCreateCases=true for coordinator', async () => {
+  it('coordinator is not admin but can check permissions', async () => {
     mockUserRecord = {
       first_name: 'Coord',
       last_name: 'User',
@@ -138,14 +146,12 @@ describe('UserContext — Phase 2.3 Role-Based Access', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('isCoordinator').textContent).toBe('true')
-      expect(screen.getByTestId('canCreateCases').textContent).toBe('true')
       // Coordinator is NOT an admin
       expect(screen.getByTestId('isAdmin').textContent).toBe('false')
     })
   })
 
-  it('sets canCreateCases=false for regular user', async () => {
+  it('regular user is not admin and permissions come from DB', async () => {
     mockUserRecord = {
       first_name: 'Regular',
       last_name: 'User',
@@ -161,9 +167,8 @@ describe('UserContext — Phase 2.3 Role-Based Access', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByTestId('canCreateCases').textContent).toBe('false')
       expect(screen.getByTestId('isAdmin').textContent).toBe('false')
-      expect(screen.getByTestId('isCoordinator').textContent).toBe('false')
+      expect(screen.getByTestId('isGlobalAdmin').textContent).toBe('false')
     })
   })
 })

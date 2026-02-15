@@ -28,18 +28,11 @@ interface UserContextType {
   impersonatedFacilityName: string | null
   effectiveFacilityId: string | null
   refreshImpersonation: () => void
-  // Permission system (Phase 2)
+  // Permission system
   can: (key: string) => boolean
   canAny: (...keys: string[]) => boolean
   canAll: (...keys: string[]) => boolean
   permissionsLoading: boolean
-  // Deprecated — use can() instead. Kept for backward compat until Phase 4.
-  /** @deprecated Use can() instead */
-  isFacilityAdmin: boolean
-  /** @deprecated Use can() instead */
-  isCoordinator: boolean
-  /** @deprecated Use can('cases.create') instead */
-  canCreateCases: boolean
 }
 
 const defaultUserData: UserData = {
@@ -70,10 +63,6 @@ const UserContext = createContext<UserContextType>({
   canAny: defaultCanMulti,
   canAll: defaultCanMulti,
   permissionsLoading: true,
-  // Deprecated
-  isFacilityAdmin: false,
-  isCoordinator: false,
-  canCreateCases: false,
 })
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -193,10 +182,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [supabase, router])
 
   const isGlobalAdmin = userData.accessLevel === 'global_admin'
-  const isFacilityAdmin = userData.accessLevel === 'facility_admin'
-  const isCoordinator = userData.accessLevel === 'coordinator'
-  const isAdmin = isGlobalAdmin || isFacilityAdmin
-  const canCreateCases = isGlobalAdmin || isFacilityAdmin || isCoordinator
+  const isAdmin = isGlobalAdmin || userData.accessLevel === 'facility_admin'
   const isImpersonating = isGlobalAdmin && impersonatedFacilityId !== null
   const effectiveFacilityId = isImpersonating ? impersonatedFacilityId : userData.facilityId
 
@@ -223,10 +209,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       canAny,
       canAll,
       permissionsLoading,
-      // Deprecated — kept for backward compat
-      isFacilityAdmin,
-      isCoordinator,
-      canCreateCases,
     }}>
       {children}
     </UserContext.Provider>

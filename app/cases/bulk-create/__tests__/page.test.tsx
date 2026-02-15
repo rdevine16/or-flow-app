@@ -32,15 +32,19 @@ vi.mock('@/lib/audit-logger', () => ({
 }))
 
 // Mock UserContext
-let mockCanCreateCases = true
+let mockCanCreate = true
 let mockUserLoading = false
 vi.mock('@/lib/UserContext', () => ({
   useUser: () => ({
     userData: { userId: 'user-1', userEmail: 'test@test.com', firstName: 'Test', lastName: 'User' },
-    canCreateCases: mockCanCreateCases,
+    can: (key: string) => key === 'cases.create' ? mockCanCreate : false,
+    canAny: () => false,
+    canAll: () => false,
+    permissionsLoading: false,
     loading: mockUserLoading,
     effectiveFacilityId: 'facility-1',
     isGlobalAdmin: false,
+    isAdmin: false,
     isImpersonating: false,
   }),
 }))
@@ -150,7 +154,7 @@ import BulkCreatePage from '../page'
 describe('BulkCreatePage — Phase 4.1', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCanCreateCases = true
+    mockCanCreate = true
     mockUserLoading = false
     mockRpc.mockResolvedValue({ data: 'new-case-id', error: null })
   })
@@ -180,7 +184,7 @@ describe('BulkCreatePage — Phase 4.1', () => {
     })
 
     it('redirects unauthorized users to cases list', async () => {
-      mockCanCreateCases = false
+      mockCanCreate = false
       render(<BulkCreatePage />)
 
       await waitFor(() => {

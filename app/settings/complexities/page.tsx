@@ -37,7 +37,7 @@ interface ProcedureCategory {
 
 export default function FacilityComplexitiesPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, isFacilityAdmin, isGlobalAdmin, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const { showToast } = useToast()
 
   // Data fetching
@@ -78,7 +78,7 @@ export default function FacilityComplexitiesPage() {
   const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [archivedComplexities, setArchivedComplexities] = useState<Complexity[]>([])
-  const canEdit = isFacilityAdmin || isGlobalAdmin
+  const canEdit = can('settings.manage')
   const { data: archivedData } = useSupabaseQuery<Complexity[]>(
     async (sb) => {
       const { data, error } = await sb

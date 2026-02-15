@@ -17,6 +17,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { Button } from '@/components/ui/Button'
 import { Archive, Ban, CheckCircle2, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
 
@@ -56,11 +57,12 @@ const getRoleName = (userRoles: { name: string }[] | { name: string } | null): s
 export default function UsersSettingsPage() {
   const supabase = createClient()
   
-  const { 
-    isGlobalAdmin, 
-    effectiveFacilityId, 
+  const {
+    isGlobalAdmin,
+    effectiveFacilityId,
     isImpersonating,
-    loading: userLoading 
+    loading: userLoading,
+    can,
   } = useUser()
   
   const [users, setUsers] = useState<User[]>([])
@@ -499,6 +501,18 @@ export default function UsersSettingsPage() {
   const activeCount = activeUsers.filter(u => getAccountStatus(u) === 'active').length
   const pendingCount = activeUsers.filter(u => getAccountStatus(u) === 'pending').length
   const noAccountCount = activeUsers.filter(u => getAccountStatus(u) === 'no_account').length
+
+  if (!userLoading && !can('users.view')) {
+    return (
+      <DashboardLayout>
+        <Container className="py-8">
+          <SettingsLayout title="Users & Roles" description="Staff accounts and permissions">
+            <AccessDenied />
+          </SettingsLayout>
+        </Container>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>

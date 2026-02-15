@@ -8,6 +8,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import AccessDenied from '@/components/ui/AccessDenied'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
@@ -1275,7 +1276,7 @@ function SkeletonBlockUtilization() {
 
 export default function BlockUtilizationPage() {
   const supabase = createClient()
-  const { effectiveFacilityId: facilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId: facilityId, loading: userLoading, can } = useUser()
 
   // State
   const [loading, setLoading] = useState(true)
@@ -1639,6 +1640,14 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
   const hasBlockData = blockSchedules.length > 0 && surgeonUtilizations.length > 0
   const hasRoomData = roomUtilizations.length > 0
+
+  if (!userLoading && !can('analytics.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>

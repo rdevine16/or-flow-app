@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertTriangle, DollarSign, DollarSignIcon } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // Local components
 import { 
@@ -31,7 +32,7 @@ import { Sign } from 'crypto'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
   
   // Data state - Using view data
   const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
@@ -227,6 +228,15 @@ if (facilityStatsRes.error) {
   const handleSurgeonClick = (surgeonId: string) => {
     setSelectedSurgeon(surgeonId)
     setActiveTab('surgeon')
+  }
+
+  // Permission guard
+  if (!userLoading && !can('financials.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
   }
 
   // Loading state

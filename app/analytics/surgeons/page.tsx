@@ -7,6 +7,7 @@ import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 
@@ -166,7 +167,7 @@ const PHASE_LEGEND_ITEMS = [
 
 export default function SurgeonPerformancePage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, can } = useUser()
   
   // State
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
@@ -721,6 +722,14 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
   // ============================================
 
   // Loading states
+  if (!userLoading && !can('analytics.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
+
   if (userLoading || initialLoading) {
     return (
       <DashboardLayout>

@@ -10,6 +10,7 @@ import Container from '@/components/ui/Container'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 
 // Tremor components
 import {
@@ -389,7 +390,7 @@ function FlipRoomModal({
 
 export default function AnalyticsHubPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
   
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
@@ -773,6 +774,14 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     return (
       <DashboardLayout>
         <PageLoader message="Loading analytics..." />
+      </DashboardLayout>
+    )
+  }
+
+  if (!can('analytics.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
       </DashboardLayout>
     )
   }

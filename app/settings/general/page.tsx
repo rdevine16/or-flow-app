@@ -164,7 +164,7 @@ const icons = {
 
 export default function GeneralOverviewPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, isFacilityAdmin, isGlobalAdmin, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can, isGlobalAdmin } = useUser()
   const { showToast } = useToast() 
   
   // Data fetching
@@ -222,7 +222,7 @@ export default function GeneralOverviewPage() {
     }
   }, [facility])
 
-  const canEdit = isFacilityAdmin || isGlobalAdmin
+  const canEdit = can('settings.manage')
 
   // =====================================================
   // HANDLERS

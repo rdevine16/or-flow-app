@@ -16,6 +16,7 @@ import { BlockPopover } from '@/components/block-schedule/BlockPopover'
 import { DeleteBlockModal } from '@/components/block-schedule/DeleteBlockModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 
@@ -73,7 +74,7 @@ function getWeekStart(date: Date): Date {
 // =====================================================
 export default function BlockSchedulePage() {
   const supabase = createClient()
-  const { loading: userLoading, effectiveFacilityId: facilityId } = useUser()
+  const { loading: userLoading, effectiveFacilityId: facilityId, can } = useUser()
   const { showToast } = useToast()
 
   // Calendar state
@@ -355,6 +356,14 @@ export default function BlockSchedulePage() {
   // =====================================================
   // RENDER
   // =====================================================
+  if (!userLoading && !can('scheduling.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
       {userLoading || surgeonsLoading ? (

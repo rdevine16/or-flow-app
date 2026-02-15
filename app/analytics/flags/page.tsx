@@ -9,6 +9,7 @@ import Container from '@/components/ui/Container'
 import DateFilter from '@/components/ui/DateFilter'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 // Tremor components
@@ -961,7 +962,7 @@ function ORUtilizationModal({
 
 export default function AnalyticsOverviewPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
   const { showToast } = useToast()
   
   const [cases, setCases] = useState<CaseWithMilestonesAndSurgeon[]>([])
@@ -1168,6 +1169,15 @@ export default function AnalyticsOverviewPage() {
 
   // Chart colors - professional blue palette
   const chartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet']
+
+  // Permission guard
+  if (!userLoading && !can('analytics.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   // Loading state
   if (userLoading) {

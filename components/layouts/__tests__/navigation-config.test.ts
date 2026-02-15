@@ -83,12 +83,14 @@ describe('getFilteredNavigation', () => {
 
   it('returns subset for regular user (no admin-only items)', () => {
     const items = getFilteredNavigation('user')
+    // Without can(), falls back to allowedRoles — admin-only items (SPD, Data Quality) excluded
     expect(items.length).toBeLessThan(facilityNavigation.length)
-    expect(items.every(item => item.allowedRoles.includes('user'))).toBe(true)
+    expect(items.find(i => i.name === 'SPD')).toBeUndefined()
+    expect(items.find(i => i.name === 'Data Quality')).toBeUndefined()
   })
 
   it('includes Dashboard and Rooms for all role levels', () => {
-    for (const role of ['global_admin', 'facility_admin', 'user']) {
+    for (const role of ['global_admin', 'facility_admin', 'coordinator', 'user']) {
       const items = getFilteredNavigation(role)
       expect(items.find(i => i.name === 'Dashboard')).toBeDefined()
       expect(items.find(i => i.name === 'Rooms')).toBeDefined()
@@ -119,19 +121,25 @@ describe('getFilteredNavigation — permission gating', () => {
   })
 
   it('falls back to allowedRoles when can() is not provided', () => {
-    // Without can(), items with permission keys use allowedRoles
+    // Without can(), items with permission keys use allowedRoles as fallback
     const adminItems = getFilteredNavigation('global_admin')
     expect(adminItems.find(i => i.name === 'Analytics')).toBeDefined()
 
+    // 'user' is in allowedRoles as fallback, so Analytics shows without can()
     const userItems = getFilteredNavigation('user')
-    expect(userItems.find(i => i.name === 'Analytics')).toBeUndefined()
+    expect(userItems.find(i => i.name === 'Analytics')).toBeDefined()
+
+    // SPD is admin-only (no 'user' in allowedRoles, no permission key)
+    expect(userItems.find(i => i.name === 'SPD')).toBeUndefined()
   })
 
   it('does not affect items without a permission field', () => {
     const canDeny = () => false
     const items = getFilteredNavigation('user', canDeny)
-    // Dashboard and Cases have no permission key — use allowedRoles (user is in their list)
+    // Dashboard has no permission key — uses allowedRoles (user is in the list)
     expect(items.find(i => i.name === 'Dashboard')).toBeDefined()
-    expect(items.find(i => i.name === 'Cases')).toBeDefined()
+    expect(items.find(i => i.name === 'Rooms')).toBeDefined()
+    // Cases has a permission key — denied by can()
+    expect(items.find(i => i.name === 'Cases')).toBeUndefined()
   })
 })

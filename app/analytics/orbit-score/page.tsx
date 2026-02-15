@@ -8,6 +8,7 @@ import DateRangeSelector, { getPresetDates } from '@/components/ui/DateRangeSele
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
+import AccessDenied from '@/components/ui/AccessDenied'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import {
@@ -533,7 +534,7 @@ function PillarLegend() {
 
 export default function ORbitScorePage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
 
   const [scorecards, setScorecards] = useState<ORbitScorecard[]>([])
   const [facilitySettings, setFacilitySettings] = useState<ScorecardSettings | null>(null)
@@ -649,6 +650,14 @@ export default function ORbitScorePage() {
   })
 
   // ─── RENDER ───────────────────────────────────────────────
+
+  if (!userLoading && !can('scores.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
 
   if (userLoading) {
     return (

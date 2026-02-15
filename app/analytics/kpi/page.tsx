@@ -7,6 +7,7 @@ import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
+import AccessDenied from '@/components/ui/AccessDenied'
 import DateFilter from '@/components/ui/DateFilter'
 
 // Tremor components
@@ -959,7 +960,7 @@ function ORUtilizationModal({
 
 export default function AnalyticsOverviewPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin } = useUser()
+  const { userData, loading: userLoading, isGlobalAdmin, can } = useUser()
   
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [noFacilitySelected, setNoFacilitySelected] = useState(false)
@@ -1178,6 +1179,14 @@ export default function AnalyticsOverviewPage() {
   const chartColors: Color[] = ['blue', 'cyan', 'indigo', 'violet']
 
   // Loading state
+  if (!userLoading && !can('analytics.view')) {
+    return (
+      <DashboardLayout>
+        <AccessDenied />
+      </DashboardLayout>
+    )
+  }
+
   if (userLoading || !facilityCheckComplete) {
     return (
       <DashboardLayout>

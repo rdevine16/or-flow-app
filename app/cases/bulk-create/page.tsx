@@ -75,7 +75,8 @@ function BulkCreateContent() {
   const router = useRouter()
   const supabase = createClient()
   const { showToast } = useToast()
-  const { userData, canCreateCases, loading: userLoading, effectiveFacilityId } = useUser()
+  const { userData, loading: userLoading, effectiveFacilityId, can } = useUser()
+  const canCreateCases = can('cases.create')
 
   // Header fields (shared across all rows)
   const [scheduledDate, setScheduledDate] = useState('')

@@ -17,7 +17,8 @@ import Container from '@/components/ui/Container'
 import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PermissionMatrix, Permission } from '@/components/permissions/PermissionMatrix'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Info, ShieldAlert } from 'lucide-react'
+import AccessDenied from '@/components/ui/AccessDenied'
+import { Info } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -48,7 +49,7 @@ const ACCESS_LEVELS: { value: AccessLevel; label: string }[] = [
 
 export default function FacilityPermissionsPage() {
   const supabase = createClient()
-  const { isAdmin, loading: userLoading, userData, effectiveFacilityId } = useUser()
+  const { isAdmin, loading: userLoading, userData, effectiveFacilityId, can } = useUser()
   const { showToast } = useToast()
 
   const [selectedLevel, setSelectedLevel] = useState<AccessLevel>('user')
@@ -153,21 +154,13 @@ export default function FacilityPermissionsPage() {
     [selectedLevel, effectiveFacilityId, userData.userId, supabase, showToast, setFacilityPerms, refetchFacilityPerms],
   )
 
-  // Access denied for non-admins
-  if (!userLoading && !isAdmin) {
+  // Access denied for users without users.manage permission
+  if (!userLoading && !can('users.manage')) {
     return (
       <DashboardLayout>
         <Container>
           <SettingsLayout title="Roles & Permissions" description="Configure what each access level can do at your facility.">
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-4">
-                <ShieldAlert className="w-6 h-6 text-red-500" />
-              </div>
-              <h2 className="text-lg font-semibold text-slate-900 mb-1">Access Denied</h2>
-              <p className="text-sm text-slate-500 max-w-sm">
-                You don&apos;t have permission to manage roles and permissions. Contact your facility administrator.
-              </p>
-            </div>
+            <AccessDenied message="You don't have permission to manage roles and permissions. Contact your facility administrator." />
           </SettingsLayout>
         </Container>
       </DashboardLayout>
