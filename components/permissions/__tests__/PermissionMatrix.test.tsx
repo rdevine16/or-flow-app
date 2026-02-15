@@ -20,7 +20,7 @@ const mockPermissions: Permission[] = [
 
   // Partial actions (view + create only)
   { id: '7', key: 'milestones.view', label: 'View Milestones', description: 'View milestones', category: 'Case Operations', resource: 'milestones', resource_type: 'action', action: 'view', sort_order: 10, is_active: true },
-  { id: '8', key: 'milestones.record', label: 'Record Milestones', description: 'Record milestones', category: 'Case Operations', resource: 'milestones', resource_type: 'action', action: 'create', sort_order: 11, is_active: true },
+  { id: '8', key: 'milestones.manage', label: 'Manage Milestones', description: 'Record, undo, and clear milestones', category: 'Case Operations', resource: 'milestones', resource_type: 'action', action: 'edit', sort_order: 11, is_active: true },
 ]
 
 const defaultGrants: Record<string, boolean> = {
@@ -31,7 +31,7 @@ const defaultGrants: Record<string, boolean> = {
   'tab.case_financials': false,
   'tab.case_milestones': true,
   'milestones.view': true,
-  'milestones.record': false,
+  'milestones.manage': false,
 }
 
 // ============================================

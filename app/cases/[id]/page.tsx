@@ -1406,10 +1406,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                     <MilestoneCard
                       key={card.milestone.id}
                       card={card}
-                      onRecord={can('milestones.record') ? () => recordMilestone(card.milestone.id) : undefined}
-                      onRecordEnd={can('milestones.record') && card.partner ? () => recordMilestone(card.partner!.id) : undefined}
-                      onUndo={can('milestones.edit') && card.recorded ? () => undoMilestone(card.recorded!.id) : undefined}
-                      onUndoEnd={can('milestones.edit') && card.partnerRecorded ? () => undoMilestone(card.partnerRecorded!.id) : undefined}
+                      onRecord={can('milestones.manage') ? () => recordMilestone(card.milestone.id) : undefined}
+                      onRecordEnd={can('milestones.manage') && card.partner ? () => recordMilestone(card.partner!.id) : undefined}
+                      onUndo={can('milestones.manage') && card.recorded ? () => undoMilestone(card.recorded!.id) : undefined}
+                      onUndoEnd={can('milestones.manage') && card.partnerRecorded ? () => undoMilestone(card.partnerRecorded!.id) : undefined}
                       loading={recordingMilestoneIds.has(card.milestone.id) || (card.partner ? recordingMilestoneIds.has(card.partner.id) : false)}
                       timeZone={userData.facilityTimezone}
                       paceInfo={cardPaceInfo}
@@ -1480,7 +1480,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 {!surgeonLeftAt ? (
                   <button
                     onClick={recordSurgeonLeft}
-                    disabled={!closingStarted || patientOutRecorded || !can('milestones.record')}
+                    disabled={!closingStarted || patientOutRecorded || !can('milestones.manage')}
                     className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
                       closingStarted && !patientOutRecorded
                         ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'

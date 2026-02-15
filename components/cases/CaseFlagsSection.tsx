@@ -381,7 +381,7 @@ export default function CaseFlagsSection({
           </h3>
           {headerBadge}
         </div>
-        {!showReportForm && can('delays.create') && (
+        {!showReportForm && can('flags.create') && (
           <button
             onClick={() => setShowReportForm(true)}
             className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
