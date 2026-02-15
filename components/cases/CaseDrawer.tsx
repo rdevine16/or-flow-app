@@ -207,9 +207,11 @@ export default function CaseDrawer({
   const tabs = useMemo(() => {
     const visible = BASE_TABS.filter((tab) => {
       if (tab.key === 'financials') return can('tab.case_financials')
+      if (tab.key === 'milestones') return can('tab.case_milestones')
+      if (tab.key === 'flags') return can('tab.case_flags')
       return true
     })
-    if (hasValidationIssues) return [...visible, VALIDATION_TAB]
+    if (hasValidationIssues && can('tab.case_validation')) return [...visible, VALIDATION_TAB]
     return visible
   }, [hasValidationIssues, can])
 
@@ -388,7 +390,7 @@ export default function CaseDrawer({
                         Review in Data Quality
                       </Link>
                     )}
-                    {(displayStatus === 'scheduled' || displayStatus === 'in_progress') && onCancelCase && caseDetail && (
+                    {(displayStatus === 'scheduled' || displayStatus === 'in_progress') && onCancelCase && caseDetail && can('cases.delete') && (
                       <button
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors"
                         onClick={() => onCancelCase(caseDetail.id, caseDetail.case_number || '')}

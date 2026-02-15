@@ -14,6 +14,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table'
+import { useUser } from '@/lib/UserContext'
 import type { CaseListItem } from '@/lib/dal/cases'
 import type { CasesPageTab, CaseFlagSummary, SortParams } from '@/lib/dal'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
@@ -346,6 +347,7 @@ export default function CasesTable({
   onExportSelected,
   dqCaseIds,
 }: CasesTableProps) {
+  const { can } = useUser()
   // ---- 60s tick for live elapsed timers on in-progress cases ----
   const hasInProgress = cases.some(c => c.case_status?.name?.toLowerCase() === 'in_progress')
   const [tick, setTick] = useState(0)
@@ -532,7 +534,7 @@ export default function CasesTable({
         const isCancellable = statusName === 'scheduled' || statusName === 'in_progress'
         return (
           <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-            {isCancellable && (
+            {isCancellable && can('cases.delete') && (
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -561,7 +563,7 @@ export default function CasesTable({
       enableSorting: false,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps -- tick forces re-render for live elapsed timers
-  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab, dqCaseIds, tick])
+  ], [cases.length, selectedRows, sort, onSortChange, onToggleAllRows, onToggleRow, flagSummaries, categoryNameById, onRowClick, onCancelCase, activeTab, dqCaseIds, tick, can])
 
   // ---- Table Instance ----
   // Sorting is handled server-side, so we use manual sorting

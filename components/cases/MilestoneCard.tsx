@@ -37,10 +37,10 @@ export interface MilestoneCardData {
 
 interface MilestoneCardProps {
   card: MilestoneCardData
-  onRecord: () => void
-  onRecordEnd: () => void
-  onUndo: () => void
-  onUndoEnd: () => void
+  onRecord?: () => void
+  onRecordEnd?: () => void
+  onUndo?: () => void
+  onUndoEnd?: () => void
   loading?: boolean
   timeZone?: string
   paceInfo?: MilestonePaceInfo | null
@@ -97,7 +97,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
             )}
           </div>
 
-          {showUndo && (
+          {showUndo && (onUndo || onUndoEnd) && (
             <button
               onClick={isComplete && isPaired ? onUndoEnd : onUndo}
               disabled={loading}
@@ -166,7 +166,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
         )}
 
         {/* Action buttons */}
-        {isNotStarted && (
+        {isNotStarted && onRecord && (
           <button
             onClick={onRecord}
             disabled={loading}
@@ -180,7 +180,7 @@ export default function MilestoneCard({ card, onRecord, onRecordEnd, onUndo, onU
           </button>
         )}
 
-        {isInProgress && isPaired && (
+        {isInProgress && isPaired && onRecordEnd && (
           <button
             onClick={onRecordEnd}
             disabled={loading}

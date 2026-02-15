@@ -568,7 +568,7 @@ export default function UsersSettingsPage() {
                         View Deactivated
                       </button>
                     )}
-                    {!showArchived && (
+                    {!showArchived && can('users.manage') && (
                       <Button onClick={() => setShowInviteModal(true)}>
                         <Plus className="w-4 h-4" />
                         Add Staff Member
@@ -680,7 +680,7 @@ export default function UsersSettingsPage() {
 
                             {/* Actions */}
                             <div className="col-span-2 flex items-center justify-end gap-1">
-                              {isDeactivated ? (
+                              {can('users.manage') && (isDeactivated ? (
                                 // Reactivate button for deactivated users
                                 <button
                                   onClick={() => handleReactivate(user.id)}
@@ -721,7 +721,7 @@ export default function UsersSettingsPage() {
                                       )}
                                     </button>
                                   )}
-                                  
+
                                   {/* Send Invite - for staff with email but no account */}
                                   {accountStatus === 'no_account' && user.email && (
                                     <button
@@ -737,7 +737,7 @@ export default function UsersSettingsPage() {
                                       )}
                                     </button>
                                   )}
-                                  
+
                                   <button
                                     onClick={() => openEditModal(user)}
                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -745,7 +745,7 @@ export default function UsersSettingsPage() {
                                   >
                                     <Pencil className="w-4 h-4" />
                                   </button>
-                                  
+
                                   {!isCurrentUser && (
                                     <button
                                       onClick={() => setDeactivateConfirm(user.id)}
@@ -756,7 +756,7 @@ export default function UsersSettingsPage() {
                                     </button>
                                   )}
                                 </>
-                              )}
+                              ))}
                             </div>
                           </div>
                         )

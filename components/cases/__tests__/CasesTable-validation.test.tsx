@@ -5,6 +5,25 @@ import type { CaseListItem } from '@/lib/dal/cases'
 import type { CasesPageTab, SortParams } from '@/lib/dal'
 
 // ============================================
+// MOCKS
+// ============================================
+
+vi.mock('@/lib/UserContext', () => ({
+  useUser: () => ({
+    can: () => true,
+    canAny: () => true,
+    canAll: () => true,
+    permissionsLoading: false,
+    userData: { accessLevel: 'facility_admin', userId: 'user-1', facilityId: 'fac-1' },
+    loading: false,
+    isGlobalAdmin: false,
+    isAdmin: true,
+    isImpersonating: false,
+    effectiveFacilityId: 'fac-1',
+  }),
+}))
+
+// ============================================
 // HELPERS
 // ============================================
 

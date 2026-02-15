@@ -130,6 +130,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     userData,
     loading: userLoading,
     effectiveFacilityId,
+    can,
   } = useUser()
 
   // Core state
@@ -1405,10 +1406,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                     <MilestoneCard
                       key={card.milestone.id}
                       card={card}
-                      onRecord={() => recordMilestone(card.milestone.id)}
-                      onRecordEnd={() => card.partner && recordMilestone(card.partner.id)}
-                      onUndo={() => card.recorded && undoMilestone(card.recorded.id)}
-                      onUndoEnd={() => card.partnerRecorded && undoMilestone(card.partnerRecorded.id)}
+                      onRecord={can('milestones.record') ? () => recordMilestone(card.milestone.id) : undefined}
+                      onRecordEnd={can('milestones.record') && card.partner ? () => recordMilestone(card.partner!.id) : undefined}
+                      onUndo={can('milestones.edit') && card.recorded ? () => undoMilestone(card.recorded!.id) : undefined}
+                      onUndoEnd={can('milestones.edit') && card.partnerRecorded ? () => undoMilestone(card.partnerRecorded!.id) : undefined}
                       loading={recordingMilestoneIds.has(card.milestone.id) || (card.partner ? recordingMilestoneIds.has(card.partner.id) : false)}
                       timeZone={userData.facilityTimezone}
                       paceInfo={cardPaceInfo}
@@ -1479,7 +1480,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 {!surgeonLeftAt ? (
                   <button
                     onClick={recordSurgeonLeft}
-                    disabled={!closingStarted || patientOutRecorded}
+                    disabled={!closingStarted || patientOutRecorded || !can('milestones.record')}
                     className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
                       closingStarted && !patientOutRecorded
                         ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'
@@ -1532,34 +1533,36 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       name={user ? `${user.first_name} ${user.last_name}` : 'Unknown'}
                       role={role?.name || 'Staff'}
                       roleName={role?.name || 'admin'}
-                      onRemove={() => removeStaff(cs.id)}
+                      onRemove={can('staff.delete') ? () => removeStaff(cs.id) : undefined}
                     />
                   )
                 })}
 
-                {showAddStaff ? (
-                  <div className="pt-2">
-                    <select
-                      autoFocus
-                      onChange={(e) => { if (e.target.value) { addStaff(e.target.value); setShowAddStaff(false) } }}
-                      onBlur={() => setShowAddStaff(false)}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      defaultValue=""
+                {can('staff.create') && (
+                  showAddStaff ? (
+                    <div className="pt-2">
+                      <select
+                        autoFocus
+                        onChange={(e) => { if (e.target.value) { addStaff(e.target.value); setShowAddStaff(false) } }}
+                        onBlur={() => setShowAddStaff(false)}
+                        className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Select staff...</option>
+                        {unassignedStaff.map(s => {
+                          const roleName = Array.isArray(s.user_roles) ? s.user_roles[0]?.name : (s.user_roles as any)?.name
+                          return <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({roleName})</option>
+                        })}
+                      </select>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowAddStaff(true)}
+                      className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-2 mt-1 border border-dashed border-slate-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 transition-all"
                     >
-                      <option value="" disabled>Select staff...</option>
-                      {unassignedStaff.map(s => {
-                        const roleName = Array.isArray(s.user_roles) ? s.user_roles[0]?.name : (s.user_roles as any)?.name
-                        return <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({roleName})</option>
-                      })}
-                    </select>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowAddStaff(true)}
-                    className="w-full text-xs text-blue-600 hover:text-blue-700 font-medium py-2 mt-1 border border-dashed border-slate-200 rounded-lg hover:border-blue-300 hover:bg-blue-50/50 transition-all"
-                  >
-                    + Add Staff
-                  </button>
+                      + Add Staff
+                    </button>
+                  )
                 )}
               </div>
             </div>

@@ -19,7 +19,7 @@ interface BlockSidebarProps {
   onDeselectAll: () => void
   currentWeekStart: Date
   onDateSelect: (date: Date) => void
-  onAddBlock: () => void
+  onAddBlock?: () => void
   showHolidays: boolean
   onToggleHolidays: () => void
   onColorChange?: (surgeonId: string, color: string) => void
@@ -129,15 +129,17 @@ export function BlockSidebar({
   return (
     <div className="w-64 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col">
       {/* Create Button - Google Style */}
-      <div className="p-4">
-        <button
-          onClick={onAddBlock}
-          className="flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 rounded-xl shadow-md hover:shadow-lg hover:bg-slate-50 transition-all group"
-        >
-          <Plus className="h-6 w-6 text-slate-600 group-hover:text-blue-600 transition-colors" />
-          <span className="text-sm font-medium text-slate-700">Create</span>
-        </button>
-      </div>
+      {onAddBlock && (
+        <div className="p-4">
+          <button
+            onClick={onAddBlock}
+            className="flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 rounded-xl shadow-md hover:shadow-lg hover:bg-slate-50 transition-all group"
+          >
+            <Plus className="h-6 w-6 text-slate-600 group-hover:text-blue-600 transition-colors" />
+            <span className="text-sm font-medium text-slate-700">Create</span>
+          </button>
+        </div>
+      )}
 
       {/* Mini Calendar */}
       <div className="px-4 pb-4">

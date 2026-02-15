@@ -90,7 +90,8 @@ export default function ProceduresSettingsPage() {
   const { showToast } = useToast()
   
   // User context - handles impersonation automatically
-const { effectiveFacilityId, loading: userLoading } = useUser()
+const { effectiveFacilityId, loading: userLoading, can } = useUser()
+  const canManage = can('settings.manage')
   
   // Data state
   const [showArchived, setShowArchived] = useState(false)
@@ -532,7 +533,7 @@ deleted_by: currentUserId
                     </button>
 
                     {/* Add Button (only when viewing active) */}
-                    {!showArchived && (
+                    {!showArchived && canManage && (
                       <Button onClick={openAddModal}>
                         <Plus className="w-4 h-4" />
                         Add Procedure
@@ -670,7 +671,7 @@ deleted_by: currentUserId
 
                         {/* Actions */}
                         <div className="col-span-1 flex items-center justify-end gap-1">
-                          {showArchived ? (
+                          {canManage && showArchived ? (
                             /* Restore Button */
                             <button
                               onClick={() => handleRestore(procedure)}
@@ -680,7 +681,7 @@ deleted_by: currentUserId
                               <Undo2 className="w-4 h-4" />
                               Restore
                             </button>
-                          ) : (
+                          ) : canManage && !showArchived ? (
                             /* Edit & Delete Buttons */
                             <>
                               <button
@@ -698,7 +699,7 @@ deleted_by: currentUserId
                                 <Archive className="w-4 h-4" />
                               </button>
                             </>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                     ))}

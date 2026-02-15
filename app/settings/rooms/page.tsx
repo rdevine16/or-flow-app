@@ -223,7 +223,8 @@ function RoomScheduleEditor({
 export default function RoomsSettingsPage() {
   const supabase = createClient()
   const { showToast } = useToast()
-  const { effectiveFacilityId, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading, can } = useUser()
+  const canManage = can('settings.manage')
 
   const { data: currentUserData } = useCurrentUser()
   const currentUserId = currentUserData?.userId || null
@@ -471,12 +472,14 @@ export default function RoomsSettingsPage() {
           ) : (
             <div className="max-w-3xl">
               {/* Add Room button */}
-              <div className="flex justify-end mb-6">
-                <Button onClick={openAddModal}>
-                  <Plus className="w-4 h-4" />
-                  Add Room
-                </Button>
-              </div>
+              {canManage && (
+                <div className="flex justify-end mb-6">
+                  <Button onClick={openAddModal}>
+                    <Plus className="w-4 h-4" />
+                    Add Room
+                  </Button>
+                </div>
+              )}
 
               {/* Active Rooms */}
               {activeRooms.length === 0 ? (
@@ -484,12 +487,14 @@ export default function RoomsSettingsPage() {
                   <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-3" strokeWidth={1.5} />
                   <p className="text-slate-500 font-medium">No rooms configured</p>
                   <p className="text-sm text-slate-400 mt-1">Add your first operating room to get started</p>
-                  <button
-                    onClick={openAddModal}
-                    className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-700"
-                  >
-                    + Add Room
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={openAddModal}
+                      className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      + Add Room
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -509,22 +514,24 @@ export default function RoomsSettingsPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEditModal(room)}
-                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Edit room & schedule"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => openDeleteModal(room)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Archive room"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {canManage && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEditModal(room)}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Edit room & schedule"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(room)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Archive room"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -548,9 +555,11 @@ export default function RoomsSettingsPage() {
                           className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-lg opacity-60"
                         >
                           <span className="text-sm text-slate-500 line-through">{room.name}</span>
-                          <Button variant="ghost" size="sm" onClick={() => handleRestore(room)}>
-                            Restore
-                          </Button>
+                          {canManage && (
+                            <Button variant="ghost" size="sm" onClick={() => handleRestore(room)}>
+                              Restore
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>

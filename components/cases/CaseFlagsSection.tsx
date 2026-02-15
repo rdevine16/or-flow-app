@@ -17,6 +17,7 @@
 //   />
 
 'use client'
+import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useState, useEffect, useCallback } from 'react'
 import { AlertCircle, AlertTriangle, ChevronDown, ChevronUp, Clock, Flag, Info, Pause, Play, Plus, Square, Timer, X } from 'lucide-react'
@@ -114,6 +115,8 @@ export default function CaseFlagsSection({
   userId,
   supabase,
 }: CaseFlagsSectionProps) {
+  const { can } = useUser()
+
   // Data
   const [flags, setFlags] = useState<CaseFlagRow[]>([])
   const [delayTypeOptions, setDelayTypeOptions] = useState<DelayTypeOption[]>([])
@@ -378,7 +381,7 @@ export default function CaseFlagsSection({
           </h3>
           {headerBadge}
         </div>
-        {!showReportForm && (
+        {!showReportForm && can('delays.create') && (
           <button
             onClick={() => setShowReportForm(true)}
             className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"

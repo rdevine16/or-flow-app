@@ -176,7 +176,7 @@ export default function BlockSchedulePage() {
           setCurrentWeekStart(prev => addDays(prev, 7))
           break
         case 'n':
-          if (!popoverOpen) { e.preventDefault(); handleAddBlockButton() }
+          if (!popoverOpen && can('scheduling.create')) { e.preventDefault(); handleAddBlockButton() }
           break
       }
     }
@@ -209,6 +209,7 @@ export default function BlockSchedulePage() {
     endTime: string,
     position?: { x: number; y: number }
   ) => {
+    if (!can('scheduling.create')) return
     setDragSelection({ dayOfWeek, startTime, endTime })
     setEditingBlock(null)
     setClickPosition(position)
@@ -217,6 +218,7 @@ export default function BlockSchedulePage() {
 
   // Handle block click (edit)
   const handleBlockClick = async (block: ExpandedBlock, position?: { x: number; y: number }) => {
+    if (!can('scheduling.edit')) return
     try {
       const { data, error: fetchError } = await supabase
         .from('block_schedules')
@@ -243,6 +245,7 @@ export default function BlockSchedulePage() {
 
   // Handle "Create" button
   const handleAddBlockButton = () => {
+    if (!can('scheduling.create')) return
     setEditingBlock(null)
     setDragSelection(null)
     setClickPosition({ x: 300, y: 150 })
@@ -390,7 +393,7 @@ export default function BlockSchedulePage() {
             onDeselectAll={deselectAllSurgeons}
             currentWeekStart={currentWeekStart}
             onDateSelect={(date) => setCurrentWeekStart(getWeekStart(date))}
-            onAddBlock={handleAddBlockButton}
+            onAddBlock={can('scheduling.create') ? handleAddBlockButton : undefined}
             showHolidays={showHolidays}
             onToggleHolidays={() => setShowHolidays(!showHolidays)}
             onColorChange={handleColorChange}
