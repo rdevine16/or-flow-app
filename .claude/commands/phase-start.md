@@ -5,7 +5,7 @@ argument-hint: (no arguments needed — auto-detects next phase from implementat
 
 ## Step 1: Identify the Next Phase
 
-Read `docs/implementation-plan.md`. This is the single source of truth for what phases exist and what each one does.
+Read `apps/web/or-flow-app/docs/implementation-plan.md`. This is the single source of truth for what phases exist and what each one does.
 
 Then check which phases are already done by reading git history:
 
@@ -17,18 +17,18 @@ Match commit messages (e.g., `feat(scope): phase 1 - ...`) to phases in the plan
 
 Also check the Session Log section at the bottom of the implementation plan — it tracks completed and partial phases from `/wrap-up`.
 
-If `docs/implementation-plan.md` doesn't exist, tell the user: **"No implementation plan found. Run /audit first."**
+If `apps/web/or-flow-app/docs/implementation-plan.md` doesn't exist, tell the user: **"No implementation plan found. Run /audit first."**
 
 If all phases have matching commits, tell the user: **"All phases complete. Run /wrap-up for final verification, then merge to main."**
 
 ## Step 2: Load Minimal Context
 
 Read only what this phase needs:
-- `docs/active-feature.md` — the feature spec
-- The section in `docs/implementation-plan.md` for the current phase ONLY
+- `apps/web/or-flow-app/docs/active-feature.md` — the feature spec
+- The section in `apps/web/or-flow-app/docs/implementation-plan.md` for the current phase ONLY
 - The specific files listed for this phase in the plan
 
-Do NOT read `docs/architecture.md` unless this phase involves database work.
+Do NOT read `apps/web/or-flow-app/docs/architecture.md` unless this phase involves database work.
 Do NOT read files for future phases.
 
 ## Step 3: Verify Clean State
@@ -36,7 +36,7 @@ Do NOT read files for future phases.
 ```bash
 git status
 git diff --stat HEAD
-npm run typecheck
+cd apps/web/or-flow-app && npm run typecheck
 ```
 
 If there are uncommitted changes from an interrupted session:

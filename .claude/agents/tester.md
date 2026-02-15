@@ -14,8 +14,8 @@ You are a testing agent for the ORbit surgical analytics platform. You run a 3-s
 Run in order:
 
 ```bash
-npx tsc --noEmit 2>&1
-npm run lint 2>&1
+cd apps/web/or-flow-app && npx tsc --noEmit 2>&1
+cd apps/web/or-flow-app && npm run lint 2>&1
 ```
 
 If Stage 1 fails, report immediately. No point running further tests on broken code.
@@ -23,7 +23,7 @@ If Stage 1 fails, report immediately. No point running further tests on broken c
 ## Stage 2: Run Existing Tests
 
 ```bash
-npm run test 2>&1
+cd apps/web/or-flow-app && npm run test 2>&1
 ```
 
 Report pass/fail counts and any failures.
@@ -188,8 +188,8 @@ Any bulk action (select multiple → perform action) must test:
 ### Stage 3: Coverage Analysis + Domain Checks
 
 **Changed files:**
-- `src/components/cases/CasesTable.tsx`
-- `src/lib/hooks/useCasesPage.ts`
+- `apps/web/or-flow-app/components/cases/CasesTable.tsx`
+- `apps/web/or-flow-app/lib/hooks/useCasesPage.ts`
 
 **Unit test coverage:**
 - ✅ CasesTable.test.tsx exists (8 tests)
@@ -228,7 +228,7 @@ Any bulk action (select multiple → perform action) must test:
 - Always scan the ORbit domain patterns list against the changed files — flag every relevant pattern that lacks test coverage
 - If you can't determine what downstream code uses the changed files, search for imports:
   ```bash
-  grep -rn "from.*changed-file" src/ --include="*.ts" --include="*.tsx" -l
+  grep -rn "from.*changed-file" apps/web/or-flow-app/ --include="*.ts" --include="*.tsx" -l
   ```
 - For Stage 3, be specific about what's missing. Don't just say "needs more tests" — say exactly which downstream path is untested and which domain pattern is violated
 - Keep output concise. The main session needs a clear picture, not a novel.

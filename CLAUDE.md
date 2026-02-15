@@ -2,36 +2,36 @@
 
 ## Stack
 - **Web:** Next.js (App Router), TypeScript, Tailwind CSS, Supabase (PostgreSQL), Vercel
-- **iOS:** SwiftUI, MVVM, Repository pattern (separate project, not in scope unless specified)
+- **iOS:** SwiftUI, MVVM, Repository pattern (at `apps/ios/`, has its own CLAUDE.md)
 - **Components:** shadcn/ui, lucide-react icons
 - **Auth:** Supabase Auth, middleware.ts, RLS on all tables
 
 ## Critical Patterns (violating these causes bugs)
-- **Data fetching:** Always use `useSupabaseQuery` from `lib/hooks/useSupabaseQuery.ts`
+- **Data fetching:** Always use `useSupabaseQuery` from `apps/web/or-flow-app/lib/hooks/useSupabaseQuery.ts`
 - **Facility scoping:** Every query must filter by `facility_id` — RLS enforces this
 - **Milestones v2.0:** `facility_milestones.facility_milestone_id` is the foreign key everywhere. Never use `milestone_type_id` directly in case_milestones.
 - **Soft deletes:** 20 tables use `sync_soft_delete_columns()` — set `is_active = false`, never hard delete
 - **Cases table:** Has 8 triggers — test changes carefully
-- **Scoring:** MAD-based, not mean-based. 3 MAD bands, volume-weighted, graduated decay. See `docs/architecture.md` for details.
-- **Logging:** Use `lib/logger.ts` (structured JSON in prod), never raw `console.log`
+- **Scoring:** MAD-based, not mean-based. 3 MAD bands, volume-weighted, graduated decay. See `apps/web/or-flow-app/docs/architecture.md` for details.
+- **Logging:** Use `apps/web/or-flow-app/lib/logger.ts` (structured JSON in prod), never raw `console.log`
 - **No `any` types.** TypeScript strict mode.
 
-## Project Structure
+## Project Structure (all paths from monorepo root)
 ```
-app/                    → Pages (App Router)
-components/ui/          → shadcn base components
-components/layouts/     → DashboardLayout (sidebar, nav)
-lib/dal/               → Data access layer (core.ts, cases.ts, facilities.ts, users.ts, lookups.ts)
-lib/hooks/             → useSupabaseQuery, useCurrentUser, useLookups
-lib/                   → supabase client, logger, utils
-docs/                  → Architecture, feature specs, implementation plans
-.claude/commands/      → Workflow commands (/audit, /phase-start, /wrap-up, /fix, /migrate)
-.claude/agents/        → Subagents (tester, reviewer, explorer)
+apps/web/or-flow-app/app/                    → Pages (App Router)
+apps/web/or-flow-app/components/ui/          → shadcn base components
+apps/web/or-flow-app/components/layouts/     → DashboardLayout (sidebar, nav)
+apps/web/or-flow-app/lib/dal/               → Data access layer (core.ts, cases.ts, facilities.ts, users.ts, lookups.ts)
+apps/web/or-flow-app/lib/hooks/             → useSupabaseQuery, useCurrentUser, useLookups
+apps/web/or-flow-app/lib/                   → supabase client, logger, utils
+apps/web/or-flow-app/docs/                  → Architecture, feature specs, implementation plans
+apps/web/or-flow-app/.claude/commands/      → Workflow commands (/audit, /phase-start, /wrap-up, /fix, /migrate)
+apps/web/or-flow-app/.claude/agents/        → Subagents (tester, reviewer, explorer)
 ```
 
 ## Code Quality
 - TypeScript strict mode, no `any` types
-- Structured logging via `lib/logger.ts` (not raw console.log)
+- Structured logging via `apps/web/or-flow-app/lib/logger.ts` (not raw console.log)
 - Commit after completing each phase of work
 
 ### 3-Stage Testing Gate (mandatory after every phase)
@@ -75,8 +75,8 @@ docs/                  → Architecture, feature specs, implementation plans
 - Set via: `export CLAUDE_CODE_SUBAGENT_MODEL="claude-sonnet-4-5-20250929"`
 
 ## Context Loading
-- Always read `CLAUDE.md` (this file) at session start
-- Read `docs/active-feature.md` when starting feature work
-- Read `docs/implementation-plan.md` when resuming phases
-- Read `docs/architecture.md` ONLY when the phase involves database work or scoring logic
+- Always read `apps/web/or-flow-app/CLAUDE.md` (this file) at session start
+- Read `apps/web/or-flow-app/docs/active-feature.md` when starting feature work
+- Read `apps/web/or-flow-app/docs/implementation-plan.md` when resuming phases
+- Read `apps/web/or-flow-app/docs/architecture.md` ONLY when the phase involves database work or scoring logic
 - Do NOT preload everything — load on demand to preserve context

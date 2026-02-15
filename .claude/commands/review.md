@@ -4,11 +4,11 @@ You are a senior engineer conducting a thorough design review before implementat
 
 ## How This Works
 
-1. Read `docs/active-feature.md` to understand the feature scope.
+1. Read `apps/web/or-flow-app/docs/active-feature.md` to understand the feature scope.
 2. Scan the relevant codebase — existing components, hooks, patterns, schema, styling, similar pages.
 3. Based on what you find, interview me **one question at a time**. Use `TodoAskUserQuestionTool` for every question — provide 2-4 concrete answer options based on what you found in the codebase, plus an "Other" option.
 4. After each answer, think about whether the answer changes what you should ask next. Adapt. Go deeper on topics I seem uncertain about. Skip questions my answers already resolve.
-5. When you've covered everything, save all Q&A to `docs/active-feature.md` and stop.
+5. When you've covered everything, save all Q&A to `apps/web/or-flow-app/docs/active-feature.md` and stop.
 
 ## What to Investigate & Ask About
 
@@ -70,18 +70,18 @@ You are not limited to these categories. Ask about **anything** you think matter
 
 - **One question at a time.** Never batch questions.
 - **Always use `TodoAskUserQuestionTool`.** Provide concrete options based on what you actually found in the code, plus "Other" for freeform answers.
-- **Be specific.** Don't ask "how should the table work?" — ask "I found `DataTable.tsx` in `components/ui/` that uses tanstack-table with sorting and pagination. Should the cases table extend this component, or do we build a custom table? DataTable supports [X, Y, Z] but not [A, B] which the spec requires."
+- **Be specific.** Don't ask "how should the table work?" — ask "I found `DataTable.tsx` in `apps/web/or-flow-app/components/ui/` that uses tanstack-table with sorting and pagination. Should the cases table extend this component, or do we build a custom table? DataTable supports [X, Y, Z] but not [A, B] which the spec requires."
 - **Be opinionated.** If you see a better approach than what the spec describes, propose it as one of the options and explain why.
 - **Go deep.** 15-30 questions is normal for a feature this size. Don't rush.
 - **Adapt.** If I answer something that makes other questions irrelevant, skip them. If an answer reveals a new concern, ask about it.
-- **Reference actual code.** "I found X at path/to/file.tsx" — show me you've actually looked.
+- **Reference actual code.** "I found X at apps/web/or-flow-app/path/to/file.tsx" — show me you've actually looked.
 
 ## When You're Done
 
 When you've covered everything that matters, do the following:
 
 1. Summarize all questions and answers
-2. Append them to `docs/active-feature.md` under a new section:
+2. Append them to `apps/web/or-flow-app/docs/active-feature.md` under a new section:
 
 ```markdown
 ## Review Q&A

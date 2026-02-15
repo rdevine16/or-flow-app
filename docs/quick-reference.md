@@ -10,11 +10,11 @@ export CLAUDE_CODE_SUBAGENT_MODEL="claude-sonnet-4-5-20250929"
 ## The Flow
 
 ```
-1. Write docs/active-feature.md          ← your input (the only file you edit)
-2. /audit                                ← scans codebase, interviews you, proposes plan
-3. Review & approve plan                 ← branch created automatically
-4. /phase-start                          ← executes Phase 1, tests, commits, STOPS
-5. Start new session → /phase-start      ← executes Phase 2, tests, commits, STOPS
+1. Write apps/web/or-flow-app/docs/active-feature.md   ← your input (the only file you edit)
+2. /audit                                               ← scans codebase, interviews you, proposes plan
+3. Review & approve plan                                ← branch created automatically
+4. /phase-start                                         ← executes Phase 1, tests, commits, STOPS
+5. Start new session → /phase-start                     ← executes Phase 2, tests, commits, STOPS
 6. Repeat until all phases done
 7. Merge feature branch to main
 ```
@@ -43,7 +43,7 @@ Subagents run on Sonnet (focused tasks). Main session runs on Opus (reasoning + 
 
 | Situation | What to Do |
 |-----------|-----------|
-| Starting a new feature | Write `docs/active-feature.md` → `/audit` |
+| Starting a new feature | Write `apps/web/or-flow-app/docs/active-feature.md` → `/audit` |
 | Starting the next phase | New session → `/phase-start` |
 | Context getting heavy (~60%) | `/wrap-up` → new session → `/phase-start` |
 | Terminal crashed mid-phase | `claude --continue` → say "keep going" |
@@ -85,11 +85,12 @@ git branch -d feature/[name]
 ## File Locations
 
 ```
-docs/active-feature.md       ← YOU write this (feature spec)
-docs/implementation-plan.md  ← /audit generates this (phased plan + session logs)
-docs/architecture.md         ← Reference (loaded on-demand, not every session)
-docs/ios-architecture.md     ← Reference (iOS only)
-CLAUDE.md                    ← Loaded every session (lean routing table)
-.claude/commands/*.md        ← Workflow commands
-.claude/agents/*.md          ← Subagent definitions
+apps/web/or-flow-app/docs/active-feature.md       ← YOU write this (feature spec)
+apps/web/or-flow-app/docs/implementation-plan.md   ← /audit generates this (phased plan + session logs)
+apps/web/or-flow-app/docs/architecture.md          ← Reference (loaded on-demand, not every session)
+apps/web/or-flow-app/docs/ios-architecture.md      ← Reference (iOS only)
+apps/web/or-flow-app/CLAUDE.md                     ← Web-specific rules
+apps/web/or-flow-app/.claude/commands/*.md          ← Workflow commands
+apps/web/or-flow-app/.claude/agents/*.md            ← Subagent definitions
+CLAUDE.md                                          ← Root routing file (loaded every session)
 ```

@@ -11,11 +11,11 @@ You are a codebase exploration agent for the ORbit surgical analytics platform. 
 
 ## Project Structure
 
-ORbit uses Next.js App Router. Key directories:
-- `app/` — Pages and routes
-- `components/` — UI components (`components/ui/` for shadcn, `components/layouts/` for layout)
-- `lib/` — Utilities, hooks, data access layer, Supabase client
-- `supabase/migrations/` — Database migrations
+ORbit uses Next.js App Router. Key directories (from monorepo root):
+- `apps/web/or-flow-app/app/` — Pages and routes
+- `apps/web/or-flow-app/components/` — UI components (`components/ui/` for shadcn, `components/layouts/` for layout)
+- `apps/web/or-flow-app/lib/` — Utilities, hooks, data access layer, Supabase client
+- `apps/web/or-flow-app/supabase/migrations/` — Database migrations
 
 ## How to Investigate
 
@@ -23,25 +23,25 @@ Use these tools to find information:
 
 ```bash
 # Find files by name
-find app/ components/ lib/ -name "*pattern*" -type f
+find apps/web/or-flow-app/app/ apps/web/or-flow-app/components/ apps/web/or-flow-app/lib/ -name "*pattern*" -type f
 
 # Find code references
-grep -rn "searchTerm" app/ components/ lib/ --include="*.tsx" --include="*.ts" -l
+grep -rn "searchTerm" apps/web/or-flow-app/app/ apps/web/or-flow-app/components/ apps/web/or-flow-app/lib/ --include="*.tsx" --include="*.ts" -l
 
 # Find function definitions
-grep -rn "function functionName\|const functionName" app/ components/ lib/ --include="*.ts" --include="*.tsx"
+grep -rn "function functionName\|const functionName" apps/web/or-flow-app/app/ apps/web/or-flow-app/components/ apps/web/or-flow-app/lib/ --include="*.ts" --include="*.tsx"
 
 # Find component usage
-grep -rn "<ComponentName" app/ components/ --include="*.tsx" -l
+grep -rn "<ComponentName" apps/web/or-flow-app/app/ apps/web/or-flow-app/components/ --include="*.tsx" -l
 
 # Find database table references
-grep -rn "from('table_name')" lib/ --include="*.ts" --include="*.tsx"
+grep -rn "from('table_name')" apps/web/or-flow-app/lib/ --include="*.ts" --include="*.tsx"
 
 # Find hook usage
-grep -rn "useHookName" app/ components/ --include="*.tsx" -l
+grep -rn "useHookName" apps/web/or-flow-app/app/ apps/web/or-flow-app/components/ --include="*.tsx" -l
 
 # Check migration history for a table
-grep -rn "table_name" supabase/migrations/ -l
+grep -rn "table_name" apps/web/or-flow-app/supabase/migrations/ -l
 ```
 
 Read the relevant files to understand the full picture.
@@ -62,8 +62,8 @@ Return a structured summary:
 - [Key finding 3]
 
 ### Files Involved
-- `path/to/file.ts` — [what it does relevant to the question]
-- `path/to/other.ts` — [what it does]
+- `apps/web/or-flow-app/path/to/file.ts` — [what it does relevant to the question]
+- `apps/web/or-flow-app/path/to/other.ts` — [what it does]
 
 ### Implications
 [If relevant: what this means for the task at hand — dependencies, risks, things to be careful about]

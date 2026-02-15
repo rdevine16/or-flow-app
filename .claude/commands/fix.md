@@ -12,7 +12,7 @@ Read the user's description: $ARGUMENTS
 
 Identify the file(s) that need to change. If you're unsure which file, search:
 ```bash
-grep -r "searchTerm" app/ components/ lib/ --include="*.tsx" --include="*.ts" -l
+grep -r "searchTerm" apps/web/or-flow-app/app/ apps/web/or-flow-app/components/ apps/web/or-flow-app/lib/ --include="*.tsx" --include="*.ts" -l
 ```
 
 ## Step 2: Make the Fix
@@ -22,7 +22,7 @@ Edit the file(s) directly. Keep changes minimal and focused.
 ## Step 3: Verify
 
 ```bash
-npx tsc --noEmit 2>&1 | grep -i error | head -10
+cd apps/web/or-flow-app && npx tsc --noEmit 2>&1 | grep -i error | head -10
 ```
 
 If the fix introduced new errors, resolve them.

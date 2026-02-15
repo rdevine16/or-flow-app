@@ -37,7 +37,7 @@ git commit -m "wip: phase N partial - [what's done, what's remaining]"
 
 ## Step 3: Determine Project Status
 
-Read `docs/implementation-plan.md` and check git log to determine if ALL phases are complete.
+Read `apps/web/or-flow-app/docs/implementation-plan.md` and check git log to determine if ALL phases are complete.
 
 ```bash
 git log --oneline --all | head -30
@@ -55,15 +55,15 @@ When all phases are done, archive the entire project for historical reference.
 ### 4A.1: Create the Archive Directory
 
 ```bash
-mkdir -p docs/completed
+mkdir -p apps/web/or-flow-app/docs/completed
 ```
 
 Generate the archive folder name from the feature branch name and today's date:
 ```bash
-# Example: docs/completed/2026-02-13_facility-admin-dashboard/
+# Example: apps/web/or-flow-app/docs/completed/2026-02-13_facility-admin-dashboard/
 BRANCH=$(git branch --show-current | sed 's|feature/||')
 DATE=$(date +%Y-%m-%d)
-ARCHIVE_DIR="docs/completed/${DATE}_${BRANCH}"
+ARCHIVE_DIR="apps/web/or-flow-app/docs/completed/${DATE}_${BRANCH}"
 mkdir -p "$ARCHIVE_DIR"
 ```
 
@@ -105,8 +105,8 @@ Create a `PROJECT_SUMMARY.md` inside the archive folder. This is the permanent r
 
 ```bash
 # Copy feature spec and implementation plan into the archive
-cp docs/active-feature.md "$ARCHIVE_DIR/active-feature.md"
-cp docs/implementation-plan.md "$ARCHIVE_DIR/implementation-plan.md"
+cp apps/web/or-flow-app/docs/active-feature.md "$ARCHIVE_DIR/active-feature.md"
+cp apps/web/or-flow-app/docs/implementation-plan.md "$ARCHIVE_DIR/implementation-plan.md"
 # PROJECT_SUMMARY.md was already created in the archive dir
 ```
 
@@ -154,7 +154,7 @@ Replace `active-feature.md` with a clean template:
 
 Delete the old implementation plan:
 ```bash
-rm docs/implementation-plan.md
+rm apps/web/or-flow-app/docs/implementation-plan.md
 ```
 
 Commit the archive:
@@ -170,15 +170,15 @@ git commit -m "docs: archive completed project - [feature name]"
 
 **Feature:** [name]
 **Branch:** [branch name]
-**Archived to:** docs/completed/[archive folder name]/
+**Archived to:** apps/web/or-flow-app/docs/completed/[archive folder name]/
 **Files archived:**
   - PROJECT_SUMMARY.md (generated overview)
   - active-feature.md (original spec)
   - implementation-plan.md (phase breakdown + session logs)
 
 **Workspace cleaned:**
-  - docs/active-feature.md → reset to blank template
-  - docs/implementation-plan.md → removed
+  - apps/web/or-flow-app/docs/active-feature.md → reset to blank template
+  - apps/web/or-flow-app/docs/implementation-plan.md → removed
 
 ### Next steps:
 1. Merge this branch to main:
@@ -189,7 +189,7 @@ git commit -m "docs: archive completed project - [feature name]"
    git branch -d [branch name]
 
 2. Start your next project:
-   - Edit docs/active-feature.md with your new feature spec
+   - Edit apps/web/or-flow-app/docs/active-feature.md with your new feature spec
    - Run /audit to generate the implementation plan
 
 ### To undo this session's work:
@@ -206,7 +206,7 @@ When phases remain, log the session and prepare for the next one.
 
 ### 4B.1: Append Session Log
 
-Add an entry to the bottom of `docs/implementation-plan.md` under the `## Session Log` section:
+Add an entry to the bottom of `apps/web/or-flow-app/docs/implementation-plan.md` under the `## Session Log` section:
 
 ```markdown
 ### Session — [date, time]

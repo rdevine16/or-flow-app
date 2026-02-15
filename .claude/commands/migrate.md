@@ -8,13 +8,13 @@ argument-hint: <describe the schema change needed>
 Read the user's description: $ARGUMENTS
 
 If the change involves tables referenced in the analytics pipeline or trigger system,
-read `docs/architecture.md` sections 2 (Trigger System) and 3 (Stats Pipeline) first.
+read `apps/web/or-flow-app/docs/architecture.md` sections 2 (Trigger System) and 3 (Stats Pipeline) first.
 
 ## Step 2: Check Current Schema
 
 Look at existing migrations to understand the current state:
 ```bash
-ls -la supabase/migrations/ | tail -20
+ls -la apps/web/or-flow-app/supabase/migrations/ | tail -20
 ```
 
 If relevant, read the most recent migration that touches the same tables.
@@ -27,7 +27,7 @@ Create the migration file with proper naming:
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 ```
 
-Write the SQL to `supabase/migrations/${TIMESTAMP}_description.sql`
+Write the SQL to `apps/web/or-flow-app/supabase/migrations/${TIMESTAMP}_description.sql`
 
 Follow these rules:
 - Wrap in `BEGIN; ... COMMIT;` for transactional safety

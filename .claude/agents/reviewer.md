@@ -25,7 +25,7 @@ Read each changed file.
 - No TypeScript `any` types
 - All data fetching uses `useSupabaseQuery` (no manual useEffect + fetch patterns)
 - All queries filter by `facility_id`
-- No raw `console.log` — use `lib/logger.ts`
+- No raw `console.log` — use `apps/web/or-flow-app/lib/logger.ts`
 - No `milestone_type_id` references on `case_milestones` (must use `facility_milestone_id`)
 - No `audit_logs` (plural) — table is `audit_log` (singular)
 - Dates use facility timezone for display, not UTC

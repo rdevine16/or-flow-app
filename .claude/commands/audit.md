@@ -1,11 +1,11 @@
 ---
 description: Analyze feature spec, interview user, create phased implementation plan. Start here for any new feature.
-argument-hint: (no arguments needed — reads docs/active-feature.md)
+argument-hint: (no arguments needed — reads apps/web/or-flow-app/docs/active-feature.md)
 ---
 
 ## Step 1: Read the Feature Spec
 
-Read `docs/active-feature.md`. Understand the goal, requirements, constraints, and acceptance criteria.
+Read `apps/web/or-flow-app/docs/active-feature.md`. Understand the goal, requirements, constraints, and acceptance criteria.
 
 ## Step 2: Parallel Codebase Scan
 
@@ -13,9 +13,9 @@ Spawn parallel subagents to analyze the codebase from different angles simultane
 
 ```
 Scan the codebase using parallel subagents:
-- Subagent 1: Scan all files in app/ for [relevant patterns based on feature spec]
-- Subagent 2: Scan all files in components/ for [relevant patterns]
-- Subagent 3: Analyze configuration files and shared utilities in lib/ for [relevant patterns]
+- Subagent 1: Scan all files in apps/web/or-flow-app/app/ for [relevant patterns based on feature spec]
+- Subagent 2: Scan all files in apps/web/or-flow-app/components/ for [relevant patterns]
+- Subagent 3: Analyze configuration files and shared utilities in apps/web/or-flow-app/lib/ for [relevant patterns]
 - Subagent 4: Check for related test coverage and existing patterns
 ```
 
@@ -51,7 +51,7 @@ Continue interviewing until all ambiguities are resolved. Document answers as yo
 
 ## Step 4: Create the Phased Plan
 
-Based on the feature spec, codebase analysis, and interview answers, create `docs/implementation-plan.md` with:
+Based on the feature spec, codebase analysis, and interview answers, create `apps/web/or-flow-app/docs/implementation-plan.md` with:
 
 1. **Summary** — what this plan accomplishes
 2. **Interview Notes** — key decisions from the user interview
@@ -85,7 +85,7 @@ Once the user approves the plan:
    ```
 3. Commit the implementation plan:
    ```bash
-   git add docs/implementation-plan.md
+   git add apps/web/or-flow-app/docs/implementation-plan.md
    git commit -m "docs: add implementation plan for [feature name]"
    ```
 4. Tell the user: **"Created branch `feature/[name]`. Run /phase-start to begin Phase 1."**
