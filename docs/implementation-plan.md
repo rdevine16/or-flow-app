@@ -418,7 +418,15 @@ WHERE pmc.procedure_type_id = p_procedure_type_id
 - **Tests:** 25 new tests (PhaseSection 7, ProcedureMilestoneRow 11, ProcedureMilestoneList 7)
 - **Boundary milestones:** Locked on (checked + greyed out + lock icon), derived from phase_definitions
 
-### Phase 5 — PENDING (next)
-### Phase 6 — PENDING
+### Phase 5 — COMPLETE
+- **Commit:** `dcba9e8` feat(milestones): phase 5 - surgeon milestone config UI with overrides
+- **New route:** /settings/surgeon-milestones with surgeon+procedure selectors, phase-grouped milestone list
+- **New component:** SurgeonMilestoneRow with override highlighting (amber bg), boundary locking, paired indicators, drag-to-reorder
+- **Nav:** "Surgeon Milestones" already in settings-nav-config.ts (added in prior phase)
+- **DAL:** surgeonMilestoneConfig() already in lookups.ts (added in prior phase)
+- **Tests:** 15 tests for SurgeonMilestoneRow (boundary lock, override badge, toggle behavior, drag handle, saving state)
+- **Features:** Toggle overrides with optimistic updates, paired milestone auto-toggle, reset to procedure defaults with confirm dialog, override count footer
+
+### Phase 6 — PENDING (next)
 ### Phase 7 — PENDING
 ### Phase 8 — PENDING
