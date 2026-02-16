@@ -427,6 +427,26 @@ WHERE pmc.procedure_type_id = p_procedure_type_id
 - **Tests:** 15 tests for SurgeonMilestoneRow (boundary lock, override badge, toggle behavior, drag handle, saving state)
 - **Features:** Toggle overrides with optimistic updates, paired milestone auto-toggle, reset to procedure defaults with confirm dialog, override count footer
 
-### Phase 6 — PENDING (next)
-### Phase 7 — PENDING
-### Phase 8 — PENDING
+### Phase 6 — COMPLETE
+- **Commit:** `2d87851` feat(milestones): phase 6 - surgeon override merge in case creation pipeline
+- **Migration:** `20260216000005_update_create_case_with_milestones.sql`
+- **Changes:** LEFT JOIN surgeon_milestone_config with COALESCE(smc.is_enabled, pmc.is_enabled) for milestone resolution
+- **Cleanup:** Dropped 2 unused older function overloads (14-param and 15-param versions)
+- **DB tests:** 4 scenarios verified against branch DB: no surgeon config (defaults), surgeon disables milestone, surgeon enables disabled milestone, boundary milestones always present
+- **App tests:** 78 test files, 1324 tests passing. Typecheck clean.
+
+### Phase 7 — COMPLETE
+- **Commit:** `05fb27e` feat(milestones): phase 7 - phase medians, analytics integration, n-count display
+- **Migration:** `20260216000006_get_phase_medians.sql` — new `get_phase_medians()` function
+- **get_phase_medians():** Calculates phase-level medians using phase_definitions boundary milestones, returns surgeon/facility medians with n-counts, nulls facility_median when n < 5
+- **DB verification:** Tested against branch DB with real data — 4 phases returned with correct medians (Pre-Op 28m, Surgical 55m, Closing 8m, Post-Op 4m for n=272 facility cases)
+- **milestoneAnalytics.ts:** Added `calculatePhaseTimeAllocation()`, `assignMilestonesToPhases()`, `buildPhaseGroups()`, new types (`PhaseDefinitionWithMilestones`, `PhaseMedianRow`, `PhaseGroupData`), deprecated legacy `calculateTimeAllocation()`
+- **useMilestoneComparison.ts:** Added parallel fetches for phase_definitions (with joined boundary milestone details) and phase_medians RPC, returns `facilityPhaseN` for threshold display
+- **MilestoneDetailRow.tsx:** Collapsible phase header rows with colored left border, phase name, duration, median, delta badge, n-count display, expand/collapse with ChevronDown/Right icons
+- **MilestoneComparisonToggle.tsx:** Shows n-count as `(n=X)`, greys out facility option when n < 5 with tooltip
+- **TimeAllocationBar.tsx:** No component changes needed — receives phase_definitions-based allocations from hook
+- **milestone-phase-config.ts:** Added `phaseConfigFromColorKey()` helper
+- **Tests:** 11 new tests (calculatePhaseTimeAllocation 5, assignMilestonesToPhases 2, buildPhaseGroups 4), updated existing CaseDrawerMilestones tests for new types and n-count format
+- **App tests:** 78 test files, 1335 tests passing. Typecheck clean.
+
+### Phase 8 — PENDING (next)
