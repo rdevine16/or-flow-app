@@ -449,4 +449,14 @@ WHERE pmc.procedure_type_id = p_procedure_type_id
 - **Tests:** 11 new tests (calculatePhaseTimeAllocation 5, assignMilestonesToPhases 2, buildPhaseGroups 4), updated existing CaseDrawerMilestones tests for new types and n-count format
 - **App tests:** 78 test files, 1335 tests passing. Typecheck clean.
 
-### Phase 8 — PENDING (next)
+### Phase 8 — COMPLETE
+- **Commit:** `60cce2b` feat(milestones): phase 8 - admin procedure milestones redesign with phase grouping
+- **Rewritten:** /admin/settings/procedure-milestones — flat checkbox grid → phase-grouped drag-to-reorder layout
+- **Extended:** ProcedureMilestoneList with `milestonesSettingsUrl` and `milestonesSettingsLabel` props for admin mode
+- **New helper:** `derivePhaseGroup()` — assigns milestone_types to phases based on display_order relative to phase_definition_templates boundaries
+- **Data mapping:** milestone_types → FacilityMilestoneWithPhase, procedure_milestone_templates → ProcedureMilestoneConfigItem, phase_definition_templates → PhaseInfo
+- **Key differences from facility-level:** Uses INSERT/DELETE (no is_enabled toggle), operates on template tables (procedure_type_templates, milestone_types, procedure_milestone_templates, phase_definition_templates)
+- **Boundary milestones:** Locked on (checked + greyed out + lock icon), derived from phase_definition_templates
+- **Info banner:** "Template configurations only apply during facility creation. Existing facilities are NOT affected."
+- **Tests:** 13 new tests (7 derivePhaseGroup, 6 admin template mode rendering)
+- **App tests:** 80 test files, 1348 tests passing. Typecheck clean.
