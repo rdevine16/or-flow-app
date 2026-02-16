@@ -14,6 +14,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Check, Clock, Info, Link, Pencil, Plus } from 'lucide-react'
 import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
+import { PhaseTemplateSection } from '@/components/settings/phases/PhaseTemplateSection'
 
 
 interface MilestoneType {
@@ -436,6 +437,12 @@ export default function AdminMilestonesSettingsPage() {
       <Container className="py-8">
           <ErrorBanner message={error} />
 <div className="max-w-4xl mx-auto">
+          {/* Phase Definition Templates Section */}
+          <PhaseTemplateSection />
+
+          {/* Divider */}
+          <div className="border-t border-slate-200 mb-8" />
+
           {/* Header */}
           <div className="flex items-start justify-between mb-6">
             <div>
