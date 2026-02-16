@@ -7,7 +7,6 @@
 // Professional milestone section that sells the product
 
 import { useState, useEffect, use, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -34,7 +33,6 @@ import {
   getJoinedValue,
   formatDisplayTime,
   formatTimestamp,
-  formatTimestamp24,
   formatElapsedMs,
   formatMinutesHMS,
   getStatusConfig,
@@ -121,7 +119,6 @@ interface DeviceCompanyData {
 
 export default function CasePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
-  const router = useRouter()
   const supabase = createClient()
   const { showToast } = useToast()
 
@@ -1207,13 +1204,39 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         />
 
         {/* ================================================================== */}
-        {/* TOP ROW: Timers + Quick Info */}
+        {/* TWO-COLUMN LAYOUT: Main + Sidebar */}
         {/* ================================================================== */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-6">
 
-          {/* TIMERS (2 cols) - HERO SIZE */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          {/* ============ MAIN CONTENT ============ */}
+          <div className="space-y-4">
+
+            {/* CASE HEADER */}
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <Link href="/cases" className="text-slate-400 hover:text-slate-600 transition-colors">
+                  <ChevronLeft className="w-5 h-5" />
+                </Link>
+                <h1 className="text-xl font-bold text-slate-900">
+                  {procedure?.name || 'No Procedure'}
+                </h1>
+                <StatusBadgeDot status={status?.name || 'scheduled'} />
+              </div>
+              <div className="flex items-center gap-2 mt-1.5 text-sm text-slate-500 flex-wrap ml-8">
+                <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded font-mono text-xs text-slate-600">
+                  {caseData.case_number}
+                </span>
+                {room && (<><span className="text-slate-300">&middot;</span><span>{room.name}</span></>)}
+                {caseData.operative_side && (<><span className="text-slate-300">&middot;</span><span className="capitalize">{caseData.operative_side}</span></>)}
+                {surgeon && (<><span className="text-slate-300">&middot;</span><span>Dr. {surgeon.last_name}</span></>)}
+                {caseData.start_time && (<><span className="text-slate-300">&middot;</span><span>{formatDisplayTime(caseData.start_time, { fallback: '--:--' })}</span></>)}
+                {caseSequence && (<><span className="text-slate-300">&middot;</span><span>Case {caseSequence.current} of {caseSequence.total}</span></>)}
+              </div>
+            </div>
+
+            {/* TIMERS */}
+            <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
             {/* Total Time */}
             <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
               <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/10 rounded-full blur-3xl" />
@@ -1298,52 +1321,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           )}
           </div>
 
-          {/* QUICK INFO (1 col) */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Link href="/cases" className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <ChevronLeft className="w-4 h-4" />
-                  </Link>
-                  <h1 className="text-lg font-semibold text-slate-900">{caseData.case_number}</h1>
-                </div>
-                <p className="text-sm text-slate-600 mt-0.5">{procedure?.name || 'No procedure'}</p>
-                {caseSequence && (
-                  <p className="text-xs text-slate-400 mt-0.5">Case {caseSequence.current} of {caseSequence.total} today</p>
-                )}
-              </div>
-              <StatusBadgeDot status={status?.name || 'scheduled'} />
-            </div>
 
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-slate-400 text-xs">Room</p>
-                <p className="font-semibold text-slate-900">{room?.name || '—'}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 text-xs">Scheduled</p>
-                <p className="font-semibold text-slate-900">{formatDisplayTime(caseData.start_time, { fallback: '--:--' })}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 text-xs">Surgeon</p>
-                <p className="font-semibold text-slate-900">{surgeon ? `Dr. ${surgeon.last_name}` : '—'}</p>
-              </div>
-              <div>
-                <p className="text-slate-400 text-xs">Side</p>
-                <p className="font-semibold text-slate-900 capitalize">{caseData.operative_side || '—'}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ================================================================== */}
-        {/* BOTTOM ROW: Milestones + Sidebar */}
-        {/* ================================================================== */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* MILESTONE SECTION (2 cols) */}
-          <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+            {/* MILESTONES */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
@@ -1442,7 +1422,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
           </div>
 
-          {/* SIDEBAR (1 col) */}
+          </div>
+
+          {/* ============ SIDEBAR ============ */}
           <div className="space-y-4">
 
             {/* FLIP ROOM — surgeon's next case in a different room */}
