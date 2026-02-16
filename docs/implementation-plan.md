@@ -1,350 +1,234 @@
 # Implementation Plan: Settings Layout Redesign + Milestones Table Overhaul
 
-## Overview
-Replace the settings sidebar with a horizontal tab bar + compact sub-nav pattern, create a settings landing page, and redesign the milestones page as a phase-grouped table. 6 phases, executed sequentially. Each phase is a single Claude Code session with `/phase-start`.
+> Generated: 2026-02-16
 
-## Branch
-`feature/settings-layout-redesign`
+## Summary
 
-## Dependency Graph
+Replace the current settings sidebar navigation with a horizontal 8-tab bar + compact sub-nav pattern (Stripe/Linear-inspired). Simultaneously redesign the Milestones settings page from a badge-heavy list into a clean, phase-grouped data table with drag-and-drop reordering. This is a pure frontend refactor — no database changes.
+
+## Interview Notes
+
+Key decisions from the user interview + review Q&A (33 questions resolved):
+
+- **8 horizontal tabs** with abbreviated labels: General, Check-In, Org, Case Mgmt, Ops, Reps, Financials, Security
+- **Device Reps is its own tab** with Device Reps + Implant Companies (moved from Operations)
+- **Orphan pages added**: Closures → Operations, Facilities → Financials
+- **Persistent shell** via `app/settings/layout.tsx` — tabs never unmount
+- **No tab bar on landing page** — landing is full-width card grid
+- **Config lookup map** for active tab determination (path → category)
+- **Phase colors**: Key-mapping layer from DB values (`pre_op`, `anesthesia`, etc.) to existing `phaseColors` keys
+- **All 5 DB phase groups** shown with empty states for empty groups
+- **@tanstack/react-table** for milestones table (consistency with CasesTable)
+- **@dnd-kit** for drag-and-drop reordering within phase groups
+- **Modal** for both Add and Edit milestone flows
+- **Archive** terminology (not Delete) — soft delete with collapsed archived section
+- **Skip** Cases count column and stats chips — not actionable in settings context
+- **Keep Geist fonts** — no font change
+- **animate-fade-in** for page transitions (already in globals.css)
+- **Hide inaccessible items** — if entire category empty, hide that tab
+- **"Soon" items** shown with badge, navigate to placeholder page
+- **Reuse existing** Breadcrumb, CardEnhanced (interactive variant), Modal, SkeletonTable components
+- **Separate config file** at `lib/settings-nav-config.ts`
+- **Delete old SettingsLayout immediately** — clean break, no fallback
+- **Big-bang layout swap** — all pages migrate at once since layout.tsx wraps children automatically
+
+## Tab Structure (8 Tabs, 28 Items)
+
+### Tab 1: General (3 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Overview | `/settings/general` | Building2 | — | — |
+| Notifications | `/settings/notifications` | Bell | Soon | settings.manage |
+| Subscription | `/settings/subscription` | CreditCard | Soon | settings.manage |
+
+### Tab 2: Check-In (2 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Arrival Settings | `/settings/checkin` | ClipboardCheck | — | settings.manage |
+| Checklist Builder | `/settings/checklist-builder` | ClipboardCheck | — | settings.manage |
+
+### Tab 3: Org (2 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Users & Roles | `/settings/users` | Users | — | — |
+| Roles & Permissions | `/settings/permissions` | KeyRound | — | users.manage |
+
+### Tab 4: Case Mgmt (7 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Procedure Types | `/settings/procedures` | ClipboardList | — | — |
+| Milestones | `/settings/milestones` | Clock | — | — |
+| Procedure Milestones | `/settings/procedure-milestones` | Clock | — | settings.manage |
+| Surgeon Preferences | `/settings/surgeon-preferences` | Zap | New | settings.manage |
+| Delay Types | `/settings/delay-types` | AlertTriangle | — | settings.manage |
+| Cancellation Reasons | `/settings/cancellation-reasons` | Ban | — | settings.manage |
+| Case Complexities | `/settings/complexities` | AlertTriangle | — | settings.manage |
+
+### Tab 5: Ops (5 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| OR Rooms | `/settings/rooms` | LayoutGrid | — | — |
+| Closures | `/settings/closures` | Clock | — | settings.manage |
+| Analytics | `/settings/analytics` | BarChart3 | New | settings.manage |
+| Case Flags | `/settings/flags` | Flag | New | settings.manage |
+| Integrations | `/settings/integrations` | Puzzle | Soon | settings.manage |
+
+### Tab 6: Reps (2 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Device Reps | `/settings/device-reps` | User | — | — |
+| Implant Companies | `/settings/implant-companies` | FlaskConical | New | settings.manage |
+
+### Tab 7: Financials (6 items)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Overview | `/settings/financials` | DollarSign | — | financials.view |
+| Facility Details | `/settings/facilities` | Building2 | — | financials.view |
+| Cost Categories | `/settings/financials/cost-categories` | Calculator | — | financials.view |
+| Payers | `/settings/financials/payers` | Building2 | — | financials.view |
+| Procedure Pricing | `/settings/financials/procedure-pricing` | Tag | — | financials.view |
+| Surgeon Variance | `/settings/financials/surgeon-variance` | User | — | financials.view |
+
+### Tab 8: Security (1 item)
+| Item | Path | Icon | Badge | Permission |
+|------|------|------|-------|------------|
+| Audit Log | `/settings/audit-log` | FileText | Admin | audit.view |
+
+---
+
+## Phases
+
+### Phase 1: Settings Nav Config + Tab Layout Shell
+
+**What it does:** Creates the nav config (single source of truth), the new SettingsTabLayout component (horizontal tabs + compact sub-nav), the settings landing page (card grid), and the `app/settings/layout.tsx` persistent shell. This is the foundation all other phases build on.
+
+**Files touched:**
+- `lib/settings-nav-config.ts` — **NEW** — 8 groups, 28 items, path-to-category lookup, icons, permissions, badges, descriptions
+- `components/settings/SettingsTabLayout.tsx` — **NEW** — horizontal tab bar (sticky) + compact sub-nav sidebar (220px, sticky) + content area + breadcrumb
+- `components/settings/SettingsLanding.tsx` — **NEW** — card grid overview using CardEnhanced (interactive variant), grouped by category
+- `app/settings/layout.tsx` — **NEW** — persistent shell that renders DashboardLayout + conditionally renders SettingsTabLayout (sub-pages) or SettingsLanding (landing page)
+- `app/settings/page.tsx` — **MODIFY** — render SettingsLanding instead of redirect to `/settings/procedures`
+
+**Commit message:** `feat(settings): phase 1 - settings nav config, tab layout shell, and landing page`
+
+**Test gate:**
+1. **Unit:** Nav config returns correct items for different permission sets (admin vs user). Tab layout renders correct active tab for given pathname. Landing page renders all 8 category cards.
+2. **Integration:** Tab bar highlights correct tab when navigating to a sub-page. Sub-nav shows correct items for active category. Breadcrumb renders Facility > Settings > Page Name. Permission-gated items are hidden for unauthorized users. Empty categories hide their tabs.
+3. **Workflow:** Dashboard → click Settings → see landing page (no tab bar) → click a category item → see tab bar + sub-nav + content area → click "Settings" in breadcrumb → back to landing page.
+
+**Complexity:** Large
+
+---
+
+### Phase 2: Migrate All Settings Pages + Cleanup
+
+**What it does:** Removes old SettingsLayout wrapper from every settings page. Since `app/settings/layout.tsx` now provides the persistent shell (DashboardLayout + SettingsTabLayout), individual pages only render their content. Also creates placeholder pages for "Coming Soon" items, and deletes the old SettingsLayout component.
+
+**Files touched:**
+- `app/settings/general/page.tsx` — **MODIFY** — remove DashboardLayout/Container/SettingsLayout wrappers
+- `app/settings/analytics/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/audit-log/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/cancellation-reasons/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/checkin/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/checklist-builder/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/closures/page.tsx` — **MODIFY** — remove wrappers (currently missing SettingsLayout)
+- `app/settings/complexities/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/delay-types/page.tsx` — **MODIFY** — remove wrappers (currently missing SettingsLayout)
+- `app/settings/device-reps/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/facilities/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/financials/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/financials/cost-categories/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/financials/payers/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/financials/procedure-pricing/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/financials/surgeon-variance/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/flags/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/implant-companies/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/milestones/page.tsx` — **MODIFY** — remove wrappers (milestones redesign is Phase 3/4)
+- `app/settings/permissions/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/procedures/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/users/page.tsx` — **MODIFY** — remove wrappers
+- `app/settings/rooms/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/procedure-milestones/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/surgeon-preferences/page.tsx` — **MODIFY** — remove wrappers (if exists)
+- `app/settings/notifications/page.tsx` — **NEW** — placeholder "Coming Soon" page
+- `app/settings/subscription/page.tsx` — **NEW** — placeholder "Coming Soon" page
+- `app/settings/integrations/page.tsx` — **NEW** — placeholder "Coming Soon" page
+- `components/settings/ComingSoonPlaceholder.tsx` — **NEW** — reusable placeholder component for "Soon" items
+- `components/settings/SettingsLayout.tsx` — **DELETE** — old sidebar layout, fully replaced
+
+**Commit message:** `feat(settings): phase 2 - migrate all settings pages to new layout, delete old SettingsLayout`
+
+**Test gate:**
+1. **Unit:** Each settings page renders without errors after wrapper removal. ComingSoonPlaceholder renders title, description, and icon.
+2. **Integration:** Every settings route renders inside the new tab layout with correct active tab and sub-nav. "Coming Soon" pages are accessible and show placeholder content. No broken imports referencing deleted SettingsLayout.
+3. **Workflow:** Navigate through every settings tab → click each sub-nav item → verify correct page renders → verify tab stays highlighted → verify breadcrumb updates. Test with both admin and non-admin users.
+
+**Complexity:** Large (many files, but mostly mechanical changes)
+
+---
+
+### Phase 3: Milestones Table — Core Structure
+
+**What it does:** Redesigns the milestones settings page from the current list/card layout into a phase-grouped data table using @tanstack/react-table. Creates the table structure with 5 columns (#, Milestone, Pair, Valid Range, Actions), phase group section headers with accent colors, the info bar, loading skeleton, and empty states.
+
+**Files touched:**
+- `components/settings/milestones/MilestonesTable.tsx` — **NEW** — main table component with @tanstack/react-table, phase grouping logic, column definitions
+- `components/settings/milestones/PhaseGroupHeader.tsx` — **NEW** — section header with colored accent bar, phase label, milestone count
+- `components/settings/milestones/MilestoneRow.tsx` — **NEW** — table row with hover action reveal (edit/archive icons), ◆ custom indicator, Start/End pills
+- `components/settings/milestones/PairIndicator.tsx` — **NEW** — pair column: directional arrow + linked name (clickable to scroll), or em-dash
+- `lib/milestone-phase-config.ts` — **NEW** — phase display names, DB value → phaseColors key mapping, phase ordering
+- `app/settings/milestones/page.tsx` — **MAJOR REFACTOR** — replace current milestone list with new MilestonesTable, add info bar, integrate with existing data fetching
+
+**Commit message:** `feat(settings): phase 3 - milestones phase-grouped table with core columns and styling`
+
+**Test gate:**
+1. **Unit:** MilestonesTable renders milestones grouped by phase. PhaseGroupHeader shows correct color per phase. MilestoneRow displays ◆ for custom, Start/End pills. PairIndicator shows arrow + name or em-dash. Empty phase groups show "No milestones in this phase" message.
+2. **Integration:** Table loads data from existing useSupabaseQuery hook. Phase groups match actual DB phase values. Hover on rows reveals action icons. SkeletonTable shows during loading. Info bar renders below header.
+3. **Workflow:** Navigate to Milestones settings → see phase-grouped table with all 5 phases → hover rows to see actions → verify pair links are clickable and scroll to target row.
+
+**Complexity:** Large
+
+---
+
+### Phase 4: Milestones Table — Interactions
+
+**What it does:** Adds all interactive features to the milestones table: drag-and-drop reordering within phase groups (using @dnd-kit), Add/Edit milestone modals, archive action with confirmation, collapsed archived milestones section with restore, and pair-column click-to-scroll behavior.
+
+**Files touched:**
+- `components/settings/milestones/MilestonesTable.tsx` — **MODIFY** — integrate DnD context per phase group, add archived section toggle
+- `components/settings/milestones/MilestoneRow.tsx` — **MODIFY** — add drag handle, DnD sortable behavior, archive click handler
+- `components/settings/milestones/MilestoneFormModal.tsx` — **NEW** — shared modal for Add and Edit flows (display name, phase group, validation range, pairing)
+- `components/settings/milestones/ArchivedMilestonesSection.tsx` — **NEW** — collapsed section below table with archived milestones and Restore action
+- `app/settings/milestones/page.tsx` — **MODIFY** — wire up modal state, add/edit/archive handlers, refetch logic
+
+**Commit message:** `feat(settings): phase 4 - milestones DnD reorder, add/edit modals, archive/restore`
+
+**Test gate:**
+1. **Unit:** Drag handle appears on each row. DnD reorders items within a phase group only (not across groups). MilestoneFormModal validates required fields. ArchivedMilestonesSection toggles open/closed.
+2. **Integration:** Reorder persists new display_order to DB. Add milestone creates record and appears in correct phase group. Edit milestone saves changes. Archive soft-deletes and moves to archived section. Restore re-activates and returns to table. Audit logging fires for all mutations.
+3. **Workflow:** Add custom milestone via modal → see it in table → drag to reorder within phase → edit via modal → archive → expand archived section → restore → verify it returns to correct phase group.
+
+**Complexity:** Large
+
+---
+
+## Phase Dependency Graph
+
 ```
-Phase 1 (Audit + Config) → Phase 2 (New Layout Shell) → Phase 3 (Landing Page)
-                                                       → Phase 4 (Migrate All Pages)
-                                                       → Phase 5 (Milestones Table)
-                                                       → Phase 6 (Polish + Cleanup)
+Phase 1 (Nav Config + Tab Layout)
+    └── Phase 2 (Migrate All Pages)
+        └── Phase 3 (Milestones Table Core)
+            └── Phase 4 (Milestones Interactions)
 ```
-Phase 1 must come first. Phase 2 must come before 3-6. Phases 3-5 can run in any order after Phase 2. Phase 6 is last.
 
----
+All phases are sequential. Each phase produces one commit.
 
-## Phase 1: Audit Current Settings Structure
-**Complexity:** Small | **Blockers:** None
+## Risk Notes
 
-### Goal
-Map every existing settings page, its route, its category, and how it uses `SettingsLayout`. Build the definitive settings configuration object that drives the new navigation. No code changes — this phase produces a config file and an audit report.
-
-### What To Do
-1. **Find all settings routes**:
-   ```bash
-   find app/settings -name "page.tsx" -type f
-   ```
-2. **For each page, document**:
-   - Route path
-   - Page title and description (from the current `<SettingsLayout>` props or page header)
-   - Which category it belongs to (General, Clinical, Organization, Case Management)
-   - Whether it has role restrictions
-   - Whether it's a placeholder/coming-soon page
-3. **Read `SettingsLayout.tsx`** — understand its props interface, how it renders the sidebar, what nav items it defines, and how categories are structured. This is the file we're replacing.
-4. **Read `navigation-config.tsx`** — check if settings nav items are defined here and whether the settings sidebar in `SettingsLayout` is independent or reads from this config.
-5. **Create `lib/settings-config.ts`** — the single source of truth for settings navigation:
-   ```typescript
-   export const SETTINGS_CATEGORIES = [
-     { id: "general", label: "General", icon: "Building2" },
-     { id: "clinical", label: "Clinical", icon: "Stethoscope" },
-     { id: "organization", label: "Organization", icon: "Users" },
-     { id: "cases", label: "Case Management", icon: "ClipboardList" },
-   ]
-   
-   export const SETTINGS_ITEMS = {
-     general: [
-       { id: "overview", label: "Overview", desc: "...", href: "/settings/overview", icon: "Building" },
-       // ...
-     ],
-     // ...
-   }
-   ```
-   Map every discovered page into this config. Include `badge`, `disabled`, and `roles` fields where relevant.
-6. **Document findings** — add a comment block at the top of the config noting: total pages found, any pages that don't fit cleanly into a category, any route naming inconsistencies to fix in Phase 4.
-
-### Files to Create
-- `lib/settings-config.ts`
-
-### Files to Read (audit only, no changes)
-- `components/layouts/SettingsLayout.tsx`
-- `components/layouts/navigation-config.tsx`
-- All `app/settings/*/page.tsx` files
-
-### Commit Message
-`chore(settings): audit settings structure and create navigation config`
-
-### Test Gate
-1. `lib/settings-config.ts` compiles with no errors
-2. Every existing settings route is represented in the config
-3. `npm run typecheck` passes
-4. No functional changes — all pages still render as before
-
----
-
-## Phase 2: Build New Settings Layout Shell
-**Complexity:** Medium | **Blockers:** Phase 1
-
-### Goal
-Create the `SettingsTabLayout` component that replaces `SettingsLayout`. This phase builds the shell (tab bar + sub-nav + content slot) without migrating any pages — only the milestones page uses it initially as a proof of concept.
-
-### What To Do
-1. **Create `SettingsTabLayout.tsx`**:
-   - Props: `children`, `activePageId: string` (matches an item id from settings-config)
-   - Reads `SETTINGS_CATEGORIES` and `SETTINGS_ITEMS` from `lib/settings-config.ts`
-   - Derives `activeCategory` from `activePageId` by finding which category contains that item
-   - Renders three layers:
-     - **Breadcrumb row**: Facility Name › Settings (clickable → `/settings`) › Active Page Name
-     - **Category tab bar**: horizontal tabs for each category, active tab has bottom border
-     - **Content area**: flex row with compact sub-nav (220px) + main content (children)
-   - Sub-nav shows only items in the active category
-   - Tab clicks use `router.push()` to navigate to the first item in that category
-   - Sub-nav item clicks use `router.push()` to navigate to that item's href
-   - Active states derived from `activePageId` prop — no internal state needed
-2. **Style the layout** per the design prototype:
-   - Tab bar: white background, bottom border, category icon + label, indigo underline on active
-   - Sub-nav: white background, right border, 220px width, rounded highlight on active item
-   - Content area: `#f8f9fb` background, padding `28px 36px`
-   - Breadcrumb: subtle gray text, 13px, clickable "Settings" link
-3. **Wire up one page as proof of concept** — update `app/settings/milestones/page.tsx` to use `<SettingsTabLayout activePageId="milestones">` instead of `<SettingsLayout>`. The milestones page content stays exactly the same for now (badge-heavy list) — we redesign it in Phase 5.
-4. **Keep `SettingsLayout.tsx` alive** — don't delete it yet. Other pages still use it. We migrate them all in Phase 4.
-
-### Files to Create
-- `components/layouts/SettingsTabLayout.tsx`
-
-### Files to Modify
-- `app/settings/milestones/page.tsx` — swap to new layout (content unchanged)
-
-### Commit Message
-`feat(settings): create SettingsTabLayout with horizontal tabs and compact sub-nav`
-
-### Test Gate
-1. Milestones page renders with new tab bar + sub-nav layout
-2. Category tabs display correctly, active category (Case Management) is highlighted
-3. Sub-nav shows only Case Management items (Procedure Types, Milestones, Procedure Milestones, Surgeon Preferences)
-4. Clicking other category tabs navigates to the first page in that category
-5. Breadcrumb shows Facility › Settings › Milestones
-6. All other settings pages still render with old `SettingsLayout` (no regression)
-7. `npm run typecheck && npm run lint` passes
-
----
-
-## Phase 3: Settings Landing Page
-**Complexity:** Small-Medium | **Blockers:** Phase 2
-
-### Goal
-Create the settings landing page that shows all categories and items in a card grid, replacing the need to navigate blind through a sidebar.
-
-### What To Do
-1. **Create `SettingsLanding.tsx`** component:
-   - Reads from `SETTINGS_CATEGORIES` and `SETTINGS_ITEMS`
-   - Renders a 2-column grid of category cards
-   - Each card has: category icon + label header, then a list of item rows
-   - Each item row: icon, label, description, optional badge, chevron →
-   - Clicking an item navigates to its `href`
-   - Disabled/coming-soon items show muted styling and no click handler
-   - Page header: "Settings" title + "Manage your facility configuration, staff, and case workflows" description
-2. **Update `app/settings/page.tsx`**:
-   - Replace current content with `<DashboardLayout><Container><SettingsLanding /></Container></DashboardLayout>`
-   - No tab bar on the landing page — the tab bar only appears on sub-pages
-   - The landing page IS the settings home, so breadcrumb would just be: Facility › Settings
-3. **Wire navigation** — clicking "Settings" in the main app sidebar should go to `/settings` (the landing page). Check if this is already the case or if it deep-links to a specific sub-page.
-
-### Files to Create
-- `components/settings/SettingsLanding.tsx`
-
-### Files to Modify
-- `app/settings/page.tsx` — render SettingsLanding
-
-### Commit Message
-`feat(settings): create settings landing page with category card grid`
-
-### Test Gate
-1. Landing page renders all categories and items
-2. Clicking an item navigates to the correct settings sub-page
-3. Coming-soon items show badges and are not clickable
-4. Breadcrumb clickable "Settings" on any sub-page returns to landing
-5. `npm run typecheck && npm run lint` passes
-
----
-
-## Phase 4: Migrate All Settings Pages to New Layout
-**Complexity:** Medium | **Blockers:** Phase 2
-
-### Goal
-Swap every remaining settings page from `<SettingsLayout>` to `<SettingsTabLayout>`. Then delete the old `SettingsLayout` component.
-
-### What To Do
-1. **List all settings pages** from the Phase 1 audit config
-2. **For each page**, perform the same swap done for milestones in Phase 2:
-   - Replace `<SettingsLayout>` (or `<SettingsLayout title="..." description="...">`) with `<SettingsTabLayout activePageId="[matching-id]">`
-   - If the page rendered its title/description inside SettingsLayout, move that into the page's own content area (SettingsTabLayout doesn't render titles — each page owns its header)
-   - Ensure the `activePageId` matches the item's `id` in `lib/settings-config.ts`
-3. **Handle edge cases**:
-   - Pages that pass custom props to `SettingsLayout` (like role restrictions) — move that logic into the page itself or into `settings-config.ts`
-   - Pages that use `SettingsLayout` children in non-standard ways — adapt case by case
-   - Placeholder/coming-soon pages — create simple stub pages if they don't exist
-4. **Delete `SettingsLayout.tsx`** — once all pages are migrated, remove the old component
-5. **Search codebase for orphan references**:
-   ```bash
-   grep -r "SettingsLayout" --include="*.tsx" --include="*.ts"
-   ```
-   Ensure zero references remain to the old component.
-
-### Files to Modify
-- Every `app/settings/*/page.tsx` file (except milestones, already done in Phase 2)
-
-### Files to Delete
-- `components/layouts/SettingsLayout.tsx`
-
-### Commit Message
-`refactor(settings): migrate all settings pages to SettingsTabLayout and remove old sidebar`
-
-### Test Gate
-1. Every settings page renders correctly with the new tab bar layout
-2. Active category tab and sub-nav item are correctly highlighted on each page
-3. Navigation between pages within a category works (sub-nav clicks)
-4. Navigation between categories works (tab clicks)
-5. `grep -r "SettingsLayout"` returns zero results (fully removed)
-6. `npm run typecheck && npm run lint` passes
-
----
-
-## Phase 5: Milestones Table Redesign
-**Complexity:** Large | **Blockers:** Phase 2
-
-### Goal
-Replace the milestone list (with its badge-heavy rows) with a clean phase-grouped data table with hover-revealed actions.
-
-### What To Do
-1. **Analyze the current milestones page** — read `app/settings/milestones/page.tsx` to understand:
-   - How milestones are fetched (query to `facility_milestones`, join for pair data)
-   - How case usage count is computed (count from `case_milestones` grouped by `facility_milestone_id`)
-   - How the current list items render (badges, link icon, edit icon)
-   - How add/edit/delete flows work (modal? inline? route change?)
-   - How phase is determined (is there a `phase` column on `facility_milestones`, or is it derived from display_order or milestone name?)
-2. **Create `PhaseGroupHeader.tsx`**:
-   - Props: `phase: "pre-op" | "surgical" | "closing"`
-   - Renders a table row spanning all columns with: colored accent bar (3px, phase color), phase label (uppercase, phase color), divider line
-   - Phase colors: Pre-Op = indigo, Surgical = cyan, Closing = amber
-3. **Create `PairIndicator.tsx`**:
-   - Props: `pair: string | null`, `position: "start" | "end" | null`
-   - If no pair: render em-dash in muted gray
-   - If pair: render directional arrow (→ or ←) + pair name
-   - Small icon indicating start (open circle) or end (filled circle)
-4. **Create `MilestoneRow.tsx`**:
-   - Props: milestone data, onEdit callback, onDelete callback
-   - Columns: order number, name (+ ◆ for custom + optional Start/End pill), pair indicator, cases count, valid range, actions
-   - Actions (edit/delete icons) visible only on hover — managed with local hover state
-   - Delete icon only renders for custom milestones
-   - Row has subtle hover background
-5. **Create `MilestonesTable.tsx`**:
-   - Props: milestones array, onEdit, onDelete
-   - Groups milestones by phase
-   - Renders table with header row + PhaseGroupHeaders + MilestoneRows
-   - Wrapped in white card with border-radius and subtle shadow
-6. **Create `SettingsStatsRow.tsx`** (reusable):
-   - Props: array of `{ label, value, color }` stats
-   - Renders horizontal row of compact stat chips
-   - Used on milestones page, potentially reusable on other settings pages
-7. **Update the milestones page**:
-   - Replace the current list rendering with: stats row → info bar → MilestonesTable
-   - Keep all existing data fetching and state management
-   - Keep all existing add/edit/delete handlers — just restyle the triggers
-   - Update the page header: title + description + "Add Custom Milestone" button (indigo)
-   - Replace the blue info callout with slim single-line info bar
-8. **Determine phase mapping** — if `facility_milestones` doesn't have a `phase` column:
-   - Option A: Derive from `display_order` ranges (e.g., 1-6 = pre-op, 7 = surgical, 8-13 = closing)
-   - Option B: Derive from milestone name patterns (check for keywords: anesthesia/prep/timeout → pre-op, incision → surgical, closing/dressing/patient out/room ready → closing)
-   - Option C: Add a `phase` column (out of scope per spec, but Claude Code should note if it would be cleaner)
-   - Choose the least fragile option and document the decision
-
-### Files to Create
-- `components/settings/PhaseGroupHeader.tsx`
-- `components/settings/PairIndicator.tsx`
-- `components/settings/MilestoneRow.tsx`
-- `components/settings/MilestonesTable.tsx`
-- `components/settings/SettingsStatsRow.tsx`
-
-### Files to Modify
-- `app/settings/milestones/page.tsx` — replace list with table, update header
-
-### Commit Message
-`feat(settings): redesign milestones page with phase-grouped table`
-
-### Test Gate
-1. Milestones grouped correctly under Pre-Op, Surgical, Closing headers
-2. Phase headers render with correct colors and labels
-3. Pair column shows linked milestone names with directional arrows
-4. Custom milestones show ◆ indicator (no "Global" badge anywhere)
-5. No phase badges on any row
-6. Stats row shows accurate Active, Custom, and Phases counts
-7. Edit icon appears on all rows on hover
-8. Delete icon appears only on custom milestone rows on hover
-9. Edit and delete actions trigger existing flows (modal, etc.) correctly
-10. Add Custom Milestone button works as before
-11. `npm run typecheck && npm run lint` passes
-
----
-
-## Phase 6: Polish, Animations, and Cleanup
-**Complexity:** Small-Medium | **Blockers:** Phases 3, 4, 5
-
-### Goal
-Final polish pass: consistent design tokens, transitions, animation, dead code removal, and integration testing across all settings pages.
-
-### What To Do
-1. **Transitions and animations**:
-   - Page content fade-in on navigation between settings pages (CSS `animation: fadeIn`)
-   - Tab bar: smooth underline transition when switching categories
-   - Sub-nav: subtle background transition on hover and active state
-   - Milestones table: row hover transition (background color)
-   - Stats chips: staggered slide-in on page load
-2. **Design token audit** across all new components:
-   - Verify DM Sans and JetBrains Mono are loaded (check `tailwind.config.ts` or global CSS)
-   - Verify color consistency: indigo-500, emerald-500, cyan-500, amber-500, slate grays
-   - Verify border-radius consistency (14px for cards, 10px for buttons, 8px for sub-elements)
-   - Verify spacing consistency (padding, gaps, margins match the prototype)
-3. **Landing page polish**:
-   - Staggered card animation on load
-   - Hover states on category cards (subtle lift/shadow)
-   - Badge styling consistency (emerald for "New", slate for "Soon")
-4. **Dead code cleanup**:
-   ```bash
-   grep -r "SettingsLayout" --include="*.tsx" --include="*.ts"
-   grep -r "settingsNav\|settingsSidebar\|SettingsSidebar" --include="*.tsx" --include="*.ts"
-   ```
-   Remove any orphaned imports, unused nav configurations, or dead CSS classes related to the old settings layout.
-5. **Integration testing** — manually verify every settings page:
-   - Navigate to Settings landing → verify all cards render
-   - Click into each settings page → verify tab bar highlights correct category
-   - Verify sub-nav highlights correct item
-   - Verify breadcrumb is correct on every page
-   - Verify back-navigation (browser back button, breadcrumb click)
-   - Verify milestones page: phase grouping, hover actions, stats row, add/edit/delete flows
-   - Verify role gating: if a non-admin user accesses settings, role-restricted items should be hidden
-6. **Handle edge cases**:
-   - Direct URL navigation (e.g., typing `/settings/milestones` directly) — should render correctly with proper tab/sub-nav state
-   - Deep linking from other parts of the app (e.g., clicking "Settings" on a milestone from the case detail page)
-   - Browser back/forward navigation through settings pages
-
-### Files to Modify
-- `components/layouts/SettingsTabLayout.tsx` — animation and transition refinements
-- `components/settings/SettingsLanding.tsx` — hover states and stagger animations
-- `components/settings/MilestonesTable.tsx` — row transition polish
-- `components/settings/SettingsStatsRow.tsx` — stagger animation
-- `tailwind.config.ts` — add custom fonts if not already present
-- Any files with dead `SettingsLayout` references
-
-### Commit Message
-`feat(settings): design polish, animations, and dead code cleanup`
-
-### Test Gate
-1. All animations are smooth and don't cause layout shifts
-2. Tab switching feels responsive (no flash of wrong content)
-3. Every settings page renders correctly with new layout
-4. No dead code references to old `SettingsLayout`
-5. Direct URL navigation works for every settings route
-6. Browser back/forward works correctly
-7. Role-gated items are properly hidden
-8. Milestones table interactions all function (edit, delete, add, hover)
-9. `npm run typecheck && npm run lint` passes
-10. No unused imports or dead CSS remain
-
----
+- **Phase 2 is high-touch** — modifying 20+ files. Each file is a mechanical change (remove wrapper imports), but any missed file will break. Run typecheck after every batch of changes.
+- **Phase 3 requires understanding @tanstack/react-table grouping** — reference CasesTable for patterns.
+- **Phase 4 DnD + react-table combo** — @dnd-kit needs to wrap individual phase group sections, not the entire table. Reference SortableList.tsx and RoomOrderModal.tsx for patterns.
+- **Financials sub-routes** (`/settings/financials/cost-categories`, etc.) need special handling in the config lookup map since they're nested deeper than other settings routes.
 
 ## Session Log
 
@@ -354,5 +238,3 @@ Final polish pass: consistent design tokens, transitions, animation, dead code r
 | 2 | pending | — | — |
 | 3 | pending | — | — |
 | 4 | pending | — | — |
-| 5 | pending | — | — |
-| 6 | pending | — | — |
