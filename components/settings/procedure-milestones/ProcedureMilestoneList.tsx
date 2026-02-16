@@ -62,6 +62,10 @@ interface ProcedureMilestoneListProps {
   onReorder: (procedureId: string, phaseGroup: string, orderedMilestoneIds: string[]) => void
   onEnableAll: (procedureId: string) => void
   onDisableAll: (procedureId: string) => void
+  /** Override the "create new milestone" link URL (default: /settings/milestones) */
+  milestonesSettingsUrl?: string
+  /** Override the "create new milestone" link label */
+  milestonesSettingsLabel?: string
 }
 
 // ── Component ────────────────────────────────────────
@@ -79,6 +83,8 @@ export function ProcedureMilestoneList({
   onReorder,
   onEnableAll,
   onDisableAll,
+  milestonesSettingsUrl = '/settings/milestones',
+  milestonesSettingsLabel = 'Need a new milestone? Create one in Milestones settings',
 }: ProcedureMilestoneListProps) {
   // Track expanded phase sections (default: all expanded)
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set())
@@ -281,10 +287,10 @@ export function ProcedureMilestoneList({
         </button>
         <div className="flex-1" />
         <a
-          href="/settings/milestones"
+          href={milestonesSettingsUrl}
           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
         >
-          Need a new milestone? Create one in Milestones settings
+          {milestonesSettingsLabel}
           <ExternalLink className="w-3 h-3" />
         </a>
       </div>
