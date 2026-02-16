@@ -38,9 +38,9 @@ import {
   getStatusConfig,
 } from '@/lib/formatters'
 import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
-import { type SurgeonMilestoneStats, type CasePaceData } from '@/types/pace'
-import PaceProgressBar from '@/components/dashboard/PaceProgressBar'
-import { computeMilestonePace, MIN_SAMPLE_SIZE } from '@/lib/pace-utils'
+import { type SurgeonMilestoneStats } from '@/types/pace'
+import { TimerChip, ProgressChip } from '@/components/cases/TimerChip'
+import { computeMilestonePace } from '@/lib/pace-utils'
 import { checkMilestoneOrder } from '@/lib/milestone-order'
 import { useFlipRoom } from '@/lib/hooks/useFlipRoom'
 import FlipRoomCard from '@/components/cases/FlipRoomCard'
@@ -913,7 +913,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     totalTimeMs = endTime - new Date(patientInTime).getTime()
   }
   const totalTime = formatElapsedMs(totalTimeMs)
-  const totalMinutes = Math.round(totalTimeMs / 60000)
 
   let surgicalTimeMs = 0
   if (incisionTime) {
@@ -921,11 +920,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     surgicalTimeMs = endTime - new Date(incisionTime).getTime()
   }
   const surgicalTime = formatElapsedMs(surgicalTimeMs)
-  const surgicalMinutes = Math.round(surgicalTimeMs / 60000)
 
-  // Median-based comparisons for hero timer cards
+  // Median-based comparisons for timer chips
   const medianTotalMinutes = procedureStats?.medianDuration ?? null
-  const totalVariance = medianTotalMinutes !== null ? totalMinutes - medianTotalMinutes : null
 
   // Surgical time median: closing milestone median - incision milestone median
   const incisionStats = milestoneStats.find(ms => ms.milestone_name === 'incision')
@@ -933,53 +930,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const medianSurgicalMinutes = (incisionStats && closingStats)
     ? Math.round(closingStats.median_minutes_from_start - incisionStats.median_minutes_from_start)
     : null
-  const surgicalVariance = medianSurgicalMinutes !== null ? surgicalMinutes - medianSurgicalMinutes : null
-
-  // Build CasePaceData for PaceProgressBar (overall case pace indicator)
-  const lastRecordedMilestone = [...milestoneTypes]
-    .filter(mt => getMilestoneByTypeId(mt.id)?.recorded_at)
-    .sort((a, b) => b.display_order - a.display_order)[0] || null
-
-  const paceData: CasePaceData | null = (() => {
-    if (!patientInTime || !procedureStats || !lastRecordedMilestone) return null
-
-    const patientInDate = new Date(patientInTime)
-
-    if (lastRecordedMilestone.name === 'patient_in') {
-      return {
-        scheduledStart: patientInDate,
-        expectedMinutesToMilestone: 0,
-        milestoneRangeLow: 0,
-        milestoneRangeHigh: 0,
-        expectedTotalMinutes: procedureStats.medianDuration,
-        totalRangeLow: procedureStats.p25Duration,
-        totalRangeHigh: procedureStats.p75Duration,
-        sampleSize: procedureStats.sampleSize,
-        currentMilestoneName: 'patient_in',
-      }
-    }
-
-    // Find milestone stats matching the last recorded facility milestone
-    const msStats = lastRecordedMilestone.source_milestone_type_id
-      ? milestoneStats.find(ms => ms.milestone_type_id === lastRecordedMilestone.source_milestone_type_id)
-      : null
-    if (!msStats) return null
-
-    return {
-      scheduledStart: patientInDate,
-      expectedMinutesToMilestone: msStats.median_minutes_from_start,
-      milestoneRangeLow: msStats.p25_minutes_from_start,
-      milestoneRangeHigh: msStats.p75_minutes_from_start,
-      expectedTotalMinutes: procedureStats.medianDuration,
-      totalRangeLow: procedureStats.p25Duration,
-      totalRangeHigh: procedureStats.p75Duration,
-      sampleSize: Math.min(procedureStats.sampleSize, msStats.sample_size),
-      currentMilestoneName: lastRecordedMilestone.name,
-    }
-  })()
-
-  // Insufficient data flag for pace display
-  const showInsufficientPaceData = procedureStats !== null && procedureStats.sampleSize < MIN_SAMPLE_SIZE
 
   const completedMilestones = caseMilestones.filter(cm => cm.recorded_at !== null).length
   const totalMilestoneCount = milestoneTypes.length
@@ -1235,91 +1185,28 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             {/* TIMERS */}
-            <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-            {/* Total Time */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-green-500/10 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-green-500/5 rounded-full blur-2xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-2">
-                  {patientInTime && !patientOutTime ? (
-                    <div className="w-2.5 h-2.5 bg-green-400 rounded-full animate-pulse" />
-                  ) : (
-                    <div className="w-2.5 h-2.5 bg-slate-600 rounded-full" />
-                  )}
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Time</span>
-                </div>
-                <p className="text-5xl lg:text-6xl font-bold text-white font-mono tabular-nums tracking-tight">
-                  {totalTime}
-                </p>
-                <div className="flex items-center gap-2 mt-3">
-                  {medianTotalMinutes !== null && (
-                    <>
-                      <span className="text-sm text-slate-500">Avg: {formatMinutesHMS(medianTotalMinutes)}</span>
-                      {totalVariance !== null && patientInTime && (
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                          totalVariance > 10 ? 'bg-red-500/20 text-red-400' :
-                          totalVariance < -10 ? 'bg-green-500/20 text-green-400' :
-                          'bg-slate-700 text-slate-400'
-                        }`}>
-                          {totalVariance > 0 ? '+' : ''}{totalVariance}m
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+            <div className="flex gap-3 flex-wrap">
+              <TimerChip
+                label="Total Time"
+                formattedTime={totalTime}
+                medianFormatted={medianTotalMinutes !== null ? formatMinutesHMS(medianTotalMinutes) : null}
+                isRunning={!!patientInTime && !patientOutTime}
+                color="indigo"
+                ratio={medianTotalMinutes !== null && medianTotalMinutes > 0 ? totalTimeMs / (medianTotalMinutes * 60000) : null}
+              />
+              <TimerChip
+                label="Surgical Time"
+                formattedTime={surgicalTime}
+                medianFormatted={medianSurgicalMinutes !== null ? formatMinutesHMS(medianSurgicalMinutes) : null}
+                isRunning={!!incisionTime && !closingTime}
+                color="cyan"
+                ratio={medianSurgicalMinutes !== null && medianSurgicalMinutes > 0 ? surgicalTimeMs / (medianSurgicalMinutes * 60000) : null}
+              />
+              <ProgressChip
+                completedCount={completedMilestones}
+                totalCount={totalMilestoneCount}
+              />
             </div>
-
-            {/* Surgical Time */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 lg:p-8 relative overflow-hidden min-h-[180px] flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl" />
-              <div className="relative">
-                <div className="flex items-center gap-2 mb-2">
-                  {incisionTime && !closingTime ? (
-                    <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
-                  ) : (
-                    <div className="w-2.5 h-2.5 bg-slate-600 rounded-full" />
-                  )}
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Surgical Time</span>
-                </div>
-                <p className="text-5xl lg:text-6xl font-bold text-white font-mono tabular-nums tracking-tight">
-                  {surgicalTime}
-                </p>
-                <div className="flex items-center gap-2 mt-3">
-                  {medianSurgicalMinutes !== null && (
-                    <>
-                      <span className="text-sm text-slate-500">Avg: {formatMinutesHMS(medianSurgicalMinutes)}</span>
-                      {surgicalVariance !== null && incisionTime && (
-                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
-                          surgicalVariance > 10 ? 'bg-red-500/20 text-red-400' :
-                          surgicalVariance < -10 ? 'bg-green-500/20 text-green-400' :
-                          'bg-slate-700 text-slate-400'
-                        }`}>
-                          {surgicalVariance > 0 ? '+' : ''}{surgicalVariance}m
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Pace Progress Bar — overall case pace indicator */}
-          {paceData && (
-            <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-              <PaceProgressBar paceData={paceData} />
-            </div>
-          )}
-          {!paceData && showInsufficientPaceData && (
-            <div className="bg-slate-50 rounded-xl px-4 py-2 text-center">
-              <p className="text-xs text-slate-400">Need {MIN_SAMPLE_SIZE}+ cases for pace tracking</p>
-            </div>
-          )}
-          </div>
 
 
             {/* MILESTONES */}
