@@ -28,7 +28,7 @@ export default function TimeAllocationBar({
       </span>
 
       {/* Stacked bar */}
-      <div className="flex h-6 w-full rounded-md overflow-hidden" role="img" aria-label="Time allocation breakdown">
+      <div className="flex h-7 w-full rounded-md overflow-hidden" role="img" aria-label="Time allocation breakdown">
         {allocations.map((alloc) => (
           <div
             key={alloc.phase_group}

@@ -145,27 +145,26 @@ function HeroRow({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center gap-6">
         {/* Two margin gauges */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <MarginGauge
             percentage={hero.margin_percentage}
-            size="md"
+            size="lg"
             rating={hero.surgeon_margin_rating}
-            label="vs Surgeon"
           />
           <MarginGauge
             percentage={hero.margin_percentage}
-            size="md"
+            size="lg"
             rating={hero.facility_margin_rating}
-            label="vs Facility"
           />
         </div>
 
         {/* Profit + badge */}
         <div className="flex-1 min-w-[140px]">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">Profit Forecast</p>
           <div className="flex items-center gap-2">
-            <span className={`text-lg font-bold ${
+            <span className={`text-[22px] font-bold ${
               (hero.profit ?? 0) >= 0 ? 'text-slate-900' : 'text-red-700'
             } ${isProjected ? 'italic' : ''}`}>
               {formatCurrency(hero.profit)}
@@ -182,17 +181,17 @@ function HeroRow({
           )}
         </div>
 
-        {/* Revenue & Costs */}
-        <div className="flex-shrink-0 text-right space-y-1">
-          <div>
+        {/* Revenue & Costs — side by side */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Revenue</p>
-            <p className={`text-sm font-semibold text-slate-800 ${isProjected ? 'italic' : ''}`}>
+            <p className={`text-lg font-semibold text-slate-800 ${isProjected ? 'italic' : ''}`}>
               {formatCurrency(hero.revenue)}
             </p>
           </div>
-          <div>
+          <div className="text-center">
             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Costs</p>
-            <p className={`text-sm font-semibold text-red-600 ${isProjected ? 'italic' : ''}`}>
+            <p className={`text-lg font-semibold text-red-600 ${isProjected ? 'italic' : ''}`}>
               {hero.total_costs != null ? formatCurrency(hero.total_costs) : '\u2014'}
             </p>
           </div>
@@ -216,20 +215,17 @@ function ProjectedVsActualTable({
 
   return (
     <div className="mt-4">
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-        Projected vs Actual
-      </h3>
       <div className="rounded-lg border border-slate-200 overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-[1fr_80px_80px_72px] gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200">
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide" />
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide text-right">
+        <div className="grid grid-cols-[1fr_80px_80px_80px] gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Projected vs Actual</span>
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
             Projected
           </span>
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide text-right">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
             Actual
           </span>
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide text-right">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
             Delta
           </span>
         </div>
@@ -242,7 +238,7 @@ function ProjectedVsActualTable({
             return (
               <div
                 key={item.label}
-                className="grid grid-cols-[1fr_80px_80px_72px] gap-1 px-3 py-2 items-center"
+                className="grid grid-cols-[1fr_80px_80px_80px] gap-1 px-3 py-2 items-center"
               >
                 <span className="text-sm text-slate-700">{item.label}</span>
                 <span className="text-sm text-slate-400 text-right">
@@ -253,7 +249,7 @@ function ProjectedVsActualTable({
                     <span className="text-slate-300">{'\u2014'}</span>
                   )}
                 </span>
-                <div className="text-right">
+                <div className="flex justify-end">
                   {showDelta ? (
                     <DeltaBadge
                       delta={item.delta!}
@@ -271,7 +267,7 @@ function ProjectedVsActualTable({
 
         {/* Profit summary row */}
         <div className="border-t-2 border-teal-200 bg-teal-50/30">
-          <div className="grid grid-cols-[1fr_80px_80px_72px] gap-1 px-3 py-2.5 items-center">
+          <div className="grid grid-cols-[1fr_80px_80px_80px] gap-1 px-3 py-2.5 items-center">
             <span className="text-sm font-bold text-slate-900">Profit</span>
             <span className="text-sm text-slate-400 text-right">
               {formatCurrency(comparison.projectedProfit)}
@@ -281,7 +277,7 @@ function ProjectedVsActualTable({
             }`}>
               {formatCurrency(comparison.actualProfit)}
             </span>
-            <div className="text-right">
+            <div className="flex justify-end">
               {comparison.profitDelta != null ? (
                 <DeltaBadge
                   delta={comparison.profitDelta}
@@ -292,7 +288,7 @@ function ProjectedVsActualTable({
               )}
             </div>
           </div>
-          <div className="grid grid-cols-[1fr_80px_80px_72px] gap-1 px-3 pb-2.5 items-center">
+          <div className="grid grid-cols-[1fr_80px_80px_80px] gap-1 px-3 pb-2.5 items-center">
             <span className="text-xs font-medium text-slate-500">Margin</span>
             <span className="text-xs text-slate-400 text-right">
               {formatMargin(comparison.projectedMargin)}
@@ -303,17 +299,17 @@ function ProjectedVsActualTable({
             <span />
           </div>
         </div>
-      </div>
 
-      {/* Source footnote */}
-      {data.projection?.durationSource && (
-        <div className="flex items-center gap-1.5 mt-2">
-          <Info className="w-3 h-3 text-slate-400 flex-shrink-0" />
-          <span className="text-[11px] text-slate-400">
-            Projected: {data.projection.durationSource}
-          </span>
-        </div>
-      )}
+        {/* Source footnote — inside table as footer */}
+        {data.projection?.durationSource && (
+          <div className="flex items-center gap-1.5 px-3 py-2 border-t border-slate-100 bg-slate-50/50">
+            <Info className="w-3 h-3 text-slate-400 flex-shrink-0" />
+            <span className="text-[11px] text-slate-400">
+              Projected: {data.projection.durationSource}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -333,19 +329,16 @@ function CostBreakdownTable({ items }: { items: CostBreakdownItem[] }) {
 
   return (
     <div className="mt-4">
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-        Cost Breakdown
-      </h3>
       <div className="rounded-lg border border-slate-200 overflow-hidden">
         {/* Header */}
         <div className="grid grid-cols-[1fr_80px_56px] gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200">
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">
-            Category
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+            Cost Breakdown
           </span>
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide text-right">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
             Amount
           </span>
-          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide text-right">
+          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
             % Total
           </span>
         </div>
@@ -366,7 +359,7 @@ function CostBreakdownTable({ items }: { items: CostBreakdownItem[] }) {
                 {/* Inline % bar (background) */}
                 {barWidth > 0 && (
                   <div
-                    className="absolute inset-y-0 left-0 bg-slate-50"
+                    className="absolute inset-y-0 left-0 bg-teal-50/40"
                     style={{ width: `${barWidth}%` }}
                   />
                 )}
@@ -379,7 +372,7 @@ function CostBreakdownTable({ items }: { items: CostBreakdownItem[] }) {
                 <span className={`relative text-sm font-medium text-right ${
                   isCredit ? 'text-green-600' : 'text-slate-800'
                 }`}>
-                  {isCredit ? '+' : ''}{formatCurrency(Math.abs(item.amount))}
+                  {isCredit ? '-' : ''}{formatCurrency(Math.abs(item.amount))}
                 </span>
                 <span className="relative text-xs text-slate-400 text-right">
                   {item.percentage_of_total > 0 ? `${item.percentage_of_total}%` : '\u2014'}

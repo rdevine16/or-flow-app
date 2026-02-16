@@ -77,18 +77,18 @@ export function MilestoneTable({
   return (
     <div className="border border-slate-200 rounded-lg overflow-hidden">
       {/* Header row */}
-      <div className="grid grid-cols-[28px_1fr_72px_60px_68px_80px] bg-slate-50 border-b border-slate-200 px-3 py-2">
-        <span className="sr-only">Status</span>
+      <div className="grid grid-cols-[28px_1fr_72px_68px_72px_80px] bg-slate-50 border-b border-slate-200 px-3 py-2">
+        <span />
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
           Milestone
         </span>
-        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
           Time
         </span>
-        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
           Interval
         </span>
-        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
           {medianLabel}
         </span>
         <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
@@ -107,7 +107,7 @@ export function MilestoneTable({
         return (
           <div
             key={iv.facility_milestone_id}
-            className={`grid grid-cols-[28px_1fr_72px_60px_68px_80px] items-center px-3 py-2 border-b border-slate-100 last:border-b-0 ${
+            className={`grid grid-cols-[28px_1fr_72px_68px_72px_80px] items-center px-3 py-2 border-b border-slate-100 last:border-b-0 ${
               isMissing ? 'bg-amber-50/60' : ''
             }`}
           >
@@ -131,16 +131,10 @@ export function MilestoneTable({
               }`}>
                 {iv.milestone_name}
               </span>
-              {/* Cohort context for recorded milestones with median data */}
-              {!isFirst && isRecorded && activeMedian != null && caseCount > 0 && (
-                <span className="text-[10px] text-slate-400 block">
-                  Based on {caseCount} {comparisonSource === 'surgeon' ? 'surgeon' : 'facility'} cases
-                </span>
-              )}
             </div>
 
             {/* Time */}
-            <span className={`text-xs text-right ${
+            <span className={`text-xs text-center ${
               isRecorded ? 'text-slate-700' : isMissing ? 'text-amber-600' : 'text-slate-400'
             }`}>
               {isMissing ? (
@@ -153,14 +147,14 @@ export function MilestoneTable({
             </span>
 
             {/* Interval */}
-            <span className="text-xs text-right text-slate-700">
+            <span className="text-xs text-center text-slate-700">
               {!isFirst && iv.interval_minutes != null
                 ? `${Math.round(iv.interval_minutes)}m`
                 : '—'}
             </span>
 
             {/* Median */}
-            <span className="text-xs text-right text-slate-500">
+            <span className="text-xs text-center text-slate-500">
               {!isFirst && activeMedian != null
                 ? `${Math.round(activeMedian)}m`
                 : '—'}
@@ -185,16 +179,16 @@ export function MilestoneTable({
 
       {/* Summary footer row */}
       {totalCaseMinutes != null && (
-        <div className="grid grid-cols-[28px_1fr_72px_60px_68px_80px] items-center px-3 py-2.5 bg-slate-50 border-t-2 border-slate-200">
+        <div className="grid grid-cols-[28px_1fr_72px_68px_72px_80px] items-center px-3 py-2.5 bg-slate-50 border-t-2 border-slate-200">
           <span />
           <span className="text-xs font-semibold text-slate-900">
             Total Case Time
           </span>
           <span />
-          <span className="text-xs font-semibold text-right text-slate-900">
+          <span className="text-xs font-semibold text-center text-slate-900">
             {formatMinutes(totalCaseMinutes)}
           </span>
-          <span className="text-xs font-semibold text-right text-slate-600">
+          <span className="text-xs font-semibold text-center text-slate-600">
             {footerTotals.totalMedian != null
               ? formatMinutes(footerTotals.totalMedian)
               : '—'}

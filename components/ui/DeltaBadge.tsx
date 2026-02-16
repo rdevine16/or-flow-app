@@ -15,11 +15,11 @@ interface DeltaBadgeProps {
 }
 
 const SEVERITY_STYLES: Record<string, string> = {
-  faster: 'bg-green-50 text-green-700 ring-green-600/20',
-  'on-pace': 'bg-amber-50 text-amber-700 ring-amber-500/20',
-  slower: 'bg-red-50 text-red-600 ring-red-600/20',
-  critical: 'bg-red-100 text-red-800 ring-red-700/20',
-  neutral: 'bg-slate-50 text-slate-600 ring-slate-500/20',
+  faster: 'bg-green-50 text-green-700',
+  'on-pace': 'bg-amber-50 text-amber-700',
+  slower: 'bg-red-50 text-red-600',
+  critical: 'bg-red-100 text-red-800',
+  neutral: 'bg-slate-50 text-slate-600',
 }
 
 function formatDeltaValue(delta: number, format: 'percentage' | 'time' | 'currency'): string {
@@ -55,7 +55,7 @@ export function DeltaBadge({
   const style = SEVERITY_STYLES[resolvedSeverity] ?? SEVERITY_STYLES.neutral
 
   const sign = delta > 0 ? '+' : delta < 0 ? '-' : ''
-  const arrow = delta > 0 ? '\u2191' : delta < 0 ? '\u2193' : '\u2192'
+  const arrow = delta > 0 ? '\u25B2' : delta < 0 ? '\u25BC' : null
   const formatted = formatDeltaValue(delta, format)
 
   // Build descriptive screen reader text
@@ -71,10 +71,11 @@ export function DeltaBadge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md ring-1 ring-inset ${style}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded ${style}`}
       aria-label={srText}
     >
-      <span aria-hidden="true">{arrow}</span> {sign}{formatted}
+      {arrow ? <span aria-hidden="true">{arrow}</span> : null}
+      {delta === 0 ? 'on pace' : `${sign}${formatted}`}
     </span>
   )
 }

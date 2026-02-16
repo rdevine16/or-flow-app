@@ -54,15 +54,20 @@ export default function MilestoneTimeline({
   }, [intervals])
 
   // Pre-compute cumulative positions for node placement
+  // Last node is clamped to 100% so it sits at the right edge of the bar
   const nodePositions = useMemo(() => {
-    return sections.reduce<number[]>((positions, section, idx) => {
+    const positions = sections.reduce<number[]>((acc, section, idx) => {
       if (idx === 0) {
-        positions.push(0)
+        acc.push(0)
       } else {
-        positions.push(positions[idx - 1] + sections[idx - 1].width_percent)
+        acc.push(acc[idx - 1] + sections[idx - 1].width_percent)
       }
-      return positions
+      return acc
     }, [])
+    if (positions.length > 1) {
+      positions[positions.length - 1] = 100
+    }
+    return positions
   }, [sections])
 
   // Calculate median node positions (cumulative median intervals as % of total median)
@@ -86,7 +91,7 @@ export default function MilestoneTimeline({
       {/* Timeline bar */}
       <div className="relative pt-6 pb-4">
         {/* Segments container */}
-        <div className="flex items-center w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div className="flex items-center w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
           {sections.map((section, idx) => {
             if (idx === 0) return null // First node has no preceding segment
             const prevState = nodeStates[idx - 1]
@@ -128,6 +133,17 @@ export default function MilestoneTimeline({
               return `${section.milestone_name} milestone, ${timeStr}${intervalStr}`
             })()
 
+            const isFirst = idx === 0
+            const isLast = idx === sections.length - 1
+            const showLabel = isFirst || isLast || hoveredIndex === idx
+
+            // Label alignment: left-align first, right-align last, center middle
+            const labelAlign = isFirst
+              ? 'left-0'
+              : isLast
+              ? 'right-0'
+              : 'left-1/2 -translate-x-1/2'
+
             return (
               <div
                 key={section.facility_milestone_id}
@@ -135,33 +151,42 @@ export default function MilestoneTimeline({
                 style={{ left: `${position}%` }}
                 role="img"
                 aria-label={nodeAriaLabel}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
               >
+                {/* Invisible hit area for smoother hover */}
+                <div className="absolute -inset-2" aria-hidden="true" />
+
                 {/* Node */}
                 {state === 'missing' ? (
-                  <div className="w-4 h-4 -mt-1 flex items-center justify-center" aria-hidden="true">
+                  <div className={`w-4 h-4 -mt-1 flex items-center justify-center transition-transform duration-150 ease-out ${hoveredIndex === idx ? 'scale-[1.4]' : ''}`} aria-hidden="true">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                   </div>
                 ) : (
                   <div
-                    className={`w-3 h-3 -mt-0.5 rounded-full border-2 ${NODE_STYLES[state]}`}
+                    className={`w-3 h-3 -mt-0.5 rounded-full border-2 transition-transform duration-150 ease-out ${NODE_STYLES[state]} ${hoveredIndex === idx ? 'scale-[1.4]' : ''}`}
                     aria-hidden="true"
                   />
                 )}
 
-                {/* Name label above */}
-                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                  <span className={`text-[10px] font-medium ${
-                    state === 'recorded' ? 'text-slate-700' :
-                    state === 'missing' ? 'text-amber-600' :
-                    'text-slate-400'
-                  }`}>
-                    {section.milestone_name}
-                  </span>
-                </div>
+                {/* Name label above — only first, last, and hovered */}
+                {showLabel && (
+                  <div className={`absolute bottom-full mb-1 whitespace-nowrap ${labelAlign}`}>
+                    <span className={`text-[10px] font-medium ${
+                      state === 'recorded' ? 'text-slate-700' :
+                      state === 'missing' ? 'text-amber-600' :
+                      'text-slate-400'
+                    }`}>
+                      {section.milestone_name}
+                    </span>
+                  </div>
+                )}
 
                 {/* Tooltip on hover */}
                 {hoveredIndex === idx && idx > 0 && (
-                  <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-md shadow-lg">
+                  <div className={`absolute top-full mt-2 z-10 whitespace-nowrap bg-slate-800 text-white text-[11px] px-2.5 py-1.5 rounded-md shadow-lg ${
+                    isLast ? 'right-0' : 'left-1/2 -translate-x-1/2'
+                  }`}>
                     <div className="font-medium">
                       {intervals[idx - 1]?.milestone_name} → {section.milestone_name}
                     </div>

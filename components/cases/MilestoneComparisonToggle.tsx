@@ -27,7 +27,7 @@ export default function MilestoneComparisonToggle({
   }
 
   return (
-    <div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="radiogroup" aria-label="Comparison benchmark">
+    <div className="inline-flex rounded-md border border-slate-200 bg-slate-100 p-0.5 gap-0.5" role="radiogroup" aria-label="Comparison benchmark">
       {OPTIONS.map((opt) => {
         const isActive = comparisonSource === opt.key
         const count = counts[opt.key]
