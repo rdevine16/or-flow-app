@@ -388,3 +388,37 @@ WHERE pmc.procedure_type_id = p_procedure_type_id
 | 8 | Admin Procedure Milestones | Medium | 1 rewrite, 2 extended components |
 
 **Dependencies:** Phase 1 → all others. Phase 2 → Phase 3 (shared components). Phase 4 → Phase 8 (shared components). Phase 5 → Phase 6 (surgeon config must exist before case creation uses it). Phase 2 + 4 → Phase 7 (phase_definitions must exist for analytics).
+
+---
+
+## Session Log
+
+### Phase 1 — COMPLETE
+- **Commit:** `fdddc43` feat(milestones): phase 1 - database foundation for milestone hierarchy
+- **Fix commit:** `62eae83` fix(milestones): add missing sync_soft_delete trigger to phase_definitions
+- **Tables created:** phase_definitions, phase_definition_templates, surgeon_milestone_config
+- **Seed:** 4 default phase templates, backfilled all 6 facilities with 4 phases each
+- **Trigger:** on_facility_created_seed_phases (AFTER INSERT on facilities)
+- **Note:** procedure_milestone_config.display_order already existed in baseline — no migration needed
+
+### Phase 2 — COMPLETE
+- **Commit:** `ead5507` feat(milestones): phase 2 - facility phase boundary UI with CRUD + reorder
+- **New route:** /settings/phases with PhaseCard, PhaseFormModal, ArchivedPhasesSection
+- **Nav:** Added "Phases" to settings-nav-config.ts under Case Management
+
+### Phase 3 — COMPLETE
+- **Commit:** `8ad01ea` feat(milestones): phase 3 - global admin phase definition templates
+- **New components:** PhaseTemplateSection, PhaseTemplateCard, PhaseTemplateFormModal
+- **Modified:** /admin/settings/milestones page with Phase Definition Templates section
+
+### Phase 4 — COMPLETE
+- **Commit:** `6da68c6` feat(milestones): phase 4 - procedure milestones redesign with phase grouping + ordering
+- **Rewritten:** /settings/procedure-milestones — flat checkbox grid → phase-grouped drag-to-reorder lists
+- **New components:** PhaseSection, ProcedureMilestoneList, ProcedureMilestoneRow
+- **Tests:** 25 new tests (PhaseSection 7, ProcedureMilestoneRow 11, ProcedureMilestoneList 7)
+- **Boundary milestones:** Locked on (checked + greyed out + lock icon), derived from phase_definitions
+
+### Phase 5 — PENDING (next)
+### Phase 6 — PENDING
+### Phase 7 — PENDING
+### Phase 8 — PENDING
