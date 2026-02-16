@@ -76,7 +76,7 @@ export default function AddDelayForm({
   return (
     <div
       ref={ref}
-      className="absolute left-0 right-0 top-full mt-1 z-30 bg-white rounded-xl border border-slate-200 shadow-lg p-3 space-y-2.5"
+      className="absolute left-0 top-full mt-1.5 z-50 bg-white rounded-[14px] border border-slate-200/50 shadow-[0_12px_40px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.04)] p-3.5 space-y-3 w-[280px]"
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -116,7 +116,7 @@ export default function AddDelayForm({
           onChange={e => setDuration(e.target.value)}
           placeholder="Min"
           min={0}
-          className="w-20 text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+          className="w-[60px] text-sm font-mono border border-slate-200/50 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
         />
         <input
           type="text"

@@ -23,7 +23,7 @@ import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWra
 import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { Check, ChevronLeft, ClipboardList, LogOut } from 'lucide-react'
+import { Check, ChevronLeft, ClipboardList, Flag, LogOut } from 'lucide-react'
 import { PageLoader } from '@/components/ui/Loading'
 import { StatusBadgeDot } from '@/components/ui/StatusBadge'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -1162,6 +1162,17 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   {procedure?.name || 'No Procedure'}
                 </h1>
                 <StatusBadgeDot status={status?.name || 'scheduled'} />
+                {caseFlags.filter(f => f.flag_type === 'threshold').length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-red-500 bg-red-500/[0.08] px-2.5 py-0.5 rounded-md">
+                    <Flag className="w-3 h-3" />
+                    {caseFlags.filter(f => f.flag_type === 'threshold').length} flag{caseFlags.filter(f => f.flag_type === 'threshold').length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {caseFlags.filter(f => f.flag_type === 'delay').length > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-500 bg-amber-500/[0.08] px-2.5 py-0.5 rounded-md">
+                    ⏱ {caseFlags.filter(f => f.flag_type === 'delay').length} delay{caseFlags.filter(f => f.flag_type === 'delay').length !== 1 ? 's' : ''}
+                  </span>
+                )}
                 <div className="ml-auto">
                   <PiPButton onClick={() => setIsPiPOpen(true)} disabled={isPiPOpen} />
                 </div>
@@ -1203,150 +1214,116 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
 
-            {/* TAB SWITCHER */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              {/* Tab Bar */}
-              <div className="flex border-b border-slate-100" role="tablist">
-                <button
-                  role="tab"
-                  aria-selected={activeTab === 'milestones'}
-                  onClick={() => setActiveTab('milestones')}
-                  className={`flex items-center gap-2.5 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
-                    activeTab === 'milestones'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Milestones
-                  {/* Progress dots */}
-                  <div className="flex items-center gap-0.5">
-                    {milestoneTypes.map(mt => {
-                      const recorded = caseMilestones.find(cm => cm.facility_milestone_id === mt.id && cm.recorded_at)
-                      return (
-                        <div
-                          key={mt.id}
-                          className={`w-1.5 h-1.5 rounded-full ${recorded ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                        />
-                      )
-                    })}
-                  </div>
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={activeTab === 'implants'}
-                  onClick={() => setActiveTab('implants')}
-                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
-                    activeTab === 'implants'
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Implants
-                  {implantFilledCount > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-cyan-100 text-cyan-700">
-                      {implantFilledCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {/* Tab Content */}
-              {activeTab === 'milestones' && (
-                <div role="tabpanel">
-                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                    <p className="text-xs text-slate-500">
-                      {completedMilestones} of {totalMilestoneCount} recorded
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
-                          style={{ width: `${totalMilestoneCount > 0 ? (completedMilestones / totalMilestoneCount) * 100 : 0}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-semibold text-slate-700">
-                        {totalMilestoneCount > 0 ? Math.round((completedMilestones / totalMilestoneCount) * 100) : 0}%
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-4">
-                    {milestoneTypes.length === 0 ? (
-                      <div className="text-center py-12 text-slate-500">
-                        <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                        <p className="text-sm font-medium">No milestones configured</p>
-                        <p className="text-xs mt-1">Configure milestones in Settings</p>
-                      </div>
-                    ) : (
-                      <MilestoneTimelineV2
-                        milestoneTypes={milestoneTypes}
-                        caseMilestones={caseMilestones}
-                        onRecord={recordMilestone}
-                        onUndo={undoMilestone}
-                        recordingMilestoneIds={recordingMilestoneIds}
-                        canManage={canManage}
-                        timeZone={userData.facilityTimezone}
-                        caseFlags={caseFlags}
-                        delayTypes={delayTypeOptions}
-                        onAddDelay={handleAddDelay}
-                        onRemoveDelay={handleRemoveDelay}
-                        canCreateFlags={canCreateFlags}
-                        currentUserId={userData.userId}
-                      />
-                    )}
-
-                    {/* Surgeon Left Confirmation */}
-                    {surgeonLeftAt && !patientOutRecorded && (
-                      <div className="mt-4 pt-4 border-t border-slate-100">
-                        <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <Check className="w-4 h-4 text-orange-500" />
-                              <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
-                            </div>
-                            <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
-                          </div>
-                          <button
-                            onClick={clearSurgeonLeft}
-                            className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
-                          >
-                            Undo
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'implants' && (
-                <div role="tabpanel" className="p-4">
-                  {!caseData.procedure_type_id ? (
-                    <div className="text-center py-12 text-slate-500">
-                      <p className="text-sm font-medium">No procedure assigned</p>
-                      <p className="text-xs mt-1">Assign a procedure to track implants</p>
-                    </div>
-                  ) : !implantCategory ? (
-                    <div className="text-center py-12 text-slate-500">
-                      <p className="text-sm font-medium">This procedure type doesn&apos;t track implants</p>
-                      <p className="text-xs mt-1">Only hip and knee procedures have implant tracking</p>
-                    </div>
-                  ) : (
-                    <ImplantSection
-                      caseId={id}
-                      procedureTypeId={caseData.procedure_type_id}
-                      supabase={supabase}
-                      readOnly={isCompleted}
-                    />
-                  )}
-                </div>
-              )}
+            {/* TAB SWITCHER — pill-style tabs outside the content card */}
+            <div className="flex items-center gap-0.5" role="tablist">
+              <button
+                role="tab"
+                aria-selected={activeTab === 'milestones'}
+                onClick={() => setActiveTab('milestones')}
+                className={`flex items-center gap-1.5 px-4 py-[7px] text-[13px] rounded-[9px] transition-all ${
+                  activeTab === 'milestones'
+                    ? 'font-bold text-slate-900 bg-white border border-slate-200/50 shadow-sm'
+                    : 'font-medium text-slate-400 bg-transparent border border-transparent'
+                }`}
+              >
+                Milestones
+              </button>
+              <button
+                role="tab"
+                aria-selected={activeTab === 'implants'}
+                onClick={() => setActiveTab('implants')}
+                className={`flex items-center gap-1.5 px-4 py-[7px] text-[13px] rounded-[9px] transition-all ${
+                  activeTab === 'implants'
+                    ? 'font-bold text-slate-900 bg-white border border-slate-200/50 shadow-sm'
+                    : 'font-medium text-slate-400 bg-transparent border border-transparent'
+                }`}
+              >
+                Implants
+                {implantFilledCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10.5px] font-bold rounded bg-cyan-500/10 text-cyan-600">
+                    {implantFilledCount}
+                  </span>
+                )}
+              </button>
             </div>
+
+            {/* TAB CONTENT — separate content card */}
+            {activeTab === 'milestones' && (
+              <div role="tabpanel" className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-5">
+                {milestoneTypes.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                    <p className="text-sm font-medium">No milestones configured</p>
+                    <p className="text-xs mt-1">Configure milestones in Settings</p>
+                  </div>
+                ) : (
+                  <MilestoneTimelineV2
+                    milestoneTypes={milestoneTypes}
+                    caseMilestones={caseMilestones}
+                    onRecord={recordMilestone}
+                    onUndo={undoMilestone}
+                    recordingMilestoneIds={recordingMilestoneIds}
+                    canManage={canManage}
+                    timeZone={userData.facilityTimezone}
+                    caseFlags={caseFlags}
+                    delayTypes={delayTypeOptions}
+                    onAddDelay={handleAddDelay}
+                    onRemoveDelay={handleRemoveDelay}
+                    canCreateFlags={canCreateFlags}
+                    currentUserId={userData.userId}
+                  />
+                )}
+
+                {/* Surgeon Left Confirmation */}
+                {surgeonLeftAt && !patientOutRecorded && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-orange-500" />
+                          <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                        </div>
+                        <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
+                      </div>
+                      <button
+                        onClick={clearSurgeonLeft}
+                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'implants' && (
+              <div role="tabpanel" className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-5">
+                {!caseData.procedure_type_id ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <p className="text-sm font-medium">No procedure assigned</p>
+                    <p className="text-xs mt-1">Assign a procedure to track implants</p>
+                  </div>
+                ) : !implantCategory ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <p className="text-sm font-medium">This procedure type doesn&apos;t track implants</p>
+                    <p className="text-xs mt-1">Only hip and knee procedures have implant tracking</p>
+                  </div>
+                ) : (
+                  <ImplantSection
+                    caseId={id}
+                    procedureTypeId={caseData.procedure_type_id}
+                    supabase={supabase}
+                    readOnly={isCompleted}
+                  />
+                )}
+              </div>
+            )}
 
           </div>
 
           {/* ============ SIDEBAR ============ */}
-          <div className="space-y-4">
+          <div className="bg-white border-l border-slate-100 -mr-4 sm:-mr-6 lg:-mr-8 pl-5 pr-5 py-5 space-y-4 lg:space-y-5">
 
             {/* FLIP ROOM — surgeon's next case in a different room */}
             {flipRoom && (
@@ -1367,7 +1344,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
             {/* NEXT SAME ROOM — inline note when next case is same room */}
             {!flipRoom && nextSameRoomCaseNumber && (
-              <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-2.5">
+              <div className="bg-slate-50/50 rounded-[14px] border border-slate-100 px-4 py-2.5">
                 <p className="text-xs text-slate-500">
                   <span className="font-medium text-slate-600">Next:</span> {nextSameRoomCaseNumber} (same room)
                 </p>
@@ -1375,11 +1352,11 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             )}
 
             {/* SURGEON LEFT — moved above team per user preference */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100">
-                <h3 className="text-sm font-semibold text-slate-900">Surgeon Status</h3>
+            <div className="rounded-[14px] border border-slate-100 overflow-hidden">
+              <div className="px-4 py-3">
+                <h3 className="text-[13px] font-bold text-slate-900">Surgeon Status</h3>
               </div>
-              <div className="p-3">
+              <div className="px-4 pb-4">
                 {!surgeonLeftAt ? (
                   <button
                     onClick={recordSurgeonLeft}
@@ -1419,12 +1396,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
             {/* TEAM */}
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-900">Team</h3>
-                <span className="text-xs text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0) + (anesthesiologist ? 1 : 0)} assigned</span>
+            <div className="rounded-[14px] border border-slate-100 overflow-hidden">
+              <div className="px-4 py-3 flex items-center justify-between">
+                <h3 className="text-[13px] font-bold text-slate-900">Team</h3>
+                <span className="text-[11.5px] text-slate-400">{assignedStaff.length + (surgeon ? 1 : 0) + (anesthesiologist ? 1 : 0)} assigned</span>
               </div>
-              <div className="p-3 space-y-1">
+              <div className="px-4 pb-4 space-y-2">
                 {surgeon && <TeamMember name={`Dr. ${surgeon.last_name}`} role="Surgeon" roleName="surgeon" />}
                 {anesthesiologist && <TeamMember name={`Dr. ${anesthesiologist.last_name}`} role="Anesthesia" roleName="anesthesiologist" />}
                 {assignedStaff.map(cs => {
@@ -1482,7 +1459,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
             {/* NOTES */}
             {caseData.notes && (
-              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+              <div className="rounded-[14px] border border-slate-100 p-4">
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Notes</h3>
                 <p className="text-sm text-slate-700">{caseData.notes}</p>
               </div>

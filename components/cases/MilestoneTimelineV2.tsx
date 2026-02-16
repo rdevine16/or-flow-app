@@ -94,7 +94,7 @@ function TimelineNode({ state }: { state: NodeState }) {
 
   if (state === 'next') {
     return (
-      <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center shadow-md shadow-indigo-300/50 flex-shrink-0 z-10 -ml-0.5">
+      <div className="w-[34px] h-[34px] rounded-full bg-indigo-500 flex items-center justify-center shadow-[0_0_0_5px_rgba(99,102,241,0.12),0_4px_12px_rgba(99,102,241,0.2)] flex-shrink-0 z-10 -ml-[3px]">
         <div className="relative">
           <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse" />
           <div className="absolute inset-0 w-2.5 h-2.5 bg-white rounded-full animate-ping opacity-30" />
@@ -193,9 +193,9 @@ export default function MilestoneTimelineV2({
         return (
           <div key={mt.id}>
             {/* Milestone row */}
-            <div className="flex gap-3 relative group">
+            <div className="flex gap-4 relative group">
               {/* Left column: node + connecting line */}
-              <div className="flex flex-col items-center w-8 flex-shrink-0">
+              <div className="flex flex-col items-center w-10 flex-shrink-0">
                 <TimelineNode state={state} />
                 {(!isLast || delayFlags.length > 0) && (
                   <div className={`w-0.5 flex-1 min-h-[16px] ${isLast && delayFlags.length > 0 ? 'bg-slate-200/40' : lineClass}`} />
@@ -208,23 +208,30 @@ export default function MilestoneTimelineV2({
                   state === 'next'
                     ? 'bg-indigo-50/60 border border-indigo-200/50 rounded-lg px-3 py-2.5 -mt-0.5 mb-3'
                     : ''
-                } relative`}
+                } relative overflow-visible`}
               >
                 <div className="flex items-center justify-between gap-2 min-h-[28px]">
                   {/* Name + time + flag badges */}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-2.5 flex-wrap">
                       <span
-                        className={`text-sm leading-tight ${
+                        className={`text-[13.5px] leading-tight ${
                           state === 'completed'
-                            ? 'font-medium text-slate-800'
+                            ? 'font-medium text-slate-700'
                             : state === 'next'
-                              ? 'font-bold text-indigo-900'
+                              ? 'font-bold text-indigo-950'
                               : 'font-normal text-slate-400'
                         }`}
                       >
                         {mt.display_name}
                       </span>
+
+                      {/* Recorded time — inline with name */}
+                      {state === 'completed' && recorded?.recorded_at && (
+                        <span className="text-[11.5px] text-slate-400 font-mono tabular-nums font-medium">
+                          {formatTimestamp(recorded.recorded_at, { timeZone })}
+                        </span>
+                      )}
 
                       {/* Threshold flag badges inline */}
                       {thresholdFlags.map(flag => (
@@ -237,15 +244,9 @@ export default function MilestoneTimelineV2({
                       ))}
                     </div>
 
-                    {state === 'completed' && recorded?.recorded_at && (
-                      <span className="text-xs text-slate-400 font-mono tabular-nums">
-                        {formatTimestamp(recorded.recorded_at, { timeZone })}
-                      </span>
-                    )}
-
                     {state === 'next' && (
-                      <span className="text-xs text-indigo-500 font-medium">
-                        Next milestone
+                      <span className="text-xs text-indigo-400 font-medium mt-0.5 block">
+                        Next milestone — ready to record
                       </span>
                     )}
                   </div>

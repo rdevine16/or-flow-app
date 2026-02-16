@@ -77,7 +77,7 @@ describe('MilestoneTimelineV2', () => {
       expect(screen.getByText('Patient Out')).toBeInTheDocument()
     })
 
-    it('shows "Next milestone" label on first pending milestone', () => {
+    it('shows "Next milestone — ready to record" label on first pending milestone', () => {
       const caseMilestones = [
         { id: 'cm1', facility_milestone_id: 'mt1', recorded_at: '2024-01-01T10:00:00Z' },
       ]
@@ -93,7 +93,7 @@ describe('MilestoneTimelineV2', () => {
         />
       )
 
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
     })
 
     it('displays timestamps for completed milestones', () => {
@@ -154,7 +154,7 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Should not show "Next milestone" label
-      expect(screen.queryByText('Next milestone')).not.toBeInTheDocument()
+      expect(screen.queryByText('Next milestone — ready to record')).not.toBeInTheDocument()
 
       // All timestamps should be displayed
       expect(screen.getByText('Formatted: 2024-01-01T10:00:00Z')).toBeInTheDocument()
@@ -376,7 +376,7 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Initially, first milestone should be "next"
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
 
       // Simulate recording the first milestone
       const newCaseMilestones = [
@@ -398,7 +398,7 @@ describe('MilestoneTimelineV2', () => {
       expect(screen.getByText('Formatted: 2024-01-01T10:00:00Z')).toBeInTheDocument()
 
       // Second milestone should now be "next"
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
     })
 
     it('updates UI state when milestone is undone (simulated)', () => {
@@ -442,7 +442,7 @@ describe('MilestoneTimelineV2', () => {
       expect(screen.queryByText('Formatted: 2024-01-01T10:15:00Z')).not.toBeInTheDocument()
 
       // Second milestone should now be "next"
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
     })
 
     it('maintains correct "next" milestone when milestones are recorded out of order', () => {
@@ -464,10 +464,10 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // The "next" milestone should be mt2 (Incision), the first unrecorded one
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
 
       // Verify it's associated with "Incision"
-      const nextLabel = screen.getByText('Next milestone')
+      const nextLabel = screen.getByText('Next milestone — ready to record')
       const incisionText = screen.getByText('Incision')
 
       // They should share the same milestone content container
@@ -493,7 +493,7 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Step 1: Initial state - first milestone is next
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
       expect(screen.getByText('Patient In')).toBeInTheDocument()
 
       // Step 2: Record first milestone
@@ -559,7 +559,7 @@ describe('MilestoneTimelineV2', () => {
       // All milestones should be completed
       expect(screen.getByText('Formatted: 2024-01-01T10:30:00Z')).toBeInTheDocument()
       expect(screen.getByText('Formatted: 2024-01-01T10:45:00Z')).toBeInTheDocument()
-      expect(screen.queryByText('Next milestone')).not.toBeInTheDocument()
+      expect(screen.queryByText('Next milestone — ready to record')).not.toBeInTheDocument()
     })
 
     it('completes undo workflow: all complete → undo last → undo middle → start over', () => {
@@ -582,7 +582,7 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Step 1: All milestones completed
-      expect(screen.queryByText('Next milestone')).not.toBeInTheDocument()
+      expect(screen.queryByText('Next milestone — ready to record')).not.toBeInTheDocument()
 
       // Step 2: Undo last milestone
       const lastUndoButton = container.querySelector('button[title="Undo Patient Out"]')
@@ -601,7 +601,7 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Last milestone should now be "next"
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
 
       // Step 3: Undo middle milestone
       const closeUndoButton = container.querySelector('button[title="Undo Close"]')
@@ -620,8 +620,8 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Close should now be "next"
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
-      const nextLabel = screen.getByText('Next milestone')
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
+      const nextLabel = screen.getByText('Next milestone — ready to record')
       const closeText = screen.getByText('Close')
       expect(nextLabel.closest('.min-w-0')?.contains(closeText)).toBe(true)
     })
@@ -688,8 +688,8 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Step 3: "Next" milestone should still be mt2 (the first unrecorded)
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
-      const nextLabel = screen.getByText('Next milestone')
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
+      const nextLabel = screen.getByText('Next milestone — ready to record')
       const incisionText = screen.getByText('Incision')
       expect(nextLabel.closest('.min-w-0')?.contains(incisionText)).toBe(true)
 
@@ -713,7 +713,7 @@ describe('MilestoneTimelineV2', () => {
       )
 
       // Now "next" should be the last milestone
-      const finalNextLabel = screen.getByText('Next milestone')
+      const finalNextLabel = screen.getByText('Next milestone — ready to record')
       const patientOutText = screen.getByText('Patient Out')
       expect(finalNextLabel.closest('.min-w-0')?.contains(patientOutText)).toBe(true)
     })
@@ -787,7 +787,7 @@ describe('MilestoneTimelineV2', () => {
 
       // First milestone should be treated as "next" (not completed)
       // because recorded_at is null
-      expect(screen.getByText('Next milestone')).toBeInTheDocument()
+      expect(screen.getByText('Next milestone — ready to record')).toBeInTheDocument()
 
       // Second milestone should be completed
       expect(screen.getByText('Formatted: 2024-01-01T10:15:00Z')).toBeInTheDocument()

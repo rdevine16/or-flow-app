@@ -38,7 +38,7 @@ export function TimerChip({ label, formattedTime, medianFormatted, isRunning, co
   const barWidth = ratio !== null ? Math.min(ratio * 100, 100) : 0
 
   return (
-    <div className={`flex flex-col gap-1.5 px-5 py-3.5 ${cfg.bg} border ${cfg.border} rounded-xl flex-1 min-w-[170px]`}>
+    <div className={`flex flex-col gap-1.5 px-6 py-4 ${cfg.bg} border ${cfg.border} rounded-2xl flex-1 min-w-[170px]`}>
       <div className="flex items-center justify-between">
         <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-400">
           {label}
@@ -49,7 +49,7 @@ export function TimerChip({ label, formattedTime, medianFormatted, isRunning, co
       </div>
       <div className="flex items-baseline gap-1.5">
         <span
-          className={`text-[26px] font-bold tracking-tight font-mono tabular-nums leading-none ${
+          className={`text-[28px] font-bold tracking-tight font-mono tabular-nums leading-none ${
             isOver ? 'text-red-500' : 'text-slate-900'
           }`}
         >
@@ -82,12 +82,12 @@ export function ProgressChip({ completedCount, totalCount }: ProgressChipProps) 
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   return (
-    <div className="flex flex-col justify-center px-5 py-3.5 bg-emerald-500/[0.04] border border-emerald-500/[0.08] rounded-xl min-w-[120px]">
+    <div className="flex flex-col justify-center px-6 py-4 bg-emerald-500/[0.04] border border-emerald-500/[0.08] rounded-2xl min-w-[120px]">
       <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-400 mb-0.5">
         Progress
       </span>
       <div className="flex items-baseline gap-1">
-        <span className="text-[26px] font-bold font-mono leading-none text-emerald-500">
+        <span className="text-[28px] font-bold font-mono leading-none text-emerald-500">
           {progress}
         </span>
         <span className="text-[13px] text-slate-400 font-semibold">%</span>

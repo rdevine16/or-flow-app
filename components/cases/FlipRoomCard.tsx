@@ -45,24 +45,24 @@ export default function FlipRoomCard({
     : 0
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="bg-gradient-to-br from-amber-50/50 to-amber-50/20 rounded-[14px] border border-amber-200/50 overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <ArrowRightLeft className="w-4 h-4 text-indigo-500" />
-          <h3 className="text-sm font-semibold text-slate-900">Flip Room</h3>
+          <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
+          <h3 className="text-[13px] font-bold text-amber-900">Flip Room</h3>
         </div>
-        <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+        <span className="text-[11px] font-bold text-amber-600 bg-amber-500/[0.08] px-2.5 py-0.5 rounded-[5px] font-mono">
           {roomName}
         </span>
       </div>
 
       {/* Content */}
-      <div className="p-3 space-y-2.5">
+      <div className="px-4 pb-4 space-y-2.5">
         {/* Procedure + Case Number */}
         <div>
-          <p className="text-sm text-slate-700 font-medium">{procedureName}</p>
-          <p className="text-xs text-slate-400">{caseNumber}</p>
+          <p className="text-sm text-indigo-950 font-semibold">{procedureName}</p>
+          <p className="text-xs text-slate-400 font-mono">{caseNumber}</p>
         </div>
 
         {/* Current Milestone */}
@@ -104,7 +104,7 @@ export default function FlipRoomCard({
           <button
             onClick={onCallBack}
             disabled={callingBack}
-            className="w-full py-2 px-3 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-blue-500 text-white hover:from-indigo-600 hover:to-blue-600 shadow-sm hover:shadow disabled:opacity-50"
+            className="w-full py-2.5 px-3 text-[13px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-[0_2px_8px_rgba(245,158,11,0.25)] hover:shadow-md disabled:opacity-50 tracking-[0.01em]"
           >
             {callingBack ? (
               <>
