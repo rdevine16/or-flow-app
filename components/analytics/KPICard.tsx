@@ -7,6 +7,7 @@
 'use client'
 
 import { Tracker, TrackerDataPoint } from './Tracker'
+import { DeltaBadge } from '@/components/ui/DeltaBadge'
 
 // ============================================
 // TYPES
@@ -33,36 +34,21 @@ interface KPICardProps {
 }
 
 // ============================================
-// DELTA BADGE
+// KPI DELTA ADAPTER
+// Adapts the old deltaType API to the new DeltaBadge API
 // ============================================
 
-function DeltaBadge({ 
-  delta, 
-  deltaType, 
-  invert = false 
-}: { 
+function KPIDeltaBadge({
+  delta,
+  deltaType,
+  invert = false,
+}: {
   delta: number
   deltaType: 'increase' | 'decrease' | 'unchanged'
-  invert?: boolean 
+  invert?: boolean
 }) {
-  // Determine if this delta is "good" or "bad"
-  const isPositive = invert 
-    ? deltaType === 'decrease' 
-    : deltaType === 'increase'
-  
-  const colorClasses = isPositive
-    ? 'bg-green-50 text-green-600 ring-green-600/20'
-    : deltaType === 'unchanged'
-    ? 'bg-slate-50 text-slate-600 ring-slate-500/20'
-    : 'bg-red-50 text-red-600 ring-red-600/20'
-
-  const arrow = deltaType === 'increase' ? '↑' : deltaType === 'decrease' ? '↓' : '→'
-
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md ring-1 ring-inset ${colorClasses}`}>
-      {arrow} {delta}%
-    </span>
-  )
+  const signedDelta = deltaType === 'decrease' ? -delta : deltaType === 'increase' ? delta : 0
+  return <DeltaBadge delta={signedDelta} format="percentage" invert={invert} />
 }
 
 // ============================================
@@ -116,7 +102,7 @@ export function KPICard({
       <div className="flex items-start justify-between">
         <p className="text-sm font-medium text-slate-600">{title}</p>
         {kpi.delta !== undefined && kpi.deltaType && (
-          <DeltaBadge delta={kpi.delta} deltaType={kpi.deltaType} invert={invertDelta} />
+          <KPIDeltaBadge delta={kpi.delta} deltaType={kpi.deltaType} invert={invertDelta} />
         )}
       </div>
       
