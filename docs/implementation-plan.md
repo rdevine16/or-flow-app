@@ -811,3 +811,370 @@ When porting to SwiftUI:
 
 **Q26:** Should the QuickStats header share calculation logic with the revamped milestones tab, or keep its independent calculation?
 **A26:** Keep independent calculation. Less coupling, numbers should match since they use the same source data.
+
+---
+
+# Mockup Alignment Update (2026-02-15)
+
+> **Reference mockup:** `Examples/light-reference-mockup.jsx`
+> **Completed phases:** 1 (DB), 2 (milestone data), 3 (milestones UI), 3.5 (phase group settings), 4 (financials data)
+> **What follows:** Phases 5-8 reshape the drawer UI to match the light-reference-mockup.
+
+## Interview Decisions (Mockup Alignment)
+
+| Topic | Decision |
+|---|---|
+| Tab structure | Keep existing 4 tabs as-is (Financials, Milestones, Flags, Validation) — no Overview or Activity tabs |
+| Drawer header | Match mockup: remove QuickStats cards, remove action buttons **except** "Cancel Case" button for scheduled cases that haven't started |
+| Milestones layout | Rebuild as structured 6-column data table (icon, name, time, interval, median, delta) — replaces MilestoneDetailRow cards |
+| Hero row gauges | Two gauges (surgeon + facility, 48px each) + ProfitBadge — combines Phase 4 Q&A decision with mockup's badge |
+| Full day forecast | Build in Phase 7 alongside other financials UI |
+| Status-specific layouts | Simplify to one layout — always show all sections, mark projected values as italic/dimmed when actuals unavailable |
+| Milestones section order | Match mockup: Timeline → Milestone Table → Time Allocation Bar |
+| File strategy | Rewrite existing files in-place (no import path changes) |
+
+---
+
+## Phase 5: Drawer Header Redesign
+
+**Goal:** Slim down the drawer header to match the mockup — remove QuickStats cards and most action buttons, keeping only a conditional "Cancel Case" for unstarted cases.
+
+### Files to Modify
+
+- `components/cases/CaseDrawer.tsx` — Remove QuickStats sub-component, remove action buttons (keep Cancel Case conditionally), clean up header layout
+
+### Steps
+
+1. **Remove QuickStats cards:**
+   - Delete the QuickStats sub-component (Total Duration, Surgical Time, Milestones count)
+   - Remove the 3-column stats grid between metadata and tabs
+   - This data now lives exclusively in the Milestones tab (timeline + table + allocation bar)
+
+2. **Simplify action buttons:**
+   - Remove "Review in Data Quality" button from header
+   - Keep "Cancel Case" button **only** for cases with `status = 'scheduled'` (not started yet)
+   - Style as subtle text button below metadata, before tabs (matches mockup's "Open full detail →" link area)
+
+3. **Clean up header layout:**
+   - Top row: Case number + status badge + close button (keep as-is)
+   - Second row: Procedure name (keep as-is)
+   - Third row: Surgeon link, Room, Date/Time (keep as-is)
+   - Fourth row: "Open full detail →" link + conditional "Cancel Case" (small, right-aligned)
+   - Tab bar: Keep existing tab rendering, just verify ordering matches design intent
+
+4. **Verify no data regressions:**
+   - QuickStats previously computed duration from milestones — ensure this logic is preserved in the Milestones tab (it already is via `useMilestoneComparison`)
+   - Validation tab still appears conditionally based on DQ issues
+
+5. **Run 3-stage test gate**
+
+### Acceptance
+
+- [ ] QuickStats cards removed from header
+- [ ] "Review in Data Quality" button removed
+- [ ] "Cancel Case" button appears only for `status = 'scheduled'` cases
+- [ ] Header is visually minimal: case meta → links → tabs
+- [ ] No functional regressions (tab switching, drawer open/close, case navigation)
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(drawer): phase 5 - header redesign to match mockup`
+
+---
+
+## Phase 6: Milestones Tab Rebuild (Table Layout)
+
+**Goal:** Rebuild the milestones tab to use a structured 6-column data table matching the mockup, replacing the card-based MilestoneDetailRow layout. Reorder sections to: Timeline → Table → Allocation Bar.
+
+### Files to Modify
+
+- `components/cases/CaseDrawerMilestones.tsx` — Reorder sections, replace MilestoneDetailRow usage with new table
+- `components/cases/MilestoneDetailRow.tsx` — **Rewrite** as `MilestoneTable` internally (keep file path for git history, rename export)
+- `components/cases/MilestoneTimeline.tsx` — Minor tweaks to match mockup style (simplify if needed)
+- `components/cases/TimeAllocationBar.tsx` — No changes expected, just verify positioning
+
+### Steps
+
+1. **Rewrite `MilestoneDetailRow.tsx` as a milestone table component:**
+   - New export: `MilestoneTable` (aliased from same file to avoid import churn)
+   - 6-column grid layout: `[status icon] [Milestone name] [Time] [Interval] [Surgeon/Facility Median] [Delta]`
+   - Header row: uppercase labels, `surfaceRaised` background, 10px font
+   - Data rows: 12px font, alternating subtle borders, amber background tint for missing milestones
+   - Status icon column: teal checkmark circle (recorded), amber "!" square (missing)
+   - Time column: formatted timestamp (e.g., "12:24 PM") or "—" for unrecorded
+   - Interval column: minutes with "m" suffix (e.g., "88m")
+   - Median column: header changes based on comparison mode ("Surg Med" / "Fac Med"), shows median + "m"
+   - Delta column: `DeltaBadge` component with favorable/unfavorable coloring
+   - **Summary footer row:** "Total Case Time" with totals for interval, median, and delta, bold styling with top border
+
+2. **Update `CaseDrawerMilestones.tsx` section ordering:**
+   - Current: comparison toggle → timeline → detail rows → allocation bar → duration summary
+   - New: comparison toggle + milestone counter ("9/9 milestones recorded") → timeline → milestone table (with built-in footer) → allocation bar
+   - Remove separate duration summary section (now part of table footer)
+   - Move missing milestone alert logic into the table (amber row backgrounds instead of separate banner)
+
+3. **Adjust MilestoneTimeline for mockup consistency:**
+   - Keep horizontal swimlane + hover tooltips
+   - Verify legend matches mockup: Recorded (teal circle), Pending (gray outline), Missing (amber square)
+   - Keep median overlay dashes (per Q22 decision, already built)
+
+4. **Add milestone counter:**
+   - Small text above timeline: "9/9 milestones recorded" (or "7/9 milestones recorded" with amber text for incomplete)
+   - Positioned left-aligned, same row as comparison toggle (toggle is right-aligned)
+
+5. **Run 3-stage test gate**
+
+### Acceptance
+
+- [ ] Milestone data displayed in structured 6-column table
+- [ ] Table header row with column labels
+- [ ] Status icons: teal checkmark (recorded), amber warning (missing)
+- [ ] Time, interval, median, and delta columns populated correctly
+- [ ] Median column header changes with comparison toggle ("Surg Med" / "Fac Med")
+- [ ] Summary footer row with totals
+- [ ] Missing milestones shown as amber-tinted table rows (not a separate banner)
+- [ ] Section order: toggle+counter → timeline → table → allocation bar
+- [ ] Milestone counter shows "N/M milestones recorded"
+- [ ] All existing functionality preserved (hover tooltips, comparison toggle, allocation bar)
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(drawer): phase 6 - milestones tab rebuild as data table`
+
+---
+
+## Phase 7: Financials Tab UI
+
+**Goal:** Build the visual financials tab with MarginGauge, ProfitBadge, hero metrics row, projected-vs-actual table, cost breakdown table, and full-day surgeon forecast. Replaces the existing `CaseDrawerFinancials` internals.
+
+### Files to Create
+
+- `components/ui/MarginGauge.tsx` — Circular SVG gauge with animated ring draw (reusable, sm/md/lg sizes)
+- `components/ui/ProfitBadge.tsx` — Rating badge ("EXCELLENT", "GOOD", "FAIR", "POOR") with ORbit Score colors
+
+### Files to Modify
+
+- `components/cases/CaseDrawerFinancials.tsx` — Rewrite internals: hero row → projected vs actual → cost breakdown → full-day forecast
+- `lib/utils/financialAnalytics.ts` — Add any missing helper functions (e.g., `formatCurrency`)
+
+### Steps
+
+1. **Build `MarginGauge` component (`components/ui/MarginGauge.tsx`):**
+   - Circular SVG progress ring
+   - Props: `percentage: number`, `size: 'sm' | 'md' | 'lg'` (40px, 48px, 68px), `rating: 'excellent' | 'good' | 'fair' | 'poor'`
+   - Ring color from rating: excellent = teal, good = green, fair = amber, poor = red
+   - Center text: percentage number (bold) + "Margin" label (small, only on md/lg)
+   - CSS animation: ring draws from 0 to value on mount (0.8s ease-out via `stroke-dashoffset` transition)
+   - Background track ring in border color
+   - `aria-label="Margin: {percentage} percent, rated {rating}"`
+
+2. **Build `ProfitBadge` component (`components/ui/ProfitBadge.tsx`):**
+   - Props: `rating: 'excellent' | 'good' | 'fair' | 'poor'`
+   - Styled pill: uppercase label, 10px font, bold, rating-colored text on tinted background
+   - Color mapping: excellent = teal, good = green, fair = amber, poor = red
+
+3. **Rebuild `CaseDrawerFinancials.tsx` — Hero Row section:**
+   - Layout: `[Surgeon Gauge 48px] [Facility Gauge 48px] [Profit + ProfitBadge] [Revenue] [Costs]`
+   - Two `MarginGauge` components (size `md`, 48px): surgeon margin gauge + facility margin gauge
+   - Each gauge labeled: "vs Surgeon" / "vs Facility" in small text below
+   - Profit: large dollar amount + `ProfitBadge` based on `margin_rating`
+   - Below profit: "Surgeon median: $380" in muted text
+   - Revenue and Costs: dollar amounts, right-aligned
+   - Rounded card with border, `surfaceRaised` background
+   - For projected values (scheduled/in-progress): italic styling + "(projected)" label
+
+4. **Rebuild `CaseDrawerFinancials.tsx` — Projected vs Actual table:**
+   - 4-column grid: Line Item | Projected | Actual | Delta
+   - Rows: Revenue, OR Time Cost, Supply Costs (Debits), Credits, **Profit** (bold separator), **Margin %** (bold)
+   - Delta column: `DeltaBadge` with favorable/unfavorable logic (revenue/profit: higher is good; costs: lower is good)
+   - Profit and Margin rows: teal-tinted background, bold text, 2px top border
+   - Source footnote: "Projected based on Dr. {name}'s median pace of {N} min · Actual from validated case data"
+   - **Unified layout:** Always show both columns. If case isn't completed, Actual column shows "—" in dimmed text. No separate "projection-only" mode.
+
+5. **Rebuild `CaseDrawerFinancials.tsx` — Cost Breakdown table:**
+   - 3-column grid: Category | Amount | % of Total
+   - Categories: OR Time, Implants/Hardware, Supplies/Soft Goods, Anesthesia, Credits (negative, green text)
+   - Each row has subtle inline horizontal bar (absolute positioned) proportional to % of total
+   - Sorted by absolute amount descending
+   - Footer row: "Total Costs" bold, 2px top border
+   - Rounded card with border
+
+6. **Build Full Day Forecast section:**
+   - Collapsible section (collapsed by default)
+   - Header button: surgeon initials avatar (2-letter circle, teal) + "Full Day Forecast — Dr. {name}"
+   - Expand/collapse chevron
+   - Expanded content: case rows in 5-column grid: Case # | Procedure | Status | Profit | Margin
+   - Status badges: Completed (green), In Progress (blue), Scheduled (gray)
+   - Profit: dollar amount or "TBD" in italic for non-completed
+   - Footer: "Day Total (N of M completed)" + total profit + mini `MarginGauge` (sm, 40px)
+
+7. **Wire data from `useFinancialComparison` hook:**
+   - Hero metrics: `data.hero` → MarginGauge + ProfitBadge + revenue/costs
+   - Projected vs Actual: `data.projected_vs_actual` → table rows
+   - Cost breakdown: `data.cost_breakdown` → cost table
+   - Full day: `data.full_day_forecast` → forecast section
+   - Data quality: `data.data_quality` → conditional banners (zero costs, missing revenue, low confidence)
+
+8. **Handle edge cases (simplified, unified layout):**
+   - Zero costs: "Cost data unavailable" banner instead of 100% margin
+   - No revenue configured: "Revenue not configured" with link to settings
+   - No surgeon history: "First case — using facility benchmarks" note
+   - Low confidence: "Based on N cases — projections improve with more data"
+
+9. **Run 3-stage test gate**
+
+### Acceptance
+
+- [ ] MarginGauge renders animated SVG ring with correct color per rating
+- [ ] Two gauges in hero row: surgeon margin + facility margin
+- [ ] ProfitBadge shows correct rating label and color
+- [ ] Hero row displays profit, revenue, costs with surgeon median benchmark
+- [ ] Projected vs Actual table renders with 4 columns, color-coded deltas
+- [ ] Profit/Margin rows visually emphasized with teal tint
+- [ ] Cost breakdown table with inline percentage bars and footer total
+- [ ] Full Day Forecast is collapsible, shows surgeon's cases for the day
+- [ ] Forecast footer has day totals + mini MarginGauge
+- [ ] Unified layout: projected values shown as italic when actuals unavailable
+- [ ] Edge cases handled gracefully (zero costs, missing revenue, no history)
+- [ ] `MarginGauge` and `ProfitBadge` are reusable from `components/ui/`
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(drawer): phase 7 - financials tab UI with MarginGauge and hero row`
+
+---
+
+## Phase 8: Polish & Accessibility
+
+**Goal:** Refine visual details across all rebuilt components, ensure accessibility compliance, add animations. (Replaces original Phase 6.)
+
+### Steps
+
+1. **Loading states:**
+   - Skeleton for hero row (2 circles + 3 rectangles)
+   - Skeleton for milestone table (header + 8 shimmer rows)
+   - Skeleton for financial tables (header + 6 shimmer rows)
+   - Tab-level loading: only active tab's data loads
+
+2. **Accessibility:**
+   - MarginGauge: `aria-label="Margin: N percent, rated {rating}"`
+   - Timeline nodes: `aria-label="{name} milestone, recorded at {time}, {interval} minutes from previous"`
+   - DeltaBadge: screen reader text includes direction ("N minutes slower/faster than median")
+   - Comparison toggle: `role="radiogroup"` with `aria-checked`
+   - Full Day Forecast: `aria-expanded` on toggle button
+   - Color never the only indicator — deltas have +/- text and ▲/▼ icons
+
+3. **Animations (CSS only, no new deps):**
+   - MarginGauge ring draw: `stroke-dashoffset` transition 0.8s ease-out (already planned in Phase 7)
+   - Full Day Forecast expand/collapse: CSS `max-height` transition
+   - Tab transitions: fade via Tailwind `transition-opacity`
+
+4. **Edge case polish:**
+   - Empty state for milestones tab (case not started, zero milestones)
+   - Empty state for financials tab (no data configured)
+   - Narrow drawer graceful degradation (hero row stacks if < 450px)
+
+5. **Run final 3-stage test gate**
+
+### Acceptance
+
+- [ ] Loading skeletons match content shapes for all sections
+- [ ] Screen reader can navigate all interactive elements
+- [ ] Color-blind safe: all deltas readable without color alone
+- [ ] Animations smooth, no layout shifts
+- [ ] Empty states are contextual and helpful
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(drawer): phase 8 - polish and accessibility`
+
+---
+
+## Phase 9: Integration Testing
+
+**Goal:** Verify all rebuilt tabs work correctly with real data across case states and procedure types. (Replaces original Phase 7.)
+
+### Steps
+
+1. **Test matrix — rebuilt Milestones tab:**
+   | Scenario | Expected |
+   |----------|----------|
+   | Completed case, all milestones | Full table with all rows, green checkmarks, correct deltas |
+   | Completed case, 2 missing | Amber rows for missing, correct counter "7/9 recorded" |
+   | In-progress case | Partial table, pending rows gray |
+   | Scheduled case, 0 milestones | Empty state message |
+   | Surgeon's first case | Surgeon median "—", facility median shown |
+
+2. **Test matrix — rebuilt Financials tab:**
+   | Scenario | Expected |
+   |----------|----------|
+   | Completed + validated | Full hero row, projected vs actual, cost breakdown, forecast |
+   | Completed + zero costs | "Cost data unavailable" banner, gauge shows 0% |
+   | Scheduled | Hero row (projected), actual column shows "—", forecast shows TBD |
+   | No revenue configured | "Revenue not configured" warning |
+   | Surgeon with 5 cases same day | Full Day Forecast shows all 5 cases |
+
+3. **Cross-tab consistency:**
+   - Milestone counter in tab matches drawer metadata
+   - Financial hero profit matches table total
+
+4. **Performance:**
+   - Tab switch < 300ms
+   - Milestone medians query < 200ms
+   - Financial query < 200ms
+
+5. **Header regression:**
+   - QuickStats removed, no visual artifacts
+   - Cancel Case button only on scheduled cases
+   - Tab switching works correctly
+
+### Acceptance
+
+- [ ] All test matrix scenarios pass
+- [ ] Cross-tab data consistent
+- [ ] Performance meets thresholds
+- [ ] Header changes verified
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(drawer): phase 9 - integration testing`
+
+---
+
+## Revised Phase Map (Complete)
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1: DB Functions + Schema | ✅ Complete | Migrations, RPC functions, phase_group column |
+| Phase 2: Milestone Data Layer | ✅ Complete | useMilestoneComparison, milestoneAnalytics.ts, DeltaBadge |
+| Phase 3: Milestones Tab UI | ✅ Complete (v1) | MilestoneTimeline, MilestoneDetailRow, TimeAllocationBar |
+| Phase 3.5: Phase Group Settings | ✅ Complete | inferPhaseGroup, settings page integration |
+| Phase 4: Financials Data Layer | ✅ Complete | useFinancialComparison, financialAnalytics.ts |
+| **Phase 5: Header Redesign** | ⬜ Next | Remove QuickStats, simplify action buttons |
+| **Phase 6: Milestones Tab Rebuild** | ⬜ Pending | Rewrite as 6-column table, match mockup layout |
+| **Phase 7: Financials Tab UI** | ⬜ Pending | MarginGauge, ProfitBadge, hero row, tables, FullDayForecast |
+| **Phase 8: Polish & Accessibility** | ⬜ Pending | Skeletons, a11y, animations, edge cases |
+| **Phase 9: Integration Testing** | ⬜ Pending | Full test matrix, performance, cross-tab consistency |
+
+## Updated Component Dependency Map
+
+```
+CaseDrawer (Phase 5: slimmed header)
+├── CaseDrawerMilestones (Phase 6: rebuilt)
+│   ├── MilestoneComparisonToggle (existing, unchanged)
+│   ├── Milestone counter ("N/M recorded") (Phase 6: new)
+│   ├── MilestoneTimeline (existing, minor tweaks)
+│   ├── MilestoneTable (Phase 6: replaces MilestoneDetailRow)
+│   │   └── DeltaBadge (existing)
+│   └── TimeAllocationBar (existing, unchanged)
+│
+├── CaseDrawerFinancials (Phase 7: rebuilt)
+│   ├── FinancialHeroRow (Phase 7: new)
+│   │   ├── MarginGauge ×2 (Phase 7: new, reusable)
+│   │   └── ProfitBadge (Phase 7: new, reusable)
+│   ├── ProjectedVsActualTable (Phase 7: new)
+│   │   └── DeltaBadge (existing)
+│   ├── CostBreakdownTable (Phase 7: new)
+│   └── FullDayForecast (Phase 7: new, collapsible)
+│       └── MarginGauge (sm)
+│
+└── Shared hooks (existing from Phases 2 & 4)
+    ├── useMilestoneComparison
+    ├── useFinancialComparison
+    └── useCaseFinancials
+```

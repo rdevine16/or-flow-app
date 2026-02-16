@@ -1,6 +1,6 @@
 // components/cases/CaseDrawer.tsx
 // Case detail drawer using Radix Dialog (sheet pattern).
-// Fixed header with case metadata + quick stats + 3 content tabs.
+// Slim header with case metadata + content tabs.
 // Slides from right, ~550px wide, overlay dims background.
 
 'use client'
@@ -20,13 +20,10 @@ import CaseDrawerFinancials from '@/components/cases/CaseDrawerFinancials'
 import CaseDrawerMilestones from '@/components/cases/CaseDrawerMilestones'
 import CaseDrawerValidation from '@/components/cases/CaseDrawerValidation'
 import { fetchMetricIssues, type MetricIssue } from '@/lib/dataQuality'
-import type { CaseDetail, CaseMilestone } from '@/lib/dal/cases'
+import type { CaseDetail } from '@/lib/dal/cases'
 import {
   X,
   ExternalLink,
-  Clock,
-  Timer,
-  RotateCcw,
   DollarSign,
   Milestone as MilestoneIcon,
   Flag,
@@ -77,39 +74,6 @@ function formatTime(timeStr: string | null): string {
   return `${displayHour}:${m} ${ampm}`
 }
 
-function formatDuration(minutes: number | null): string {
-  if (minutes == null) return '—'
-  const hrs = Math.floor(minutes / 60)
-  const mins = Math.round(minutes % 60)
-  if (hrs === 0) return `${mins}m`
-  return `${hrs}h ${mins}m`
-}
-
-/** Compute surgical time from milestones (Incision → Closing) */
-function computeSurgicalTime(milestones: CaseMilestone[]): number | null {
-  const incision = milestones.find(
-    (m) => m.facility_milestone?.name?.toLowerCase().includes('incision')
-  )
-  const closing = milestones.find(
-    (m) => m.facility_milestone?.name?.toLowerCase().includes('closing')
-  )
-
-  if (!incision?.recorded_at || !closing?.recorded_at) return null
-  const diff = new Date(closing.recorded_at).getTime() - new Date(incision.recorded_at).getTime()
-  return diff > 0 ? diff / 60000 : null
-}
-
-/** Compute total case time from first to last milestone */
-function computeTotalFromMilestones(milestones: CaseMilestone[]): number | null {
-  const recorded = milestones
-    .filter((m) => m.recorded_at)
-    .map((m) => new Date(m.recorded_at).getTime())
-
-  if (recorded.length < 2) return null
-  const diff = Math.max(...recorded) - Math.min(...recorded)
-  return diff > 0 ? diff / 60000 : null
-}
-
 // ============================================
 // TAB CONFIG
 // ============================================
@@ -128,45 +92,12 @@ const VALIDATION_TAB: { key: DrawerTab; label: string; icon: typeof Flag } = {
 // SUB-COMPONENTS
 // ============================================
 
-function QuickStats({ caseDetail }: { caseDetail: CaseDetail }) {
-  const totalDuration = caseDetail.scheduled_duration_minutes
-    ?? computeTotalFromMilestones(caseDetail.case_milestones)
-  const surgicalTime = computeSurgicalTime(caseDetail.case_milestones)
-
-  const stats = [
-    { label: 'Total Duration', value: formatDuration(totalDuration), icon: Clock },
-    { label: 'Surgical Time', value: formatDuration(surgicalTime), icon: Timer },
-    { label: 'Milestones', value: `${caseDetail.case_milestones.filter(m => m.recorded_at).length}/${caseDetail.case_milestones.length}`, icon: RotateCcw },
-  ]
-
-  return (
-    <div className="grid grid-cols-3 gap-3">
-      {stats.map((stat) => (
-        <div key={stat.label} className="bg-slate-50 rounded-lg p-2.5 text-center">
-          <div className="flex items-center justify-center gap-1.5 mb-1">
-            <stat.icon className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-              {stat.label}
-            </span>
-          </div>
-          <span className="text-sm font-semibold text-slate-900">{stat.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 function DrawerSkeleton() {
   return (
     <div className="p-6 space-y-4 animate-pulse">
       <div className="h-6 bg-slate-200 rounded w-1/3" />
       <div className="h-4 bg-slate-200 rounded w-2/3" />
       <div className="h-4 bg-slate-200 rounded w-1/2" />
-      <div className="grid grid-cols-3 gap-3 mt-6">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="h-16 bg-slate-100 rounded-lg" />
-        ))}
-      </div>
       <div className="h-8 bg-slate-100 rounded mt-6" />
       <div className="space-y-3 mt-4">
         {[1, 2, 3].map(i => (
@@ -350,8 +281,8 @@ export default function CaseDrawer({
                   </Dialog.Close>
                 </div>
 
-                {/* Open full detail link */}
-                <div className="px-4 pt-2">
+                {/* Open full detail link + conditional Cancel Case */}
+                <div className="flex items-center justify-between px-4 pt-2 pb-3">
                   <Link
                     href={`/cases/${caseDetail.id}`}
                     className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors"
@@ -359,36 +290,16 @@ export default function CaseDrawer({
                     Open full detail
                     <ExternalLink className="w-3 h-3" />
                   </Link>
+                  {displayStatus === 'scheduled' && onCancelCase && can('cases.delete') && (
+                    <button
+                      className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"
+                      onClick={() => onCancelCase(caseDetail.id, caseDetail.case_number || '')}
+                    >
+                      <Ban className="w-3 h-3" />
+                      Cancel Case
+                    </button>
+                  )}
                 </div>
-
-                {/* Quick Stats */}
-                <div className="px-4 pt-3 pb-3">
-                  <QuickStats caseDetail={caseDetail} />
-                </div>
-
-                {/* Action buttons for cases needing review or cancellation */}
-                {((displayStatus === 'completed' && !caseDetail?.data_validated) || displayStatus === 'scheduled' || displayStatus === 'in_progress') && (
-                  <div className="px-4 pb-3 flex gap-2">
-                    {displayStatus === 'completed' && !caseDetail?.data_validated && caseDetail && (
-                      <Link
-                        href={`/dashboard/data-quality?caseId=${caseDetail.id}`}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        Review in Data Quality
-                      </Link>
-                    )}
-                    {(displayStatus === 'scheduled' || displayStatus === 'in_progress') && onCancelCase && caseDetail && can('cases.delete') && (
-                      <button
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-red-200 text-red-600 text-sm font-medium rounded-lg hover:bg-red-50 transition-colors"
-                        onClick={() => onCancelCase(caseDetail.id, caseDetail.case_number || '')}
-                      >
-                        <Ban className="w-4 h-4" />
-                        Cancel Case
-                      </button>
-                    )}
-                  </div>
-                )}
 
                 {/* Tab bar */}
                 <div className="flex border-t border-slate-100">

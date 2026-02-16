@@ -244,25 +244,12 @@ describe('CaseDrawer — unit', () => {
     expect(screen.getByTestId('procedure-icon')).toBeDefined()
   })
 
-  it('renders quick stats with computed values', () => {
-    render(
-      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
-    )
-    // Total duration = 95 minutes (scheduled_duration_minutes)
-    expect(screen.getByText('1h 35m')).toBeDefined()
-    // Surgical time = Incision (8:50) to Closing (9:45) = 55 min
-    expect(screen.getByText('55m')).toBeDefined()
-    // Milestones: 4/4 recorded
-    expect(screen.getByText('4/4')).toBeDefined()
-  })
-
   it('renders 3 tabs: Financials, Milestones, Flags (no dqCaseIds)', () => {
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
     )
     expect(screen.getByText('Financials')).toBeDefined()
-    // "Milestones" appears in both quick stats and tab bar — use getAllByText
-    expect(screen.getAllByText('Milestones').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Milestones')).toBeDefined()
     expect(screen.getByText('Flags')).toBeDefined()
     expect(screen.queryByText('Validation')).toBeNull()
   })
@@ -325,25 +312,6 @@ describe('CaseDrawer — unit', () => {
     )
     expect(screen.getByText('Failed to load case details')).toBeDefined()
     expect(screen.getByText('Network error')).toBeDefined()
-  })
-
-  it('shows Review in Data Quality link for completed + unvalidated case', () => {
-    const unvalidatedCase = {
-      ...MOCK_CASE_DETAIL,
-      data_validated: false,
-      case_status: { name: 'Completed' },
-    }
-    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: unvalidatedCase }))
-    render(
-      <CaseDrawer
-        caseId="case-123"
-        onClose={vi.fn()}
-        categoryNameById={CATEGORY_MAP}
-      />
-    )
-    const link = screen.getByText('Review in Data Quality')
-    expect(link).toBeDefined()
-    expect(link.closest('a')?.getAttribute('href')).toBe('/dashboard/data-quality?caseId=case-123')
   })
 
   it('shows Cancel button for scheduled cases when handler provided', () => {
