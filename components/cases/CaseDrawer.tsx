@@ -11,7 +11,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useUser } from '@/lib/UserContext'
 import { useCaseDrawer } from '@/lib/hooks/useCaseDrawer'
-import { useCaseFinancials } from '@/lib/hooks/useCaseFinancials'
+import { useFinancialComparison } from '@/lib/hooks/useFinancialComparison'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
 import { statusColors } from '@/lib/design-tokens'
 import ProcedureIcon from '@/components/ui/ProcedureIcon'
@@ -161,22 +161,24 @@ export default function CaseDrawer({
     }
   )
 
+  // Surgeon display name (needed before hook calls)
+  const surgeonName = caseDetail?.surgeon
+    ? `Dr. ${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
+    : null
+
   // Lazy-load financial data only when financials tab is active
   const {
-    projection: financialProjection,
-    comparison: financialComparison,
-    actual: financialActual,
+    data: financialData,
     loading: financialsLoading,
     error: financialsError,
-  } = useCaseFinancials(
+  } = useFinancialComparison(
     caseDetail?.id ?? null,
     caseDetail?.facility_id ?? null,
     caseDetail?.surgeon_id ?? null,
     caseDetail?.procedure_type?.id ?? null,
     caseDetail?.scheduled_duration_minutes ?? null,
-    caseDetail?.surgeon
-      ? `Dr. ${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
-      : null,
+    caseDetail?.scheduled_date ?? null,
+    surgeonName,
     activeTab === 'financials' && !!caseDetail,
   )
 
@@ -194,11 +196,6 @@ export default function CaseDrawer({
     if (!caseDetail?.procedure_type?.procedure_category_id) return null
     return categoryNameById.get(caseDetail.procedure_type.procedure_category_id) ?? null
   }, [caseDetail, categoryNameById])
-
-  // Surgeon display name
-  const surgeonName = caseDetail?.surgeon
-    ? `Dr. ${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
-    : null
 
   return (
     <Dialog.Root open={!!caseId} onOpenChange={(open) => !open && onClose()}>
@@ -350,13 +347,11 @@ export default function CaseDrawer({
 
                 {activeTab === 'financials' && (
                   <CaseDrawerFinancials
+                    data={financialData}
                     displayStatus={displayStatus}
-                    projection={financialProjection}
-                    comparison={financialComparison}
-                    actual={financialActual}
+                    surgeonName={surgeonName}
                     loading={financialsLoading}
                     error={financialsError}
-                    surgeonName={surgeonName}
                   />
                 )}
 

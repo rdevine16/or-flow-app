@@ -50,10 +50,10 @@ vi.mock('@/lib/hooks/useMilestoneComparison', () => ({
   }),
 }))
 
-// Mock useCaseFinancials to avoid Supabase client initialization in tests
-const mockUseCaseFinancials = vi.fn()
-vi.mock('@/lib/hooks/useCaseFinancials', () => ({
-  useCaseFinancials: (...args: unknown[]) => mockUseCaseFinancials(...args),
+// Mock useFinancialComparison to avoid Supabase client initialization in tests
+const mockUseFinancialComparison = vi.fn()
+vi.mock('@/lib/hooks/useFinancialComparison', () => ({
+  useFinancialComparison: (...args: unknown[]) => mockUseFinancialComparison(...args),
 }))
 
 // Mock useSupabaseQuery (used by validation tab lazy-loading)
@@ -193,10 +193,8 @@ function defaultDrawerReturn(overrides: Partial<ReturnType<typeof mockUseCaseDra
 describe('CaseDrawer — unit', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
-    mockUseCaseFinancials.mockReturnValue({
-      projection: null,
-      comparison: null,
-      actual: null,
+    mockUseFinancialComparison.mockReturnValue({
+      data: null,
       loading: false,
       error: null,
     })
@@ -351,10 +349,8 @@ describe('CaseDrawer — unit', () => {
 describe('CaseDrawer — tab switching', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
-    mockUseCaseFinancials.mockReturnValue({
-      projection: null,
-      comparison: null,
-      actual: null,
+    mockUseFinancialComparison.mockReturnValue({
+      data: null,
       loading: false,
       error: null,
     })
