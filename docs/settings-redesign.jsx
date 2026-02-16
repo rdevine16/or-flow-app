@@ -1,51 +1,24 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 
 /* ═══════════════════════════════════════════
    DATA
    ═══════════════════════════════════════════ */
 
-// Raw milestone data — includes both start and end milestones
-const RAW_MILESTONES = [
-  { id: 1, name: "Patient In Room", phase: "pre-op", scope: "global", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 115, validRange: "1-90 min", active: true },
-  { id: 2, name: "Anesthesia Start", phase: "pre-op", scope: "global", pairLabel: "Anesthesia", pairPosition: "start", pairWithId: 3, casesUsed: 100, validRange: "1-90 min", active: true },
-  { id: 3, name: "Anesthesia End", phase: "pre-op", scope: "global", pairLabel: "Anesthesia", pairPosition: "end", pairWithId: 2, casesUsed: 100, validRange: "1-90 min", active: true },
-  { id: 4, name: "Prep/Drape Start", phase: "pre-op", scope: "global", pairLabel: "Prep & Drape", pairPosition: "start", pairWithId: 5, casesUsed: 115, validRange: "1-90 min", active: true },
-  { id: 5, name: "Prep/Drape Complete", phase: "pre-op", scope: "global", pairLabel: "Prep & Drape", pairPosition: "end", pairWithId: 4, casesUsed: 91, validRange: "1-90 min", active: true },
-  { id: 6, name: "Timeout", phase: "pre-op", scope: "global", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 108, validRange: "1-90 min", active: true },
-  { id: 7, name: "Incision", phase: "surgical", scope: "global", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 114, validRange: "1-90 min", active: true },
-  { id: 8, name: "Implant Placement", phase: "surgical", scope: "custom", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 42, validRange: "1-120 min", active: true },
-  { id: 9, name: "Closing", phase: "closing", scope: "global", pairLabel: "Closing", pairPosition: "start", pairWithId: 10, casesUsed: 114, validRange: "1-90 min", active: true },
-  { id: 10, name: "Closing Complete", phase: "closing", scope: "global", pairLabel: "Closing", pairPosition: "end", pairWithId: 9, casesUsed: 112, validRange: "1-90 min", active: true },
-  { id: 11, name: "Dressing", phase: "closing", scope: "global", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 98, validRange: "1-60 min", active: true },
-  { id: 12, name: "Patient Out", phase: "closing", scope: "global", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 115, validRange: "1-90 min", active: true },
-  { id: 13, name: "Room Ready", phase: "closing", scope: "global", pairLabel: null, pairPosition: null, pairWithId: null, casesUsed: 87, validRange: "1-120 min", active: true },
+const MILESTONES = [
+  { id: 1, name: "Patient In Room", phase: "pre-op", scope: "global", pair: null, pairPosition: null, casesUsed: 115, validRange: "1-90 min", active: true },
+  { id: 2, name: "Anesthesia Start", phase: "pre-op", scope: "global", pair: "Anesthesia End", pairPosition: "start", casesUsed: 100, validRange: "1-90 min", active: true },
+  { id: 3, name: "Anesthesia End", phase: "pre-op", scope: "global", pair: "Anesthesia Start", pairPosition: "end", casesUsed: 100, validRange: "1-90 min", active: true },
+  { id: 4, name: "Prep/Drape Start", phase: "pre-op", scope: "global", pair: "Prep/Drape Complete", pairPosition: "start", casesUsed: 115, validRange: "1-90 min", active: true },
+  { id: 5, name: "Prep/Drape Complete", phase: "pre-op", scope: "global", pair: "Prep/Drape Start", pairPosition: "end", casesUsed: 91, validRange: "1-90 min", active: true },
+  { id: 6, name: "Timeout", phase: "pre-op", scope: "global", pair: null, pairPosition: null, casesUsed: 108, validRange: "1-90 min", active: true },
+  { id: 7, name: "Incision", phase: "surgical", scope: "global", pair: null, pairPosition: null, casesUsed: 114, validRange: "1-90 min", active: true },
+  { id: 8, name: "Implant Placement", phase: "surgical", scope: "custom", pair: null, pairPosition: null, casesUsed: 42, validRange: "1-120 min", active: true },
+  { id: 9, name: "Closing", phase: "closing", scope: "global", pair: "Closing Complete", pairPosition: "start", casesUsed: 114, validRange: "1-90 min", active: true },
+  { id: 10, name: "Closing Complete", phase: "closing", scope: "global", pair: "Closing", pairPosition: "end", casesUsed: 112, validRange: "1-90 min", active: true },
+  { id: 11, name: "Dressing", phase: "closing", scope: "global", pair: null, pairPosition: null, casesUsed: 98, validRange: "1-60 min", active: true },
+  { id: 12, name: "Patient Out", phase: "closing", scope: "global", pair: null, pairPosition: null, casesUsed: 115, validRange: "1-90 min", active: true },
+  { id: 13, name: "Room Ready", phase: "closing", scope: "global", pair: null, pairPosition: null, casesUsed: 87, validRange: "1-120 min", active: true },
 ];
-
-// Collapse paired milestones into single display rows
-// - "start" milestones become the collapsed row, using pair_label as display name
-// - "end" milestones are hidden (consumed by their pair)
-// - standalone milestones pass through unchanged
-function collapseMilestones(raw) {
-  const byId = new Map(raw.map(m => [m.id, m]));
-  return raw
-    .filter(m => m.pairPosition !== "end") // hide end milestones
-    .map(m => {
-      if (m.pairPosition === "start") {
-        const partner = byId.get(m.pairWithId);
-        return {
-          ...m,
-          displayName: m.pairLabel || m.name, // use pair_label as display name
-          isPaired: true,
-          startName: m.name,
-          endName: partner?.name || "—",
-          casesUsed: Math.max(m.casesUsed, partner?.casesUsed || 0),
-        };
-      }
-      return { ...m, displayName: m.name, isPaired: false, startName: null, endName: null };
-    });
-}
-
-const MILESTONES = collapseMilestones(RAW_MILESTONES);
 
 const SETTINGS_CATEGORIES = [
   { id: "general", label: "General", icon: "⚙️" },
@@ -86,17 +59,19 @@ const PHASES = [
    SMALL COMPONENTS
    ═══════════════════════════════════════════ */
 
-function TypeIndicator({ isPaired, startName, endName }) {
-  if (!isPaired) {
-    return <span style={{ fontSize: 11.5, color: "#94a3b8", fontWeight: 500 }}>Single</span>;
-  }
+function PairIndicator({ pair, position }) {
+  if (!pair) return <span style={{ color: "#cbd5e1", fontSize: 12.5 }}>—</span>;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={position === "start" ? "#6366f1" : "#10b981"} strokeWidth="2" strokeLinecap="round">
+        {position === "start"
+          ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v4M12 18v4" /></>
+          : <><circle cx="12" cy="12" r="4" fill="currentColor" /><path d="M12 2v4M12 18v4" /></>
+        }
       </svg>
-      <span style={{ fontSize: 11.5, color: "#6366f1", fontWeight: 600 }}>Paired</span>
+      <span style={{ fontSize: 12.5, color: "#64748b" }}>
+        <span style={{ color: "#94a3b8" }}>{position === "start" ? "→" : "←"}</span> {pair}
+      </span>
     </div>
   );
 }
@@ -123,16 +98,6 @@ function PhaseGroupHeader({ phase }) {
 function MilestonesContent() {
   const [milestones, setMilestones] = useState(MILESTONES);
   const [hoveredRow, setHoveredRow] = useState(null);
-  const [expandedPairs, setExpandedPairs] = useState(new Set());
-
-  const toggleExpanded = useCallback((id) => {
-    setExpandedPairs(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
 
   // Group milestones by phase, maintaining order
   const phases = ["pre-op", "surgical", "closing"];
@@ -142,7 +107,6 @@ function MilestonesContent() {
   }));
 
   const totalActive = milestones.filter(m => m.active).length;
-  const pairedCount = milestones.filter(m => m.isPaired).length;
   const customCount = milestones.filter(m => m.scope === "custom").length;
 
   return (
@@ -170,9 +134,8 @@ function MilestonesContent() {
       <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
         {[
           { label: "Active Milestones", value: totalActive, color: "#10b981" },
-          { label: "Paired", value: pairedCount, color: "#6366f1" },
           { label: "Custom", value: customCount, color: "#8b5cf6" },
-          { label: "Phases", value: 3, color: "#06b6d4" },
+          { label: "Phases", value: 3, color: "#6366f1" },
         ].map((s, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: `${s.color}06`, border: `1px solid ${s.color}12`, borderRadius: 10 }}>
             <span style={{ fontSize: 20, fontWeight: 750, color: s.color, fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</span>
@@ -195,7 +158,7 @@ function MilestonesContent() {
               {[
                 { label: "#", width: 48, align: "center" },
                 { label: "Milestone", width: "auto", align: "left" },
-                { label: "Type", width: 120, align: "left" },
+                { label: "Pair", width: 180, align: "left" },
                 { label: "Cases", width: 80, align: "right" },
                 { label: "Valid Range", width: 100, align: "right" },
                 { label: "", width: 80, align: "right" },
@@ -214,101 +177,73 @@ function MilestonesContent() {
             {grouped.map(({ phase, items }) => (
               <>
                 <PhaseGroupHeader key={`phase-${phase}`} phase={phase} />
-                {items.map((m, idx) => {
-                  const isExpanded = expandedPairs.has(m.id);
-                  return (
-                    <>
-                      <tr key={m.id}
-                        onMouseEnter={() => setHoveredRow(m.id)}
-                        onMouseLeave={() => setHoveredRow(null)}
-                        onClick={() => m.isPaired && toggleExpanded(m.id)}
-                        style={{
-                          borderBottom: "1px solid rgba(148,163,184,0.06)",
-                          background: hoveredRow === m.id ? "rgba(99,102,241,0.02)" : "transparent",
-                          transition: "background 0.1s",
-                          cursor: m.isPaired ? "pointer" : "default",
-                        }}>
-                        {/* Order */}
-                        <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "#b0b8c4", fontFamily: "'JetBrains Mono', monospace" }}>{m.id}</span>
-                        </td>
+                {items.map((m, idx) => (
+                  <tr key={m.id}
+                    onMouseEnter={() => setHoveredRow(m.id)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                    style={{
+                      borderBottom: "1px solid rgba(148,163,184,0.06)",
+                      background: hoveredRow === m.id ? "rgba(99,102,241,0.02)" : "transparent",
+                      transition: "background 0.1s",
+                      cursor: "pointer",
+                    }}>
+                    {/* Order */}
+                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#b0b8c4", fontFamily: "'JetBrains Mono', monospace" }}>{m.id}</span>
+                    </td>
 
-                        {/* Name — uses pair_label for paired milestones */}
-                        <td style={{ padding: "12px 16px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {m.isPaired && (
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round"
-                                style={{ transition: "transform 0.15s", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>
-                                <polyline points="9 18 15 12 9 6"/>
-                              </svg>
-                            )}
-                            {m.scope === "custom" && (
-                              <span style={{ color: "#8b5cf6", fontSize: 8, lineHeight: 1 }}>◆</span>
-                            )}
-                            <span style={{ fontSize: 13.5, fontWeight: 600, color: "#0f172a" }}>{m.displayName}</span>
-                          </div>
-                        </td>
+                    {/* Name */}
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        {m.scope === "custom" && (
+                          <span style={{ color: "#8b5cf6", fontSize: 8, lineHeight: 1 }}>◆</span>
+                        )}
+                        <span style={{ fontSize: 13.5, fontWeight: 600, color: "#0f172a" }}>{m.name}</span>
+                        {m.pairPosition && (
+                          <span style={{
+                            fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                            background: m.pairPosition === "start" ? "rgba(99,102,241,0.08)" : "rgba(16,185,129,0.08)",
+                            color: m.pairPosition === "start" ? "#6366f1" : "#10b981",
+                            textTransform: "uppercase", letterSpacing: "0.04em",
+                          }}>{m.pairPosition}</span>
+                        )}
+                      </div>
+                    </td>
 
-                        {/* Type */}
-                        <td style={{ padding: "12px 16px" }}>
-                          <TypeIndicator isPaired={m.isPaired} startName={m.startName} endName={m.endName} />
-                        </td>
+                    {/* Pair */}
+                    <td style={{ padding: "12px 16px" }}>
+                      <PairIndicator pair={m.pair} position={m.pairPosition} />
+                    </td>
 
-                        {/* Cases */}
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                          <span style={{ fontSize: 13, fontWeight: 500, color: "#475569", fontFamily: "'JetBrains Mono', monospace" }}>{m.casesUsed}</span>
-                        </td>
+                    {/* Cases */}
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: "#475569", fontFamily: "'JetBrains Mono', monospace" }}>{m.casesUsed}</span>
+                    </td>
 
-                        {/* Valid Range */}
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                          <span style={{ fontSize: 12.5, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{m.validRange}</span>
-                        </td>
+                    {/* Valid Range */}
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <span style={{ fontSize: 12.5, color: "#94a3b8", fontFamily: "'JetBrains Mono', monospace" }}>{m.validRange}</span>
+                    </td>
 
-                        {/* Actions */}
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, opacity: hoveredRow === m.id ? 1 : 0, transition: "opacity 0.15s" }}>
-                            <button style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 6, color: "#94a3b8", display: "flex" }} title="Edit"
-                              onClick={e => { e.stopPropagation(); }}
-                              onMouseEnter={e => { e.currentTarget.style.background = "rgba(148,163,184,0.1)"; e.currentTarget.style.color = "#475569"; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                            </button>
-                            {m.scope === "custom" && (
-                              <button style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 6, color: "#94a3b8", display: "flex" }} title="Delete"
-                                onClick={e => { e.stopPropagation(); }}
-                                onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; e.currentTarget.style.color = "#ef4444"; }}
-                                onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* Expanded sub-rows for paired milestones */}
-                      {m.isPaired && isExpanded && (
-                        <>
-                          <tr key={`${m.id}-start`} style={{ background: "rgba(99,102,241,0.015)" }}>
-                            <td style={{ padding: "6px 16px" }} />
-                            <td style={{ padding: "6px 16px", paddingLeft: 52 }}>
-                              <span style={{ fontSize: 12, color: "#64748b" }}>{m.startName}</span>
-                              <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 8, padding: "1px 6px", borderRadius: 3, background: "rgba(99,102,241,0.08)", color: "#6366f1" }}>START</span>
-                            </td>
-                            <td colSpan={4} />
-                          </tr>
-                          <tr key={`${m.id}-end`} style={{ background: "rgba(99,102,241,0.015)" }}>
-                            <td style={{ padding: "6px 16px" }} />
-                            <td style={{ padding: "6px 16px", paddingLeft: 52 }}>
-                              <span style={{ fontSize: 12, color: "#64748b" }}>{m.endName}</span>
-                              <span style={{ fontSize: 10, fontWeight: 600, marginLeft: 8, padding: "1px 6px", borderRadius: 3, background: "rgba(16,185,129,0.08)", color: "#10b981" }}>END</span>
-                            </td>
-                            <td colSpan={4} />
-                          </tr>
-                        </>
-                      )}
-                    </>
-                  );
-                })}
+                    {/* Actions */}
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, opacity: hoveredRow === m.id ? 1 : 0, transition: "opacity 0.15s" }}>
+                        <button style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 6, color: "#94a3b8", display: "flex" }} title="Edit"
+                          onMouseEnter={e => { e.currentTarget.style.background = "rgba(148,163,184,0.1)"; e.currentTarget.style.color = "#475569"; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                        </button>
+                        {m.scope === "custom" && (
+                          <button style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 6, color: "#94a3b8", display: "flex" }} title="Delete"
+                            onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; e.currentTarget.style.color = "#ef4444"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#94a3b8"; }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </>
             ))}
           </tbody>

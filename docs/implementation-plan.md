@@ -1,20 +1,19 @@
 # Implementation Plan: Settings Layout Redesign + Milestones Table Overhaul
 
 ## Overview
-Replace the settings sidebar with a horizontal tab bar + compact sub-nav pattern, create a settings landing page, redesign the milestones page as a phase-grouped table with collapsed pair rows, and fix the case drawer interval logic. 8 phases, executed sequentially. Each phase is a single Claude Code session with `/phase-start`.
+Replace the settings sidebar with a horizontal tab bar + compact sub-nav pattern, create a settings landing page, and redesign the milestones page as a phase-grouped table. 6 phases, executed sequentially. Each phase is a single Claude Code session with `/phase-start`.
 
 ## Branch
 `feature/settings-layout-redesign`
 
 ## Dependency Graph
 ```
-Phase 1 (Audit + Config) → Phase 2 (pair_label Migration) → Phase 3 (New Layout Shell) → Phase 4 (Landing Page)
-                                                                                        → Phase 5 (Migrate All Pages)
-                                                                                        → Phase 6 (Milestones Table)
-                                                            → Phase 7 (Case Drawer Intervals)
-                                                            → Phase 8 (Polish + Cleanup)
+Phase 1 (Audit + Config) → Phase 2 (New Layout Shell) → Phase 3 (Landing Page)
+                                                       → Phase 4 (Migrate All Pages)
+                                                       → Phase 5 (Milestones Table)
+                                                       → Phase 6 (Polish + Cleanup)
 ```
-Phase 1 must come first. Phase 2 (migration) must come before Phases 3-8. Phase 3 must come before 4-6. Phases 4-7 can run in any order after their dependencies. Phase 8 is last.
+Phase 1 must come first. Phase 2 must come before 3-6. Phases 3-5 can run in any order after Phase 2. Phase 6 is last.
 
 ---
 
@@ -76,61 +75,7 @@ Map every existing settings page, its route, its category, and how it uses `Sett
 
 ---
 
-## Phase 2: Add `pair_label` Column + Update Interval Medians Function
-**Complexity:** Small-Medium | **Blockers:** Phase 1
-
-### Goal
-Add the `pair_label` column to `milestone_types` and `facility_milestones`, backfill existing pairs, and rewrite the `get_milestone_interval_medians` DB function to use forward-looking/paired interval semantics. This is shared infrastructure needed by both the milestones settings table (Phase 6) and case drawer intervals (Phase 7).
-
-### What To Do
-1. **Create migration: `add_pair_label.sql`**:
-   ```sql
-   ALTER TABLE public.milestone_types ADD COLUMN pair_label TEXT;
-   ALTER TABLE public.facility_milestones ADD COLUMN pair_label TEXT;
-   ```
-2. **Backfill existing pairs** in the same migration:
-   - For `milestone_types`: find rows where `pair_position = 'start'`, derive `pair_label` by stripping " Start" suffix from `display_name` (or `name`). E.g., "Anesthesia Start" → "Anesthesia", "Prep/Drape Start" → "Prep/Drape", "Closing" → "Closing"
-   - For `facility_milestones`: same logic, matching by `source_milestone_type_id` or name pattern
-   - Handle edge cases: "Closing" / "Closing Complete" — the start milestone is "Closing" which doesn't have " Start" in it. Use a CASE statement with known patterns, falling back to the start milestone's display_name as-is.
-3. **Create migration: `update_interval_medians_v2.sql`** — rewrite `get_milestone_interval_medians`:
-   - Add `pair_label`, `pair_with_id`, and `pair_position` to the return type
-   - Change the interval CTE logic:
-     - **Paired milestones (pair_position = 'start')**: interval = end_milestone.recorded_at - start_milestone.recorded_at (join via `pair_with_id`)
-     - **Paired milestones (pair_position = 'end')**: excluded from results (consumed by their pair)
-     - **Standalone milestones (pair_position IS NULL)**: interval = LEAD(recorded_at) - recorded_at (forward-looking)
-     - **Last milestone**: interval = NULL
-   - Medians are computed using the same paired/forward-looking semantics across historical cases
-   - Keep the same function signature (p_surgeon_id, p_procedure_type_id, p_facility_id) for backward compatibility, but extend the return columns
-4. **Update admin milestone pairing UI** (`app/admin/settings/milestones/page.tsx`):
-   - Add a `pair_label` text field to the pair creation/edit dialog
-   - When creating a pair, set `pair_label` on the start milestone
-   - When propagating to facilities, include `pair_label`
-5. **Update the facility milestones lookup** (`lib/dal/lookups.ts`):
-   - Add `pair_label` to the `FacilityMilestone` interface and SELECT query
-
-### Files to Create
-- `supabase/migrations/YYYYMMDD_add_pair_label.sql`
-- `supabase/migrations/YYYYMMDD_update_interval_medians_v2.sql`
-
-### Files to Modify
-- `app/admin/settings/milestones/page.tsx` — add `pair_label` to pairing UI
-- `lib/dal/lookups.ts` — add `pair_label` to FacilityMilestone type and query
-
-### Commit Message
-`feat(milestones): add pair_label column and rewrite interval medians to forward-looking/paired logic`
-
-### Test Gate
-1. `pair_label` column exists on both tables with correct backfilled values
-2. Existing pairs have meaningful labels (e.g., "Anesthesia", "Prep/Drape", "Closing")
-3. `get_milestone_interval_medians` returns forward-looking intervals for standalone milestones
-4. `get_milestone_interval_medians` returns paired durations for start milestones
-5. `get_milestone_interval_medians` excludes end milestones from results
-6. Admin pairing UI allows setting `pair_label`
-7. `npm run typecheck && npm run lint` passes
-
----
-
-## Phase 3: Build New Settings Layout Shell
+## Phase 2: Build New Settings Layout Shell
 **Complexity:** Medium | **Blockers:** Phase 1
 
 ### Goal
@@ -154,8 +99,8 @@ Create the `SettingsTabLayout` component that replaces `SettingsLayout`. This ph
    - Sub-nav: white background, right border, 220px width, rounded highlight on active item
    - Content area: `#f8f9fb` background, padding `28px 36px`
    - Breadcrumb: subtle gray text, 13px, clickable "Settings" link
-3. **Wire up one page as proof of concept** — update `app/settings/milestones/page.tsx` to use `<SettingsTabLayout activePageId="milestones">` instead of `<SettingsLayout>`. The milestones page content stays exactly the same for now (badge-heavy list) — we redesign it in Phase 6.
-4. **Keep `SettingsLayout.tsx` alive** — don't delete it yet. Other pages still use it. We migrate them all in Phase 5.
+3. **Wire up one page as proof of concept** — update `app/settings/milestones/page.tsx` to use `<SettingsTabLayout activePageId="milestones">` instead of `<SettingsLayout>`. The milestones page content stays exactly the same for now (badge-heavy list) — we redesign it in Phase 5.
+4. **Keep `SettingsLayout.tsx` alive** — don't delete it yet. Other pages still use it. We migrate them all in Phase 4.
 
 ### Files to Create
 - `components/layouts/SettingsTabLayout.tsx`
@@ -177,8 +122,8 @@ Create the `SettingsTabLayout` component that replaces `SettingsLayout`. This ph
 
 ---
 
-## Phase 4: Settings Landing Page
-**Complexity:** Small-Medium | **Blockers:** Phase 3
+## Phase 3: Settings Landing Page
+**Complexity:** Small-Medium | **Blockers:** Phase 2
 
 ### Goal
 Create the settings landing page that shows all categories and items in a card grid, replacing the need to navigate blind through a sidebar.
@@ -216,15 +161,15 @@ Create the settings landing page that shows all categories and items in a card g
 
 ---
 
-## Phase 5: Migrate All Settings Pages to New Layout
-**Complexity:** Medium | **Blockers:** Phase 3
+## Phase 4: Migrate All Settings Pages to New Layout
+**Complexity:** Medium | **Blockers:** Phase 2
 
 ### Goal
 Swap every remaining settings page from `<SettingsLayout>` to `<SettingsTabLayout>`. Then delete the old `SettingsLayout` component.
 
 ### What To Do
 1. **List all settings pages** from the Phase 1 audit config
-2. **For each page**, perform the same swap done for milestones in Phase 3:
+2. **For each page**, perform the same swap done for milestones in Phase 2:
    - Replace `<SettingsLayout>` (or `<SettingsLayout title="..." description="...">`) with `<SettingsTabLayout activePageId="[matching-id]">`
    - If the page rendered its title/description inside SettingsLayout, move that into the page's own content area (SettingsTabLayout doesn't render titles — each page owns its header)
    - Ensure the `activePageId` matches the item's `id` in `lib/settings-config.ts`
@@ -240,7 +185,7 @@ Swap every remaining settings page from `<SettingsLayout>` to `<SettingsTabLayou
    Ensure zero references remain to the old component.
 
 ### Files to Modify
-- Every `app/settings/*/page.tsx` file (except milestones, already done in Phase 3)
+- Every `app/settings/*/page.tsx` file (except milestones, already done in Phase 2)
 
 ### Files to Delete
 - `components/layouts/SettingsLayout.tsx`
@@ -258,11 +203,11 @@ Swap every remaining settings page from `<SettingsLayout>` to `<SettingsTabLayou
 
 ---
 
-## Phase 6: Milestones Table Redesign (Collapsed Pairs)
-**Complexity:** Large | **Blockers:** Phase 2, Phase 3
+## Phase 5: Milestones Table Redesign
+**Complexity:** Large | **Blockers:** Phase 2
 
 ### Goal
-Replace the milestone list (with its badge-heavy rows) with a clean phase-grouped data table using collapsed pair rows and hover-revealed actions. Paired milestones (Anesthesia Start/End, Closing/Closing Complete, etc.) display as a single row using their `pair_label`.
+Replace the milestone list (with its badge-heavy rows) with a clean phase-grouped data table with hover-revealed actions.
 
 ### What To Do
 1. **Analyze the current milestones page** — read `app/settings/milestones/page.tsx` to understand:
@@ -270,126 +215,73 @@ Replace the milestone list (with its badge-heavy rows) with a clean phase-groupe
    - How case usage count is computed (count from `case_milestones` grouped by `facility_milestone_id`)
    - How the current list items render (badges, link icon, edit icon)
    - How add/edit/delete flows work (modal? inline? route change?)
-   - Phase grouping: use the `phase_group` column on `facility_milestones` (added in earlier migration)
+   - How phase is determined (is there a `phase` column on `facility_milestones`, or is it derived from display_order or milestone name?)
 2. **Create `PhaseGroupHeader.tsx`**:
-   - Props: `phase: "pre_op" | "surgical" | "closing" | "post_op"`
+   - Props: `phase: "pre-op" | "surgical" | "closing"`
    - Renders a table row spanning all columns with: colored accent bar (3px, phase color), phase label (uppercase, phase color), divider line
-   - Phase colors: Pre-Op = indigo, Surgical = cyan, Closing = amber, Post-Op = slate
-3. **Create `MilestoneRow.tsx`** — handles both standalone and collapsed pair rows:
-   - Props: milestone data (including `pair_label`, `pair_position`, `pair_with_id`), onEdit callback, onDelete callback
-   - **Standalone rows**: order number, name (+ ◆ for custom), type indicator ("Single"), cases count, valid range, actions
-   - **Collapsed pair rows**: order number, `pair_label` as display name (+ ◆ for custom), type indicator ("Paired" with link icon), combined cases count (max of start/end), valid range, actions
-   - Collapsed pair row can expand on click to show the underlying start/end milestone names as indented sub-rows (for reference only)
-   - **End milestones (`pair_position = 'end'`) are NOT rendered as top-level rows** — they are consumed by their pair's collapsed row
-   - Actions (edit/delete icons) visible only on hover
+   - Phase colors: Pre-Op = indigo, Surgical = cyan, Closing = amber
+3. **Create `PairIndicator.tsx`**:
+   - Props: `pair: string | null`, `position: "start" | "end" | null`
+   - If no pair: render em-dash in muted gray
+   - If pair: render directional arrow (→ or ←) + pair name
+   - Small icon indicating start (open circle) or end (filled circle)
+4. **Create `MilestoneRow.tsx`**:
+   - Props: milestone data, onEdit callback, onDelete callback
+   - Columns: order number, name (+ ◆ for custom + optional Start/End pill), pair indicator, cases count, valid range, actions
+   - Actions (edit/delete icons) visible only on hover — managed with local hover state
    - Delete icon only renders for custom milestones
    - Row has subtle hover background
-4. **Create `MilestonesTable.tsx`**:
+5. **Create `MilestonesTable.tsx`**:
    - Props: milestones array, onEdit, onDelete
-   - **Pre-processing step**: filter out `pair_position = 'end'` milestones from top-level rows. For each `pair_position = 'start'` milestone, attach its partner data for the collapsed display.
-   - Groups remaining milestones by `phase_group`
+   - Groups milestones by phase
    - Renders table with header row + PhaseGroupHeaders + MilestoneRows
-   - Table columns: #, Milestone, Type (Single/Paired), Cases, Valid Range, Actions
    - Wrapped in white card with border-radius and subtle shadow
-5. **Create `SettingsStatsRow.tsx`** (reusable):
+6. **Create `SettingsStatsRow.tsx`** (reusable):
    - Props: array of `{ label, value, color }` stats
    - Renders horizontal row of compact stat chips
    - Used on milestones page, potentially reusable on other settings pages
-6. **Update the milestones page**:
+7. **Update the milestones page**:
    - Replace the current list rendering with: stats row → info bar → MilestonesTable
-   - Keep all existing data fetching — add `pair_label` to the `facility_milestones` SELECT
+   - Keep all existing data fetching and state management
    - Keep all existing add/edit/delete handlers — just restyle the triggers
-   - Edit on a collapsed pair row opens the pair edit dialog (editing both start + end + pair_label)
    - Update the page header: title + description + "Add Custom Milestone" button (indigo)
    - Replace the blue info callout with slim single-line info bar
+8. **Determine phase mapping** — if `facility_milestones` doesn't have a `phase` column:
+   - Option A: Derive from `display_order` ranges (e.g., 1-6 = pre-op, 7 = surgical, 8-13 = closing)
+   - Option B: Derive from milestone name patterns (check for keywords: anesthesia/prep/timeout → pre-op, incision → surgical, closing/dressing/patient out/room ready → closing)
+   - Option C: Add a `phase` column (out of scope per spec, but Claude Code should note if it would be cleaner)
+   - Choose the least fragile option and document the decision
 
 ### Files to Create
 - `components/settings/PhaseGroupHeader.tsx`
+- `components/settings/PairIndicator.tsx`
 - `components/settings/MilestoneRow.tsx`
 - `components/settings/MilestonesTable.tsx`
 - `components/settings/SettingsStatsRow.tsx`
 
 ### Files to Modify
-- `app/settings/milestones/page.tsx` — replace list with table, update header, fetch `pair_label`
+- `app/settings/milestones/page.tsx` — replace list with table, update header
 
 ### Commit Message
-`feat(settings): redesign milestones page with phase-grouped table and collapsed pair rows`
+`feat(settings): redesign milestones page with phase-grouped table`
 
 ### Test Gate
-1. Milestones grouped correctly under Pre-Op, Surgical, Closing, Post-Op headers
+1. Milestones grouped correctly under Pre-Op, Surgical, Closing headers
 2. Phase headers render with correct colors and labels
-3. Paired milestones display as single collapsed rows using `pair_label` (e.g., "Anesthesia", not "Anesthesia Start" + "Anesthesia End")
-4. End milestones (`pair_position = 'end'`) do not appear as separate rows
-5. Collapsed pair rows show "Paired" type indicator
-6. Expanding a collapsed pair row reveals underlying start/end milestone names
-7. Custom milestones show ◆ indicator (no "Global" badge anywhere)
-8. No phase badges on any row
-9. Stats row shows accurate Active, Custom, and Phases counts
-10. Edit icon appears on all rows on hover
-11. Delete icon appears only on custom milestone rows on hover
-12. Edit and delete actions trigger existing flows correctly
-13. Add Custom Milestone button works as before
-14. `npm run typecheck && npm run lint` passes
+3. Pair column shows linked milestone names with directional arrows
+4. Custom milestones show ◆ indicator (no "Global" badge anywhere)
+5. No phase badges on any row
+6. Stats row shows accurate Active, Custom, and Phases counts
+7. Edit icon appears on all rows on hover
+8. Delete icon appears only on custom milestone rows on hover
+9. Edit and delete actions trigger existing flows (modal, etc.) correctly
+10. Add Custom Milestone button works as before
+11. `npm run typecheck && npm run lint` passes
 
 ---
 
-## Phase 7: Case Drawer Interval Logic
-**Complexity:** Medium | **Blockers:** Phase 2
-
-### Goal
-Update the case drawer's milestone tab to use the new forward-looking/paired interval model. Paired milestones collapse into a single row using `pair_label`, standalone milestones show forward-looking intervals (this → next), and the last milestone shows no interval.
-
-### What To Do
-1. **Update `milestoneAnalytics.ts`** — rewrite `calculateIntervals()`:
-   - Accept pair metadata (`pair_label`, `pair_with_id`, `pair_position`) from the enriched milestone data
-   - **Collapse pairs**: For `pair_position = 'start'`, find the matching end milestone and compute interval = end.recorded_at - start.recorded_at. Use `pair_label` as the display name. Remove the end milestone from the output array.
-   - **Forward-looking standalone**: For milestones with `pair_position = null`, compute interval = next_milestone.recorded_at - this.recorded_at
-   - **Last milestone**: interval = null
-   - **Gap time**: Time between a pair-end and the next milestone is not attributed to any row — it contributes to the Idle/Gap bucket in time allocation
-   - Update the `MilestoneInterval` type to include `pair_label`, `is_paired`, and optionally `pair_start_time`/`pair_end_time` for tooltip display
-2. **Update `useMilestoneComparison.ts`**:
-   - Fetch `pair_label`, `pair_with_id`, `pair_position` in the case_milestones query (join from `facility_milestones`)
-   - Pass pair metadata through to `calculateIntervals()`
-   - The medians from `get_milestone_interval_medians` (updated in Phase 2) already use the new semantics, so delta calculations should work automatically
-3. **Update `MilestoneDetailRow.tsx` (MilestoneTable)**:
-   - Show interval on all rows except the **last** (currently hides the **first**)
-   - For collapsed pair rows, display `pair_label` as the milestone name
-   - Optionally show start/end timestamps in the "Time" column as a range (e.g., "10:03 – 10:15") for paired rows
-   - Update the `isFirst` → `isLast` logic for the interval/median/delta columns
-4. **Update `calculateTimeAllocation()`**:
-   - Gap time between pair-end and next milestone should be bucketed into "Idle/Gap"
-   - Paired interval time inherits the start milestone's `phase_group`
-5. **Update `calculateSwimlaneSections()`**:
-   - Collapsed pairs get a single segment proportional to their duration
-   - Ensure total widths still sum correctly
-6. **Update `CaseDrawerMilestones.tsx`** if needed — ensure pair data flows through to all sub-components (timeline, table, time allocation bar)
-
-### Files to Modify
-- `lib/utils/milestoneAnalytics.ts` — core interval logic rewrite
-- `lib/hooks/useMilestoneComparison.ts` — fetch pair metadata, pass to analytics
-- `components/cases/MilestoneDetailRow.tsx` — render collapsed pairs, fix first→last logic
-- `components/cases/CaseDrawerMilestones.tsx` — pass pair data through
-
-### Commit Message
-`feat(milestones): rewrite case drawer intervals to forward-looking/paired model`
-
-### Test Gate
-1. Paired milestones display as single row in drawer using `pair_label`
-2. Paired interval = end.recorded_at - start.recorded_at
-3. Standalone interval = next_milestone.recorded_at - this.recorded_at (forward-looking)
-4. Last milestone shows "—" for interval, median, and delta
-5. First milestone now shows an interval (unlike current behavior)
-6. Gap time between pairs appears in Idle/Gap time allocation bucket
-7. Median comparisons and delta severity badges display correctly
-8. Timeline swimlane renders collapsed pairs as single proportional segments
-9. Total case time and total surgical time still compute correctly
-10. `npm run typecheck && npm run lint` passes
-11. Existing milestone analytics tests updated to reflect new semantics
-
----
-
-## Phase 8: Polish, Animations, and Cleanup
-**Complexity:** Small-Medium | **Blockers:** Phases 4, 5, 6, 7
+## Phase 6: Polish, Animations, and Cleanup
+**Complexity:** Small-Medium | **Blockers:** Phases 3, 4, 5
 
 ### Goal
 Final polish pass: consistent design tokens, transitions, animation, dead code removal, and integration testing across all settings pages.
@@ -399,7 +291,7 @@ Final polish pass: consistent design tokens, transitions, animation, dead code r
    - Page content fade-in on navigation between settings pages (CSS `animation: fadeIn`)
    - Tab bar: smooth underline transition when switching categories
    - Sub-nav: subtle background transition on hover and active state
-   - Milestones table: row hover transition (background color), collapsed pair expand/collapse animation
+   - Milestones table: row hover transition (background color)
    - Stats chips: staggered slide-in on page load
 2. **Design token audit** across all new components:
    - Verify DM Sans and JetBrains Mono are loaded (check `tailwind.config.ts` or global CSS)
@@ -416,27 +308,23 @@ Final polish pass: consistent design tokens, transitions, animation, dead code r
    grep -r "settingsNav\|settingsSidebar\|SettingsSidebar" --include="*.tsx" --include="*.ts"
    ```
    Remove any orphaned imports, unused nav configurations, or dead CSS classes related to the old settings layout.
-   Also clean up any old backward-looking interval code or comments in milestoneAnalytics.ts.
 5. **Integration testing** — manually verify every settings page:
    - Navigate to Settings landing → verify all cards render
    - Click into each settings page → verify tab bar highlights correct category
    - Verify sub-nav highlights correct item
    - Verify breadcrumb is correct on every page
    - Verify back-navigation (browser back button, breadcrumb click)
-   - Verify milestones settings page: phase grouping, collapsed pairs, hover actions, stats row, add/edit/delete flows
-   - Verify case drawer milestones tab: collapsed pairs, forward-looking intervals, correct medians and deltas
+   - Verify milestones page: phase grouping, hover actions, stats row, add/edit/delete flows
    - Verify role gating: if a non-admin user accesses settings, role-restricted items should be hidden
 6. **Handle edge cases**:
    - Direct URL navigation (e.g., typing `/settings/milestones` directly) — should render correctly with proper tab/sub-nav state
    - Deep linking from other parts of the app (e.g., clicking "Settings" on a milestone from the case detail page)
    - Browser back/forward navigation through settings pages
-   - Cases with missing paired milestones (e.g., start recorded but not end) — show partial data gracefully
-   - Cases where pair_label is null for legacy paired milestones — fall back to start milestone display_name
 
 ### Files to Modify
 - `components/layouts/SettingsTabLayout.tsx` — animation and transition refinements
 - `components/settings/SettingsLanding.tsx` — hover states and stagger animations
-- `components/settings/MilestonesTable.tsx` — row transition polish, pair expand animation
+- `components/settings/MilestonesTable.tsx` — row transition polish
 - `components/settings/SettingsStatsRow.tsx` — stagger animation
 - `tailwind.config.ts` — add custom fonts if not already present
 - Any files with dead `SettingsLayout` references
@@ -452,23 +340,19 @@ Final polish pass: consistent design tokens, transitions, animation, dead code r
 5. Direct URL navigation works for every settings route
 6. Browser back/forward works correctly
 7. Role-gated items are properly hidden
-8. Milestones settings table: collapsed pairs expand/collapse smoothly
-9. Case drawer: intervals correct for both paired and standalone milestones
-10. Edge cases handled: missing pair-end, null pair_label fallback
-11. `npm run typecheck && npm run lint` passes
-12. No unused imports or dead CSS remain
+8. Milestones table interactions all function (edit, delete, add, hover)
+9. `npm run typecheck && npm run lint` passes
+10. No unused imports or dead CSS remain
 
 ---
 
 ## Session Log
 
-| Phase | Description | Status | Date | Notes |
-|-------|-------------|--------|------|-------|
-| 1 | Audit + Config | pending | — | — |
-| 2 | pair_label Migration + Interval Medians | pending | — | — |
-| 3 | New Layout Shell | pending | — | — |
-| 4 | Landing Page | pending | — | — |
-| 5 | Migrate All Pages | pending | — | — |
-| 6 | Milestones Table (Collapsed Pairs) | pending | — | — |
-| 7 | Case Drawer Intervals | pending | — | — |
-| 8 | Polish + Cleanup | pending | — | — |
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| 1 | pending | — | — |
+| 2 | pending | — | — |
+| 3 | pending | — | — |
+| 4 | pending | — | — |
+| 5 | pending | — | — |
+| 6 | pending | — | — |
