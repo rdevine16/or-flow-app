@@ -239,3 +239,109 @@ describe('CaseDrawerMilestones — workflow', () => {
     expect(screen.getByText('Where did the time go?')).toBeDefined()
   })
 })
+
+// ============================================
+// PHASE 9: Integration Test Matrix
+// ============================================
+
+describe('CaseDrawerMilestones — scheduled case with 0 milestones', () => {
+  it('shows "Case not started" message for scheduled case with no data', () => {
+    mockReturn.data = { ...FULL_DATA, intervals: [] }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="scheduled" />)
+    expect(screen.getByText('Case not started')).toBeDefined()
+    expect(screen.getByText('Milestone data will appear once the case begins')).toBeDefined()
+  })
+})
+
+describe('CaseDrawerMilestones — in-progress case with partial milestones', () => {
+  it('shows partial count and renders available data', () => {
+    mockReturn.data = {
+      ...FULL_DATA,
+      intervals: [
+        { ...INTERVALS[0], recorded_at: '2024-06-15T08:00:00Z' },
+        { ...INTERVALS[1], recorded_at: '2024-06-15T08:20:00Z' },
+        { ...INTERVALS[2], recorded_at: null, interval_minutes: null, delta_severity: null, delta_from_surgeon: null, delta_from_facility: null },
+        { ...INTERVALS[3], recorded_at: null, interval_minutes: null, delta_severity: null, delta_from_surgeon: null, delta_from_facility: null },
+      ],
+    }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="in_progress" />)
+    expect(screen.getByText('2/4 milestones recorded')).toBeDefined()
+  })
+})
+
+describe('CaseDrawerMilestones — surgeon first case (no median data)', () => {
+  it('renders with zero surgeon case count', () => {
+    mockReturn.surgeonCaseCount = 0
+    mockReturn.facilityCaseCount = 100
+    mockReturn.data = {
+      ...FULL_DATA,
+      intervals: INTERVALS.map(iv => ({
+        ...iv,
+        surgeon_median_minutes: null,
+        delta_from_surgeon: null,
+      })),
+    }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    // Should still render the table and toggle
+    expect(screen.getByText('Surgeon Median')).toBeDefined()
+    // Toggle hides count when count === 0, so "(0)" should not appear
+    expect(screen.queryByText('(0)')).toBeNull()
+    // But facility count should still show
+    expect(screen.getByText('(100)')).toBeDefined()
+  })
+})
+
+describe('CaseDrawerMilestones — completed case with 2 missing milestones', () => {
+  it('shows correct counter and amber rows for missing milestones', () => {
+    mockReturn.data = {
+      ...FULL_DATA,
+      intervals: [
+        { ...INTERVALS[0], recorded_at: '2024-06-15T08:00:00Z', milestone_name: 'Patient In' },
+        {
+          milestone_name: 'Anes Start',
+          facility_milestone_id: 'fm-a',
+          display_order: 2,
+          phase_group: 'pre_op',
+          recorded_at: null,
+          interval_minutes: null,
+          surgeon_median_minutes: 6,
+          facility_median_minutes: 7,
+          delta_from_surgeon: null,
+          delta_from_facility: null,
+          delta_severity: null,
+        },
+        { ...INTERVALS[1], recorded_at: '2024-06-15T08:20:00Z' },
+        {
+          milestone_name: 'Prep Complete',
+          facility_milestone_id: 'fm-b',
+          display_order: 4,
+          phase_group: 'surgical',
+          recorded_at: null,
+          interval_minutes: null,
+          surgeon_median_minutes: 8,
+          facility_median_minutes: 10,
+          delta_from_surgeon: null,
+          delta_from_facility: null,
+          delta_severity: null,
+        },
+        { ...INTERVALS[2], recorded_at: '2024-06-15T09:15:00Z' },
+        { ...INTERVALS[3], recorded_at: '2024-06-15T09:30:00Z' },
+      ],
+      missing_milestones: ['Anes Start', 'Prep Complete'],
+    }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="completed" />)
+    // Shows 4 of 6 recorded
+    expect(screen.getByText('4/6 milestones recorded')).toBeDefined()
+    // The text should be amber (not all recorded)
+    const counterEl = screen.getByText('4/6 milestones recorded')
+    expect(counterEl.className).toContain('text-amber')
+  })
+})
+
+describe('CaseDrawerMilestones — hides time allocation when no data', () => {
+  it('does not render allocation bar when time_allocation is empty', () => {
+    mockReturn.data = { ...FULL_DATA, time_allocation: [] }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    expect(screen.queryByText('Where did the time go?')).toBeNull()
+  })
+})

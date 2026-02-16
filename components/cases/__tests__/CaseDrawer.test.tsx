@@ -284,12 +284,13 @@ describe('CaseDrawer — unit', () => {
     expect(screen.getByText('1')).toBeDefined()
   })
 
-  it('defaults to Flags tab and shows flag content', () => {
+  it('defaults to Financials tab (Phase 5 changed default from Flags)', () => {
     render(
       <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
     )
-    // Flags tab content should be visible by default
-    expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
+    // Default tab is now Financials, not Flags
+    // With mock returning null financial data, shows empty state
+    expect(screen.getByText('No financial data available')).toBeDefined()
   })
 
   it('shows loading skeleton when loading', () => {
@@ -426,7 +427,7 @@ describe('CaseDrawer — tab switching', () => {
     expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
   })
 
-  it('resets to Flags tab when caseId changes (prevents stale validation content)', async () => {
+  it('resets to default Financials tab when caseId changes (prevents stale validation content)', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
     const dqSet = new Set(['case-123'])
@@ -451,13 +452,13 @@ describe('CaseDrawer — tab switching', () => {
       <CaseDrawer caseId="case-456" onClose={onClose} categoryNameById={CATEGORY_MAP} dqCaseIds={dqSet} />
     )
 
-    // Should reset to Flags tab — show flag content, no Validation tab
-    expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
+    // Should reset to Financials tab (default), no Validation tab
+    expect(screen.getByText('No financial data available')).toBeDefined()
     expect(screen.queryByText('Validation')).toBeNull()
     expect(screen.queryByText('No validation issues')).toBeNull()
   })
 
-  it('resets to Flags tab when switching between two non-validation tabs too', async () => {
+  it('resets to default Financials tab when switching cases', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
 
@@ -465,9 +466,10 @@ describe('CaseDrawer — tab switching', () => {
       <CaseDrawer caseId="case-123" onClose={onClose} categoryNameById={CATEGORY_MAP} />
     )
 
-    // Switch to Financials tab
-    await user.click(screen.getByText('Financials'))
-    expect(screen.getByText('No financial data available')).toBeDefined()
+    // Switch to Milestones tab
+    const milestonesElements = screen.getAllByText('Milestones')
+    const tabButton = milestonesElements.find(el => el.closest('button'))
+    await user.click(tabButton!)
 
     // Switch to different case
     const case456 = {
@@ -480,7 +482,165 @@ describe('CaseDrawer — tab switching', () => {
       <CaseDrawer caseId="case-456" onClose={onClose} categoryNameById={CATEGORY_MAP} />
     )
 
-    // Should reset to Flags tab, not stay on Financials
-    expect(screen.getByText('Late start — 10 min behind schedule')).toBeDefined()
+    // Should reset to Financials tab (default)
+    expect(screen.getByText('No financial data available')).toBeDefined()
+  })
+})
+
+// ============================================
+// PHASE 9: Header Regression Tests
+// ============================================
+
+describe('CaseDrawer — header regression (Phase 5)', () => {
+  beforeEach(() => {
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
+    mockUseFinancialComparison.mockReturnValue({ data: null, loading: false, error: null })
+  })
+
+  it('does NOT render QuickStats cards (removed in Phase 5)', () => {
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    // QuickStats had "Total Duration", "Surgical Time", "Milestones" heading cards
+    // These should no longer appear in the header
+    expect(screen.queryByText('Total Duration')).toBeNull()
+    expect(screen.queryByText('Surgical Time')).toBeNull()
+  })
+
+  it('does NOT render "Review in Data Quality" button (removed in Phase 5)', () => {
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    expect(screen.queryByText('Review in Data Quality')).toBeNull()
+  })
+
+  it('does NOT show Cancel Case for completed cases', () => {
+    render(
+      <CaseDrawer
+        caseId="case-123"
+        onClose={vi.fn()}
+        categoryNameById={CATEGORY_MAP}
+        onCancelCase={vi.fn()}
+      />
+    )
+    expect(screen.queryByText('Cancel Case')).toBeNull()
+  })
+
+  it('shows Cancel Case only for scheduled cases', () => {
+    const scheduledCase = {
+      ...MOCK_CASE_DETAIL,
+      case_status: { name: 'Scheduled' },
+    }
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: scheduledCase }))
+    render(
+      <CaseDrawer
+        caseId="case-123"
+        onClose={vi.fn()}
+        categoryNameById={CATEGORY_MAP}
+        onCancelCase={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Cancel Case')).toBeDefined()
+  })
+
+  it('does NOT show Cancel Case for in_progress cases', () => {
+    const inProgressCase = {
+      ...MOCK_CASE_DETAIL,
+      case_status: { name: 'In Progress' },
+    }
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn({ caseDetail: inProgressCase }))
+    render(
+      <CaseDrawer
+        caseId="case-123"
+        onClose={vi.fn()}
+        categoryNameById={CATEGORY_MAP}
+        onCancelCase={vi.fn()}
+      />
+    )
+    expect(screen.queryByText('Cancel Case')).toBeNull()
+  })
+
+  it('renders "Open full detail" link pointing to case detail page', () => {
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    const link = screen.getByText('Open full detail')
+    expect(link.closest('a')?.getAttribute('href')).toBe('/cases/case-123')
+  })
+
+  it('header contains case number, status badge, procedure, surgeon, room, date', () => {
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    expect(screen.getByText('CASE-2024-001')).toBeDefined()
+    expect(screen.getByText('Completed')).toBeDefined()
+    expect(screen.getByText('Total Hip Replacement')).toBeDefined()
+    expect(screen.getByText('Dr. James Wilson')).toBeDefined()
+    expect(screen.getByText('OR-3')).toBeDefined()
+    expect(screen.getByText(/Jun 15, 2024/)).toBeDefined()
+  })
+})
+
+// ============================================
+// PHASE 9: Cross-tab Consistency Tests
+// ============================================
+
+describe('CaseDrawer — cross-tab consistency', () => {
+  beforeEach(() => {
+    mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
+    mockUseFinancialComparison.mockReturnValue({ data: null, loading: false, error: null })
+  })
+
+  it('milestones tab renders after switching from financials', async () => {
+    const user = userEvent.setup()
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    // Go to Financials first
+    await user.click(screen.getByText('Financials'))
+    expect(screen.getByText('No financial data available')).toBeDefined()
+
+    // Switch to Milestones
+    const milestonesElements = screen.getAllByText('Milestones')
+    const tabButton = milestonesElements.find(el => el.closest('button'))
+    await user.click(tabButton!)
+    // Milestone content should render
+    expect(screen.getAllByText('Patient In').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('4/4 milestones recorded')).toBeDefined()
+  })
+
+  it('financials tab renders after switching from milestones', async () => {
+    const user = userEvent.setup()
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    // Switch to Milestones first
+    const milestonesElements = screen.getAllByText('Milestones')
+    const tabButton = milestonesElements.find(el => el.closest('button'))
+    await user.click(tabButton!)
+    // Now switch to Financials
+    await user.click(screen.getByText('Financials'))
+    // Should render without error
+    expect(screen.getByText('No financial data available')).toBeDefined()
+  })
+
+  it('tab switching preserves header content', async () => {
+    const user = userEvent.setup()
+    render(
+      <CaseDrawer caseId="case-123" onClose={vi.fn()} categoryNameById={CATEGORY_MAP} />
+    )
+    // Header should be stable across all tab switches
+    expect(screen.getByText('CASE-2024-001')).toBeDefined()
+
+    await user.click(screen.getByText('Financials'))
+    expect(screen.getByText('CASE-2024-001')).toBeDefined()
+
+    const milestonesElements = screen.getAllByText('Milestones')
+    const tabButton = milestonesElements.find(el => el.closest('button'))
+    await user.click(tabButton!)
+    expect(screen.getByText('CASE-2024-001')).toBeDefined()
+
+    await user.click(screen.getByText('Flags'))
+    expect(screen.getByText('CASE-2024-001')).toBeDefined()
   })
 })
