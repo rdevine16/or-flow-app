@@ -653,8 +653,8 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
 | Phase 5 | Tab switcher & implant panel | 1 session | Phase 3 | ✅ Done |
 | Phase 6 | Sidebar cleanup & case activity | 1 session | Phases 4, 5 | ✅ Done |
 | Phase 7 | Completed view, PiP relocation & cleanup | 1 session | Phases 3-6 | ✅ Done |
-| Phase 8 | Mockup alignment & visual polish | 1-2 sessions | Phase 7 | Pending |
-| Phase 9 | Accessibility, edge cases & integration testing | 1 session | Phase 8 | Pending |
+| Phase 8 | Mockup alignment & visual polish | 1-2 sessions | Phase 7 | ✅ Done |
+| Phase 9 | Accessibility, edge cases & integration testing | 1 session | Phase 8 | ✅ Done |
 
 **Total: ~9-12 sessions**
 
