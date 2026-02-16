@@ -15,12 +15,39 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-// Mock useCaseDrawer and useMilestoneComparisons
+// Mock useCaseDrawer
 const mockUseCaseDrawer = vi.fn()
-const mockUseMilestoneComparisons = vi.fn()
 vi.mock('@/lib/hooks/useCaseDrawer', () => ({
   useCaseDrawer: (...args: unknown[]) => mockUseCaseDrawer(...args),
-  useMilestoneComparisons: (...args: unknown[]) => mockUseMilestoneComparisons(...args),
+}))
+
+// Mock useMilestoneComparison (used by CaseDrawerMilestones internally)
+vi.mock('@/lib/hooks/useMilestoneComparison', () => ({
+  useMilestoneComparison: () => ({
+    data: {
+      intervals: [
+        { milestone_name: 'Patient In', facility_milestone_id: 'fm-1', display_order: 1, phase_group: 'pre_op', recorded_at: '2024-06-15T08:30:00Z', interval_minutes: null, surgeon_median_minutes: null, facility_median_minutes: null, delta_from_surgeon: null, delta_from_facility: null, delta_severity: null },
+        { milestone_name: 'Incision', facility_milestone_id: 'fm-2', display_order: 3, phase_group: 'surgical', recorded_at: '2024-06-15T08:50:00Z', interval_minutes: 20, surgeon_median_minutes: 18, facility_median_minutes: 22, delta_from_surgeon: 2, delta_from_facility: -2, delta_severity: 'on-pace' },
+        { milestone_name: 'Closing', facility_milestone_id: 'fm-3', display_order: 5, phase_group: 'closing', recorded_at: '2024-06-15T09:45:00Z', interval_minutes: 55, surgeon_median_minutes: 50, facility_median_minutes: 52, delta_from_surgeon: 5, delta_from_facility: 3, delta_severity: 'on-pace' },
+        { milestone_name: 'Patient Out', facility_milestone_id: 'fm-4', display_order: 7, phase_group: 'post_op', recorded_at: '2024-06-15T10:05:00Z', interval_minutes: 15, surgeon_median_minutes: 12, facility_median_minutes: 14, delta_from_surgeon: 3, delta_from_facility: 1, delta_severity: 'slower' },
+      ],
+      time_allocation: [
+        { label: 'Pre-Op', phase_group: 'pre_op', minutes: 20, percentage: 22, color: 'bg-blue-500' },
+        { label: 'Surgical', phase_group: 'surgical', minutes: 55, percentage: 61, color: 'bg-teal-500' },
+      ],
+      missing_milestones: [],
+      total_case_minutes: 95,
+      total_surgical_minutes: 55,
+      comparison_source: 'surgeon' as const,
+    },
+    loading: false,
+    error: null,
+    comparisonSource: 'surgeon' as const,
+    setComparisonSource: vi.fn(),
+    surgeonCaseCount: 25,
+    facilityCaseCount: 150,
+    refetch: vi.fn(),
+  }),
 }))
 
 // Mock useCaseFinancials to avoid Supabase client initialization in tests
@@ -159,15 +186,6 @@ function defaultDrawerReturn(overrides: Partial<ReturnType<typeof mockUseCaseDra
   }
 }
 
-function defaultComparisonReturn() {
-  return {
-    surgeonStats: null,
-    facilityStats: null,
-    loading: false,
-    error: null,
-  }
-}
-
 // ============================================
 // TESTS
 // ============================================
@@ -175,7 +193,6 @@ function defaultComparisonReturn() {
 describe('CaseDrawer — unit', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
-    mockUseMilestoneComparisons.mockReturnValue(defaultComparisonReturn())
     mockUseCaseFinancials.mockReturnValue({
       projection: null,
       comparison: null,
@@ -366,7 +383,6 @@ describe('CaseDrawer — unit', () => {
 describe('CaseDrawer — tab switching', () => {
   beforeEach(() => {
     mockUseCaseDrawer.mockReturnValue(defaultDrawerReturn())
-    mockUseMilestoneComparisons.mockReturnValue(defaultComparisonReturn())
     mockUseCaseFinancials.mockReturnValue({
       projection: null,
       comparison: null,
@@ -386,11 +402,11 @@ describe('CaseDrawer — tab switching', () => {
     const tabButton = milestonesElements.find(el => el.closest('button'))
     expect(tabButton).toBeDefined()
     await user.click(tabButton!)
-    // Should show milestone names from case_milestones
-    expect(screen.getByText('Patient In')).toBeDefined()
-    expect(screen.getByText('Incision')).toBeDefined()
-    expect(screen.getByText('Closing')).toBeDefined()
-    expect(screen.getByText('Patient Out')).toBeDefined()
+    // Should show milestone names (appear in both timeline and detail rows)
+    expect(screen.getAllByText('Patient In').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Incision').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Closing').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Patient Out').length).toBeGreaterThanOrEqual(1)
   })
 
   it('switches to Financials tab and shows content', async () => {

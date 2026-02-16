@@ -10,7 +10,7 @@ import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useUser } from '@/lib/UserContext'
-import { useCaseDrawer, useMilestoneComparisons } from '@/lib/hooks/useCaseDrawer'
+import { useCaseDrawer } from '@/lib/hooks/useCaseDrawer'
 import { useCaseFinancials } from '@/lib/hooks/useCaseFinancials'
 import { resolveDisplayStatus, getCaseStatusConfig } from '@/lib/constants/caseStatusConfig'
 import { statusColors } from '@/lib/design-tokens'
@@ -230,18 +230,6 @@ export default function CaseDrawer({
     }
   )
 
-  // Lazy-load milestone comparison data only when milestones tab is active
-  const {
-    surgeonStats,
-    facilityStats,
-    loading: comparisonLoading,
-  } = useMilestoneComparisons(
-    caseDetail?.facility_id ?? null,
-    caseDetail?.surgeon_id ?? null,
-    caseDetail?.procedure_type?.id ?? null,
-    activeTab === 'milestones' && !!caseDetail,
-  )
-
   // Lazy-load financial data only when financials tab is active
   const {
     projection: financialProjection,
@@ -441,15 +429,11 @@ export default function CaseDrawer({
 
                 {activeTab === 'milestones' && (
                   <CaseDrawerMilestones
-                    milestones={caseDetail.case_milestones}
-                    surgeonStats={surgeonStats}
-                    facilityStats={facilityStats}
-                    comparisonLoading={comparisonLoading}
-                    surgeonName={
-                      caseDetail.surgeon
-                        ? `${caseDetail.surgeon.first_name} ${caseDetail.surgeon.last_name}`
-                        : null
-                    }
+                    caseId={caseDetail.id}
+                    surgeonId={caseDetail.surgeon_id}
+                    procedureTypeId={caseDetail.procedure_type?.id ?? null}
+                    facilityId={caseDetail.facility_id}
+                    caseStatus={displayStatus}
                   />
                 )}
 

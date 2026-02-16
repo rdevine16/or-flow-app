@@ -1,87 +1,127 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import CaseDrawerMilestones from '../CaseDrawerMilestones'
-import type { CaseMilestone } from '@/lib/dal/cases'
-import type { SurgeonProcedureStats, FacilityProcedureStats } from '@/lib/hooks/useCaseDrawer'
+import type { MilestoneComparisonData, MilestoneInterval } from '@/lib/utils/milestoneAnalytics'
+
+// ============================================
+// MOCK useMilestoneComparison
+// ============================================
+
+const mockSetComparisonSource = vi.fn()
+const mockRefetch = vi.fn()
+
+let mockReturn: {
+  data: MilestoneComparisonData | null
+  loading: boolean
+  error: string | null
+  comparisonSource: 'surgeon' | 'facility'
+  setComparisonSource: (source: 'surgeon' | 'facility') => void
+  surgeonCaseCount: number
+  facilityCaseCount: number
+  refetch: () => Promise<void>
+}
+
+vi.mock('@/lib/hooks/useMilestoneComparison', () => ({
+  useMilestoneComparison: () => mockReturn,
+}))
 
 // ============================================
 // FIXTURES
 // ============================================
 
-const MILESTONES: CaseMilestone[] = [
+const INTERVALS: MilestoneInterval[] = [
   {
-    id: 'ms-1',
-    case_id: 'case-1',
+    milestone_name: 'Patient In',
     facility_milestone_id: 'fm-1',
+    display_order: 1,
+    phase_group: 'pre_op',
     recorded_at: '2024-06-15T08:00:00Z',
-    recorded_by: 'user-1',
-    facility_milestone: { name: 'Patient In', display_name: 'Patient In', display_order: 1 },
+    interval_minutes: null,
+    surgeon_median_minutes: null,
+    facility_median_minutes: null,
+    delta_from_surgeon: null,
+    delta_from_facility: null,
+    delta_severity: null,
   },
   {
-    id: 'ms-2',
-    case_id: 'case-1',
+    milestone_name: 'Incision',
     facility_milestone_id: 'fm-2',
+    display_order: 3,
+    phase_group: 'surgical',
     recorded_at: '2024-06-15T08:20:00Z',
-    recorded_by: 'user-1',
-    facility_milestone: { name: 'Incision', display_name: 'Incision', display_order: 3 },
+    interval_minutes: 20,
+    surgeon_median_minutes: 18,
+    facility_median_minutes: 22,
+    delta_from_surgeon: 2,
+    delta_from_facility: -2,
+    delta_severity: 'on-pace',
   },
   {
-    id: 'ms-3',
-    case_id: 'case-1',
+    milestone_name: 'Closing',
     facility_milestone_id: 'fm-3',
+    display_order: 5,
+    phase_group: 'closing',
     recorded_at: '2024-06-15T09:15:00Z',
-    recorded_by: 'user-1',
-    facility_milestone: { name: 'Closing', display_name: 'Closing', display_order: 5 },
+    interval_minutes: 55,
+    surgeon_median_minutes: 50,
+    facility_median_minutes: 52,
+    delta_from_surgeon: 5,
+    delta_from_facility: 3,
+    delta_severity: 'on-pace',
   },
   {
-    id: 'ms-4',
-    case_id: 'case-1',
+    milestone_name: 'Patient Out',
     facility_milestone_id: 'fm-4',
+    display_order: 7,
+    phase_group: 'post_op',
     recorded_at: '2024-06-15T09:30:00Z',
-    recorded_by: 'user-1',
-    facility_milestone: { name: 'Patient Out', display_name: 'Patient Out', display_order: 7 },
+    interval_minutes: 15,
+    surgeon_median_minutes: 12,
+    facility_median_minutes: 14,
+    delta_from_surgeon: 3,
+    delta_from_facility: 1,
+    delta_severity: 'slower',
   },
 ]
 
-const MILESTONES_WITH_PENDING: CaseMilestone[] = [
-  ...MILESTONES.slice(0, 2),
-  {
-    id: 'ms-3b',
-    case_id: 'case-1',
-    facility_milestone_id: 'fm-3',
-    recorded_at: '', // pending
-    recorded_by: null,
-    facility_milestone: { name: 'Closing', display_name: 'Closing', display_order: 5 },
-  },
-  {
-    id: 'ms-4b',
-    case_id: 'case-1',
-    facility_milestone_id: 'fm-4',
-    recorded_at: '', // pending
-    recorded_by: null,
-    facility_milestone: { name: 'Patient Out', display_name: 'Patient Out', display_order: 7 },
-  },
-]
-
-const SURGEON_STATS: SurgeonProcedureStats = {
-  surgeon_id: 'surgeon-1',
-  procedure_type_id: 'pt-1',
-  facility_id: 'fac-1',
-  sample_size: 25,
-  median_duration: 100, // total: 90 actual = green (faster)
-  median_surgical_duration: 60, // surgical: 55 actual = green
-  median_call_to_patient_in: 15, // pre-op: 20 actual = amber (within 10%? no, 33% over)
+const FULL_DATA: MilestoneComparisonData = {
+  intervals: INTERVALS,
+  time_allocation: [
+    { label: 'Pre-Op', phase_group: 'pre_op', minutes: 20, percentage: 22, color: 'bg-blue-500' },
+    { label: 'Surgical', phase_group: 'surgical', minutes: 55, percentage: 61, color: 'bg-teal-500' },
+    { label: 'Post-Op', phase_group: 'post_op', minutes: 15, percentage: 17, color: 'bg-slate-400' },
+  ],
+  missing_milestones: [],
+  total_case_minutes: 90,
+  total_surgical_minutes: 55,
+  comparison_source: 'surgeon',
 }
 
-const FACILITY_STATS: FacilityProcedureStats = {
-  procedure_type_id: 'pt-1',
-  facility_id: 'fac-1',
-  sample_size: 150,
-  surgeon_count: 8,
-  median_duration: 95,
-  median_surgical_duration: 58,
-  median_call_to_patient_in: 18,
+const DEFAULT_PROPS = {
+  caseId: 'case-1',
+  surgeonId: 'surgeon-1',
+  procedureTypeId: 'pt-1',
+  facilityId: 'fac-1',
+  caseStatus: 'completed',
 }
+
+// ============================================
+// SETUP
+// ============================================
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockReturn = {
+    data: FULL_DATA,
+    loading: false,
+    error: null,
+    comparisonSource: 'surgeon',
+    setComparisonSource: mockSetComparisonSource,
+    surgeonCaseCount: 25,
+    facilityCaseCount: 150,
+    refetch: mockRefetch,
+  }
+})
 
 // ============================================
 // UNIT TESTS
@@ -89,192 +129,106 @@ const FACILITY_STATS: FacilityProcedureStats = {
 
 describe('CaseDrawerMilestones — unit', () => {
   it('renders empty state when no milestones', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={[]}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
+    mockReturn.data = { ...FULL_DATA, intervals: [] }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     expect(screen.getByText('No milestones')).toBeDefined()
-    expect(screen.getByText('No milestones are configured for this case')).toBeDefined()
+    expect(screen.getByText('No milestones are configured for this procedure')).toBeDefined()
   })
 
-  it('renders all milestone names in order', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
-    expect(screen.getByText('Patient In')).toBeDefined()
-    expect(screen.getByText('Incision')).toBeDefined()
-    expect(screen.getByText('Closing')).toBeDefined()
-    expect(screen.getByText('Patient Out')).toBeDefined()
+  it('renders loading skeleton when loading with no data', () => {
+    mockReturn.data = null
+    mockReturn.loading = true
+    const { container } = render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    expect(container.querySelector('.animate-pulse')).toBeDefined()
+  })
+
+  it('renders error state', () => {
+    mockReturn.data = null
+    mockReturn.error = 'Connection failed'
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    expect(screen.getByText('Failed to load milestone data')).toBeDefined()
+    expect(screen.getByText('Connection failed')).toBeDefined()
+  })
+
+  it('renders all milestone names', () => {
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    // Names appear in both timeline labels and detail rows
+    expect(screen.getAllByText('Patient In').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Incision').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Closing').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Patient Out').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows recorded count', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     expect(screen.getByText('4/4 recorded')).toBeDefined()
   })
 
-  it('shows partial recorded count for milestones with pending items', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES_WITH_PENDING}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
-    expect(screen.getByText('2/4 recorded')).toBeDefined()
-  })
-
-  it('shows "Pending" for unrecorded milestones', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES_WITH_PENDING}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
-    expect(screen.getAllByText('Pending').length).toBe(2)
-  })
-
-  it('shows interval labels between consecutive recorded milestones', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
-    // Patient In → Incision = 20min (also appears in Pre-Op summary)
-    expect(screen.getAllByText('20m').length).toBeGreaterThanOrEqual(1)
-    // Incision → Closing = 55min (also appears in Surgical Time summary)
-    expect(screen.getAllByText('55m').length).toBeGreaterThanOrEqual(1)
-    // Closing → Patient Out = 15min
-    expect(screen.getAllByText('15m').length).toBeGreaterThanOrEqual(1)
-  })
-
   it('renders duration summary section', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     expect(screen.getByText('Duration Summary')).toBeDefined()
     expect(screen.getByText('Total Case Time')).toBeDefined()
     expect(screen.getByText('Surgical Time')).toBeDefined()
-    expect(screen.getByText('Pre-Op Time')).toBeDefined()
-  })
-
-  it('shows "no benchmark" when no stats provided', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={null}
-        facilityStats={null}
-        comparisonLoading={false}
-        surgeonName={null}
-      />
-    )
-    expect(screen.getByText('No benchmark data available for this procedure')).toBeDefined()
   })
 })
 
-describe('CaseDrawerMilestones — comparison badges', () => {
-  it('renders surgeon and facility comparison badges when stats available', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={SURGEON_STATS}
-        facilityStats={FACILITY_STATS}
-        comparisonLoading={false}
-        surgeonName="James Wilson"
-      />
-    )
-    // Should show sample size context
-    expect(screen.getByText(/Surgeon median based on 25 cases/)).toBeDefined()
-    expect(screen.getByText(/Facility median based on 150 cases/)).toBeDefined()
+describe('CaseDrawerMilestones — comparison toggle', () => {
+  it('renders comparison toggle with case counts', () => {
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    expect(screen.getByText('Surgeon Median')).toBeDefined()
+    expect(screen.getByText('Facility Median')).toBeDefined()
+    expect(screen.getByText('(25)')).toBeDefined()
+    expect(screen.getByText('(150)')).toBeDefined()
   })
 
-  it('shows surgeon name in comparison badges', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={SURGEON_STATS}
-        facilityStats={FACILITY_STATS}
-        comparisonLoading={false}
-        surgeonName="James Wilson"
-      />
-    )
-    // Surgeon badge should show abbreviated name "Dr. Wilson"
-    expect(screen.getAllByText(/Dr\. Wilson/).length).toBeGreaterThan(0)
+  it('calls setComparisonSource when toggle clicked', () => {
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    fireEvent.click(screen.getByText('Facility Median'))
+    expect(mockSetComparisonSource).toHaveBeenCalledWith('facility')
+  })
+})
+
+describe('CaseDrawerMilestones — missing milestones', () => {
+  it('shows missing milestone alert for completed cases', () => {
+    mockReturn.data = {
+      ...FULL_DATA,
+      missing_milestones: ['Anesthesia Start', 'Prep Complete'],
+    }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="completed" />)
+    expect(screen.getByText('2 milestones not recorded')).toBeDefined()
+    expect(screen.getByText('Anesthesia Start, Prep Complete')).toBeDefined()
   })
 
-  it('shows "No data" badges when surgeon stats missing but facility stats present', () => {
-    render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={null}
-        facilityStats={FACILITY_STATS}
-        comparisonLoading={false}
-        surgeonName="James Wilson"
-      />
-    )
-    // Surgeon badges should show "No data"
-    expect(screen.getAllByText(/No data/).length).toBeGreaterThan(0)
-    // Facility badges should show actual deltas
-    expect(screen.getByText(/Facility median based on 150 cases/)).toBeDefined()
+  it('does not show missing milestone alert for non-completed cases', () => {
+    mockReturn.data = {
+      ...FULL_DATA,
+      missing_milestones: ['Anesthesia Start'],
+    }
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="in_progress" />)
+    expect(screen.queryByText('1 milestone not recorded')).toBeNull()
+  })
+})
+
+describe('CaseDrawerMilestones — time allocation', () => {
+  it('renders time allocation bar when data available', () => {
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    expect(screen.getByText('Where did the time go?')).toBeDefined()
   })
 })
 
 describe('CaseDrawerMilestones — workflow', () => {
-  it('renders complete milestone view with timeline, intervals, and comparisons', () => {
-    const { container } = render(
-      <CaseDrawerMilestones
-        milestones={MILESTONES}
-        surgeonStats={SURGEON_STATS}
-        facilityStats={FACILITY_STATS}
-        comparisonLoading={false}
-        surgeonName="James Wilson"
-      />
-    )
-    // Timeline section exists
+  it('renders complete milestone view with timeline, detail rows, and summary', () => {
+    render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
+    // Timeline section
     expect(screen.getByText('Milestone Timeline')).toBeDefined()
-    // All 4 milestones rendered
-    expect(screen.getByText('Patient In')).toBeDefined()
-    expect(screen.getByText('Patient Out')).toBeDefined()
-    // Intervals are shown (may appear in both timeline and summary)
-    expect(screen.getAllByText('20m').length).toBeGreaterThanOrEqual(1)
-    // Summary section exists
+    // All milestone names (appear in both timeline and detail rows)
+    expect(screen.getAllByText('Patient In').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Patient Out').length).toBeGreaterThanOrEqual(1)
+    // Summary section
     expect(screen.getByText('Duration Summary')).toBeDefined()
-    // Comparison badges exist (at least some)
-    expect(container.querySelectorAll('[class*="bg-green-50"], [class*="bg-amber-50"], [class*="bg-red-50"]').length).toBeGreaterThan(0)
-    // Sample size context
-    expect(screen.getByText(/25 cases/)).toBeDefined()
+    // Comparison toggle
+    expect(screen.getByText('Surgeon Median')).toBeDefined()
+    // Time allocation
+    expect(screen.getByText('Where did the time go?')).toBeDefined()
   })
 })
