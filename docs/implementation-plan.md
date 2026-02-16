@@ -234,7 +234,7 @@ All phases are sequential. Each phase produces one commit.
 
 | Phase | Status | Date | Notes |
 |-------|--------|------|-------|
-| 1 | pending | — | — |
+| 1 | complete | 2026-02-16 | Nav config (8 categories, 28 items), SettingsTabLayout (tabs + sub-nav), SettingsLanding (card grid), settings layout.tsx shell, page.tsx landing. Commit: 14b705a |
 | 2 | pending | — | — |
 | 3 | pending | — | — |
 | 4 | pending | — | — |
