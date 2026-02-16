@@ -17,6 +17,8 @@ export interface PhaseConfig {
   headerBg: string
   /** Border color for the left accent bar */
   borderColor: string
+  /** Hex color for SVG rendering and boundary dot gradients */
+  hex: string
 }
 
 /**
@@ -37,6 +39,7 @@ export const PHASE_ORDER: PhaseConfig[] = [
     accentText: 'text-blue-700',
     headerBg: 'bg-blue-50',
     borderColor: 'border-blue-500',
+    hex: '#3B82F6',
   },
   {
     key: 'surgical',
@@ -45,6 +48,7 @@ export const PHASE_ORDER: PhaseConfig[] = [
     accentText: 'text-green-700',
     headerBg: 'bg-green-50',
     borderColor: 'border-green-500',
+    hex: '#22C55E',
   },
   {
     key: 'closing',
@@ -53,6 +57,7 @@ export const PHASE_ORDER: PhaseConfig[] = [
     accentText: 'text-amber-700',
     headerBg: 'bg-amber-50',
     borderColor: 'border-amber-500',
+    hex: '#F59E0B',
   },
   {
     key: 'post_op',
@@ -61,6 +66,7 @@ export const PHASE_ORDER: PhaseConfig[] = [
     accentText: 'text-purple-700',
     headerBg: 'bg-purple-50',
     borderColor: 'border-purple-500',
+    hex: '#8B5CF6',
   },
 ]
 
@@ -77,6 +83,7 @@ export const UNASSIGNED_PHASE: PhaseConfig = {
   accentText: 'text-slate-600',
   headerBg: 'bg-slate-50',
   borderColor: 'border-slate-400',
+  hex: '#94A3B8',
 }
 
 /**
@@ -91,17 +98,19 @@ export interface ColorKeyConfig {
   accentText: string
   headerBg: string
   borderColor: string
+  /** Hex color for SVG rendering and boundary dot gradients */
+  hex: string
 }
 
 export const COLOR_KEY_PALETTE: ColorKeyConfig[] = [
-  { key: 'blue',   label: 'Blue',   swatch: 'bg-blue-500',   accentBg: 'bg-blue-500',   accentText: 'text-blue-700',   headerBg: 'bg-blue-50',   borderColor: 'border-blue-500' },
-  { key: 'green',  label: 'Green',  swatch: 'bg-green-500',  accentBg: 'bg-green-500',  accentText: 'text-green-700',  headerBg: 'bg-green-50',  borderColor: 'border-green-500' },
-  { key: 'amber',  label: 'Amber',  swatch: 'bg-amber-500',  accentBg: 'bg-amber-500',  accentText: 'text-amber-700',  headerBg: 'bg-amber-50',  borderColor: 'border-amber-500' },
-  { key: 'purple', label: 'Purple', swatch: 'bg-purple-500', accentBg: 'bg-purple-500', accentText: 'text-purple-700', headerBg: 'bg-purple-50', borderColor: 'border-purple-500' },
-  { key: 'teal',   label: 'Teal',   swatch: 'bg-teal-500',   accentBg: 'bg-teal-500',   accentText: 'text-teal-700',   headerBg: 'bg-teal-50',   borderColor: 'border-teal-500' },
-  { key: 'indigo', label: 'Indigo', swatch: 'bg-indigo-500', accentBg: 'bg-indigo-500', accentText: 'text-indigo-700', headerBg: 'bg-indigo-50', borderColor: 'border-indigo-500' },
-  { key: 'rose',   label: 'Rose',   swatch: 'bg-rose-500',   accentBg: 'bg-rose-500',   accentText: 'text-rose-700',   headerBg: 'bg-rose-50',   borderColor: 'border-rose-500' },
-  { key: 'slate',  label: 'Slate',  swatch: 'bg-slate-500',  accentBg: 'bg-slate-500',  accentText: 'text-slate-700',  headerBg: 'bg-slate-50',  borderColor: 'border-slate-500' },
+  { key: 'blue',   label: 'Blue',   swatch: 'bg-blue-500',   accentBg: 'bg-blue-500',   accentText: 'text-blue-700',   headerBg: 'bg-blue-50',   borderColor: 'border-blue-500',   hex: '#3B82F6' },
+  { key: 'green',  label: 'Green',  swatch: 'bg-green-500',  accentBg: 'bg-green-500',  accentText: 'text-green-700',  headerBg: 'bg-green-50',  borderColor: 'border-green-500',  hex: '#22C55E' },
+  { key: 'amber',  label: 'Amber',  swatch: 'bg-amber-500',  accentBg: 'bg-amber-500',  accentText: 'text-amber-700',  headerBg: 'bg-amber-50',  borderColor: 'border-amber-500',  hex: '#F59E0B' },
+  { key: 'purple', label: 'Purple', swatch: 'bg-purple-500', accentBg: 'bg-purple-500', accentText: 'text-purple-700', headerBg: 'bg-purple-50', borderColor: 'border-purple-500', hex: '#8B5CF6' },
+  { key: 'teal',   label: 'Teal',   swatch: 'bg-teal-500',   accentBg: 'bg-teal-500',   accentText: 'text-teal-700',   headerBg: 'bg-teal-50',   borderColor: 'border-teal-500',   hex: '#14B8A6' },
+  { key: 'indigo', label: 'Indigo', swatch: 'bg-indigo-500', accentBg: 'bg-indigo-500', accentText: 'text-indigo-700', headerBg: 'bg-indigo-50', borderColor: 'border-indigo-500', hex: '#6366F1' },
+  { key: 'rose',   label: 'Rose',   swatch: 'bg-rose-500',   accentBg: 'bg-rose-500',   accentText: 'text-rose-700',   headerBg: 'bg-rose-50',   borderColor: 'border-rose-500',   hex: '#F43F5E' },
+  { key: 'slate',  label: 'Slate',  swatch: 'bg-slate-500',  accentBg: 'bg-slate-500',  accentText: 'text-slate-700',  headerBg: 'bg-slate-50',  borderColor: 'border-slate-500',  hex: '#64748B' },
 ]
 
 export const COLOR_KEY_MAP: Record<string, ColorKeyConfig> = Object.fromEntries(
@@ -131,5 +140,6 @@ export function phaseConfigFromColorKey(
     accentText: resolved.accentText,
     headerBg: resolved.headerBg,
     borderColor: resolved.borderColor,
+    hex: resolved.hex,
   }
 }

@@ -4,7 +4,6 @@ import {
   PHASE_ORDER,
   PHASE_CONFIG_MAP,
   UNASSIGNED_PHASE,
-  type PhaseConfig,
 } from '../milestone-phase-config'
 
 describe('milestone-phase-config', () => {
@@ -26,6 +25,7 @@ describe('milestone-phase-config', () => {
         expect(phase.accentText).toMatch(/^text-/)
         expect(phase.headerBg).toMatch(/^bg-/)
         expect(phase.borderColor).toMatch(/^border-/)
+        expect(phase.hex).toMatch(/^#[0-9A-Fa-f]{6}$/)
       }
     })
 
