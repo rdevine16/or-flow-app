@@ -236,5 +236,5 @@ All phases are sequential. Each phase produces one commit.
 |-------|--------|------|-------|
 | 1 | complete | 2026-02-16 | Nav config (8 categories, 28 items), SettingsTabLayout (tabs + sub-nav), SettingsLanding (card grid), settings layout.tsx shell, page.tsx landing. Commit: 14b705a |
 | 2 | complete | 2026-02-16 | Removed DashboardLayout/Container/SettingsLayout wrappers from all 27 settings pages. Created ComingSoonPlaceholder component. Deleted old SettingsLayout.tsx (560 lines). Fixed 4 pages with incomplete wrapper removal. All 1216 tests passing. |
-| 3 | pending | — | — |
+| 3 | complete | 2026-02-16 | Created milestone-phase-config.ts (4 phases + unassigned), PhaseGroupHeader, PairIndicator, MilestoneRow, MilestonesTable components. Refactored milestones page from badge-heavy list to phase-grouped @tanstack/react-table with 5 columns (#, Milestone, Pair, Valid Range, Actions). Added collapsed archived section, slim info bar. 24 new tests (8 config + 16 table). All 1240 tests passing. Commit: b578130 |
 | 4 | pending | — | — |
