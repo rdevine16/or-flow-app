@@ -12,16 +12,13 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { milestoneAudit, staffAudit } from '@/lib/audit-logger'
-import FloatingActionButton from '@/components/ui/FloatingActionButton'
-import CallNextPatientModal from '@/components/CallNextPatientModal'
-import CompletedCaseView from '@/components/cases/CompletedCaseView'
 import CaseActivitySummary from '@/components/cases/CaseActivitySummary'
 import MilestoneTimelineV2, { type CaseFlagForTimeline } from '@/components/cases/MilestoneTimelineV2'
 import { type DelayTypeOption } from '@/components/cases/AddDelayForm'
 import TeamMember from '@/components/cases/TeamMember'
 import ImplantSection from '@/components/cases/ImplantSection'
 import { runDetectionForCase } from '@/lib/dataQuality'
-import PiPMilestoneWrapper from '@/components/pip/PiPMilestoneWrapper'
+import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWrapper'
 // CaseFlagsSection removed — flags now inline on milestone timeline (Phase 4)
 import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -36,7 +33,6 @@ import {
   formatTimestamp,
   formatElapsedMs,
   formatMinutesHMS,
-  getStatusConfig,
 } from '@/lib/formatters'
 import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
 import { type SurgeonMilestoneStats } from '@/types/pace'
@@ -100,19 +96,6 @@ interface CaseStaff {
   user_roles: { name: string }[] | { name: string } | null
 }
 
-interface DeviceCompanyData {
-  id: string
-  companyName: string
-  trayStatus: 'pending' | 'consignment' | 'loaners_confirmed' | 'delivered'
-  loanerTrayCount: number | null
-  deliveredTrayCount: number | null
-  repNotes: string | null
-  confirmedAt: string | null
-  confirmedByName: string | null
-  deliveredAt: string | null
-  deliveredByName: string | null
-}
-
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -154,17 +137,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [implants, setImplants] = useState<any>(null)
   const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | 'total_hip' | 'total_knee' | null>(null)
 
-  // Device companies
-  const [deviceCompanies, setDeviceCompanies] = useState<DeviceCompanyData[]>([])
-
   // Flags & delays (Phase 4: inline on timeline)
   const [caseFlags, setCaseFlags] = useState<CaseFlagForTimeline[]>([])
   const [delayTypeOptions, setDelayTypeOptions] = useState<DelayTypeOption[]>([])
 
   // UI state
   const [activeTab, setActiveTab] = useState<'milestones' | 'implants'>('milestones')
-  const [showCallNextPatient, setShowCallNextPatient] = useState(false)
-  const [patientCallTime, setPatientCallTime] = useState<string | null>(null)
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [surgeonLeftAt, setSurgeonLeftAt] = useState<string | null>(null)
   const [isPiPOpen, setIsPiPOpen] = useState(false)
@@ -181,11 +159,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [allRooms, setAllRooms] = useState<{ id: string; label: string }[]>([])
   const [showIncompleteModal, setShowIncompleteModal] = useState(false)
 
-  // Live clock
+  // Live clock — only tick for active (non-completed) cases
+  const isCompleted = caseData ? getJoinedValue(caseData.case_statuses)?.name === 'completed' : false
   useEffect(() => {
+    if (isCompleted) return
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isCompleted])
 
   // ============================================================================
   // FETCH ALL DATA
@@ -309,38 +289,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         }
       }
 
-      // Fetch device companies
-      const { data: deviceCompanyData } = await supabase
-        .from('case_device_companies')
-        .select(`
-          id, tray_status, loaner_tray_count, delivered_tray_count, rep_notes,
-          confirmed_at, confirmed_by, delivered_at, delivered_by,
-          implant_companies (name),
-          confirmed_by_user:users!case_device_companies_confirmed_by_fkey (first_name, last_name),
-          delivered_by_user:users!case_device_companies_delivered_by_fkey (first_name, last_name)
-        `)
-        .eq('case_id', id)
-
-      if (deviceCompanyData) {
-        setDeviceCompanies(deviceCompanyData.map((dc: any) => {
-          const implantCompany = Array.isArray(dc.implant_companies) ? dc.implant_companies[0] : dc.implant_companies
-          const confirmedUser = Array.isArray(dc.confirmed_by_user) ? dc.confirmed_by_user[0] : dc.confirmed_by_user
-          const deliveredUser = Array.isArray(dc.delivered_by_user) ? dc.delivered_by_user[0] : dc.delivered_by_user
-          return {
-            id: dc.id,
-            companyName: implantCompany?.name || 'Unknown',
-            trayStatus: dc.tray_status,
-            loanerTrayCount: dc.loaner_tray_count,
-            deliveredTrayCount: dc.delivered_tray_count,
-            repNotes: dc.rep_notes,
-            confirmedAt: dc.confirmed_at,
-            confirmedByName: confirmedUser ? `${confirmedUser.first_name} ${confirmedUser.last_name}` : null,
-            deliveredAt: dc.delivered_at,
-            deliveredByName: deliveredUser ? `${deliveredUser.first_name} ${deliveredUser.last_name}` : null,
-          }
-        }))
-      }
-
       // Fetch case flags (threshold + delay) for inline timeline display
       const { data: flagsData } = await supabase
         .from('case_flags')
@@ -406,8 +354,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         .order('display_order', { ascending: true })
 
       if (delayTypesData) setDelayTypeOptions(delayTypesData)
-
-      setPatientCallTime(caseResult?.call_time || null)
 
       // Fetch surgeon pace stats (median-based, from materialized views)
       const surgeon = getJoinedValue(caseResult?.surgeon)
@@ -1037,9 +983,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const status = getJoinedValue(caseData?.case_statuses)
   const surgeon = getJoinedValue(caseData?.surgeon)
   const anesthesiologist = getJoinedValue(caseData?.anesthesiologist)
-  const statusConfig = getStatusConfig(status?.name || null)
-  const isCompleted = status?.name === 'completed'
-
   // Calculate times
   const patientInMilestone = milestoneTypes.find(mt => mt.name === 'patient_in')
   const patientOutMilestone = milestoneTypes.find(mt => mt.name === 'patient_out')
@@ -1161,71 +1104,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     fetchData() // Refresh all data
   }
 
-  // ============================================================================
-  // COMPLETED CASE VIEW
-  // ============================================================================
-
-  if (isCompleted) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4 mb-6">
-            <Link href="/cases" className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
-              <ChevronLeft className="w-5 h-5" />
-            </Link>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold text-slate-900">{caseData.case_number}</h1>
-                <StatusBadgeDot status="completed" />
-              </div>
-            </div>
-          </div>
-
-          <CompletedCaseView
-            caseData={{
-              id: caseData.id,
-              caseNumber: caseData.case_number,
-              scheduledDate: caseData.scheduled_date,
-              startTime: caseData.start_time,
-              operativeSide: caseData.operative_side,
-              notes: caseData.notes,
-              room: room?.name || null,
-              procedure: procedure?.name || null,
-            }}
-            surgeon={surgeon ? { firstName: surgeon.first_name, lastName: surgeon.last_name } : null}
-            anesthesiologist={anesthesiologist ? { firstName: anesthesiologist.first_name, lastName: anesthesiologist.last_name } : null}
-            milestones={milestoneTypes.map(mt => ({
-              id: mt.id,
-              name: mt.name,
-              displayName: mt.display_name,
-              recordedAt: getMilestoneByTypeId(mt.id)?.recorded_at || null,
-            }))}
-            staff={caseStaff.map(cs => {
-              const user = getJoinedValue(cs.users)
-              const role = getJoinedValue(cs.user_roles)
-              return {
-                id: cs.id,
-                name: user ? `${user.first_name} ${user.last_name}` : 'Unknown',
-                role: role?.name || 'staff'
-              }
-            })}
-            patientCallTime={patientCallTime}
-            surgeonAverage={procedureStats ? { avgTotalMinutes: procedureStats.medianDuration, sampleSize: procedureStats.sampleSize } : null}
-            milestoneAverages={milestoneStats.map(ms => ({ milestoneName: ms.milestone_name, avgMinutesFromStart: ms.median_minutes_from_start }))}
-            implants={implants}
-            implantCategory={implantCategory}
-            facilityId={effectiveFacilityId!}
-            userId={userData.userId}
-            supabase={supabase}
-            deviceCompanies={deviceCompanies}
-          />
-        </div>
-      </DashboardLayout>
-    )
-  }
+  // Permission flags — disabled for completed cases
+  const canManage = !isCompleted && can('milestones.manage')
+  const canCreateFlags = !isCompleted && can('flags.create')
 
   // ============================================================================
-  // ACTIVE CASE VIEW - COMMAND CENTER
+  // CASE VIEW (unified for active + completed)
   // ============================================================================
 
   return (
@@ -1250,7 +1134,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         />
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 pb-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
 
         {/* Error Banner */}
         <ErrorBanner
@@ -1278,6 +1162,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                   {procedure?.name || 'No Procedure'}
                 </h1>
                 <StatusBadgeDot status={status?.name || 'scheduled'} />
+                <div className="ml-auto">
+                  <PiPButton onClick={() => setIsPiPOpen(true)} disabled={isPiPOpen} />
+                </div>
               </div>
               <div className="flex items-center gap-2 mt-1.5 text-sm text-slate-500 flex-wrap ml-8">
                 <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 rounded font-mono text-xs text-slate-600">
@@ -1297,7 +1184,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 label="Total Time"
                 formattedTime={totalTime}
                 medianFormatted={medianTotalMinutes !== null ? formatMinutesHMS(medianTotalMinutes) : null}
-                isRunning={!!patientInTime && !patientOutTime}
+                isRunning={!isCompleted && !!patientInTime && !patientOutTime}
                 color="indigo"
                 ratio={medianTotalMinutes !== null && medianTotalMinutes > 0 ? totalTimeMs / (medianTotalMinutes * 60000) : null}
               />
@@ -1305,7 +1192,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 label="Surgical Time"
                 formattedTime={surgicalTime}
                 medianFormatted={medianSurgicalMinutes !== null ? formatMinutesHMS(medianSurgicalMinutes) : null}
-                isRunning={!!incisionTime && !closingTime}
+                isRunning={!isCompleted && !!incisionTime && !closingTime}
                 color="cyan"
                 ratio={medianSurgicalMinutes !== null && medianSurgicalMinutes > 0 ? surgicalTimeMs / (medianSurgicalMinutes * 60000) : null}
               />
@@ -1397,13 +1284,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                         onRecord={recordMilestone}
                         onUndo={undoMilestone}
                         recordingMilestoneIds={recordingMilestoneIds}
-                        canManage={can('milestones.manage')}
+                        canManage={canManage}
                         timeZone={userData.facilityTimezone}
                         caseFlags={caseFlags}
                         delayTypes={delayTypeOptions}
                         onAddDelay={handleAddDelay}
                         onRemoveDelay={handleRemoveDelay}
-                        canCreateFlags={can('flags.create')}
+                        canCreateFlags={canCreateFlags}
                         currentUserId={userData.userId}
                       />
                     )}
@@ -1449,6 +1336,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       caseId={id}
                       procedureTypeId={caseData.procedure_type_id}
                       supabase={supabase}
+                      readOnly={isCompleted}
                     />
                   )}
                 </div>
@@ -1495,7 +1383,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                 {!surgeonLeftAt ? (
                   <button
                     onClick={recordSurgeonLeft}
-                    disabled={!closingStarted || patientOutRecorded || !can('milestones.manage')}
+                    disabled={isCompleted || !closingStarted || patientOutRecorded || !can('milestones.manage')}
                     className={`w-full py-2.5 px-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
                       closingStarted && !patientOutRecorded
                         ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow'
@@ -1548,12 +1436,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       name={user ? `${user.first_name} ${user.last_name}` : 'Unknown'}
                       role={role?.name || 'Staff'}
                       roleName={role?.name || 'admin'}
-                      onRemove={can('staff.delete') ? () => removeStaff(cs.id) : undefined}
+                      onRemove={!isCompleted && can('staff.delete') ? () => removeStaff(cs.id) : undefined}
                     />
                   )
                 })}
 
-                {can('staff.create') && (
+                {!isCompleted && can('staff.create') && (
                   showAddStaff ? (
                     <div className="pt-2">
                       <select
@@ -1603,29 +1491,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
       </div>
-
-      {/* FAB */}
-      {effectiveFacilityId && (
-        <FloatingActionButton
-          actions={[{
-            id: 'call-next-patient',
-            label: 'Call Next Patient',
-            icon: 'megaphone',
-            onClick: () => setShowCallNextPatient(true)
-          }]}
-        />
-      )}
-
-      {/* Call Next Patient Modal */}
-      {effectiveFacilityId && userData.userId && userData.userEmail && (
-        <CallNextPatientModal
-          isOpen={showCallNextPatient}
-          onClose={() => setShowCallNextPatient(false)}
-          facilityId={effectiveFacilityId}
-          userId={userData.userId}
-          userEmail={userData.userEmail}
-        />
-      )}
 
       {/* Picture-in-Picture Milestone Panel */}
       {caseData && (

@@ -372,52 +372,55 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
 
 ---
 
-## Phase 7: Completed Case View & Cleanup
+## Phase 7: Completed Case View, PiP Relocation & Cleanup
 
-**Goal:** Handle the completed case state, remove unused components/imports, and clean up the page.
+**Goal:** Unify completed/active case views, relocate PiP to a "Pop Out" header button (matching mockup), remove FAB and CallNextPatientModal, and clean up unused code.
 
 ### Files to Modify
 
-- `app/cases/[id]/page.tsx` — Unify completed/active views or update completed rendering
+- `app/cases/[id]/page.tsx` — Unify completed/active views, add Pop Out button to header, remove FAB/CallNextPatient/unused state
 - Various component files — Remove unused imports
 
 ### Steps
 
-1. **Decide on completed case view:**
-   - Option A: Unify — completed cases use the same timeline (all nodes green, no action buttons, times locked)
-   - Option B: Keep separate `CompletedCaseView` but restyle to match v2 layout
-   - **Recommendation: Option A** — the timeline works for both states, just disable interactions
+1. **Unify completed case view:**
+   - Remove the `if (isCompleted) { return <CompletedCaseView /> }` early return (lines ~1168-1225)
+   - Completed cases flow through the same v2 layout with interactions disabled:
+     - Pass `canManage={false}` — no Record/Undo buttons
+     - Pass `canCreateFlags={false}` — no delay logging
+     - Pass `readOnly={true}` to ImplantSection
+     - Timer chips show final values (not ticking — `isRunning` already false when patientOut recorded)
+     - Stop the live clock interval for completed cases (no need to tick every second)
 
-2. **Completed case adjustments:**
-   - All timeline nodes show as completed (green checkmarks)
-   - No Record/Undo buttons
-   - Timer chips show final values (not ticking)
-   - No "next milestone" highlighting
-   - Flags/delays are read-only (no add buttons)
-   - Implants tab: read-only mode (ImplantSection supports this)
+2. **Relocate PiP to "Pop Out" header button:**
+   - Add a "Pop Out" button to the right side of the case header (matching mockup position)
+   - Style: subtle border button with expand/arrows icon, text "Pop Out"
+   - On click: opens PiPMilestoneWrapper (same functionality, new trigger location)
+   - Remove the old FAB-based PiP trigger
 
-3. **Remove unused imports and components:**
-   - Remove `PiPMilestoneWrapper` / `PiPButton` import and usage
-   - Remove `FloatingActionButton` import and usage
-   - Remove `CallNextPatientModal` import and usage
-   - Remove `PaceProgressBar` import (already done in Phase 2)
-   - Remove `MilestoneCard` import (already done in Phase 3)
-   - Remove `ImplantBadge` import (already done in Phase 5/6)
-   - Clean up any unused state variables
+3. **Remove unused components:**
+   - Remove `FloatingActionButton` import and usage (FAB deleted)
+   - Remove `CallNextPatientModal` import and usage (call patient now lives in FlipRoomCard only)
+   - Remove `CompletedCaseView` import (no longer used after unification)
+   - Remove `showCallNextPatient` state variable
+   - Remove `deviceCompanies` state + fetch (was only used by CompletedCaseView)
+   - Clean up any other dead state variables
 
-4. **Handle IncompleteCaseModal:**
-   - Keep this — it's important for data quality (prompts users to fill missing fields)
-   - Ensure it still renders correctly over the new layout
+4. **Keep IncompleteCaseModal:**
+   - Still needed for data quality
+   - Verify it renders correctly over the new layout
 
 5. **Run 3-stage test gate**
 
 ### Acceptance
 
-- [ ] Completed cases render using the same timeline (read-only mode)
+- [ ] Completed cases render using the same v2 layout (read-only mode)
 - [ ] No Record/Undo buttons on completed cases
 - [ ] Timers show final values without ticking
-- [ ] PiP, FAB, CallNextPatientModal fully removed
-- [ ] No unused imports remain
+- [ ] "Pop Out" button in case header opens PiP panel
+- [ ] FAB and CallNextPatientModal fully removed
+- [ ] CompletedCaseView import removed
+- [ ] No unused imports or state variables remain
 - [ ] IncompleteCaseModal still works
 - [ ] Run `npm run typecheck && npm run lint && npm run test`
 
@@ -425,26 +428,123 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
 
 ---
 
-## Phase 8: Polish & Accessibility
+## Phase 8: Mockup Alignment & Visual Polish
 
-**Goal:** Add animations, loading states, accessibility attributes, and handle edge cases.
+**Goal:** Align all visual details with the `Examples/case-details-v2.jsx` mockup. This phase focuses on making the page feel professional — fonts, spacing, colors, component restyling.
+
+### Gap Analysis (mockup vs current)
+
+| Area | Mockup | Current | Change |
+|------|--------|---------|--------|
+| Timer font | 26px, could feel bigger with padding | 26px, px-5 py-3.5 | Bump to ~28px, increase padding slightly |
+| Tab switcher | Pill/chip buttons OUTSIDE card | Underline tabs INSIDE card | Restyle to pill tabs above content card |
+| Progress dots | Not next to tab label | Small dots next to "Milestones" | Remove dots from tab label |
+| "X of Y" subheader | Not present | Progress bar inside milestones panel | Remove subheader |
+| Header badges | Flag count (red) + delay count (amber) | Not present | Add inline badges |
+| Timeline gap | 16px node-to-content, 40px track | 12px gap, 32px track | Widen spacing |
+| Recorded time | Inline with name on same line | Below name on separate line | Move inline |
+| Delay form | 280px wide popover, compact, floats below | Too large, clipped by container | Shrink + fix positioning |
+| Flip room card | Amber gradient bg, styled button | Basic card | Restyle to match |
+| Sidebar bg | Single white panel (border-left) | Separate cards on gray bg | Convert to unified white panel |
+| Content card | borderRadius 16, generous padding | rounded-xl (12px), p-4 | Increase radius + padding |
+| Milestones card padding | 22px 22px 14px 18px | p-4 (16px) | Match mockup padding |
+
+### Files to Modify
+
+- `app/cases/[id]/page.tsx` — Header badges, tab restyle, sidebar panel, timer sizing, remove progress subheader
+- `components/cases/TimerChip.tsx` — Bump font/padding
+- `components/cases/MilestoneTimelineV2.tsx` — Widen spacing, inline recorded time
+- `components/cases/AddDelayForm.tsx` — Shrink, fix overflow/positioning
+- `components/cases/FlipRoomCard.tsx` — Restyle to match mockup (amber gradient, styled button)
 
 ### Steps
 
-1. **Animations (CSS only):**
-   - Timeline nodes: staggered fade-in on mount (50ms delay per node)
-   - Timer chips: slide-in from left on mount
-   - Tab content: fade transition on switch
-   - Progress bar: smooth width transition (1s linear)
-   - Delay node: slide-in animation when added
+1. **Case header — add flag/delay count badges:**
+   - After the StatusBadgeDot, add:
+     - Red flag badge: flag icon + count (only when > 0)
+     - Amber delay badge: clock icon + count (only when > 0)
+   - Style: `text-xs font-bold` in colored pill with tinted background (matching mockup)
 
-2. **Loading states:**
-   - Skeleton for case header (title bar + metadata pills)
-   - Skeleton for timer chips (3 rectangular placeholders)
-   - Skeleton for timeline (vertical line + circle placeholders)
-   - Tab-level: only active tab's content loads
+2. **Timer chips — bump size:**
+   - Increase time font from `text-[26px]` to `text-[28px]`
+   - Increase chip padding slightly (py-4 px-6)
+   - Increase border-radius to `rounded-2xl` (16px) to match mockup's 14px
 
-3. **Accessibility:**
+3. **Tab switcher — restyle to pill/chip tabs:**
+   - Move tabs OUTSIDE the content card (above it, as standalone buttons)
+   - Active tab: white bg, `border border-slate-200/50`, subtle shadow, bold text
+   - Inactive tab: transparent bg, muted text
+   - Remove the progress dots from the Milestones tab label
+   - Keep the cyan implant count badge on Implants tab
+   - Remove the `bg-white rounded-xl border` wrapper from around both tabs + content
+   - Content card becomes a separate white card below the tabs
+
+4. **Remove "X of Y recorded" subheader:**
+   - Remove the progress bar + count header inside the milestones tab panel
+   - This info already lives in the Progress chip and Case Activity sidebar
+
+5. **Timeline spacing:**
+   - Increase track column width from `w-8` (32px) to `w-10` (40px)
+   - Increase gap from `gap-3` (12px) to `gap-4` (16px)
+   - Adjust next-milestone node size from `w-8 h-8` to match mockup's 34px
+
+6. **Recorded time inline with name:**
+   - Move the recorded timestamp to the same line as the milestone name (flex row, gap)
+   - Currently it's a separate `<span>` block below the name — move it inline
+
+7. **AddDelayForm — compact and fix positioning:**
+   - Reduce width to ~280px max
+   - Use 2-column grid for delay type buttons (matching mockup)
+   - Duration input: 60px wide
+   - Ensure popover uses `position: absolute; z-index: 50` and isn't clipped by parent `overflow: hidden`
+   - Add `overflow: visible` to the milestone row container so popover can escape
+
+8. **Flip room card — restyle:**
+   - Background: warm amber gradient (`from-amber-50/50 to-amber-50/20` or similar)
+   - Border: amber tint (`border-amber-200/50`)
+   - "Call Patient Back" button: full-width amber gradient button with shadow
+   - Add flip room icon (arrows) + "Flip Room" label + room badge
+
+9. **Sidebar — unified white panel:**
+   - Change sidebar from individual cards on gray bg to a single white background panel
+   - Add `border-l border-slate-100` to the sidebar column
+   - Remove individual card borders/backgrounds — use section dividers instead
+   - Keep section headings and padding
+
+10. **Content card refinements:**
+    - Milestones content card: `rounded-2xl` (16px), padding ~`px-5 py-5`
+    - Subtle border: `border-slate-100` (lighter than current `border-slate-200`)
+
+11. **Run 3-stage test gate**
+
+### Acceptance
+
+- [ ] Flag/delay count badges visible in header when counts > 0
+- [ ] Timer chips feel bigger and more prominent
+- [ ] Tabs are pill-style, outside the content card
+- [ ] No progress dots on tab labels
+- [ ] No "X of Y" subheader inside milestones panel
+- [ ] Timeline spacing matches mockup (wider gaps, larger track)
+- [ ] Recorded times inline with milestone names
+- [ ] Delay form is compact (280px), doesn't get clipped
+- [ ] Flip room card has amber gradient styling
+- [ ] Sidebar is a unified white panel
+- [ ] Page feels professional and matches mockup's visual quality
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(case-detail): phase 8 - mockup alignment and visual polish`
+
+---
+
+## Phase 9: Accessibility, Edge Cases & Integration Testing
+
+**Goal:** Add accessibility attributes, handle edge cases, add animations/loading states, and run the full integration test matrix. This is the final phase.
+
+### Steps
+
+#### Accessibility
+
+1. **ARIA attributes:**
    - Timeline nodes: `aria-label="{name} milestone, {status}, recorded at {time}"`
    - Timer chips: `aria-label="{label}: {time}, median {median}"`
    - Progress bar: `role="progressbar"` with `aria-valuenow`, `aria-valuemax`
@@ -452,41 +552,39 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
    - Record button: `aria-label="Record {milestone name}"`
    - Color never the only indicator — status uses icons + text alongside color
 
-4. **Edge cases:**
+2. **Keyboard navigation:**
+   - Tabs navigable with arrow keys
+   - Record/Undo buttons focusable
+   - Delay form keyboard-accessible
+
+#### Animations (CSS only, lightweight)
+
+3. **Mount animations:**
+   - Tab content: fade transition on switch
+   - Progress bar: smooth width transition (1s linear)
+   - Delay node: slide-in animation when added
+
+4. **Loading skeletons:**
+   - Skeleton for case header (title bar + metadata pills)
+   - Skeleton for timer chips (3 rectangular placeholders)
+   - Skeleton for timeline (vertical line + circle placeholders)
+
+#### Edge Cases
+
+5. **Handle gracefully:**
    - Zero milestones configured: "No milestones configured" empty state
-   - No surgeon assigned: Timer chips show "—" for median, no variance display
+   - No surgeon assigned: Timer chips show "—" for median
    - No procedure assigned: Implant tab disabled with message
    - Case with only 1 milestone: Timeline renders single node without lines
    - Very long milestone names: truncate with ellipsis
 
-5. **Responsive behavior:**
+6. **Responsive behavior:**
    - Below lg breakpoint: stack to single column (sidebar below main)
    - Timer chips: flex-wrap to stack on narrow screens
-   - Timeline: always vertical, no special narrow handling needed
 
-6. **Run 3-stage test gate**
+#### Integration Testing
 
-### Acceptance
-
-- [ ] Animations smooth (60fps, no layout shifts)
-- [ ] Loading skeletons match content shapes
-- [ ] Screen reader can navigate all interactive elements
-- [ ] Color-blind safe: all statuses readable without color alone
-- [ ] Edge cases handled gracefully
-- [ ] Responsive layout works on all breakpoints
-- [ ] Run `npm run typecheck && npm run lint && npm run test`
-
-**Commit:** `feat(case-detail): phase 8 - polish and accessibility`
-
----
-
-## Phase 9: Integration Testing
-
-**Goal:** Verify the full page works correctly across all case states, procedure types, and data scenarios.
-
-### Steps
-
-1. **Test matrix — Case states:**
+7. **Test matrix — Case states:**
    | Scenario | Expected |
    |----------|----------|
    | Scheduled case, 0 milestones | Header shows "Scheduled", timers at 0:00:00, empty timeline |
@@ -494,12 +592,12 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
    | In-progress with delays logged | Delay nodes visible between milestones |
    | In-progress with system flags | Flag badges on flagged milestones |
    | Completed case, all milestones | Read-only timeline, final times, no action buttons |
-   | Completed case, 2 missing milestones | Missing shown as pending (gray), flag if applicable |
+   | Completed case, 2 missing milestones | Missing shown as pending (gray) |
    | Case with no surgeon | Medians unavailable, timer shows time only |
    | Case with no procedure | Implants tab disabled, no implant category |
    | Incomplete case (missing required fields) | IncompleteCaseModal shows |
 
-2. **Test matrix — Implants tab:**
+8. **Test matrix — Implants tab:**
    | Scenario | Expected |
    |----------|----------|
    | Hip procedure | Cup, Stem, Head, Liner fields |
@@ -507,7 +605,7 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
    | Non-implant procedure | "No implants for this procedure" empty state |
    | Edit and save | Auto-save works, data persists on reload |
 
-3. **Test matrix — Sidebar:**
+9. **Test matrix — Sidebar:**
    | Scenario | Expected |
    |----------|----------|
    | Surgeon with flip room case | FlipRoomCard shows, call-back works |
@@ -515,42 +613,48 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
    | Staff management | Add/remove staff works |
    | Surgeon left | Surgeon Status reflects correctly |
 
-4. **Cross-feature consistency:**
-   - Timer values match milestone timestamps
-   - Case Activity summary counts match actual data
-   - Milestone count matches timeline node count
+10. **Cross-feature consistency:**
+    - Timer values match milestone timestamps
+    - Case Activity summary counts match actual data
+    - Milestone count matches timeline node count
+    - Pop Out (PiP) opens and functions correctly
 
-5. **Performance:**
-   - Page load < 2s
-   - Milestone record < 500ms perceived (optimistic update)
-   - Tab switch instant (no data refetch needed)
-   - Delay logging < 1s
+11. **Performance:**
+    - Page load < 2s
+    - Milestone record < 500ms perceived (optimistic update)
+    - Tab switch instant (no data refetch needed)
+    - Delay logging < 1s
 
 ### Acceptance
 
+- [ ] All ARIA attributes in place, screen reader navigable
+- [ ] Animations smooth (60fps, no layout shifts)
+- [ ] Loading skeletons match content shapes
+- [ ] Edge cases handled gracefully
+- [ ] Responsive layout works on all breakpoints
 - [ ] All test matrix scenarios pass
 - [ ] Cross-feature data consistent
 - [ ] Performance meets thresholds
 - [ ] No console errors or warnings
 - [ ] Run `npm run typecheck && npm run lint && npm run test`
 
-**Commit:** `feat(case-detail): phase 9 - integration testing`
+**Commit:** `feat(case-detail): phase 9 - accessibility, edge cases, and integration testing`
 
 ---
 
 ## Phase Map
 
-| Phase | Description | Effort | Dependencies |
-|-------|-------------|--------|-------------|
-| Phase 1 | Layout restructure & case header | 1 session | None |
-| Phase 2 | Timer chips | 1 session | Phase 1 |
-| Phase 3 | Milestone timeline | 1-2 sessions | Phase 1 |
-| Phase 4 | Inline flags & delay logging | 1-2 sessions | Phase 3 |
-| Phase 5 | Tab switcher & implant panel | 1 session | Phase 3 |
-| Phase 6 | Sidebar cleanup & case activity | 1 session | Phases 4, 5 |
-| Phase 7 | Completed view & cleanup | 1 session | Phases 3-6 |
-| Phase 8 | Polish & accessibility | 1 session | Phase 7 |
-| Phase 9 | Integration testing | 1 session | Phase 8 |
+| Phase | Description | Effort | Dependencies | Status |
+|-------|-------------|--------|-------------|--------|
+| Phase 1 | Layout restructure & case header | 1 session | None | ✅ Done |
+| Phase 2 | Timer chips | 1 session | Phase 1 | ✅ Done |
+| Phase 3 | Milestone timeline | 1-2 sessions | Phase 1 | ✅ Done |
+| Phase 4 | Inline flags & delay logging | 1-2 sessions | Phase 3 | ✅ Done |
+| Phase 5 | Tab switcher & implant panel | 1 session | Phase 3 | ✅ Done |
+| Phase 6 | Sidebar cleanup & case activity | 1 session | Phases 4, 5 | ✅ Done |
+| Phase 7 | Completed view, PiP relocation & cleanup | 1 session | Phases 3-6 | ✅ Done |
+| Phase 8 | Mockup alignment & visual polish | 1-2 sessions | Phase 7 | Pending |
+| Phase 9 | Accessibility, edge cases & integration testing | 1 session | Phase 8 | Pending |
 
 **Total: ~9-12 sessions**
 
@@ -560,24 +664,26 @@ The current case detail page (`/cases/[id]`) uses a "command center" design with
 
 ```
 app/cases/[id]/page.tsx (restructured)
-├── Case Header (inline, not a separate component)
-│   └── StatusPill (new or reuse StatusBadgeDot)
+├── Case Header (inline)
+│   ├── StatusBadgeDot (existing)
+│   ├── Flag/Delay count badges (Phase 8)
+│   └── "Pop Out" button → PiPMilestoneWrapper (relocated from FAB)
 │
 ├── Timer Chips (3x)
 │   └── TimerChip (new component)
 │
-├── Tab Switcher (inline)
+├── Tab Switcher (pill-style, outside content card — Phase 8)
 │   ├── Milestones Tab (default)
 │   │   └── MilestoneTimelineV2 (new component)
 │   │       ├── FlagBadge (new, inline on milestone rows)
 │   │       ├── DelayNode (new, between milestones)
-│   │       └── AddDelayForm (new, popover)
+│   │       └── AddDelayForm (new, compact popover)
 │   │
 │   └── Implants Tab
 │       └── ImplantSection (existing component, integrated)
 │
-├── Sidebar
-│   ├── FlipRoomCard (existing, kept)
+├── Sidebar (unified white panel — Phase 8)
+│   ├── FlipRoomCard (existing, restyled in Phase 8)
 │   ├── Surgeon Status (existing inline section, kept)
 │   ├── Team Section (existing, styled)
 │   │   └── TeamMember (existing, kept)
@@ -586,6 +692,7 @@ app/cases/[id]/page.tsx (restructured)
 │
 └── Modals
     ├── IncompleteCaseModal (existing, kept)
+    ├── PiPMilestoneWrapper (existing, trigger relocated to header)
     └── ConfirmDialog (existing, kept for undo/out-of-order)
 ```
 
@@ -593,14 +700,20 @@ app/cases/[id]/page.tsx (restructured)
 
 | File | Reason |
 |------|--------|
-| `PiPMilestoneWrapper` | Feature removed from v2 |
-| `FloatingActionButton` | Feature removed from v2 |
-| `CallNextPatientModal` | Replaced by flip room inline |
+| `FloatingActionButton` | FAB removed, PiP relocated to header button |
+| `CallNextPatientModal` | Replaced by flip room card inline |
+| `CompletedCaseView` | Unified into main v2 layout (read-only mode) |
 | `MilestoneCard` | Replaced by MilestoneTimelineV2 |
 | `ImplantBadge` | Replaced by ImplantSection tab |
 | `PaceProgressBar` | Replaced by TimerChip progress bars |
 | `DeviceRepSection` | Removed from sidebar |
 | `CaseFlagsSection` | Moved to inline timeline |
+
+## Files Kept (relocated)
+
+| File | Change |
+|------|--------|
+| `PiPMilestoneWrapper` | Kept — trigger relocated from FAB to "Pop Out" header button |
 
 ---
 
@@ -608,7 +721,7 @@ app/cases/[id]/page.tsx (restructured)
 
 - Breadcrumb nav (keep DashboardLayout)
 - Cmd+K search bar
-- "Pop Out" button
+- Font change to DM Sans / JetBrains Mono (would require global CSS changes — keep system font stack)
 - Real-time WebSocket for multi-device sync (existing realtime subscription stays)
 - Implant catalog/SKU system (keep free-text approach)
 - Dark mode
