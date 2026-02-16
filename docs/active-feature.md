@@ -508,6 +508,39 @@ Each phase of implementation must include UI-level tests that simulate real user
 - [ ] iOS equivalent needed (eventually — surgeon milestone config, phase-based analytics)
 - [x] iOS can wait — web is the admin/configuration platform; iOS consumes the data
 
+## Supabase Branch (Development Database)
+
+All database work for this feature uses a **Supabase branch** — an isolated copy of the production database. This protects production from any schema changes during development.
+
+**Branch details:**
+- **Branch name:** `feature/milestone-hierarchy-redesign`
+- **Branch ID:** `pytonqwejaxagwywvitb`
+- **Host:** `aws-0-us-west-2.pooler.supabase.com`
+- **User:** `postgres.pytonqwejaxagwywvitb`
+- **Password:** `oKjKolOVlubRoHMbnWsTXHThSYkOvoFQ`
+- **Status:** Full clone of production — schema (81 tables) + all data (3,046 cases, 27,322 case milestones, etc.)
+
+**How migrations work:**
+1. Write a new migration SQL file locally in `supabase/migrations/`
+2. Push to the branch DB: `supabase db push --db-url "postgresql://postgres.pytonqwejaxagwywvitb:oKjKolOVlubRoHMbnWsTXHThSYkOvoFQ@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require"`
+3. Verify it applied correctly against real data
+4. Nothing touches production until merge to main + explicit push to production
+
+**Baseline migration:**
+- `supabase/migrations/20260101000000_baseline.sql` — complete pg_dump of the production schema
+- The 15 pre-existing migrations are archived in `supabase/migrations/_applied/` (subsumed by the baseline)
+- The baseline is registered as "applied" in both branch and production migration history
+
+**Switching between production and branch databases:**
+```bash
+./switch-db.sh              # shows which DB you're on
+./switch-db.sh branch       # switch to branch DB
+./switch-db.sh production   # switch back to production
+```
+After switching, restart your dev server (`npm run dev`) for changes to take effect. The script swaps `.env.local` between `.env.production` and `.env.branch`.
+
+---
+
 ## Known Issues / Constraints
 - `milestone_types` CREATE TABLE not in migration files (created via Supabase UI before migration tracking started)
 - `procedure_milestone_config` CREATE TABLE not in migration files (same reason)

@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 // Layout components
 import Sidebar, { useSidebarWidth } from './Sidebar'
 import SubNavigation, { SUBNAV_WIDTH } from './SubNavigation'
-import Header, { TrialBanner, ImpersonationBanner } from './Header'
+import Header, { TrialBanner, ImpersonationBanner, BranchBanner } from './Header'
 import BlockedScreen from './BlockedScreen'
 import { getFilteredNavigation, SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED } from './navigation-config'
 
@@ -253,6 +253,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         className="min-h-screen flex flex-col transition-all duration-300 ease-out"
       >
         {/* Banners */}
+        <BranchBanner />
         {showTrialWarning && <TrialBanner daysRemaining={trialDaysRemaining!} />}
         {impersonation && effectiveIsGlobalAdmin && (
           <ImpersonationBanner

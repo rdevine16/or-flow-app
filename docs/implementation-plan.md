@@ -21,6 +21,42 @@ Redesign the milestone system to support a three-level hierarchy: facility phase
 
 ---
 
+## Supabase Branch (Development Database)
+
+All database migrations are developed and tested against an isolated Supabase branch before touching production.
+
+| Field | Value |
+|-------|-------|
+| Branch name | `feature/milestone-hierarchy-redesign` |
+| Branch ID | `pytonqwejaxagwywvitb` |
+| Pooler host | `aws-0-us-west-2.pooler.supabase.com` |
+| User | `postgres.pytonqwejaxagwywvitb` |
+| Password | `oKjKolOVlubRoHMbnWsTXHThSYkOvoFQ` |
+| State | Full clone — schema + production data |
+
+**Push migrations to branch:**
+```bash
+supabase db push --db-url "postgresql://postgres.pytonqwejaxagwywvitb:oKjKolOVlubRoHMbnWsTXHThSYkOvoFQ@aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require"
+```
+
+**Connect via psql:**
+```bash
+PGPASSWORD='oKjKolOVlubRoHMbnWsTXHThSYkOvoFQ' /opt/homebrew/opt/libpq/bin/psql "sslmode=require host=aws-0-us-west-2.pooler.supabase.com port=5432 user=postgres.pytonqwejaxagwywvitb dbname=postgres"
+```
+
+**Switch dev server between production and branch:**
+```bash
+./switch-db.sh              # shows which DB you're on
+./switch-db.sh branch       # switch to branch DB
+./switch-db.sh production   # switch back to production
+```
+Restart `npm run dev` after switching. The script swaps `.env.local` between `.env.production` and `.env.branch`.
+
+**Workflow per phase:**
+1. Write migration file locally → push to branch → `./switch-db.sh branch` → `npm run dev` → test UI against real data → commit
+
+---
+
 ## Phase 1: Database Foundation
 
 **What it does:** Creates the three new tables (`phase_definitions`, `phase_definition_templates`, `surgeon_milestone_config`), adds `display_order` to `procedure_milestone_config`, creates the `seed_facility_phases()` function + AFTER INSERT trigger on facilities, seeds templates and migrates existing facilities to have phase definitions.
