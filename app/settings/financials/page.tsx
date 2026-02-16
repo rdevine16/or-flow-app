@@ -6,9 +6,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { Building2, Calculator, Check, ChevronRight, ClipboardCheck, Clock, PenLine, Plus, Tag, User } from 'lucide-react'
 import { genericAuditLog } from '@/lib/audit-logger'
 import Link from 'next/link'
@@ -263,38 +260,34 @@ showToast({
 
   if (userLoading) {
     return (
-      <DashboardLayout>
-        <Container>
-          <ErrorBanner message={error} />
-          <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
-            <PageLoader message="Loading financials..." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <ErrorBanner message={error} />
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Financials</h1>
+        <p className="text-slate-500 mb-6">Configure financial tracking and cost analysis</p>
+        <PageLoader message="Loading financials..." />
+      </>
     )
   }
 
   if (!effectiveFacilityId) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
-            <div className="text-center py-12">
-              <p className="text-slate-500">No facility selected</p>
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Financials</h1>
+        <p className="text-slate-500 mb-6">Configure financial tracking and cost analysis</p>
+        <div className="text-center py-12">
+          <p className="text-slate-500">No facility selected</p>
+        </div>
+      </>
     )
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Financials" description="Configure financial tracking and cost analysis">
-          {loading ? (
-            <PageLoader message="Loading financial data..." />
-          ) : (
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Financials</h1>
+      <p className="text-slate-500 mb-6">Configure financial tracking and cost analysis</p>
+      {loading ? (
+        <PageLoader message="Loading financial data..." />
+      ) : (
             <div className="space-y-8">
               {/* OR Hourly Rate + Quick Actions */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -597,8 +590,6 @@ showToast({
 
             </div>
           )}
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

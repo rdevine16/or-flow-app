@@ -6,9 +6,6 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown, ClipboardList, Loader2 } from 'lucide-react'
@@ -320,29 +317,22 @@ export default function ProcedureMilestonesSettingsPage() {
   const isAnySaving = savingKeys.size > 0
 
   if (userLoading || loading) {
-    return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
-            <PageLoader message="Loading procedure milestones..." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
-    )
+    return <PageLoader message="Loading procedure milestones..." />
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Procedure Milestones" description="Configure which milestones are tracked for each procedure type.">
-          {!effectiveFacilityId ? (
-            <div className="text-center py-12 text-slate-500">
-              No facility found. Please contact support.
-            </div>
-          ) : (
-            <>
-              <div className="space-y-3">
-                {(procedures || []).map(procedure => {
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Procedure Milestones</h1>
+      <p className="text-slate-500 mb-6">Configure which milestones are tracked for each procedure type.</p>
+
+      {!effectiveFacilityId ? (
+        <div className="text-center py-12 text-slate-500">
+          No facility found. Please contact support.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {(procedures || []).map(procedure => {
                   const isExpanded = expandedProcedure === procedure.id
                   const milestoneCount = getMilestoneCount(procedure.id)
                   const totalMilestones = (milestones || []).length
@@ -493,9 +483,6 @@ export default function ProcedureMilestonesSettingsPage() {
               </div>
             </>
           )}
-        </SettingsLayout>
-
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

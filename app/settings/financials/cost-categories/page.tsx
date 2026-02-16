@@ -7,9 +7,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
@@ -442,38 +439,34 @@ await genericAuditLog(supabase, 'cost_category.restored', {
 
   if (userLoading) {
     return (
-      <DashboardLayout>
-        <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <SettingsLayout title="Cost Categories" description="Manage debit and credit categories for financial tracking">
-            <PageLoader message="Loading cost categories..." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Cost Categories</h1>
+        <p className="text-slate-500 mb-6">Manage debit and credit categories for financial tracking</p>
+        <PageLoader message="Loading cost categories..." />
+      </>
     )
   }
 
   if (!effectiveFacilityId) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Cost Categories" description="Manage debit and credit categories for financial tracking">
-            <div className="text-center py-12 text-slate-500">
-              No facility selected
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Cost Categories</h1>
+        <p className="text-slate-500 mb-6">Manage debit and credit categories for financial tracking</p>
+        <div className="text-center py-12 text-slate-500">
+          No facility selected
+        </div>
+      </>
     )
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Cost Categories" description="Manage debit and credit categories for financial tracking">
-          {loading ? (
-            <PageLoader message="Loading categories..." />
-          ) : activeCategories.length === 0 && deletedCategories.length === 0 ? (
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Cost Categories</h1>
+      <p className="text-slate-500 mb-6">Manage debit and credit categories for financial tracking</p>
+      {loading ? (
+        <PageLoader message="Loading categories..." />
+      ) : activeCategories.length === 0 && deletedCategories.length === 0 ? (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
               <Calculator className="w-12 h-12 text-slate-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-900 mb-2">No Cost Categories</h3>
@@ -696,8 +689,6 @@ await genericAuditLog(supabase, 'cost_category.restored', {
     </div>
   </div>
 </div>
-        </SettingsLayout>
-      </Container>
 
       {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={closeModal} title={modalMode === 'add' ? `Add ${formData.type === 'debit' ? 'Debit' : 'Credit'} Category` : 'Edit Category'}>
@@ -780,6 +771,6 @@ await genericAuditLog(supabase, 'cost_category.restored', {
               </Modal.Action>
             </Modal.Footer>
       </Modal>
-    </DashboardLayout>
+    </>
   )
 }

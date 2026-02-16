@@ -6,9 +6,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
@@ -262,36 +259,33 @@ await genericAuditLog(supabase, 'payer.restored', {
 
   if (userLoading) {
     return (
-      <DashboardLayout>
-        <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
-            <PageLoader message="Loading payers..." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Payers</h1>
+        <p className="text-slate-500 mb-6">Manage insurance companies and payer contracts</p>
+        <PageLoader message="Loading payers..." />
+      </>
     )
   }
 
   if (!effectiveFacilityId) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
-            <div className="text-center py-12 text-slate-500">
-              No facility selected
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Payers</h1>
+        <p className="text-slate-500 mb-6">Manage insurance companies and payer contracts</p>
+        <div className="text-center py-12 text-slate-500">
+          No facility selected
+        </div>
+      </>
     )
   }
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Payers" description="Manage insurance companies and payer contracts">
-          {/* Action Button */}
-          <div className="flex justify-end gap-3 mb-6">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Payers</h1>
+      <p className="text-slate-500 mb-6">Manage insurance companies and payer contracts</p>
+
+      {/* Action Button */}
+      <div className="flex justify-end gap-3 mb-6">
             {/* Archive Toggle */}
 <button
               onClick={() => setShowInactivePayers(!showInactivePayers)}
@@ -403,8 +397,6 @@ await genericAuditLog(supabase, 'payer.restored', {
               </div>
             </div>
           </div>
-        </SettingsLayout>
-      </Container>
 
       {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={closeModal} title={modalMode === 'add' ? 'Add Payer' : 'Edit Payer'}>
@@ -440,6 +432,6 @@ await genericAuditLog(supabase, 'payer.restored', {
         itemName={archiveTarget?.name || ''}
         itemType="payer"
       />
-    </DashboardLayout>
+    </>
   )
 }

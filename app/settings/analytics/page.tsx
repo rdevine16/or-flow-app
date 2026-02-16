@@ -2,9 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -172,37 +169,34 @@ export default function AnalyticsSettingsPage() {
 
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
-            <div className="flex items-center justify-center py-16">
-              <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
+        <p className="text-slate-500 mb-6">Configure how your facility's OR metrics are calculated and what targets to measure against.</p>
+        <div className="flex items-center justify-center py-16">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </>
     )
   }
 
   if (!effectiveFacilityId) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
-            <div className="text-center py-16 text-slate-500">
-              <p>No facility selected. Please select a facility to configure analytics settings.</p>
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
+        <p className="text-slate-500 mb-6">Configure how your facility's OR metrics are calculated and what targets to measure against.</p>
+        <div className="text-center py-16 text-slate-500">
+          <p>No facility selected. Please select a facility to configure analytics settings.</p>
+        </div>
+      </>
     )
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Analytics Settings" description="Configure how your facility's OR metrics are calculated and what targets to measure against.">
-          <div className="space-y-8">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
+      <p className="text-slate-500 mb-6">Configure how your facility's OR metrics are calculated and what targets to measure against.</p>
+
+      <div className="space-y-8">
             {/* FCOTS Configuration */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
@@ -622,8 +616,6 @@ export default function AnalyticsSettingsPage() {
             </div>
 
           </div>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

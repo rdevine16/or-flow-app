@@ -4,9 +4,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { roomAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import {
@@ -460,17 +457,16 @@ export default function RoomsSettingsPage() {
   const deletedRooms = (rooms || []).filter(r => r.deleted_at)
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="OR Rooms"
-          description="Manage the operating rooms and their daily schedules at your facility."
-        >
-          {loading || userLoading ? (
-            <PageLoader message="Loading rooms..." />
-          ) : (
-            <div className="max-w-3xl">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">OR Rooms</h1>
+      <p className="text-slate-500 mb-6">Manage the operating rooms and their daily schedules at your facility.</p>
+
+      <ErrorBanner message={error} />
+
+      {loading || userLoading ? (
+        <PageLoader message="Loading rooms..." />
+      ) : (
+        <div className="max-w-3xl">
               {/* Add Room button */}
               {canManage && (
                 <div className="flex justify-end mb-6">
@@ -569,8 +565,8 @@ export default function RoomsSettingsPage() {
             </div>
           )}
 
-          {/* Add/Edit Modal with Schedule Editor */}
-          <Modal
+      {/* Add/Edit Modal with Schedule Editor */}
+      <Modal
             open={modal.isOpen}
             onClose={closeModal}
             title={modal.mode === 'add' ? 'Add Room' : 'Edit Room'}
@@ -670,8 +666,6 @@ export default function RoomsSettingsPage() {
               </Modal.Action>
             </Modal.Footer>
           </Modal>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

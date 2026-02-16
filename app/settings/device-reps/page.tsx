@@ -3,9 +3,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { deviceRepAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
@@ -308,16 +305,13 @@ export default function DeviceRepsPage() {
   const pendingCount = (pendingInvites || []).length
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Device Rep Access"
-          description="Manage implant company representative access to your cases."
-        >
-          {loading ? (
-            <PageLoader message="Loading device reps..." />
-          ) : (
+    <>
+      <ErrorBanner message={error} />
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Device Rep Access</h1>
+      <p className="text-slate-500 mb-6">Manage implant company representative access to your cases.</p>
+      {loading ? (
+        <PageLoader message="Loading device reps..." />
+      ) : (
             <div className="space-y-6">
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -497,7 +491,7 @@ export default function DeviceRepsPage() {
             </div>
           )}
 
-          {/* Invite Modal */}
+        {/* Invite Modal */}
           <Modal open={inviteModal.isOpen} onClose={closeInviteModal} title="Invite Device Rep" subtitle="They'll receive an email to create their account">
             <div className="space-y-4">
               <div>
@@ -563,8 +557,6 @@ export default function DeviceRepsPage() {
               </Modal.Action>
             </Modal.Footer>
           </Modal>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

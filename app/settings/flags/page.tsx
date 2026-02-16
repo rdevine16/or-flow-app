@@ -9,9 +9,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
@@ -197,28 +194,24 @@ export default function FlagsSettingsPage() {
 
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
-        <Container>
-          <ErrorBanner message={error} />
-          <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
-            <PageLoader message="Loading flag rules..." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <ErrorBanner message={error} />
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Case Flags</h1>
+        <p className="text-slate-500 mb-6">Configure auto-detection threshold rules for your facility.</p>
+        <PageLoader message="Loading flag rules..." />
+      </>
     )
   }
 
   if (!effectiveFacilityId) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
-            <div className="text-center py-12 text-slate-500">
-              No facility found. Please contact support.
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Case Flags</h1>
+        <p className="text-slate-500 mb-6">Configure auto-detection threshold rules for your facility.</p>
+        <div className="text-center py-12 text-slate-500">
+          No facility found. Please contact support.
+        </div>
+      </>
     )
   }
 
@@ -227,10 +220,10 @@ export default function FlagsSettingsPage() {
   // =====================================================
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Case Flags" description="Configure auto-detection threshold rules for your facility.">
-          <div className="space-y-8">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Case Flags</h1>
+      <p className="text-slate-500 mb-6">Configure auto-detection threshold rules for your facility.</p>
+      <div className="space-y-8">
 
             {/* ============================================= */}
             {/* SECTION 1: THRESHOLD FLAG RULES                */}
@@ -451,12 +444,10 @@ export default function FlagsSettingsPage() {
                     )
                   })
                 )}
-              </div>
-            </section>
-
           </div>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+        </section>
+
+      </div>
+    </>
   )
 }

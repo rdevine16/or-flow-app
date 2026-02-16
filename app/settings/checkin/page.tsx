@@ -8,8 +8,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { FeatureGate, TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
@@ -174,39 +172,36 @@ export default function CheckInSettingsPage() {
   // Feature not enabled
   if (!featureLoading && !isEnabled) {
     return (
-      <DashboardLayout>
-        <SettingsLayout 
-          title="Patient Check-In" 
-          description="Configure arrival times and pre-op checklists"
-        >
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-            <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-6 h-6 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">Feature Not Enabled</h3>
-            <p className="text-slate-500 text-sm mb-4">
-              Patient Check-In is not enabled for your facility.
-            </p>
-            <Link 
-              href="/settings/subscription"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
-            >
-              View Available Add-Ons
-            </Link>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Patient Check-In</h1>
+        <p className="text-slate-500 mb-6">Configure arrival times and pre-op checklists</p>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+          <div className="w-12 h-12 bg-slate-200 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-6 h-6 text-slate-400" />
           </div>
-        </SettingsLayout>
-      </DashboardLayout>
+          <h3 className="text-lg font-semibold text-slate-900 mb-1">Feature Not Enabled</h3>
+          <p className="text-slate-500 text-sm mb-4">
+            Patient Check-In is not enabled for your facility.
+          </p>
+          <Link
+            href="/settings/subscription"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            View Available Add-Ons
+          </Link>
+        </div>
+      </>
     )
   }
 
   return (
-    <DashboardLayout>
-      <SettingsLayout 
-        title="Patient Check-In" 
-        description="Configure arrival times and pre-op checklists"
-      >
-        {/* Trial Banner */}
-        <TrialBanner feature={FEATURES.PATIENT_CHECKIN} />
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Patient Check-In</h1>
+      <p className="text-slate-500 mb-6">Configure arrival times and pre-op checklists</p>
+
+      {/* Trial Banner */}
+      <TrialBanner feature={FEATURES.PATIENT_CHECKIN} />
 
         {/* Success Message */}
         {successMessage && (
@@ -392,10 +387,9 @@ export default function CheckInSettingsPage() {
                 </div>
                 <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600" />
               </Link>
-            </div>
           </div>
         </div>
-      </SettingsLayout>
-    </DashboardLayout>
+      </div>
+    </>
   )
 }

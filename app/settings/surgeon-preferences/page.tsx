@@ -3,9 +3,6 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useUser } from '@/lib/UserContext'
 import { useSurgeons, useProcedureTypes, useImplantCompanies } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -259,13 +256,10 @@ export default function SurgeonPreferencesPage() {
   const facilityCompanies = implantCompanies.filter(c => c.facility_id !== null)
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-        <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Surgeon Preferences"
-          description="Create quick-fill templates for surgeon + procedure combinations"
-        >
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Surgeon Preferences</h1>
+      <p className="text-slate-500 mb-6">Create quick-fill templates for surgeon + procedure combinations</p>
+      <ErrorBanner message={error} />
           {loading || userLoading ? (
             <PageLoader message="Loading surgeon preferences..." />
           ) : (
@@ -594,8 +588,6 @@ export default function SurgeonPreferencesPage() {
               </Modal.Action>
             </Modal.Footer>
           </Modal>
-        </SettingsLayout>
-      </Container>
 
       <DeleteConfirm
         open={!!deleteTarget}
@@ -603,9 +595,9 @@ export default function SurgeonPreferencesPage() {
         onConfirm={async () => {
           if (deleteTarget) await handleDelete(deleteTarget.id)
         }}
-        itemName={deleteTarget?.procedure_name || ''}
-        itemType="surgeon preference"
-      />
-    </DashboardLayout>
+      itemName={deleteTarget?.procedure_name || ''}
+      itemType="surgeon preference"
+    />
+  </>
   )
 }

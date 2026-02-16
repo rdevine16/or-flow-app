@@ -10,9 +10,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import SearchableDropdown from '@/components/ui/SearchableDropdown'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -394,17 +391,14 @@ export default function SurgeonVariancePage() {
   const selectedProcedure = procedures.find(p => p.id === selectedProcedureId)
 
   return (
-    <DashboardLayout>
-      <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        <SettingsLayout 
-          title="Surgeon Variance" 
-          description="Configure surgeon-specific cost overrides"
-        >
-          {loading ? (
-            <PageLoader message="Loading surgeon variance data..." />
-          ) : costCategories.length === 0 ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+    <>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Surgeon Variance</h1>
+      <p className="text-slate-500 mb-6">Configure surgeon-specific cost overrides</p>
+      {loading ? (
+        <PageLoader message="Loading surgeon variance data..." />
+      ) : costCategories.length === 0 ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
               <h3 className="text-lg font-medium text-amber-900 mb-2">Set Up Cost Categories First</h3>
               <p className="text-amber-700 mb-4">
                 You need to create cost categories before configuring surgeon variances.
@@ -414,10 +408,10 @@ export default function SurgeonVariancePage() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
               >
                 Set Up Cost Categories
-              </a>
-            </div>
-          ) : (
-            <div className="space-y-6">
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-6">
               {/* Header with Add button and filter */}
               <div className="flex items-center justify-between gap-4">
                 <div className="w-64">
@@ -517,11 +511,11 @@ export default function SurgeonVariancePage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
+            </div>
+          )}
 
-{/* Info Box with Cross-Links */}
-<div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+          {/* Info Box with Cross-Links */}
+          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
   <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
   <div className="text-sm text-blue-800">
     <p className="font-medium mb-1">How surgeon variance works</p>
@@ -537,12 +531,10 @@ export default function SurgeonVariancePage() {
         <ExternalLink className="w-3 h-3" />
       </a>
     </div>
-  </div>
-</div>
-            </div>
-          )}
-        </SettingsLayout>
-      </Container>
+      </div>
+    </div>
+        </div>
+      )}
 
       {/* Add/Edit Panel */}
       {panelOpen && (
@@ -718,6 +710,6 @@ export default function SurgeonVariancePage() {
         itemName={deleteTarget ? `${deleteTarget.surgeonName} — ${deleteTarget.procedureName}` : ''}
         itemType="cost override"
       />
-    </DashboardLayout>
+    </>
   )
 }

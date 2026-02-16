@@ -5,9 +5,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import Badge from '@/components/ui/Badge'
 import InviteUserModal from '@/components/InviteUserModal'
 import { userAudit } from '@/lib/audit-logger'
@@ -503,33 +500,24 @@ export default function UsersSettingsPage() {
   const noAccountCount = activeUsers.filter(u => getAccountStatus(u) === 'no_account').length
 
   if (!userLoading && !can('users.view')) {
-    return (
-      <DashboardLayout>
-        <Container className="py-8">
-          <SettingsLayout title="Users & Roles" description="Staff accounts and permissions">
-            <AccessDenied />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
-    )
+    return <AccessDenied />
   }
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Users & Roles"
-          description="Manage staff members at your facility."
-        >
-          {loading || userLoading ? (
-            <PageLoader message="Loading users..." />
-          ) : !effectiveFacilityId && !showAllUsers ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500">No facility selected</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Users & Roles</h1>
+      <p className="text-slate-500 mb-6">Manage staff members at your facility.</p>
+
+      <ErrorBanner message={error} />
+
+      {loading || userLoading ? (
+        <PageLoader message="Loading users..." />
+      ) : !effectiveFacilityId && !showAllUsers ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <p className="text-slate-500">No facility selected</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Header */}
@@ -767,11 +755,9 @@ export default function UsersSettingsPage() {
               </div>
             </div>
           )}
-        </SettingsLayout>
-      </Container>
 
-      {/* Add Staff Modal */}
-      <InviteUserModal
+    {/* Add Staff Modal */}
+    <InviteUserModal
         isOpen={showInviteModal}
         onClose={() => setShowInviteModal(false)}
         onSuccess={handleInviteSuccess}
@@ -915,10 +901,10 @@ export default function UsersSettingsPage() {
         message={`Would you like to send ${pendingInviteUser?.first_name} an invitation to access the app?`}
         confirmText="Send Invite"
         cancelText="Not Now"
-        icon={
-          <Mail className="w-6 h-6" />
-        }
-      />
-    </DashboardLayout>
+      icon={
+        <Mail className="w-6 h-6" />
+      }
+    />
+  </>
   )
 }

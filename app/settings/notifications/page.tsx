@@ -3,11 +3,6 @@
 
 'use client'
 
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
-import { PageLoader } from '@/components/ui/Loading'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Bell, CalendarDays, ClipboardList, Clock, FileBarChart, FlaskConical, Mail, Smartphone } from 'lucide-react'
 
 // =====================================================
@@ -160,10 +155,10 @@ const notificationCategories: NotificationCategory[] = [
 
 export default function NotificationsPage() {
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Notifications" description="Configure how your facility receives alerts and updates">
-          {/* Coming Soon Banner */}
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Notifications</h1>
+      <p className="text-slate-500 mb-6">Configure how your facility receives alerts and updates</p>
+      {/* Coming Soon Banner */}
           <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
@@ -345,11 +340,9 @@ export default function NotificationsPage() {
                     <span className="text-sm text-slate-600">{role}</span>
                   </div>
                 ))}
-              </div>
             </div>
           </div>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+        </div>
+    </>
   )
 }

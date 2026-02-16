@@ -4,9 +4,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { cancellationReasonAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -224,21 +221,20 @@ export default function CancellationReasonsSettingsPage() {
   // ============================================================================
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Cancellation Reasons"
-          description="Manage the reasons staff can select when cancelling a surgical case."
-        >
-          {loading || userLoading ? (
-            <PageLoader message="Loading cancellation reasons..." />
-          ) : !effectiveFacilityId ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500">No facility selected</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Cancellation Reasons</h1>
+      <p className="text-slate-500 mb-6">Manage the reasons staff can select when cancelling a surgical case.</p>
+
+      <ErrorBanner message={error} />
+
+      {loading || userLoading ? (
+        <PageLoader message="Loading cancellation reasons..." />
+      ) : !effectiveFacilityId ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <p className="text-slate-500">No facility selected</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Header */}
@@ -362,11 +358,9 @@ export default function CancellationReasonsSettingsPage() {
                     </p>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </SettingsLayout>
-      </Container>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       <Modal
@@ -431,6 +425,6 @@ export default function CancellationReasonsSettingsPage() {
         itemName={archiveTarget?.display_name || ''}
         itemType="cancellation reason"
       />
-    </DashboardLayout>
+    </>
   )
 }

@@ -7,8 +7,6 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
 import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
@@ -510,14 +508,14 @@ export default function ChecklistBuilderPage() {
   }
 
   return (
-    <DashboardLayout>
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Checklist Builder</h1>
+      <p className="text-slate-500 mb-6">Customize pre-op checklist fields</p>
+
       <ErrorBanner message={error} />
-      <SettingsLayout 
-        title="Checklist Builder" 
-        description="Customize pre-op checklist fields"
-      >
-        {/* Trial Banner */}
-        <TrialBanner feature={FEATURES.PATIENT_CHECKIN} />
+
+      {/* Trial Banner */}
+      <TrialBanner feature={FEATURES.PATIENT_CHECKIN} />
 
         {/* Success Message */}
         {successMessage && (
@@ -588,7 +586,6 @@ export default function ChecklistBuilderPage() {
             onSave={handleSaveField}
           />
         )}
-      </SettingsLayout>
-    </DashboardLayout>
+    </>
   )
 }

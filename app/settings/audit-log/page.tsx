@@ -3,9 +3,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown, Download, FileText, Info, Loader2, Search } from 'lucide-react'
@@ -220,15 +217,14 @@ export default function AuditLogPage() {
     : logs
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        <SettingsLayout
-          title="Audit Log"
-          description="View a history of all actions taken in the system."
-        >
-          {/* Filters */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Audit Log</h1>
+      <p className="text-slate-500 mb-6">View a history of all actions taken in the system.</p>
+
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
             <div className="flex flex-wrap gap-4">
               {/* Date Range */}
               <div className="flex items-center gap-2">
@@ -445,20 +441,18 @@ export default function AuditLogPage() {
             </div>
           )}
 
-          {/* HIPAA Notice */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <div className="flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-blue-800">Compliance Notice</p>
-                <p className="text-sm text-blue-700 mt-0.5">
-                  Audit logs are retained for 6 years per HIPAA requirements. These logs are read-only and cannot be modified or deleted.
-                </p>
-              </div>
-            </div>
+      {/* HIPAA Notice */}
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-blue-800">Compliance Notice</p>
+            <p className="text-sm text-blue-700 mt-0.5">
+              Audit logs are retained for 6 years per HIPAA requirements. These logs are read-only and cannot be modified or deleted.
+            </p>
           </div>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+        </div>
+      </div>
+    </>
   )
 }

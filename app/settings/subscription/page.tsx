@@ -6,9 +6,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -186,11 +183,11 @@ export default function SubscriptionPage() {
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        <SettingsLayout title="Subscription" description="Manage your plan, view usage, and billing details">
-          {/* Coming Soon Banner */}
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Subscription</h1>
+      <p className="text-slate-500 mb-6">Manage your plan, view usage, and billing details</p>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      {/* Coming Soon Banner */}
           <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
@@ -443,11 +440,9 @@ export default function SubscriptionPage() {
                     Contact Sales
                   </a>
                 </div>
-              </div>
             </div>
-          )}
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+          </div>
+        )}
+    </>
   )
 }

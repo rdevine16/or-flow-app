@@ -6,9 +6,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
@@ -255,17 +252,17 @@ export default function FacilityComplexitiesPage() {
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-          <ErrorBanner message={error} />
-        <SettingsLayout title="Case Complexities" description="Complexity factors that can be tagged on cases">
-          {loading ? (
-            <PageLoader message="Loading complexities..." />
-          ) : !effectiveFacilityId ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500">No facility selected</p>
-            </div>
-          ) : (
+    <>
+      <ErrorBanner message={error} />
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Case Complexities</h1>
+      <p className="text-slate-500 mb-6">Complexity factors that can be tagged on cases</p>
+      {loading ? (
+        <PageLoader message="Loading complexities..." />
+      ) : !effectiveFacilityId ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <p className="text-slate-500">No facility selected</p>
+        </div>
+      ) : (
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               {/* Header */}
               <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
@@ -422,9 +419,8 @@ export default function FacilityComplexitiesPage() {
               )}
             </div>
           )}
-        </SettingsLayout>
-      </Container>
- {/* Show Archived Toggle */}
+
+          {/* Show Archived Toggle */}
               {canEdit && (
                 <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50">
                   <span className="text-sm text-slate-600">
@@ -506,6 +502,6 @@ export default function FacilityComplexitiesPage() {
           </Modal.Action>
         </Modal.Footer>
       </Modal>
-    </DashboardLayout>
+    </>
   )
 }

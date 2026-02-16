@@ -12,9 +12,6 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { PermissionMatrix, Permission } from '@/components/permissions/PermissionMatrix'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import AccessDenied from '@/components/ui/AccessDenied'
@@ -157,13 +154,11 @@ export default function FacilityPermissionsPage() {
   // Access denied for users without users.manage permission
   if (!userLoading && !can('users.manage')) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Roles & Permissions" description="Configure what each access level can do at your facility.">
-            <AccessDenied message="You don't have permission to manage roles and permissions. Contact your facility administrator." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Roles & Permissions</h1>
+        <p className="text-slate-500 mb-6">Configure what each access level can do at your facility.</p>
+        <AccessDenied message="You don't have permission to manage roles and permissions. Contact your facility administrator." />
+      </>
     )
   }
 
@@ -171,13 +166,10 @@ export default function FacilityPermissionsPage() {
   const error = permsError || facilityPermsError
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout
-          title="Roles & Permissions"
-          description="Configure what each access level can do at your facility."
-        >
-          <div className="space-y-6">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Roles & Permissions</h1>
+      <p className="text-slate-500 mb-6">Configure what each access level can do at your facility.</p>
+      <div className="space-y-6">
             {/* Access Level Tabs */}
             <div className="flex items-center gap-4">
               <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
@@ -215,10 +207,8 @@ export default function FacilityPermissionsPage() {
                 onToggle={handleToggle}
               />
             ) : null}
-          </div>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+      </div>
+    </>
   )
 }
 

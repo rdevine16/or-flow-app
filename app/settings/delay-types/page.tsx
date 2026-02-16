@@ -5,8 +5,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
 import { useUser } from '@/lib/UserContext'
 import { delayTypeAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast'
@@ -153,12 +151,10 @@ export default function AdminDelayTypesPage() {
 
   if (userLoading || loading) {
     return (
-      <DashboardLayout>
-        <Container className="py-8">
-          <ErrorBanner message={error} />
-          <PageLoader message="Loading delay types..." />
-        </Container>
-      </DashboardLayout>
+      <>
+        <ErrorBanner message={error} />
+        <PageLoader message="Loading delay types..." />
+      </>
     )
   }
 
@@ -167,17 +163,16 @@ export default function AdminDelayTypesPage() {
   }
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Global Delay Types</h1>
-              <p className="text-slate-500 mt-1">
-                Standard delay reasons available to all facilities as templates.
-              </p>
-            </div>
+    <>
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Global Delay Types</h1>
+            <p className="text-slate-500 mt-1">
+              Standard delay reasons available to all facilities as templates.
+            </p>
+          </div>
             <Button onClick={openAddModal}>
               <Plus className="w-4 h-4" />
               Add Delay Type
@@ -274,7 +269,6 @@ export default function AdminDelayTypesPage() {
             </div>
           </div>
         </div>
-      </Container>
 
       {/* Modal */}
       <Modal open={modal.isOpen} onClose={closeModal} title={modal.mode === 'add' ? 'Add Delay Type' : 'Edit Delay Type'}>
@@ -341,6 +335,6 @@ export default function AdminDelayTypesPage() {
         itemName={deleteTarget?.display_name || ''}
         itemType="delay type"
       />
-    </DashboardLayout>
+    </>
   )
 }

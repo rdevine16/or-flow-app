@@ -3,9 +3,6 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { Modal } from '@/components/ui/Modal'
@@ -624,17 +621,14 @@ const handleRestore = async (milestone: FacilityMilestone) => {
   })
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Milestones"
-          description="Configure the surgical milestones tracked during cases."
-        >
-          {loading ? (
-            <PageLoader message="Loading milestones..." />
-          ) : (
-            <>
+    <>
+      <ErrorBanner message={error} />
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Milestones</h1>
+      <p className="text-slate-500 mb-6">Configure the surgical milestones tracked during cases.</p>
+      {loading ? (
+        <PageLoader message="Loading milestones..." />
+      ) : (
+        <>
               {/* Info Banner */}
               <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
                 <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -914,11 +908,9 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                     <span className="text-slate-500">Time allocation group</span>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-        </SettingsLayout>
-      </Container>
+          </div>
+        </>
+      )}
 
       {/* Add Modal */}
       <Modal
@@ -1220,6 +1212,6 @@ const handleRestore = async (milestone: FacilityMilestone) => {
         confirmText={confirmModal.confirmLabel}
         loading={saving}
       />
-    </DashboardLayout>
+    </>
   )
 }

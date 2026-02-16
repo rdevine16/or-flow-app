@@ -3,11 +3,6 @@
 
 'use client'
 
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
-import { PageLoader } from '@/components/ui/Loading'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Code, Mail, Plus, Zap } from 'lucide-react'
 
 // =====================================================
@@ -177,10 +172,10 @@ const categories = [
 
 export default function IntegrationsPage() {
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Integrations" description="Connect ORbit to your existing systems">
-          {/* Coming Soon Banner */}
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Integrations</h1>
+      <p className="text-slate-500 mb-6">Connect ORbit to your existing systems</p>
+      {/* Coming Soon Banner */}
           <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -276,10 +271,8 @@ export default function IntegrationsPage() {
                   Coming Q2 2026
                 </span>
               </div>
-            </div>
           </div>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+        </div>
+    </>
   )
 }

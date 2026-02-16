@@ -4,9 +4,6 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { procedureAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
@@ -489,21 +486,20 @@ deleted_by: currentUserId
   // =====================================================
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Procedure Types"
-          description="Manage the procedure types available at your facility."
-        >
-          {loading || userLoading ? (
-            <PageLoader message="Loading procedures..." />
-          ) : !effectiveFacilityId ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <p className="text-slate-500">No facility selected</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Procedure Types</h1>
+      <p className="text-slate-500 mb-6">Manage the procedure types available at your facility.</p>
+
+      <ErrorBanner message={error} />
+
+      {loading || userLoading ? (
+        <PageLoader message="Loading procedures..." />
+      ) : !effectiveFacilityId ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <p className="text-slate-500">No facility selected</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               {/* Header */}
               <div className="px-6 py-4 border-b border-slate-200">
                 <div className="flex items-center justify-between mb-4">
@@ -709,10 +705,10 @@ deleted_by: currentUserId
             </div>
           )}
 
-          {/* =====================================================
-              ADD/EDIT MODAL
-              ===================================================== */}
-          <Modal
+      {/* =====================================================
+          ADD/EDIT MODAL
+          ===================================================== */}
+      <Modal
             open={modal.isOpen}
             onClose={closeModal}
             title={modal.mode === 'add' ? 'Add Procedure' : 'Edit Procedure'}
@@ -862,12 +858,6 @@ deleted_by: currentUserId
               </Modal.Action>
             </Modal.Footer>
           </Modal>
-
-          {/* =====================================================
-              TOAST NOTIFICATION
-              ===================================================== */}
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

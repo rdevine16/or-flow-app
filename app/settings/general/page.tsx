@@ -6,9 +6,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -336,21 +333,23 @@ showToast({
   // =====================================================
 
   return (
-    <DashboardLayout>
-      <Container>
-          <ErrorBanner message={error} />
-        <SettingsLayout title="General" description="Manage your facility's basic information and settings">
-          {loading ? (
-            <OverviewSkeleton />
-          ) : !effectiveFacilityId || !facility ? (
-            <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-                {icons.building}
-              </div>
-              <p className="text-slate-500">No facility selected</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">General</h1>
+      <p className="text-slate-500 mb-6">Manage your facility's basic information and settings</p>
+
+      <ErrorBanner message={error} />
+
+      {loading ? (
+        <OverviewSkeleton />
+      ) : !effectiveFacilityId || !facility ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+            {icons.building}
+          </div>
+          <p className="text-slate-500">No facility selected</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
               {/* Quick Stats Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-200">
@@ -645,8 +644,6 @@ showToast({
               )}
             </div>
           )}
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

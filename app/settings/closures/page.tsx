@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useFacilityClosures } from '@/hooks/useFacilityClosures'
 import {
   FacilityHoliday,
@@ -207,31 +206,27 @@ export default function FacilityClosuresPage() {
   const upcomingClosures = closures.filter(c => c.closure_date >= today)
   const pastClosures = closures.filter(c => c.closure_date < today)
 
+  if (pageLoading) {
+    return <PageLoader message="Loading closures..." />
+  }
+
   return (
-    <DashboardLayout>
-      {pageLoading ? (
-        <PageLoader message="Loading closures..." />
-      ) : (
-        <div className="space-y-6">
-          {/* Page Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-900">Facility Closures</h1>
-              <p className="text-sm text-slate-500 mt-1">
-                Manage recurring holidays and one-off closures for {facilityName}
-              </p>
-            </div>
-          </div>
+    <>
+      {/* Page Header */}
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Facility Closures</h1>
+      <p className="text-slate-500 mb-6">
+        Manage recurring holidays and one-off closures for {facilityName}
+      </p>
 
-          {/* Error Display */}
-          {error && (
-            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
-              <AlertCircle className="h-5 w-5 flex-shrink-0" />
-              <p className="text-sm">{error}</p>
-            </div>
-          )}
+      {/* Error Display */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Recurring Holidays Card */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/50">
@@ -392,46 +387,45 @@ export default function FacilityClosuresPage() {
                     )}
                   </>
                 )}
-              </div>
-            </div>
           </div>
-
-          {/* Holiday Dialog */}
-          <HolidayDialog
-            open={holidayDialogOpen}
-            onClose={() => {
-              setHolidayDialogOpen(false)
-              setEditingHoliday(null)
-            }}
-            onSave={editingHoliday ? handleUpdateHoliday : handleCreateHoliday}
-            editingHoliday={editingHoliday}
-            loading={loading}
-          />
-
-          {/* Closure Dialog */}
-          <ClosureDialog
-            open={closureDialogOpen}
-            onClose={() => setClosureDialogOpen(false)}
-            onSave={handleCreateClosure}
-            loading={loading}
-          />
         </div>
-      )}
+      </div>
+
+      {/* Holiday Dialog */}
+      <HolidayDialog
+        open={holidayDialogOpen}
+        onClose={() => {
+          setHolidayDialogOpen(false)
+          setEditingHoliday(null)
+        }}
+        onSave={editingHoliday ? handleUpdateHoliday : handleCreateHoliday}
+        editingHoliday={editingHoliday}
+        loading={loading}
+      />
+
+      {/* Closure Dialog */}
+      <ClosureDialog
+        open={closureDialogOpen}
+        onClose={() => setClosureDialogOpen(false)}
+        onSave={handleCreateClosure}
+        loading={loading}
+      />
+
       <DeleteConfirm
-            open={!!deleteTarget}
-            onClose={() => setDeleteTarget(null)}
-            onConfirm={async () => {
-              if (!deleteTarget) return
-              if (deleteTarget.type === 'holiday') {
-                await handleDeleteHoliday(deleteTarget.id, deleteTarget.name)
-              } else {
-                await handleDeleteClosure(deleteTarget.id, deleteTarget.name)
-              }
-            }}
-            itemName={deleteTarget?.name || ''}
-            itemType={deleteTarget?.type === 'holiday' ? 'holiday' : 'closure date'}
-          />
-    </DashboardLayout>
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          if (deleteTarget.type === 'holiday') {
+            await handleDeleteHoliday(deleteTarget.id, deleteTarget.name)
+          } else {
+            await handleDeleteClosure(deleteTarget.id, deleteTarget.name)
+          }
+        }}
+        itemName={deleteTarget?.name || ''}
+        itemType={deleteTarget?.type === 'holiday' ? 'holiday' : 'closure date'}
+      />
+    </>
   )
 }
 

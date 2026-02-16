@@ -3,9 +3,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { facilityAudit, procedureAudit, genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
@@ -610,14 +607,12 @@ export default function FinancialsSettingsPage() {
   // =====================================================
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        <SettingsLayout
-          title="Financials"
-          description="Manage procedure costs, reimbursement rates, and payers."
-        >
-          {/* Facility Selector (Global Admin Only) */}
+    <>
+      <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Financials</h1>
+      <p className="text-slate-500 mb-6">Manage procedure costs, reimbursement rates, and payers.</p>
+
+      {/* Facility Selector (Global Admin Only) */}
           {isGlobalAdmin && facilities.length > 0 && (
             <div className="mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
               <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1153,8 +1148,6 @@ export default function FinancialsSettingsPage() {
               </Modal.Action>
             </Modal.Footer>
           </Modal>
-        </SettingsLayout>
-      </Container>
-    </DashboardLayout>
+    </>
   )
 }

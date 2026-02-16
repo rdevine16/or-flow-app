@@ -3,9 +3,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { implantCompanyAudit } from '@/lib/audit-logger'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { Modal } from '@/components/ui/Modal'
@@ -215,17 +212,14 @@ const handleDelete = async (id: string) => {
   }
 
   return (
-    <DashboardLayout>
-      <Container className="py-8">
-          <ErrorBanner message={error} />
-        <SettingsLayout
-          title="Implant Companies"
-          description="Manage surgical implant vendors for case assignments."
-        >
-          {loading ? (
-            <PageLoader message="Loading implant companies..." />
-          ) : (
-            <div className="space-y-6">
+    <>
+      <ErrorBanner message={error} />
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Implant Companies</h1>
+      <p className="text-slate-500 mb-6">Manage surgical implant vendors for case assignments.</p>
+      {loading ? (
+        <PageLoader message="Loading implant companies..." />
+      ) : (
+        <div className="space-y-6">
               {/* Main Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 {/* Header */}
@@ -391,12 +385,12 @@ const handleDelete = async (id: string) => {
                   Implant companies are assigned to cases to track which vendors are involved. 
                   Device reps from these companies can be granted access to view relevant case information.
                 </p>
-              </div>
-            </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {/* Modal */}
-          <Modal open={modal.isOpen} onClose={closeModal} title={modal.mode === 'add' ? 'Add Implant Company' : 'Edit Implant Company'}>
+      {/* Modal */}
+      <Modal open={modal.isOpen} onClose={closeModal} title={modal.mode === 'add' ? 'Add Implant Company' : 'Edit Implant Company'}>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Company Name *
@@ -414,12 +408,10 @@ const handleDelete = async (id: string) => {
                 <Modal.Footer>
                   <Modal.Cancel onClick={closeModal} />
                   <Modal.Action onClick={handleSave} loading={saving} disabled={!formData.name.trim()}>
-                    {modal.mode === 'add' ? 'Add Company' : 'Save Changes'}
-                  </Modal.Action>
-                </Modal.Footer>
-          </Modal>
-        </SettingsLayout>
-      </Container>
+              {modal.mode === 'add' ? 'Add Company' : 'Save Changes'}
+            </Modal.Action>
+          </Modal.Footer>
+      </Modal>
       <ArchiveConfirm
         open={!!archiveTarget}
         onClose={() => setArchiveTarget(null)}
@@ -429,6 +421,6 @@ const handleDelete = async (id: string) => {
         itemName={archiveTarget?.name || ''}
         itemType="implant company"
       />
-    </DashboardLayout>
+    </>
   )
 }

@@ -6,9 +6,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
-import DashboardLayout from '@/components/layouts/DashboardLayout'
-import Container from '@/components/ui/Container'
-import SettingsLayout from '@/components/settings/SettingsLayout'
 import { genericAuditLog } from '@/lib/audit-logger'
 import { useProcedureTypes, usePayers } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -381,39 +378,35 @@ export default function ProcedurePricingPage() {
 
   if (userLoading) {
     return (
-      <DashboardLayout>
-        <Container>
-          <ErrorBanner message={error} onDismiss={() => setError(null)} />
-          <SettingsLayout title="Procedure Pricing" description="Configure costs and reimbursements for each procedure type">
-            <PageLoader message="Loading procedure pricing..." />
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Procedure Pricing</h1>
+        <p className="text-slate-500 mb-6">Configure costs and reimbursements for each procedure type</p>
+        <PageLoader message="Loading procedure pricing..." />
+      </>
     )
   }
 
   if (!effectiveFacilityId) {
     return (
-      <DashboardLayout>
-        <Container>
-          <SettingsLayout title="Procedure Pricing" description="Configure costs and reimbursements for each procedure type">
-            <div className="text-center py-12 text-slate-500">
-              No facility selected
-            </div>
-          </SettingsLayout>
-        </Container>
-      </DashboardLayout>
+      <>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-1">Procedure Pricing</h1>
+        <p className="text-slate-500 mb-6">Configure costs and reimbursements for each procedure type</p>
+        <div className="text-center py-12 text-slate-500">
+          No facility selected
+        </div>
+      </>
     )
   }
 
   return (
-    <DashboardLayout>
-      <Container>
-        <SettingsLayout title="Procedure Pricing" description="Configure costs and reimbursements for each procedure type">
-          {loading ? (
-            <PageLoader message="Loading pricing data..." />
-          ) : (
-            <div className="space-y-6">
+    <>
+      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Procedure Pricing</h1>
+      <p className="text-slate-500 mb-6">Configure costs and reimbursements for each procedure type</p>
+      {loading ? (
+        <PageLoader message="Loading pricing data..." />
+      ) : (
+        <div className="space-y-6">
               {/* OR Hourly Rate Card */}
               <div className="bg-white border border-slate-200 rounded-xl p-6">
                 <div className="flex items-center justify-between">
@@ -624,8 +617,6 @@ export default function ProcedurePricingPage() {
               </div>
             </div>
           )}
-        </SettingsLayout>
-      </Container>
 
       {/* Edit Panel (Slideout) */}
       {panelOpen && selectedProcedure && (
@@ -822,6 +813,6 @@ export default function ProcedurePricingPage() {
           animation: slide-in-right 0.2s ease-out;
         }
       `}</style>
-    </DashboardLayout>
+    </>
   )
 }
