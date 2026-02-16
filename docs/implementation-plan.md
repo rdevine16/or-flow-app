@@ -181,6 +181,68 @@ Both tabs leverage ORbit's existing analytics engine (median calculations, MAD s
 
 ---
 
+## Phase 3.5: Phase Group Settings Integration
+
+**Goal:** Ensure the `phase_group` column (added in Phase 1's migration) is present in the live database and surfaced in all settings UIs so each facility can independently assign milestones to time-allocation buckets (Pre-Op, Surgical, Closing, Post-Op).
+
+> **Why this phase exists:** Phase 1 created the migration file and Phase 2's hook selects `phase_group` from `facility_milestones`. If the migration hasn't been applied to the live database, the drawer errors with "column facility_milestones_1.phase_group does not exist". Additionally, three code paths insert into `facility_milestones` without setting `phase_group`, and neither settings page exposes it for editing.
+
+### Prerequisite
+
+Apply the migration `supabase/migrations/20260215000002_add_phase_group_to_facility_milestones.sql` to the database:
+```bash
+supabase db push   # or run the migration manually via the Supabase dashboard
+```
+
+### Files to Create
+
+- `lib/utils/inferPhaseGroup.ts` — Shared utility: infers `phase_group` from milestone internal name (mirrors SQL migration logic)
+
+### Files to Modify
+
+- `app/settings/milestones/page.tsx` — Facility settings: add `phase_group` to interface, query, handleAdd (with inference), handleEdit (with save), and UI (badge in list rows + dropdown in edit/add modals)
+- `app/admin/settings/milestones/page.tsx` — Admin settings: add `phase_group` inference in `propagateToFacilities()`
+- `app/admin/facilities/new/page.tsx` — New facility onboarding: add `phase_group` inference when copying `milestone_types` → `facility_milestones`
+
+### Steps
+
+1. **Create `inferPhaseGroup(name: string)` utility:**
+   - Mirror the SQL CASE logic from the Phase 1 migration
+   - Map known internal names → phase groups: `patient_in` → `pre_op`, `incision` → `surgical`, `closing` → `closing`, `patient_out` → `post_op`, etc.
+   - Return `null` for unrecognized names (facility can set manually)
+   - Export `PHASE_GROUP_OPTIONS` array for use in dropdowns
+
+2. **Update facility settings page (`/settings/milestones`):**
+   - Add `phase_group` to `FacilityMilestone` interface
+   - Add `phase_group` to the Supabase `.select()` query
+   - Display phase group badge in each milestone list row
+   - Add phase group dropdown to the Edit Modal (saves on `handleEdit`)
+   - Add phase group dropdown to the Add Modal (auto-inferred from name, editable)
+   - Include `phase_group` in `handleAdd()` insert and `handleEdit()` update
+
+3. **Update admin settings propagation (`/admin/settings/milestones`):**
+   - In `propagateToFacilities()`, call `inferPhaseGroup(milestone.name)` and include result in the insert payload
+
+4. **Update new facility onboarding (`/admin/facilities/new`):**
+   - When copying milestones from `milestone_types` to `facility_milestones`, call `inferPhaseGroup(mt.name)` and include in the insert
+
+5. **Run 3-stage test gate**
+
+### Acceptance
+
+- [ ] `phase_group` column exists in database (migration applied)
+- [ ] Facility settings shows phase group badge on each milestone row
+- [ ] Facility settings edit modal has a phase group dropdown that saves correctly
+- [ ] Facility settings add modal auto-infers phase group from name
+- [ ] Each facility can change phase_group independently without affecting others
+- [ ] Admin propagation sets phase_group on new facility_milestones
+- [ ] New facility onboarding sets phase_group on copied milestones
+- [ ] Run `npm run typecheck && npm run lint && npm run test`
+
+**Commit:** `feat(drawer): phase 3.5 - phase group settings integration`
+
+---
+
 ## Phase 3: Financials Data Layer & Hooks
 
 **Goal:** Build the data-fetching and projection layer for enhanced financial analytics. Extends the existing `useCaseFinancialProjection` hook.
@@ -721,7 +783,7 @@ When porting to SwiftUI:
 **A16:** Keep 7 granular phases. Smaller phases = safer commits, easier to revert.
 
 **Q17:** Confirmed revised phase ordering:
-**A17:** Phase 1: DB functions + phase_group migration → Phase 2: Milestone data layer → Phase 3: Milestones tab UI → Phase 4: Financials data layer → Phase 5: Financials tab UI → Phase 6: Polish & accessibility → Phase 7: Integration testing.
+**A17:** Phase 1: DB functions + phase_group migration → Phase 2: Milestone data layer → Phase 3: Milestones tab UI → **Phase 3.5: Phase group settings integration** → Phase 4: Financials data layer → Phase 5: Financials tab UI → Phase 6: Polish & accessibility → Phase 7: Integration testing.
 
 **Q18:** Animation approach: CSS-only or framer-motion?
 **A18:** CSS only. Tailwind + custom @keyframes for gauge ring draw, staggered fades, and tab transitions. No new dependencies.
