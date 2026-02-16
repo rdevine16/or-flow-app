@@ -1,7 +1,7 @@
 // app/settings/milestones/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
@@ -12,8 +12,10 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Info, Plus } from 'lucide-react'
-import { inferPhaseGroup, PHASE_GROUP_OPTIONS, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
+import { inferPhaseGroup, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
 import { MilestonesTable } from '@/components/settings/milestones/MilestonesTable'
+import { MilestoneFormModal } from '@/components/settings/milestones/MilestoneFormModal'
+import { ArchivedMilestonesSection } from '@/components/settings/milestones/ArchivedMilestonesSection'
 import type { MilestoneRowData } from '@/components/settings/milestones/MilestoneRow'
 
 interface FacilityMilestone {
@@ -57,10 +59,10 @@ export default function MilestonesSettingsPage() {
   const [saving, setSaving] = useState(false)
 
   // Modal states
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [showPairModal, setShowPairModal] = useState(false)
+  const [showFormModal, setShowFormModal] = useState(false)
+  const [formMode, setFormMode] = useState<'add' | 'edit'>('add')
   const [editingMilestone, setEditingMilestone] = useState<FacilityMilestone | null>(null)
+  const [showPairModal, setShowPairModal] = useState(false)
   const [pairingMilestone, setPairingMilestone] = useState<FacilityMilestone | null>(null)
 
   // Confirmation modal state
@@ -80,15 +82,8 @@ export default function MilestonesSettingsPage() {
     onConfirm: () => {},
   })
 
-  // Form states
-  const [newName, setNewName] = useState('')
-  const [newDisplayName, setNewDisplayName] = useState('')
-  const [editDisplayName, setEditDisplayName] = useState('')
+  // Pair modal form state
   const [selectedPairId, setSelectedPairId] = useState<string>('')
-  const [editMinMinutes, setEditMinMinutes] = useState<number>(0)
-  const [editMaxMinutes, setEditMaxMinutes] = useState<number>(90)
-  const [newPhaseGroup, setNewPhaseGroup] = useState<PhaseGroup | ''>('')
-  const [editPhaseGroup, setEditPhaseGroup] = useState<PhaseGroup | ''>('')
 
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
@@ -126,38 +121,52 @@ export default function MilestonesSettingsPage() {
     [milestones]
   )
 
+  const deletedMilestones = useMemo(
+    () => (milestones || []).filter(m => m.deleted_at),
+    [milestones]
+  )
+
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
 
-  const generateName = (displayName: string): string => {
-    return displayName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .replace(/\s+/g, '_')
-      .substring(0, 50)
-  }
-
   // ── Mutation handlers ────────────────────────────────────
 
-  const handleAdd = async () => {
-    if (!newDisplayName.trim() || !effectiveFacilityId) return
+  const handleFormSubmit = async (data: {
+    displayName: string
+    internalName: string
+    phaseGroup: PhaseGroup | ''
+    minMinutes: number
+    maxMinutes: number
+  }) => {
+    if (formMode === 'add') {
+      await handleAdd(data)
+    } else {
+      await handleEdit(data)
+    }
+  }
+
+  const handleAdd = async (data: {
+    displayName: string
+    internalName: string
+    phaseGroup: PhaseGroup | ''
+  }) => {
+    if (!data.displayName || !effectiveFacilityId) return
 
     setSaving(true)
     try {
-      const name = newName.trim() || generateName(newDisplayName)
       const maxOrder = (milestones || []).length > 0
         ? Math.max(...(milestones || []).map(m => m.display_order))
         : 0
 
-      const resolvedPhaseGroup = newPhaseGroup || inferPhaseGroup(name) || null
+      const resolvedPhaseGroup = data.phaseGroup || inferPhaseGroup(data.internalName) || null
 
-      const { data, error: insertError } = await supabase
+      const { data: insertedData, error: insertError } = await supabase
         .from('facility_milestones')
         .insert({
           facility_id: effectiveFacilityId,
-          name,
-          display_name: newDisplayName.trim(),
+          name: data.internalName,
+          display_name: data.displayName,
           display_order: maxOrder + 1,
           source_milestone_type_id: null,
           is_active: true,
@@ -171,12 +180,10 @@ export default function MilestonesSettingsPage() {
 
       if (insertError) throw insertError
 
-      await milestoneTypeAudit.created(supabase, newDisplayName.trim(), data.id)
-      setMilestones([...(milestones || []), { ...data, deleted_at: null }])
-      setNewName('')
-      setNewDisplayName('')
-      setNewPhaseGroup('')
-      setShowAddModal(false)
+      await milestoneTypeAudit.created(supabase, data.displayName, insertedData.id)
+      setMilestones([...(milestones || []), { ...insertedData, deleted_at: null }])
+      setShowFormModal(false)
+      showToast({ type: 'success', title: `"${data.displayName}" created` })
     } catch {
       showToast({ type: 'error', title: 'Failed to create milestone' })
     } finally {
@@ -184,37 +191,42 @@ export default function MilestonesSettingsPage() {
     }
   }
 
-  const handleEdit = async () => {
-    if (!editingMilestone || !editDisplayName.trim()) return
+  const handleEdit = async (data: {
+    displayName: string
+    phaseGroup: PhaseGroup | ''
+    minMinutes: number
+    maxMinutes: number
+  }) => {
+    if (!editingMilestone || !data.displayName) return
 
     setSaving(true)
     try {
       const oldDisplayName = editingMilestone.display_name
-      const resolvedPhaseGroup = editPhaseGroup || null
+      const resolvedPhaseGroup = data.phaseGroup || null
 
       const { error: updateError } = await supabase
         .from('facility_milestones')
         .update({
-          display_name: editDisplayName.trim(),
-          min_minutes: editMinMinutes,
-          max_minutes: editMaxMinutes,
+          display_name: data.displayName,
+          min_minutes: data.minMinutes,
+          max_minutes: data.maxMinutes,
           phase_group: resolvedPhaseGroup,
         })
         .eq('id', editingMilestone.id)
 
       if (updateError) throw updateError
 
-      if (oldDisplayName !== editDisplayName.trim()) {
-        await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, editDisplayName.trim())
+      if (oldDisplayName !== data.displayName) {
+        await milestoneTypeAudit.updated(supabase, editingMilestone.id, oldDisplayName, data.displayName)
       }
 
       setMilestones(
         (milestones || []).map(m => m.id === editingMilestone.id
-          ? { ...m, display_name: editDisplayName.trim(), min_minutes: editMinMinutes, max_minutes: editMaxMinutes, phase_group: resolvedPhaseGroup }
+          ? { ...m, display_name: data.displayName, min_minutes: data.minMinutes, max_minutes: data.maxMinutes, phase_group: resolvedPhaseGroup }
           : m
         )
       )
-      setShowEditModal(false)
+      setShowFormModal(false)
       setEditingMilestone(null)
     } catch {
       showToast({ type: 'error', title: 'Failed to update milestone' })
@@ -305,14 +317,14 @@ export default function MilestonesSettingsPage() {
         }
 
         closeConfirmModal()
-        setShowEditModal(false)
+        setShowFormModal(false)
         setEditingMilestone(null)
         setSaving(false)
       },
     })
   }
 
-  const handleRestore = async (milestone: FacilityMilestone) => {
+  const handleRestore = async (milestone: { id: string; display_name: string }) => {
     setSaving(true)
     try {
       const { error: restoreError } = await supabase
@@ -340,6 +352,38 @@ export default function MilestonesSettingsPage() {
       setSaving(false)
     }
   }
+
+  const handleReorder = useCallback(async (phaseKey: string, milestoneIds: string[]) => {
+    // Optimistically update local state
+    const updated = (milestones || []).map(m => {
+      const idx = milestoneIds.indexOf(m.id)
+      if (idx !== -1) {
+        return { ...m, display_order: idx + 1 }
+      }
+      return m
+    })
+    // Sort by display_order so the table re-renders correctly
+    updated.sort((a, b) => a.display_order - b.display_order)
+    setMilestones(updated)
+
+    // Persist to DB
+    try {
+      const updates = milestoneIds.map((id, idx) => ({
+        id,
+        display_order: idx + 1,
+      }))
+
+      for (const { id, display_order } of updates) {
+        const { error: updateError } = await supabase
+          .from('facility_milestones')
+          .update({ display_order })
+          .eq('id', id)
+        if (updateError) throw updateError
+      }
+    } catch {
+      showToast({ type: 'error', title: 'Failed to save new order' })
+    }
+  }, [milestones, setMilestones, supabase, showToast])
 
   const handleUnlink = async (milestone: FacilityMilestone) => {
     if (!milestone.pair_with_id) return
@@ -485,15 +529,18 @@ export default function MilestonesSettingsPage() {
     )
   }
 
+  const openAddModal = () => {
+    setFormMode('add')
+    setEditingMilestone(null)
+    setShowFormModal(true)
+  }
+
   const openEditModal = (row: MilestoneRowData) => {
     const milestone = (milestones || []).find(m => m.id === row.id)
     if (!milestone) return
+    setFormMode('edit')
     setEditingMilestone(milestone)
-    setEditDisplayName(milestone.display_name)
-    setEditMinMinutes(milestone.min_minutes ?? 1)
-    setEditMaxMinutes(milestone.max_minutes ?? 90)
-    setEditPhaseGroup(milestone.phase_group ?? '')
-    setShowEditModal(true)
+    setShowFormModal(true)
   }
 
   const handleArchiveFromRow = (row: MilestoneRowData) => {
@@ -501,31 +548,16 @@ export default function MilestonesSettingsPage() {
     if (milestone) handleArchive(milestone)
   }
 
-  const deletedMilestones = useMemo(
-    () => (milestones || []).filter(m => m.deleted_at),
-    [milestones]
-  )
-
-  const formatDeletedDate = (dateStr: string): string => {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) !== 1 ? 's' : ''} ago`
-    return date.toLocaleDateString()
+  const handleArchiveFromModal = () => {
+    if (editingMilestone) handleArchive(editingMilestone)
   }
-
-  const [showArchived, setShowArchived] = useState(false)
 
   return (
     <>
       <ErrorBanner message={error} />
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-semibold text-slate-900">Milestones</h1>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={openAddModal}>
           <Plus className="w-4 h-4" />
           Add Custom Milestone
         </Button>
@@ -536,7 +568,7 @@ export default function MilestonesSettingsPage() {
       <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-slate-50 border-l-[3px] border-indigo-400 rounded-r-lg text-sm text-slate-600">
         <Info className="w-4 h-4 text-indigo-400 flex-shrink-0" />
         <span>
-          <span className="text-indigo-400">&#x25C6;</span> indicates a custom milestone. All others are global defaults.
+          <span className="text-indigo-400">&#x25C6;</span> indicates a custom milestone. All others are global defaults. Drag to reorder within each phase.
         </span>
       </div>
 
@@ -546,223 +578,27 @@ export default function MilestonesSettingsPage() {
         loading={loading}
         onEdit={openEditModal}
         onArchive={handleArchiveFromRow}
+        onReorder={handleReorder}
       />
 
       {/* Archived milestones section */}
-      {deletedMilestones.length > 0 && (
-        <div className="mt-6">
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
-          >
-            <span className={`transition-transform ${showArchived ? 'rotate-90' : ''}`}>&#x25B6;</span>
-            Archived ({deletedMilestones.length})
-          </button>
-          {showArchived && (
-            <div className="mt-3 space-y-2">
-              {deletedMilestones.map(milestone => (
-                <div
-                  key={milestone.id}
-                  className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg"
-                >
-                  <div>
-                    <span className="text-sm font-medium text-slate-500 line-through">
-                      {milestone.display_name}
-                    </span>
-                    {!milestone.source_milestone_type_id && (
-                      <span className="ml-2 text-indigo-400 text-xs">&#x25C6;</span>
-                    )}
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Archived {milestone.deleted_at ? formatDeletedDate(milestone.deleted_at) : ''}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleRestore(milestone)}
-                    disabled={saving}
-                    className="px-3 py-1.5 text-sm font-medium text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Restore
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <ArchivedMilestonesSection
+        milestones={deletedMilestones}
+        saving={saving}
+        onRestore={handleRestore}
+      />
 
-      {/* Add Modal */}
-      <Modal
-        open={showAddModal}
-        onClose={() => { setShowAddModal(false); setNewName(''); setNewDisplayName(''); setNewPhaseGroup('') }}
-        title="Add Custom Milestone"
-      >
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Display Name <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="text"
-            value={newDisplayName}
-            onChange={(e) => setNewDisplayName(e.target.value)}
-            placeholder="e.g., Array Placement"
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            autoFocus
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Internal Name <span className="text-slate-400 font-normal">(auto-generated if blank)</span>
-          </label>
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={newDisplayName ? generateName(newDisplayName) : 'e.g., array_placement'}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Phase Group <span className="text-slate-400 font-normal">(auto-inferred from name)</span>
-          </label>
-          <select
-            value={newPhaseGroup}
-            onChange={(e) => setNewPhaseGroup(e.target.value as PhaseGroup | '')}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">
-              {(() => {
-                const inferred = inferPhaseGroup(newName.trim() || generateName(newDisplayName))
-                return inferred ? `Auto: ${PHASE_GROUP_OPTIONS.find(o => o.value === inferred)?.label}` : 'None (unassigned)'
-              })()}
-            </option>
-            {PHASE_GROUP_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <Modal.Footer>
-          <Modal.Cancel onClick={() => { setShowAddModal(false); setNewName(''); setNewDisplayName(''); setNewPhaseGroup('') }} />
-          <Modal.Action onClick={handleAdd} loading={saving} disabled={!newDisplayName.trim()}>
-            Add Milestone
-          </Modal.Action>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Edit Modal */}
-      <Modal
-        open={showEditModal && !!editingMilestone}
-        onClose={() => { setShowEditModal(false); setEditingMilestone(null) }}
-        title="Edit Milestone"
-      >
-        {editingMilestone && (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Display Name <span className="text-red-600">*</span>
-              </label>
-              <input
-                type="text"
-                value={editDisplayName}
-                onChange={(e) => setEditDisplayName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-              />
-            </div>
-
-            {editingMilestone.pair_with_id && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm font-medium text-green-900">Paired Milestone</p>
-                <p className="text-sm text-green-600 mt-1">
-                  {editingMilestone.pair_position === 'start' ? 'Start' : 'End'} of pair with: <span className="font-medium">{getPairedName(editingMilestone.pair_with_id)}</span>
-                </p>
-              </div>
-            )}
-
-            {editingMilestone.source_milestone_type_id && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700">
-                  This is a global milestone. You can edit the name and validation range, but it cannot be archived.
-                </p>
-              </div>
-            )}
-
-            <div className="pt-2 border-t border-slate-200">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Phase Group</label>
-              <p className="text-xs text-slate-500 mb-2">Used for time allocation bucketing in milestone analytics</p>
-              <select
-                value={editPhaseGroup}
-                onChange={(e) => setEditPhaseGroup(e.target.value as PhaseGroup | '')}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">None (unassigned)</option>
-                {PHASE_GROUP_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="pt-2 border-t border-slate-200">
-              <label className="block text-sm font-medium text-slate-700 mb-2">Expected Duration Range</label>
-              <p className="text-xs text-slate-500 mb-3">
-                {editingMilestone.validation_type === 'duration' && editingMilestone.pair_with_id
-                  ? `Time between ${editingMilestone.display_name} and ${getPairedName(editingMilestone.pair_with_id)}`
-                  : 'Time from previous milestone to this one'
-                }
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-500 mb-1">Min (minutes)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="999"
-                    value={editMinMinutes}
-                    onChange={(e) => setEditMinMinutes(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
-                  />
-                </div>
-                <span className="text-slate-400 pt-4">&mdash;</span>
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-500 mb-1">Max (minutes)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="999"
-                    value={editMaxMinutes}
-                    onChange={(e) => setEditMaxMinutes(Math.max(1, parseInt(e.target.value) || 90))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center"
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-slate-400 mt-2">
-                Milestones outside this range will be flagged for review in Data Quality.
-              </p>
-            </div>
-          </>
-        )}
-
-        {/* Custom footer: Archive left, Cancel/Save right */}
-        <div className="px-6 py-4 border-t border-slate-200 flex justify-between">
-          {editingMilestone && !editingMilestone.source_milestone_type_id ? (
-            <Button variant="dangerGhost" onClick={() => handleArchive(editingMilestone)} disabled={saving}>
-              Archive
-            </Button>
-          ) : (
-            <div />
-          )}
-          <div className="flex gap-3">
-            <Modal.Cancel onClick={() => { setShowEditModal(false); setEditingMilestone(null) }} />
-            <Modal.Action onClick={handleEdit} loading={saving} disabled={!editDisplayName.trim()}>
-              Save Changes
-            </Modal.Action>
-          </div>
-        </div>
-      </Modal>
+      {/* Add/Edit Modal */}
+      <MilestoneFormModal
+        open={showFormModal}
+        onClose={() => { setShowFormModal(false); setEditingMilestone(null) }}
+        mode={formMode}
+        milestone={editingMilestone}
+        pairedName={editingMilestone?.pair_with_id ? getPairedName(editingMilestone.pair_with_id) : null}
+        saving={saving}
+        onSubmit={handleFormSubmit}
+        onArchive={handleArchiveFromModal}
+      />
 
       {/* Pair/Unlink Modal */}
       <Modal

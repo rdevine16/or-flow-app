@@ -24,7 +24,7 @@ describe('MilestonesTable', () => {
 
   it('renders loading skeleton when loading is true', () => {
     const { container } = render(
-      <MilestonesTable milestones={[]} loading={true} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={[]} loading={true} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
     // SkeletonTable renders shimmer divs
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
@@ -32,7 +32,7 @@ describe('MilestonesTable', () => {
 
   it('renders all 4 phase group headers when given no milestones', () => {
     render(
-      <MilestonesTable milestones={[]} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={[]} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.getByText('Pre-Op')).toBeInTheDocument()
@@ -43,7 +43,7 @@ describe('MilestonesTable', () => {
 
   it('shows empty state messages for empty phase groups', () => {
     render(
-      <MilestonesTable milestones={[]} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={[]} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     const emptyMessages = screen.getAllByText('No milestones in this phase')
@@ -58,7 +58,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.getByText('Patient In')).toBeInTheDocument()
@@ -74,7 +74,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.getByText('2 milestones')).toBeInTheDocument()
@@ -87,7 +87,7 @@ describe('MilestonesTable', () => {
     ]
 
     const { container } = render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     // ◆ is rendered as &#x25C6;
@@ -100,7 +100,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     // Find the milestone row and check no diamond
@@ -115,7 +115,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.getByText('start')).toBeInTheDocument()
@@ -129,7 +129,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     // The pair column should show the paired milestone's name
@@ -144,7 +144,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     // 5–45 min (en-dash)
@@ -157,7 +157,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     // Both pair column (em-dash for unpaired) and valid range column show em-dash
@@ -173,7 +173,8 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={onEdit} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={onEdit} onArchive={noop} onReorder={noop} />
+
     )
 
     const editBtn = screen.getByTitle('Edit milestone')
@@ -189,7 +190,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={onArchive} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={onArchive} onReorder={noop} />
     )
 
     const archiveBtn = screen.getByTitle('Archive milestone')
@@ -203,7 +204,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.queryByTitle('Archive milestone')).not.toBeInTheDocument()
@@ -215,7 +216,7 @@ describe('MilestonesTable', () => {
     ]
 
     render(
-      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={milestones} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.getByText('Unassigned')).toBeInTheDocument()
@@ -224,7 +225,7 @@ describe('MilestonesTable', () => {
 
   it('renders column headers', () => {
     render(
-      <MilestonesTable milestones={[]} loading={false} onEdit={noop} onArchive={noop} />
+      <MilestonesTable milestones={[]} loading={false} onEdit={noop} onArchive={noop} onReorder={noop} />
     )
 
     expect(screen.getByText('#')).toBeInTheDocument()

@@ -1,7 +1,9 @@
 // components/settings/milestones/MilestoneRow.tsx
 'use client'
 
-import { Archive, Pencil } from 'lucide-react'
+import { Archive, GripVertical, Pencil } from 'lucide-react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { PairIndicator } from './PairIndicator'
 
 export interface MilestoneRowData {
@@ -34,6 +36,20 @@ export function MilestoneRow({
   onArchive,
   onScrollToPair,
 }: MilestoneRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: milestone.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
   const isCustom = !milestone.source_milestone_type_id
   const validRange =
     milestone.min_minutes != null && milestone.max_minutes != null
@@ -42,12 +58,26 @@ export function MilestoneRow({
 
   return (
     <tr
+      ref={setNodeRef}
+      style={style}
       id={`milestone-${milestone.id}`}
-      className="group border-b border-slate-100 last:border-b-0 hover:bg-indigo-50/40 transition-colors"
+      className={`group border-b border-slate-100 last:border-b-0 hover:bg-indigo-50/40 transition-colors ${
+        isDragging ? 'bg-indigo-50 shadow-lg ring-1 ring-indigo-200 z-50' : ''
+      }`}
     >
-      {/* # */}
+      {/* # with drag handle */}
       <td className="px-4 py-3 w-12">
-        <span className="font-mono text-xs text-slate-400">{index + 1}</span>
+        <div className="flex items-center gap-1.5">
+          <button
+            {...attributes}
+            {...listeners}
+            className="p-0.5 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing touch-none"
+            title="Drag to reorder"
+          >
+            <GripVertical className="w-3.5 h-3.5" />
+          </button>
+          <span className="font-mono text-xs text-slate-400">{index + 1}</span>
+        </div>
       </td>
 
       {/* Milestone name */}
