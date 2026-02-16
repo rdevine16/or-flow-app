@@ -1,16 +1,6 @@
--- ============================================
--- get_milestone_interval_medians(surgeon_id, procedure_type_id, facility_id)
---
--- Returns median intervals between consecutive milestones for:
---   1. A specific surgeon (surgeon-level benchmarks)
---   2. The entire facility (facility-level benchmarks)
---
--- Used by useMilestoneComparison hook for the Milestones tab.
---
--- SECURITY INVOKER: inherits caller's RLS, facility isolation automatic.
--- Only includes completed + validated cases (data_validated = true).
--- Uses PERCENTILE_CONT(0.5) for medians (platform-wide: median over average).
--- ============================================
+-- Fix: remove c.is_active reference from get_milestone_interval_medians
+-- The cases table does not have an is_active column.
+-- Completed + data_validated filters are sufficient.
 
 CREATE OR REPLACE FUNCTION public.get_milestone_interval_medians(
   p_surgeon_id        UUID,
@@ -34,7 +24,6 @@ AS $$
 BEGIN
   RETURN QUERY
   WITH
-  -- Step 1: Get the ordered milestone sequence for this procedure+facility
   milestone_order AS (
     SELECT
       fm.id AS fm_id,
@@ -50,7 +39,6 @@ BEGIN
     ORDER BY fm.display_order
   ),
 
-  -- Step 2: Get all recorded milestones for completed+validated cases of this procedure
   case_milestone_timestamps AS (
     SELECT
       c.id AS case_id,
@@ -71,8 +59,6 @@ BEGIN
       AND cm.recorded_at IS NOT NULL
   ),
 
-  -- Step 3: Compute interval from previous milestone per case
-  -- LAG gives the previous milestone's recorded_at within the same case
   intervals AS (
     SELECT
       cmt.case_id,
@@ -90,7 +76,6 @@ BEGIN
     FROM case_milestone_timestamps cmt
   )
 
-  -- Step 4: Aggregate medians per milestone
   SELECT
     i.ms_name::TEXT                                                    AS milestone_name,
     i.cm_fm_id                                                         AS facility_milestone_id,
@@ -115,12 +100,3 @@ BEGIN
   ORDER BY i.ms_order;
 END;
 $$;
-
--- Grant execute to authenticated users (RLS enforces facility isolation)
-GRANT EXECUTE ON FUNCTION public.get_milestone_interval_medians(UUID, UUID, UUID)
-  TO authenticated;
-
-COMMENT ON FUNCTION public.get_milestone_interval_medians IS
-  'Returns median milestone intervals for surgeon + facility benchmarking. '
-  'First milestone has NULL interval (no predecessor). '
-  'Only includes completed, validated cases. SECURITY INVOKER — RLS applies.';
