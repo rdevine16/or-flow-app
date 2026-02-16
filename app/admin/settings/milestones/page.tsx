@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Check, Clock, Info, Link, Pencil, Plus } from 'lucide-react'
+import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
 
 
 interface MilestoneType {
@@ -160,6 +161,7 @@ export default function AdminMilestonesSettingsPage() {
         display_order: milestone.display_order,
         source_milestone_type_id: milestone.id,
         is_active: true,
+        phase_group: inferPhaseGroup(milestone.name),
       }))
 
       await supabase

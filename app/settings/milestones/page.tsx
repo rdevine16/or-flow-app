@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Archive, Check, Clock, Info, Link2, Pencil, Plus } from 'lucide-react'
+import { inferPhaseGroup, PHASE_GROUP_OPTIONS, PHASE_GROUP_LABELS, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
 
 
 interface FacilityMilestone {
@@ -34,6 +35,8 @@ interface FacilityMilestone {
   min_minutes: number | null
   max_minutes: number | null
   validation_type: 'duration' | 'sequence_gap' | null
+  // Phase 3.5: Time allocation phase group
+  phase_group: PhaseGroup | null
 }
 
 export default function MilestonesSettingsPage() {
@@ -49,7 +52,7 @@ export default function MilestonesSettingsPage() {
     async (sb) => {
       const { data, error } = await sb
         .from('facility_milestones')
-        .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, deleted_by, min_minutes, max_minutes, validation_type')
+        .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, deleted_by, min_minutes, max_minutes, validation_type, phase_group')
         .eq('facility_id', effectiveFacilityId!)
         .order('display_order')
       if (error) throw error
@@ -95,6 +98,10 @@ export default function MilestonesSettingsPage() {
   // Phase 2: Validation range form state
   const [editMinMinutes, setEditMinMinutes] = useState<number>(0)
   const [editMaxMinutes, setEditMaxMinutes] = useState<number>(90)
+
+  // Phase 3.5: Phase group form state
+  const [newPhaseGroup, setNewPhaseGroup] = useState<PhaseGroup | ''>('')
+  const [editPhaseGroup, setEditPhaseGroup] = useState<PhaseGroup | ''>('')
 
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
@@ -151,6 +158,8 @@ export default function MilestonesSettingsPage() {
         ? Math.max(...(milestones || []).map(m => m.display_order)) 
         : 0
 
+      const resolvedPhaseGroup = newPhaseGroup || inferPhaseGroup(name) || null
+
       const { data, error } = await supabase
         .from('facility_milestones')
         .insert({
@@ -163,6 +172,7 @@ export default function MilestonesSettingsPage() {
           min_minutes: 1,
           max_minutes: 90,
           validation_type: 'sequence_gap',
+          phase_group: resolvedPhaseGroup,
         })
         .select()
         .single()
@@ -173,6 +183,7 @@ export default function MilestonesSettingsPage() {
       setMilestones([...(milestones || []), { ...data, deleted_at: null }])
       setNewName('')
       setNewDisplayName('')
+      setNewPhaseGroup('')
       setShowAddModal(false)
     } catch (err) {
       showToast({ type: 'error', title: 'Failed to create milestone' })
@@ -189,12 +200,15 @@ export default function MilestonesSettingsPage() {
     try {
       const oldDisplayName = editingMilestone.display_name
 
+      const resolvedPhaseGroup = editPhaseGroup || null
+
       const { error } = await supabase
         .from('facility_milestones')
-        .update({ 
+        .update({
           display_name: editDisplayName.trim(),
           min_minutes: editMinMinutes,
           max_minutes: editMaxMinutes,
+          phase_group: resolvedPhaseGroup,
         })
         .eq('id', editingMilestone.id)
 
@@ -205,8 +219,8 @@ export default function MilestonesSettingsPage() {
       }
 
       setMilestones(
-        (milestones || []).map(m => m.id === editingMilestone.id 
-          ? { ...m, display_name: editDisplayName.trim(), min_minutes: editMinMinutes, max_minutes: editMaxMinutes } 
+        (milestones || []).map(m => m.id === editingMilestone.id
+          ? { ...m, display_name: editDisplayName.trim(), min_minutes: editMinMinutes, max_minutes: editMaxMinutes, phase_group: resolvedPhaseGroup }
           : m
         )
       )
@@ -724,12 +738,18 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                               </span>
                             )}
 
+                            {milestone.phase_group && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                                {PHASE_GROUP_LABELS[milestone.phase_group]}
+                              </span>
+                            )}
+
                             {!milestone.is_active && (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
                                 Inactive
                               </span>
                             )}
-                            
+
                             {milestone.pair_position && milestone.is_active && (
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                                 milestone.pair_position === 'start' 
@@ -783,6 +803,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                               setEditDisplayName(milestone.display_name)
                               setEditMinMinutes(milestone.min_minutes ?? 1)
                               setEditMaxMinutes(milestone.max_minutes ?? 90)
+                              setEditPhaseGroup(milestone.phase_group ?? '')
                               setShowEditModal(true)
                             }}
                             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -888,6 +909,10 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">End</span>
                     <span className="text-slate-500">Second button in pair</span>
                   </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 font-medium">Phase</span>
+                    <span className="text-slate-500">Time allocation group</span>
+                  </div>
                 </div>
               </div>
             </>
@@ -898,7 +923,7 @@ const handleRestore = async (milestone: FacilityMilestone) => {
       {/* Add Modal */}
       <Modal
         open={showAddModal}
-        onClose={() => { setShowAddModal(false); setNewName(''); setNewDisplayName('') }}
+        onClose={() => { setShowAddModal(false); setNewName(''); setNewDisplayName(''); setNewPhaseGroup('') }}
         title="Add Custom Milestone"
       >
               <div>
@@ -928,8 +953,29 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Phase Group <span className="text-slate-400 font-normal">(auto-inferred from name)</span>
+                </label>
+                <select
+                  value={newPhaseGroup}
+                  onChange={(e) => setNewPhaseGroup(e.target.value as PhaseGroup | '')}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">
+                    {(() => {
+                      const inferred = inferPhaseGroup(newName.trim() || generateName(newDisplayName))
+                      return inferred ? `Auto: ${PHASE_GROUP_LABELS[inferred]}` : 'None (unassigned)'
+                    })()}
+                  </option>
+                  {PHASE_GROUP_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
         <Modal.Footer>
-          <Modal.Cancel onClick={() => { setShowAddModal(false); setNewName(''); setNewDisplayName('') }} />
+          <Modal.Cancel onClick={() => { setShowAddModal(false); setNewName(''); setNewDisplayName(''); setNewPhaseGroup('') }} />
           <Modal.Action onClick={handleAdd} loading={saving} disabled={!newDisplayName.trim()}>
             Add Milestone
           </Modal.Action>
@@ -975,6 +1021,25 @@ const handleRestore = async (milestone: FacilityMilestone) => {
                   </p>
                 </div>
               )}
+
+              <div className="pt-2 border-t border-slate-200">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Phase Group
+                </label>
+                <p className="text-xs text-slate-500 mb-2">
+                  Used for time allocation bucketing in milestone analytics
+                </p>
+                <select
+                  value={editPhaseGroup}
+                  onChange={(e) => setEditPhaseGroup(e.target.value as PhaseGroup | '')}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">None (unassigned)</option>
+                  {PHASE_GROUP_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
 
               <div className="pt-2 border-t border-slate-200">
                 <label className="block text-sm font-medium text-slate-700 mb-2">

@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertCircle, AlertTriangle, Ban, Building2, Check, ClipboardCheck, Clock, DollarSign, FlaskConical, Info, Mail, Palette } from 'lucide-react'
+import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
 
 // ============================================================================
 // INTERFACES
@@ -586,6 +587,7 @@ const toggleAll = () => {
                 pair_position: mt.pair_position,
                 source_milestone_type_id: mt.id,
                 is_active: true,
+                phase_group: inferPhaseGroup(mt.name),
               })
               .select()
               .single()
