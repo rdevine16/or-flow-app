@@ -1,21 +1,18 @@
 // components/cases/CaseDrawerMilestones.tsx
-// Revamped milestones tab with horizontal swimlane timeline, per-interval
-// surgeon/facility benchmarking, time allocation bar, and comparison toggle.
+// Revamped milestones tab with horizontal swimlane timeline, structured 6-column
+// data table, time allocation bar, and comparison toggle.
 
 'use client'
 
 import { useMemo } from 'react'
 import { useMilestoneComparison } from '@/lib/hooks/useMilestoneComparison'
-import { DeltaBadge } from '@/components/ui/DeltaBadge'
-import { formatMinutes } from '@/lib/utils/milestoneAnalytics'
 import MilestoneComparisonToggle from '@/components/cases/MilestoneComparisonToggle'
 import MilestoneTimeline from '@/components/cases/MilestoneTimeline'
-import MilestoneDetailRow from '@/components/cases/MilestoneDetailRow'
+import { MilestoneTable } from '@/components/cases/MilestoneDetailRow'
 import TimeAllocationBar from '@/components/cases/TimeAllocationBar'
 import {
   Clock,
   Loader2,
-  AlertTriangle,
 } from 'lucide-react'
 
 // ============================================
@@ -39,7 +36,6 @@ export default function CaseDrawerMilestones({
   surgeonId,
   procedureTypeId,
   facilityId,
-  caseStatus,
 }: CaseDrawerMilestonesProps) {
   const {
     data,
@@ -67,17 +63,19 @@ export default function CaseDrawerMilestones({
     return intervals.map((iv, idx) => !iv.recorded_at && idx < lastRecordedIdx)
   }, [data])
 
-  const isCompleted = caseStatus === 'completed'
-
   // Loading state
   if (loading && !data) {
     return (
       <div className="space-y-4 animate-pulse">
-        <div className="h-4 bg-slate-200 rounded w-1/4" />
+        <div className="flex items-center justify-between">
+          <div className="h-4 bg-slate-200 rounded w-1/4" />
+          <div className="h-6 bg-slate-100 rounded w-1/3" />
+        </div>
         <div className="h-8 bg-slate-100 rounded-full" />
-        <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-14 bg-slate-50 rounded-lg" />
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <div className="h-8 bg-slate-50" />
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <div key={i} className="h-10 bg-white border-t border-slate-100" />
           ))}
         </div>
         <div className="h-6 bg-slate-100 rounded" />
@@ -111,17 +109,16 @@ export default function CaseDrawerMilestones({
   }
 
   const recordedCount = data.intervals.filter((iv) => iv.recorded_at).length
+  const totalCount = data.intervals.length
+  const allRecorded = recordedCount === totalCount
 
   return (
-    <div className="space-y-5">
-      {/* Header: title + toggle */}
+    <div className="space-y-4">
+      {/* Header: milestone counter (left) + comparison toggle (right) */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-            Milestone Timeline
-          </span>
-          <span className="text-xs text-slate-400">
-            {recordedCount}/{data.intervals.length} recorded
+          <span className={`text-xs font-medium ${allRecorded ? 'text-slate-600' : 'text-amber-600'}`}>
+            {recordedCount}/{totalCount} milestones recorded
           </span>
           {loading && <Loader2 className="w-3 h-3 text-slate-400 animate-spin" />}
         </div>
@@ -133,21 +130,6 @@ export default function CaseDrawerMilestones({
         />
       </div>
 
-      {/* Missing milestone alert banner */}
-      {isCompleted && data.missing_milestones.length > 0 && (
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200">
-          <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-medium text-amber-800">
-              {data.missing_milestones.length} milestone{data.missing_milestones.length > 1 ? 's' : ''} not recorded
-            </p>
-            <p className="text-[11px] text-amber-600 mt-0.5">
-              {data.missing_milestones.join(', ')}
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Horizontal swimlane timeline */}
       <MilestoneTimeline
         intervals={data.intervals}
@@ -155,128 +137,21 @@ export default function CaseDrawerMilestones({
         comparisonSource={comparisonSource}
       />
 
-      {/* Detail rows */}
-      <div className="space-y-0.5">
-        {data.intervals.map((interval, idx) => (
-          <MilestoneDetailRow
-            key={interval.facility_milestone_id}
-            interval={interval}
-            index={idx}
-            comparisonSource={comparisonSource}
-            surgeonCaseCount={surgeonCaseCount}
-            facilityCaseCount={facilityCaseCount}
-            isMissing={missingFlags[idx] ?? false}
-          />
-        ))}
-      </div>
+      {/* Structured milestone table (replaces card-based detail rows) */}
+      <MilestoneTable
+        intervals={data.intervals}
+        comparisonSource={comparisonSource}
+        surgeonCaseCount={surgeonCaseCount}
+        facilityCaseCount={facilityCaseCount}
+        missingFlags={missingFlags}
+        totalCaseMinutes={data.total_case_minutes}
+        totalSurgicalMinutes={data.total_surgical_minutes}
+      />
 
       {/* Time allocation bar */}
       {data.time_allocation.length > 0 && (
-        <div className="border-t border-slate-200 pt-4">
-          <TimeAllocationBar allocations={data.time_allocation} />
-        </div>
+        <TimeAllocationBar allocations={data.time_allocation} />
       )}
-
-      {/* Summary footer */}
-      <SummaryFooter
-        totalCaseMinutes={data.total_case_minutes}
-        totalSurgicalMinutes={data.total_surgical_minutes}
-        intervals={data.intervals}
-        comparisonSource={comparisonSource}
-      />
-    </div>
-  )
-}
-
-// ============================================
-// SUMMARY FOOTER
-// ============================================
-
-function SummaryFooter({
-  totalCaseMinutes,
-  totalSurgicalMinutes,
-  intervals,
-  comparisonSource,
-}: {
-  totalCaseMinutes: number | null
-  totalSurgicalMinutes: number | null
-  intervals: import('@/lib/utils/milestoneAnalytics').MilestoneInterval[]
-  comparisonSource: 'surgeon' | 'facility'
-}) {
-  // Compute total median for comparison
-  const medianKey = comparisonSource === 'surgeon' ? 'surgeon_median_minutes' : 'facility_median_minutes'
-  const totalMedian = useMemo(() => {
-    const sum = intervals
-      .filter((iv) => iv[medianKey] != null)
-      .reduce((s, iv) => s + (iv[medianKey] ?? 0), 0)
-    return sum > 0 ? sum : null
-  }, [intervals, medianKey])
-
-  const totalDelta = totalCaseMinutes != null && totalMedian != null
-    ? totalCaseMinutes - totalMedian
-    : null
-
-  // Compute surgical median
-  const surgicalIntervals = intervals.filter((iv) => iv.phase_group === 'surgical')
-  const surgicalMedian = useMemo(() => {
-    const sum = surgicalIntervals
-      .filter((iv) => iv[medianKey] != null)
-      .reduce((s, iv) => s + (iv[medianKey] ?? 0), 0)
-    return sum > 0 ? sum : null
-  }, [surgicalIntervals, medianKey])
-
-  const surgicalDelta = totalSurgicalMinutes != null && surgicalMedian != null
-    ? totalSurgicalMinutes - surgicalMedian
-    : null
-
-  const stats = [
-    {
-      label: 'Total Case Time',
-      value: totalCaseMinutes,
-      delta: totalDelta,
-      median: totalMedian,
-    },
-    {
-      label: 'Surgical Time',
-      value: totalSurgicalMinutes,
-      delta: surgicalDelta,
-      median: surgicalMedian,
-    },
-  ]
-
-  if (totalCaseMinutes == null && totalSurgicalMinutes == null) return null
-
-  return (
-    <div className="border-t border-slate-200 pt-4">
-      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-        Duration Summary
-      </span>
-      <div className="bg-slate-50 rounded-lg p-3 mt-2 divide-y divide-slate-200">
-        {stats.map((stat) => (
-          <div key={stat.label} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
-            <div>
-              <span className="text-sm font-medium text-slate-700">{stat.label}</span>
-              <span className="text-sm text-slate-900 ml-2 font-semibold">
-                {formatMinutes(stat.value)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {stat.median != null && (
-                <span className="text-[10px] text-slate-400">
-                  median {formatMinutes(stat.median)}
-                </span>
-              )}
-              {stat.delta != null && (
-                <DeltaBadge
-                  delta={stat.delta}
-                  format="time"
-                  invert
-                />
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

@@ -161,14 +161,13 @@ describe('CaseDrawerMilestones — unit', () => {
 
   it('shows recorded count', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
-    expect(screen.getByText('4/4 recorded')).toBeDefined()
+    expect(screen.getByText('4/4 milestones recorded')).toBeDefined()
   })
 
   it('renders duration summary section', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
-    expect(screen.getByText('Duration Summary')).toBeDefined()
+    // The footer row shows "Total Case Time" in the MilestoneTable component
     expect(screen.getByText('Total Case Time')).toBeDefined()
-    expect(screen.getByText('Surgical Time')).toBeDefined()
   })
 })
 
@@ -190,13 +189,23 @@ describe('CaseDrawerMilestones — comparison toggle', () => {
 
 describe('CaseDrawerMilestones — missing milestones', () => {
   it('shows missing milestone alert for completed cases', () => {
+    // Phase 6 removed the alert banner — missing milestones are now shown
+    // inline in the table with amber background and AlertTriangle icon
     mockReturn.data = {
       ...FULL_DATA,
+      // Simulate two unrecorded milestones with later ones recorded
+      intervals: [
+        { ...INTERVALS[0], recorded_at: '2024-06-15T08:00:00Z' },
+        { ...INTERVALS[1], recorded_at: null, milestone_name: 'Anesthesia Start' },
+        { ...INTERVALS[2], recorded_at: null, milestone_name: 'Prep Complete' },
+        { ...INTERVALS[3], recorded_at: '2024-06-15T09:30:00Z' },
+      ],
       missing_milestones: ['Anesthesia Start', 'Prep Complete'],
     }
-    render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="completed" />)
-    expect(screen.getByText('2 milestones not recorded')).toBeDefined()
-    expect(screen.getByText('Anesthesia Start, Prep Complete')).toBeDefined()
+    const { container } = render(<CaseDrawerMilestones {...DEFAULT_PROPS} caseStatus="completed" />)
+    // Missing milestones get amber background rows
+    const amberRows = container.querySelectorAll('.bg-amber-50\\/60')
+    expect(amberRows.length).toBeGreaterThanOrEqual(2)
   })
 
   it('does not show missing milestone alert for non-completed cases', () => {
@@ -219,13 +228,11 @@ describe('CaseDrawerMilestones — time allocation', () => {
 describe('CaseDrawerMilestones — workflow', () => {
   it('renders complete milestone view with timeline, detail rows, and summary', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
-    // Timeline section
-    expect(screen.getByText('Milestone Timeline')).toBeDefined()
-    // All milestone names (appear in both timeline and detail rows)
+    // All milestone names (appear in both timeline and table)
     expect(screen.getAllByText('Patient In').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Patient Out').length).toBeGreaterThanOrEqual(1)
-    // Summary section
-    expect(screen.getByText('Duration Summary')).toBeDefined()
+    // Footer row in table
+    expect(screen.getByText('Total Case Time')).toBeDefined()
     // Comparison toggle
     expect(screen.getByText('Surgeon Median')).toBeDefined()
     // Time allocation

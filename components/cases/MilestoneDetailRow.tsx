@@ -1,23 +1,34 @@
 // components/cases/MilestoneDetailRow.tsx
-// Individual milestone row showing name, timestamp, interval,
-// surgeon/facility medians, delta badge, and cohort context.
+// Structured 6-column milestone data table.
+// Replaces the card-based MilestoneDetailRow with a table layout.
+// Columns: [Status Icon] [Milestone Name] [Time] [Interval] [Median] [Delta]
 
 'use client'
 
+import { useMemo } from 'react'
 import { DeltaBadge } from '@/components/ui/DeltaBadge'
 import { formatMinutes } from '@/lib/utils/milestoneAnalytics'
 import type { MilestoneInterval } from '@/lib/utils/milestoneAnalytics'
-import { AlertTriangle, CheckCircle2, Circle, Clock } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Circle } from 'lucide-react'
 
-interface MilestoneDetailRowProps {
-  interval: MilestoneInterval
-  index: number
+// ============================================
+// TYPES
+// ============================================
+
+interface MilestoneTableProps {
+  intervals: MilestoneInterval[]
   comparisonSource: 'surgeon' | 'facility'
   surgeonCaseCount: number
   facilityCaseCount: number
-  /** Whether a later milestone has been recorded (makes unrecorded ones "missing") */
-  isMissing: boolean
+  /** Indexes of milestones that are "missing" (unrecorded with later ones recorded) */
+  missingFlags: boolean[]
+  totalCaseMinutes: number | null
+  totalSurgicalMinutes: number | null
 }
+
+// ============================================
+// HELPERS
+// ============================================
 
 function formatTimestamp(isoString: string | null): string {
   if (!isoString) return '—'
@@ -29,94 +40,181 @@ function formatTimestamp(isoString: string | null): string {
   })
 }
 
-export default function MilestoneDetailRow({
-  interval,
-  index,
+// ============================================
+// MAIN TABLE COMPONENT
+// ============================================
+
+export function MilestoneTable({
+  intervals,
   comparisonSource,
   surgeonCaseCount,
   facilityCaseCount,
-  isMissing,
-}: MilestoneDetailRowProps) {
-  const isRecorded = !!interval.recorded_at
-  const isFirstMilestone = index === 0
-  const activeDelta = comparisonSource === 'surgeon'
-    ? interval.delta_from_surgeon
-    : interval.delta_from_facility
-  const activeMedian = comparisonSource === 'surgeon'
-    ? interval.surgeon_median_minutes
-    : interval.facility_median_minutes
+  missingFlags,
+  totalCaseMinutes,
+  totalSurgicalMinutes,
+}: MilestoneTableProps) {
+  const medianLabel = comparisonSource === 'surgeon' ? 'Surg Med' : 'Fac Med'
   const caseCount = comparisonSource === 'surgeon' ? surgeonCaseCount : facilityCaseCount
+  const medianKey = comparisonSource === 'surgeon' ? 'surgeon_median_minutes' : 'facility_median_minutes' as const
+  const deltaKey = comparisonSource === 'surgeon' ? 'delta_from_surgeon' : 'delta_from_facility' as const
+
+  // Compute footer totals
+  const footerTotals = useMemo(() => {
+    const totalInterval = intervals.reduce(
+      (sum, iv) => sum + (iv.interval_minutes ?? 0),
+      0,
+    )
+    const totalMedian = intervals
+      .filter((iv) => iv[medianKey] != null)
+      .reduce((sum, iv) => sum + (iv[medianKey] ?? 0), 0)
+    const totalDelta = totalCaseMinutes != null && totalMedian > 0
+      ? totalCaseMinutes - totalMedian
+      : null
+
+    return { totalInterval, totalMedian: totalMedian > 0 ? totalMedian : null, totalDelta }
+  }, [intervals, medianKey, totalCaseMinutes])
 
   return (
-    <div
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-        isMissing ? 'bg-amber-50/60' : isRecorded ? 'hover:bg-slate-50' : ''
-      }`}
-    >
-      {/* Status icon */}
-      <div className="flex-shrink-0">
-        {isMissing ? (
-          <AlertTriangle className="w-4 h-4 text-amber-500" />
-        ) : isRecorded ? (
-          <CheckCircle2 className="w-4 h-4 text-teal-500" />
-        ) : (
-          <Circle className="w-4 h-4 text-slate-300" />
-        )}
+    <div className="border border-slate-200 rounded-lg overflow-hidden">
+      {/* Header row */}
+      <div className="grid grid-cols-[28px_1fr_72px_60px_68px_80px] bg-slate-50 border-b border-slate-200 px-3 py-2">
+        <span className="sr-only">Status</span>
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+          Milestone
+        </span>
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+          Time
+        </span>
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+          Interval
+        </span>
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+          {medianLabel}
+        </span>
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-right">
+          Delta
+        </span>
       </div>
 
-      {/* Name + timestamp */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className={`text-sm font-medium truncate ${
-            isRecorded ? 'text-slate-900' : isMissing ? 'text-amber-700' : 'text-slate-400'
-          }`}>
-            {interval.milestone_name}
-          </span>
-          <span className={`text-xs ml-2 flex-shrink-0 ${
-            isRecorded ? 'text-slate-500' : 'text-slate-400'
-          }`}>
-            {isMissing ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-                Not Recorded
-              </span>
-            ) : (
-              formatTimestamp(interval.recorded_at)
-            )}
-          </span>
-        </div>
+      {/* Data rows */}
+      {intervals.map((iv, idx) => {
+        const isMissing = missingFlags[idx] ?? false
+        const isRecorded = !!iv.recorded_at
+        const isFirst = idx === 0
+        const activeMedian = iv[medianKey]
+        const activeDelta = iv[deltaKey]
 
-        {/* Interval + median + delta row (skip for first milestone) */}
-        {!isFirstMilestone && isRecorded && interval.interval_minutes != null && (
-          <div className="flex items-center gap-2 mt-1">
-            <span className="flex items-center gap-1 text-xs text-slate-500">
-              <Clock className="w-3 h-3" />
-              {formatMinutes(interval.interval_minutes)}
-            </span>
-            {activeMedian != null && (
-              <>
-                <span className="text-[10px] text-slate-400">
-                  median {formatMinutes(activeMedian)}
+        return (
+          <div
+            key={iv.facility_milestone_id}
+            className={`grid grid-cols-[28px_1fr_72px_60px_68px_80px] items-center px-3 py-2 border-b border-slate-100 last:border-b-0 ${
+              isMissing ? 'bg-amber-50/60' : ''
+            }`}
+          >
+            {/* Status icon */}
+            <div className="flex items-center justify-center">
+              {isMissing ? (
+                <div className="w-4 h-4 rounded-sm bg-amber-100 flex items-center justify-center">
+                  <AlertTriangle className="w-3 h-3 text-amber-500" />
+                </div>
+              ) : isRecorded ? (
+                <CheckCircle2 className="w-4 h-4 text-teal-500" />
+              ) : (
+                <Circle className="w-4 h-4 text-slate-300" />
+              )}
+            </div>
+
+            {/* Milestone name */}
+            <div className="min-w-0">
+              <span className={`text-xs font-medium truncate block ${
+                isRecorded ? 'text-slate-900' : isMissing ? 'text-amber-700' : 'text-slate-400'
+              }`}>
+                {iv.milestone_name}
+              </span>
+              {/* Cohort context for recorded milestones with median data */}
+              {!isFirst && isRecorded && activeMedian != null && caseCount > 0 && (
+                <span className="text-[10px] text-slate-400 block">
+                  Based on {caseCount} {comparisonSource === 'surgeon' ? 'surgeon' : 'facility'} cases
                 </span>
-                {activeDelta != null && interval.delta_severity && (
-                  <DeltaBadge
-                    delta={activeDelta}
-                    format="time"
-                    invert
-                    severity={interval.delta_severity}
-                  />
-                )}
-              </>
+              )}
+            </div>
+
+            {/* Time */}
+            <span className={`text-xs text-right ${
+              isRecorded ? 'text-slate-700' : isMissing ? 'text-amber-600' : 'text-slate-400'
+            }`}>
+              {isMissing ? (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-100 text-amber-700">
+                  N/R
+                </span>
+              ) : (
+                formatTimestamp(iv.recorded_at)
+              )}
+            </span>
+
+            {/* Interval */}
+            <span className="text-xs text-right text-slate-700">
+              {!isFirst && iv.interval_minutes != null
+                ? `${Math.round(iv.interval_minutes)}m`
+                : '—'}
+            </span>
+
+            {/* Median */}
+            <span className="text-xs text-right text-slate-500">
+              {!isFirst && activeMedian != null
+                ? `${Math.round(activeMedian)}m`
+                : '—'}
+            </span>
+
+            {/* Delta */}
+            <div className="flex justify-end">
+              {!isFirst && activeDelta != null && iv.delta_severity ? (
+                <DeltaBadge
+                  delta={activeDelta}
+                  format="time"
+                  invert
+                  severity={iv.delta_severity}
+                />
+              ) : (
+                <span className="text-xs text-slate-400">—</span>
+              )}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Summary footer row */}
+      {totalCaseMinutes != null && (
+        <div className="grid grid-cols-[28px_1fr_72px_60px_68px_80px] items-center px-3 py-2.5 bg-slate-50 border-t-2 border-slate-200">
+          <span />
+          <span className="text-xs font-semibold text-slate-900">
+            Total Case Time
+          </span>
+          <span />
+          <span className="text-xs font-semibold text-right text-slate-900">
+            {formatMinutes(totalCaseMinutes)}
+          </span>
+          <span className="text-xs font-semibold text-right text-slate-600">
+            {footerTotals.totalMedian != null
+              ? formatMinutes(footerTotals.totalMedian)
+              : '—'}
+          </span>
+          <div className="flex justify-end">
+            {footerTotals.totalDelta != null ? (
+              <DeltaBadge
+                delta={footerTotals.totalDelta}
+                format="time"
+                invert
+              />
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
             )}
           </div>
-        )}
-
-        {/* Cohort context */}
-        {!isFirstMilestone && isRecorded && activeMedian != null && caseCount > 0 && (
-          <span className="text-[10px] text-slate-400 mt-0.5 block">
-            Based on {caseCount} {comparisonSource === 'surgeon' ? 'surgeon' : 'facility'} cases
-          </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
+
+// Default export aliased for backward compatibility
+export default MilestoneTable
