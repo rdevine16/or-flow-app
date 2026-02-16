@@ -53,6 +53,12 @@ CREATE POLICY "Users can view own facility phase_definitions"
     FOR SELECT
     USING (facility_id = public.get_my_facility_id());
 
+-- Soft-delete trigger: keeps is_active and deleted_at in sync (same pattern as 20+ other tables)
+CREATE TRIGGER sync_soft_delete_phase_definitions
+    BEFORE UPDATE ON public.phase_definitions
+    FOR EACH ROW
+    EXECUTE FUNCTION public.sync_soft_delete_columns();
+
 
 --------------------------------------------------------------------------------
 -- 2. phase_definition_templates — global admin templates (seed new facilities)
