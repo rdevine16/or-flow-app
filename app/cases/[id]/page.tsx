@@ -16,11 +16,11 @@ import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import CompletedCaseView from '@/components/cases/CompletedCaseView'
 import DeviceRepSection from '@/components/cases/DeviceRepSection'
-import MilestoneCard, { type MilestoneCardData } from '@/components/cases/MilestoneCard'
+import MilestoneTimelineV2 from '@/components/cases/MilestoneTimelineV2'
 import TeamMember from '@/components/cases/TeamMember'
 import ImplantBadge from '@/components/cases/ImplantBadge'
 import { runDetectionForCase } from '@/lib/dataQuality'
-import PiPMilestoneWrapper, { PiPButton } from '@/components/pip/PiPMilestoneWrapper'
+import PiPMilestoneWrapper from '@/components/pip/PiPMilestoneWrapper'
 import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
 import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
@@ -40,7 +40,6 @@ import {
 import { useMilestoneRealtime } from '@/lib/hooks/useMilestoneRealtime'
 import { type SurgeonMilestoneStats } from '@/types/pace'
 import { TimerChip, ProgressChip } from '@/components/cases/TimerChip'
-import { computeMilestonePace } from '@/lib/pace-utils'
 import { checkMilestoneOrder } from '@/lib/milestone-order'
 import { useFlipRoom } from '@/lib/hooks/useFlipRoom'
 import FlipRoomCard from '@/components/cases/FlipRoomCard'
@@ -1075,49 +1074,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   }
 
   // ============================================================================
-  // BUILD MILESTONE DATA FOR GRID
-  // ============================================================================
-
-  const getPartnerMilestone = (milestone: FacilityMilestone): FacilityMilestone | undefined => {
-    if (!milestone.pair_with_id) return undefined
-    return milestoneTypes.find(mt => mt.id === milestone.pair_with_id)
-  }
-
-  const milestoneCards: MilestoneCardData[] = milestoneTypes
-    .filter(mt => mt.pair_position !== 'end')
-    .map(mt => {
-      const recorded = getMilestoneByTypeId(mt.id)
-      const isPaired = mt.pair_position === 'start'
-      const partner = isPaired ? getPartnerMilestone(mt) : undefined
-      const partnerRecorded = partner ? getMilestoneByTypeId(partner.id) : undefined
-
-      let elapsedDisplay = ''
-      if (isPaired && recorded?.recorded_at) {
-        const endTime = partnerRecorded?.recorded_at
-          ? new Date(partnerRecorded.recorded_at).getTime()
-          : currentTime
-        const elapsedMs = endTime - new Date(recorded.recorded_at).getTime()
-        const totalSeconds = Math.floor(elapsedMs / 1000)
-        const mins = Math.floor(totalSeconds / 60)
-        const secs = totalSeconds % 60
-        elapsedDisplay = `${mins}m ${secs}s`
-      }
-
-      return {
-        milestone: mt,
-        recorded,
-        isPaired,
-        partner,
-        partnerRecorded,
-        elapsedMs: 0,
-        elapsedDisplay,
-        displayName: mt.display_name.replace(/ Start$/i, ''),
-        isComplete: isPaired ? !!partnerRecorded?.recorded_at : !!recorded?.recorded_at,
-        isInProgress: isPaired ? (!!recorded?.recorded_at && !partnerRecorded?.recorded_at) : false,
-      }
-    })
-
-  // ============================================================================
   // ACTIVE CASE VIEW - COMMAND CENTER
   // ============================================================================
 
@@ -1209,105 +1165,69 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
 
-            {/* MILESTONES */}
+            {/* MILESTONES — Vertical Timeline */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {completedMilestones} of {totalMilestoneCount} recorded
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${totalMilestoneCount > 0 ? (completedMilestones / totalMilestoneCount) * 100 : 0}%` }}
-                  />
+              <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {completedMilestones} of {totalMilestoneCount} recorded
+                  </p>
                 </div>
-                <span className="text-sm font-semibold text-slate-700">
-                  {totalMilestoneCount > 0 ? Math.round((completedMilestones / totalMilestoneCount) * 100) : 0}%
-                </span>
-                <PiPButton onClick={() => setIsPiPOpen(true)} disabled={isPiPOpen} />
-              </div>
-            </div>
-
-            <div className="p-4">
-              {milestoneTypes.length === 0 ? (
-                <div className="text-center py-12 text-slate-500">
-                  <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                  <p className="text-sm font-medium">No milestones configured</p>
-                  <p className="text-xs mt-1">Configure milestones in Settings</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {milestoneCards.map((card) => {
-                    // Compute per-milestone pace info
-                    let cardPaceInfo = null
-                    if (patientInTime && card.isComplete && card.milestone.name !== 'patient_in') {
-                      if (card.isPaired && card.recorded?.recorded_at && card.partnerRecorded?.recorded_at) {
-                        // Paired milestone: show duration comparison
-                        const startStats = card.milestone.source_milestone_type_id
-                          ? milestoneStats.find(ms => ms.milestone_type_id === card.milestone.source_milestone_type_id)
-                          : null
-                        const endStats = card.partner?.source_milestone_type_id
-                          ? milestoneStats.find(ms => ms.milestone_type_id === card.partner!.source_milestone_type_id)
-                          : null
-                        if (startStats && endStats) {
-                          const expectedDuration = endStats.median_minutes_from_start - startStats.median_minutes_from_start
-                          const actualMs = new Date(card.partnerRecorded.recorded_at).getTime() - new Date(card.recorded.recorded_at).getTime()
-                          cardPaceInfo = computeMilestonePace(expectedDuration, actualMs / 60000, Math.min(startStats.sample_size, endStats.sample_size))
-                        }
-                      } else if (!card.isPaired && card.recorded?.recorded_at) {
-                        // Single milestone: show time-from-start comparison
-                        const msStats = card.milestone.source_milestone_type_id
-                          ? milestoneStats.find(ms => ms.milestone_type_id === card.milestone.source_milestone_type_id)
-                          : null
-                        if (msStats) {
-                          const actualMs = new Date(card.recorded.recorded_at).getTime() - new Date(patientInTime).getTime()
-                          cardPaceInfo = computeMilestonePace(msStats.median_minutes_from_start, actualMs / 60000, msStats.sample_size)
-                        }
-                      }
-                    }
-                    return (
-                    <MilestoneCard
-                      key={card.milestone.id}
-                      card={card}
-                      onRecord={can('milestones.manage') ? () => recordMilestone(card.milestone.id) : undefined}
-                      onRecordEnd={can('milestones.manage') && card.partner ? () => recordMilestone(card.partner!.id) : undefined}
-                      onUndo={can('milestones.manage') && card.recorded ? () => undoMilestone(card.recorded!.id) : undefined}
-                      onUndoEnd={can('milestones.manage') && card.partnerRecorded ? () => undoMilestone(card.partnerRecorded!.id) : undefined}
-                      loading={recordingMilestoneIds.has(card.milestone.id) || (card.partner ? recordingMilestoneIds.has(card.partner.id) : false)}
-                      timeZone={userData.facilityTimezone}
-                      paceInfo={cardPaceInfo}
+                <div className="flex items-center gap-3">
+                  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
+                      style={{ width: `${totalMilestoneCount > 0 ? (completedMilestones / totalMilestoneCount) * 100 : 0}%` }}
                     />
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Surgeon Left Confirmation */}
-              {surgeonLeftAt && !patientOutRecorded && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-orange-500" />
-                        <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
-                      </div>
-                      <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
-                    </div>
-                    <button
-                      onClick={clearSurgeonLeft}
-                      className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
-                    >
-                      Undo
-                    </button>
                   </div>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {totalMilestoneCount > 0 ? Math.round((completedMilestones / totalMilestoneCount) * 100) : 0}%
+                  </span>
                 </div>
-              )}
+              </div>
+
+              <div className="p-4">
+                {milestoneTypes.length === 0 ? (
+                  <div className="text-center py-12 text-slate-500">
+                    <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                    <p className="text-sm font-medium">No milestones configured</p>
+                    <p className="text-xs mt-1">Configure milestones in Settings</p>
+                  </div>
+                ) : (
+                  <MilestoneTimelineV2
+                    milestoneTypes={milestoneTypes}
+                    caseMilestones={caseMilestones}
+                    onRecord={recordMilestone}
+                    onUndo={undoMilestone}
+                    recordingMilestoneIds={recordingMilestoneIds}
+                    canManage={can('milestones.manage')}
+                    timeZone={userData.facilityTimezone}
+                  />
+                )}
+
+                {/* Surgeon Left Confirmation */}
+                {surgeonLeftAt && !patientOutRecorded && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-orange-500" />
+                          <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                        </div>
+                        <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
+                      </div>
+                      <button
+                        onClick={clearSurgeonLeft}
+                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                      >
+                        Undo
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
           </div>
 
