@@ -118,7 +118,6 @@ describe('Cases DAL Types — Phase 5.2 Schema Alignment', () => {
       laterality: null,
       anesthesia_type: null,
       scheduled_duration_minutes: null,
-      scheduled_duration_minutes: null,
       notes: null,
       rep_required_override: null,
       called_back_at: null,
@@ -318,7 +317,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('applies search filter as ilike on case_number', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',
@@ -333,7 +332,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('applies surgeon filter as in on surgeon_id', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',
@@ -348,7 +347,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('applies room filter as in on or_room_id', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',
@@ -363,7 +362,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('applies procedure filter as in on procedure_type_id', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',
@@ -378,7 +377,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('applies all filters together', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',
@@ -396,7 +395,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('does not apply filters when undefined', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',
@@ -412,7 +411,7 @@ describe('casesDAL.listForCasesPage with filters — Phase 4', () => {
 
   it('does not apply filters when empty arrays', async () => {
     await casesDAL.listForCasesPage(
-      mockSupabase as ReturnType<typeof vi.fn> & { from: ReturnType<typeof vi.fn> },
+      mockSupabase as unknown as Parameters<typeof casesDAL.listForCasesPage>[0],
       'facility-1',
       { start: '2026-01-01', end: '2026-01-31' },
       'all',

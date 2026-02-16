@@ -123,12 +123,12 @@ function createSupabaseMock(overrides: Record<string, any> = {}) {
     if (table === 'or_rooms') Object.assign(chainable, { then: undefined })
     if (table === 'procedure_milestone_config') {
       // Return the milestone config result at the end of the chain
-      const milestoneChain = {
-        select: vi.fn().mockReturnValue(milestoneChain),
-        eq: vi.fn().mockReturnValue(milestoneChain),
-        order: vi.fn().mockReturnValue(milestoneChain),
-        then: (resolve: Function) => resolve(defaultResults.procedure_milestone_config),
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const milestoneChain: Record<string, any> = {}
+      milestoneChain.select = vi.fn().mockReturnValue(milestoneChain)
+      milestoneChain.eq = vi.fn().mockReturnValue(milestoneChain)
+      milestoneChain.order = vi.fn().mockReturnValue(milestoneChain)
+      milestoneChain.then = (resolve: Function) => resolve(defaultResults.procedure_milestone_config)
       // Make it thenable for await
       return {
         ...milestoneChain,

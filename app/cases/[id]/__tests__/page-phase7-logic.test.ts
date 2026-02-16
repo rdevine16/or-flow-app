@@ -39,15 +39,13 @@ describe('CasePage Phase 7 - Permission Logic', () => {
     })
 
     it('handles case when caseData is null', () => {
-      const caseData = null
+      const caseData = null as { case_statuses: { id: string; name: string } | null } | null
       const isCompleted = caseData?.case_statuses?.name === 'completed'
       expect(isCompleted).toBe(false)
     })
 
     it('handles case when case_statuses is null', () => {
-      const caseData = {
-        case_statuses: null,
-      }
+      const caseData = { case_statuses: null } as { case_statuses: { id: string; name: string } | null }
       const isCompleted = caseData?.case_statuses?.name === 'completed'
       expect(isCompleted).toBe(false)
     })

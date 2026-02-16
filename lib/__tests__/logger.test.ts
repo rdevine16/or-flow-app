@@ -20,11 +20,12 @@ describe('logger', () => {
   })
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv
+    vi.stubEnv('NODE_ENV', originalEnv ?? '')
+    vi.unstubAllEnvs()
   })
 
   it('creates a logger with all log methods', async () => {
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
     // Dynamic import to get fresh module
     const { logger } = await import('../logger')
     const log = logger('TestModule')
@@ -36,7 +37,7 @@ describe('logger', () => {
   })
 
   it('outputs to console in development', async () => {
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const { logger } = await import('../logger')
@@ -52,7 +53,7 @@ describe('logger', () => {
   })
 
   it('formats Error objects with stack traces', async () => {
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const { logger } = await import('../logger')
@@ -67,7 +68,7 @@ describe('logger', () => {
   })
 
   it('includes data objects when provided', async () => {
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const { logger } = await import('../logger')
@@ -80,7 +81,7 @@ describe('logger', () => {
   })
 
   it('handles non-Error thrown values', async () => {
-    process.env.NODE_ENV = 'development'
+    vi.stubEnv('NODE_ENV', 'development')
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const { logger } = await import('../logger')

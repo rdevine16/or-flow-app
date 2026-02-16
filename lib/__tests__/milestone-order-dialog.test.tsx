@@ -86,10 +86,10 @@ function TestOrderWarning({ initialMilestones = [], onRecordComplete }: TestWrap
 // ============================================
 
 describe('Out-of-order warning dialog — integration', () => {
-  let onRecordComplete: ReturnType<typeof vi.fn>
+  let onRecordComplete: ReturnType<typeof vi.fn> & ((milestoneTypeId: string) => void)
 
   beforeEach(() => {
-    onRecordComplete = vi.fn()
+    onRecordComplete = vi.fn() as typeof onRecordComplete
   })
 
   it('should NOT show warning when recording in order', async () => {

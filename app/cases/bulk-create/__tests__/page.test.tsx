@@ -129,7 +129,7 @@ vi.mock('@/components/ui/SearchableDropdown', () => ({
 }))
 
 // Supabase mock
-const mockRpc = vi.fn(() => Promise.resolve({ data: 'new-case-id', error: null }))
+const mockRpc = vi.fn(() => Promise.resolve({ data: 'new-case-id' as string | null, error: null as { message: string } | null }))
 const mockInsert = vi.fn(() => Promise.resolve({ data: null, error: null }))
 const mockSingle = vi.fn(() => Promise.resolve({ data: { id: 'status-scheduled' }, error: null }))
 
