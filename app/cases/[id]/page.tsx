@@ -15,7 +15,7 @@ import { milestoneAudit, staffAudit } from '@/lib/audit-logger'
 import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import CompletedCaseView from '@/components/cases/CompletedCaseView'
-import DeviceRepSection from '@/components/cases/DeviceRepSection'
+import CaseActivitySummary from '@/components/cases/CaseActivitySummary'
 import MilestoneTimelineV2, { type CaseFlagForTimeline } from '@/components/cases/MilestoneTimelineV2'
 import { type DelayTypeOption } from '@/components/cases/AddDelayForm'
 import TeamMember from '@/components/cases/TeamMember'
@@ -1582,10 +1582,15 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               </div>
             </div>
 
-            {/* TRAYS */}
-            <DeviceRepSection caseId={id} supabase={supabase} compact />
-
-            {/* IMPLANTS — moved to Implants tab (Phase 5) */}
+            {/* CASE ACTIVITY SUMMARY */}
+            <CaseActivitySummary
+              completedMilestones={completedMilestones}
+              totalMilestones={totalMilestoneCount}
+              implantsFilled={implantFilledCount}
+              implantTotal={implantCategory === 'hip' || implantCategory === 'total_hip' || implantCategory === 'knee' || implantCategory === 'total_knee' ? 4 : 0}
+              delayCount={caseFlags.filter(f => f.flag_type === 'delay').length}
+              flagCount={caseFlags.filter(f => f.flag_type === 'threshold').length}
+            />
 
             {/* NOTES */}
             {caseData.notes && (
@@ -1595,7 +1600,6 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               </div>
             )}
 
-            {/* FLAGS & DELAYS — moved inline on milestone timeline (Phase 4) */}
           </div>
         </div>
       </div>
