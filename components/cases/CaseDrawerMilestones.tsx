@@ -1,6 +1,6 @@
 // components/cases/CaseDrawerMilestones.tsx
 // Revamped milestones tab with horizontal swimlane timeline, structured 6-column
-// data table, time allocation bar, and comparison toggle.
+// data table with collapsible phase headers, time allocation bar, and comparison toggle.
 
 'use client'
 
@@ -175,7 +175,7 @@ export default function CaseDrawerMilestones({
         comparisonSource={comparisonSource}
       />
 
-      {/* Structured milestone table (replaces card-based detail rows) */}
+      {/* Structured milestone table with phase headers */}
       <MilestoneTable
         intervals={data.intervals}
         comparisonSource={comparisonSource}
@@ -184,6 +184,7 @@ export default function CaseDrawerMilestones({
         missingFlags={missingFlags}
         totalCaseMinutes={data.total_case_minutes}
         totalSurgicalMinutes={data.total_surgical_minutes}
+        phaseGroups={data.phase_groups}
       />
 
       {/* Time allocation bar */}

@@ -113,3 +113,23 @@ export function resolveColorKey(colorKey: string | null): ColorKeyConfig {
   if (!colorKey) return COLOR_KEY_PALETTE[7] // slate
   return COLOR_KEY_MAP[colorKey] ?? COLOR_KEY_PALETTE[7]
 }
+
+/**
+ * Convert a color_key from phase_definitions to a PhaseConfig-compatible object.
+ * Used by analytics components that need PhaseConfig-style styling from DB-stored color keys.
+ */
+export function phaseConfigFromColorKey(
+  colorKey: string | null,
+  label: string,
+  key: PhaseGroup = 'pre_op',
+): PhaseConfig {
+  const resolved = resolveColorKey(colorKey)
+  return {
+    key,
+    label,
+    accentBg: resolved.accentBg,
+    accentText: resolved.accentText,
+    headerBg: resolved.headerBg,
+    borderColor: resolved.borderColor,
+  }
+}

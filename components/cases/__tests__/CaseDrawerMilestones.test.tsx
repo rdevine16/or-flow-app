@@ -18,6 +18,7 @@ let mockReturn: {
   setComparisonSource: (source: 'surgeon' | 'facility') => void
   surgeonCaseCount: number
   facilityCaseCount: number
+  facilityPhaseN: number
   refetch: () => Promise<void>
 }
 
@@ -91,6 +92,7 @@ const FULL_DATA: MilestoneComparisonData = {
     { label: 'Surgical', phase_group: 'surgical', minutes: 55, percentage: 61, color: 'bg-teal-500' },
     { label: 'Post-Op', phase_group: 'post_op', minutes: 15, percentage: 17, color: 'bg-slate-400' },
   ],
+  phase_groups: [],
   missing_milestones: [],
   total_case_minutes: 90,
   total_surgical_minutes: 55,
@@ -119,6 +121,7 @@ beforeEach(() => {
     setComparisonSource: mockSetComparisonSource,
     surgeonCaseCount: 25,
     facilityCaseCount: 150,
+    facilityPhaseN: 150,
     refetch: mockRefetch,
   }
 })
@@ -176,8 +179,8 @@ describe('CaseDrawerMilestones — comparison toggle', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     expect(screen.getByText('Surgeon Median')).toBeDefined()
     expect(screen.getByText('Facility Median')).toBeDefined()
-    expect(screen.getByText('(25)')).toBeDefined()
-    expect(screen.getByText('(150)')).toBeDefined()
+    expect(screen.getByText('(n=25)')).toBeDefined()
+    expect(screen.getByText('(n=150)')).toBeDefined()
   })
 
   it('calls setComparisonSource when toggle clicked', () => {
@@ -284,10 +287,10 @@ describe('CaseDrawerMilestones — surgeon first case (no median data)', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     // Should still render the table and toggle
     expect(screen.getByText('Surgeon Median')).toBeDefined()
-    // Toggle hides count when count === 0, so "(0)" should not appear
-    expect(screen.queryByText('(0)')).toBeNull()
+    // Toggle hides count when count === 0, so "(n=0)" should not appear
+    expect(screen.queryByText('(n=0)')).toBeNull()
     // But facility count should still show
-    expect(screen.getByText('(100)')).toBeDefined()
+    expect(screen.getByText('(n=100)')).toBeDefined()
   })
 })
 

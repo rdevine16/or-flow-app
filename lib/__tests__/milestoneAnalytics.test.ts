@@ -3,12 +3,17 @@ import {
   calculateDeltaSeverity,
   calculateIntervals,
   calculateTimeAllocation,
+  calculatePhaseTimeAllocation,
+  assignMilestonesToPhases,
+  buildPhaseGroups,
   identifyMissingMilestones,
   calculateSwimlaneSections,
   formatMinutes,
   formatDelta,
   type MilestoneMedianRow,
   type CaseMilestoneWithDetails,
+  type PhaseDefinitionWithMilestones,
+  type PhaseMedianRow,
 } from '../utils/milestoneAnalytics'
 
 // ============================================
@@ -408,5 +413,274 @@ describe('formatDelta', () => {
 
   it('returns dash for null', () => {
     expect(formatDelta(null)).toBe('—')
+  })
+})
+
+// ============================================
+// Phase 7: Phase-based time allocation
+// ============================================
+
+function buildPhaseDefinitions(): PhaseDefinitionWithMilestones[] {
+  return [
+    {
+      id: 'phase-1',
+      name: 'pre_op',
+      display_name: 'Pre-Op',
+      display_order: 1,
+      color_key: 'blue',
+      start_milestone_id: 'fm-1',
+      end_milestone_id: 'fm-3',
+      start_milestone: { id: 'fm-1', name: 'patient_in', display_name: 'Patient In', display_order: 1 },
+      end_milestone: { id: 'fm-3', name: 'incision', display_name: 'Incision', display_order: 3 },
+    },
+    {
+      id: 'phase-2',
+      name: 'surgical',
+      display_name: 'Surgical',
+      display_order: 2,
+      color_key: 'green',
+      start_milestone_id: 'fm-3',
+      end_milestone_id: 'fm-4',
+      start_milestone: { id: 'fm-3', name: 'incision', display_name: 'Incision', display_order: 3 },
+      end_milestone: { id: 'fm-4', name: 'closing', display_name: 'Closing', display_order: 4 },
+    },
+    {
+      id: 'phase-3',
+      name: 'post_op',
+      display_name: 'Post-Op',
+      display_order: 3,
+      color_key: 'purple',
+      start_milestone_id: 'fm-4',
+      end_milestone_id: 'fm-5',
+      start_milestone: { id: 'fm-4', name: 'closing', display_name: 'Closing', display_order: 4 },
+      end_milestone: { id: 'fm-5', name: 'patient_out', display_name: 'Patient Out', display_order: 5 },
+    },
+  ]
+}
+
+function buildPhaseMedians(): PhaseMedianRow[] {
+  return [
+    {
+      phase_name: 'pre_op',
+      phase_display_name: 'Pre-Op',
+      color_key: 'blue',
+      display_order: 1,
+      surgeon_median_minutes: 14,
+      surgeon_n: 20,
+      facility_median_minutes: 16,
+      facility_n: 100,
+    },
+    {
+      phase_name: 'surgical',
+      phase_display_name: 'Surgical',
+      color_key: 'green',
+      display_order: 2,
+      surgeon_median_minutes: 38,
+      surgeon_n: 20,
+      facility_median_minutes: 42,
+      facility_n: 100,
+    },
+    {
+      phase_name: 'post_op',
+      phase_display_name: 'Post-Op',
+      color_key: 'purple',
+      display_order: 3,
+      surgeon_median_minutes: 14,
+      surgeon_n: 20,
+      facility_median_minutes: 16,
+      facility_n: 100,
+    },
+  ]
+}
+
+describe('calculatePhaseTimeAllocation', () => {
+  it('computes phase durations from boundary milestone timestamps', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = buildCompleteCaseMilestones()
+
+    const allocation = calculatePhaseTimeAllocation(phases, milestones)
+
+    expect(allocation).toHaveLength(3)
+
+    // Pre-Op: patient_in(0m) → incision(15m) = 15m
+    expect(allocation[0].label).toBe('Pre-Op')
+    expect(allocation[0].minutes).toBe(15)
+
+    // Surgical: incision(15m) → closing(55m) = 40m
+    expect(allocation[1].label).toBe('Surgical')
+    expect(allocation[1].minutes).toBe(40)
+
+    // Post-Op: closing(55m) → patient_out(70m) = 15m
+    expect(allocation[2].label).toBe('Post-Op')
+    expect(allocation[2].minutes).toBe(15)
+  })
+
+  it('percentages sum to ~100%', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = buildCompleteCaseMilestones()
+
+    const allocation = calculatePhaseTimeAllocation(phases, milestones)
+    const totalPct = allocation.reduce((s, a) => s + a.percentage, 0)
+    expect(totalPct).toBeGreaterThanOrEqual(98)
+    expect(totalPct).toBeLessThanOrEqual(102)
+  })
+
+  it('skips phases when boundary milestones not recorded', () => {
+    const phases = buildPhaseDefinitions()
+    // Only patient_in and incision recorded — no closing/patient_out
+    const milestones = [
+      makeCaseMilestone({ name: 'patient_in', order: 1, phase: 'pre_op', facility_milestone_id: 'fm-1', recorded_at: BASE_TIME }),
+      makeCaseMilestone({ name: 'incision', order: 3, phase: 'surgical', facility_milestone_id: 'fm-3', recorded_at: minutesAfter(BASE_TIME, 15) }),
+    ]
+
+    const allocation = calculatePhaseTimeAllocation(phases, milestones)
+
+    // Only Pre-Op has both boundary milestones recorded
+    expect(allocation).toHaveLength(1)
+    expect(allocation[0].label).toBe('Pre-Op')
+    expect(allocation[0].minutes).toBe(15)
+  })
+
+  it('returns empty when no milestones recorded', () => {
+    const phases = buildPhaseDefinitions()
+    const allocation = calculatePhaseTimeAllocation(phases, [])
+    expect(allocation).toHaveLength(0)
+  })
+
+  it('uses correct color from color_key', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = buildCompleteCaseMilestones()
+
+    const allocation = calculatePhaseTimeAllocation(phases, milestones)
+
+    expect(allocation[0].color).toBe('bg-blue-500')
+    expect(allocation[1].color).toBe('bg-green-500')
+    expect(allocation[2].color).toBe('bg-purple-500')
+  })
+})
+
+// ============================================
+// Phase 7: Assign milestones to phases
+// ============================================
+
+describe('assignMilestonesToPhases', () => {
+  it('assigns milestones to correct phases by display_order range', () => {
+    const milestones = buildCompleteCaseMilestones()
+    const intervals = calculateIntervals(milestones, buildCompleteMedians(), 'surgeon')
+    const phases = buildPhaseDefinitions()
+
+    const { grouped, ungrouped } = assignMilestonesToPhases(intervals, phases)
+
+    // Pre-Op: display_order 1 and 2 (patient_in, anes_start) — range [1, 3)
+    const preOp = grouped.get('phase-1') ?? []
+    expect(preOp).toHaveLength(2)
+    expect(preOp[0].milestone_name).toBe('patient_in')
+    expect(preOp[1].milestone_name).toBe('anes_start')
+
+    // Surgical: display_order 3 (incision) — range [3, 4)
+    const surgical = grouped.get('phase-2') ?? []
+    expect(surgical).toHaveLength(1)
+    expect(surgical[0].milestone_name).toBe('incision')
+
+    // Post-Op: display_order 4 and 5 (closing, patient_out) — range [4, 5] (last phase)
+    const postOp = grouped.get('phase-3') ?? []
+    expect(postOp).toHaveLength(2)
+    expect(postOp[0].milestone_name).toBe('closing')
+    expect(postOp[1].milestone_name).toBe('patient_out')
+
+    expect(ungrouped).toHaveLength(0)
+  })
+
+  it('puts milestones outside all ranges into ungrouped', () => {
+    const intervals = calculateIntervals(
+      [makeCaseMilestone({ name: 'extra', order: 99, phase: null, facility_milestone_id: 'fm-99', recorded_at: BASE_TIME })],
+      [],
+      'surgeon',
+    )
+    const phases = buildPhaseDefinitions()
+
+    const { ungrouped } = assignMilestonesToPhases(intervals, phases)
+    expect(ungrouped).toHaveLength(1)
+    expect(ungrouped[0].milestone_name).toBe('extra')
+  })
+})
+
+// ============================================
+// Phase 7: Build phase groups
+// ============================================
+
+describe('buildPhaseGroups', () => {
+  it('combines phase definitions, intervals, and medians into PhaseGroupData', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = buildCompleteCaseMilestones()
+    const medians = buildCompleteMedians()
+    const phaseMedians = buildPhaseMedians()
+
+    const intervals = calculateIntervals(milestones, medians, 'surgeon')
+    const groups = buildPhaseGroups(phases, intervals, milestones, phaseMedians, 'surgeon')
+
+    expect(groups).toHaveLength(3)
+
+    // Pre-Op phase
+    expect(groups[0].phaseDisplayName).toBe('Pre-Op')
+    expect(groups[0].durationMinutes).toBe(15) // patient_in(0) → incision(15)
+    expect(groups[0].medianMinutes).toBe(14) // surgeon median
+    expect(groups[0].surgeonN).toBe(20)
+    expect(groups[0].facilityN).toBe(100)
+    expect(groups[0].intervals).toHaveLength(2) // patient_in, anes_start
+
+    // Surgical phase
+    expect(groups[1].phaseDisplayName).toBe('Surgical')
+    expect(groups[1].durationMinutes).toBe(40) // incision(15) → closing(55)
+    expect(groups[1].medianMinutes).toBe(38) // surgeon median
+
+    // Post-Op phase
+    expect(groups[2].phaseDisplayName).toBe('Post-Op')
+    expect(groups[2].durationMinutes).toBe(15) // closing(55) → patient_out(70)
+  })
+
+  it('uses facility median when comparisonSource is facility', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = buildCompleteCaseMilestones()
+    const phaseMedians = buildPhaseMedians()
+    const intervals = calculateIntervals(milestones, buildCompleteMedians(), 'facility')
+
+    const groups = buildPhaseGroups(phases, intervals, milestones, phaseMedians, 'facility')
+
+    expect(groups[0].medianMinutes).toBe(16) // facility median for pre_op
+    expect(groups[1].medianMinutes).toBe(42) // facility median for surgical
+  })
+
+  it('returns null duration when boundary milestones not recorded', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = [
+      makeCaseMilestone({ name: 'patient_in', order: 1, phase: 'pre_op', facility_milestone_id: 'fm-1', recorded_at: BASE_TIME }),
+      // incision not recorded
+      makeCaseMilestone({ name: 'incision', order: 3, phase: 'surgical', facility_milestone_id: 'fm-3', recorded_at: null }),
+    ]
+    const intervals = calculateIntervals(milestones, [], 'surgeon')
+
+    const groups = buildPhaseGroups(phases, intervals, milestones, [], 'surgeon')
+
+    // Pre-Op duration null because end milestone (incision) not recorded
+    expect(groups[0].durationMinutes).toBeNull()
+  })
+
+  it('handles empty phase medians gracefully', () => {
+    const phases = buildPhaseDefinitions()
+    const milestones = buildCompleteCaseMilestones()
+    const intervals = calculateIntervals(milestones, buildCompleteMedians(), 'surgeon')
+
+    const groups = buildPhaseGroups(phases, intervals, milestones, [], 'surgeon')
+
+    expect(groups).toHaveLength(3)
+    // All medians should be null since no phase medians provided
+    groups.forEach((g) => {
+      expect(g.medianMinutes).toBeNull()
+      expect(g.surgeonN).toBe(0)
+      expect(g.facilityN).toBe(0)
+    })
+    // But durations should still be computed from case milestones
+    expect(groups[0].durationMinutes).toBe(15)
   })
 })
