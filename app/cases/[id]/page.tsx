@@ -1043,7 +1043,56 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   if (loading) {
     return (
       <DashboardLayout>
-        <PageLoader message="Loading case..." />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_330px] gap-6">
+            {/* Main content skeleton */}
+            <div className="space-y-4">
+              {/* Header skeleton */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded skeleton-pulse" />
+                  <div className="h-6 w-48 rounded skeleton-pulse" />
+                  <div className="h-5 w-20 rounded-full skeleton-pulse" />
+                </div>
+                <div className="flex items-center gap-2 ml-8">
+                  <div className="h-5 w-16 rounded skeleton-pulse" />
+                  <div className="h-4 w-12 rounded skeleton-pulse" />
+                  <div className="h-4 w-20 rounded skeleton-pulse" />
+                  <div className="h-4 w-16 rounded skeleton-pulse" />
+                </div>
+              </div>
+              {/* Timer chips skeleton */}
+              <div className="flex gap-3">
+                <div className="flex-1 h-24 rounded-2xl skeleton-pulse min-w-[170px]" />
+                <div className="flex-1 h-24 rounded-2xl skeleton-pulse min-w-[170px]" />
+                <div className="h-24 w-[120px] rounded-2xl skeleton-pulse" />
+              </div>
+              {/* Tab bar skeleton */}
+              <div className="flex gap-1">
+                <div className="h-8 w-24 rounded-lg skeleton-pulse" />
+                <div className="h-8 w-20 rounded-lg skeleton-pulse" />
+              </div>
+              {/* Timeline skeleton */}
+              <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="flex gap-4">
+                    <div className="w-7 h-7 rounded-full skeleton-pulse flex-shrink-0" />
+                    <div className="flex-1 space-y-1">
+                      <div className="h-4 w-32 rounded skeleton-pulse" />
+                      {i < 2 && <div className="h-3 w-20 rounded skeleton-pulse" />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Sidebar skeleton */}
+            <div className="space-y-4">
+              <div className="h-32 rounded-[14px] skeleton-pulse" />
+              <div className="h-24 rounded-[14px] skeleton-pulse" />
+              <div className="h-40 rounded-[14px] skeleton-pulse" />
+            </div>
+          </div>
+        </div>
       </DashboardLayout>
     )
   }
@@ -1215,11 +1264,20 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
 
             {/* TAB SWITCHER — pill-style tabs outside the content card */}
-            <div className="flex items-center gap-0.5" role="tablist">
+            <div className="flex items-center gap-0.5" role="tablist" aria-label="Case detail tabs">
               <button
                 role="tab"
+                id="tab-milestones"
                 aria-selected={activeTab === 'milestones'}
+                aria-controls="tabpanel-milestones"
+                tabIndex={activeTab === 'milestones' ? 0 : -1}
                 onClick={() => setActiveTab('milestones')}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    setActiveTab(activeTab === 'milestones' ? 'implants' : 'milestones')
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-4 py-[7px] text-[13px] rounded-[9px] transition-all ${
                   activeTab === 'milestones'
                     ? 'font-bold text-slate-900 bg-white border border-slate-200/50 shadow-sm'
@@ -1230,8 +1288,17 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               </button>
               <button
                 role="tab"
+                id="tab-implants"
                 aria-selected={activeTab === 'implants'}
+                aria-controls="tabpanel-implants"
+                tabIndex={activeTab === 'implants' ? 0 : -1}
                 onClick={() => setActiveTab('implants')}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    setActiveTab(activeTab === 'milestones' ? 'implants' : 'milestones')
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-4 py-[7px] text-[13px] rounded-[9px] transition-all ${
                   activeTab === 'implants'
                     ? 'font-bold text-slate-900 bg-white border border-slate-200/50 shadow-sm'
@@ -1249,7 +1316,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
             {/* TAB CONTENT — separate content card */}
             {activeTab === 'milestones' && (
-              <div role="tabpanel" className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-5">
+              <div role="tabpanel" id="tabpanel-milestones" aria-labelledby="tab-milestones" className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-5 animate-in">
                 {milestoneTypes.length === 0 ? (
                   <div className="text-center py-12 text-slate-500">
                     <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
@@ -1298,7 +1365,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             )}
 
             {activeTab === 'implants' && (
-              <div role="tabpanel" className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-5">
+              <div role="tabpanel" id="tabpanel-implants" aria-labelledby="tab-implants" className="bg-white rounded-2xl border border-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.02)] px-5 py-5 animate-in">
                 {!caseData.procedure_type_id ? (
                   <div className="text-center py-12 text-slate-500">
                     <p className="text-sm font-medium">No procedure assigned</p>
@@ -1323,7 +1390,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           </div>
 
           {/* ============ SIDEBAR ============ */}
-          <div className="bg-white border-l border-slate-100 -mr-4 sm:-mr-6 lg:-mr-8 pl-5 pr-5 py-5 space-y-4 lg:space-y-5">
+          <div className="bg-white lg:border-l border-slate-100 lg:-mr-8 pl-5 pr-5 py-5 space-y-4 lg:space-y-5">
 
             {/* FLIP ROOM — surgeon's next case in a different room */}
             {flipRoom && (

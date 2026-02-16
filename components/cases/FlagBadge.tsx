@@ -24,10 +24,12 @@ export default function FlagBadge({ severity, label, detail }: FlagBadgeProps) {
 
   return (
     <span
+      role="status"
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold leading-tight ${sev}`}
       title={detail || undefined}
+      aria-label={`${severity} flag: ${label}${detail ? ` — ${detail}` : ''}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} aria-hidden="true" />
       <span className="truncate max-w-[120px]">{label}</span>
     </span>
   )

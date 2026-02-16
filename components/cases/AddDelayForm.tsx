@@ -76,6 +76,8 @@ export default function AddDelayForm({
   return (
     <div
       ref={ref}
+      role="dialog"
+      aria-label={`Log delay at ${milestoneName}`}
       className="absolute left-0 top-full mt-1.5 z-50 bg-white rounded-[14px] border border-slate-200/50 shadow-[0_12px_40px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.04)] p-3.5 space-y-3 w-[280px]"
     >
       {/* Header */}
@@ -116,6 +118,7 @@ export default function AddDelayForm({
           onChange={e => setDuration(e.target.value)}
           placeholder="Min"
           min={0}
+          aria-label="Delay duration in minutes"
           className="w-[60px] text-sm font-mono border border-slate-200/50 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
         />
         <input
@@ -123,6 +126,7 @@ export default function AddDelayForm({
           value={note}
           onChange={e => setNote(e.target.value)}
           placeholder="Note (optional)"
+          aria-label="Delay note"
           className="flex-1 text-sm border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
           onKeyDown={e => {
             if (e.key === 'Enter' && selectedTypeId) handleSubmit()

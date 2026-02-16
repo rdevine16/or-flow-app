@@ -19,13 +19,15 @@ export default function DelayNode({
   canRemove,
   onRemove,
 }: DelayNodeProps) {
+  const ariaLabel = `Delay: ${delayTypeName}${durationMinutes !== null ? `, ${durationMinutes} minutes` : ''}${note ? `, note: ${note}` : ''}`
+
   return (
-    <div className="flex gap-3 relative group">
+    <div className="flex gap-3 relative group delay-slide-in" role="listitem" aria-label={ariaLabel}>
       {/* Left column: amber node + dashed connecting lines */}
       <div className="flex flex-col items-center w-8 flex-shrink-0">
         <div className="w-0.5 h-2 border-l-2 border-dashed border-amber-300" />
         <div className="w-6 h-6 rounded-full bg-amber-100 border-2 border-dashed border-amber-400 flex items-center justify-center flex-shrink-0 z-10">
-          <Clock className="w-3 h-3 text-amber-600" />
+          <Clock className="w-3 h-3 text-amber-600" aria-hidden="true" />
         </div>
         <div className="w-0.5 flex-1 min-h-[8px] border-l-2 border-dashed border-amber-300" />
       </div>
@@ -50,8 +52,9 @@ export default function DelayNode({
             onClick={() => onRemove(id)}
             className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-all flex-shrink-0"
             title="Remove delay"
+            aria-label={`Remove ${delayTypeName} delay`}
           >
-            <X className="w-3 h-3" />
+            <X className="w-3 h-3" aria-hidden="true" />
           </button>
         )}
       </div>

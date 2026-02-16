@@ -37,14 +37,21 @@ export function TimerChip({ label, formattedTime, medianFormatted, isRunning, co
   const barColorClass = isOver ? 'bg-red-500' : isWarning ? 'bg-amber-500' : cfg.barClass
   const barWidth = ratio !== null ? Math.min(ratio * 100, 100) : 0
 
+  const ariaLabel = medianFormatted
+    ? `${label}: ${formattedTime}, median ${medianFormatted}`
+    : `${label}: ${formattedTime}`
+
   return (
-    <div className={`flex flex-col gap-1.5 px-6 py-4 ${cfg.bg} border ${cfg.border} rounded-2xl flex-1 min-w-[170px]`}>
+    <div
+      className={`flex flex-col gap-1.5 px-6 py-4 ${cfg.bg} border ${cfg.border} rounded-2xl flex-1 min-w-[170px]`}
+      aria-label={ariaLabel}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-400">
           {label}
         </span>
         {isRunning && (
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" />
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse" aria-label="Timer running" />
         )}
       </div>
       <div className="flex items-baseline gap-1.5">
@@ -62,7 +69,14 @@ export function TimerChip({ label, formattedTime, medianFormatted, isRunning, co
         )}
       </div>
       {ratio !== null && (
-        <div className="w-full h-[3px] rounded-sm bg-slate-500/[0.08] overflow-hidden">
+        <div
+          className="w-full h-[3px] rounded-sm bg-slate-500/[0.08] overflow-hidden"
+          role="progressbar"
+          aria-valuenow={Math.round(barWidth)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${label} progress: ${Math.round(barWidth)}%`}
+        >
           <div
             className={`h-full rounded-sm ${barColorClass} transition-[width] duration-1000 ease-linear`}
             style={{ width: `${barWidth}%` }}
@@ -82,7 +96,14 @@ export function ProgressChip({ completedCount, totalCount }: ProgressChipProps) 
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   return (
-    <div className="flex flex-col justify-center px-6 py-4 bg-emerald-500/[0.04] border border-emerald-500/[0.08] rounded-2xl min-w-[120px]">
+    <div
+      className="flex flex-col justify-center px-6 py-4 bg-emerald-500/[0.04] border border-emerald-500/[0.08] rounded-2xl min-w-[120px]"
+      role="progressbar"
+      aria-valuenow={completedCount}
+      aria-valuemin={0}
+      aria-valuemax={totalCount}
+      aria-label={`Progress: ${completedCount} of ${totalCount} milestones completed (${progress}%)`}
+    >
       <span className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-400 mb-0.5">
         Progress
       </span>

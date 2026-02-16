@@ -81,11 +81,14 @@ function getNodeState(
 // TIMELINE NODE — SVG circle for each milestone
 // ============================================================================
 
-function TimelineNode({ state }: { state: NodeState }) {
+function TimelineNode({ state, milestoneName }: { state: NodeState; milestoneName?: string }) {
+  const stateLabel = state === 'completed' ? 'completed' : state === 'next' ? 'next, ready to record' : 'pending'
+  const ariaLabel = milestoneName ? `${milestoneName}: ${stateLabel}` : stateLabel
+
   if (state === 'completed') {
     return (
-      <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm shadow-emerald-200 flex-shrink-0 z-10">
-        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shadow-sm shadow-emerald-200 flex-shrink-0 z-10" aria-label={ariaLabel}>
+        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
         </svg>
       </div>
@@ -94,7 +97,7 @@ function TimelineNode({ state }: { state: NodeState }) {
 
   if (state === 'next') {
     return (
-      <div className="w-[34px] h-[34px] rounded-full bg-indigo-500 flex items-center justify-center shadow-[0_0_0_5px_rgba(99,102,241,0.12),0_4px_12px_rgba(99,102,241,0.2)] flex-shrink-0 z-10 -ml-[3px]">
+      <div className="w-[34px] h-[34px] rounded-full bg-indigo-500 flex items-center justify-center shadow-[0_0_0_5px_rgba(99,102,241,0.12),0_4px_12px_rgba(99,102,241,0.2)] flex-shrink-0 z-10 -ml-[3px]" aria-label={ariaLabel}>
         <div className="relative">
           <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse" />
           <div className="absolute inset-0 w-2.5 h-2.5 bg-white rounded-full animate-ping opacity-30" />
@@ -105,7 +108,7 @@ function TimelineNode({ state }: { state: NodeState }) {
 
   // pending
   return (
-    <div className="w-7 h-7 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center flex-shrink-0 z-10 bg-white">
+    <div className="w-7 h-7 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center flex-shrink-0 z-10 bg-white" aria-label={ariaLabel}>
       <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
     </div>
   )
@@ -196,7 +199,7 @@ export default function MilestoneTimelineV2({
             <div className="flex gap-4 relative group">
               {/* Left column: node + connecting line */}
               <div className="flex flex-col items-center w-10 flex-shrink-0">
-                <TimelineNode state={state} />
+                <TimelineNode state={state} milestoneName={mt.display_name} />
                 {(!isLast || delayFlags.length > 0) && (
                   <div className={`w-0.5 flex-1 min-h-[16px] ${isLast && delayFlags.length > 0 ? 'bg-slate-200/40' : lineClass}`} />
                 )}
@@ -215,13 +218,14 @@ export default function MilestoneTimelineV2({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span
-                        className={`text-[13.5px] leading-tight ${
+                        className={`text-[13.5px] leading-tight truncate max-w-[200px] ${
                           state === 'completed'
                             ? 'font-medium text-slate-700'
                             : state === 'next'
                               ? 'font-bold text-indigo-950'
                               : 'font-normal text-slate-400'
                         }`}
+                        title={mt.display_name}
                       >
                         {mt.display_name}
                       </span>
@@ -265,6 +269,8 @@ export default function MilestoneTimelineV2({
                               : 'opacity-0 group-hover:opacity-100 text-slate-300 hover:text-amber-600 hover:bg-amber-50'
                         }`}
                         title={`Log delay at ${mt.display_name}`}
+                        aria-label={`Log delay at ${mt.display_name}`}
+                        aria-expanded={showDelayForm}
                       >
                         <Clock className="w-3.5 h-3.5" />
                       </button>
@@ -277,6 +283,7 @@ export default function MilestoneTimelineV2({
                         disabled={loading}
                         className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all disabled:opacity-50"
                         title={`Undo ${mt.display_name}`}
+                        aria-label={`Undo ${mt.display_name}`}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
@@ -289,6 +296,7 @@ export default function MilestoneTimelineV2({
                       <button
                         onClick={() => onRecord(mt.id)}
                         disabled={loading}
+                        aria-label={`Record ${mt.display_name}`}
                         className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all active:scale-[0.97] ${
                           loading
                             ? 'bg-slate-300 text-white cursor-not-allowed'
@@ -304,6 +312,7 @@ export default function MilestoneTimelineV2({
                       <button
                         onClick={() => onRecord(mt.id)}
                         disabled={loading}
+                        aria-label={`Record ${mt.display_name}`}
                         className="opacity-0 group-hover:opacity-100 px-3 py-1.5 text-xs font-semibold text-slate-500 border border-slate-200 rounded-lg hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/50 transition-all disabled:opacity-50"
                       >
                         {loading ? 'Recording...' : 'Record'}
