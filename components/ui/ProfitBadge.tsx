@@ -26,6 +26,7 @@ export function ProfitBadge({ rating }: ProfitBadgeProps) {
   return (
     <span
       className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded ring-1 ring-inset ${BADGE_STYLES[rating]}`}
+      aria-label={`Margin rated ${rating}`}
     >
       {BADGE_LABELS[rating]}
     </span>

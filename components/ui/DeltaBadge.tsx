@@ -55,15 +55,26 @@ export function DeltaBadge({
   const style = SEVERITY_STYLES[resolvedSeverity] ?? SEVERITY_STYLES.neutral
 
   const sign = delta > 0 ? '+' : delta < 0 ? '-' : ''
-  const arrow = delta > 0 ? '↑' : delta < 0 ? '↓' : '→'
+  const arrow = delta > 0 ? '\u2191' : delta < 0 ? '\u2193' : '\u2192'
   const formatted = formatDeltaValue(delta, format)
+
+  // Build descriptive screen reader text
+  const directionWord = (() => {
+    if (resolvedSeverity === 'faster') return 'faster'
+    if (resolvedSeverity === 'slower' || resolvedSeverity === 'critical') return 'slower'
+    if (resolvedSeverity === 'on-pace') return 'on pace'
+    return delta > 0 ? 'higher' : delta < 0 ? 'lower' : 'on pace'
+  })()
+  const srText = delta === 0
+    ? 'on pace'
+    : `${formatted} ${directionWord}`
 
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md ring-1 ring-inset ${style}`}
-      aria-label={`${sign}${formatted}, ${resolvedSeverity}`}
+      aria-label={srText}
     >
-      {arrow} {sign}{formatted}
+      <span aria-hidden="true">{arrow}</span> {sign}{formatted}
     </span>
   )
 }

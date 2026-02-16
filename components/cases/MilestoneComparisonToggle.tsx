@@ -27,7 +27,7 @@ export default function MilestoneComparisonToggle({
   }
 
   return (
-    <div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="tablist" aria-label="Comparison benchmark">
+    <div className="inline-flex rounded-lg bg-slate-100 p-0.5" role="radiogroup" aria-label="Comparison benchmark">
       {OPTIONS.map((opt) => {
         const isActive = comparisonSource === opt.key
         const count = counts[opt.key]
@@ -35,8 +35,8 @@ export default function MilestoneComparisonToggle({
         return (
           <button
             key={opt.key}
-            role="tab"
-            aria-selected={isActive}
+            role="radio"
+            aria-checked={isActive}
             onClick={() => onSourceChange(opt.key)}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
               isActive

@@ -117,21 +117,34 @@ export default function MilestoneTimeline({
           {sections.map((section, idx) => {
             const position = nodePositions[idx]
             const state = nodeStates[idx]
+            const iv = intervals[idx]
+            const nodeAriaLabel = (() => {
+              const timeStr = iv.recorded_at
+                ? `recorded at ${new Date(iv.recorded_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+                : state === 'missing' ? 'not recorded' : 'pending'
+              const intervalStr = idx > 0 && iv.interval_minutes != null
+                ? `, ${Math.round(iv.interval_minutes)} minutes from previous`
+                : ''
+              return `${section.milestone_name} milestone, ${timeStr}${intervalStr}`
+            })()
 
             return (
               <div
                 key={section.facility_milestone_id}
                 className="absolute -translate-x-1/2"
                 style={{ left: `${position}%` }}
+                role="img"
+                aria-label={nodeAriaLabel}
               >
                 {/* Node */}
                 {state === 'missing' ? (
-                  <div className="w-4 h-4 -mt-1 flex items-center justify-center">
+                  <div className="w-4 h-4 -mt-1 flex items-center justify-center" aria-hidden="true">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                   </div>
                 ) : (
                   <div
                     className={`w-3 h-3 -mt-0.5 rounded-full border-2 ${NODE_STYLES[state]}`}
+                    aria-hidden="true"
                   />
                 )}
 

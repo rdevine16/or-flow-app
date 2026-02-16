@@ -36,6 +36,7 @@ export default function CaseDrawerMilestones({
   surgeonId,
   procedureTypeId,
   facilityId,
+  caseStatus,
 }: CaseDrawerMilestonesProps) {
   const {
     data,
@@ -67,18 +68,50 @@ export default function CaseDrawerMilestones({
   if (loading && !data) {
     return (
       <div className="space-y-4 animate-pulse">
+        {/* Toggle bar + counter */}
         <div className="flex items-center justify-between">
-          <div className="h-4 bg-slate-200 rounded w-1/4" />
-          <div className="h-6 bg-slate-100 rounded w-1/3" />
+          <div className="h-4 bg-slate-200 rounded w-36" />
+          <div className="h-7 bg-slate-100 rounded-lg w-48" />
         </div>
-        <div className="h-8 bg-slate-100 rounded-full" />
+        {/* Timeline bar with node circles */}
+        <div className="relative pt-6 pb-4">
+          <div className="flex items-center gap-0.5 w-full">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="flex-1 flex items-center">
+                <div className="w-3 h-3 rounded-full bg-slate-200 flex-shrink-0" />
+                {i < 6 && <div className="flex-1 h-2 bg-slate-100 rounded-full mx-0.5" />}
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Table: header + 8 shimmer rows */}
         <div className="border border-slate-200 rounded-lg overflow-hidden">
-          <div className="h-8 bg-slate-50" />
+          <div className="grid grid-cols-[28px_1fr_72px_60px_68px_80px] gap-2 px-3 py-2 bg-slate-50">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-3 bg-slate-200 rounded" />
+            ))}
+          </div>
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="h-10 bg-white border-t border-slate-100" />
+            <div key={i} className="grid grid-cols-[28px_1fr_72px_60px_68px_80px] gap-2 px-3 py-2.5 border-t border-slate-100">
+              <div className="w-4 h-4 rounded-full bg-slate-100" />
+              <div className="h-4 bg-slate-100 rounded w-3/4" />
+              <div className="h-4 bg-slate-100 rounded w-2/3 ml-auto" />
+              <div className="h-4 bg-slate-100 rounded w-1/2 ml-auto" />
+              <div className="h-4 bg-slate-100 rounded w-1/2 ml-auto" />
+              <div className="h-5 bg-slate-100 rounded w-full ml-auto" />
+            </div>
           ))}
         </div>
-        <div className="h-6 bg-slate-100 rounded" />
+        {/* Allocation bar */}
+        <div className="space-y-2">
+          <div className="h-3 bg-slate-100 rounded w-36" />
+          <div className="h-6 bg-slate-100 rounded-md" />
+          <div className="flex gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-3 bg-slate-100 rounded w-16" />
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -93,16 +126,21 @@ export default function CaseDrawerMilestones({
     )
   }
 
-  // Empty state — no milestones configured
+  // Empty state — differentiate "not started" vs "not configured"
   if (!data || data.intervals.length === 0) {
+    const isScheduled = caseStatus === 'scheduled'
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
           <Clock className="w-6 h-6 text-slate-400" />
         </div>
-        <p className="text-sm font-medium text-slate-900">No milestones</p>
+        <p className="text-sm font-medium text-slate-900">
+          {isScheduled ? 'Case not started' : 'No milestones'}
+        </p>
         <p className="text-xs text-slate-500 mt-1">
-          No milestones are configured for this procedure
+          {isScheduled
+            ? 'Milestone data will appear once the case begins'
+            : 'No milestones are configured for this procedure'}
         </p>
       </div>
     )

@@ -28,12 +28,13 @@ export default function TimeAllocationBar({
       </span>
 
       {/* Stacked bar */}
-      <div className="flex h-6 w-full rounded-md overflow-hidden">
+      <div className="flex h-6 w-full rounded-md overflow-hidden" role="img" aria-label="Time allocation breakdown">
         {allocations.map((alloc) => (
           <div
             key={alloc.phase_group}
             className={`${alloc.color} relative group transition-opacity hover:opacity-90`}
             style={{ width: `${alloc.percentage}%` }}
+            aria-label={`${alloc.label}: ${formatMinutes(alloc.minutes)}, ${alloc.percentage}% of total`}
           >
             {/* Label — only show if segment is wide enough */}
             {alloc.percentage >= 15 && (

@@ -56,8 +56,8 @@ function isCompletedStatus(status: string): boolean {
 function FinancialsSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
-      {/* Hero skeleton: 2 circles + 3 rectangles */}
-      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg">
+      {/* Hero skeleton: 2 gauge circles + profit/revenue/costs rectangles */}
+      <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
         <div className="w-12 h-12 rounded-full bg-slate-200" />
         <div className="w-12 h-12 rounded-full bg-slate-200" />
         <div className="flex-1 space-y-2">
@@ -69,24 +69,58 @@ function FinancialsSkeleton() {
           <div className="h-4 bg-slate-200 rounded w-16" />
         </div>
       </div>
-      {/* Table skeleton */}
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex justify-between py-3">
-          <div className="h-4 bg-slate-100 rounded w-1/4" />
-          <div className="h-4 bg-slate-100 rounded w-1/5" />
+
+      {/* Projected vs Actual table skeleton */}
+      <div>
+        <div className="h-3 bg-slate-100 rounded w-28 mb-2" />
+        <div className="rounded-lg border border-slate-200 overflow-hidden">
+          <div className="h-8 bg-slate-50" />
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="grid grid-cols-4 gap-2 px-3 py-2.5 border-t border-slate-100">
+              <div className="h-4 bg-slate-100 rounded w-3/4" />
+              <div className="h-4 bg-slate-100 rounded w-2/3 ml-auto" />
+              <div className="h-4 bg-slate-100 rounded w-2/3 ml-auto" />
+              <div className="h-4 bg-slate-100 rounded w-1/2 ml-auto" />
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
+
+      {/* Cost breakdown skeleton */}
+      <div>
+        <div className="h-3 bg-slate-100 rounded w-24 mb-2" />
+        <div className="rounded-lg border border-slate-200 overflow-hidden">
+          <div className="h-8 bg-slate-50" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="grid grid-cols-3 gap-2 px-3 py-2.5 border-t border-slate-100">
+              <div className="h-4 bg-slate-100 rounded w-3/4" />
+              <div className="h-4 bg-slate-100 rounded w-1/2 ml-auto" />
+              <div className="h-4 bg-slate-100 rounded w-1/3 ml-auto" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Forecast toggle skeleton */}
+      <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-200">
+        <div className="w-8 h-8 rounded-full bg-slate-200" />
+        <div className="flex-1 space-y-1">
+          <div className="h-4 bg-slate-100 rounded w-1/3" />
+        </div>
+        <div className="w-4 h-4 bg-slate-100 rounded" />
+      </div>
     </div>
   )
 }
 
-function NoDataMessage({ message }: { message: string }) {
+function NoDataMessage({ message, hint }: { message: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
       <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mb-3">
         <DollarSign className="w-5 h-5 text-slate-400" />
       </div>
-      <p className="text-sm text-slate-500">{message}</p>
+      <p className="text-sm font-medium text-slate-700">{message}</p>
+      {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
     </div>
   )
 }
@@ -111,7 +145,7 @@ function HeroRow({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-4">
         {/* Two margin gauges */}
         <div className="flex items-center gap-3 flex-shrink-0">
           <MarginGauge
@@ -129,7 +163,7 @@ function HeroRow({
         </div>
 
         {/* Profit + badge */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-[140px]">
           <div className="flex items-center gap-2">
             <span className={`text-lg font-bold ${
               (hero.profit ?? 0) >= 0 ? 'text-slate-900' : 'text-red-700'
@@ -393,6 +427,7 @@ function FullDayForecastSection({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors text-left"
         aria-expanded={expanded}
+        aria-label={`Full Day Forecast for ${forecast.surgeon_name}, ${forecast.cases.length} cases`}
       >
         {/* Surgeon avatar */}
         <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -413,76 +448,81 @@ function FullDayForecastSection({
         )}
       </button>
 
-      {expanded && (
-        <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden">
-          {/* Column headers */}
-          <div className="grid grid-cols-[72px_1fr_76px_72px_56px] gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200">
-            <span className="text-[10px] font-medium text-slate-400 uppercase">Case #</span>
-            <span className="text-[10px] font-medium text-slate-400 uppercase">Procedure</span>
-            <span className="text-[10px] font-medium text-slate-400 uppercase">Status</span>
-            <span className="text-[10px] font-medium text-slate-400 uppercase text-right">Profit</span>
-            <span className="text-[10px] font-medium text-slate-400 uppercase text-right">Margin</span>
-          </div>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+        style={{ gridTemplateRows: expanded ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-2 rounded-lg border border-slate-200 overflow-hidden">
+            {/* Column headers */}
+            <div className="grid grid-cols-[72px_1fr_76px_72px_56px] gap-1 px-3 py-2 bg-slate-50 border-b border-slate-200">
+              <span className="text-[10px] font-medium text-slate-400 uppercase">Case #</span>
+              <span className="text-[10px] font-medium text-slate-400 uppercase">Procedure</span>
+              <span className="text-[10px] font-medium text-slate-400 uppercase">Status</span>
+              <span className="text-[10px] font-medium text-slate-400 uppercase text-right">Profit</span>
+              <span className="text-[10px] font-medium text-slate-400 uppercase text-right">Margin</span>
+            </div>
 
-          {/* Case rows */}
-          <div className="divide-y divide-slate-100">
-            {forecast.cases.map((c) => {
-              const isNonCompleted = c.status !== 'completed'
-              return (
-                <div
-                  key={c.case_id}
-                  className="grid grid-cols-[72px_1fr_76px_72px_56px] gap-1 px-3 py-2 items-center"
-                >
-                  <span className="text-xs font-medium text-slate-700 truncate">
-                    {c.case_number}
-                  </span>
-                  <span className="text-xs text-slate-600 truncate">
-                    {c.procedure_name}
-                  </span>
-                  <span>
-                    <StatusPill status={c.status} />
-                  </span>
-                  <span className={`text-xs font-medium text-right ${
-                    isNonCompleted ? 'italic text-slate-400' : (
-                      (c.profit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'
-                    )
-                  }`}>
-                    {c.profit != null ? formatCurrency(c.profit) : (
-                      <span className="italic text-slate-400">TBD</span>
-                    )}
-                  </span>
-                  <span className={`text-xs text-right ${
-                    isNonCompleted ? 'italic text-slate-400' : 'text-slate-600'
-                  }`}>
-                    {c.margin_pct != null ? `${Math.round(c.margin_pct)}%` : '\u2014'}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+            {/* Case rows */}
+            <div className="divide-y divide-slate-100">
+              {forecast.cases.map((c) => {
+                const isNonCompleted = c.status !== 'completed'
+                return (
+                  <div
+                    key={c.case_id}
+                    className="grid grid-cols-[72px_1fr_76px_72px_56px] gap-1 px-3 py-2 items-center"
+                  >
+                    <span className="text-xs font-medium text-slate-700 truncate">
+                      {c.case_number}
+                    </span>
+                    <span className="text-xs text-slate-600 truncate">
+                      {c.procedure_name}
+                    </span>
+                    <span>
+                      <StatusPill status={c.status} />
+                    </span>
+                    <span className={`text-xs font-medium text-right ${
+                      isNonCompleted ? 'italic text-slate-400' : (
+                        (c.profit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'
+                      )
+                    }`}>
+                      {c.profit != null ? formatCurrency(c.profit) : (
+                        <span className="italic text-slate-400">TBD</span>
+                      )}
+                    </span>
+                    <span className={`text-xs text-right ${
+                      isNonCompleted ? 'italic text-slate-400' : 'text-slate-600'
+                    }`}>
+                      {c.margin_pct != null ? `${Math.round(c.margin_pct)}%` : '\u2014'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
 
-          {/* Footer totals */}
-          <div className="border-t-2 border-slate-200 bg-slate-50/50 px-3 py-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500">
-                Day Total ({completedCount} of {forecast.cases.length} completed)
-              </span>
-              <div className="flex items-center gap-3">
-                <span className={`text-sm font-bold ${
-                  forecast.total_profit >= 0 ? 'text-green-700' : 'text-red-700'
-                }`}>
-                  {formatCurrency(forecast.total_profit)}
+            {/* Footer totals */}
+            <div className="border-t-2 border-slate-200 bg-slate-50/50 px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500">
+                  Day Total ({completedCount} of {forecast.cases.length} completed)
                 </span>
-                <MarginGauge
-                  percentage={forecast.total_margin}
-                  size="sm"
-                  rating={getMarginRatingSimple(forecast.total_margin)}
-                />
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-bold ${
+                    forecast.total_profit >= 0 ? 'text-green-700' : 'text-red-700'
+                  }`}>
+                    {formatCurrency(forecast.total_profit)}
+                  </span>
+                  <MarginGauge
+                    percentage={forecast.total_margin}
+                    size="sm"
+                    rating={getMarginRatingSimple(forecast.total_margin)}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -599,7 +639,12 @@ export default function CaseDrawerFinancials({
   }
 
   if (!data) {
-    return <NoDataMessage message="No financial data available for this case" />
+    return (
+      <NoDataMessage
+        message="No financial data available"
+        hint="Revenue and cost data will appear once configured for this procedure"
+      />
+    )
   }
 
   const isProjected = !isCompletedStatus(displayStatus)

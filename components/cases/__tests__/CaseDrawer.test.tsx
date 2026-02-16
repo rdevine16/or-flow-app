@@ -380,7 +380,7 @@ describe('CaseDrawer — tab switching', () => {
     )
     await user.click(screen.getByText('Financials'))
     // With null projection, shows "no data" message
-    expect(screen.getByText('No financial data available for this case')).toBeDefined()
+    expect(screen.getByText('No financial data available')).toBeDefined()
   })
 
   it('switches back to Flags tab', async () => {
@@ -467,7 +467,7 @@ describe('CaseDrawer — tab switching', () => {
 
     // Switch to Financials tab
     await user.click(screen.getByText('Financials'))
-    expect(screen.getByText('No financial data available for this case')).toBeDefined()
+    expect(screen.getByText('No financial data available')).toBeDefined()
 
     // Switch to different case
     const case456 = {

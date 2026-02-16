@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -125,11 +125,12 @@ export default function CaseDrawer({
   const { can } = useUser()
   const { caseDetail, loading, error } = useCaseDrawer(caseId)
 
-  // Reset to default tab when switching cases (render-time, no extra cycle)
-  if (caseId !== prevCaseIdRef.current) {
+  // Reset to default tab when switching cases
+  useEffect(() => {
     prevCaseIdRef.current = caseId
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab('flags')
-  }
+  }, [caseId])
 
   // Whether this case has DQ issues (drives conditional Validation tab)
   const hasValidationIssues = !!(caseId && dqCaseIds?.has(caseId))
@@ -332,35 +333,43 @@ export default function CaseDrawer({
               {/* ---- SCROLLABLE TAB CONTENT ---- */}
               <div className="flex-1 overflow-y-auto p-4">
                 {activeTab === 'flags' && (
-                  <CaseDrawerFlags flags={caseDetail.case_flags} />
+                  <div className="animate-fade-in">
+                    <CaseDrawerFlags flags={caseDetail.case_flags} />
+                  </div>
                 )}
 
                 {activeTab === 'milestones' && (
-                  <CaseDrawerMilestones
-                    caseId={caseDetail.id}
-                    surgeonId={caseDetail.surgeon_id}
-                    procedureTypeId={caseDetail.procedure_type?.id ?? null}
-                    facilityId={caseDetail.facility_id}
-                    caseStatus={displayStatus}
-                  />
+                  <div className="animate-fade-in">
+                    <CaseDrawerMilestones
+                      caseId={caseDetail.id}
+                      surgeonId={caseDetail.surgeon_id}
+                      procedureTypeId={caseDetail.procedure_type?.id ?? null}
+                      facilityId={caseDetail.facility_id}
+                      caseStatus={displayStatus}
+                    />
+                  </div>
                 )}
 
                 {activeTab === 'financials' && (
-                  <CaseDrawerFinancials
-                    data={financialData}
-                    displayStatus={displayStatus}
-                    surgeonName={surgeonName}
-                    loading={financialsLoading}
-                    error={financialsError}
-                  />
+                  <div className="animate-fade-in">
+                    <CaseDrawerFinancials
+                      data={financialData}
+                      displayStatus={displayStatus}
+                      surgeonName={surgeonName}
+                      loading={financialsLoading}
+                      error={financialsError}
+                    />
+                  </div>
                 )}
 
                 {activeTab === 'validation' && caseId && (
-                  <CaseDrawerValidation
-                    issues={validationIssues ?? []}
-                    loading={validationLoading}
-                    caseId={caseId}
-                  />
+                  <div className="animate-fade-in">
+                    <CaseDrawerValidation
+                      issues={validationIssues ?? []}
+                      loading={validationLoading}
+                      caseId={caseId}
+                    />
+                  </div>
                 )}
               </div>
 
