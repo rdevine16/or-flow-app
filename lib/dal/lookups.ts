@@ -71,6 +71,19 @@ export interface ImplantCompany {
   facility_id: string | null
 }
 
+export interface PhaseDefinition {
+  id: string
+  facility_id: string
+  name: string
+  display_name: string
+  display_order: number
+  start_milestone_id: string
+  end_milestone_id: string
+  color_key: string | null
+  is_active: boolean
+  deleted_at: string | null
+}
+
 // ============================================
 // DAL FUNCTIONS
 // ============================================
@@ -194,6 +207,22 @@ export const lookupsDAL = {
       .order('name')
 
     return { data: (data as unknown as Payer[]) || [], error }
+  },
+
+  /**
+   * Get phase definitions for a facility
+   */
+  async phaseDefinitions(
+    supabase: AnySupabaseClient,
+    facilityId: string,
+  ): Promise<DALListResult<PhaseDefinition>> {
+    const { data, error } = await supabase
+      .from('phase_definitions')
+      .select('id, facility_id, name, display_name, display_order, start_milestone_id, end_milestone_id, color_key, is_active, deleted_at')
+      .eq('facility_id', facilityId)
+      .order('display_order')
+
+    return { data: (data as unknown as PhaseDefinition[]) || [], error }
   },
 
   /**

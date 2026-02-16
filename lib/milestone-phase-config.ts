@@ -78,3 +78,38 @@ export const UNASSIGNED_PHASE: PhaseConfig = {
   headerBg: 'bg-slate-50',
   borderColor: 'border-slate-400',
 }
+
+/**
+ * Color key palette for phase definitions.
+ * DB stores a color_key string (e.g. 'blue'), this resolves to full Tailwind classes.
+ */
+export interface ColorKeyConfig {
+  key: string
+  label: string
+  swatch: string       // bg-color for swatch preview
+  accentBg: string
+  accentText: string
+  headerBg: string
+  borderColor: string
+}
+
+export const COLOR_KEY_PALETTE: ColorKeyConfig[] = [
+  { key: 'blue',   label: 'Blue',   swatch: 'bg-blue-500',   accentBg: 'bg-blue-500',   accentText: 'text-blue-700',   headerBg: 'bg-blue-50',   borderColor: 'border-blue-500' },
+  { key: 'green',  label: 'Green',  swatch: 'bg-green-500',  accentBg: 'bg-green-500',  accentText: 'text-green-700',  headerBg: 'bg-green-50',  borderColor: 'border-green-500' },
+  { key: 'amber',  label: 'Amber',  swatch: 'bg-amber-500',  accentBg: 'bg-amber-500',  accentText: 'text-amber-700',  headerBg: 'bg-amber-50',  borderColor: 'border-amber-500' },
+  { key: 'purple', label: 'Purple', swatch: 'bg-purple-500', accentBg: 'bg-purple-500', accentText: 'text-purple-700', headerBg: 'bg-purple-50', borderColor: 'border-purple-500' },
+  { key: 'teal',   label: 'Teal',   swatch: 'bg-teal-500',   accentBg: 'bg-teal-500',   accentText: 'text-teal-700',   headerBg: 'bg-teal-50',   borderColor: 'border-teal-500' },
+  { key: 'indigo', label: 'Indigo', swatch: 'bg-indigo-500', accentBg: 'bg-indigo-500', accentText: 'text-indigo-700', headerBg: 'bg-indigo-50', borderColor: 'border-indigo-500' },
+  { key: 'rose',   label: 'Rose',   swatch: 'bg-rose-500',   accentBg: 'bg-rose-500',   accentText: 'text-rose-700',   headerBg: 'bg-rose-50',   borderColor: 'border-rose-500' },
+  { key: 'slate',  label: 'Slate',  swatch: 'bg-slate-500',  accentBg: 'bg-slate-500',  accentText: 'text-slate-700',  headerBg: 'bg-slate-50',  borderColor: 'border-slate-500' },
+]
+
+export const COLOR_KEY_MAP: Record<string, ColorKeyConfig> = Object.fromEntries(
+  COLOR_KEY_PALETTE.map((c) => [c.key, c])
+)
+
+/** Resolve a DB color_key to full Tailwind config. Falls back to slate. */
+export function resolveColorKey(colorKey: string | null): ColorKeyConfig {
+  if (!colorKey) return COLOR_KEY_PALETTE[7] // slate
+  return COLOR_KEY_MAP[colorKey] ?? COLOR_KEY_PALETTE[7]
+}

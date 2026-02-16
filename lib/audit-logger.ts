@@ -119,6 +119,12 @@ export type AuditAction =
   | 'milestone_type.linked'
   | 'milestone_type.unlinked' 
   | 'milestone_type.restored'
+  // Phase Definitions
+  | 'phase_definition.created'
+  | 'phase_definition.updated'
+  | 'phase_definition.deleted'
+  | 'phase_definition.restored'
+  | 'phase_definition.reordered'
   // Rooms
   | 'room.created'
   | 'room.updated'
@@ -310,7 +316,13 @@ export const auditActionLabels: Record<AuditAction, string> = {
   'milestone_type.reordered': 'reordered milestone types',
     'milestone_type.linked': 'linked milestone types',
   'milestone_type.unlinked': 'unlinked milestone types',
-    'milestone_type.restored': 'restored a milestone type',  
+    'milestone_type.restored': 'restored a milestone type',
+  // Phase Definitions
+  'phase_definition.created': 'created a phase definition',
+  'phase_definition.updated': 'updated a phase definition',
+  'phase_definition.deleted': 'archived a phase definition',
+  'phase_definition.restored': 'restored a phase definition',
+  'phase_definition.reordered': 'reordered phase definitions',
   // Rooms
   'room.created': 'created an OR room',
   'room.updated': 'updated an OR room',
@@ -1619,6 +1631,60 @@ export const milestoneTypeAudit = {
       targetId: milestoneId,
       targetLabel: milestoneName,
       newValues: { restored: true },
+    })
+  },
+}
+
+// =====================================================
+// PHASE DEFINITIONS
+// =====================================================
+
+export const phaseDefinitionAudit = {
+  async created(supabase: SupabaseClient, displayName: string, phaseId: string) {
+    await log(supabase, 'phase_definition.created', {
+      targetType: 'phase_definition',
+      targetId: phaseId,
+      targetLabel: displayName,
+      newValues: { display_name: displayName },
+    })
+  },
+
+  async updated(
+    supabase: SupabaseClient,
+    phaseId: string,
+    oldDisplayName: string,
+    newDisplayName: string
+  ) {
+    await log(supabase, 'phase_definition.updated', {
+      targetType: 'phase_definition',
+      targetId: phaseId,
+      targetLabel: newDisplayName,
+      oldValues: { display_name: oldDisplayName },
+      newValues: { display_name: newDisplayName },
+    })
+  },
+
+  async deleted(supabase: SupabaseClient, displayName: string, phaseId: string) {
+    await log(supabase, 'phase_definition.deleted', {
+      targetType: 'phase_definition',
+      targetId: phaseId,
+      targetLabel: displayName,
+    })
+  },
+
+  async restored(supabase: SupabaseClient, displayName: string, phaseId: string) {
+    await log(supabase, 'phase_definition.restored', {
+      targetType: 'phase_definition',
+      targetId: phaseId,
+      targetLabel: displayName,
+      newValues: { restored: true },
+    })
+  },
+
+  async reordered(supabase: SupabaseClient, count: number) {
+    await log(supabase, 'phase_definition.reordered', {
+      targetType: 'phase_definition',
+      metadata: { items_reordered: count },
     })
   },
 }
