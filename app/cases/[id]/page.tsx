@@ -16,12 +16,13 @@ import FloatingActionButton from '@/components/ui/FloatingActionButton'
 import CallNextPatientModal from '@/components/CallNextPatientModal'
 import CompletedCaseView from '@/components/cases/CompletedCaseView'
 import DeviceRepSection from '@/components/cases/DeviceRepSection'
-import MilestoneTimelineV2 from '@/components/cases/MilestoneTimelineV2'
+import MilestoneTimelineV2, { type CaseFlagForTimeline } from '@/components/cases/MilestoneTimelineV2'
+import { type DelayTypeOption } from '@/components/cases/AddDelayForm'
 import TeamMember from '@/components/cases/TeamMember'
 import ImplantBadge from '@/components/cases/ImplantBadge'
 import { runDetectionForCase } from '@/lib/dataQuality'
 import PiPMilestoneWrapper from '@/components/pip/PiPMilestoneWrapper'
-import CaseFlagsSection from '@/components/cases/CaseFlagsSection'
+// CaseFlagsSection removed — flags now inline on milestone timeline (Phase 4)
 import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -155,6 +156,10 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   // Device companies
   const [deviceCompanies, setDeviceCompanies] = useState<DeviceCompanyData[]>([])
+
+  // Flags & delays (Phase 4: inline on timeline)
+  const [caseFlags, setCaseFlags] = useState<CaseFlagForTimeline[]>([])
+  const [delayTypeOptions, setDelayTypeOptions] = useState<DelayTypeOption[]>([])
 
   // UI state
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
@@ -334,6 +339,72 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
           }
         }))
       }
+
+      // Fetch case flags (threshold + delay) for inline timeline display
+      const { data: flagsData } = await supabase
+        .from('case_flags')
+        .select(`
+          id, flag_type, severity, metric_value, threshold_value, comparison_scope,
+          delay_type_id, duration_minutes, note, created_by, facility_milestone_id,
+          flag_rules (name, end_milestone),
+          delay_types (display_name)
+        `)
+        .eq('case_id', id)
+        .order('created_at', { ascending: true })
+
+      if (flagsData) {
+        const mapped: CaseFlagForTimeline[] = flagsData.map((f: Record<string, unknown>) => {
+          const flagRule = Array.isArray(f.flag_rules) ? f.flag_rules[0] : f.flag_rules
+          const delayType = Array.isArray(f.delay_types) ? f.delay_types[0] : f.delay_types
+
+          // Resolve milestone: direct for delays, derived from flag_rules.end_milestone for threshold
+          let resolvedMilestoneId = f.facility_milestone_id as string | null
+          if (!resolvedMilestoneId && flagRule?.end_milestone) {
+            const match = milestoneTypesResult.find(mt => mt.name === flagRule.end_milestone)
+            if (match) resolvedMilestoneId = match.id
+          }
+
+          // Label
+          const label = f.flag_type === 'threshold'
+            ? (flagRule?.name || 'Threshold Flag')
+            : ((delayType as { display_name?: string })?.display_name || 'Delay')
+
+          // Detail
+          let detail: string | null = null
+          if (f.flag_type === 'threshold') {
+            const actual = f.metric_value !== null ? Math.round(f.metric_value as number) : null
+            const threshold = f.threshold_value !== null ? Math.round(f.threshold_value as number) : null
+            if (actual !== null && threshold !== null) {
+              detail = `${actual} min (threshold: ${threshold} min)`
+            }
+          } else if (f.duration_minutes) {
+            detail = `${f.duration_minutes} min`
+          }
+
+          return {
+            id: f.id as string,
+            flag_type: f.flag_type as 'threshold' | 'delay',
+            severity: (f.severity as 'critical' | 'warning' | 'info') || 'info',
+            label,
+            detail,
+            facility_milestone_id: resolvedMilestoneId,
+            duration_minutes: f.duration_minutes as number | null,
+            note: f.note as string | null,
+            created_by: f.created_by as string | null,
+          }
+        })
+        setCaseFlags(mapped)
+      }
+
+      // Fetch delay types for the AddDelayForm
+      const { data: delayTypesData } = await supabase
+        .from('delay_types')
+        .select('id, name, display_name')
+        .or(`facility_id.eq.${effectiveFacilityId},facility_id.is.null`)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+
+      if (delayTypesData) setDelayTypeOptions(delayTypesData)
 
       setPatientCallTime(caseResult?.call_time || null)
 
@@ -670,6 +741,79 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         setCaseData({ ...caseData, case_statuses: { id: statusData.id, name: statusName } })
       }
     }
+  }
+
+  // ============================================================================
+  // FLAG & DELAY FUNCTIONS (Phase 4: inline on timeline)
+  // ============================================================================
+
+  const handleAddDelay = async (data: {
+    delayTypeId: string
+    durationMinutes: number | null
+    note: string | null
+    facilityMilestoneId: string
+  }) => {
+    if (!effectiveFacilityId) return
+
+    // Write to case_flags (new system)
+    const { data: newFlag, error: flagError } = await supabase
+      .from('case_flags')
+      .insert({
+        case_id: id,
+        facility_id: effectiveFacilityId,
+        flag_type: 'delay',
+        delay_type_id: data.delayTypeId,
+        duration_minutes: data.durationMinutes,
+        severity: 'warning',
+        note: data.note,
+        created_by: userData.userId,
+        facility_milestone_id: data.facilityMilestoneId,
+      })
+      .select('id, delay_types (display_name)')
+      .single()
+
+    if (flagError) {
+      showToast({ type: 'error', title: 'Failed to log delay', message: flagError.message })
+      throw flagError
+    }
+
+    // Write to case_delays (backward compat)
+    await supabase.from('case_delays').insert({
+      case_id: id,
+      delay_type_id: data.delayTypeId,
+      duration_minutes: data.durationMinutes,
+      notes: data.note,
+      recorded_at: new Date().toISOString(),
+      recorded_by: userData.userId,
+    })
+
+    // Optimistic local state update
+    if (newFlag) {
+      const delayType = Array.isArray(newFlag.delay_types) ? newFlag.delay_types[0] : newFlag.delay_types
+      setCaseFlags(prev => [...prev, {
+        id: newFlag.id,
+        flag_type: 'delay',
+        severity: 'warning',
+        label: (delayType as { display_name?: string })?.display_name || 'Delay',
+        detail: data.durationMinutes ? `${data.durationMinutes} min` : null,
+        facility_milestone_id: data.facilityMilestoneId,
+        duration_minutes: data.durationMinutes,
+        note: data.note,
+        created_by: userData.userId,
+      }])
+    }
+
+    showToast({ type: 'success', title: 'Delay logged' })
+  }
+
+  const handleRemoveDelay = async (flagId: string) => {
+    const { error } = await supabase.from('case_flags').delete().eq('id', flagId)
+    if (error) {
+      showToast({ type: 'error', title: 'Failed to remove delay', message: error.message })
+      return
+    }
+    setCaseFlags(prev => prev.filter(f => f.id !== flagId))
+    showToast({ type: 'success', title: 'Delay removed' })
   }
 
   // ============================================================================
@@ -1203,6 +1347,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                     recordingMilestoneIds={recordingMilestoneIds}
                     canManage={can('milestones.manage')}
                     timeZone={userData.facilityTimezone}
+                    caseFlags={caseFlags}
+                    delayTypes={delayTypeOptions}
+                    onAddDelay={handleAddDelay}
+                    onRemoveDelay={handleRemoveDelay}
+                    canCreateFlags={can('flags.create')}
+                    currentUserId={userData.userId}
                   />
                 )}
 
@@ -1396,16 +1546,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
               </div>
             )}
 
-            {/* FLAGS & DELAYS */}
-            {effectiveFacilityId && (
-              <CaseFlagsSection
-                caseId={id}
-                facilityId={effectiveFacilityId}
-                isCompleted={false}
-                userId={userData.userId}
-                supabase={supabase}
-              />
-            )}
+            {/* FLAGS & DELAYS — moved inline on milestone timeline (Phase 4) */}
           </div>
         </div>
       </div>

@@ -470,8 +470,8 @@ describe('MilestoneTimelineV2', () => {
       const nextLabel = screen.getByText('Next milestone')
       const incisionText = screen.getByText('Incision')
 
-      // They should be in the same parent container
-      expect(nextLabel.parentElement).toBe(incisionText.parentElement)
+      // They should share the same milestone content container
+      expect(nextLabel.closest('.min-w-0')?.contains(incisionText)).toBe(true)
     })
   })
 
@@ -623,7 +623,7 @@ describe('MilestoneTimelineV2', () => {
       expect(screen.getByText('Next milestone')).toBeInTheDocument()
       const nextLabel = screen.getByText('Next milestone')
       const closeText = screen.getByText('Close')
-      expect(nextLabel.parentElement).toBe(closeText.parentElement)
+      expect(nextLabel.closest('.min-w-0')?.contains(closeText)).toBe(true)
     })
 
     it('handles out-of-order recording and correction workflow', () => {
@@ -691,7 +691,7 @@ describe('MilestoneTimelineV2', () => {
       expect(screen.getByText('Next milestone')).toBeInTheDocument()
       const nextLabel = screen.getByText('Next milestone')
       const incisionText = screen.getByText('Incision')
-      expect(nextLabel.parentElement).toBe(incisionText.parentElement)
+      expect(nextLabel.closest('.min-w-0')?.contains(incisionText)).toBe(true)
 
       // Step 4: Fill in the gap
       const nextRecord = screen.getAllByText('Record')[0]
@@ -715,7 +715,7 @@ describe('MilestoneTimelineV2', () => {
       // Now "next" should be the last milestone
       const finalNextLabel = screen.getByText('Next milestone')
       const patientOutText = screen.getByText('Patient Out')
-      expect(finalNextLabel.parentElement).toBe(patientOutText.parentElement)
+      expect(finalNextLabel.closest('.min-w-0')?.contains(patientOutText)).toBe(true)
     })
   })
 
@@ -791,6 +791,261 @@ describe('MilestoneTimelineV2', () => {
 
       // Second milestone should be completed
       expect(screen.getByText('Formatted: 2024-01-01T10:15:00Z')).toBeInTheDocument()
+    })
+  })
+
+  // ============================================================================
+  // PHASE 4: FLAGS & DELAYS INTEGRATION
+  // ============================================================================
+
+  describe('Phase 4: Inline Flags & Delays', () => {
+    const caseMilestonesPartial = [
+      { id: 'cm1', facility_milestone_id: 'mt1', recorded_at: '2024-01-01T10:00:00Z' },
+      { id: 'cm2', facility_milestone_id: 'mt2', recorded_at: '2024-01-01T10:15:00Z' },
+    ]
+
+    const mockDelayTypes = [
+      { id: 'dt1', name: 'equipment_delay', display_name: 'Equipment Delay' },
+      { id: 'dt2', name: 'staff_delay', display_name: 'Staff Delay' },
+    ]
+
+    it('renders threshold FlagBadge on the associated milestone row', () => {
+      const caseFlags = [
+        {
+          id: 'flag1',
+          flag_type: 'threshold' as const,
+          severity: 'warning' as const,
+          label: 'Long Surgical Time',
+          detail: '65 min (threshold: 45 min)',
+          facility_milestone_id: 'mt2',
+          duration_minutes: null,
+          note: null,
+          created_by: null,
+        },
+      ]
+
+      render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          caseFlags={caseFlags}
+        />
+      )
+
+      expect(screen.getByText('Long Surgical Time')).toBeInTheDocument()
+      // Badge should be in the same row as Incision (mt2)
+      const badge = screen.getByText('Long Surgical Time')
+      const incision = screen.getByText('Incision')
+      expect(badge.closest('.min-w-0')?.contains(incision)).toBe(true)
+    })
+
+    it('renders DelayNode between milestones for delay flags', () => {
+      const caseFlags = [
+        {
+          id: 'delay1',
+          flag_type: 'delay' as const,
+          severity: 'warning' as const,
+          label: 'Equipment Delay',
+          detail: '15 min',
+          facility_milestone_id: 'mt1',
+          duration_minutes: 15,
+          note: 'Tray late',
+          created_by: 'user1',
+        },
+      ]
+
+      render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          caseFlags={caseFlags}
+        />
+      )
+
+      expect(screen.getByText('Equipment Delay')).toBeInTheDocument()
+      expect(screen.getByText('15m')).toBeInTheDocument()
+    })
+
+    it('shows clock button on completed/next milestones when canCreateFlags is true', () => {
+      const { container } = render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          canCreateFlags={true}
+          delayTypes={mockDelayTypes}
+          onAddDelay={vi.fn()}
+        />
+      )
+
+      const clockButtons = container.querySelectorAll('button[title^="Log delay"]')
+      // Should have clock buttons on completed (mt1, mt2) and next (mt3) milestones
+      expect(clockButtons.length).toBe(3)
+    })
+
+    it('hides clock button when canCreateFlags is false', () => {
+      const { container } = render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          canCreateFlags={false}
+          delayTypes={mockDelayTypes}
+          onAddDelay={vi.fn()}
+        />
+      )
+
+      const clockButtons = container.querySelectorAll('button[title^="Log delay"]')
+      expect(clockButtons.length).toBe(0)
+    })
+
+    it('opens AddDelayForm popover when clock button is clicked', () => {
+      const { container } = render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          canCreateFlags={true}
+          delayTypes={mockDelayTypes}
+          onAddDelay={vi.fn()}
+        />
+      )
+
+      // Click clock button on first completed milestone
+      const clockButton = container.querySelector('button[title="Log delay at Patient In"]')
+      expect(clockButton).toBeInTheDocument()
+      fireEvent.click(clockButton!)
+
+      // AddDelayForm should appear with delay type buttons
+      expect(screen.getByText('Log Delay — Patient In')).toBeInTheDocument()
+      expect(screen.getByText('Equipment Delay')).toBeInTheDocument()
+      expect(screen.getByText('Staff Delay')).toBeInTheDocument()
+    })
+
+    it('fires onAddDelay with correct payload when form is submitted', async () => {
+      const mockAddDelay = vi.fn().mockResolvedValue(undefined)
+
+      const { container } = render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          canCreateFlags={true}
+          delayTypes={mockDelayTypes}
+          onAddDelay={mockAddDelay}
+        />
+      )
+
+      // Open form
+      const clockButton = container.querySelector('button[title="Log delay at Patient In"]')
+      fireEvent.click(clockButton!)
+
+      // Select delay type
+      const eqButton = screen.getByText('Equipment Delay')
+      fireEvent.click(eqButton)
+
+      // Enter duration
+      const durationInput = screen.getByPlaceholderText('Min')
+      fireEvent.change(durationInput, { target: { value: '10' } })
+
+      // Submit
+      const submitButton = screen.getByText('Log Delay')
+      fireEvent.click(submitButton)
+
+      expect(mockAddDelay).toHaveBeenCalledWith({
+        delayTypeId: 'dt1',
+        durationMinutes: 10,
+        note: null,
+        facilityMilestoneId: 'mt1',
+      })
+    })
+
+    it('shows remove button on DelayNode only when user owns the delay', () => {
+      const caseFlags = [
+        {
+          id: 'delay1',
+          flag_type: 'delay' as const,
+          severity: 'warning' as const,
+          label: 'Equipment Delay',
+          detail: '15 min',
+          facility_milestone_id: 'mt1',
+          duration_minutes: 15,
+          note: null,
+          created_by: 'user1',
+        },
+        {
+          id: 'delay2',
+          flag_type: 'delay' as const,
+          severity: 'warning' as const,
+          label: 'Staff Delay',
+          detail: '5 min',
+          facility_milestone_id: 'mt2',
+          duration_minutes: 5,
+          note: null,
+          created_by: 'user2',
+        },
+      ]
+
+      const mockRemove = vi.fn()
+      const { container } = render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          caseFlags={caseFlags}
+          onRemoveDelay={mockRemove}
+          currentUserId="user1"
+        />
+      )
+
+      // Only the delay created by user1 should have a remove button
+      const removeButtons = container.querySelectorAll('button[title="Remove delay"]')
+      expect(removeButtons.length).toBe(1)
+
+      fireEvent.click(removeButtons[0])
+      expect(mockRemove).toHaveBeenCalledWith('delay1')
+    })
+
+    it('renders without flags/delays when caseFlags is empty', () => {
+      render(
+        <MilestoneTimelineV2
+          milestoneTypes={mockMilestoneTypes}
+          caseMilestones={caseMilestonesPartial}
+          onRecord={mockOnRecord}
+          onUndo={mockOnUndo}
+          recordingMilestoneIds={new Set()}
+          canManage={true}
+          caseFlags={[]}
+        />
+      )
+
+      // Timeline should render normally without any flag/delay elements
+      expect(screen.getByText('Patient In')).toBeInTheDocument()
+      expect(screen.getByText('Incision')).toBeInTheDocument()
+      expect(screen.queryByTitle('Remove delay')).not.toBeInTheDocument()
     })
   })
 })
