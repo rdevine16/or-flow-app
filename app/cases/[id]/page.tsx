@@ -19,7 +19,7 @@ import DeviceRepSection from '@/components/cases/DeviceRepSection'
 import MilestoneTimelineV2, { type CaseFlagForTimeline } from '@/components/cases/MilestoneTimelineV2'
 import { type DelayTypeOption } from '@/components/cases/AddDelayForm'
 import TeamMember from '@/components/cases/TeamMember'
-import ImplantBadge from '@/components/cases/ImplantBadge'
+import ImplantSection from '@/components/cases/ImplantSection'
 import { runDetectionForCase } from '@/lib/dataQuality'
 import PiPMilestoneWrapper from '@/components/pip/PiPMilestoneWrapper'
 // CaseFlagsSection removed — flags now inline on milestone timeline (Phase 4)
@@ -162,6 +162,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [delayTypeOptions, setDelayTypeOptions] = useState<DelayTypeOption[]>([])
 
   // UI state
+  const [activeTab, setActiveTab] = useState<'milestones' | 'implants'>('milestones')
   const [showCallNextPatient, setShowCallNextPatient] = useState(false)
   const [patientCallTime, setPatientCallTime] = useState<string | null>(null)
   const [showAddStaff, setShowAddStaff] = useState(false)
@@ -1086,6 +1087,12 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
   const unassignedStaff = availableStaff.filter(s => !caseStaff.some(cs => cs.user_id === s.id))
 
+  // Implant count for tab badge — count non-null final size fields
+  const implantFilledCount = implants ? [
+    implants.cup_size_final, implants.stem_size_final, implants.head_size_final, implants.liner_size_final,
+    implants.femur_size_final, implants.tibia_size_final, implants.poly_size_final, implants.patella_size_final,
+  ].filter(Boolean).length : 0
+
   // ============================================================================
   // LOADING / ERROR / NOT FOUND
   // ============================================================================
@@ -1309,74 +1316,143 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             </div>
 
 
-            {/* MILESTONES — Vertical Timeline */}
+            {/* TAB SWITCHER */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-4 border-b border-slate-100 flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Milestones</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {completedMilestones} of {totalMilestoneCount} recorded
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
-                      style={{ width: `${totalMilestoneCount > 0 ? (completedMilestones / totalMilestoneCount) * 100 : 0}%` }}
-                    />
+              {/* Tab Bar */}
+              <div className="flex border-b border-slate-100" role="tablist">
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'milestones'}
+                  onClick={() => setActiveTab('milestones')}
+                  className={`flex items-center gap-2.5 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                    activeTab === 'milestones'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Milestones
+                  {/* Progress dots */}
+                  <div className="flex items-center gap-0.5">
+                    {milestoneTypes.map(mt => {
+                      const recorded = caseMilestones.find(cm => cm.facility_milestone_id === mt.id && cm.recorded_at)
+                      return (
+                        <div
+                          key={mt.id}
+                          className={`w-1.5 h-1.5 rounded-full ${recorded ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                        />
+                      )
+                    })}
                   </div>
-                  <span className="text-sm font-semibold text-slate-700">
-                    {totalMilestoneCount > 0 ? Math.round((completedMilestones / totalMilestoneCount) * 100) : 0}%
-                  </span>
-                </div>
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={activeTab === 'implants'}
+                  onClick={() => setActiveTab('implants')}
+                  className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                    activeTab === 'implants'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Implants
+                  {implantFilledCount > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-cyan-100 text-cyan-700">
+                      {implantFilledCount}
+                    </span>
+                  )}
+                </button>
               </div>
 
-              <div className="p-4">
-                {milestoneTypes.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500">
-                    <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-                    <p className="text-sm font-medium">No milestones configured</p>
-                    <p className="text-xs mt-1">Configure milestones in Settings</p>
-                  </div>
-                ) : (
-                  <MilestoneTimelineV2
-                    milestoneTypes={milestoneTypes}
-                    caseMilestones={caseMilestones}
-                    onRecord={recordMilestone}
-                    onUndo={undoMilestone}
-                    recordingMilestoneIds={recordingMilestoneIds}
-                    canManage={can('milestones.manage')}
-                    timeZone={userData.facilityTimezone}
-                    caseFlags={caseFlags}
-                    delayTypes={delayTypeOptions}
-                    onAddDelay={handleAddDelay}
-                    onRemoveDelay={handleRemoveDelay}
-                    canCreateFlags={can('flags.create')}
-                    currentUserId={userData.userId}
-                  />
-                )}
-
-                {/* Surgeon Left Confirmation */}
-                {surgeonLeftAt && !patientOutRecorded && (
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Check className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
-                        </div>
-                        <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
+              {/* Tab Content */}
+              {activeTab === 'milestones' && (
+                <div role="tabpanel">
+                  <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                    <p className="text-xs text-slate-500">
+                      {completedMilestones} of {totalMilestoneCount} recorded
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-green-500 rounded-full transition-all duration-500 ease-out"
+                          style={{ width: `${totalMilestoneCount > 0 ? (completedMilestones / totalMilestoneCount) * 100 : 0}%` }}
+                        />
                       </div>
-                      <button
-                        onClick={clearSurgeonLeft}
-                        className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
-                      >
-                        Undo
-                      </button>
+                      <span className="text-sm font-semibold text-slate-700">
+                        {totalMilestoneCount > 0 ? Math.round((completedMilestones / totalMilestoneCount) * 100) : 0}%
+                      </span>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  <div className="p-4">
+                    {milestoneTypes.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500">
+                        <ClipboardList className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                        <p className="text-sm font-medium">No milestones configured</p>
+                        <p className="text-xs mt-1">Configure milestones in Settings</p>
+                      </div>
+                    ) : (
+                      <MilestoneTimelineV2
+                        milestoneTypes={milestoneTypes}
+                        caseMilestones={caseMilestones}
+                        onRecord={recordMilestone}
+                        onUndo={undoMilestone}
+                        recordingMilestoneIds={recordingMilestoneIds}
+                        canManage={can('milestones.manage')}
+                        timeZone={userData.facilityTimezone}
+                        caseFlags={caseFlags}
+                        delayTypes={delayTypeOptions}
+                        onAddDelay={handleAddDelay}
+                        onRemoveDelay={handleRemoveDelay}
+                        canCreateFlags={can('flags.create')}
+                        currentUserId={userData.userId}
+                      />
+                    )}
+
+                    {/* Surgeon Left Confirmation */}
+                    {surgeonLeftAt && !patientOutRecorded && (
+                      <div className="mt-4 pt-4 border-t border-slate-100">
+                        <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Check className="w-4 h-4 text-orange-500" />
+                              <span className="text-sm font-semibold text-orange-800">Surgeon Left</span>
+                            </div>
+                            <p className="text-xs text-orange-600 mt-0.5">{formatTimestamp(surgeonLeftAt, { timeZone: userData.facilityTimezone })}</p>
+                          </div>
+                          <button
+                            onClick={clearSurgeonLeft}
+                            className="text-xs text-orange-600 hover:text-orange-800 font-medium px-2 py-1 rounded hover:bg-orange-100 transition-colors"
+                          >
+                            Undo
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'implants' && (
+                <div role="tabpanel" className="p-4">
+                  {!caseData.procedure_type_id ? (
+                    <div className="text-center py-12 text-slate-500">
+                      <p className="text-sm font-medium">No procedure assigned</p>
+                      <p className="text-xs mt-1">Assign a procedure to track implants</p>
+                    </div>
+                  ) : !implantCategory ? (
+                    <div className="text-center py-12 text-slate-500">
+                      <p className="text-sm font-medium">This procedure type doesn&apos;t track implants</p>
+                      <p className="text-xs mt-1">Only hip and knee procedures have implant tracking</p>
+                    </div>
+                  ) : (
+                    <ImplantSection
+                      caseId={id}
+                      procedureTypeId={caseData.procedure_type_id}
+                      supabase={supabase}
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
           </div>
@@ -1509,34 +1585,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
             {/* TRAYS */}
             <DeviceRepSection caseId={id} supabase={supabase} compact />
 
-            {/* IMPLANTS */}
-            {implants && implantCategory && (
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <h3 className="text-sm font-semibold text-slate-900">Implants</h3>
-                </div>
-                <div className="p-3">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    {(implantCategory === 'hip' || implantCategory === 'total_hip') && (
-                      <>
-                        <ImplantBadge label="Cup" value={implants.cup_size_final} />
-                        <ImplantBadge label="Stem" value={implants.stem_size_final} />
-                        <ImplantBadge label="Head" value={implants.head_size_final} />
-                        <ImplantBadge label="Liner" value={implants.liner_size_final} />
-                      </>
-                    )}
-                    {(implantCategory === 'knee' || implantCategory === 'total_knee') && (
-                      <>
-                        <ImplantBadge label="Femur" value={implants.femur_size_final} />
-                        <ImplantBadge label="Tibia" value={implants.tibia_size_final} />
-                        <ImplantBadge label="Poly" value={implants.poly_size_final} />
-                        <ImplantBadge label="Patella" value={implants.patella_size_final} />
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* IMPLANTS — moved to Implants tab (Phase 5) */}
 
             {/* NOTES */}
             {caseData.notes && (
