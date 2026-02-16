@@ -41,3 +41,32 @@ describe('settings nav - phases entry', () => {
     expect(item!.id).toBe('phases')
   })
 })
+
+describe('settings nav - surgeon milestones entry', () => {
+  const caseManagement = settingsCategories.find(c => c.id === 'case-management')
+
+  it('has a surgeon-milestones nav item', () => {
+    const item = caseManagement!.items.find(i => i.id === 'surgeon-milestones')
+    expect(item).toBeDefined()
+    expect(item!.href).toBe('/settings/surgeon-milestones')
+    expect(item!.label).toBe('Surgeon Milestones')
+  })
+
+  it('surgeon-milestones appears after surgeon-preferences in the nav order', () => {
+    const items = caseManagement!.items
+    const surgPrefIdx = items.findIndex(i => i.id === 'surgeon-preferences')
+    const surgMsIdx = items.findIndex(i => i.id === 'surgeon-milestones')
+    expect(surgMsIdx).toBeGreaterThan(surgPrefIdx)
+    expect(surgMsIdx).toBe(surgPrefIdx + 1)
+  })
+
+  it('getCategoryForPath returns case-management for /settings/surgeon-milestones', () => {
+    expect(getCategoryForPath('/settings/surgeon-milestones')).toBe('case-management')
+  })
+
+  it('getNavItemForPath returns surgeon-milestones item for /settings/surgeon-milestones', () => {
+    const item = getNavItemForPath('/settings/surgeon-milestones')
+    expect(item).toBeDefined()
+    expect(item!.id).toBe('surgeon-milestones')
+  })
+})

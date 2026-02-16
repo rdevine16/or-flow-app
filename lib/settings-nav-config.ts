@@ -181,6 +181,15 @@ export const settingsCategories: SettingsCategory[] = [
         permission: 'settings.manage',
       },
       {
+        id: 'surgeon-milestones',
+        label: 'Surgeon Milestones',
+        href: '/settings/surgeon-milestones',
+        icon: User,
+        description: 'Per-surgeon milestone overrides',
+        badge: 'new',
+        permission: 'settings.manage',
+      },
+      {
         id: 'delay-types',
         label: 'Delay Types',
         href: '/settings/delay-types',

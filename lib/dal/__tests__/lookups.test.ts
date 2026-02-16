@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { FacilityMilestone } from '../lookups'
+import type { FacilityMilestone, SurgeonMilestoneConfig } from '../lookups'
 import { lookupsDAL } from '../lookups'
 
 // ============================================
@@ -85,5 +85,94 @@ describe('lookupsDAL.facilityMilestones — Phase 5.2b', () => {
     const result = await lookupsDAL.facilityMilestones(mockSupabase as any, 'facility-1')
 
     expect(result.error).toBe(pgError)
+  })
+})
+
+describe('SurgeonMilestoneConfig type', () => {
+  it('should have all expected fields', () => {
+    const config: SurgeonMilestoneConfig = {
+      id: 'smc-1',
+      facility_id: 'fac-1',
+      surgeon_id: 'surg-1',
+      procedure_type_id: 'proc-1',
+      facility_milestone_id: 'fm-1',
+      is_enabled: true,
+      display_order: 5,
+    }
+
+    expect(config.surgeon_id).toBe('surg-1')
+    expect(config.is_enabled).toBe(true)
+    expect(config.display_order).toBe(5)
+  })
+
+  it('should allow null display_order', () => {
+    const config: SurgeonMilestoneConfig = {
+      id: 'smc-2',
+      facility_id: 'fac-1',
+      surgeon_id: 'surg-1',
+      procedure_type_id: 'proc-1',
+      facility_milestone_id: 'fm-2',
+      is_enabled: false,
+      display_order: null,
+    }
+
+    expect(config.display_order).toBeNull()
+  })
+})
+
+describe('lookupsDAL.surgeonMilestoneConfig', () => {
+  const chainable = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+  }
+
+  const mockSupabase = {
+    from: vi.fn().mockReturnValue(chainable),
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSupabase.from.mockReturnValue(chainable)
+  })
+
+  it('should query surgeon_milestone_config with correct filters', async () => {
+    // The last .eq() is the terminal call, so we mock it to resolve
+    let eqCallCount = 0
+    chainable.eq.mockImplementation(() => {
+      eqCallCount++
+      if (eqCallCount === 3) {
+        return Promise.resolve({
+          data: [
+            { id: 'smc-1', facility_id: 'fac-1', surgeon_id: 'surg-1', procedure_type_id: 'proc-1', facility_milestone_id: 'fm-1', is_enabled: false, display_order: null },
+          ],
+          error: null,
+        })
+      }
+      return chainable
+    })
+
+    const result = await lookupsDAL.surgeonMilestoneConfig(mockSupabase as any, 'fac-1', 'surg-1', 'proc-1')
+
+    expect(mockSupabase.from).toHaveBeenCalledWith('surgeon_milestone_config')
+    expect(chainable.eq).toHaveBeenCalledWith('facility_id', 'fac-1')
+    expect(chainable.eq).toHaveBeenCalledWith('surgeon_id', 'surg-1')
+    expect(chainable.eq).toHaveBeenCalledWith('procedure_type_id', 'proc-1')
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].is_enabled).toBe(false)
+  })
+
+  it('should return empty array when no overrides exist', async () => {
+    let eqCallCount = 0
+    chainable.eq.mockImplementation(() => {
+      eqCallCount++
+      if (eqCallCount === 3) {
+        return Promise.resolve({ data: null, error: null })
+      }
+      return chainable
+    })
+
+    const result = await lookupsDAL.surgeonMilestoneConfig(mockSupabase as any, 'fac-1', 'surg-1', 'proc-1')
+
+    expect(result.data).toEqual([])
   })
 })
