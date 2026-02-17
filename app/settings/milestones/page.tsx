@@ -88,14 +88,7 @@ export default function MilestonesSettingsPage() {
   // Usage counts for milestones
   const [usageCounts, setUsageCounts] = useState<Record<string, number>>({})
 
-  useEffect(() => {
-    if (effectiveFacilityId && milestones) {
-      fetchUsageCounts()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveFacilityId, milestones])
-
-  const fetchUsageCounts = async () => {
+  const fetchUsageCounts = useCallback(async () => {
     try {
       const { data, error: fetchError } = await supabase
         .from('case_milestones')
@@ -114,7 +107,13 @@ export default function MilestonesSettingsPage() {
     } catch {
       // Non-critical
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    if (effectiveFacilityId && milestones) {
+      fetchUsageCounts()
+    }
+  }, [effectiveFacilityId, milestones, fetchUsageCounts])
 
   // Filtered milestone lists
   const activeMilestones = useMemo(

@@ -76,7 +76,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
-          setCheckingAccess(false)
           return
         }
 
@@ -89,15 +88,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (userRecord?.access_level) setUserAccessLevel(userRecord.access_level)
         if (userRecord?.must_change_password) {
           setMustChangePassword(true)
-          setCheckingAccess(false)
           return
         }
         if (userRecord?.access_level === 'global_admin') {
-          setCheckingAccess(false)
           return
         }
         if (!userRecord?.facility_id) {
-          setCheckingAccess(false)
           return
         }
 
@@ -115,14 +111,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             facilityLogo: facility.logo_url,
           })
         }
-        setCheckingAccess(false)
 } catch (error) {
   showToast({
     type: 'error',
     title: 'Access Check Failed',
     message: error instanceof Error ? error.message : 'Unable to verify facility access'
   })
-  setCheckingAccess(false)
 }
     }
     if (!loading) checkFacilityAccess()
