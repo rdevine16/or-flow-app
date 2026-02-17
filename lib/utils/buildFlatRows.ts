@@ -7,11 +7,23 @@
 // just like the reference design. This means dragging ANY milestone (including
 // boundaries) changes where phases visually start and end.
 
-import type { PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
 import type { PhaseDefLike, PhaseTreeNode } from '@/lib/milestone-phase-config'
 import { resolveColorKey } from '@/lib/milestone-phase-config'
 
 // ─── Types ──────────────────────────────────────────────
+
+/** Base milestone shape used by FlatRow and bracket computation */
+export interface PhaseBlockMilestone {
+  id: string
+  display_name: string
+  phase_group: string | null
+  is_boundary: boolean
+  pair_with_id: string | null
+  pair_position: 'start' | 'end' | null
+  pair_group: string | null
+  min_minutes: number | null
+  max_minutes: number | null
+}
 
 export interface PhaseTag {
   label: string

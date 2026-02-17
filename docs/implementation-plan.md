@@ -119,3 +119,4 @@ Replace the grouped collapsible PhaseBlock cards with a **single flat list** whe
 |------|---------|---------------|
 | 2026-02-16 | Session 1 | Phase 1 complete. Created buildFlatRows + FlatMilestoneList + 16 tests. |
 | 2026-02-16 | Session 2 | Phase 2 complete. Wired milestones page. Rewrote buildFlatRows to sort by display_order and compute phase ranges dynamically (matching reference design). Fixed boundary milestone draggability — all milestones now freely reorderable. |
+| 2026-02-16 | Session 3 | Phase 3 complete. Replaced PhaseBlock/BoundaryMarker on procedure + surgeon pages with FlatMilestoneList. Removed ~380 lines of dead renderData/phaseBlockData/toBlockMilestones code. Added configOrderMap for customized procedures. |

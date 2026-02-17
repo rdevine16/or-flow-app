@@ -7,7 +7,7 @@ import type { FlatRow, SubPhaseRailDef, PhaseDefForLegend } from '@/lib/utils/bu
 import {
   computeBracketData,
   computeBracketAreaWidth,
-} from '@/components/settings/milestones/PairBracketOverlay'
+} from '@/lib/utils/bracketUtils'
 
 // ─── Constants ──────────────────────────────────────────
 

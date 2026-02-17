@@ -191,7 +191,7 @@ export default function MilestonesSettingsPage() {
     return map
   }, [activeMilestones])
 
-  // Phase tree: only top-level phases become PhaseBlocks, children are nested
+  // Phase tree: top-level phases define rail colors, children define sub-phase rails
   const phaseTree = useMemo(() => {
     if (!phaseDefinitions?.length) return []
     return buildPhaseTree(phaseDefinitions)
