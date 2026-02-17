@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Info, Plus, AlertTriangle } from 'lucide-react'
-import { inferPhaseGroup, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
+import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
 import { MilestoneFormModal } from '@/components/settings/milestones/MilestoneFormModal'
 import { ArchivedMilestonesSection } from '@/components/settings/milestones/ArchivedMilestonesSection'
 import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
@@ -37,7 +37,7 @@ interface FacilityMilestone {
   min_minutes: number | null
   max_minutes: number | null
   validation_type: 'duration' | 'sequence_gap' | null
-  phase_group: PhaseGroup | null
+  phase_group: string | null
 }
 
 interface PhaseDefinitionRow {
@@ -49,6 +49,7 @@ interface PhaseDefinitionRow {
   start_milestone_id: string
   end_milestone_id: string
   is_active: boolean
+  parent_phase_id: string | null
 }
 
 export default function MilestonesSettingsPage() {
@@ -75,7 +76,7 @@ export default function MilestonesSettingsPage() {
     async (sb) => {
       const { data, error: fetchError } = await sb
         .from('phase_definitions')
-        .select('id, name, display_name, display_order, color_key, start_milestone_id, end_milestone_id, is_active')
+        .select('id, name, display_name, display_order, color_key, start_milestone_id, end_milestone_id, is_active, parent_phase_id')
         .eq('facility_id', effectiveFacilityId!)
         .eq('is_active', true)
         .order('display_order')
@@ -257,6 +258,15 @@ export default function MilestonesSettingsPage() {
         if (ms) {
           boundaryBefore = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
         }
+      } else {
+        // Show start boundary for non-first phases when not shared with previous phase's end
+        const prevPhase = phaseBlockData[idx - 1]
+        if (prevPhase.phaseDef.end_milestone_id !== phase.phaseDef.start_milestone_id) {
+          const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
+          if (ms) {
+            boundaryBefore = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
+          }
+        }
       }
 
       // Boundary after this phase block
@@ -293,6 +303,12 @@ export default function MilestonesSettingsPage() {
   const boundaryCount = activeMilestones.filter(m => boundaryMilestoneIds.has(m.id)).length
   const optionalCount = totalCount - boundaryCount
 
+  // Dynamic phase options from phase_definitions (for form dropdown)
+  const phaseOptions = useMemo(() => {
+    if (!phaseDefinitions?.length) return undefined
+    return phaseDefinitions.map(pd => ({ value: pd.name, label: pd.display_name }))
+  }, [phaseDefinitions])
+
   // Available milestones for pairing in add modal
   const availableForPairing = useMemo(() => {
     return activeMilestones
@@ -309,7 +325,7 @@ export default function MilestonesSettingsPage() {
   const handleFormSubmit = async (data: {
     displayName: string
     internalName: string
-    phaseGroup: PhaseGroup | ''
+    phaseGroup: string
     minMinutes: number
     maxMinutes: number
     pairWithId: string
@@ -325,7 +341,7 @@ export default function MilestonesSettingsPage() {
   const handleAdd = async (data: {
     displayName: string
     internalName: string
-    phaseGroup: PhaseGroup | ''
+    phaseGroup: string
     pairWithId?: string
     pairRole?: 'start' | 'end'
   }) => {
@@ -425,7 +441,7 @@ export default function MilestonesSettingsPage() {
 
   const handleEdit = async (data: {
     displayName: string
-    phaseGroup: PhaseGroup | ''
+    phaseGroup: string
     minMinutes: number
     maxMinutes: number
   }) => {
@@ -612,6 +628,30 @@ export default function MilestonesSettingsPage() {
     }
   }, [milestones, setMilestones, supabase, showToast])
 
+  const handleCrossPhaseMove = useCallback(async (milestoneId: string, targetPhaseKey: string, _insertBeforeId?: string) => {
+    // Resolve the target phase_group (null for "unphased")
+    const newPhaseGroup = targetPhaseKey === 'unphased' ? null : targetPhaseKey
+
+    // Optimistically update local state
+    setMilestones((prev) =>
+      (prev || []).map(m =>
+        m.id === milestoneId ? { ...m, phase_group: newPhaseGroup } : m
+      )
+    )
+
+    // Persist to DB
+    try {
+      const { error: updateError } = await supabase
+        .from('facility_milestones')
+        .update({ phase_group: newPhaseGroup })
+        .eq('id', milestoneId)
+      if (updateError) throw updateError
+      showToast({ type: 'success', title: 'Milestone moved' })
+    } catch {
+      showToast({ type: 'error', title: 'Failed to move milestone' })
+    }
+  }, [setMilestones, supabase, showToast])
+
   const handleUnlink = async (milestone: FacilityMilestone) => {
     if (!milestone.pair_with_id) return
 
@@ -767,6 +807,15 @@ export default function MilestonesSettingsPage() {
     if (milestone) handleArchive(milestone)
   }
 
+  const openEditModal = (milestoneId: string) => {
+    const milestone = (milestones || []).find(m => m.id === milestoneId)
+    if (milestone) {
+      setFormMode('edit')
+      setEditingMilestone(milestone)
+      setShowFormModal(true)
+    }
+  }
+
   const handleArchiveFromModal = () => {
     if (editingMilestone) handleArchive(editingMilestone)
   }
@@ -836,6 +885,8 @@ export default function MilestonesSettingsPage() {
                   onReorder={handleReorder}
                   draggable
                   onDelete={handleArchiveById}
+                  onEditMilestone={openEditModal}
+                  onCrossPhaseMove={handleCrossPhaseMove}
                   startCounter={phase.startCounter}
                   bracketAreaWidth={phase.bracketWidth}
                 >
@@ -868,6 +919,8 @@ export default function MilestonesSettingsPage() {
                 onReorder={handleReorder}
                 draggable
                 onDelete={handleArchiveById}
+                onEditMilestone={openEditModal}
+                onCrossPhaseMove={handleCrossPhaseMove}
                 startCounter={
                   phaseBlockData.reduce((sum, p) => sum + p.milestones.length, 0) + 1
                 }
@@ -900,6 +953,7 @@ export default function MilestonesSettingsPage() {
         onSubmit={handleFormSubmit}
         onArchive={handleArchiveFromModal}
         availableForPairing={availableForPairing}
+        phaseOptions={phaseOptions}
       />
 
       {/* Pair/Unlink Modal */}

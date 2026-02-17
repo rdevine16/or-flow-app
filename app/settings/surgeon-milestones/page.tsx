@@ -49,6 +49,7 @@ interface PhaseDefinitionRow {
   start_milestone_id: string
   end_milestone_id: string
   is_active: boolean
+  parent_phase_id: string | null
 }
 
 interface ProcedureMilestoneConfigItem {
@@ -134,7 +135,7 @@ export default function SurgeonMilestonesSettingsPage() {
     async (sb) => {
       const { data, error } = await sb
         .from('phase_definitions')
-        .select('id, name, display_name, display_order, color_key, start_milestone_id, end_milestone_id, is_active')
+        .select('id, name, display_name, display_order, color_key, start_milestone_id, end_milestone_id, is_active, parent_phase_id')
         .eq('facility_id', effectiveFacilityId!)
         .eq('is_active', true)
         .order('display_order')
@@ -527,6 +528,20 @@ export default function SurgeonMilestonesSettingsPage() {
             topColor: phase.color,
             bottomColor: phase.color,
             solid: true,
+          }
+        }
+      } else {
+        // Show start boundary for non-first phases when not shared with previous phase's end
+        const prevPhase = phaseBlockData[idx - 1]
+        if (prevPhase.phaseDef.end_milestone_id !== phase.phaseDef.start_milestone_id) {
+          const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
+          if (ms) {
+            boundaryBefore = {
+              name: ms.display_name,
+              topColor: phase.color,
+              bottomColor: phase.color,
+              solid: true,
+            }
           }
         }
       }

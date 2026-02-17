@@ -1,6 +1,7 @@
 // components/settings/phases/PhaseCard.tsx
 'use client'
 
+import { useState, useEffect, useRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Archive, GripVertical, ArrowRight } from 'lucide-react'
@@ -15,6 +16,7 @@ export interface PhaseCardData {
   end_milestone_id: string
   color_key: string | null
   is_active: boolean
+  parent_phase_id: string | null
 }
 
 interface FacilityMilestoneOption {
@@ -45,6 +47,24 @@ export function PhaseCard({ phase, milestones, onEdit, onArchive }: PhaseCardPro
   }
 
   const colorConfig = resolveColorKey(phase.color_key)
+
+  // Local state for name editing (blur-commit pattern)
+  const [localName, setLocalName] = useState(phase.display_name)
+  const nameRef = useRef<HTMLInputElement>(null)
+
+  // Sync local state when parent state changes (e.g., after reorder)
+  useEffect(() => {
+    setLocalName(phase.display_name)
+  }, [phase.display_name])
+
+  const commitName = () => {
+    const trimmed = localName.trim()
+    if (trimmed && trimmed !== phase.display_name) {
+      onEdit(phase, 'display_name', trimmed)
+    } else {
+      setLocalName(phase.display_name)
+    }
+  }
 
   return (
     <div
@@ -83,12 +103,18 @@ export function PhaseCard({ phase, milestones, onEdit, onArchive }: PhaseCardPro
         </div>
       </div>
 
-      {/* Phase name (editable inline) */}
+      {/* Phase name (editable inline, commits on blur/enter) */}
       <input
+        ref={nameRef}
         type="text"
-        value={phase.display_name}
-        onChange={(e) => onEdit(phase, 'display_name', e.target.value)}
-        className="text-sm font-medium text-slate-900 bg-transparent border-0 focus:outline-none focus:ring-0 w-[140px] px-1 py-0.5 rounded hover:bg-slate-50 focus:bg-slate-50"
+        value={localName}
+        onChange={(e) => setLocalName(e.target.value)}
+        onBlur={commitName}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') nameRef.current?.blur()
+          if (e.key === 'Escape') { setLocalName(phase.display_name); nameRef.current?.blur() }
+        }}
+        className="text-sm font-medium text-slate-900 bg-transparent border border-transparent focus:border-slate-300 focus:outline-none focus:ring-0 w-[140px] px-1 py-0.5 rounded hover:bg-slate-50 focus:bg-white"
       />
 
       {/* Start milestone dropdown */}

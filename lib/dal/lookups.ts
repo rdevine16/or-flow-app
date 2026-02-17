@@ -82,6 +82,7 @@ export interface PhaseDefinition {
   color_key: string | null
   is_active: boolean
   deleted_at: string | null
+  parent_phase_id: string | null
 }
 
 export interface SurgeonMilestoneConfig {
@@ -228,7 +229,7 @@ export const lookupsDAL = {
   ): Promise<DALListResult<PhaseDefinition>> {
     const { data, error } = await supabase
       .from('phase_definitions')
-      .select('id, facility_id, name, display_name, display_order, start_milestone_id, end_milestone_id, color_key, is_active, deleted_at')
+      .select('id, facility_id, name, display_name, display_order, start_milestone_id, end_milestone_id, color_key, is_active, deleted_at, parent_phase_id')
       .eq('facility_id', facilityId)
       .order('display_order')
 

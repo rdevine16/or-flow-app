@@ -41,6 +41,7 @@ interface PhaseDefinition {
   color_key: string | null
   is_active: boolean
   deleted_at: string | null
+  parent_phase_id: string | null
 }
 
 interface FacilityMilestone {
@@ -60,7 +61,7 @@ export default function PhasesSettingsPage() {
     async (sb) => {
       const { data, error: fetchError } = await sb
         .from('phase_definitions')
-        .select('id, facility_id, name, display_name, display_order, start_milestone_id, end_milestone_id, color_key, is_active, deleted_at')
+        .select('id, facility_id, name, display_name, display_order, start_milestone_id, end_milestone_id, color_key, is_active, deleted_at, parent_phase_id')
         .eq('facility_id', effectiveFacilityId!)
         .order('display_order')
       if (fetchError) throw fetchError
