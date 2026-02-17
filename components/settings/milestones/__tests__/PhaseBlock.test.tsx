@@ -13,6 +13,8 @@ const mockMilestones: PhaseBlockMilestone[] = [
     pair_with_id: 'ms-2',
     pair_position: 'start',
     pair_group: 'anesthesia',
+    min_minutes: 5,
+    max_minutes: 15,
   },
   {
     id: 'ms-2',
@@ -22,6 +24,8 @@ const mockMilestones: PhaseBlockMilestone[] = [
     pair_with_id: 'ms-1',
     pair_position: 'end',
     pair_group: 'anesthesia',
+    min_minutes: null,
+    max_minutes: null,
   },
   {
     id: 'ms-3',
@@ -31,6 +35,8 @@ const mockMilestones: PhaseBlockMilestone[] = [
     pair_with_id: null,
     pair_position: null,
     pair_group: null,
+    min_minutes: null,
+    max_minutes: null,
   },
 ]
 
@@ -171,7 +177,7 @@ describe('PhaseBlock', () => {
       expect(screen.getByText('3')).toBeInTheDocument()
     })
 
-    it('calls onDelete when delete button is clicked', () => {
+    it('calls onDelete when archive button is clicked', () => {
       const onDelete = vi.fn()
       render(
         <PhaseBlock
@@ -184,16 +190,109 @@ describe('PhaseBlock', () => {
         />
       )
 
-      // Find delete buttons (there should be 3, one per milestone)
-      const deleteButtons = screen.getAllByRole('button')
-      // Filter to only the trash buttons (not the header which is also clickable)
-      const trashButtons = deleteButtons.filter((btn) =>
-        btn.querySelector('svg.lucide-trash-2')
+      // Find archive buttons (there should be 3, one per milestone)
+      const allButtons = screen.getAllByRole('button')
+      const archiveButtons = allButtons.filter((btn) =>
+        btn.querySelector('svg.lucide-archive')
       )
-      expect(trashButtons.length).toBe(3)
+      expect(archiveButtons.length).toBe(3)
 
-      fireEvent.click(trashButtons[0])
+      fireEvent.click(archiveButtons[0])
       expect(onDelete).toHaveBeenCalledWith('ms-1')
+    })
+
+    it('calls onEditMilestone when pencil button is clicked', () => {
+      const onEdit = vi.fn()
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          onEditMilestone={onEdit}
+        />
+      )
+
+      const allButtons = screen.getAllByRole('button')
+      const pencilButtons = allButtons.filter((btn) =>
+        btn.querySelector('svg.lucide-pencil')
+      )
+      expect(pencilButtons.length).toBe(3)
+
+      fireEvent.click(pencilButtons[1])
+      expect(onEdit).toHaveBeenCalledWith('ms-2')
+    })
+
+    it('renders interval badge when min_minutes and max_minutes are set', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+        />
+      )
+
+      // ms-1 has min_minutes: 5, max_minutes: 15 → "5–15 min"
+      expect(screen.getByText('5\u201315 min')).toBeInTheDocument()
+      // ms-2 and ms-3 have null intervals → no badge
+      expect(screen.queryByText('\u226490 min')).not.toBeInTheDocument()
+    })
+
+    it('renders interval badge with only max_minutes', () => {
+      const milestones: PhaseBlockMilestone[] = [
+        {
+          id: 'ms-max',
+          display_name: 'Max Only',
+          phase_group: 'pre_op',
+          is_boundary: false,
+          pair_with_id: null,
+          pair_position: null,
+          pair_group: null,
+          min_minutes: null,
+          max_minutes: 30,
+        },
+      ]
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={milestones}
+        />
+      )
+
+      expect(screen.getByText('\u226430 min')).toBeInTheDocument()
+    })
+
+    it('renders interval badge with only min_minutes', () => {
+      const milestones: PhaseBlockMilestone[] = [
+        {
+          id: 'ms-min',
+          display_name: 'Min Only',
+          phase_group: 'pre_op',
+          is_boundary: false,
+          pair_with_id: null,
+          pair_position: null,
+          pair_group: null,
+          min_minutes: 10,
+          max_minutes: null,
+        },
+      ]
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={milestones}
+        />
+      )
+
+      expect(screen.getByText('\u226510 min')).toBeInTheDocument()
     })
 
     it('respects startCounter for numbering', () => {

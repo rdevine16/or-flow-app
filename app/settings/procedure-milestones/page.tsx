@@ -364,6 +364,8 @@ export default function ProcedureMilestonesSettingsPage() {
           pair_with_id: m.pair_with_id,
           pair_position: m.pair_position,
           pair_group: pairGroupMap.get(m.id) || null,
+          min_minutes: null,
+          max_minutes: null,
         }))
       return { phaseDef: pd, color, milestones: phaseMilestones }
     })
@@ -381,6 +383,8 @@ export default function ProcedureMilestonesSettingsPage() {
         pair_with_id: m.pair_with_id,
         pair_position: m.pair_position,
         pair_group: pairGroupMap.get(m.id) || null,
+        min_minutes: null,
+        max_minutes: null,
       }))
   }, [safeMilestones, boundaryMilestoneIds, pairGroupMap])
 

@@ -208,6 +208,8 @@ export default function MilestonesSettingsPage() {
           pair_with_id: m.pair_with_id,
           pair_position: m.pair_position,
           pair_group: pairGroupMap.get(m.id) || null,
+          min_minutes: m.min_minutes,
+          max_minutes: m.max_minutes,
         }))
 
       return { phaseDef: pd, color, milestones: phaseMilestones }
@@ -226,6 +228,8 @@ export default function MilestonesSettingsPage() {
         pair_with_id: m.pair_with_id,
         pair_position: m.pair_position,
         pair_group: pairGroupMap.get(m.id) || null,
+        min_minutes: m.min_minutes,
+        max_minutes: m.max_minutes,
       }))
   }, [activeMilestones, boundaryMilestoneIds, pairGroupMap])
 
@@ -947,13 +951,12 @@ export default function MilestonesSettingsPage() {
         open={showFormModal}
         onClose={() => { setShowFormModal(false); setEditingMilestone(null) }}
         mode={formMode}
-        milestone={editingMilestone}
+        milestone={editingMilestone as Parameters<typeof MilestoneFormModal>[0]['milestone']}
         pairedName={editingMilestone?.pair_with_id ? getPairedName(editingMilestone.pair_with_id) : null}
         saving={saving}
         onSubmit={handleFormSubmit}
         onArchive={handleArchiveFromModal}
         availableForPairing={availableForPairing}
-        phaseOptions={phaseOptions}
       />
 
       {/* Pair/Unlink Modal */}

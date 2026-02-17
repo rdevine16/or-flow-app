@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { ChevronDown, GripVertical, Trash2, Check, AlertTriangle } from 'lucide-react'
+import { ChevronDown, GripVertical, Archive, Pencil, Check, AlertTriangle } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -14,6 +14,8 @@ export interface PhaseBlockMilestone {
   pair_with_id: string | null
   pair_position: 'start' | 'end' | null
   pair_group: string | null
+  min_minutes: number | null
+  max_minutes: number | null
 }
 
 export type PhaseBlockMode = 'table' | 'config'
@@ -51,8 +53,12 @@ export interface PhaseBlockProps {
   onReorder?: (phaseKey: string, newOrder: PhaseBlockMilestone[]) => void
   /** Whether rows are draggable */
   draggable?: boolean
-  /** Called when delete button is clicked (table mode) */
+  /** Called when delete/archive button is clicked (table mode) */
   onDelete?: (milestoneId: string) => void
+  /** Called when pencil icon is clicked (table mode) — opens edit modal */
+  onEditMilestone?: (milestoneId: string) => void
+  /** Called when a milestone is dragged from another phase into this one */
+  onCrossPhaseMove?: (milestoneId: string, targetPhaseKey: string, insertBeforeId?: string) => void
   /** Starting counter value for numbered rows (table mode). Defaults to 1. */
   startCounter?: number
   /** Width in pixels of the bracket overlay area. Rows are padded-left by this amount. */
@@ -80,6 +86,8 @@ export function PhaseBlock({
   onReorder,
   draggable = false,
   onDelete,
+  onEditMilestone,
+  onCrossPhaseMove,
   startCounter = 1,
   bracketAreaWidth = 0,
   children,
@@ -101,8 +109,9 @@ export function PhaseBlock({
       setDragId(id)
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', id)
+      e.dataTransfer.setData('application/x-phase-key', phaseKey)
     },
-    []
+    [phaseKey]
   )
 
   const handleDragOver = useCallback(
@@ -119,6 +128,21 @@ export function PhaseBlock({
   const handleDrop = useCallback(
     (e: React.DragEvent, targetId: string) => {
       e.preventDefault()
+      const droppedId = e.dataTransfer.getData('text/plain') || dragId
+      const sourcePhase = e.dataTransfer.getData('application/x-phase-key')
+      if (!droppedId) return
+
+      // Cross-phase move
+      if (sourcePhase && sourcePhase !== phaseKey && onCrossPhaseMove) {
+        const insertBefore = dropPos === 'before' ? targetId : undefined
+        onCrossPhaseMove(droppedId, phaseKey, insertBefore)
+        setDragId(null)
+        setDropTargetId(null)
+        setDropPos(null)
+        return
+      }
+
+      // Same-phase reorder
       if (!dragId || dragId === targetId || !onReorder) return
       const fromIdx = milestones.findIndex((m) => m.id === dragId)
       const toIdx = milestones.findIndex((m) => m.id === targetId)
@@ -133,7 +157,7 @@ export function PhaseBlock({
       setDropTargetId(null)
       setDropPos(null)
     },
-    [dragId, dropPos, milestones, onReorder, phaseKey]
+    [dragId, dropPos, milestones, onReorder, onCrossPhaseMove, phaseKey]
   )
 
   const handleDragEnd = useCallback(() => {
@@ -141,6 +165,26 @@ export function PhaseBlock({
     setDropTargetId(null)
     setDropPos(null)
   }, [])
+
+  // Cross-phase drop on header (for empty phases or appending to end)
+  const handleHeaderDragOver = useCallback((e: React.DragEvent) => {
+    if (!onCrossPhaseMove && !onReorder) return
+    e.preventDefault()
+  }, [onCrossPhaseMove, onReorder])
+
+  const handleHeaderDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    const droppedId = e.dataTransfer.getData('text/plain')
+    const sourcePhase = e.dataTransfer.getData('application/x-phase-key')
+    if (!droppedId) return
+
+    if (sourcePhase && sourcePhase !== phaseKey && onCrossPhaseMove) {
+      onCrossPhaseMove(droppedId, phaseKey)
+    }
+    setDragId(null)
+    setDropTargetId(null)
+    setDropPos(null)
+  }, [phaseKey, onCrossPhaseMove])
 
   // ── Render ──
   return (
@@ -153,6 +197,8 @@ export function PhaseBlock({
         {/* Collapsible header */}
         <div
           onClick={() => milestones.length > 0 && setExpanded(!expanded)}
+          onDragOver={handleHeaderDragOver}
+          onDrop={handleHeaderDrop}
           className={`flex items-center justify-between px-2.5 py-[7px] select-none ${
             milestones.length > 0 ? 'cursor-pointer' : 'cursor-default'
           } ${expanded && milestones.length > 0 ? 'rounded-tr-[5px]' : 'rounded-r-[5px]'}`}
@@ -307,6 +353,17 @@ export function PhaseBlock({
                       {ms.display_name}
                     </span>
 
+                    {/* Interval badge */}
+                    {(ms.min_minutes != null || ms.max_minutes != null) && (
+                      <span className="text-xs text-slate-500 bg-slate-100 rounded px-1.5 py-[1px] shrink-0">
+                        {ms.min_minutes != null && ms.max_minutes != null
+                          ? `${ms.min_minutes}\u2013${ms.max_minutes} min`
+                          : ms.max_minutes != null
+                            ? `\u2264${ms.max_minutes} min`
+                            : `\u2265${ms.min_minutes} min`}
+                      </span>
+                    )}
+
                     {/* Override badge (config mode) */}
                     {isOverridden && overrideLabel && (
                       <span className="text-xs font-bold px-1 py-[1px] rounded-sm bg-amber-100 text-amber-700">
@@ -321,7 +378,22 @@ export function PhaseBlock({
                       </span>
                     )}
 
-                    {/* Delete button (table mode, hover-reveal) */}
+                    {/* Pencil/edit button (table mode, hover-reveal) */}
+                    {isTable && onEditMilestone && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEditMilestone(ms.id)
+                        }}
+                        className={`border-none bg-transparent cursor-pointer text-slate-300 hover:text-blue-500 flex items-center p-0.5 rounded transition-opacity ${
+                          isHovered ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      >
+                        <Pencil className="w-[11px] h-[11px]" />
+                      </button>
+                    )}
+
+                    {/* Archive button (table mode, hover-reveal) */}
                     {isTable && onDelete && (
                       <button
                         onClick={(e) => {
@@ -332,7 +404,7 @@ export function PhaseBlock({
                           isHovered ? 'opacity-100' : 'opacity-0'
                         }`}
                       >
-                        <Trash2 className="w-[11px] h-[11px]" />
+                        <Archive className="w-[11px] h-[11px]" />
                       </button>
                     )}
                   </div>

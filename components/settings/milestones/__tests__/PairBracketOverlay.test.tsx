@@ -22,6 +22,8 @@ function ms(
     pair_with_id: pairWithId,
     pair_position: pairPosition,
     pair_group: pairGroup,
+    min_minutes: null,
+    max_minutes: null,
   }
 }
 
@@ -233,6 +235,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: 'anes-end',
       pair_position: 'start',
       pair_group: 'anesthesia',
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'anes-end',
@@ -242,6 +246,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: 'anes-start',
       pair_position: 'end',
       pair_group: 'anesthesia',
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'bed-prep',
@@ -251,6 +257,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: null,
       pair_position: null,
       pair_group: null,
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'table-start',
@@ -260,6 +268,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: 'table-end',
       pair_position: 'start',
       pair_group: 'table-setup',
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'table-end',
@@ -269,6 +279,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: 'table-start',
       pair_position: 'end',
       pair_group: 'table-setup',
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'prep-start',
@@ -278,6 +290,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: 'prep-end',
       pair_position: 'start',
       pair_group: 'prep-drape',
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'prep-end',
@@ -287,6 +301,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: 'prep-start',
       pair_position: 'end',
       pair_group: 'prep-drape',
+      min_minutes: null,
+      max_minutes: null,
     },
     {
       id: 'timeout',
@@ -296,6 +312,8 @@ describe('Workflow: Pre-Op phase with paired milestones', () => {
       pair_with_id: null,
       pair_position: null,
       pair_group: null,
+      min_minutes: null,
+      max_minutes: null,
     },
   ]
 
