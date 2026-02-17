@@ -59,6 +59,7 @@ export interface DailyTrackerData {
   date: string
   color: Color
   tooltip: string
+  numericValue: number  // Raw value for sparkline rendering
 }
 
 export interface KPIResult {
@@ -148,6 +149,26 @@ export interface CancellationResult extends KPIResult {
 }
 
 
+export interface FCOTSDetail {
+  caseId: string
+  caseNumber: string
+  scheduledDate: string
+  roomName: string
+  surgeonName: string
+  scheduledStart: string
+  actualStart: string
+  delayMinutes: number
+  isOnTime: boolean
+}
+
+export interface FCOTSResult extends KPIResult {
+  firstCaseDetails: FCOTSDetail[]
+}
+
+export interface CaseVolumeResult extends KPIResult {
+  weeklyVolume: Array<{ week: string; count: number }>
+}
+
 export interface AnalyticsOverview {
   // Volume
   totalCases: number
@@ -155,10 +176,10 @@ export interface AnalyticsOverview {
   cancelledCases: number
   
   // KPIs
-  fcots: KPIResult
+  fcots: FCOTSResult
   turnoverTime: KPIResult
   orUtilization: ORUtilizationResult
-  caseVolume: KPIResult
+  caseVolume: CaseVolumeResult
   cancellationRate: CancellationResult
   cumulativeTardiness: KPIResult
   nonOperativeTime: KPIResult
@@ -180,6 +201,28 @@ export interface AnalyticsOverview {
   avgClosingTime: number
   avgEmergenceTime: number
 }
+// ============================================
+// STATUS UTILITY
+// ============================================
+
+/**
+ * 3-tier KPI status based on value vs target.
+ * Returns 'good' if at or above target, 'warn' if ≥70%, 'bad' otherwise.
+ * For inverse metrics (lower is better), pass inverse=true.
+ */
+export function getKPIStatus(
+  value: number,
+  target: number,
+  inverse: boolean = false
+): 'good' | 'warn' | 'bad' {
+  const ratio = inverse
+    ? target / Math.max(value, 0.01)
+    : value / Math.max(target, 0.01)
+  if (ratio >= 1) return 'good'
+  if (ratio >= 0.7) return 'warn'
+  return 'bad'
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -742,7 +785,8 @@ export function calculateSurgicalTurnovers(
       return {
         date,
         color: (dayMedian <= 40 ? 'green' : dayMedian <= 50 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} turnovers)`
+        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} turnovers)`,
+        numericValue: dayMedian
       }
     })
 
@@ -755,7 +799,8 @@ export function calculateSurgicalTurnovers(
       return {
         date,
         color: (dayMedian <= 10 ? 'green' : dayMedian <= 20 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} flips)`
+        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} flips)`,
+        numericValue: dayMedian
       }
     })
 
@@ -803,46 +848,70 @@ export function calculateFCOTS(
   cases: CaseWithMilestones[],
   previousPeriodCases?: CaseWithMilestones[],
   config?: FCOTSConfig
-): KPIResult {
+): FCOTSResult {
   const milestone = config?.milestone || 'patient_in'
   const grace = config?.graceMinutes ?? 2
   const targetPercent = config?.targetPercent ?? 85
-  
+
   const casesByDateRoom = new Map<string, CaseWithMilestones>()
-  
+
   // Find first case per room per day
   cases.forEach(c => {
     if (!c.or_room_id || !c.start_time) return
     const key = `${c.scheduled_date}|${c.or_room_id}`
     const existing = casesByDateRoom.get(key)
-    
+
     if (!existing || (c.start_time < (existing.start_time || ''))) {
       casesByDateRoom.set(key, c)
     }
   })
-  
+
   const firstCases = Array.from(casesByDateRoom.values())
   let onTimeCount = 0
   let lateCount = 0
   const dailyResults = new Map<string, { onTime: number; late: number }>()
-  
+  const firstCaseDetails: FCOTSDetail[] = []
+
   firstCases.forEach(c => {
     const milestones = getMilestoneMap(c)
     const scheduled = parseScheduledDateTime(c.scheduled_date, c.start_time)
     // Use configured milestone for "actual start"
     const actual = milestone === 'incision' ? milestones.incision : milestones.patient_in
-    
+
     if (!scheduled || !actual) return
-    
+
     const delayMinutes = getTimeDiffMinutes(scheduled, actual) || 0
     const isOnTime = delayMinutes <= grace
-    
+
     if (isOnTime) {
       onTimeCount++
     } else {
       lateCount++
     }
-    
+
+    // Collect per-case detail for drill-through
+    const surgeonName = c.surgeon
+      ? `Dr. ${c.surgeon.last_name}`
+      : 'Unknown'
+    const scheduledTime = c.start_time
+      ? c.start_time.substring(0, 5) // "07:30:00" → "07:30"
+      : '--'
+    const actualTime = actual
+      ? `${String(actual.getHours()).padStart(2, '0')}:${String(actual.getMinutes()).padStart(2, '0')}`
+      : '--'
+
+    firstCaseDetails.push({
+      caseId: c.id,
+      caseNumber: c.case_number,
+      scheduledDate: c.scheduled_date,
+      roomName: c.or_rooms?.name || 'Unknown',
+      surgeonName,
+      scheduledStart: scheduledTime,
+      actualStart: actualTime,
+      delayMinutes: Math.max(0, delayMinutes),
+      isOnTime
+    })
+
     // Track daily
     const dayData = dailyResults.get(c.scheduled_date) || { onTime: 0, late: 0 }
     if (isOnTime) dayData.onTime++
@@ -890,13 +959,14 @@ export function calculateFCOTS(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30) // Last 30 days
     .map(([date, data]) => {
-      const dayRate = data.onTime + data.late > 0 
-        ? (data.onTime / (data.onTime + data.late)) * 100 
+      const dayRate = data.onTime + data.late > 0
+        ? (data.onTime / (data.onTime + data.late)) * 100
         : 100
       return {
         date,
         color: dayRate >= 100 ? 'green' : dayRate >= 80 ? 'yellow' : 'red' as Color,
-        tooltip: `${date}: ${data.onTime}/${data.onTime + data.late} on-time`
+        tooltip: `${date}: ${data.onTime}/${data.onTime + data.late} on-time`,
+        numericValue: dayRate
       }
     })
   
@@ -910,7 +980,8 @@ export function calculateFCOTS(
     targetMet: rate >= targetPercent,
     delta,
     deltaType,
-    dailyData
+    dailyData,
+    firstCaseDetails: firstCaseDetails.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
   }
 }
 
@@ -1007,7 +1078,8 @@ export function calculateTurnoverTime(
       return {
         date,
         color: dayMedian <= 25 ? 'green' : dayMedian <= 30 ? 'yellow' : 'red' as Color,
-        tooltip: `${date}: ${Math.round(dayMedian)} min median`
+        tooltip: `${date}: ${Math.round(dayMedian)} min median`,
+        numericValue: dayMedian
       }
     })
   
@@ -1165,7 +1237,8 @@ export function calculateORUtilization(
       return {
         date,
         color: dayAvg >= 75 ? 'green' : dayAvg >= 60 ? 'yellow' : 'slate' as Color,
-        tooltip: `${date}: ${Math.round(dayAvg)}% utilization`
+        tooltip: `${date}: ${Math.round(dayAvg)}% utilization`,
+        numericValue: dayAvg
       }
     })
   
@@ -1199,7 +1272,7 @@ export function calculateORUtilization(
 export function calculateCaseVolume(
   cases: CaseWithMilestones[],
   previousPeriodCases?: CaseWithMilestones[]
-): KPIResult {
+): CaseVolumeResult {
   const totalCases = cases.length
   const previousTotal = previousPeriodCases?.length || 0
   
@@ -1227,7 +1300,10 @@ export function calculateCaseVolume(
     displayValue: totalCases.toString(),
     subtitle: delta !== undefined ? `${deltaType === 'increase' ? '+' : '-'}${delta}% vs last period` : 'This period',
     delta,
-    deltaType
+    deltaType,
+    weeklyVolume: Array.from(weeklyVolume.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([week, count]) => ({ week, count }))
   }
 }
 
@@ -1277,9 +1353,10 @@ export function calculateCancellationRate(
     .map(([date, data]) => ({
       date,
       color: data.sameDay === 0 ? 'green' : data.sameDay === 1 ? 'yellow' : 'red' as Color,
-      tooltip: data.sameDay === 0 
-        ? `${date}: No same-day cancellations` 
-        : `${date}: ${data.sameDay} same-day, ${data.cancelled} total cancelled`
+      tooltip: data.sameDay === 0
+        ? `${date}: No same-day cancellations`
+        : `${date}: ${data.sameDay} same-day, ${data.cancelled} total cancelled`,
+      numericValue: data.sameDay
     }))
   
   return {
@@ -1330,7 +1407,8 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
     .map(([date, minutes]) => ({
       date,
       color: minutes <= 30 ? 'green' : minutes <= 45 ? 'yellow' : 'red' as Color,
-      tooltip: `${date}: ${Math.round(minutes)} min total delays`
+      tooltip: `${date}: ${Math.round(minutes)} min total delays`,
+      numericValue: minutes
     }))
   
   return {
@@ -1355,17 +1433,18 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
 export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResult {
   const notTimes: number[] = []
   const totalTimes: number[] = []
-  
+  const dailyResults = new Map<string, number[]>()
+
   cases.forEach(c => {
     const m = getMilestoneMap(c)
-    
+
     // Must have at least patient_in and incision to calculate any non-operative time
     if (!m.patient_in || !m.incision) return
-    
+
     // Pre-op time: patient_in to incision (always available if we get here)
     const preOp = getTimeDiffMinutes(m.patient_in, m.incision)
     if (preOp === null || preOp < 0) return // Skip invalid data
-    
+
     // Post-closing time: ONLY use closing_complete → patient_out
     // Do NOT fall back to closing — that segment includes active surgical closing work
     let postClose: number | null = null
@@ -1373,27 +1452,47 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
       postClose = getTimeDiffMinutes(m.closing_complete, m.patient_out)
       if (postClose !== null && postClose < 0) postClose = null // Skip invalid
     }
-    
+
     // Total case time
     const total = getTimeDiffMinutes(m.patient_in, m.patient_out)
-    
+
     // Sum non-operative segments (pre-op always, post-op when available)
     const nonOpTime = preOp + (postClose ?? 0)
     notTimes.push(nonOpTime)
-    
+
     if (total !== null && total > 0) {
       totalTimes.push(total)
     }
+
+    // Track daily
+    const dayTimes = dailyResults.get(c.scheduled_date) || []
+    dayTimes.push(nonOpTime)
+    dailyResults.set(c.scheduled_date, dayTimes)
   })
-  
+
   const avgNOT = calculateAverage(notTimes)
   const avgTotal = calculateAverage(totalTimes)
   const notPercent = avgTotal > 0 ? Math.round((avgNOT / avgTotal) * 100) : 0
-  
+
+  // Build daily tracker
+  const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-30)
+    .map(([date, dayTimes]) => {
+      const dayAvg = calculateAverage(dayTimes)
+      return {
+        date,
+        color: (dayAvg <= 20 ? 'green' : dayAvg <= 30 ? 'yellow' : 'red') as Color,
+        tooltip: `${date}: ${Math.round(dayAvg)} min avg non-op (${dayTimes.length} cases)`,
+        numericValue: dayAvg
+      }
+    })
+
   return {
     value: Math.round(avgNOT),
     displayValue: formatMinutes(avgNOT),
-    subtitle: `${notPercent}% of total case time · ${notTimes.length} cases`
+    subtitle: `${notPercent}% of total case time · ${notTimes.length} cases`,
+    dailyData
   }
 }
 
