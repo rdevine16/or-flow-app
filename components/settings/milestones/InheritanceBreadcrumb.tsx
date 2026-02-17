@@ -19,8 +19,8 @@ interface InheritanceBreadcrumbProps {
  */
 export function InheritanceBreadcrumb({ levels }: InheritanceBreadcrumbProps) {
   return (
-    <div className="flex items-center gap-0 text-[10px] text-slate-400 px-2.5 py-1.5 bg-slate-50 rounded-[5px] border border-slate-100 mb-2.5">
-      <span className="font-semibold text-slate-500 text-[9px] mr-1.5 uppercase tracking-wide">
+    <div className="flex items-center gap-0 text-xs text-slate-400 px-2.5 py-1.5 bg-slate-50 rounded-[5px] border border-slate-100 mb-2.5">
+      <span className="font-semibold text-slate-500 text-xs mr-1.5 uppercase tracking-wide">
         Inheritance:
       </span>
       {levels.map((level, i) => (

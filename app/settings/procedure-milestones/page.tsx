@@ -368,6 +368,21 @@ export default function ProcedureMilestonesSettingsPage() {
     })
   }, [phaseDefinitions, safeMilestones, boundaryMilestoneIds, pairGroupMap])
 
+  // Milestones with no phase_group (unphased, e.g. after Patient Out)
+  const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
+    return safeMilestones
+      .filter((m) => !m.phase_group && !boundaryMilestoneIds.has(m.id))
+      .map((m) => ({
+        id: m.id,
+        display_name: m.display_name,
+        phase_group: m.phase_group,
+        is_boundary: false,
+        pair_with_id: m.pair_with_id,
+        pair_position: m.pair_position,
+        pair_group: pairGroupMap.get(m.id) || null,
+      }))
+  }, [safeMilestones, boundaryMilestoneIds, pairGroupMap])
+
   const renderData = useMemo(() => {
     if (!phaseBlockData.length) return []
     return phaseBlockData.map((phase, idx) => {
@@ -411,14 +426,16 @@ export default function ProcedureMilestonesSettingsPage() {
           }
         }
       } else {
-        const nextColor = phaseBlockData[idx + 1].color
+        const nextPhase = phaseBlockData[idx + 1]
+        const nextColor = nextPhase.color
+        const isShared = phase.phaseDef.end_milestone_id === nextPhase.phaseDef.start_milestone_id
         const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
         if (ms) {
           boundaryAfter = {
             name: ms.display_name,
             topColor: phase.color,
             bottomColor: nextColor,
-            solid: false,
+            solid: !isShared,
           }
         }
       }
@@ -685,7 +702,7 @@ export default function ProcedureMilestonesSettingsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search procedures..."
-              className="border-none outline-none bg-transparent text-[11px] text-slate-800 w-full font-inherit"
+              className="border-none outline-none bg-transparent text-xs text-slate-800 w-full font-inherit"
             />
           </div>
         </div>
@@ -696,7 +713,7 @@ export default function ProcedureMilestonesSettingsPage() {
             <button
               key={f.id}
               onClick={() => setFilterTab(f.id)}
-              className={`px-[7px] py-[3px] border-none rounded-[3px] text-[10px] cursor-pointer ${
+              className={`px-[7px] py-[3px] border-none rounded-[3px] text-xs cursor-pointer ${
                 filterTab === f.id
                   ? f.purple
                     ? 'font-semibold text-purple-700 bg-purple-100'
@@ -730,20 +747,20 @@ export default function ProcedureMilestonesSettingsPage() {
               >
                 <div className="min-w-0">
                   <div
-                    className={`text-[11px] text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis ${
+                    className={`text-xs text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis ${
                       isSel ? 'font-semibold' : 'font-medium'
                     }`}
                   >
                     {p.name}
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[9px] text-slate-400">
+                    <span className="text-xs text-slate-400">
                       {custom
                         ? `${diffCount} override${diffCount !== 1 ? 's' : ''}`
                         : 'Default'}
                     </span>
                     {surgOvCount > 0 && (
-                      <span className="text-[9px] text-purple-600 font-medium flex items-center gap-0.5">
+                      <span className="text-xs text-purple-600 font-medium flex items-center gap-0.5">
                         <User className="w-3 h-3" /> {surgOvCount}
                       </span>
                     )}
@@ -762,7 +779,7 @@ export default function ProcedureMilestonesSettingsPage() {
           })}
 
           {filteredProcedures.length === 0 && (
-            <div className="py-8 text-center text-[11px] text-slate-400">
+            <div className="py-8 text-center text-xs text-slate-400">
               {searchQuery ? 'No matching procedures' : 'No procedures'}
             </div>
           )}
@@ -777,11 +794,11 @@ export default function ProcedureMilestonesSettingsPage() {
             <div className="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h2 className="text-sm font-bold text-slate-900 m-0">
+                  <h2 className="text-sm font-semibold text-slate-900 m-0">
                     {selectedProc.name}
                   </h2>
                   <span
-                    className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-[3px] ${
+                    className={`text-xs font-semibold px-1.5 py-0.5 rounded-[3px] ${
                       isCustomized
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-slate-100 text-slate-500'
@@ -790,14 +807,14 @@ export default function ProcedureMilestonesSettingsPage() {
                     {isCustomized ? 'CUSTOMIZED' : 'DEFAULT'}
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-0.5 m-0">
+                <p className="text-xs text-slate-500 mt-0.5 m-0">
                   {enabledCount}/{safeMilestones.length} milestones active
                 </p>
               </div>
               {isCustomized && (
                 <button
                   onClick={handleReset}
-                  className="flex items-center gap-1 px-2.5 py-[5px] border border-slate-200 rounded-[5px] bg-white cursor-pointer text-[10px] font-medium text-slate-500 hover:bg-slate-50"
+                  className="flex items-center gap-1 px-2.5 py-[5px] border border-slate-200 rounded-[5px] bg-white cursor-pointer text-xs font-medium text-slate-500 hover:bg-slate-50"
                 >
                   <Undo2 className="w-3 h-3" /> Reset
                 </button>
@@ -816,7 +833,7 @@ export default function ProcedureMilestonesSettingsPage() {
 
               {/* Surgeon override banner */}
               {selectedProcSurgeons.length > 0 && (
-                <div className="flex items-start gap-2 px-3 py-2 mb-2.5 bg-purple-100 border border-purple-200 rounded-[5px] text-[10px] text-purple-800">
+                <div className="flex items-start gap-2 px-3 py-2 mb-2.5 bg-purple-100 border border-purple-200 rounded-[5px] text-xs text-purple-700">
                   <User className="w-3 h-3 mt-0.5 shrink-0" />
                   <div>
                     <strong>
@@ -833,7 +850,7 @@ export default function ProcedureMilestonesSettingsPage() {
                               `/settings/surgeon-milestones?surgeon=${s.id}&procedure=${selectedProcId}`
                             )
                           }
-                          className="px-1.5 py-0.5 rounded-[3px] bg-purple-200 font-medium text-[10px] text-purple-800 hover:bg-purple-300 cursor-pointer border-none"
+                          className="px-1.5 py-0.5 rounded-[3px] bg-purple-200 font-medium text-xs text-purple-700 hover:bg-purple-300 cursor-pointer border-none"
                         >
                           {s.last_name}, {s.first_name} &rarr;
                         </button>
@@ -888,6 +905,22 @@ export default function ProcedureMilestonesSettingsPage() {
                     )}
                   </Fragment>
                 ))}
+
+                {/* Unphased milestones (no phase_group assigned) */}
+                {unphasedMilestones.length > 0 && (
+                  <PhaseBlock
+                    phaseColor="#94A3B8"
+                    phaseLabel="Unphased"
+                    phaseKey="unphased"
+                    mode="config"
+                    milestones={unphasedMilestones}
+                    config={effectiveConfig}
+                    parentConfig={defaultConfig}
+                    overriddenIds={overriddenIds}
+                    overrideLabel="OVERRIDE"
+                    onToggle={handleToggle}
+                  />
+                )}
               </div>
             </div>
           </>
@@ -895,10 +928,10 @@ export default function ProcedureMilestonesSettingsPage() {
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full text-slate-400">
             <Search className="w-10 h-10 mb-3 text-slate-300" />
-            <p className="text-[13px] font-medium text-slate-500 mb-1">
+            <p className="text-sm font-medium text-slate-500 mb-1">
               Select a procedure
             </p>
-            <p className="text-[11px]">
+            <p className="text-xs">
               Choose a procedure from the list to configure its milestones.
             </p>
           </div>

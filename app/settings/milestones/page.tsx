@@ -213,6 +213,21 @@ export default function MilestonesSettingsPage() {
     })
   }, [phaseDefinitions, activeMilestones, boundaryMilestoneIds, pairGroupMap])
 
+  // Milestones with no phase_group (unphased, e.g. after Patient Out)
+  const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
+    return activeMilestones
+      .filter(m => !m.phase_group && !boundaryMilestoneIds.has(m.id))
+      .map(m => ({
+        id: m.id,
+        display_name: m.display_name,
+        phase_group: m.phase_group,
+        is_boundary: false,
+        pair_with_id: m.pair_with_id,
+        pair_position: m.pair_position,
+        pair_group: pairGroupMap.get(m.id) || null,
+      }))
+  }, [activeMilestones, boundaryMilestoneIds, pairGroupMap])
+
   // All milestones as PairIssueMilestone for issue detection
   const allPairIssueMilestones = useMemo(() => {
     return activeMilestones.map(m => ({
@@ -252,10 +267,12 @@ export default function MilestonesSettingsPage() {
           boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
         }
       } else {
-        const nextColor = phaseBlockData[idx + 1].color
+        const nextPhase = phaseBlockData[idx + 1]
+        const nextColor = nextPhase.color
+        const isShared = phase.phaseDef.end_milestone_id === nextPhase.phaseDef.start_milestone_id
         const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
         if (ms) {
-          boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: nextColor, solid: false }
+          boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: nextColor, solid: !isShared }
         }
       }
 
@@ -464,7 +481,7 @@ export default function MilestonesSettingsPage() {
           <p>Archive <strong>&ldquo;{milestone.display_name}&rdquo;</strong>?</p>
           {usageCount > 0 && (
             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-amber-800 text-sm">
+              <p className="text-amber-700 text-sm">
                 This milestone has been used in <strong>{usageCount} case{usageCount !== 1 ? 's' : ''}</strong>.
                 Historical data will be preserved.
               </p>
@@ -472,7 +489,7 @@ export default function MilestonesSettingsPage() {
           )}
           {partner && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-blue-800 text-sm">
+              <p className="text-blue-700 text-sm">
                 This milestone is paired with <strong>&ldquo;{partner.display_name}&rdquo;</strong>.
                 The pairing will be removed but the partner milestone will remain.
               </p>
@@ -761,7 +778,7 @@ export default function MilestonesSettingsPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Milestones</h1>
         <div className="flex items-center gap-2">
           {totalPairIssueCount > 0 && (
-            <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 rounded-md text-[10px] font-semibold text-red-600">
+            <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 rounded-md text-xs font-semibold text-red-600">
               <AlertTriangle className="w-3 h-3" /> {totalPairIssueCount} pair issue{totalPairIssueCount > 1 ? 's' : ''}
             </div>
           )}
@@ -839,10 +856,27 @@ export default function MilestonesSettingsPage() {
                 )}
               </Fragment>
             ))}
+
+            {/* Unphased milestones (no phase_group assigned) */}
+            {unphasedMilestones.length > 0 && (
+              <PhaseBlock
+                phaseColor="#94A3B8"
+                phaseLabel="Unphased"
+                phaseKey="unphased"
+                mode="table"
+                milestones={unphasedMilestones}
+                onReorder={handleReorder}
+                draggable
+                onDelete={handleArchiveById}
+                startCounter={
+                  phaseBlockData.reduce((sum, p) => sum + p.milestones.length, 0) + 1
+                }
+              />
+            )}
           </div>
 
           {/* Summary footer */}
-          <div className="mt-3 px-3.5 py-2 bg-white rounded-md border border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+          <div className="mt-3 px-3.5 py-2 bg-white rounded-md border border-slate-100 text-xs text-slate-400 flex items-center justify-between">
             <span>{totalCount} total &middot; {boundaryCount} boundary &middot; {optionalCount} optional</span>
           </div>
         </div>
@@ -950,7 +984,7 @@ export default function MilestonesSettingsPage() {
 
                 {selectedPairId && selectedPairId !== pairingMilestone.pair_with_id && (
                   <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm font-medium text-blue-800 mb-2">New pairing:</p>
+                    <p className="text-sm font-medium text-blue-700 mb-2">New pairing:</p>
                     <p className="text-sm text-blue-700">
                       <span className="font-medium">{pairingMilestone.display_name}</span> &rarr; Start
                     </p>

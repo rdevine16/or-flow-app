@@ -492,6 +492,21 @@ export default function SurgeonMilestonesSettingsPage() {
     })
   }, [phaseDefinitions, safeMilestones, boundaryMilestoneIds, pairGroupMap, configOrderMap])
 
+  // Milestones with no phase_group (unphased, e.g. after Patient Out)
+  const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
+    return safeMilestones
+      .filter((m) => !m.phase_group && !boundaryMilestoneIds.has(m.id))
+      .map((m) => ({
+        id: m.id,
+        display_name: m.display_name,
+        phase_group: m.phase_group,
+        is_boundary: false,
+        pair_with_id: m.pair_with_id,
+        pair_position: m.pair_position,
+        pair_group: pairGroupMap.get(m.id) || null,
+      }))
+  }, [safeMilestones, boundaryMilestoneIds, pairGroupMap])
+
   const renderData = useMemo(() => {
     if (!phaseBlockData.length) return []
     return phaseBlockData.map((phase, idx) => {
@@ -533,14 +548,16 @@ export default function SurgeonMilestonesSettingsPage() {
           }
         }
       } else {
-        const nextColor = phaseBlockData[idx + 1].color
+        const nextPhase = phaseBlockData[idx + 1]
+        const nextColor = nextPhase.color
+        const isShared = phase.phaseDef.end_milestone_id === nextPhase.phaseDef.start_milestone_id
         const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
         if (ms) {
           boundaryAfter = {
             name: ms.display_name,
             topColor: phase.color,
             bottomColor: nextColor,
-            solid: false,
+            solid: !isShared,
           }
         }
       }
@@ -939,7 +956,7 @@ export default function SurgeonMilestonesSettingsPage() {
                 value={surgeonSearch}
                 onChange={(e) => setSurgeonSearch(e.target.value)}
                 placeholder="Search surgeons..."
-                className="border-none outline-none bg-transparent text-[11px] text-slate-800 w-full"
+                className="border-none outline-none bg-transparent text-xs text-slate-800 w-full"
               />
             </div>
           </div>
@@ -964,7 +981,7 @@ export default function SurgeonMilestonesSettingsPage() {
                   }`}
                 >
                   <div
-                    className={`w-7 h-7 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                    className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold shrink-0 ${
                       overrideCount > 0
                         ? 'bg-purple-100 text-purple-600'
                         : 'bg-slate-100 text-slate-400'
@@ -974,13 +991,13 @@ export default function SurgeonMilestonesSettingsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div
-                      className={`text-[11px] text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis ${
+                      className={`text-xs text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis ${
                         isSel ? 'font-semibold' : 'font-medium'
                       }`}
                     >
                       {s.last_name}, {s.first_name}
                     </div>
-                    <div className="text-[9px] text-slate-400 mt-0.5">
+                    <div className="text-xs text-slate-400 mt-0.5">
                       {overrideCount > 0 ? (
                         <span className="text-purple-600 font-medium">
                           {overrideCount} procedure{overrideCount !== 1 ? 's' : ''}
@@ -998,7 +1015,7 @@ export default function SurgeonMilestonesSettingsPage() {
             })}
 
             {filteredSurgeons.length === 0 && (
-              <div className="py-8 text-center text-[11px] text-slate-400">
+              <div className="py-8 text-center text-xs text-slate-400">
                 {surgeonSearch ? 'No matching surgeons' : 'No surgeons'}
               </div>
             )}
@@ -1012,11 +1029,11 @@ export default function SurgeonMilestonesSettingsPage() {
               {/* Header */}
               <div className="bg-white border-b border-slate-200 px-5 py-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-[30px] h-[30px] rounded-md bg-purple-100 flex items-center justify-center text-[10px] font-bold text-purple-600">
+                  <div className="w-[30px] h-[30px] rounded-md bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-600">
                     {getInitials(selectedSurgeonObj)}
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-slate-900 m-0">
+                    <h2 className="text-sm font-semibold text-slate-900 m-0">
                       {selectedSurgeonObj.last_name}, {selectedSurgeonObj.first_name}
                     </h2>
                   </div>
@@ -1027,7 +1044,7 @@ export default function SurgeonMilestonesSettingsPage() {
                 {/* Procedure override chips */}
                 {surgeonProcs.length > 0 && (
                   <div className="mb-2.5">
-                    <div className="text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
+                    <div className="text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
                       Procedure Overrides ({surgeonProcs.length})
                     </div>
                     <div className="flex gap-1 flex-wrap mb-2">
@@ -1046,7 +1063,7 @@ export default function SurgeonMilestonesSettingsPage() {
                           >
                             <button
                               onClick={() => setSelectedSurgeonProc(p.id)}
-                              className={`px-2 py-[5px] border-none bg-transparent text-[11px] cursor-pointer flex items-center gap-1 ${
+                              className={`px-2 py-[5px] border-none bg-transparent text-xs cursor-pointer flex items-center gap-1 ${
                                 isActive
                                   ? 'font-semibold text-blue-700'
                                   : 'font-normal text-slate-600'
@@ -1057,7 +1074,7 @@ export default function SurgeonMilestonesSettingsPage() {
                                 <div className="w-[5px] h-[5px] rounded-full bg-purple-500" />
                               )}
                               {!hasDiff && (
-                                <span className="text-[8px] text-slate-400">
+                                <span className="text-xs text-slate-400">
                                   no diff
                                 </span>
                               )}
@@ -1089,7 +1106,7 @@ export default function SurgeonMilestonesSettingsPage() {
 
                 {/* Loading state for configs */}
                 {surgeonConfigsLoading && (
-                  <div className="py-8 text-center text-[11px] text-slate-400">
+                  <div className="py-8 text-center text-xs text-slate-400">
                     Loading milestone configuration...
                   </div>
                 )}
@@ -1119,7 +1136,7 @@ export default function SurgeonMilestonesSettingsPage() {
 
                     {/* Active count + reset */}
                     <div className="flex justify-between items-center mb-2.5">
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-xs text-slate-500">
                         {enabledCount}/{safeMilestones.length} active
                         {surgeonIsCustomized &&
                           ` · ${overriddenIds.size} override${
@@ -1130,7 +1147,7 @@ export default function SurgeonMilestonesSettingsPage() {
                         <button
                           onClick={() => setShowResetConfirm(true)}
                           disabled={resetting}
-                          className="flex items-center gap-1 px-2 py-1 border border-slate-200 rounded bg-white cursor-pointer text-[10px] font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                          className="flex items-center gap-1 px-2 py-1 border border-slate-200 rounded bg-white cursor-pointer text-xs font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
                         >
                           <Undo2 className="w-3 h-3" /> Reset
                         </button>
@@ -1139,7 +1156,7 @@ export default function SurgeonMilestonesSettingsPage() {
 
                     {/* Green info banner when matching parent */}
                     {!surgeonIsCustomized && (
-                      <div className="flex items-center gap-1.5 px-3 py-2 mb-2.5 bg-green-50 border border-green-200 rounded-[5px] text-[10px] text-green-800">
+                      <div className="flex items-center gap-1.5 px-3 py-2 mb-2.5 bg-green-50 border border-green-200 rounded-[5px] text-xs text-green-800">
                         <CheckCircle2 className="w-3 h-3 shrink-0" />
                         Matching {isProcCustomized ? 'procedure' : 'facility default'}{' '}
                         config. Toggle any milestone to create a surgeon override.
@@ -1191,15 +1208,31 @@ export default function SurgeonMilestonesSettingsPage() {
                           )}
                         </Fragment>
                       ))}
+
+                      {/* Unphased milestones (no phase_group assigned) */}
+                      {unphasedMilestones.length > 0 && (
+                        <PhaseBlock
+                          phaseColor="#94A3B8"
+                          phaseLabel="Unphased"
+                          phaseKey="unphased"
+                          mode="config"
+                          milestones={unphasedMilestones}
+                          config={effectiveConfig}
+                          parentConfig={parentConfig}
+                          overriddenIds={overriddenIds}
+                          overrideLabel="SURGEON"
+                          onToggle={handleToggle}
+                        />
+                      )}
                     </div>
                   </>
                 ) : !surgeonConfigsLoading && !selectedSurgeonProc ? (
                   /* Empty state when no procedure selected */
                   <div className="py-10 text-center text-slate-400">
-                    <div className="text-[13px] font-medium text-slate-500 mb-1">
+                    <div className="text-sm font-medium text-slate-500 mb-1">
                       No procedure overrides yet
                     </div>
-                    <div className="text-[11px]">
+                    <div className="text-xs">
                       Use &ldquo;Add Procedure Override&rdquo; to configure
                       surgeon-specific milestones.
                     </div>
@@ -1211,10 +1244,10 @@ export default function SurgeonMilestonesSettingsPage() {
             /* Empty state when no surgeon selected */
             <div className="flex flex-col items-center justify-center h-full text-slate-400">
               <Search className="w-10 h-10 mb-3 text-slate-300" />
-              <p className="text-[13px] font-medium text-slate-500 mb-1">
+              <p className="text-sm font-medium text-slate-500 mb-1">
                 Select a surgeon
               </p>
-              <p className="text-[11px]">
+              <p className="text-xs">
                 Choose a surgeon from the list to manage their milestone overrides.
               </p>
             </div>

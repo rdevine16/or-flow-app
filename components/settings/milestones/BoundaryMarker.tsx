@@ -46,7 +46,7 @@ export function BoundaryMarker({
           className="w-[13px] h-[13px] rounded-full shrink-0"
           style={{ background: dotBackground }}
         />
-        <span className="text-[11px] font-semibold text-slate-800 whitespace-nowrap">
+        <span className="text-xs font-semibold text-slate-800 whitespace-nowrap">
           {name}
         </span>
         <span className="text-slate-400 flex items-center">

@@ -216,7 +216,7 @@ function MilestoneFormContent({
                   key={r}
                   type="button"
                   onClick={() => setPairRole(r)}
-                  className={`px-3 py-1 border rounded text-[10px] font-semibold uppercase ${
+                  className={`px-3 py-1 border rounded text-xs font-semibold uppercase ${
                     pairRole === r
                       ? 'border-blue-500 bg-blue-50 text-blue-600'
                       : 'border-slate-200 bg-white text-slate-500'

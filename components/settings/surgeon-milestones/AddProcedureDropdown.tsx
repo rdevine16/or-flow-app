@@ -56,7 +56,7 @@ export function AddProcedureDropdown({
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-[5px] px-3 py-1.5 border-[1.5px] border-dashed border-slate-300 rounded-md bg-[#FAFBFC] cursor-pointer text-[11px] font-medium text-slate-500 w-full justify-center hover:border-blue-500 hover:text-blue-500 transition-colors"
+        className="flex items-center gap-[5px] px-3 py-1.5 border-[1.5px] border-dashed border-slate-300 rounded-md bg-[#FAFBFC] cursor-pointer text-xs font-medium text-slate-500 w-full justify-center hover:border-blue-500 hover:text-blue-500 transition-colors"
       >
         <Plus className="w-[13px] h-[13px]" /> Add Procedure Override
       </button>
@@ -71,13 +71,13 @@ export function AddProcedureDropdown({
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search procedures..."
                 autoFocus
-                className="border-none outline-none bg-transparent text-[11px] text-slate-800 w-full"
+                className="border-none outline-none bg-transparent text-xs text-slate-800 w-full"
               />
             </div>
           </div>
           <div className="overflow-y-auto p-1">
             {available.length === 0 && (
-              <div className="py-3 text-center text-[11px] text-slate-400">
+              <div className="py-3 text-center text-xs text-slate-400">
                 {search ? 'No match' : 'All procedures added'}
               </div>
             )}
@@ -89,7 +89,7 @@ export function AddProcedureDropdown({
                   setOpen(false)
                   setSearch('')
                 }}
-                className="px-2.5 py-[7px] rounded cursor-pointer text-[11px] text-slate-800 hover:bg-slate-100"
+                className="px-2.5 py-[7px] rounded cursor-pointer text-xs text-slate-800 hover:bg-slate-100"
               >
                 {p.name}
               </div>
