@@ -1,8 +1,10 @@
 'use client'
 
+import { useMemo } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/lib/UserContext'
+import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import Breadcrumb from '@/components/ui/Breadcrumb'
 import {
   getCategoryForPath,
@@ -84,9 +86,11 @@ function TabBar({
 function SubNav({
   category,
   pathname,
+  notificationDots,
 }: {
   category: SettingsCategory
   pathname: string
+  notificationDots?: Record<string, boolean>
 }) {
   return (
     <nav className="w-[220px] flex-shrink-0 sticky top-[49px] self-start max-h-[calc(100vh-49px)] overflow-y-auto py-4 pl-6">
@@ -94,6 +98,7 @@ function SubNav({
         {category.items.map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           const Icon = item.icon
+          const hasDot = notificationDots?.[item.id]
 
           return (
             <Link
@@ -107,7 +112,12 @@ function SubNav({
                 }
               `}
             >
-              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`} />
+              <div className="relative flex-shrink-0">
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`} />
+                {hasDot && (
+                  <div className={`absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full ${isActive ? 'bg-amber-400' : 'bg-amber-500'} border border-white`} />
+                )}
+              </div>
               <span className="flex-1 truncate">{item.label}</span>
               {item.badge && <SettingsBadge type={item.badge} />}
             </Link>
@@ -128,12 +138,35 @@ interface SettingsTabLayoutProps {
 
 export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) {
   const pathname = usePathname()
-  const { userData, can } = useUser()
+  const { userData, can, effectiveFacilityId } = useUser()
 
   const visibleCategories = getVisibleCategories(can)
   const activeCategoryId = getCategoryForPath(pathname)
   const activeCategory = visibleCategories.find(c => c.id === activeCategoryId)
   const activeItem = getNavItemForPath(pathname)
+
+  // Query for surgeon override existence (lightweight: only checks if any rows exist)
+  const isCaseMgmtTab = activeCategoryId === 'case-management'
+  const { data: surgeonOverrideExists } = useSupabaseQuery<boolean>(
+    async (sb) => {
+      const { count, error } = await sb
+        .from('surgeon_milestone_config')
+        .select('id', { count: 'exact', head: true })
+        .eq('facility_id', effectiveFacilityId!)
+        .limit(1)
+      if (error) return false
+      return (count ?? 0) > 0
+    },
+    {
+      deps: [effectiveFacilityId],
+      enabled: isCaseMgmtTab && !!effectiveFacilityId,
+    }
+  )
+
+  const notificationDots = useMemo(() => {
+    if (!surgeonOverrideExists) return undefined
+    return { 'surgeon-milestones': true } as Record<string, boolean>
+  }, [surgeonOverrideExists])
 
   // Breadcrumb: Facility Name > Settings > Page Name
   const breadcrumbItems = [
@@ -154,7 +187,11 @@ export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) 
       {/* Sub-nav + Content */}
       <div className="flex flex-1 min-h-0">
         {activeCategory && (
-          <SubNav category={activeCategory} pathname={pathname} />
+          <SubNav
+            category={activeCategory}
+            pathname={pathname}
+            notificationDots={notificationDots}
+          />
         )}
 
         {/* Content Area */}

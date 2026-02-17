@@ -2,12 +2,13 @@
 'use client'
 
 import { useState, useCallback, useMemo, useRef, Fragment } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useSurgeons } from '@/hooks'
-import { PageLoader } from '@/components/ui/Loading'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { Search, User, Undo2 } from 'lucide-react'
 import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
 import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
@@ -66,6 +67,7 @@ type FilterTab = 'all' | 'customized' | 'default' | 'surgeon-overrides'
 // ── Page ────────────────────────────────────────────
 
 export default function ProcedureMilestonesSettingsPage() {
+  const router = useRouter()
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast()
@@ -622,7 +624,33 @@ export default function ProcedureMilestonesSettingsPage() {
   // ── Loading ────────────────────────────────────────
 
   if (userLoading || loading) {
-    return <PageLoader message="Loading procedure milestones..." />
+    return (
+      <div
+        className="flex border border-slate-200 rounded-xl overflow-hidden bg-white"
+        style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}
+      >
+        {/* Left panel skeleton */}
+        <div className="w-[280px] min-w-[280px] border-r border-slate-200 bg-white flex flex-col p-2.5 gap-2">
+          <Skeleton className="h-8 w-full" />
+          <div className="flex gap-1">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-5 w-16" rounded="sm" />
+            ))}
+          </div>
+          <div className="space-y-1 mt-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 w-full" rounded="md" />
+            ))}
+          </div>
+        </div>
+        {/* Right panel skeleton */}
+        <div className="flex-1 bg-slate-50 flex flex-col items-center justify-center">
+          <Skeleton className="w-10 h-10 mb-3" rounded="full" />
+          <Skeleton className="h-4 w-32 mb-1" />
+          <Skeleton className="h-3 w-48" />
+        </div>
+      </div>
+    )
   }
 
   if (!effectiveFacilityId) {
@@ -798,13 +826,17 @@ export default function ProcedureMilestonesSettingsPage() {
                     override this:
                     <div className="flex gap-1 flex-wrap mt-1">
                       {selectedProcSurgeons.map((s) => (
-                        <a
+                        <button
                           key={s.id}
-                          href={`/settings/surgeon-milestones?surgeon=${s.id}&procedure=${selectedProcId}`}
-                          className="px-1.5 py-0.5 rounded-[3px] bg-purple-200 font-medium text-[10px] text-purple-800 hover:bg-purple-300 cursor-pointer no-underline"
+                          onClick={() =>
+                            router.push(
+                              `/settings/surgeon-milestones?surgeon=${s.id}&procedure=${selectedProcId}`
+                            )
+                          }
+                          className="px-1.5 py-0.5 rounded-[3px] bg-purple-200 font-medium text-[10px] text-purple-800 hover:bg-purple-300 cursor-pointer border-none"
                         >
                           {s.last_name}, {s.first_name} &rarr;
-                        </a>
+                        </button>
                       ))}
                     </div>
                   </div>

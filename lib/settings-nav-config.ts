@@ -43,6 +43,8 @@ export interface SettingsNavItem {
   badge?: BadgeType
   /** Permission key for can() gating. Takes precedence over requiredAccess. */
   permission?: string
+  /** Show a notification dot indicator (e.g., amber dot for active overrides) */
+  notificationDot?: boolean
 }
 
 export interface SettingsCategory {

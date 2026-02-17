@@ -20,6 +20,7 @@ import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
 import { PairBracketOverlay, computeBracketData, computeBracketAreaWidth } from '@/components/settings/milestones/PairBracketOverlay'
 import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
 import { resolveColorKey } from '@/lib/milestone-phase-config'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 interface FacilityMilestone {
   id: string
@@ -774,7 +775,27 @@ export default function MilestonesSettingsPage() {
 
       {/* Phase blocks with boundary markers */}
       {loading || phasesLoading ? (
-        <div className="flex items-center justify-center py-12 text-slate-400">Loading milestones...</div>
+        <div className="max-w-[620px] space-y-1">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i}>
+              <div className="ml-[11px] border-l-[2.5px] border-slate-200 rounded-r-[5px] bg-white">
+                <div className="flex items-center gap-2 px-2.5 py-[7px]">
+                  <Skeleton className="h-3 w-14" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <div className="space-y-0">
+                  {Array.from({ length: 3 }).map((_, j) => (
+                    <div key={j} className="h-[34px] flex items-center gap-2 px-2 border-b border-[#F5F5F5]">
+                      <Skeleton className="w-3 h-3" />
+                      <Skeleton className="w-[18px] h-3" />
+                      <Skeleton className="h-3 flex-1" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="max-w-[620px]">
           <div className="flex flex-col">

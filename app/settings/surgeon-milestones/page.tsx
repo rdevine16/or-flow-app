@@ -2,12 +2,13 @@
 'use client'
 
 import { useState, useCallback, useMemo, useRef, useEffect, Fragment } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { useSurgeons } from '@/hooks'
-import { PageLoader } from '@/components/ui/Loading'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Search, Undo2, X, CheckCircle2 } from 'lucide-react'
 import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
@@ -81,10 +82,15 @@ export default function SurgeonMilestonesSettingsPage() {
   const { showToast } = useToast()
   const pendingOps = useRef<Set<string>>(new Set())
 
+  // ── URL Params (cross-page navigation) ───────────
+  const searchParams = useSearchParams()
+  const urlSurgeonId = searchParams.get('surgeon')
+  const urlProcedureId = searchParams.get('procedure')
+
   // ── UI State ──────────────────────────────────────
 
-  const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
-  const [selectedSurgeonProc, setSelectedSurgeonProc] = useState<string | null>(null)
+  const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(urlSurgeonId)
+  const [selectedSurgeonProc, setSelectedSurgeonProc] = useState<string | null>(urlProcedureId)
   const [surgeonSearch, setSurgeonSearch] = useState('')
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -340,6 +346,22 @@ export default function SurgeonMilestonesSettingsPage() {
         .filter((p): p is ProcedureType => !!p),
     [surgeonProcIds, safeProcs]
   )
+
+  // Sync URL params to state when navigating from another page
+  const appliedUrlParams = useRef(false)
+  useEffect(() => {
+    if (appliedUrlParams.current) return
+    if (urlSurgeonId && safeSurgeons.length > 0) {
+      const found = safeSurgeons.find((s) => s.id === urlSurgeonId)
+      if (found) {
+        setSelectedSurgeon(urlSurgeonId)
+        if (urlProcedureId) {
+          setSelectedSurgeonProc(urlProcedureId)
+        }
+        appliedUrlParams.current = true
+      }
+    }
+  }, [urlSurgeonId, urlProcedureId, safeSurgeons])
 
   // Auto-select first procedure when surgeon configs load
   useEffect(() => {
@@ -854,7 +876,34 @@ export default function SurgeonMilestonesSettingsPage() {
   // ── Loading ────────────────────────────────────────
 
   if (userLoading || loading) {
-    return <PageLoader message="Loading surgeon milestones..." />
+    return (
+      <div
+        className="flex border border-slate-200 rounded-xl overflow-hidden bg-white"
+        style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}
+      >
+        {/* Left panel skeleton */}
+        <div className="w-[280px] min-w-[280px] border-r border-slate-200 bg-white flex flex-col p-2.5 gap-2">
+          <Skeleton className="h-8 w-full" />
+          <div className="space-y-1 mt-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 px-2.5 py-2">
+                <Skeleton className="w-7 h-7 shrink-0" rounded="md" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-2.5 w-16" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Right panel skeleton */}
+        <div className="flex-1 bg-slate-50 flex flex-col items-center justify-center">
+          <Skeleton className="w-10 h-10 mb-3" rounded="full" />
+          <Skeleton className="h-4 w-28 mb-1" />
+          <Skeleton className="h-3 w-52" />
+        </div>
+      </div>
+    )
   }
 
   if (!effectiveFacilityId) {
