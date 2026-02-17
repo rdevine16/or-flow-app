@@ -2,9 +2,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { Archive, GripVertical, ArrowRight } from 'lucide-react'
+import { Archive, GripVertical, ArrowRight, CornerDownRight } from 'lucide-react'
 import { resolveColorKey, COLOR_KEY_PALETTE } from '@/lib/milestone-phase-config'
 
 export interface PhaseCardData {
@@ -31,23 +29,33 @@ interface PhaseCardProps {
   activePhases?: PhaseCardData[]
   onEdit: (phase: PhaseCardData, field: string, value: string) => void
   onArchive: (phase: PhaseCardData) => void
+  /** Whether this card is a child phase (renders indented) */
+  isChild?: boolean
+  /** Whether another phase is currently being dragged over this card for nesting */
+  isNestTarget?: boolean
+  /** Called when drag starts on this card's grip handle */
+  onDragStart?: (e: React.DragEvent, phaseId: string) => void
+  /** Called when another phase is dragged over this card */
+  onDragOver?: (e: React.DragEvent, phaseId: string) => void
+  /** Called when a phase is dropped on this card */
+  onDrop?: (e: React.DragEvent, phaseId: string) => void
+  /** Called when drag leaves this card */
+  onDragLeave?: (e: React.DragEvent) => void
 }
 
-export function PhaseCard({ phase, milestones, activePhases, onEdit, onArchive }: PhaseCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: phase.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
-
+export function PhaseCard({
+  phase,
+  milestones,
+  activePhases,
+  onEdit,
+  onArchive,
+  isChild = false,
+  isNestTarget = false,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragLeave,
+}: PhaseCardProps) {
   const colorConfig = resolveColorKey(phase.color_key)
 
   // Phases that can be this phase's parent:
@@ -84,22 +92,29 @@ export function PhaseCard({ phase, milestones, activePhases, onEdit, onArchive }
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
       className={`
-        flex items-center gap-3 px-4 py-3 bg-white border rounded-lg
-        ${isDragging ? 'shadow-lg ring-2 ring-indigo-200 z-50 opacity-90' : 'border-slate-200'}
+        flex items-center gap-3 px-4 py-3 bg-white border rounded-lg transition-all
+        ${isNestTarget ? 'ring-2 ring-blue-400 border-blue-300 bg-blue-50/30' : 'border-slate-200'}
+        ${isChild ? 'ml-8' : ''}
       `}
+      onDragOver={onDragOver ? (e) => onDragOver(e, phase.id) : undefined}
+      onDrop={onDrop ? (e) => onDrop(e, phase.id) : undefined}
+      onDragLeave={onDragLeave}
     >
+      {/* Child indicator */}
+      {isChild && (
+        <CornerDownRight className="w-3.5 h-3.5 text-slate-300 -ml-1 shrink-0" />
+      )}
+
       {/* Drag handle */}
-      <button
-        {...attributes}
-        {...listeners}
+      <div
+        draggable
+        onDragStart={onDragStart ? (e) => onDragStart(e, phase.id) : undefined}
         className="cursor-grab active:cursor-grabbing touch-none text-slate-400 hover:text-slate-600"
-        aria-label="Drag to reorder"
+        aria-label="Drag to reorder or nest"
       >
         <GripVertical className="w-4 h-4" />
-      </button>
+      </div>
 
       {/* Color swatch */}
       <div className="relative group">

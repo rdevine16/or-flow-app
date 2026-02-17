@@ -1,7 +1,7 @@
 // components/settings/milestones/BoundaryMarker.tsx
 'use client'
 
-import { Lock } from 'lucide-react'
+import { Lock, Pencil } from 'lucide-react'
 
 export interface BoundaryMarkerProps {
   /** Display name of the boundary milestone */
@@ -12,6 +12,12 @@ export interface BoundaryMarkerProps {
   bottomColor: string
   /** If true, the dot and line use a single color (bottomColor). If false, uses a gradient. */
   solid?: boolean
+  /** Min minutes for interval badge */
+  minMinutes?: number | null
+  /** Max minutes for interval badge */
+  maxMinutes?: number | null
+  /** Called when the edit icon is clicked */
+  onEdit?: () => void
 }
 
 /**
@@ -24,6 +30,9 @@ export function BoundaryMarker({
   topColor,
   bottomColor,
   solid = false,
+  minMinutes,
+  maxMinutes,
+  onEdit,
 }: BoundaryMarkerProps) {
   const dotBackground = solid
     ? bottomColor
@@ -32,8 +41,10 @@ export function BoundaryMarker({
     ? bottomColor
     : `linear-gradient(to bottom, ${topColor}, ${bottomColor})`
 
+  const hasInterval = minMinutes != null || maxMinutes != null
+
   return (
-    <div className="relative flex items-center z-[2] ml-[11px]">
+    <div className="relative flex items-center z-[2] ml-[11px] group/bm">
       {/* Vertical color line */}
       <div
         className="absolute left-0 top-0 bottom-0 w-[2.5px]"
@@ -49,9 +60,34 @@ export function BoundaryMarker({
         <span className="text-xs font-semibold text-slate-800 whitespace-nowrap">
           {name}
         </span>
+
+        {/* Interval badge */}
+        {hasInterval && (
+          <span className="text-xs text-slate-500 bg-slate-100 rounded px-1.5 py-[1px] shrink-0">
+            {minMinutes != null && maxMinutes != null
+              ? `${minMinutes}\u2013${maxMinutes} min`
+              : maxMinutes != null
+                ? `\u2264${maxMinutes} min`
+                : `\u2265${minMinutes} min`}
+          </span>
+        )}
+
         <span className="text-slate-400 flex items-center">
           <Lock className="w-[9px] h-[9px]" />
         </span>
+
+        {/* Edit button (hover-reveal) */}
+        {onEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="border-none bg-transparent cursor-pointer text-slate-300 hover:text-blue-500 flex items-center p-0.5 rounded transition-opacity opacity-0 group-hover/bm:opacity-100"
+          >
+            <Pencil className="w-[10px] h-[10px]" />
+          </button>
+        )}
       </div>
     </div>
   )

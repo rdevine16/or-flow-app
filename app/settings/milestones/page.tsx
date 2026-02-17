@@ -281,11 +281,11 @@ export default function MilestonesSettingsPage() {
       const isLast = idx === phaseBlockData.length - 1
 
       // Boundary before this phase block
-      let boundaryBefore: { name: string; topColor: string; bottomColor: string; solid: boolean } | null = null
+      let boundaryBefore: { id: string; name: string; topColor: string; bottomColor: string; solid: boolean; minMinutes: number | null; maxMinutes: number | null } | null = null
       if (isFirst) {
         const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
         if (ms) {
-          boundaryBefore = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
+          boundaryBefore = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
         }
       } else {
         // Show start boundary for non-first phases when not shared with previous phase's end
@@ -293,17 +293,17 @@ export default function MilestonesSettingsPage() {
         if (prevPhase.phaseDef.end_milestone_id !== phase.phaseDef.start_milestone_id) {
           const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
           if (ms) {
-            boundaryBefore = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
+            boundaryBefore = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
           }
         }
       }
 
       // Boundary after this phase block
-      let boundaryAfter: { name: string; topColor: string; bottomColor: string; solid: boolean } | null = null
+      let boundaryAfter: { id: string; name: string; topColor: string; bottomColor: string; solid: boolean; minMinutes: number | null; maxMinutes: number | null } | null = null
       if (isLast) {
         const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
         if (ms) {
-          boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
+          boundaryAfter = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
         }
       } else {
         const nextPhase = phaseBlockData[idx + 1]
@@ -311,7 +311,7 @@ export default function MilestonesSettingsPage() {
         const isShared = phase.phaseDef.end_milestone_id === nextPhase.phaseDef.start_milestone_id
         const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
         if (ms) {
-          boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: nextColor, solid: !isShared }
+          boundaryAfter = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: nextColor, solid: !isShared, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
         }
       }
 
@@ -905,6 +905,9 @@ export default function MilestonesSettingsPage() {
                     topColor={phase.boundaryBefore.topColor}
                     bottomColor={phase.boundaryBefore.bottomColor}
                     solid={phase.boundaryBefore.solid}
+                    minMinutes={phase.boundaryBefore.minMinutes}
+                    maxMinutes={phase.boundaryBefore.maxMinutes}
+                    onEdit={() => openEditModal(phase.boundaryBefore!.id)}
                   />
                 )}
                 <PhaseBlock
@@ -936,6 +939,9 @@ export default function MilestonesSettingsPage() {
                     topColor={phase.boundaryAfter.topColor}
                     bottomColor={phase.boundaryAfter.bottomColor}
                     solid={phase.boundaryAfter.solid}
+                    minMinutes={phase.boundaryAfter.minMinutes}
+                    maxMinutes={phase.boundaryAfter.maxMinutes}
+                    onEdit={() => openEditModal(phase.boundaryAfter!.id)}
                   />
                 )}
               </Fragment>
@@ -989,6 +995,7 @@ export default function MilestonesSettingsPage() {
         onSubmit={handleFormSubmit}
         onArchive={handleArchiveFromModal}
         availableForPairing={availableForPairing}
+        phaseOptions={phaseOptions}
       />
 
       {/* Pair/Unlink Modal */}
