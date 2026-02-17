@@ -215,7 +215,10 @@ export default function PhasesSettingsPage() {
     setSaving(true)
     try {
       const oldDisplayName = phase.display_name
-      const updatePayload: Record<string, string> = { [field]: value }
+
+      // parent_phase_id: empty string → null
+      const resolvedValue = field === 'parent_phase_id' && !value ? null : value
+      const updatePayload: Record<string, string | null> = { [field]: resolvedValue }
 
       const { error: updateError } = await supabase
         .from('phase_definitions')
@@ -229,7 +232,7 @@ export default function PhasesSettingsPage() {
       }
 
       setPhases(
-        (phases || []).map(p => p.id === phase.id ? { ...p, [field]: value } : p)
+        (phases || []).map(p => p.id === phase.id ? { ...p, [field]: resolvedValue } : p)
       )
     } catch {
       showToast({ type: 'error', title: 'Failed to update phase' })
@@ -398,6 +401,7 @@ export default function PhasesSettingsPage() {
                   key={phase.id}
                   phase={phase}
                   milestones={milestoneOptions}
+                  activePhases={activePhases}
                   onEdit={handleEdit}
                   onArchive={handleArchive}
                 />

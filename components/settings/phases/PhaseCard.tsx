@@ -27,11 +27,13 @@ interface FacilityMilestoneOption {
 interface PhaseCardProps {
   phase: PhaseCardData
   milestones: FacilityMilestoneOption[]
+  /** All active phases (for parent phase dropdown). Phase can't be its own parent or a parent of another phase. */
+  activePhases?: PhaseCardData[]
   onEdit: (phase: PhaseCardData, field: string, value: string) => void
   onArchive: (phase: PhaseCardData) => void
 }
 
-export function PhaseCard({ phase, milestones, onEdit, onArchive }: PhaseCardProps) {
+export function PhaseCard({ phase, milestones, activePhases, onEdit, onArchive }: PhaseCardProps) {
   const {
     attributes,
     listeners,
@@ -47,6 +49,20 @@ export function PhaseCard({ phase, milestones, onEdit, onArchive }: PhaseCardPro
   }
 
   const colorConfig = resolveColorKey(phase.color_key)
+
+  // Phases that can be this phase's parent:
+  // - Not itself
+  // - Not already a child of another phase (1-level nesting only)
+  // - Not a phase that lists THIS phase as its parent (prevents cycles)
+  const parentPhaseOptions = (activePhases || []).filter((p) => {
+    if (p.id === phase.id) return false
+    if (p.parent_phase_id) return false // already a child, can't be a parent
+    // Don't offer phases that are children of THIS phase
+    const isChildOfThis = (activePhases || []).some(
+      (c) => c.parent_phase_id === phase.id && c.id === p.id
+    )
+    return !isChildOfThis
+  })
 
   // Local state for name editing (blur-commit pattern)
   const [localName, setLocalName] = useState(phase.display_name)
@@ -142,6 +158,21 @@ export function PhaseCard({ phase, milestones, onEdit, onArchive }: PhaseCardPro
           <option key={m.id} value={m.id}>{m.display_name}</option>
         ))}
       </select>
+
+      {/* Parent phase dropdown */}
+      {activePhases && activePhases.length > 1 && (
+        <select
+          value={phase.parent_phase_id || ''}
+          onChange={(e) => onEdit(phase, 'parent_phase_id', e.target.value)}
+          className="text-xs text-slate-600 border border-slate-200 rounded-md px-2 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[130px]"
+          title="Parent phase (makes this a subphase)"
+        >
+          <option value="">No parent</option>
+          {parentPhaseOptions.map((p) => (
+            <option key={p.id} value={p.id}>{p.display_name}</option>
+          ))}
+        </select>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />

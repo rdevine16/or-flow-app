@@ -442,4 +442,291 @@ describe('PhaseBlock', () => {
       expect(block.style.borderLeft).toContain('rgb(34, 197, 94)')
     })
   })
+
+  describe('child phase nesting', () => {
+    const childMilestones: PhaseBlockMilestone[] = [
+      {
+        id: 'child-ms-1',
+        display_name: 'Child Milestone A',
+        phase_group: 'sub_phase',
+        is_boundary: false,
+        pair_with_id: null,
+        pair_position: null,
+        pair_group: null,
+        min_minutes: null,
+        max_minutes: null,
+      },
+      {
+        id: 'child-ms-2',
+        display_name: 'Child Milestone B',
+        phase_group: 'sub_phase',
+        is_boundary: false,
+        pair_with_id: null,
+        pair_position: null,
+        pair_group: null,
+        min_minutes: 3,
+        max_minutes: 10,
+      },
+    ]
+
+    it('renders child phase header and milestones in table mode', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Sub Phase')).toBeInTheDocument()
+      expect(screen.getByText('Child Milestone A')).toBeInTheDocument()
+      expect(screen.getByText('Child Milestone B')).toBeInTheDocument()
+    })
+
+    it('includes child milestones in parent header count (table mode)', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      // 3 parent + 2 child = 5
+      expect(screen.getByText('5 milestones')).toBeInTheDocument()
+    })
+
+    it('includes child milestones in config mode counts', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="config"
+          milestones={mockMilestones}
+          config={{
+            'ms-1': true,
+            'ms-2': false,
+            'ms-3': true,
+            'child-ms-1': true,
+            'child-ms-2': false,
+          }}
+          onToggle={vi.fn()}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      // 2 parent enabled + 1 child enabled = 3/5
+      expect(screen.getByText('3/5')).toBeInTheDocument()
+    })
+
+    it('renders child phase interval badges', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={[]}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      // child-ms-2 has 3-10 min
+      expect(screen.getByText('3\u201310 min')).toBeInTheDocument()
+    })
+
+    it('calls onToggle for child milestone clicks in config mode', () => {
+      const onToggle = vi.fn()
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="config"
+          milestones={[]}
+          config={{ 'child-ms-1': true, 'child-ms-2': true }}
+          onToggle={onToggle}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      fireEvent.click(screen.getByText('Child Milestone A'))
+      expect(onToggle).toHaveBeenCalledWith('child-ms-1')
+    })
+
+    it('calls onDelete for child milestone archive in table mode', () => {
+      const onDelete = vi.fn()
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={[]}
+          onDelete={onDelete}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      const archiveButtons = screen.getAllByRole('button').filter((btn) =>
+        btn.querySelector('svg.lucide-archive')
+      )
+      expect(archiveButtons.length).toBe(2)
+      fireEvent.click(archiveButtons[0])
+      expect(onDelete).toHaveBeenCalledWith('child-ms-1')
+    })
+
+    it('continues numbering from parent milestones', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          startCounter={1}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      // Parent milestones: 1, 2, 3
+      // Child milestones: 4, 5
+      expect(screen.getByText('4')).toBeInTheDocument()
+      expect(screen.getByText('5')).toBeInTheDocument()
+    })
+
+    it('renders empty child phase with "No milestones" message', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Empty Sub',
+              phaseKey: 'empty_sub',
+              milestones: [],
+            },
+          ]}
+        />
+      )
+
+      expect(screen.getByText('Empty Sub')).toBeInTheDocument()
+      expect(screen.getByText('No milestones')).toBeInTheDocument()
+    })
+
+    it('hides child phases when parent is collapsed', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      // Collapse parent
+      fireEvent.click(screen.getByText('Pre-Op'))
+      expect(screen.queryByText('Sub Phase')).not.toBeInTheDocument()
+      expect(screen.queryByText('Child Milestone A')).not.toBeInTheDocument()
+    })
+
+    it('can collapse child phase independently', () => {
+      render(
+        <PhaseBlock
+          phaseColor="#3B82F6"
+          phaseLabel="Pre-Op"
+          phaseKey="pre_op"
+          mode="table"
+          milestones={mockMilestones}
+          childPhases={[
+            {
+              phaseColor: '#22C55E',
+              phaseLabel: 'Sub Phase',
+              phaseKey: 'sub_phase',
+              milestones: childMilestones,
+            },
+          ]}
+        />
+      )
+
+      // Child phase header should be visible
+      expect(screen.getByText('Sub Phase')).toBeInTheDocument()
+      expect(screen.getByText('Child Milestone A')).toBeInTheDocument()
+
+      // Collapse child phase
+      fireEvent.click(screen.getByText('Sub Phase'))
+      expect(screen.queryByText('Child Milestone A')).not.toBeInTheDocument()
+      // Parent milestones still visible
+      expect(screen.getByText('Anesthesia Start')).toBeInTheDocument()
+    })
+  })
 })

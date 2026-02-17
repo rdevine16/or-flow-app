@@ -18,6 +18,13 @@ export interface PhaseBlockMilestone {
   max_minutes: number | null
 }
 
+export interface ChildPhaseData {
+  phaseColor: string
+  phaseLabel: string
+  phaseKey: string
+  milestones: PhaseBlockMilestone[]
+}
+
 export type PhaseBlockMode = 'table' | 'config'
 
 export interface PhaseBlockProps {
@@ -63,6 +70,8 @@ export interface PhaseBlockProps {
   startCounter?: number
   /** Width in pixels of the bracket overlay area. Rows are padded-left by this amount. */
   bracketAreaWidth?: number
+  /** Child phases to render as nested bordered cards inside this parent phase */
+  childPhases?: ChildPhaseData[]
   /** Optional children to render (e.g. PairBracketOverlay) */
   children?: React.ReactNode
 }
@@ -90,18 +99,24 @@ export function PhaseBlock({
   onCrossPhaseMove,
   startCounter = 1,
   bracketAreaWidth = 0,
+  childPhases,
   children,
 }: PhaseBlockProps) {
   const [expanded, setExpanded] = useState(true)
+  const [childExpandedMap, setChildExpandedMap] = useState<Record<string, boolean>>({})
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
   const [dropPos, setDropPos] = useState<'before' | 'after' | null>(null)
 
   const isTable = mode === 'table'
+  const childMilestoneCount = (childPhases || []).reduce((sum, c) => sum + c.milestones.length, 0)
+  const allMilestoneCount = milestones.length + childMilestoneCount
   const enabledCount = config
-    ? milestones.filter((ms) => config[ms.id] !== false).length
-    : milestones.length
+    ? milestones.filter((ms) => config[ms.id] !== false).length +
+      (childPhases || []).reduce((sum, c) => sum + c.milestones.filter((ms) => config[ms.id] !== false).length, 0)
+    : allMilestoneCount
+  const hasContent = allMilestoneCount > 0 || (childPhases?.length ?? 0) > 0
 
   // ── Drag-and-drop handlers ──
   const handleDragStart = useCallback(
@@ -196,16 +211,16 @@ export function PhaseBlock({
       >
         {/* Collapsible header */}
         <div
-          onClick={() => milestones.length > 0 && setExpanded(!expanded)}
+          onClick={() => hasContent && setExpanded(!expanded)}
           onDragOver={handleHeaderDragOver}
           onDrop={handleHeaderDrop}
           className={`flex items-center justify-between px-2.5 py-[7px] select-none ${
-            milestones.length > 0 ? 'cursor-pointer' : 'cursor-default'
-          } ${expanded && milestones.length > 0 ? 'rounded-tr-[5px]' : 'rounded-r-[5px]'}`}
+            hasContent ? 'cursor-pointer' : 'cursor-default'
+          } ${expanded && hasContent ? 'rounded-tr-[5px]' : 'rounded-r-[5px]'}`}
           style={{
             background: `${phaseColor}06`,
             borderBottom:
-              expanded && milestones.length > 0 ? '1px solid #F1F5F9' : 'none',
+              expanded && hasContent ? '1px solid #F1F5F9' : 'none',
           }}
         >
           <div className="flex items-center gap-[5px]">
@@ -217,8 +232,8 @@ export function PhaseBlock({
             </span>
             <span className="text-xs text-slate-400 font-medium">
               {isTable
-                ? `${milestones.length} milestone${milestones.length !== 1 ? 's' : ''}`
-                : `${enabledCount}/${milestones.length}`}
+                ? `${allMilestoneCount} milestone${allMilestoneCount !== 1 ? 's' : ''}`
+                : `${enabledCount}/${allMilestoneCount}`}
             </span>
             {pairIssueCount > 0 && (
               <span className="text-red-500 flex items-center gap-0.5 text-xs font-medium">
@@ -226,7 +241,7 @@ export function PhaseBlock({
               </span>
             )}
           </div>
-          {milestones.length > 0 && (
+          {hasContent && (
             <ChevronDown
               className={`w-[13px] h-[13px] transition-transform duration-200 ${
                 expanded ? 'rotate-180' : 'rotate-0'
@@ -236,7 +251,7 @@ export function PhaseBlock({
         </div>
 
         {/* Expanded row list */}
-        {expanded && milestones.length > 0 && (
+        {expanded && hasContent && (
           <div className="relative">
             {/* Slot for bracket overlays (PairBracketOverlay) */}
             {children}
@@ -411,11 +426,211 @@ export function PhaseBlock({
                 </div>
               )
             })}
+
+            {/* ── Child phase nested cards ── */}
+            {(childPhases || []).map((child) => {
+              const childIsExpanded = childExpandedMap[child.phaseKey] !== false
+              const childEnabledCount = config
+                ? child.milestones.filter((ms) => config[ms.id] !== false).length
+                : child.milestones.length
+              // Running counter continues from parent milestones + preceding children
+              const childIdx = (childPhases || []).indexOf(child)
+              const precedingChildCount = (childPhases || [])
+                .slice(0, childIdx)
+                .reduce((sum, c) => sum + c.milestones.length, 0)
+              const childStartCounter = startCounter + milestones.length + precedingChildCount
+
+              return (
+                <div key={child.phaseKey} className="ml-4 mr-2 my-1.5">
+                  <div
+                    className="border border-slate-200 rounded-md overflow-hidden"
+                    style={{ borderLeft: `2.5px solid ${child.phaseColor}` }}
+                  >
+                    {/* Child phase header */}
+                    <div
+                      onClick={() =>
+                        child.milestones.length > 0 &&
+                        setChildExpandedMap((prev) => ({
+                          ...prev,
+                          [child.phaseKey]: !(prev[child.phaseKey] !== false),
+                        }))
+                      }
+                      className={`flex items-center justify-between px-2 py-[5px] select-none ${
+                        child.milestones.length > 0 ? 'cursor-pointer' : 'cursor-default'
+                      }`}
+                      style={{
+                        background: `${child.phaseColor}06`,
+                        borderBottom:
+                          childIsExpanded && child.milestones.length > 0
+                            ? '1px solid #F1F5F9'
+                            : 'none',
+                      }}
+                    >
+                      <div className="flex items-center gap-[5px]">
+                        <span
+                          className="text-xs font-semibold"
+                          style={{ color: child.phaseColor }}
+                        >
+                          {child.phaseLabel}
+                        </span>
+                        <span className="text-xs text-slate-400 font-medium">
+                          {isTable
+                            ? `${child.milestones.length} milestone${child.milestones.length !== 1 ? 's' : ''}`
+                            : `${childEnabledCount}/${child.milestones.length}`}
+                        </span>
+                      </div>
+                      {child.milestones.length > 0 && (
+                        <ChevronDown
+                          className={`w-[11px] h-[11px] transition-transform duration-200 ${
+                            childIsExpanded ? 'rotate-180' : 'rotate-0'
+                          }`}
+                        />
+                      )}
+                    </div>
+
+                    {/* Child milestone rows */}
+                    {childIsExpanded &&
+                      child.milestones.length > 0 &&
+                      child.milestones.map((ms, j) => {
+                        const counter = childStartCounter + j
+                        const isOn = config ? config[ms.id] !== false : true
+                        const isOverridden = overriddenIds?.has(ms.id) ?? false
+                        const parentVal = parentConfig?.[ms.id]
+                        const isHovered = hoveredId === ms.id
+
+                        let rowBg = 'transparent'
+                        if (isOverridden) rowBg = '#FFFBEB'
+
+                        return (
+                          <div
+                            key={ms.id}
+                            onMouseEnter={() => setHoveredId(ms.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            className="relative"
+                            style={{ height: ROW_HEIGHT }}
+                          >
+                            <div
+                              onClick={onToggle ? () => onToggle(ms.id) : undefined}
+                              className={`flex items-center gap-1.5 h-full pr-2.5 border-b border-[#F5F5F5] relative z-[3] transition-colors ${
+                                onToggle ? 'cursor-pointer' : 'cursor-default'
+                              }`}
+                              style={{ background: rowBg, paddingLeft: 6 }}
+                              onMouseEnter={(e) => {
+                                if (rowBg === 'transparent')
+                                  e.currentTarget.style.background = '#F8FAFC'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = rowBg
+                              }}
+                            >
+                              {/* Row number (table mode) */}
+                              {isTable && (
+                                <span className="text-xs text-slate-400 w-[18px] text-center shrink-0">
+                                  {counter}
+                                </span>
+                              )}
+
+                              {/* Checkbox (config mode) */}
+                              {config && onToggle && (
+                                <div
+                                  className={`w-[15px] h-[15px] rounded-[3px] shrink-0 flex items-center justify-center ${
+                                    isOn
+                                      ? 'bg-blue-500'
+                                      : 'border-[1.5px] border-slate-300 bg-white'
+                                  }`}
+                                >
+                                  {isOn && (
+                                    <Check
+                                      className="w-2.5 h-2.5 text-white"
+                                      strokeWidth={3.5}
+                                    />
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Milestone name */}
+                              <span
+                                className={`text-xs text-slate-800 flex-1 ${
+                                  isOverridden ? 'font-medium' : 'font-normal'
+                                } ${config && !isOn ? 'line-through opacity-40' : ''}`}
+                              >
+                                {ms.display_name}
+                              </span>
+
+                              {/* Interval badge */}
+                              {(ms.min_minutes != null || ms.max_minutes != null) && (
+                                <span className="text-xs text-slate-500 bg-slate-100 rounded px-1.5 py-[1px] shrink-0">
+                                  {ms.min_minutes != null && ms.max_minutes != null
+                                    ? `${ms.min_minutes}\u2013${ms.max_minutes} min`
+                                    : ms.max_minutes != null
+                                      ? `\u2264${ms.max_minutes} min`
+                                      : `\u2265${ms.min_minutes} min`}
+                                </span>
+                              )}
+
+                              {/* Override badge (config mode) */}
+                              {isOverridden && overrideLabel && (
+                                <span className="text-xs font-bold px-1 py-[1px] rounded-sm bg-amber-100 text-amber-700">
+                                  {overrideLabel}
+                                </span>
+                              )}
+
+                              {/* "was on/off" text (config mode) */}
+                              {isOverridden && parentVal !== undefined && (
+                                <span className="text-xs text-slate-400">
+                                  was {parentVal ? 'on' : 'off'}
+                                </span>
+                              )}
+
+                              {/* Pencil/edit button (table mode, hover-reveal) */}
+                              {isTable && onEditMilestone && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onEditMilestone(ms.id)
+                                  }}
+                                  className={`border-none bg-transparent cursor-pointer text-slate-300 hover:text-blue-500 flex items-center p-0.5 rounded transition-opacity ${
+                                    isHovered ? 'opacity-100' : 'opacity-0'
+                                  }`}
+                                >
+                                  <Pencil className="w-[11px] h-[11px]" />
+                                </button>
+                              )}
+
+                              {/* Archive button (table mode, hover-reveal) */}
+                              {isTable && onDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onDelete(ms.id)
+                                  }}
+                                  className={`border-none bg-transparent cursor-pointer text-slate-300 hover:text-red-500 flex items-center p-0.5 rounded transition-opacity ${
+                                    isHovered ? 'opacity-100' : 'opacity-0'
+                                  }`}
+                                >
+                                  <Archive className="w-[11px] h-[11px]" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+
+                    {/* Child empty state */}
+                    {childIsExpanded && child.milestones.length === 0 && (
+                      <div className="px-2.5 py-2 text-xs text-slate-400 italic">
+                        No milestones
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
         {/* Empty state */}
-        {expanded && milestones.length === 0 && (
+        {expanded && !hasContent && (
           <div className="px-2.5 py-2 text-xs text-slate-400 italic">
             No optional milestones
           </div>

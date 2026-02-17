@@ -4,6 +4,8 @@ import {
   PHASE_ORDER,
   PHASE_CONFIG_MAP,
   UNASSIGNED_PHASE,
+  buildPhaseTree,
+  type PhaseDefLike,
 } from '../milestone-phase-config'
 
 describe('milestone-phase-config', () => {
@@ -63,6 +65,99 @@ describe('milestone-phase-config', () => {
     it('uses slate colors', () => {
       expect(UNASSIGNED_PHASE.accentBg).toContain('slate')
       expect(UNASSIGNED_PHASE.headerBg).toContain('slate')
+    })
+  })
+
+  describe('buildPhaseTree', () => {
+    const makePhase = (
+      id: string,
+      name: string,
+      displayOrder: number,
+      parentId: string | null = null,
+    ): PhaseDefLike => ({
+      id,
+      name,
+      display_name: name,
+      display_order: displayOrder,
+      parent_phase_id: parentId,
+    })
+
+    it('returns empty array for empty input', () => {
+      expect(buildPhaseTree([])).toEqual([])
+    })
+
+    it('returns all phases as top-level when no parents set', () => {
+      const phases = [
+        makePhase('1', 'pre_op', 1),
+        makePhase('2', 'surgical', 2),
+        makePhase('3', 'closing', 3),
+      ]
+      const tree = buildPhaseTree(phases)
+      expect(tree).toHaveLength(3)
+      expect(tree.map((n) => n.phase.name)).toEqual(['pre_op', 'surgical', 'closing'])
+      expect(tree.every((n) => n.children.length === 0)).toBe(true)
+    })
+
+    it('nests child phases under their parent', () => {
+      const phases = [
+        makePhase('1', 'surgical', 1),
+        makePhase('2', 'sub_a', 2, '1'),
+        makePhase('3', 'sub_b', 3, '1'),
+      ]
+      const tree = buildPhaseTree(phases)
+      expect(tree).toHaveLength(1)
+      expect(tree[0].phase.name).toBe('surgical')
+      expect(tree[0].children).toHaveLength(2)
+      expect(tree[0].children[0].phase.name).toBe('sub_a')
+      expect(tree[0].children[1].phase.name).toBe('sub_b')
+    })
+
+    it('sorts by display_order at each level', () => {
+      const phases = [
+        makePhase('3', 'closing', 3),
+        makePhase('1', 'pre_op', 1),
+        makePhase('2', 'surgical', 2),
+        makePhase('5', 'sub_b', 5, '2'),
+        makePhase('4', 'sub_a', 4, '2'),
+      ]
+      const tree = buildPhaseTree(phases)
+      expect(tree.map((n) => n.phase.name)).toEqual(['pre_op', 'surgical', 'closing'])
+      expect(tree[1].children.map((c) => c.phase.name)).toEqual(['sub_a', 'sub_b'])
+    })
+
+    it('children have empty children array (1-level only)', () => {
+      const phases = [
+        makePhase('1', 'parent', 1),
+        makePhase('2', 'child', 2, '1'),
+      ]
+      const tree = buildPhaseTree(phases)
+      expect(tree[0].children[0].children).toEqual([])
+    })
+
+    it('handles orphaned children (parent not in list)', () => {
+      const phases = [
+        makePhase('1', 'pre_op', 1),
+        makePhase('2', 'orphan', 2, 'nonexistent'),
+      ]
+      const tree = buildPhaseTree(phases)
+      // Only pre_op is top-level, orphan is not rendered
+      expect(tree).toHaveLength(1)
+      expect(tree[0].phase.name).toBe('pre_op')
+    })
+
+    it('handles multiple parents with children', () => {
+      const phases = [
+        makePhase('1', 'pre_op', 1),
+        makePhase('2', 'surgical', 2),
+        makePhase('3', 'child_a', 3, '1'),
+        makePhase('4', 'child_b', 4, '2'),
+      ]
+      const tree = buildPhaseTree(phases)
+      expect(tree).toHaveLength(2)
+      expect(tree[0].children).toHaveLength(1)
+      expect(tree[0].children[0].phase.name).toBe('child_a')
+      expect(tree[1].children).toHaveLength(1)
+      expect(tree[1].children[0].phase.name).toBe('child_b')
     })
   })
 })

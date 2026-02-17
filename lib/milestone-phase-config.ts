@@ -123,6 +123,56 @@ export function resolveColorKey(colorKey: string | null): ColorKeyConfig {
   return COLOR_KEY_MAP[colorKey] ?? COLOR_KEY_PALETTE[7]
 }
 
+// ─── Phase Tree Types & Builder ──────────────────────────────────
+
+/**
+ * Minimal interface for phase definitions used by the tree builder.
+ * Satisfied by both DAL PhaseDefinition and page-local PhaseDefinitionRow types.
+ */
+export interface PhaseDefLike {
+  id: string
+  name: string
+  display_name: string
+  display_order: number
+  parent_phase_id: string | null
+}
+
+export interface PhaseTreeNode<T extends PhaseDefLike = PhaseDefLike> {
+  phase: T
+  children: PhaseTreeNode<T>[]
+}
+
+/**
+ * Build a 1-level-deep tree from flat phase definitions.
+ * Top-level nodes: phases where parent_phase_id is null.
+ * Children: phases where parent_phase_id matches a top-level phase's id.
+ * Sorted by display_order at each level.
+ */
+export function buildPhaseTree<T extends PhaseDefLike>(phases: T[]): PhaseTreeNode<T>[] {
+  const topLevel = phases.filter(p => !p.parent_phase_id)
+  const childMap = new Map<string, T[]>()
+
+  for (const p of phases) {
+    if (p.parent_phase_id) {
+      const existing = childMap.get(p.parent_phase_id) || []
+      existing.push(p)
+      childMap.set(p.parent_phase_id, existing)
+    }
+  }
+
+  return topLevel
+    .sort((a, b) => a.display_order - b.display_order)
+    .map(p => ({
+      phase: p,
+      children: (childMap.get(p.id) || [])
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(child => ({
+          phase: child,
+          children: [] as PhaseTreeNode<T>[],
+        })),
+    }))
+}
+
 /**
  * Convert a color_key from phase_definitions to a PhaseConfig-compatible object.
  * Used by analytics components that need PhaseConfig-style styling from DB-stored color keys.

@@ -19,7 +19,7 @@ import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/mile
 import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
 import { PairBracketOverlay, computeBracketData, computeBracketAreaWidth } from '@/components/settings/milestones/PairBracketOverlay'
 import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
-import { resolveColorKey } from '@/lib/milestone-phase-config'
+import { resolveColorKey, buildPhaseTree } from '@/lib/milestone-phase-config'
 import { Skeleton } from '@/components/ui/Skeleton'
 
 interface FacilityMilestone {
@@ -192,14 +192,17 @@ export default function MilestonesSettingsPage() {
     return map
   }, [activeMilestones])
 
-  // Build PhaseBlockMilestone arrays per phase
-  const phaseBlockData = useMemo(() => {
+  // Phase tree: only top-level phases become PhaseBlocks, children are nested
+  const phaseTree = useMemo(() => {
     if (!phaseDefinitions?.length) return []
+    return buildPhaseTree(phaseDefinitions)
+  }, [phaseDefinitions])
 
-    return phaseDefinitions.map(pd => {
-      const color = resolveColorKey(pd.color_key).hex
-      const phaseMilestones: PhaseBlockMilestone[] = activeMilestones
-        .filter(m => m.phase_group === pd.name && !boundaryMilestoneIds.has(m.id))
+  // Helper: convert FacilityMilestone to PhaseBlockMilestone for a given phase name
+  const toBlockMilestones = useCallback(
+    (phaseName: string): PhaseBlockMilestone[] =>
+      activeMilestones
+        .filter(m => m.phase_group === phaseName && !boundaryMilestoneIds.has(m.id))
         .map(m => ({
           id: m.id,
           display_name: m.display_name,
@@ -210,11 +213,33 @@ export default function MilestonesSettingsPage() {
           pair_group: pairGroupMap.get(m.id) || null,
           min_minutes: m.min_minutes,
           max_minutes: m.max_minutes,
-        }))
+        })),
+    [activeMilestones, boundaryMilestoneIds, pairGroupMap]
+  )
 
-      return { phaseDef: pd, color, milestones: phaseMilestones }
+  // Build PhaseBlockMilestone arrays per top-level phase (with child phases)
+  const phaseBlockData = useMemo(() => {
+    if (!phaseTree.length) return []
+
+    return phaseTree.map(node => {
+      const pd = node.phase
+      const color = resolveColorKey(pd.color_key).hex
+      const parentMilestones = toBlockMilestones(pd.name)
+
+      const childPhases = node.children.map(childNode => {
+        const childPd = childNode.phase
+        const childColor = resolveColorKey(childPd.color_key).hex
+        return {
+          phaseColor: childColor,
+          phaseLabel: childPd.display_name,
+          phaseKey: childPd.name,
+          milestones: toBlockMilestones(childPd.name),
+        }
+      })
+
+      return { phaseDef: pd, color, milestones: parentMilestones, childPhases }
     })
-  }, [phaseDefinitions, activeMilestones, boundaryMilestoneIds, pairGroupMap])
+  }, [phaseTree, toBlockMilestones])
 
   // Milestones with no phase_group (unphased, e.g. after Patient Out)
   const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
@@ -295,8 +320,11 @@ export default function MilestonesSettingsPage() {
       const bracketWidth = computeBracketAreaWidth(brackets)
       const issueCount = countPairIssuesInPhase(allPairIssueMilestones, pairIssues, phase.phaseDef.name)
 
-      // Running counter for numbered rows (across all phases)
-      const startCounter = phaseBlockData.slice(0, idx).reduce((sum, p) => sum + p.milestones.length, 0) + 1
+      // Running counter for numbered rows (across all phases, including child milestones)
+      const startCounter = phaseBlockData.slice(0, idx).reduce(
+        (sum, p) => sum + p.milestones.length + (p.childPhases || []).reduce((cs, c) => cs + c.milestones.length, 0),
+        0
+      ) + 1
 
       return { ...phase, boundaryBefore, boundaryAfter, brackets, bracketWidth, issueCount, startCounter }
     })
@@ -893,6 +921,7 @@ export default function MilestonesSettingsPage() {
                   onCrossPhaseMove={handleCrossPhaseMove}
                   startCounter={phase.startCounter}
                   bracketAreaWidth={phase.bracketWidth}
+                  childPhases={phase.childPhases}
                 >
                   {phase.brackets.length > 0 && (
                     <PairBracketOverlay
@@ -926,7 +955,10 @@ export default function MilestonesSettingsPage() {
                 onEditMilestone={openEditModal}
                 onCrossPhaseMove={handleCrossPhaseMove}
                 startCounter={
-                  phaseBlockData.reduce((sum, p) => sum + p.milestones.length, 0) + 1
+                  phaseBlockData.reduce(
+                    (sum, p) => sum + p.milestones.length + (p.childPhases || []).reduce((cs, c) => cs + c.milestones.length, 0),
+                    0
+                  ) + 1
                 }
               />
             )}

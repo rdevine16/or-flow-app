@@ -20,7 +20,7 @@ import {
   computeBracketAreaWidth,
 } from '@/components/settings/milestones/PairBracketOverlay'
 import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
-import { resolveColorKey } from '@/lib/milestone-phase-config'
+import { resolveColorKey, buildPhaseTree } from '@/lib/milestone-phase-config'
 import { AddProcedureDropdown } from '@/components/settings/surgeon-milestones/AddProcedureDropdown'
 
 // ── Types ────────────────────────────────────────────
@@ -469,12 +469,16 @@ export default function SurgeonMilestonesSettingsPage() {
 
   // ── Phase Block Render Data ──────────────────────
 
-  const phaseBlockData = useMemo(() => {
+  // Phase tree: only top-level phases become PhaseBlocks, children are nested
+  const phaseTree = useMemo(() => {
     if (!phaseDefinitions?.length) return []
-    return phaseDefinitions.map((pd) => {
-      const color = resolveColorKey(pd.color_key).hex
-      const phaseMilestones: PhaseBlockMilestone[] = safeMilestones
-        .filter((m) => m.phase_group === pd.name && !boundaryMilestoneIds.has(m.id))
+    return buildPhaseTree(phaseDefinitions)
+  }, [phaseDefinitions])
+
+  const toBlockMilestones = useCallback(
+    (phaseName: string): PhaseBlockMilestone[] =>
+      safeMilestones
+        .filter((m) => m.phase_group === phaseName && !boundaryMilestoneIds.has(m.id))
         .sort((a, b) => {
           const aOrder = configOrderMap.get(a.id) ?? a.display_order
           const bOrder = configOrderMap.get(b.id) ?? b.display_order
@@ -490,10 +494,31 @@ export default function SurgeonMilestonesSettingsPage() {
           pair_group: pairGroupMap.get(m.id) || null,
           min_minutes: null,
           max_minutes: null,
-        }))
-      return { phaseDef: pd, color, milestones: phaseMilestones }
+        })),
+    [safeMilestones, boundaryMilestoneIds, pairGroupMap, configOrderMap]
+  )
+
+  const phaseBlockData = useMemo(() => {
+    if (!phaseTree.length) return []
+    return phaseTree.map((node) => {
+      const pd = node.phase
+      const color = resolveColorKey(pd.color_key).hex
+      const parentMilestones = toBlockMilestones(pd.name)
+
+      const childPhases = node.children.map((childNode) => {
+        const childPd = childNode.phase
+        const childColor = resolveColorKey(childPd.color_key).hex
+        return {
+          phaseColor: childColor,
+          phaseLabel: childPd.display_name,
+          phaseKey: childPd.name,
+          milestones: toBlockMilestones(childPd.name),
+        }
+      })
+
+      return { phaseDef: pd, color, milestones: parentMilestones, childPhases }
     })
-  }, [phaseDefinitions, safeMilestones, boundaryMilestoneIds, pairGroupMap, configOrderMap])
+  }, [phaseTree, toBlockMilestones])
 
   // Milestones with no phase_group (unphased, e.g. after Patient Out)
   const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
@@ -1209,6 +1234,7 @@ export default function SurgeonMilestonesSettingsPage() {
                             onReorder={handleReorder}
                             draggable={true}
                             bracketAreaWidth={phase.bracketWidth}
+                            childPhases={phase.childPhases}
                           >
                             {phase.brackets.length > 0 && (
                               <PairBracketOverlay
