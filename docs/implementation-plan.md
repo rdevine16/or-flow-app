@@ -1,207 +1,121 @@
-# Implementation Plan: Milestone Pages — Subphases, Edit/Archive UX, Intervals
+# Implementation Plan: Flat Milestone List Redesign
 
 ## Summary
 
-Enhance the three milestone settings pages (Milestones, Procedure Milestones, Surgeon Milestones) with:
-1. **Edit icon** — pencil icon on each row (icon-only trigger, no row click)
-2. **Archive UX** — replace Trash2 with Archive icon on rows; existing ArchivedMilestonesSection and modal archive button remain
-3. **Subphases** — nested phases with `parent_phase_id` in the DB; visually rendered as bordered cards floating inside parent phase blocks
-4. **Intervals** — show min/max validation range on milestone rows across all three pages
+Replace the grouped collapsible PhaseBlock cards with a **single flat list** where phase membership is indicated by colored vertical rails, not by grouping milestones into separate cards. All milestones (including phase boundaries) are freely draggable — phase ranges update dynamically based on where boundaries sit.
 
-## Interview Notes
+**Previous feature (Subphases/Edit/Archive/Intervals) is COMPLETE** — all 5 phases merged. This plan builds on that work.
 
-| Decision | Answer |
-|----------|--------|
-| Edit trigger | Icon only — pencil icon opens edit modal, row click does nothing |
-| Archive location | Keep archive in edit modal. Replace Trash2 row icon with Archive icon (same soft-delete behavior) |
-| Subphase DB | Add `parent_phase_id` FK column to `phase_definitions` (migration required) |
-| Subphase visual | Nested card style — parent phase color fills background, subphase gets its own bordered card floating inside |
-| Intervals | Show validation range (min/max minutes) on all three pages |
-| Subphase scope | All three pages show subphase nesting |
-| River Walk | Test facility — expect it to work correctly once subphase nesting is properly implemented |
+## Key Architecture
 
----
+- **One flat list** — all milestones in a single scrollable container, no collapsing
+- **Primary color rail** — 4px SVG bar on left edge, color matches the top-level phase
+- **Sub-phase rails** — additional 4px colored bars for child phases
+- **Boundary milestones are regular rows** — bold text, lock icon, phase tags, draggable
+- **Order determined by display_order** — `buildFlatRows` sorts ALL milestones by display_order, then computes phase ranges dynamically from boundary positions (matching reference design `docs/orbit-flat-milestones.jsx`)
+- **ROW_HEIGHT = 40px**
 
-## Phase 1: Database Migration — `parent_phase_id`
+## Reference Design
 
-**What it does:** Add self-referencing `parent_phase_id` FK to `phase_definitions` table, enabling phase nesting (one level deep).
-
-**Files:**
-- `supabase/migrations/YYYYMMDD_add_parent_phase_id.sql` (new)
-- `lib/dal/lookups.ts` — update `PhaseDefinition` interface and `phaseDefinitions()` query to include `parent_phase_id`
-
-**Details:**
-- Add `parent_phase_id UUID REFERENCES phase_definitions(id) ON DELETE SET NULL`
-- Add index on `parent_phase_id` for lookup performance
-- No data backfill needed — existing phases start as `NULL` (top-level)
-- Update the `PhaseDefinition` TypeScript interface to include `parent_phase_id: string | null`
-
-**Commit:** `feat(milestones): phase 1 - add parent_phase_id to phase_definitions`
-
-**Test gate:**
-1. **Unit:** Migration applies cleanly, column exists, FK constraint works
-2. **Integration:** Existing phase queries return correct data with new nullable column
-3. **Workflow:** Settings pages load normally with no regressions
-
-**Complexity:** Small
+`docs/orbit-flat-milestones.jsx` — standalone React component showing the target UX.
 
 ---
 
-## Phase 2: PhaseBlock UX Updates — Edit Icon, Archive Icon, Intervals
+## Phase 1: Core component + utility ✅ COMPLETE
 
-**What it does:** Update the shared `PhaseBlock` component to change row interactions and add interval display.
+**Commit:** `69e456d feat(milestones): phase 1 - FlatMilestoneList component and buildFlatRows utility`
 
-**Changes:**
-- Replace `Trash2` import with `Archive` icon (lucide-react)
-- Add `Pencil` icon (hover-reveal) on each row — calls `onEditMilestone(milestoneId)`
-- Remove row-level `onClick` handler (no more click-to-edit on the row itself)
-- Add interval badge on each milestone row showing "X–Y min" from `min_minutes`/`max_minutes`
-- Extend `PhaseBlockMilestone` interface with `min_minutes: number | null` and `max_minutes: number | null`
-
-**Row layout (table mode):** `[Grip] [#] [Name] [Interval badge] [...spacer...] [Pencil] [Archive]`
-**Row layout (config mode):** `[Checkbox] [Name] [Interval badge] [Override badge]`
-
-**Interval badge:** Subtle gray pill (`text-xs text-slate-500 bg-slate-100 rounded px-1.5`). Formats:
-- Both set: "5–15 min"
-- Only max: "≤15 min"
-- Only min: "≥5 min"
-- Neither: hidden
-
-**Files:**
-- `components/settings/milestones/PhaseBlock.tsx` — icon swap, add pencil, add interval badge, remove row onClick
-- `app/settings/milestones/page.tsx` — pass `min_minutes`/`max_minutes` in milestone data to PhaseBlock
-
-**Commit:** `feat(milestones): phase 2 - edit icon, archive icon, interval display on PhaseBlock`
-
-**Test gate:**
-1. **Unit:** PhaseBlock renders pencil + archive icons in table mode, interval badges in both modes
-2. **Integration:** Milestones page: pencil opens edit modal, archive triggers soft-delete, interval shows correct range
-3. **Workflow:** Add milestone with interval → see badge on row → click pencil → edit → click archive → see in archived section → restore
-
-**Complexity:** Medium
+**Files created:**
+- `lib/utils/buildFlatRows.ts` — pure function producing flat ordered `FlatRow[]`
+- `components/settings/milestones/FlatMilestoneList.tsx` — renders legend, rails, brackets, rows
+- `lib/utils/__tests__/buildFlatRows.test.ts` — 16 unit tests
 
 ---
 
-## Phase 3: Subphase Nesting — PhaseBlock + Phase Tree
+## Phase 2: Wire up milestones page (table mode) ✅ COMPLETE
 
-**What it does:** Enable PhaseBlock to render child phases as nested bordered cards inside a parent phase. Build phase tree utility. Update all three pages.
+**Commit:** `74e1e49 feat(milestones): phase 2 - milestones page uses FlatMilestoneList`
 
-**Files:**
-- `lib/milestone-phase-config.ts` — add `buildPhaseTree()` helper: takes flat `PhaseDefinition[]`, returns tree structure
-- `components/settings/milestones/PhaseBlock.tsx` — add `childPhases` prop, render nested cards inside parent
-- `app/settings/milestones/page.tsx` — build phase tree, render nested PhaseBlocks
-- `app/settings/procedure-milestones/page.tsx` — integrate phase tree for subphase rendering
-- `app/settings/surgeon-milestones/page.tsx` — integrate phase tree for subphase rendering
+**Files modified:**
+- `app/settings/milestones/page.tsx` — replaced PhaseBlock/BoundaryMarker loop with single `<FlatMilestoneList>`
+- `lib/utils/buildFlatRows.ts` — **rewritten** to sort ALL milestones by display_order and compute phase ranges dynamically (matching reference design approach)
+- `components/settings/milestones/FlatMilestoneList.tsx` — all milestones (including boundaries) are draggable, no cross-phase constraint
 
-**Subphase nested card visual:**
-- Parent PhaseBlock has its normal left color border and background
-- Child phase renders as a card inside the parent with:
-  - Its own left color border (child phase's color)
-  - Subtle border on all sides (`border border-slate-200 rounded-md`)
-  - Its own collapsible header with child phase label + count
-  - Child phase milestones listed inside
-  - Slightly indented from parent milestones (e.g., `ml-4`)
-- Parent milestones that are NOT in a subphase render normally above/below/between subphase cards
-- Phase assignment: milestones with `phase_group` matching a child phase's `name` go into the subphase card; milestones matching the parent phase go into the parent (outside any subphase card)
-
-**Phase tree builder:**
-```typescript
-interface PhaseTreeNode {
-  phase: PhaseDefinition
-  children: PhaseTreeNode[]
-  milestones: PhaseBlockMilestone[]  // milestones assigned to THIS phase (not children)
-}
-function buildPhaseTree(phases: PhaseDefinition[]): PhaseTreeNode[]
-```
-- Top-level nodes: phases where `parent_phase_id` is null
-- Children: phases where `parent_phase_id` matches a top-level phase's `id`
-- Only 1 level of nesting supported (children cannot have children)
-
-**Commit:** `feat(milestones): phase 3 - subphase nesting with nested card visuals`
-
-**Test gate:**
-1. **Unit:** `buildPhaseTree()` correctly nests phases; handles no children, multiple children, orphaned children
-2. **Integration:** PhaseBlock renders nested cards with correct colors; milestones sort into correct parent vs child phase
-3. **Workflow:** On the phases settings page, set a phase's parent → milestones page shows that phase nested inside its parent → procedure + surgeon pages show same nesting
-
-**Complexity:** Large
+**Key changes:**
+- Removed `toBlockMilestones`, `phaseBlockData`, `unphasedMilestones`, `renderData` computed blocks (~240 lines)
+- Removed `handleCrossPhaseMove` (free reorder across full list)
+- `handleReorder` persists order for ALL milestones (boundaries included)
+- `buildFlatRows` now sorts by display_order first, computes phase ranges from boundary positions (like reference `computePhaseRanges`)
 
 ---
 
-## Phase 4: Procedure + Surgeon Page Interval Integration
+## ⚠️ Verify Before Phase 3
 
-**What it does:** Ensure intervals and subphase nesting fully work on Procedure Milestones and Surgeon Milestones pages.
-
-**Files:**
-- `app/settings/procedure-milestones/page.tsx` — pass `min_minutes`/`max_minutes` in milestone data
-- `app/settings/surgeon-milestones/page.tsx` — pass `min_minutes`/`max_minutes` in milestone data
-- Potentially `components/settings/procedure-milestones/ProcedureMilestoneRow.tsx` — add interval if this component is still used independently
-
-**Details:**
-- Both pages already use PhaseBlock in config mode — subphase nesting from Phase 3 propagates automatically
-- Ensure milestone data queries on both pages include `min_minutes` and `max_minutes` from `facility_milestones`
-- Verify override detection works with milestones inside subphases
-- Verify inheritance breadcrumb renders correctly with subphase context
-- Test that toggling a milestone inside a subphase correctly creates/removes override records
-
-**Commit:** `feat(milestones): phase 4 - intervals and subphases on procedure + surgeon pages`
-
-**Test gate:**
-1. **Unit:** Config mode PhaseBlock shows interval badges inside subphase cards
-2. **Integration:** Toggle milestone in subphase → override badge appears → reset restores parent value
-3. **Workflow:** Navigate Milestones → Procedure Milestones → Surgeon Milestones — intervals and subphases consistent across all three
-
-**Complexity:** Medium
+**Left-side color rails need visual verification.** The primary rail SVG and sub-phase rail divs are implemented in `FlatMilestoneList.tsx` (lines 180-246) and data flows from `buildFlatRows`. However, the user has not confirmed they render correctly in the browser. Before starting Phase 3:
+1. Load the milestones page for a facility WITH phase_definitions (e.g., River Walk)
+2. Confirm the primary color rail (4px colored bar) appears on the left edge
+3. Confirm sub-phase rails appear next to the primary rail for child phases
+4. Confirm gradient transitions appear at shared boundary milestones
+5. If rails are NOT visible, debug: check `primaryColor` values in rows, check CSS positioning/z-index, check `overflow-hidden` on container
 
 ---
 
-## Phase 5: Cross-Page Verification + Polish
+## Phase 3: Wire up procedure + surgeon pages (config mode) — NEXT
 
-**What it does:** End-to-end verification across all three pages. Fix visual inconsistencies, edge cases, and River Walk facility data.
+**Replace PhaseBlock + BoundaryMarker on both config-mode pages with FlatMilestoneList.**
 
-**Files:**
-- Any files from prior phases needing fixes
-- `lib/utils/pairIssues.ts` — ensure pair detection works within subphases
-- `components/settings/milestones/PairBracketOverlay.tsx` — verify brackets render inside nested subphase cards
+### Files to modify
+- `app/settings/procedure-milestones/page.tsx`
+- `app/settings/surgeon-milestones/page.tsx`
 
-**Details:**
-- Test with River Walk facility — verify milestones appear in correct phases/subphases after proper `parent_phase_id` setup
-- Verify pair brackets render correctly inside subphase nested cards
-- Verify drag-and-drop reorder works within subphases (table mode)
-- Verify boundary markers between parent and child phases render correctly
-- Ensure phases settings page allows setting `parent_phase_id` (dropdown to select parent phase)
-- Edge cases: empty subphases, subphase with 0 milestones, phase with only boundary milestones
-- Limit nesting to 1 level (child cannot be a parent)
+### Key changes (both pages)
+1. Add `buildFlatRows()` call to produce `flatRows`
+2. Remove `renderData` computation and PhaseBlock rendering loop
+3. Adapt `handleReorder` signature to accept `FlatRow[]`
+4. Replace render with `<FlatMilestoneList mode="config" .../>`
+5. Remove PhaseBlock/BoundaryMarker/PairBracketOverlay imports
 
-**Commit:** `feat(milestones): phase 5 - cross-page verification and polish`
+### Page-specific notes
 
-**Test gate:**
-1. **Unit:** Edge cases render cleanly (empty subphases, no intervals, no pairs)
-2. **Integration:** River Walk facility shows correct phase/subphase assignments
-3. **Workflow:** Full flow — configure subphase on phases page → see nesting on milestones page → view on procedure/surgeon pages → toggle overrides → verify consistency
+**Procedure page:**
+- `config={effectiveConfig}`, `parentConfig={defaultConfig}`, `overrideLabel="OVERRIDE"`
+- `draggable={isCustomized}`, `onReorder` only when customized
 
-**Complexity:** Medium
+**Surgeon page:**
+- `config={effectiveConfig}`, `parentConfig={parentConfig}` (procedure-level), `overrideLabel="SURGEON"`
+- `draggable={true}` (always)
+- Uses `configOrderMap` for milestone sorting — pass to `buildFlatRows`
+- InheritanceBreadcrumb stays above the list
+
+### Commit
+`feat(milestones): phase 3 - procedure and surgeon pages use FlatMilestoneList`
 
 ---
 
-## Dependency Graph
+## Phase 4: Delete dead code
 
-```
-Phase 1 (Migration: parent_phase_id)
-  └── Phase 2 (PhaseBlock UX: edit/archive icons, intervals)
-        └── Phase 3 (Subphase nesting: phase tree, nested cards)
-              └── Phase 4 (Procedure + Surgeon page integration)
-                    └── Phase 5 (Cross-page verification + polish)
-```
+**Remove PhaseBlock, BoundaryMarker, PairBracketOverlay, and their tests. Move bracket utilities to shared location.**
 
-All phases are sequential — each builds on the previous.
+### Files to delete
+- `components/settings/milestones/PhaseBlock.tsx`
+- `components/settings/milestones/BoundaryMarker.tsx`
+- `components/settings/milestones/PairBracketOverlay.tsx`
+- `components/settings/milestones/__tests__/PhaseBlock.test.tsx`
+- `components/settings/milestones/__tests__/BoundaryMarker.test.tsx`
+- `components/settings/milestones/__tests__/PairBracketOverlay.test.tsx`
 
-## Estimated Scope
+### Files to create/modify
+- **Create `lib/utils/bracketUtils.ts`** — move `computeBracketData`, `computeBracketAreaWidth` from PairBracketOverlay.tsx before deleting
+- **Update `FlatMilestoneList.tsx`** — change import path for bracket utilities
 
-| Phase | Complexity | Files | Description |
-|-------|-----------|-------|-------------|
-| 1 | Small | 2 | DB migration + TypeScript interface update |
-| 2 | Medium | 2 | Edit/archive icons, interval badges on PhaseBlock |
-| 3 | Large | 5 | Phase tree builder, nested card rendering, all 3 pages |
-| 4 | Medium | 2-3 | Interval data on procedure + surgeon pages |
-| 5 | Medium | 3+ | E2E verification, edge cases, River Walk fix |
+### Commit
+`refactor(milestones): phase 4 - remove PhaseBlock, BoundaryMarker, PairBracketOverlay`
+
+---
+
+## Session Log
+
+| Date | Session | What happened |
+|------|---------|---------------|
+| 2026-02-16 | Session 1 | Phase 1 complete. Created buildFlatRows + FlatMilestoneList + 16 tests. |
+| 2026-02-16 | Session 2 | Phase 2 complete. Wired milestones page. Rewrote buildFlatRows to sort by display_order and compute phase ranges dynamically (matching reference design). Fixed boundary milestone draggability — all milestones now freely reorderable. |
