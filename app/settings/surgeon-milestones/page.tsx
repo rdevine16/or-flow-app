@@ -1,35 +1,35 @@
 // app/settings/surgeon-milestones/page.tsx
 'use client'
 
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { useSurgeons, useProcedureTypes } from '@/hooks'
+import { useSurgeons } from '@/hooks'
 import { PageLoader } from '@/components/ui/Loading'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { Info, RotateCcw, User, ClipboardList } from 'lucide-react'
+import { Search, Undo2, X, CheckCircle2 } from 'lucide-react'
+import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
+import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
+import { InheritanceBreadcrumb } from '@/components/settings/milestones/InheritanceBreadcrumb'
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { PhaseSection } from '@/components/settings/procedure-milestones/PhaseSection'
-import { SurgeonMilestoneRow } from '@/components/settings/surgeon-milestones/SurgeonMilestoneRow'
+  PairBracketOverlay,
+  computeBracketData,
+  computeBracketAreaWidth,
+} from '@/components/settings/milestones/PairBracketOverlay'
+import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
+import { resolveColorKey } from '@/lib/milestone-phase-config'
+import { AddProcedureDropdown } from '@/components/settings/surgeon-milestones/AddProcedureDropdown'
 
 // ── Types ────────────────────────────────────────────
 
-interface FacilityMilestoneWithPhase {
+interface ProcedureType {
+  id: string
+  name: string
+}
+
+interface FacilityMilestone {
   id: string
   name: string
   display_name: string
@@ -68,13 +68,9 @@ interface SurgeonMilestoneConfigItem {
   display_order: number | null
 }
 
-interface PhaseInfo {
-  name: string
-  display_name: string
-  display_order: number
-  color_key: string | null
-  start_milestone_id: string
-  end_milestone_id: string
+interface SurgeonConfigSummaryItem {
+  surgeon_id: string
+  procedure_type_id: string
 }
 
 // ── Page ────────────────────────────────────────────
@@ -83,16 +79,37 @@ export default function SurgeonMilestonesSettingsPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast()
+  const pendingOps = useRef<Set<string>>(new Set())
+
+  // ── UI State ──────────────────────────────────────
 
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
-  const [selectedProcedure, setSelectedProcedure] = useState<string | null>(null)
+  const [selectedSurgeonProc, setSelectedSurgeonProc] = useState<string | null>(null)
+  const [surgeonSearch, setSurgeonSearch] = useState('')
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
-  // ── Data fetching ──────────────────────────────────
+  // ── Data Fetching ────────────────────────────────
 
+  // 1. Surgeons list
   const { data: surgeons, loading: surgeonsLoading } = useSurgeons(effectiveFacilityId)
-  const { data: procedureTypes, loading: proceduresLoading } = useProcedureTypes(effectiveFacilityId)
 
-  const { data: milestones, loading: milestonesLoading } = useSupabaseQuery<FacilityMilestoneWithPhase[]>(
+  // 2. Procedure types
+  const { data: procedureTypes, loading: proceduresLoading } = useSupabaseQuery<ProcedureType[]>(
+    async (sb) => {
+      const { data, error } = await sb
+        .from('procedure_types')
+        .select('id, name')
+        .eq('facility_id', effectiveFacilityId!)
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  // 3. Facility milestones
+  const { data: milestones, loading: milestonesLoading } = useSupabaseQuery<FacilityMilestone[]>(
     async (sb) => {
       const { data, error } = await sb
         .from('facility_milestones')
@@ -106,6 +123,7 @@ export default function SurgeonMilestonesSettingsPage() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
   )
 
+  // 4. Phase definitions
   const { data: phaseDefinitions, loading: phasesLoading } = useSupabaseQuery<PhaseDefinitionRow[]>(
     async (sb) => {
       const { data, error } = await sb
@@ -120,24 +138,48 @@ export default function SurgeonMilestonesSettingsPage() {
     { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
   )
 
-  // Procedure milestone configs (the "defaults")
-  const { data: procedureConfigs, loading: procConfigsLoading } = useSupabaseQuery<ProcedureMilestoneConfigItem[]>(
+  // 5. All procedure configs (for parent config resolution)
+  const { data: allProcedureConfigs, loading: allProcConfigsLoading } =
+    useSupabaseQuery<ProcedureMilestoneConfigItem[]>(
+      async (sb) => {
+        const { data, error } = await sb
+          .from('procedure_milestone_config')
+          .select('id, procedure_type_id, facility_milestone_id, display_order, is_enabled')
+          .eq('facility_id', effectiveFacilityId!)
+        if (error) throw error
+        return data || []
+      },
+      { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+    )
+
+  // 6. Surgeon config summary (for left panel override counts)
+  const {
+    data: surgeonConfigSummary,
+    loading: summaryLoading,
+    refetch: refetchSummary,
+  } = useSupabaseQuery<SurgeonConfigSummaryItem[]>(
     async (sb) => {
       const { data, error } = await sb
-        .from('procedure_milestone_config')
-        .select('id, procedure_type_id, facility_milestone_id, display_order, is_enabled')
+        .from('surgeon_milestone_config')
+        .select('surgeon_id, procedure_type_id')
         .eq('facility_id', effectiveFacilityId!)
-        .eq('procedure_type_id', selectedProcedure!)
       if (error) throw error
-      return data || []
+      // Deduplicate: one entry per surgeon+procedure
+      const seen = new Set<string>()
+      const result: SurgeonConfigSummaryItem[] = []
+      for (const row of data || []) {
+        const key = `${row.surgeon_id}:${row.procedure_type_id}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          result.push({ surgeon_id: row.surgeon_id, procedure_type_id: row.procedure_type_id })
+        }
+      }
+      return result
     },
-    {
-      deps: [effectiveFacilityId, selectedProcedure],
-      enabled: !userLoading && !!effectiveFacilityId && !!selectedProcedure,
-    }
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
   )
 
-  // Surgeon milestone configs (the "overrides")
+  // 7. Selected surgeon's configs (ALL procedures for this surgeon)
   const {
     data: surgeonConfigs,
     loading: surgeonConfigsLoading,
@@ -150,22 +192,30 @@ export default function SurgeonMilestonesSettingsPage() {
         .select('id, facility_id, surgeon_id, procedure_type_id, facility_milestone_id, is_enabled, display_order')
         .eq('facility_id', effectiveFacilityId!)
         .eq('surgeon_id', selectedSurgeon!)
-        .eq('procedure_type_id', selectedProcedure!)
       if (error) throw error
       return data || []
     },
     {
-      deps: [effectiveFacilityId, selectedSurgeon, selectedProcedure],
-      enabled: !userLoading && !!effectiveFacilityId && !!selectedSurgeon && !!selectedProcedure,
+      deps: [effectiveFacilityId, selectedSurgeon],
+      enabled: !userLoading && !!effectiveFacilityId && !!selectedSurgeon,
     }
   )
 
-  // ── Safe arrays (useSupabaseQuery returns null before first fetch) ──
+  const loading =
+    surgeonsLoading || proceduresLoading || milestonesLoading || phasesLoading || allProcConfigsLoading || summaryLoading
 
-  const safeConfigs = useMemo(() => surgeonConfigs ?? [], [surgeonConfigs])
+  // ── Safe Arrays ──────────────────────────────────
 
-  // ── Derived data ──────────────────────────────────
+  const safeMilestones = milestones || []
+  const safeSurgeonConfigs = surgeonConfigs || []
+  const safeProcs = procedureTypes || []
+  const safeSurgeons = surgeons || []
+  const safeSummary = surgeonConfigSummary || []
+  const safeAllProcConfigs = allProcedureConfigs || []
 
+  // ── Derived Data ──────────────────────────────────
+
+  // Boundary milestone IDs
   const boundaryMilestoneIds = useMemo(() => {
     const ids = new Set<string>()
     for (const pd of phaseDefinitions || []) {
@@ -175,555 +225,953 @@ export default function SurgeonMilestonesSettingsPage() {
     return ids
   }, [phaseDefinitions])
 
-  const phases: PhaseInfo[] = useMemo(
-    () => (phaseDefinitions || []).map(pd => ({
-      name: pd.name,
-      display_name: pd.display_name,
-      display_order: pd.display_order,
-      color_key: pd.color_key,
-      start_milestone_id: pd.start_milestone_id,
-      end_milestone_id: pd.end_milestone_id,
-    })),
-    [phaseDefinitions]
+  // Non-boundary milestones
+  const optionalMilestones = useMemo(
+    () => safeMilestones.filter((m) => !boundaryMilestoneIds.has(m.id)),
+    [safeMilestones, boundaryMilestoneIds]
   )
 
-  // Procedure default enabled set
-  const procedureEnabledSet = useMemo(() => {
-    const s = new Set<string>()
-    for (const c of procedureConfigs || []) {
-      if (c.is_enabled) s.add(c.facility_milestone_id)
-    }
-    return s
-  }, [procedureConfigs])
-
-  // Config display_order lookup for ordering within phases
-  const configOrderMap = useMemo(() => {
-    const map = new Map<string, number>()
-    // Start with procedure config order
-    for (const c of procedureConfigs || []) {
-      map.set(c.facility_milestone_id, c.display_order)
-    }
-    // Surgeon overrides can have their own display_order
-    for (const c of safeConfigs) {
-      if (c.display_order !== null) {
-        map.set(c.facility_milestone_id, c.display_order)
-      }
+  // Pair group map
+  const pairGroupMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const m of safeMilestones) {
+      if (!m.pair_with_id || !m.pair_position) continue
+      if (m.pair_position === 'start') map.set(m.id, m.id)
+      else if (m.pair_position === 'end') map.set(m.id, m.pair_with_id)
     }
     return map
-  }, [procedureConfigs, safeConfigs])
+  }, [safeMilestones])
 
-  // Surgeon override lookup
+  // Milestone lookup
+  const milestoneById = useMemo(() => {
+    const map = new Map<string, FacilityMilestone>()
+    for (const m of safeMilestones) map.set(m.id, m)
+    return map
+  }, [safeMilestones])
+
+  // Pair issues
+  const pairIssueMilestones = useMemo(
+    () =>
+      safeMilestones.map((m) => ({
+        id: m.id,
+        phase_group: m.phase_group,
+        pair_with_id: m.pair_with_id,
+        pair_position: m.pair_position,
+        pair_group: pairGroupMap.get(m.id) || null,
+      })),
+    [safeMilestones, pairGroupMap]
+  )
+  const pairIssues = useMemo(() => detectPairIssues(pairIssueMilestones), [pairIssueMilestones])
+
+  // Procedure configs grouped by procedure
+  const procConfigsByProc = useMemo(() => {
+    const map = new Map<string, ProcedureMilestoneConfigItem[]>()
+    for (const c of safeAllProcConfigs) {
+      const existing = map.get(c.procedure_type_id) || []
+      existing.push(c)
+      map.set(c.procedure_type_id, existing)
+    }
+    return map
+  }, [safeAllProcConfigs])
+
+  // Get parent config for any procedure
+  const getParentConfig = useCallback(
+    (procId: string): Record<string, boolean> => {
+      const configs = procConfigsByProc.get(procId) || []
+      const result: Record<string, boolean> = {}
+      if (configs.length === 0) {
+        // No procedure config = facility default = all enabled
+        for (const m of optionalMilestones) result[m.id] = true
+      } else {
+        for (const m of optionalMilestones) {
+          result[m.id] = configs.some(
+            (c) => c.facility_milestone_id === m.id && c.is_enabled
+          )
+        }
+      }
+      return result
+    },
+    [procConfigsByProc, optionalMilestones]
+  )
+
+  // ── Left Panel Data ──────────────────────────────
+
+  // Override count per surgeon (number of procedures overridden)
+  const surgeonOverrideCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const s of safeSummary) {
+      map.set(s.surgeon_id, (map.get(s.surgeon_id) || 0) + 1)
+    }
+    return map
+  }, [safeSummary])
+
+  // Filtered surgeon list
+  const filteredSurgeons = useMemo(() => {
+    let list = safeSurgeons
+    if (surgeonSearch) {
+      const q = surgeonSearch.toLowerCase()
+      list = list.filter(
+        (s) =>
+          s.first_name.toLowerCase().includes(q) ||
+          s.last_name.toLowerCase().includes(q) ||
+          `${s.first_name} ${s.last_name}`.toLowerCase().includes(q) ||
+          `${s.last_name}, ${s.first_name}`.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [safeSurgeons, surgeonSearch])
+
+  // ── Right Panel Data ─────────────────────────────
+
+  // Procedure IDs the selected surgeon overrides
+  const surgeonProcIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const c of safeSurgeonConfigs) {
+      ids.add(c.procedure_type_id)
+    }
+    return [...ids]
+  }, [safeSurgeonConfigs])
+
+  // Procedure objects for chips
+  const surgeonProcs = useMemo(
+    () =>
+      surgeonProcIds
+        .map((pid) => safeProcs.find((p) => p.id === pid))
+        .filter((p): p is ProcedureType => !!p),
+    [surgeonProcIds, safeProcs]
+  )
+
+  // Auto-select first procedure when surgeon configs load
+  useEffect(() => {
+    if (selectedSurgeon && !surgeonConfigsLoading && surgeonProcIds.length > 0 && !selectedSurgeonProc) {
+      setSelectedSurgeonProc(surgeonProcIds[0])
+    }
+  }, [selectedSurgeon, surgeonConfigsLoading, surgeonProcIds, selectedSurgeonProc])
+
+  // Surgeon configs for the selected procedure
+  const surgeonConfigsForProc = useMemo(
+    () => safeSurgeonConfigs.filter((c) => c.procedure_type_id === selectedSurgeonProc),
+    [safeSurgeonConfigs, selectedSurgeonProc]
+  )
+
+  // Surgeon override map for selected procedure
   const surgeonOverrideMap = useMemo(() => {
     const map = new Map<string, SurgeonMilestoneConfigItem>()
-    for (const c of safeConfigs) {
+    for (const c of surgeonConfigsForProc) {
       map.set(c.facility_milestone_id, c)
     }
     return map
-  }, [safeConfigs])
+  }, [surgeonConfigsForProc])
 
-  // Override count
-  const overrideCount = safeConfigs.length
-
-  // Visible milestones (hide pair_position='end')
-  const visibleMilestones = useMemo(
-    () => (milestones || []).filter(m => m.pair_position !== 'end'),
-    [milestones]
+  // Parent config for the selected procedure
+  const parentConfig = useMemo(
+    () => (selectedSurgeonProc ? getParentConfig(selectedSurgeonProc) : {}),
+    [selectedSurgeonProc, getParentConfig]
   )
 
-  // Phase groups (same logic as ProcedureMilestoneList)
-  const phaseGroups = useMemo(() => {
-    const sortedPhases = [...phases].sort((a, b) => a.display_order - b.display_order)
-    const groups: { phase: PhaseInfo; milestones: FacilityMilestoneWithPhase[] }[] = []
-    const usedMilestoneIds = new Set<string>()
+  // Whether the selected procedure has been customized (has procedure-level configs)
+  const isProcCustomized = useMemo(
+    () =>
+      selectedSurgeonProc
+        ? (procConfigsByProc.get(selectedSurgeonProc)?.length ?? 0) > 0
+        : false,
+    [selectedSurgeonProc, procConfigsByProc]
+  )
 
-    for (const phase of sortedPhases) {
-      const phaseMs = visibleMilestones
-        .filter(m => m.phase_group === phase.name && !usedMilestoneIds.has(m.id))
+  // Config order map (procedure config + surgeon overrides)
+  const configOrderMap = useMemo(() => {
+    const map = new Map<string, number>()
+    if (selectedSurgeonProc) {
+      const procConfigs = procConfigsByProc.get(selectedSurgeonProc) || []
+      for (const c of procConfigs) {
+        map.set(c.facility_milestone_id, c.display_order)
+      }
+      for (const c of surgeonConfigsForProc) {
+        if (c.display_order !== null) {
+          map.set(c.facility_milestone_id, c.display_order)
+        }
+      }
+    }
+    return map
+  }, [selectedSurgeonProc, procConfigsByProc, surgeonConfigsForProc])
+
+  // Effective config for the surgeon+procedure
+  const effectiveConfig = useMemo(() => {
+    if (!selectedSurgeonProc) return {} as Record<string, boolean>
+    const config: Record<string, boolean> = {}
+    for (const m of optionalMilestones) {
+      const override = surgeonOverrideMap.get(m.id)
+      if (override) {
+        config[m.id] = override.is_enabled
+      } else {
+        config[m.id] = parentConfig[m.id] ?? true
+      }
+    }
+    return config
+  }, [selectedSurgeonProc, optionalMilestones, surgeonOverrideMap, parentConfig])
+
+  // Overridden IDs (milestones where surgeon differs from parent)
+  const overriddenIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const msId of Object.keys(parentConfig)) {
+      if (effectiveConfig[msId] !== parentConfig[msId]) ids.add(msId)
+    }
+    return ids
+  }, [effectiveConfig, parentConfig])
+
+  const surgeonIsCustomized = overriddenIds.size > 0
+
+  // Enabled count for selected procedure
+  const enabledCount = useMemo(() => {
+    if (!selectedSurgeonProc) return 0
+    const boundaryCount = boundaryMilestoneIds.size
+    const optionalEnabled = Object.values(effectiveConfig).filter(Boolean).length
+    return boundaryCount + optionalEnabled
+  }, [selectedSurgeonProc, effectiveConfig, boundaryMilestoneIds])
+
+  // Check if a procedure has actual diff from parent for chip indicators
+  const hasDiffForProc = useCallback(
+    (procId: string): boolean => {
+      const parent = getParentConfig(procId)
+      const configs = safeSurgeonConfigs.filter((c) => c.procedure_type_id === procId)
+      if (configs.length === 0) return false
+      for (const c of configs) {
+        const parentEnabled = parent[c.facility_milestone_id] ?? true
+        if (c.is_enabled !== parentEnabled) return true
+      }
+      return false
+    },
+    [getParentConfig, safeSurgeonConfigs]
+  )
+
+  // ── Phase Block Render Data ──────────────────────
+
+  const phaseBlockData = useMemo(() => {
+    if (!phaseDefinitions?.length) return []
+    return phaseDefinitions.map((pd) => {
+      const color = resolveColorKey(pd.color_key).hex
+      const phaseMilestones: PhaseBlockMilestone[] = safeMilestones
+        .filter((m) => m.phase_group === pd.name && !boundaryMilestoneIds.has(m.id))
         .sort((a, b) => {
           const aOrder = configOrderMap.get(a.id) ?? a.display_order
           const bOrder = configOrderMap.get(b.id) ?? b.display_order
           return aOrder - bOrder
         })
-      phaseMs.forEach(m => usedMilestoneIds.add(m.id))
-      if (phaseMs.length > 0) {
-        groups.push({ phase, milestones: phaseMs })
+        .map((m) => ({
+          id: m.id,
+          display_name: m.display_name,
+          phase_group: m.phase_group,
+          is_boundary: false,
+          pair_with_id: m.pair_with_id,
+          pair_position: m.pair_position,
+          pair_group: pairGroupMap.get(m.id) || null,
+        }))
+      return { phaseDef: pd, color, milestones: phaseMilestones }
+    })
+  }, [phaseDefinitions, safeMilestones, boundaryMilestoneIds, pairGroupMap, configOrderMap])
+
+  const renderData = useMemo(() => {
+    if (!phaseBlockData.length) return []
+    return phaseBlockData.map((phase, idx) => {
+      const isFirst = idx === 0
+      const isLast = idx === phaseBlockData.length - 1
+
+      let boundaryBefore: {
+        name: string
+        topColor: string
+        bottomColor: string
+        solid: boolean
+      } | null = null
+      if (isFirst) {
+        const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
+        if (ms) {
+          boundaryBefore = {
+            name: ms.display_name,
+            topColor: phase.color,
+            bottomColor: phase.color,
+            solid: true,
+          }
+        }
       }
-    }
 
-    const unassigned = visibleMilestones.filter(m => !usedMilestoneIds.has(m.id))
-    if (unassigned.length > 0) {
-      groups.push({
-        phase: {
-          name: '_unassigned',
-          display_name: 'Other',
-          display_order: 999,
-          color_key: 'slate',
-          start_milestone_id: '',
-          end_milestone_id: '',
-        },
-        milestones: unassigned,
+      let boundaryAfter: {
+        name: string
+        topColor: string
+        bottomColor: string
+        solid: boolean
+      } | null = null
+      if (isLast) {
+        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
+        if (ms) {
+          boundaryAfter = {
+            name: ms.display_name,
+            topColor: phase.color,
+            bottomColor: phase.color,
+            solid: true,
+          }
+        }
+      } else {
+        const nextColor = phaseBlockData[idx + 1].color
+        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
+        if (ms) {
+          boundaryAfter = {
+            name: ms.display_name,
+            topColor: phase.color,
+            bottomColor: nextColor,
+            solid: false,
+          }
+        }
+      }
+
+      const brackets = computeBracketData(phase.milestones, pairIssues)
+      const bracketWidth = computeBracketAreaWidth(brackets)
+      const issueCount = countPairIssuesInPhase(
+        pairIssueMilestones,
+        pairIssues,
+        phase.phaseDef.name
+      )
+
+      return {
+        ...phase,
+        boundaryBefore,
+        boundaryAfter,
+        brackets,
+        bracketWidth,
+        issueCount,
+      }
+    })
+  }, [phaseBlockData, milestoneById, pairIssues, pairIssueMilestones])
+
+  // ── Toggle Handler ─────────────────────────────────
+
+  const handleToggle = useCallback(
+    async (milestoneId: string) => {
+      if (!effectiveFacilityId || !selectedSurgeon || !selectedSurgeonProc) return
+      if (pendingOps.current.has(milestoneId)) return
+      pendingOps.current.add(milestoneId)
+
+      const currentlyEnabled = effectiveConfig[milestoneId] ?? true
+      const procedureDefaultEnabled = parentConfig[milestoneId] ?? true
+      const existingOverride = surgeonOverrideMap.get(milestoneId)
+      const newEnabled = !currentlyEnabled
+
+      try {
+        // If toggling back to match the procedure default, remove the override
+        if (newEnabled === procedureDefaultEnabled && existingOverride) {
+          setSurgeonConfigs((prev) =>
+            (prev || []).filter(
+              (c) =>
+                !(
+                  c.facility_milestone_id === milestoneId &&
+                  c.procedure_type_id === selectedSurgeonProc
+                )
+            )
+          )
+
+          const { error } = await supabase
+            .from('surgeon_milestone_config')
+            .delete()
+            .eq('id', existingOverride.id)
+
+          if (error) {
+            showToast({ type: 'error', title: 'Failed to remove override' })
+            await refetchSurgeonConfigs()
+          }
+        } else if (existingOverride) {
+          // Update existing override
+          setSurgeonConfigs((prev) =>
+            (prev || []).map((c) =>
+              c.id === existingOverride.id ? { ...c, is_enabled: newEnabled } : c
+            )
+          )
+
+          const { error } = await supabase
+            .from('surgeon_milestone_config')
+            .update({ is_enabled: newEnabled })
+            .eq('id', existingOverride.id)
+
+          if (error) {
+            showToast({ type: 'error', title: 'Failed to update override' })
+            await refetchSurgeonConfigs()
+          }
+        } else {
+          // Create new override
+          const optimistic: SurgeonMilestoneConfigItem = {
+            id: `optimistic-${milestoneId}`,
+            facility_id: effectiveFacilityId,
+            surgeon_id: selectedSurgeon,
+            procedure_type_id: selectedSurgeonProc,
+            facility_milestone_id: milestoneId,
+            is_enabled: newEnabled,
+            display_order: null,
+          }
+          setSurgeonConfigs((prev) => [...(prev || []), optimistic])
+
+          const { data, error } = await supabase
+            .from('surgeon_milestone_config')
+            .insert({
+              facility_id: effectiveFacilityId,
+              surgeon_id: selectedSurgeon,
+              procedure_type_id: selectedSurgeonProc,
+              facility_milestone_id: milestoneId,
+              is_enabled: newEnabled,
+            })
+            .select()
+            .single()
+
+          if (error || !data) {
+            showToast({ type: 'error', title: 'Failed to create override' })
+            await refetchSurgeonConfigs()
+          } else {
+            setSurgeonConfigs((prev) =>
+              (prev || []).map((c) =>
+                c.id === `optimistic-${milestoneId}`
+                  ? (data as SurgeonMilestoneConfigItem)
+                  : c
+              )
+            )
+          }
+        }
+      } finally {
+        pendingOps.current.delete(milestoneId)
+      }
+    },
+    [
+      effectiveFacilityId,
+      selectedSurgeon,
+      selectedSurgeonProc,
+      effectiveConfig,
+      parentConfig,
+      surgeonOverrideMap,
+      supabase,
+      showToast,
+      refetchSurgeonConfigs,
+      setSurgeonConfigs,
+    ]
+  )
+
+  // ── Reorder Handler ────────────────────────────────
+
+  const handleReorder = useCallback(
+    async (phaseKey: string, newOrder: PhaseBlockMilestone[]) => {
+      if (!effectiveFacilityId || !selectedSurgeon || !selectedSurgeonProc) return
+      const milestoneIds = newOrder.map((m) => m.id)
+
+      // Optimistic update
+      setSurgeonConfigs((prev) => {
+        const updated = [...(prev || [])]
+        for (const [idx, msId] of milestoneIds.entries()) {
+          const config = updated.find(
+            (c) =>
+              c.procedure_type_id === selectedSurgeonProc &&
+              c.facility_milestone_id === msId
+          )
+          if (config) config.display_order = idx + 1
+        }
+        return updated
       })
-    }
 
-    return groups
-  }, [phases, visibleMilestones, configOrderMap])
+      try {
+        for (const [idx, msId] of milestoneIds.entries()) {
+          const existing = surgeonConfigsForProc.find(
+            (c) => c.facility_milestone_id === msId && !c.id.startsWith('optimistic-')
+          )
+          if (existing) {
+            await supabase
+              .from('surgeon_milestone_config')
+              .update({ display_order: idx + 1 })
+              .eq('id', existing.id)
+          } else {
+            const currentEnabled = effectiveConfig[msId] ?? true
+            await supabase
+              .from('surgeon_milestone_config')
+              .upsert(
+                {
+                  facility_id: effectiveFacilityId,
+                  surgeon_id: selectedSurgeon,
+                  procedure_type_id: selectedSurgeonProc,
+                  facility_milestone_id: msId,
+                  is_enabled: currentEnabled,
+                  display_order: idx + 1,
+                },
+                {
+                  onConflict:
+                    'facility_id,surgeon_id,procedure_type_id,facility_milestone_id',
+                }
+              )
+          }
+        }
+      } catch {
+        showToast({ type: 'error', title: 'Failed to save new order' })
+        await refetchSurgeonConfigs()
+      }
+    },
+    [
+      effectiveFacilityId,
+      selectedSurgeon,
+      selectedSurgeonProc,
+      surgeonConfigsForProc,
+      effectiveConfig,
+      setSurgeonConfigs,
+      supabase,
+      showToast,
+      refetchSurgeonConfigs,
+    ]
+  )
 
-  // ── Resolve milestone enabled state ───────────────
+  // ── Add / Remove Procedure Override ────────────────
 
-  const isMilestoneEnabled = useCallback((milestoneId: string): boolean => {
-    if (boundaryMilestoneIds.has(milestoneId)) return true
-    const override = surgeonOverrideMap.get(milestoneId)
-    if (override) return override.is_enabled
-    return procedureEnabledSet.has(milestoneId)
-  }, [boundaryMilestoneIds, surgeonOverrideMap, procedureEnabledSet])
+  const handleAddProcedure = useCallback(
+    async (procedureId: string) => {
+      if (!effectiveFacilityId || !selectedSurgeon) return
 
-  const isProcedureDefault = useCallback((milestoneId: string): boolean => {
-    return procedureEnabledSet.has(milestoneId)
-  }, [procedureEnabledSet])
+      // Get the procedure's parent config
+      const procConfigs = procConfigsByProc.get(procedureId) || []
+      const hasProcConfig = procConfigs.length > 0
+      const parentMap = new Map(
+        procConfigs.map((c) => [c.facility_milestone_id, c])
+      )
 
-  const isOverride = useCallback((milestoneId: string): boolean => {
-    return surgeonOverrideMap.has(milestoneId)
-  }, [surgeonOverrideMap])
-
-  // ── Saving state ──────────────────────────────────
-
-  const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set())
-  const pendingOps = useRef<Set<string>>(new Set())
-
-  const markSaving = useCallback((milestoneIds: string[]) => {
-    setSavingKeys(prev => {
-      const next = new Set(prev)
-      milestoneIds.forEach(mid => next.add(mid))
-      return next
-    })
-  }, [])
-
-  const clearSaving = useCallback((milestoneIds: string[]) => {
-    setSavingKeys(prev => {
-      const next = new Set(prev)
-      milestoneIds.forEach(mid => next.delete(mid))
-      return next
-    })
-  }, [])
-
-  // ── Toggle handler ────────────────────────────────
-
-  const toggleMilestone = useCallback(async (milestoneId: string) => {
-    if (!effectiveFacilityId || !selectedSurgeon || !selectedProcedure) return
-    if (pendingOps.current.has(milestoneId)) return
-    pendingOps.current.add(milestoneId)
-    markSaving([milestoneId])
-
-    const currentlyEnabled = isMilestoneEnabled(milestoneId)
-    const procedureDefaultEnabled = isProcedureDefault(milestoneId)
-    const existingOverride = surgeonOverrideMap.get(milestoneId)
-    const newEnabled = !currentlyEnabled
-
-    // If toggling back to match the procedure default, remove the override
-    if (newEnabled === procedureDefaultEnabled && existingOverride) {
-      // Optimistic: remove override
-      setSurgeonConfigs(prev => (prev || []).filter(c => c.facility_milestone_id !== milestoneId))
+      // Create rows matching parent config
+      const rowsToInsert = optionalMilestones.map((m) => ({
+        facility_id: effectiveFacilityId,
+        surgeon_id: selectedSurgeon,
+        procedure_type_id: procedureId,
+        facility_milestone_id: m.id,
+        is_enabled: hasProcConfig
+          ? (parentMap.get(m.id)?.is_enabled ?? false)
+          : true,
+        display_order: parentMap.get(m.id)?.display_order ?? m.display_order,
+      }))
 
       const { error } = await supabase
         .from('surgeon_milestone_config')
-        .delete()
-        .eq('id', existingOverride.id)
+        .insert(rowsToInsert)
 
       if (error) {
-        showToast({ type: 'error', title: 'Failed to remove override. Reverting.' })
+        showToast({ type: 'error', title: 'Failed to add procedure override' })
+      } else {
+        setSelectedSurgeonProc(procedureId)
         await refetchSurgeonConfigs()
+        await refetchSummary()
       }
-    } else if (existingOverride) {
-      // Update existing override
-      setSurgeonConfigs(prev =>
-        (prev || []).map(c => c.facility_milestone_id === milestoneId ? { ...c, is_enabled: newEnabled } : c)
+    },
+    [
+      effectiveFacilityId,
+      selectedSurgeon,
+      optionalMilestones,
+      procConfigsByProc,
+      supabase,
+      showToast,
+      refetchSurgeonConfigs,
+      refetchSummary,
+    ]
+  )
+
+  const handleRemoveProcedure = useCallback(
+    async (procedureId: string) => {
+      if (!effectiveFacilityId || !selectedSurgeon) return
+
+      // Optimistic: remove configs for this procedure
+      setSurgeonConfigs((prev) =>
+        (prev || []).filter((c) => c.procedure_type_id !== procedureId)
       )
 
       const { error } = await supabase
         .from('surgeon_milestone_config')
-        .update({ is_enabled: newEnabled })
-        .eq('id', existingOverride.id)
+        .delete()
+        .eq('facility_id', effectiveFacilityId)
+        .eq('surgeon_id', selectedSurgeon)
+        .eq('procedure_type_id', procedureId)
 
       if (error) {
-        showToast({ type: 'error', title: 'Failed to update override. Reverting.' })
-        await refetchSurgeonConfigs()
-      }
-    } else {
-      // Create new override
-      const optimistic: SurgeonMilestoneConfigItem = {
-        id: `optimistic-${milestoneId}`,
-        facility_id: effectiveFacilityId,
-        surgeon_id: selectedSurgeon,
-        procedure_type_id: selectedProcedure,
-        facility_milestone_id: milestoneId,
-        is_enabled: newEnabled,
-        display_order: null,
-      }
-      setSurgeonConfigs(prev => [...(prev || []), optimistic])
-
-      const { data, error } = await supabase
-        .from('surgeon_milestone_config')
-        .insert({
-          facility_id: effectiveFacilityId,
-          surgeon_id: selectedSurgeon,
-          procedure_type_id: selectedProcedure,
-          facility_milestone_id: milestoneId,
-          is_enabled: newEnabled,
-        })
-        .select()
-        .single()
-
-      if (error || !data) {
-        showToast({ type: 'error', title: 'Failed to create override. Reverting.' })
+        showToast({ type: 'error', title: 'Failed to remove procedure override' })
         await refetchSurgeonConfigs()
       } else {
-        setSurgeonConfigs(prev => (prev || []).map(c =>
-          c.id === `optimistic-${milestoneId}` ? data as SurgeonMilestoneConfigItem : c
-        ))
-      }
-    }
-
-    clearSaving([milestoneId])
-    pendingOps.current.delete(milestoneId)
-  }, [effectiveFacilityId, selectedSurgeon, selectedProcedure, isMilestoneEnabled, isProcedureDefault, surgeonOverrideMap, markSaving, clearSaving, supabase, showToast, refetchSurgeonConfigs, setSurgeonConfigs])
-
-  // Handle paired milestone toggle (toggle both start + end)
-  const togglePairedMilestone = useCallback((startMilestoneId: string) => {
-    const startMs = (milestones || []).find(m => m.id === startMilestoneId)
-    if (!startMs?.pair_with_id) {
-      toggleMilestone(startMilestoneId)
-      return
-    }
-
-    // Toggle both start and end milestones
-    toggleMilestone(startMilestoneId)
-    toggleMilestone(startMs.pair_with_id)
-  }, [milestones, toggleMilestone])
-
-  // ── Reorder handler ───────────────────────────────
-
-  const handleReorder = useCallback(async (phaseGroup: string, orderedMilestoneIds: string[]) => {
-    if (!effectiveFacilityId || !selectedSurgeon || !selectedProcedure) return
-
-    // Optimistic: update display_order in surgeon configs (or create overrides for order)
-    setSurgeonConfigs(prev => {
-      const updated = [...(prev || [])]
-      for (const [idx, milestoneId] of orderedMilestoneIds.entries()) {
-        const existing = updated.find(c => c.facility_milestone_id === milestoneId)
-        if (existing) {
-          existing.display_order = idx + 1
+        if (selectedSurgeonProc === procedureId) {
+          const remaining = surgeonProcIds.filter((id) => id !== procedureId)
+          setSelectedSurgeonProc(remaining[0] || null)
         }
+        await refetchSummary()
       }
-      return updated
-    })
+    },
+    [
+      effectiveFacilityId,
+      selectedSurgeon,
+      selectedSurgeonProc,
+      surgeonProcIds,
+      setSurgeonConfigs,
+      supabase,
+      showToast,
+      refetchSurgeonConfigs,
+      refetchSummary,
+    ]
+  )
 
-    // Persist reorder — upsert display_order for each milestone
-    try {
-      for (const [idx, milestoneId] of orderedMilestoneIds.entries()) {
-        const existing = safeConfigs.find(c => c.facility_milestone_id === milestoneId)
-        if (existing && !existing.id.startsWith('optimistic-')) {
-          await supabase
-            .from('surgeon_milestone_config')
-            .update({ display_order: idx + 1 })
-            .eq('id', existing.id)
-        } else {
-          // Need to create an override row just for order
-          const currentEnabled = isMilestoneEnabled(milestoneId)
-          await supabase
-            .from('surgeon_milestone_config')
-            .upsert({
-              facility_id: effectiveFacilityId,
-              surgeon_id: selectedSurgeon,
-              procedure_type_id: selectedProcedure,
-              facility_milestone_id: milestoneId,
-              is_enabled: currentEnabled,
-              display_order: idx + 1,
-            }, { onConflict: 'facility_id,surgeon_id,procedure_type_id,facility_milestone_id' })
-        }
-      }
-    } catch {
-      showToast({ type: 'error', title: 'Failed to save new order' })
-      await refetchSurgeonConfigs()
-    }
-  }, [effectiveFacilityId, selectedSurgeon, selectedProcedure, safeConfigs, isMilestoneEnabled, supabase, showToast, refetchSurgeonConfigs, setSurgeonConfigs])
-
-  // ── Reset to defaults ─────────────────────────────
-
-  const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [resetting, setResetting] = useState(false)
+  // ── Reset Handler ──────────────────────────────────
 
   const handleReset = useCallback(async () => {
-    if (!effectiveFacilityId || !selectedSurgeon || !selectedProcedure) return
+    if (!effectiveFacilityId || !selectedSurgeon || !selectedSurgeonProc) return
 
     setResetting(true)
-    // Optimistic: clear all overrides
-    setSurgeonConfigs([])
+    // Optimistic: remove overrides for this procedure
+    setSurgeonConfigs((prev) =>
+      (prev || []).filter((c) => c.procedure_type_id !== selectedSurgeonProc)
+    )
 
     const { error } = await supabase
       .from('surgeon_milestone_config')
       .delete()
       .eq('facility_id', effectiveFacilityId)
       .eq('surgeon_id', selectedSurgeon)
-      .eq('procedure_type_id', selectedProcedure)
+      .eq('procedure_type_id', selectedSurgeonProc)
 
     if (error) {
-      showToast({ type: 'error', title: 'Failed to reset. Reverting.' })
+      showToast({ type: 'error', title: 'Failed to reset' })
       await refetchSurgeonConfigs()
     } else {
       showToast({ type: 'success', title: 'Reset to procedure defaults' })
+      // Procedure removed from override list since all rows deleted
+      const remaining = surgeonProcIds.filter((id) => id !== selectedSurgeonProc)
+      setSelectedSurgeonProc(remaining[0] || null)
+      await refetchSummary()
     }
 
     setResetting(false)
     setShowResetConfirm(false)
-  }, [effectiveFacilityId, selectedSurgeon, selectedProcedure, supabase, showToast, refetchSurgeonConfigs, setSurgeonConfigs])
+  }, [
+    effectiveFacilityId,
+    selectedSurgeon,
+    selectedSurgeonProc,
+    surgeonProcIds,
+    setSurgeonConfigs,
+    supabase,
+    showToast,
+    refetchSurgeonConfigs,
+    refetchSummary,
+  ])
 
-  // ── DnD ───────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  const handleDragEnd = useCallback((phaseGroup: string) => (event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const group = phaseGroups.find(g => g.phase.name === phaseGroup)
-    if (!group) return
-
-    const ids = group.milestones.map(m => m.id)
-    const oldIndex = ids.indexOf(String(active.id))
-    const newIndex = ids.indexOf(String(over.id))
-    if (oldIndex === -1 || newIndex === -1) return
-
-    const newIds = [...ids]
-    const [moved] = newIds.splice(oldIndex, 1)
-    newIds.splice(newIndex, 0, moved)
-
-    handleReorder(phaseGroup, newIds)
-  }, [phaseGroups, handleReorder])
-
-  // ── Collapsed phases ──────────────────────────────
-
-  const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set())
-
-  const togglePhaseCollapse = useCallback((phaseName: string) => {
-    setCollapsedPhases(prev => {
-      const next = new Set(prev)
-      if (next.has(phaseName)) {
-        next.delete(phaseName)
-      } else {
-        next.add(phaseName)
-      }
-      return next
-    })
-  }, [])
-
-  // ── Loading states ────────────────────────────────
-
-  const baseLoading = userLoading || surgeonsLoading || proceduresLoading || milestonesLoading || phasesLoading
-  const configLoading = procConfigsLoading || surgeonConfigsLoading
-  const bothSelected = !!selectedSurgeon && !!selectedProcedure
-  const isAnySaving = savingKeys.size > 0
-
-  if (baseLoading) {
+  if (userLoading || loading) {
     return <PageLoader message="Loading surgeon milestones..." />
   }
+
+  if (!effectiveFacilityId) {
+    return (
+      <div className="text-center py-12 text-slate-500">
+        No facility found. Please contact support.
+      </div>
+    )
+  }
+
+  // ── Helpers ────────────────────────────────────────
+
+  const selectedSurgeonObj = safeSurgeons.find((s) => s.id === selectedSurgeon) || null
+
+  const getInitials = (s: { first_name: string; last_name: string }) =>
+    `${s.first_name.charAt(0)}${s.last_name.charAt(0)}`.toUpperCase()
 
   // ── Render ────────────────────────────────────────
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-slate-900 mb-1">Surgeon Milestones</h1>
-      <p className="text-slate-500 mb-6">
-        Override which milestones are tracked per surgeon. Changes here only affect the selected surgeon&apos;s cases.
-      </p>
-
-      {/* Info bar */}
-      <div className="mb-6 flex items-center gap-2 px-3 py-2 bg-slate-50 border-l-[3px] border-indigo-400 rounded-r-lg text-sm text-slate-600">
-        <Info className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-        <span>
-          Surgeon overrides take precedence over procedure defaults. Boundary milestones cannot be disabled.
-        </span>
-      </div>
-
-      {/* Surgeon selector */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Surgeon</label>
-          <select
-            value={selectedSurgeon || ''}
-            onChange={(e) => {
-              setSelectedSurgeon(e.target.value || null)
-              setSelectedProcedure(null)
-            }}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="">Select a surgeon...</option>
-            {surgeons.map(s => (
-              <option key={s.id} value={s.id}>
-                {s.last_name}, {s.first_name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Procedure Type</label>
-          <select
-            value={selectedProcedure || ''}
-            onChange={(e) => setSelectedProcedure(e.target.value || null)}
-            disabled={!selectedSurgeon}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
-          >
-            <option value="">
-              {selectedSurgeon ? 'Select a procedure type...' : 'Select a surgeon first'}
-            </option>
-            {procedureTypes.map(pt => (
-              <option key={pt.id} value={pt.id}>
-                {pt.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Empty state when nothing selected */}
-      {!bothSelected && (
-        <div className="text-center py-16 bg-white border border-slate-200 rounded-xl">
-          <User className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-          <p className="text-slate-500">
-            {!selectedSurgeon
-              ? 'Select a surgeon to configure their milestone overrides.'
-              : 'Select a procedure type to view milestones.'}
-          </p>
-        </div>
-      )}
-
-      {/* Loading state for configs */}
-      {bothSelected && configLoading && (
-        <PageLoader message="Loading milestone configuration..." />
-      )}
-
-      {/* Milestone list */}
-      {bothSelected && !configLoading && (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          {/* Header with reset button + override count */}
-          <div className="flex items-center justify-between p-4 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
-                <ClipboardList className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900">
-                  {surgeons.find(s => s.id === selectedSurgeon)?.last_name},{' '}
-                  {surgeons.find(s => s.id === selectedSurgeon)?.first_name}
-                  {' — '}
-                  {procedureTypes.find(pt => pt.id === selectedProcedure)?.name}
-                </h3>
-                <span className="text-xs text-slate-500">
-                  {overrideCount === 0
-                    ? 'Using procedure defaults'
-                    : `${overrideCount} override${overrideCount !== 1 ? 's' : ''} active`}
-                </span>
-              </div>
+      <div
+        className="flex border border-slate-200 rounded-xl overflow-hidden bg-white"
+        style={{ height: 'calc(100vh - 220px)', minHeight: 500 }}
+      >
+        {/* ── Left Panel: Surgeon List ── */}
+        <div className="w-[280px] min-w-[280px] border-r border-slate-200 bg-white flex flex-col">
+          {/* Search */}
+          <div className="p-2.5 pb-1.5">
+            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 rounded-[5px] border border-slate-200">
+              <Search className="w-[13px] h-[13px] text-slate-400" />
+              <input
+                value={surgeonSearch}
+                onChange={(e) => setSurgeonSearch(e.target.value)}
+                placeholder="Search surgeons..."
+                className="border-none outline-none bg-transparent text-[11px] text-slate-800 w-full"
+              />
             </div>
-
-            {overrideCount > 0 && (
-              <button
-                onClick={() => setShowResetConfirm(true)}
-                disabled={isAnySaving || resetting}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:text-slate-800 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Reset to Defaults
-              </button>
-            )}
           </div>
 
-          {/* Phase-grouped milestone rows */}
-          <div className="p-4 bg-slate-50">
-            <p className="text-sm text-slate-600 mb-3">
-              Milestones grouped by phase. Amber rows indicate surgeon-specific overrides.
-            </p>
-
-            {phaseGroups.map((group) => {
-              const phaseName = group.phase.name
-              const isExpanded = !collapsedPhases.has(phaseName)
-              const enabledCount = group.milestones.filter(m =>
-                isMilestoneEnabled(m.id)
-              ).length
+          {/* Surgeon list */}
+          <div className="flex-1 overflow-y-auto px-1.5 pb-1.5">
+            {filteredSurgeons.map((s) => {
+              const overrideCount = surgeonOverrideCounts.get(s.id) || 0
+              const isSel = s.id === selectedSurgeon
 
               return (
-                <PhaseSection
-                  key={phaseName}
-                  phaseName={phaseName}
-                  phaseDisplayName={group.phase.display_name}
-                  colorKey={group.phase.color_key}
-                  milestoneCount={group.milestones.length}
-                  enabledCount={enabledCount}
-                  isExpanded={isExpanded}
-                  onToggle={() => togglePhaseCollapse(phaseName)}
+                <div
+                  key={s.id}
+                  onClick={() => {
+                    setSelectedSurgeon(s.id)
+                    setSelectedSurgeonProc(null)
+                  }}
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-[5px] cursor-pointer mb-px ${
+                    isSel
+                      ? 'bg-blue-50 border border-blue-200'
+                      : 'border border-transparent hover:bg-slate-50'
+                  }`}
                 >
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd(phaseName)}
+                  <div
+                    className={`w-7 h-7 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                      overrideCount > 0
+                        ? 'bg-purple-100 text-purple-600'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
                   >
-                    <SortableContext
-                      items={group.milestones.map(m => m.id)}
-                      strategy={verticalListSortingStrategy}
+                    {getInitials(s)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={`text-[11px] text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis ${
+                        isSel ? 'font-semibold' : 'font-medium'
+                      }`}
                     >
-                      {group.milestones.map((milestone) => {
-                        const isBoundary = boundaryMilestoneIds.has(milestone.id)
-                        const enabled = isMilestoneEnabled(milestone.id)
-                        const isPaired = milestone.pair_position === 'start' && !!milestone.pair_with_id
-                        const hasOverride = isOverride(milestone.id)
-                        const procDefault = isProcedureDefault(milestone.id)
-
-                        return (
-                          <SurgeonMilestoneRow
-                            key={milestone.id}
-                            id={milestone.id}
-                            displayName={milestone.display_name}
-                            isEnabled={enabled}
-                            procedureDefault={procDefault}
-                            isBoundary={isBoundary}
-                            isPaired={isPaired}
-                            isOverride={hasOverride}
-                            isSaving={savingKeys.has(milestone.id)}
-                            onToggle={() => {
-                              if (isPaired) {
-                                togglePairedMilestone(milestone.id)
-                              } else {
-                                toggleMilestone(milestone.id)
-                              }
-                            }}
-                          />
-                        )
-                      })}
-                    </SortableContext>
-                  </DndContext>
-                </PhaseSection>
+                      {s.last_name}, {s.first_name}
+                    </div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">
+                      {overrideCount > 0 ? (
+                        <span className="text-purple-600 font-medium">
+                          {overrideCount} procedure{overrideCount !== 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        'No overrides'
+                      )}
+                    </div>
+                  </div>
+                  {overrideCount > 0 && (
+                    <div className="w-[5px] h-[5px] rounded-full bg-purple-500 shrink-0" />
+                  )}
+                </div>
               )
             })}
 
-            {phaseGroups.length === 0 && (
-              <div className="text-center py-8 text-slate-500">
-                <p>No milestones configured for this procedure.</p>
-                <p className="text-sm mt-1">Configure milestones in Procedure Milestones settings first.</p>
+            {filteredSurgeons.length === 0 && (
+              <div className="py-8 text-center text-[11px] text-slate-400">
+                {surgeonSearch ? 'No matching surgeons' : 'No surgeons'}
               </div>
             )}
           </div>
+        </div>
 
-          {/* Footer with override count */}
-          {overrideCount > 0 && (
-            <div className="px-4 py-3 bg-amber-50 border-t border-amber-200 text-sm text-amber-700">
-              {overrideCount} override{overrideCount !== 1 ? 's' : ''} active for this surgeon + procedure combination
+        {/* ── Right Panel: Surgeon Detail ── */}
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          {selectedSurgeonObj ? (
+            <>
+              {/* Header */}
+              <div className="bg-white border-b border-slate-200 px-5 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-[30px] h-[30px] rounded-md bg-purple-100 flex items-center justify-center text-[10px] font-bold text-purple-600">
+                    {getInitials(selectedSurgeonObj)}
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900 m-0">
+                      {selectedSurgeonObj.last_name}, {selectedSurgeonObj.first_name}
+                    </h2>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-3.5 max-w-[520px]">
+                {/* Procedure override chips */}
+                {surgeonProcs.length > 0 && (
+                  <div className="mb-2.5">
+                    <div className="text-[10px] font-semibold text-slate-500 mb-1.5 uppercase tracking-wide">
+                      Procedure Overrides ({surgeonProcs.length})
+                    </div>
+                    <div className="flex gap-1 flex-wrap mb-2">
+                      {surgeonProcs.map((p) => {
+                        const isActive = p.id === selectedSurgeonProc
+                        const hasDiff = hasDiffForProc(p.id)
+
+                        return (
+                          <div
+                            key={p.id}
+                            className={`flex items-center rounded-md overflow-hidden ${
+                              isActive
+                                ? 'border-[1.5px] border-blue-500 bg-blue-50'
+                                : 'border-[1.5px] border-slate-200 bg-white'
+                            }`}
+                          >
+                            <button
+                              onClick={() => setSelectedSurgeonProc(p.id)}
+                              className={`px-2 py-[5px] border-none bg-transparent text-[11px] cursor-pointer flex items-center gap-1 ${
+                                isActive
+                                  ? 'font-semibold text-blue-700'
+                                  : 'font-normal text-slate-600'
+                              }`}
+                            >
+                              {p.name}
+                              {hasDiff && (
+                                <div className="w-[5px] h-[5px] rounded-full bg-purple-500" />
+                              )}
+                              {!hasDiff && (
+                                <span className="text-[8px] text-slate-400">
+                                  no diff
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveProcedure(p.id)
+                              }}
+                              className="px-1.5 py-[5px] border-none border-l border-l-slate-200 bg-transparent cursor-pointer text-slate-400 hover:text-red-500 flex items-center"
+                            >
+                              <X className="w-[11px] h-[11px]" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add Procedure Override */}
+                <div className="mb-3.5">
+                  <AddProcedureDropdown
+                    onAdd={handleAddProcedure}
+                    existingProcIds={surgeonProcIds}
+                    allProcedures={safeProcs}
+                  />
+                </div>
+
+                {/* Loading state for configs */}
+                {surgeonConfigsLoading && (
+                  <div className="py-8 text-center text-[11px] text-slate-400">
+                    Loading milestone configuration...
+                  </div>
+                )}
+
+                {/* Selected procedure content */}
+                {selectedSurgeonProc && !surgeonConfigsLoading ? (
+                  <>
+                    {/* Inheritance breadcrumb */}
+                    <InheritanceBreadcrumb
+                      levels={[
+                        {
+                          label: 'Facility Default',
+                          active: !isProcCustomized && !surgeonIsCustomized,
+                        },
+                        {
+                          label:
+                            safeProcs.find((p) => p.id === selectedSurgeonProc)?.name ||
+                            '',
+                          active: isProcCustomized && !surgeonIsCustomized,
+                        },
+                        {
+                          label: selectedSurgeonObj.last_name,
+                          active: surgeonIsCustomized,
+                        },
+                      ]}
+                    />
+
+                    {/* Active count + reset */}
+                    <div className="flex justify-between items-center mb-2.5">
+                      <div className="text-[10px] text-slate-500">
+                        {enabledCount}/{safeMilestones.length} active
+                        {surgeonIsCustomized &&
+                          ` · ${overriddenIds.size} override${
+                            overriddenIds.size !== 1 ? 's' : ''
+                          }`}
+                      </div>
+                      {surgeonIsCustomized && (
+                        <button
+                          onClick={() => setShowResetConfirm(true)}
+                          disabled={resetting}
+                          className="flex items-center gap-1 px-2 py-1 border border-slate-200 rounded bg-white cursor-pointer text-[10px] font-medium text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <Undo2 className="w-3 h-3" /> Reset
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Green info banner when matching parent */}
+                    {!surgeonIsCustomized && (
+                      <div className="flex items-center gap-1.5 px-3 py-2 mb-2.5 bg-green-50 border border-green-200 rounded-[5px] text-[10px] text-green-800">
+                        <CheckCircle2 className="w-3 h-3 shrink-0" />
+                        Matching {isProcCustomized ? 'procedure' : 'facility default'}{' '}
+                        config. Toggle any milestone to create a surgeon override.
+                      </div>
+                    )}
+
+                    {/* Phase blocks */}
+                    <div className="flex flex-col">
+                      {renderData.map((phase) => (
+                        <Fragment key={phase.phaseDef.id}>
+                          {phase.boundaryBefore && (
+                            <BoundaryMarker
+                              name={phase.boundaryBefore.name}
+                              topColor={phase.boundaryBefore.topColor}
+                              bottomColor={phase.boundaryBefore.bottomColor}
+                              solid={phase.boundaryBefore.solid}
+                            />
+                          )}
+                          <PhaseBlock
+                            phaseColor={phase.color}
+                            phaseLabel={phase.phaseDef.display_name}
+                            phaseKey={phase.phaseDef.name}
+                            mode="config"
+                            milestones={phase.milestones}
+                            config={effectiveConfig}
+                            parentConfig={parentConfig}
+                            overriddenIds={overriddenIds}
+                            overrideLabel="SURGEON"
+                            pairIssueCount={phase.issueCount}
+                            onToggle={handleToggle}
+                            onReorder={handleReorder}
+                            draggable={true}
+                            bracketAreaWidth={phase.bracketWidth}
+                          >
+                            {phase.brackets.length > 0 && (
+                              <PairBracketOverlay
+                                milestones={phase.milestones}
+                                pairIssues={pairIssues}
+                              />
+                            )}
+                          </PhaseBlock>
+                          {phase.boundaryAfter && (
+                            <BoundaryMarker
+                              name={phase.boundaryAfter.name}
+                              topColor={phase.boundaryAfter.topColor}
+                              bottomColor={phase.boundaryAfter.bottomColor}
+                              solid={phase.boundaryAfter.solid}
+                            />
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </>
+                ) : !surgeonConfigsLoading && !selectedSurgeonProc ? (
+                  /* Empty state when no procedure selected */
+                  <div className="py-10 text-center text-slate-400">
+                    <div className="text-[13px] font-medium text-slate-500 mb-1">
+                      No procedure overrides yet
+                    </div>
+                    <div className="text-[11px]">
+                      Use &ldquo;Add Procedure Override&rdquo; to configure
+                      surgeon-specific milestones.
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            /* Empty state when no surgeon selected */
+            <div className="flex flex-col items-center justify-center h-full text-slate-400">
+              <Search className="w-10 h-10 mb-3 text-slate-300" />
+              <p className="text-[13px] font-medium text-slate-500 mb-1">
+                Select a surgeon
+              </p>
+              <p className="text-[11px]">
+                Choose a surgeon from the list to manage their milestone overrides.
+              </p>
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {/* Reset confirmation dialog */}
       <ConfirmDialog
@@ -736,8 +1184,9 @@ export default function SurgeonMilestonesSettingsPage() {
           <div>
             <p>Remove all surgeon-specific overrides for this procedure?</p>
             <p className="mt-2 text-sm text-slate-500">
-              This will delete {overrideCount} override{overrideCount !== 1 ? 's' : ''} and
-              revert to the procedure&apos;s default milestone configuration.
+              This will delete {overriddenIds.size} override
+              {overriddenIds.size !== 1 ? 's' : ''} and revert to the
+              procedure&apos;s default milestone configuration.
             </p>
           </div>
         }
