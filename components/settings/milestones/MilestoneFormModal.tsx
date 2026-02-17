@@ -1,18 +1,26 @@
 // components/settings/milestones/MilestoneFormModal.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Info } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { inferPhaseGroup, PHASE_GROUP_OPTIONS, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
 
-interface MilestoneFormData {
+export interface MilestoneFormData {
   displayName: string
   internalName: string
   phaseGroup: PhaseGroup | ''
   minMinutes: number
   maxMinutes: number
+  pairWithId: string
+  pairRole: 'start' | 'end'
+}
+
+export interface PairingCandidate {
+  id: string
+  display_name: string
+  phase_group: string | null
 }
 
 interface EditingMilestone {
@@ -37,6 +45,8 @@ interface MilestoneFormModalProps {
   saving: boolean
   onSubmit: (data: MilestoneFormData) => void
   onArchive?: () => void
+  /** Unpaired milestones available for pairing in add mode */
+  availableForPairing?: PairingCandidate[]
 }
 
 function generateName(displayName: string): string {
@@ -56,6 +66,7 @@ function MilestoneFormContent({
   onSubmit,
   onArchive,
   onClose,
+  availableForPairing,
 }: Omit<MilestoneFormModalProps, 'open'>) {
   const [displayName, setDisplayName] = useState(
     mode === 'edit' && milestone ? milestone.display_name : ''
@@ -70,6 +81,14 @@ function MilestoneFormContent({
   const [maxMinutes, setMaxMinutes] = useState(
     mode === 'edit' && milestone ? (milestone.max_minutes ?? 90) : 90
   )
+  const [pairWithId, setPairWithId] = useState('')
+  const [pairRole, setPairRole] = useState<'start' | 'end'>('start')
+
+  // Filter available pairing candidates by selected phase
+  const phaseFilteredForPairing = useMemo(() => {
+    if (!availableForPairing || !phaseGroup) return []
+    return availableForPairing.filter(m => m.phase_group === phaseGroup)
+  }, [availableForPairing, phaseGroup])
 
   const handleSubmit = () => {
     if (!displayName.trim()) return
@@ -79,6 +98,8 @@ function MilestoneFormContent({
       phaseGroup,
       minMinutes,
       maxMinutes,
+      pairWithId,
+      pairRole,
     })
   }
 
@@ -168,6 +189,47 @@ function MilestoneFormContent({
         </select>
       </div>
 
+      {/* Pair With (add mode only) */}
+      {mode === 'add' && availableForPairing && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Pair With <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <select
+            value={pairWithId}
+            onChange={(e) => setPairWithId(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">None &mdash; standalone milestone</option>
+            {phaseFilteredForPairing.map((m) => (
+              <option key={m.id} value={m.id}>{m.display_name}</option>
+            ))}
+          </select>
+          {!phaseGroup && (
+            <p className="text-xs text-slate-400 mt-1">Select a phase group first to see available milestones.</p>
+          )}
+          {pairWithId && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-slate-500">This milestone is the:</span>
+              {(['start', 'end'] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setPairRole(r)}
+                  className={`px-3 py-1 border rounded text-[10px] font-semibold uppercase ${
+                    pairRole === r
+                      ? 'border-blue-500 bg-blue-50 text-blue-600'
+                      : 'border-slate-200 bg-white text-slate-500'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Validation Range (edit mode only) */}
       {mode === 'edit' && milestone && (
         <div className="pt-2 border-t border-slate-200">
@@ -247,6 +309,7 @@ export function MilestoneFormModal({
   saving,
   onSubmit,
   onArchive,
+  availableForPairing,
 }: MilestoneFormModalProps) {
   // Key forces inner form to remount (reset state) when modal reopens or milestone changes
   const formKey = `${mode}-${milestone?.id ?? 'new'}-${open}`
@@ -255,7 +318,7 @@ export function MilestoneFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={mode === 'add' ? 'Add Custom Milestone' : 'Edit Milestone'}
+      title={mode === 'add' ? 'Add Milestone' : 'Edit Milestone'}
     >
       {open && (
         <MilestoneFormContent
@@ -267,6 +330,7 @@ export function MilestoneFormModal({
           onSubmit={onSubmit}
           onArchive={onArchive}
           onClose={onClose}
+          availableForPairing={availableForPairing}
         />
       )}
     </Modal>

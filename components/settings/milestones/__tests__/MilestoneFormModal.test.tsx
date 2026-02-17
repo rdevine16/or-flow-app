@@ -19,9 +19,11 @@ describe('MilestoneFormModal', () => {
         />
       )
 
-      expect(screen.getByText('Add Custom Milestone')).toBeInTheDocument()
+      // Modal title and submit button both say "Add Milestone"
+      const addTexts = screen.getAllByText('Add Milestone')
+      expect(addTexts.length).toBeGreaterThanOrEqual(2) // title + button
       expect(screen.getByPlaceholderText('e.g., Array Placement')).toHaveValue('')
-      expect(screen.getByText('Add Milestone')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Add Milestone' })).toBeInTheDocument()
     })
 
     it('shows internal name field in add mode', () => {
@@ -53,7 +55,7 @@ describe('MilestoneFormModal', () => {
       )
 
       await user.type(screen.getByPlaceholderText('e.g., Array Placement'), 'My Milestone')
-      await user.click(screen.getByText('Add Milestone'))
+      await user.click(screen.getByRole('button', { name: 'Add Milestone' }))
 
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -74,7 +76,7 @@ describe('MilestoneFormModal', () => {
         />
       )
 
-      expect(screen.getByText('Add Milestone').closest('button')).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Add Milestone' })).toBeDisabled()
     })
   })
 

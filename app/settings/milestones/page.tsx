@@ -1,7 +1,7 @@
 // app/settings/milestones/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { createClient } from '@/lib/supabase'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
@@ -11,12 +11,15 @@ import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
-import { Info, Plus } from 'lucide-react'
+import { Info, Plus, AlertTriangle } from 'lucide-react'
 import { inferPhaseGroup, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
-import { MilestonesTable } from '@/components/settings/milestones/MilestonesTable'
 import { MilestoneFormModal } from '@/components/settings/milestones/MilestoneFormModal'
 import { ArchivedMilestonesSection } from '@/components/settings/milestones/ArchivedMilestonesSection'
-import type { MilestoneRowData } from '@/components/settings/milestones/MilestoneRow'
+import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
+import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
+import { PairBracketOverlay, computeBracketData, computeBracketAreaWidth } from '@/components/settings/milestones/PairBracketOverlay'
+import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
+import { resolveColorKey } from '@/lib/milestone-phase-config'
 
 interface FacilityMilestone {
   id: string
@@ -36,6 +39,17 @@ interface FacilityMilestone {
   phase_group: PhaseGroup | null
 }
 
+interface PhaseDefinitionRow {
+  id: string
+  name: string
+  display_name: string
+  display_order: number
+  color_key: string | null
+  start_milestone_id: string
+  end_milestone_id: string
+  is_active: boolean
+}
+
 export default function MilestonesSettingsPage() {
   const supabase = createClient()
   const { effectiveFacilityId, loading: userLoading } = useUser()
@@ -49,6 +63,20 @@ export default function MilestonesSettingsPage() {
         .from('facility_milestones')
         .select('id, facility_id, name, display_name, display_order, pair_with_id, pair_position, source_milestone_type_id, is_active, deleted_at, deleted_by, min_minutes, max_minutes, validation_type, phase_group')
         .eq('facility_id', effectiveFacilityId!)
+        .order('display_order')
+      if (fetchError) throw fetchError
+      return data || []
+    },
+    { deps: [effectiveFacilityId], enabled: !userLoading && !!effectiveFacilityId }
+  )
+
+  const { data: phaseDefinitions, loading: phasesLoading } = useSupabaseQuery<PhaseDefinitionRow[]>(
+    async (sb) => {
+      const { data, error: fetchError } = await sb
+        .from('phase_definitions')
+        .select('id, name, display_name, display_order, color_key, start_milestone_id, end_milestone_id, is_active')
+        .eq('facility_id', effectiveFacilityId!)
+        .eq('is_active', true)
         .order('display_order')
       if (fetchError) throw fetchError
       return data || []
@@ -126,6 +154,134 @@ export default function MilestonesSettingsPage() {
     [milestones]
   )
 
+  // ── Computed data for new phase-block layout ────────────────────────
+
+  // Set of milestone IDs that are boundary milestones (referenced in phase_definitions)
+  const boundaryMilestoneIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (!phaseDefinitions) return ids
+    for (const pd of phaseDefinitions) {
+      ids.add(pd.start_milestone_id)
+      ids.add(pd.end_milestone_id)
+    }
+    return ids
+  }, [phaseDefinitions])
+
+  // Milestone lookup by ID
+  const milestoneById = useMemo(() => {
+    const map = new Map<string, FacilityMilestone>()
+    for (const m of (milestones || [])) {
+      map.set(m.id, m)
+    }
+    return map
+  }, [milestones])
+
+  // Derive pair_group: both milestones in a pair share the START milestone's ID
+  const pairGroupMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const m of activeMilestones) {
+      if (!m.pair_with_id || !m.pair_position) continue
+      if (m.pair_position === 'start') {
+        map.set(m.id, m.id)
+      } else if (m.pair_position === 'end') {
+        map.set(m.id, m.pair_with_id)
+      }
+    }
+    return map
+  }, [activeMilestones])
+
+  // Build PhaseBlockMilestone arrays per phase
+  const phaseBlockData = useMemo(() => {
+    if (!phaseDefinitions?.length) return []
+
+    return phaseDefinitions.map(pd => {
+      const color = resolveColorKey(pd.color_key).hex
+      const phaseMilestones: PhaseBlockMilestone[] = activeMilestones
+        .filter(m => m.phase_group === pd.name && !boundaryMilestoneIds.has(m.id))
+        .map(m => ({
+          id: m.id,
+          display_name: m.display_name,
+          phase_group: m.phase_group,
+          is_boundary: false,
+          pair_with_id: m.pair_with_id,
+          pair_position: m.pair_position,
+          pair_group: pairGroupMap.get(m.id) || null,
+        }))
+
+      return { phaseDef: pd, color, milestones: phaseMilestones }
+    })
+  }, [phaseDefinitions, activeMilestones, boundaryMilestoneIds, pairGroupMap])
+
+  // All milestones as PairIssueMilestone for issue detection
+  const allPairIssueMilestones = useMemo(() => {
+    return activeMilestones.map(m => ({
+      id: m.id,
+      phase_group: m.phase_group,
+      pair_with_id: m.pair_with_id,
+      pair_position: m.pair_position,
+      pair_group: pairGroupMap.get(m.id) || null,
+    }))
+  }, [activeMilestones, pairGroupMap])
+
+  const pairIssues = useMemo(() => detectPairIssues(allPairIssueMilestones), [allPairIssueMilestones])
+  const totalPairIssueCount = Object.keys(pairIssues).length
+
+  // Precompute render data: boundary markers + bracket info per phase
+  const renderData = useMemo(() => {
+    if (!phaseBlockData.length) return []
+
+    return phaseBlockData.map((phase, idx) => {
+      const isFirst = idx === 0
+      const isLast = idx === phaseBlockData.length - 1
+
+      // Boundary before this phase block
+      let boundaryBefore: { name: string; topColor: string; bottomColor: string; solid: boolean } | null = null
+      if (isFirst) {
+        const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
+        if (ms) {
+          boundaryBefore = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
+        }
+      }
+
+      // Boundary after this phase block
+      let boundaryAfter: { name: string; topColor: string; bottomColor: string; solid: boolean } | null = null
+      if (isLast) {
+        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
+        if (ms) {
+          boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true }
+        }
+      } else {
+        const nextColor = phaseBlockData[idx + 1].color
+        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
+        if (ms) {
+          boundaryAfter = { name: ms.display_name, topColor: phase.color, bottomColor: nextColor, solid: false }
+        }
+      }
+
+      // Pair bracket computation
+      const brackets = computeBracketData(phase.milestones, pairIssues)
+      const bracketWidth = computeBracketAreaWidth(brackets)
+      const issueCount = countPairIssuesInPhase(allPairIssueMilestones, pairIssues, phase.phaseDef.name)
+
+      // Running counter for numbered rows (across all phases)
+      const startCounter = phaseBlockData.slice(0, idx).reduce((sum, p) => sum + p.milestones.length, 0) + 1
+
+      return { ...phase, boundaryBefore, boundaryAfter, brackets, bracketWidth, issueCount, startCounter }
+    })
+  }, [phaseBlockData, milestoneById, pairIssues, allPairIssueMilestones])
+
+  // Summary counts
+  const totalCount = activeMilestones.length
+  const boundaryCount = activeMilestones.filter(m => boundaryMilestoneIds.has(m.id)).length
+  const optionalCount = totalCount - boundaryCount
+
+  // Available milestones for pairing in add modal
+  const availableForPairing = useMemo(() => {
+    return activeMilestones
+      .filter(m => !m.pair_with_id && !boundaryMilestoneIds.has(m.id))
+      .map(m => ({ id: m.id, display_name: m.display_name, phase_group: m.phase_group }))
+  }, [activeMilestones, boundaryMilestoneIds])
+
   const closeConfirmModal = () => {
     setConfirmModal(prev => ({ ...prev, isOpen: false }))
   }
@@ -138,6 +294,8 @@ export default function MilestonesSettingsPage() {
     phaseGroup: PhaseGroup | ''
     minMinutes: number
     maxMinutes: number
+    pairWithId: string
+    pairRole: 'start' | 'end'
   }) => {
     if (formMode === 'add') {
       await handleAdd(data)
@@ -150,6 +308,8 @@ export default function MilestonesSettingsPage() {
     displayName: string
     internalName: string
     phaseGroup: PhaseGroup | ''
+    pairWithId?: string
+    pairRole?: 'start' | 'end'
   }) => {
     if (!data.displayName || !effectiveFacilityId) return
 
@@ -181,7 +341,61 @@ export default function MilestonesSettingsPage() {
       if (insertError) throw insertError
 
       await milestoneTypeAudit.created(supabase, data.displayName, insertedData.id)
-      setMilestones([...(milestones || []), { ...insertedData, deleted_at: null }])
+
+      let newMilestone = { ...insertedData, deleted_at: null } as FacilityMilestone
+
+      // Set up pairing if requested
+      if (data.pairWithId && data.pairRole) {
+        const isStart = data.pairRole === 'start'
+        const { error: pairErr1 } = await supabase
+          .from('facility_milestones')
+          .update({
+            pair_with_id: data.pairWithId,
+            pair_position: isStart ? 'start' : 'end',
+            validation_type: isStart ? 'duration' : 'sequence_gap',
+          })
+          .eq('id', insertedData.id)
+        if (pairErr1) throw pairErr1
+
+        const { error: pairErr2 } = await supabase
+          .from('facility_milestones')
+          .update({
+            pair_with_id: insertedData.id,
+            pair_position: isStart ? 'end' : 'start',
+            validation_type: isStart ? 'sequence_gap' : 'duration',
+          })
+          .eq('id', data.pairWithId)
+        if (pairErr2) throw pairErr2
+
+        const partner = (milestones || []).find(m => m.id === data.pairWithId)
+        await milestoneTypeAudit.linked(supabase, data.displayName, partner?.display_name || 'Unknown')
+
+        newMilestone = {
+          ...newMilestone,
+          pair_with_id: data.pairWithId,
+          pair_position: (isStart ? 'start' : 'end') as 'start' | 'end',
+          validation_type: (isStart ? 'duration' : 'sequence_gap') as 'duration' | 'sequence_gap',
+        }
+
+        // Update local state: add new + update partner
+        setMilestones(prev => {
+          const updated = [...(prev || []), newMilestone]
+          return updated.map(m => {
+            if (m.id === data.pairWithId) {
+              return {
+                ...m,
+                pair_with_id: insertedData.id,
+                pair_position: (isStart ? 'end' : 'start') as 'start' | 'end',
+                validation_type: (isStart ? 'sequence_gap' : 'duration') as 'duration' | 'sequence_gap',
+              }
+            }
+            return m
+          })
+        })
+      } else {
+        setMilestones([...(milestones || []), newMilestone])
+      }
+
       setShowFormModal(false)
       showToast({ type: 'success', title: `"${data.displayName}" created` })
     } catch {
@@ -353,7 +567,8 @@ export default function MilestonesSettingsPage() {
     }
   }
 
-  const handleReorder = useCallback(async (phaseKey: string, milestoneIds: string[]) => {
+  const handleReorder = useCallback(async (phaseKey: string, newOrder: PhaseBlockMilestone[]) => {
+    const milestoneIds = newOrder.map(m => m.id)
     // Optimistically update local state
     const updated = (milestones || []).map(m => {
       const idx = milestoneIds.indexOf(m.id)
@@ -362,22 +577,16 @@ export default function MilestonesSettingsPage() {
       }
       return m
     })
-    // Sort by display_order so the table re-renders correctly
     updated.sort((a, b) => a.display_order - b.display_order)
     setMilestones(updated)
 
     // Persist to DB
     try {
-      const updates = milestoneIds.map((id, idx) => ({
-        id,
-        display_order: idx + 1,
-      }))
-
-      for (const { id, display_order } of updates) {
+      for (let i = 0; i < milestoneIds.length; i++) {
         const { error: updateError } = await supabase
           .from('facility_milestones')
-          .update({ display_order })
-          .eq('id', id)
+          .update({ display_order: i + 1 })
+          .eq('id', milestoneIds[i])
         if (updateError) throw updateError
       }
     } catch {
@@ -535,16 +744,8 @@ export default function MilestonesSettingsPage() {
     setShowFormModal(true)
   }
 
-  const openEditModal = (row: MilestoneRowData) => {
-    const milestone = (milestones || []).find(m => m.id === row.id)
-    if (!milestone) return
-    setFormMode('edit')
-    setEditingMilestone(milestone)
-    setShowFormModal(true)
-  }
-
-  const handleArchiveFromRow = (row: MilestoneRowData) => {
-    const milestone = (milestones || []).find(m => m.id === row.id)
+  const handleArchiveById = (milestoneId: string) => {
+    const milestone = (milestones || []).find(m => m.id === milestoneId)
     if (milestone) handleArchive(milestone)
   }
 
@@ -557,29 +758,74 @@ export default function MilestonesSettingsPage() {
       <ErrorBanner message={error} />
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-semibold text-slate-900">Milestones</h1>
-        <Button onClick={openAddModal}>
-          <Plus className="w-4 h-4" />
-          Add Custom Milestone
-        </Button>
+        <div className="flex items-center gap-2">
+          {totalPairIssueCount > 0 && (
+            <div className="flex items-center gap-1 px-2.5 py-1 bg-red-50 border border-red-200 rounded-md text-[10px] font-semibold text-red-600">
+              <AlertTriangle className="w-3 h-3" /> {totalPairIssueCount} pair issue{totalPairIssueCount > 1 ? 's' : ''}
+            </div>
+          )}
+          <Button onClick={openAddModal}>
+            <Plus className="w-4 h-4" />
+            Add Milestone
+          </Button>
+        </div>
       </div>
-      <p className="text-slate-500 mb-4">Configure the surgical milestones tracked during cases.</p>
+      <p className="text-slate-500 mb-4">Facility-level milestone definitions. Drag to reorder, add or remove milestones.</p>
 
-      {/* Info bar */}
-      <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-slate-50 border-l-[3px] border-indigo-400 rounded-r-lg text-sm text-slate-600">
-        <Info className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-        <span>
-          <span className="text-indigo-400">&#x25C6;</span> indicates a custom milestone. All others are global defaults. Drag to reorder within each phase.
-        </span>
-      </div>
+      {/* Phase blocks with boundary markers */}
+      {loading || phasesLoading ? (
+        <div className="flex items-center justify-center py-12 text-slate-400">Loading milestones...</div>
+      ) : (
+        <div className="max-w-[620px]">
+          <div className="flex flex-col">
+            {renderData.map((phase) => (
+              <Fragment key={phase.phaseDef.id}>
+                {phase.boundaryBefore && (
+                  <BoundaryMarker
+                    name={phase.boundaryBefore.name}
+                    topColor={phase.boundaryBefore.topColor}
+                    bottomColor={phase.boundaryBefore.bottomColor}
+                    solid={phase.boundaryBefore.solid}
+                  />
+                )}
+                <PhaseBlock
+                  phaseColor={phase.color}
+                  phaseLabel={phase.phaseDef.display_name}
+                  phaseKey={phase.phaseDef.name}
+                  mode="table"
+                  milestones={phase.milestones}
+                  pairIssueCount={phase.issueCount}
+                  onReorder={handleReorder}
+                  draggable
+                  onDelete={handleArchiveById}
+                  startCounter={phase.startCounter}
+                  bracketAreaWidth={phase.bracketWidth}
+                >
+                  {phase.brackets.length > 0 && (
+                    <PairBracketOverlay
+                      milestones={phase.milestones}
+                      pairIssues={pairIssues}
+                    />
+                  )}
+                </PhaseBlock>
+                {phase.boundaryAfter && (
+                  <BoundaryMarker
+                    name={phase.boundaryAfter.name}
+                    topColor={phase.boundaryAfter.topColor}
+                    bottomColor={phase.boundaryAfter.bottomColor}
+                    solid={phase.boundaryAfter.solid}
+                  />
+                )}
+              </Fragment>
+            ))}
+          </div>
 
-      {/* Phase-grouped milestones table */}
-      <MilestonesTable
-        milestones={activeMilestones}
-        loading={loading}
-        onEdit={openEditModal}
-        onArchive={handleArchiveFromRow}
-        onReorder={handleReorder}
-      />
+          {/* Summary footer */}
+          <div className="mt-3 px-3.5 py-2 bg-white rounded-md border border-slate-100 text-[10px] text-slate-400 flex items-center justify-between">
+            <span>{totalCount} total &middot; {boundaryCount} boundary &middot; {optionalCount} optional</span>
+          </div>
+        </div>
+      )}
 
       {/* Archived milestones section */}
       <ArchivedMilestonesSection
@@ -598,6 +844,7 @@ export default function MilestonesSettingsPage() {
         saving={saving}
         onSubmit={handleFormSubmit}
         onArchive={handleArchiveFromModal}
+        availableForPairing={availableForPairing}
       />
 
       {/* Pair/Unlink Modal */}
