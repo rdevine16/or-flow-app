@@ -38,6 +38,8 @@ interface FacilityMilestone {
   pair_position: 'start' | 'end' | null
   pair_with_id: string | null
   phase_group: string | null
+  min_minutes: number | null
+  max_minutes: number | null
 }
 
 interface PhaseDefinitionRow {
@@ -120,7 +122,7 @@ export default function SurgeonMilestonesSettingsPage() {
     async (sb) => {
       const { data, error } = await sb
         .from('facility_milestones')
-        .select('id, name, display_name, display_order, pair_position, pair_with_id, phase_group')
+        .select('id, name, display_name, display_order, pair_position, pair_with_id, phase_group, min_minutes, max_minutes')
         .eq('facility_id', effectiveFacilityId!)
         .eq('is_active', true)
         .order('display_order')
@@ -492,8 +494,8 @@ export default function SurgeonMilestonesSettingsPage() {
           pair_with_id: m.pair_with_id,
           pair_position: m.pair_position,
           pair_group: pairGroupMap.get(m.id) || null,
-          min_minutes: null,
-          max_minutes: null,
+          min_minutes: m.min_minutes,
+          max_minutes: m.max_minutes,
         })),
     [safeMilestones, boundaryMilestoneIds, pairGroupMap, configOrderMap]
   )
@@ -532,8 +534,8 @@ export default function SurgeonMilestonesSettingsPage() {
         pair_with_id: m.pair_with_id,
         pair_position: m.pair_position,
         pair_group: pairGroupMap.get(m.id) || null,
-        min_minutes: null,
-        max_minutes: null,
+        min_minutes: m.min_minutes,
+        max_minutes: m.max_minutes,
       }))
   }, [safeMilestones, boundaryMilestoneIds, pairGroupMap])
 
