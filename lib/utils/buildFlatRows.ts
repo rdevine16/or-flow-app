@@ -1,6 +1,11 @@
 // lib/utils/buildFlatRows.ts
 // Builds a flat ordered row array from the phase tree and active milestones.
 // Used by FlatMilestoneList to render a single continuous list with color rails.
+//
+// ORDER IS DETERMINED BY display_order (or configOrderMap), NOT by phase tree
+// structure. Phase ranges are computed dynamically from boundary positions —
+// just like the reference design. This means dragging ANY milestone (including
+// boundaries) changes where phases visually start and end.
 
 import type { PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
 import type { PhaseDefLike, PhaseTreeNode } from '@/lib/milestone-phase-config'
@@ -25,7 +30,7 @@ export interface FlatRow extends PhaseBlockMilestone {
   transitionToColor: string
   /** Phase start/end tags to display inline */
   phaseTags: PhaseTag[]
-  /** Top-level phase key this row belongs to (for drag boundary enforcement) */
+  /** Top-level phase key this row belongs to */
   ownerPhaseKey: string
 }
 
@@ -74,15 +79,10 @@ const UNPHASED_COLOR = '#94A3B8'
 // ─── Builder ─────────────────────────────────────────────
 
 /**
- * Build a flat ordered FlatRow[] array from the phase tree and active milestones.
- *
- * Walk the phase tree in order. For each top-level phase:
- *  1. Emit start boundary row
- *  2. Emit non-boundary milestones (parent + child phases interleaved by display_order)
- *  3. Emit end boundary row (or shared transition boundary handled by next phase)
- *
- * Shared boundaries (where phase A's end = phase B's start) are emitted once
- * with isPhaseTransition = true and gradient color data.
+ * Build a flat ordered FlatRow[] array from active milestones sorted by
+ * display_order (or configOrderMap). Phase membership and transition colors
+ * are computed dynamically from where boundary milestones sit in the sorted
+ * order — so dragging a boundary changes the phase ranges.
  */
 export function buildFlatRows(
   phaseTree: PhaseTreeNode<PhaseDefWithBoundaries>[],
@@ -91,17 +91,21 @@ export function buildFlatRows(
   milestoneById: Map<string, FlatRowMilestone>,
   configOrderMap?: Map<string, number>,
 ): BuildFlatRowsResult {
-  const rows: FlatRow[] = []
-  const emittedIds = new Set<string>()
+  // Sort key helper
+  const orderOf = (ms: FlatRowMilestone) =>
+    configOrderMap?.get(ms.id) ?? ms.display_order
 
-  // 1. Compute top-level boundary IDs
+  // 1. Sort ALL milestones by display_order (boundaries included)
+  const sorted = [...activeMilestones].sort((a, b) => orderOf(a) - orderOf(b))
+
+  // 2. Build top-level boundary ID set
   const topLevelBoundaryIds = new Set<string>()
   for (const node of phaseTree) {
     topLevelBoundaryIds.add(node.phase.start_milestone_id)
     topLevelBoundaryIds.add(node.phase.end_milestone_id)
   }
 
-  // 2. Pre-compute phase tags for milestone IDs
+  // 3. Pre-compute phase tags for milestone IDs
   const phaseTagsMap = new Map<string, PhaseTag[]>()
   const addTag = (msId: string, tag: PhaseTag) => {
     const existing = phaseTagsMap.get(msId) || []
@@ -121,115 +125,90 @@ export function buildFlatRows(
     }
   }
 
-  // Helper: get sort key for a milestone
-  const orderOf = (ms: FlatRowMilestone) =>
-    configOrderMap?.get(ms.id) ?? ms.display_order
+  // 4. Compute phase ranges from sorted positions
+  //    For each top-level phase, find the indices of its boundary milestones
+  const phaseRanges: { name: string; color: string; start: number; end: number }[] = []
+  for (const node of phaseTree) {
+    const startIdx = sorted.findIndex(m => m.id === node.phase.start_milestone_id)
+    const endIdx = sorted.findIndex(m => m.id === node.phase.end_milestone_id)
+    const color = resolveColorKey(node.phase.color_key).hex
+    if (startIdx >= 0 && endIdx >= 0) {
+      phaseRanges.push({ name: node.phase.name, color, start: startIdx, end: endIdx })
+    }
+  }
 
-  // Helper: create a FlatRow from a milestone
-  const toFlatRow = (
-    ms: FlatRowMilestone,
-    isBoundary: boolean,
-    primaryColor: string,
-    ownerPhaseKey: string,
-    isPhaseTransition: boolean,
-    fromColor: string,
-    toColor: string,
-  ): FlatRow => ({
-    id: ms.id,
-    display_name: ms.display_name,
-    phase_group: ms.phase_group,
-    is_boundary: isBoundary,
-    pair_with_id: ms.pair_with_id,
-    pair_position: ms.pair_position,
-    pair_group: pairGroupMap.get(ms.id) || null,
-    min_minutes: ms.min_minutes,
-    max_minutes: ms.max_minutes,
-    primaryColor,
-    isPhaseTransition,
-    transitionFromColor: fromColor,
-    transitionToColor: toColor,
-    phaseTags: phaseTagsMap.get(ms.id) || [],
-    ownerPhaseKey,
-  })
-
-  // 3. Walk phase tree and emit rows
-  for (let i = 0; i < phaseTree.length; i++) {
-    const node = phaseTree[i]
-    const phase = node.phase
-    const color = resolveColorKey(phase.color_key).hex
-    const prevNode = i > 0 ? phaseTree[i - 1] : null
-    const prevColor = prevNode ? resolveColorKey(prevNode.phase.color_key).hex : color
-
-    // Start boundary
-    if (!emittedIds.has(phase.start_milestone_id)) {
-      const ms = milestoneById.get(phase.start_milestone_id)
-      if (ms) {
-        const isShared = prevNode?.phase.end_milestone_id === phase.start_milestone_id
-        rows.push(toFlatRow(
-          ms,
-          true,
-          isShared ? prevColor : color,
-          phase.name,
-          isShared,
-          isShared ? prevColor : color,
-          color,
-        ))
-        emittedIds.add(ms.id)
+  // 5. Helper: determine top-level phase(s) for a row index
+  const getPhaseForIndex = (idx: number): {
+    from: string; to: string; fromColor: string; toColor: string
+  } | null => {
+    const containing: { name: string; color: string; start: number }[] = []
+    for (const range of phaseRanges) {
+      if (range.start > range.end) continue // inverted range
+      if (idx >= range.start && idx <= range.end) {
+        containing.push({ name: range.name, color: range.color, start: range.start })
       }
     }
 
-    // Non-boundary milestones for this phase and children
-    const allPhaseNames = new Set([phase.name, ...node.children.map(c => c.phase.name)])
-    const phaseMilestones = activeMilestones
-      .filter(m =>
-        m.phase_group !== null &&
-        allPhaseNames.has(m.phase_group) &&
-        !topLevelBoundaryIds.has(m.id)
-      )
-      .sort((a, b) => orderOf(a) - orderOf(b))
-
-    for (const ms of phaseMilestones) {
-      if (emittedIds.has(ms.id)) continue
-      rows.push(toFlatRow(ms, false, color, phase.name, false, color, color))
-      emittedIds.add(ms.id)
-    }
-
-    // End boundary — only emit if NOT shared with next phase's start
-    const nextNode = i < phaseTree.length - 1 ? phaseTree[i + 1] : null
-    const isSharedWithNext = nextNode?.phase.start_milestone_id === phase.end_milestone_id
-
-    if (!isSharedWithNext && !emittedIds.has(phase.end_milestone_id)) {
-      const ms = milestoneById.get(phase.end_milestone_id)
-      if (ms) {
-        rows.push(toFlatRow(ms, true, color, phase.name, false, color, color))
-        emittedIds.add(ms.id)
+    if (containing.length === 0) return null
+    if (containing.length === 1) {
+      return {
+        from: containing[0].name,
+        to: containing[0].name,
+        fromColor: containing[0].color,
+        toColor: containing[0].color,
       }
     }
-    // If shared, the next phase's start boundary loop will emit it with transition
+    // Transition: row sits in two top-level phases
+    // The one that started earlier is "from", the other is "to"
+    containing.sort((a, b) => a.start - b.start)
+    return {
+      from: containing[0].name,
+      to: containing[1].name,
+      fromColor: containing[0].color,
+      toColor: containing[1].color,
+    }
   }
 
-  // 4. Unphased milestones (not yet emitted, not top-level boundaries)
-  const unphasedMs = activeMilestones
-    .filter(m => !emittedIds.has(m.id) && !topLevelBoundaryIds.has(m.id))
-    .sort((a, b) => orderOf(a) - orderOf(b))
+  // 6. Build FlatRows from sorted milestones
+  const rows: FlatRow[] = []
+  for (let i = 0; i < sorted.length; i++) {
+    const ms = sorted[i]
+    const isBoundary = topLevelBoundaryIds.has(ms.id)
+    const phaseInfo = getPhaseForIndex(i)
+    const isTransition = phaseInfo ? phaseInfo.from !== phaseInfo.to : false
+    const primaryColor = phaseInfo ? phaseInfo.fromColor : UNPHASED_COLOR
+    const ownerPhase = phaseInfo
+      ? (isTransition ? phaseInfo.to : phaseInfo.from)
+      : 'unphased'
 
-  for (const ms of unphasedMs) {
-    rows.push(toFlatRow(
-      ms, false, UNPHASED_COLOR, 'unphased', false, UNPHASED_COLOR, UNPHASED_COLOR,
-    ))
+    rows.push({
+      id: ms.id,
+      display_name: ms.display_name,
+      phase_group: ms.phase_group,
+      is_boundary: isBoundary,
+      pair_with_id: ms.pair_with_id,
+      pair_position: ms.pair_position,
+      pair_group: pairGroupMap.get(ms.id) || null,
+      min_minutes: ms.min_minutes,
+      max_minutes: ms.max_minutes,
+      primaryColor,
+      isPhaseTransition: isTransition,
+      transitionFromColor: phaseInfo?.fromColor ?? UNPHASED_COLOR,
+      transitionToColor: phaseInfo?.toColor ?? UNPHASED_COLOR,
+      phaseTags: phaseTagsMap.get(ms.id) || [],
+      ownerPhaseKey: ownerPhase,
+    })
   }
 
-  // 5. Compute sub-phase rails
+  // 7. Compute sub-phase rails
   const subPhaseRails: SubPhaseRailDef[] = []
   for (const node of phaseTree) {
     for (const child of node.children) {
       const childColor = resolveColorKey(child.phase.color_key).hex
 
-      // Primary: find start/end milestone row indices
-      const startMs = milestoneById.get(child.phase.start_milestone_id)
-      const endMs = milestoneById.get(child.phase.end_milestone_id)
-      const startIdx = startMs ? rows.findIndex(r => r.id === startMs.id) : -1
-      const endIdx = endMs ? rows.findIndex(r => r.id === endMs.id) : -1
+      // Find boundary milestone indices in sorted array
+      const startIdx = sorted.findIndex(m => m.id === child.phase.start_milestone_id)
+      const endIdx = sorted.findIndex(m => m.id === child.phase.end_milestone_id)
 
       if (startIdx >= 0 && endIdx >= 0 && endIdx >= startIdx) {
         subPhaseRails.push({
@@ -262,7 +241,7 @@ export function buildFlatRows(
     }
   }
 
-  // 6. Build legend
+  // 8. Build legend
   const legendPhases: PhaseDefForLegend[] = []
   for (const node of phaseTree) {
     const color = resolveColorKey(node.phase.color_key).hex

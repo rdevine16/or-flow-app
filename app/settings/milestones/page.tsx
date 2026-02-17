@@ -1,7 +1,7 @@
 // app/settings/milestones/page.tsx
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { milestoneTypeAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
@@ -15,11 +15,10 @@ import { Info, Plus, AlertTriangle } from 'lucide-react'
 import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
 import { MilestoneFormModal } from '@/components/settings/milestones/MilestoneFormModal'
 import { ArchivedMilestonesSection } from '@/components/settings/milestones/ArchivedMilestonesSection'
-import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
-import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
-import { PairBracketOverlay, computeBracketData, computeBracketAreaWidth } from '@/components/settings/milestones/PairBracketOverlay'
-import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
-import { resolveColorKey, buildPhaseTree } from '@/lib/milestone-phase-config'
+import { FlatMilestoneList } from '@/components/settings/milestones/FlatMilestoneList'
+import { buildFlatRows, type FlatRow } from '@/lib/utils/buildFlatRows'
+import { detectPairIssues } from '@/lib/utils/pairIssues'
+import { buildPhaseTree } from '@/lib/milestone-phase-config'
 import { Skeleton } from '@/components/ui/Skeleton'
 
 interface FacilityMilestone {
@@ -198,65 +197,11 @@ export default function MilestonesSettingsPage() {
     return buildPhaseTree(phaseDefinitions)
   }, [phaseDefinitions])
 
-  // Helper: convert FacilityMilestone to PhaseBlockMilestone for a given phase name
-  const toBlockMilestones = useCallback(
-    (phaseName: string): PhaseBlockMilestone[] =>
-      activeMilestones
-        .filter(m => m.phase_group === phaseName && !boundaryMilestoneIds.has(m.id))
-        .map(m => ({
-          id: m.id,
-          display_name: m.display_name,
-          phase_group: m.phase_group,
-          is_boundary: false,
-          pair_with_id: m.pair_with_id,
-          pair_position: m.pair_position,
-          pair_group: pairGroupMap.get(m.id) || null,
-          min_minutes: m.min_minutes,
-          max_minutes: m.max_minutes,
-        })),
-    [activeMilestones, boundaryMilestoneIds, pairGroupMap]
-  )
-
-  // Build PhaseBlockMilestone arrays per top-level phase (with child phases)
-  const phaseBlockData = useMemo(() => {
-    if (!phaseTree.length) return []
-
-    return phaseTree.map(node => {
-      const pd = node.phase
-      const color = resolveColorKey(pd.color_key).hex
-      const parentMilestones = toBlockMilestones(pd.name)
-
-      const childPhases = node.children.map(childNode => {
-        const childPd = childNode.phase
-        const childColor = resolveColorKey(childPd.color_key).hex
-        return {
-          phaseColor: childColor,
-          phaseLabel: childPd.display_name,
-          phaseKey: childPd.name,
-          milestones: toBlockMilestones(childPd.name),
-        }
-      })
-
-      return { phaseDef: pd, color, milestones: parentMilestones, childPhases }
-    })
-  }, [phaseTree, toBlockMilestones])
-
-  // Milestones with no phase_group (unphased, e.g. after Patient Out)
-  const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
-    return activeMilestones
-      .filter(m => !m.phase_group && !boundaryMilestoneIds.has(m.id))
-      .map(m => ({
-        id: m.id,
-        display_name: m.display_name,
-        phase_group: m.phase_group,
-        is_boundary: false,
-        pair_with_id: m.pair_with_id,
-        pair_position: m.pair_position,
-        pair_group: pairGroupMap.get(m.id) || null,
-        min_minutes: m.min_minutes,
-        max_minutes: m.max_minutes,
-      }))
-  }, [activeMilestones, boundaryMilestoneIds, pairGroupMap])
+  // Build flat rows for the single-list view
+  const flatRowsResult = useMemo(() => {
+    if (!phaseTree.length) return { rows: [] as FlatRow[], subPhaseRails: [], legendPhases: [] }
+    return buildFlatRows(phaseTree, activeMilestones, pairGroupMap, milestoneById)
+  }, [phaseTree, activeMilestones, pairGroupMap, milestoneById])
 
   // All milestones as PairIssueMilestone for issue detection
   const allPairIssueMilestones = useMemo(() => {
@@ -271,64 +216,6 @@ export default function MilestonesSettingsPage() {
 
   const pairIssues = useMemo(() => detectPairIssues(allPairIssueMilestones), [allPairIssueMilestones])
   const totalPairIssueCount = Object.keys(pairIssues).length
-
-  // Precompute render data: boundary markers + bracket info per phase
-  const renderData = useMemo(() => {
-    if (!phaseBlockData.length) return []
-
-    return phaseBlockData.map((phase, idx) => {
-      const isFirst = idx === 0
-      const isLast = idx === phaseBlockData.length - 1
-
-      // Boundary before this phase block
-      let boundaryBefore: { id: string; name: string; topColor: string; bottomColor: string; solid: boolean; minMinutes: number | null; maxMinutes: number | null } | null = null
-      if (isFirst) {
-        const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
-        if (ms) {
-          boundaryBefore = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
-        }
-      } else {
-        // Show start boundary for non-first phases when not shared with previous phase's end
-        const prevPhase = phaseBlockData[idx - 1]
-        if (prevPhase.phaseDef.end_milestone_id !== phase.phaseDef.start_milestone_id) {
-          const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
-          if (ms) {
-            boundaryBefore = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
-          }
-        }
-      }
-
-      // Boundary after this phase block
-      let boundaryAfter: { id: string; name: string; topColor: string; bottomColor: string; solid: boolean; minMinutes: number | null; maxMinutes: number | null } | null = null
-      if (isLast) {
-        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
-        if (ms) {
-          boundaryAfter = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: phase.color, solid: true, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
-        }
-      } else {
-        const nextPhase = phaseBlockData[idx + 1]
-        const nextColor = nextPhase.color
-        const isShared = phase.phaseDef.end_milestone_id === nextPhase.phaseDef.start_milestone_id
-        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
-        if (ms) {
-          boundaryAfter = { id: ms.id, name: ms.display_name, topColor: phase.color, bottomColor: nextColor, solid: !isShared, minMinutes: ms.min_minutes, maxMinutes: ms.max_minutes }
-        }
-      }
-
-      // Pair bracket computation
-      const brackets = computeBracketData(phase.milestones, pairIssues)
-      const bracketWidth = computeBracketAreaWidth(brackets)
-      const issueCount = countPairIssuesInPhase(allPairIssueMilestones, pairIssues, phase.phaseDef.name)
-
-      // Running counter for numbered rows (across all phases, including child milestones)
-      const startCounter = phaseBlockData.slice(0, idx).reduce(
-        (sum, p) => sum + p.milestones.length + (p.childPhases || []).reduce((cs, c) => cs + c.milestones.length, 0),
-        0
-      ) + 1
-
-      return { ...phase, boundaryBefore, boundaryAfter, brackets, bracketWidth, issueCount, startCounter }
-    })
-  }, [phaseBlockData, milestoneById, pairIssues, allPairIssueMilestones])
 
   // Summary counts
   const totalCount = activeMilestones.length
@@ -633,8 +520,9 @@ export default function MilestonesSettingsPage() {
     }
   }
 
-  const handleReorder = useCallback(async (phaseKey: string, newOrder: PhaseBlockMilestone[]) => {
-    const milestoneIds = newOrder.map(m => m.id)
+  const handleReorder = useCallback(async (reorderedRows: FlatRow[]) => {
+    // All milestone IDs in new order (boundaries included — they're draggable)
+    const milestoneIds = reorderedRows.map(r => r.id)
     // Optimistically update local state
     const updated = (milestones || []).map(m => {
       const idx = milestoneIds.indexOf(m.id)
@@ -659,30 +547,6 @@ export default function MilestonesSettingsPage() {
       showToast({ type: 'error', title: 'Failed to save new order' })
     }
   }, [milestones, setMilestones, supabase, showToast])
-
-  const handleCrossPhaseMove = useCallback(async (milestoneId: string, targetPhaseKey: string, _insertBeforeId?: string) => {
-    // Resolve the target phase_group (null for "unphased")
-    const newPhaseGroup = targetPhaseKey === 'unphased' ? null : targetPhaseKey
-
-    // Optimistically update local state
-    setMilestones((prev) =>
-      (prev || []).map(m =>
-        m.id === milestoneId ? { ...m, phase_group: newPhaseGroup } : m
-      )
-    )
-
-    // Persist to DB
-    try {
-      const { error: updateError } = await supabase
-        .from('facility_milestones')
-        .update({ phase_group: newPhaseGroup })
-        .eq('id', milestoneId)
-      if (updateError) throw updateError
-      showToast({ type: 'success', title: 'Milestone moved' })
-    } catch {
-      showToast({ type: 'error', title: 'Failed to move milestone' })
-    }
-  }, [setMilestones, supabase, showToast])
 
   const handleUnlink = async (milestone: FacilityMilestone) => {
     if (!milestone.pair_with_id) return
@@ -871,104 +735,41 @@ export default function MilestonesSettingsPage() {
       </div>
       <p className="text-slate-500 mb-4">Facility-level milestone definitions. Drag to reorder, add or remove milestones.</p>
 
-      {/* Phase blocks with boundary markers */}
+      {/* Flat milestone list */}
       {loading || phasesLoading ? (
-        <div className="max-w-[620px] space-y-1">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i}>
-              <div className="ml-[11px] border-l-[2.5px] border-slate-200 rounded-r-[5px] bg-white">
-                <div className="flex items-center gap-2 px-2.5 py-[7px]">
-                  <Skeleton className="h-3 w-14" />
-                  <Skeleton className="h-3 w-20" />
-                </div>
-                <div className="space-y-0">
-                  {Array.from({ length: 3 }).map((_, j) => (
-                    <div key={j} className="h-[34px] flex items-center gap-2 px-2 border-b border-[#F5F5F5]">
-                      <Skeleton className="w-3 h-3" />
-                      <Skeleton className="w-[18px] h-3" />
-                      <Skeleton className="h-3 flex-1" />
-                    </div>
-                  ))}
-                </div>
+        <div className="max-w-[620px]">
+          <div className="flex items-center gap-3 px-3 py-2 mb-2 bg-white rounded-md border border-slate-100">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <Skeleton className="w-3 h-3 rounded-sm" />
+                <Skeleton className="h-3 w-16" />
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <div className="relative">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-slate-200 rounded-full" />
+            {Array.from({ length: 8 }).map((_, j) => (
+              <div key={j} className="h-[40px] flex items-center gap-2 pl-4 pr-2 border-b border-[#F5F5F5]">
+                <Skeleton className="w-3 h-3" />
+                <Skeleton className="w-[18px] h-3" />
+                <Skeleton className="h-3 flex-1" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="max-w-[620px]">
-          <div className="flex flex-col">
-            {renderData.map((phase) => (
-              <Fragment key={phase.phaseDef.id}>
-                {phase.boundaryBefore && (
-                  <BoundaryMarker
-                    name={phase.boundaryBefore.name}
-                    topColor={phase.boundaryBefore.topColor}
-                    bottomColor={phase.boundaryBefore.bottomColor}
-                    solid={phase.boundaryBefore.solid}
-                    minMinutes={phase.boundaryBefore.minMinutes}
-                    maxMinutes={phase.boundaryBefore.maxMinutes}
-                    onEdit={() => openEditModal(phase.boundaryBefore!.id)}
-                  />
-                )}
-                <PhaseBlock
-                  phaseColor={phase.color}
-                  phaseLabel={phase.phaseDef.display_name}
-                  phaseKey={phase.phaseDef.name}
-                  mode="table"
-                  milestones={phase.milestones}
-                  pairIssueCount={phase.issueCount}
-                  onReorder={handleReorder}
-                  draggable
-                  onDelete={handleArchiveById}
-                  onEditMilestone={openEditModal}
-                  onCrossPhaseMove={handleCrossPhaseMove}
-                  startCounter={phase.startCounter}
-                  bracketAreaWidth={phase.bracketWidth}
-                  childPhases={phase.childPhases}
-                >
-                  {phase.brackets.length > 0 && (
-                    <PairBracketOverlay
-                      milestones={phase.milestones}
-                      pairIssues={pairIssues}
-                    />
-                  )}
-                </PhaseBlock>
-                {phase.boundaryAfter && (
-                  <BoundaryMarker
-                    name={phase.boundaryAfter.name}
-                    topColor={phase.boundaryAfter.topColor}
-                    bottomColor={phase.boundaryAfter.bottomColor}
-                    solid={phase.boundaryAfter.solid}
-                    minMinutes={phase.boundaryAfter.minMinutes}
-                    maxMinutes={phase.boundaryAfter.maxMinutes}
-                    onEdit={() => openEditModal(phase.boundaryAfter!.id)}
-                  />
-                )}
-              </Fragment>
-            ))}
-
-            {/* Unphased milestones (no phase_group assigned) */}
-            {unphasedMilestones.length > 0 && (
-              <PhaseBlock
-                phaseColor="#94A3B8"
-                phaseLabel="Unphased"
-                phaseKey="unphased"
-                mode="table"
-                milestones={unphasedMilestones}
-                onReorder={handleReorder}
-                draggable
-                onDelete={handleArchiveById}
-                onEditMilestone={openEditModal}
-                onCrossPhaseMove={handleCrossPhaseMove}
-                startCounter={
-                  phaseBlockData.reduce(
-                    (sum, p) => sum + p.milestones.length + (p.childPhases || []).reduce((cs, c) => cs + c.milestones.length, 0),
-                    0
-                  ) + 1
-                }
-              />
-            )}
-          </div>
+          <FlatMilestoneList
+            rows={flatRowsResult.rows}
+            mode="table"
+            phaseDefinitions={flatRowsResult.legendPhases}
+            subPhaseRails={flatRowsResult.subPhaseRails}
+            pairIssues={pairIssues}
+            draggable
+            onReorder={handleReorder}
+            onDelete={handleArchiveById}
+            onEditMilestone={openEditModal}
+          />
 
           {/* Summary footer */}
           <div className="mt-3 px-3.5 py-2 bg-white rounded-md border border-slate-100 text-xs text-slate-400 flex items-center justify-between">

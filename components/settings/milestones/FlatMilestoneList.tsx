@@ -82,42 +82,34 @@ export function FlatMilestoneList({
       : 0
   const totalLeftPad = 6 + PRIMARY_RAIL_W + subRailTotalWidth
 
-  // ── Row numbering (skipping boundary rows) ──
+  // ── Row numbering (all rows) ──
   const rowNumbers = useMemo(() => {
     const map = new Map<string, number>()
-    let counter = 1
-    for (const row of rows) {
-      if (!row.is_boundary) {
-        map.set(row.id, counter)
-        counter++
-      }
+    for (let i = 0; i < rows.length; i++) {
+      map.set(rows[i].id, i + 1)
     }
     return map
   }, [rows])
 
   // ── DnD handlers ──
   const handleDragStart = useCallback(
-    (e: React.DragEvent, id: string, ownerPhaseKey: string) => {
+    (e: React.DragEvent, id: string) => {
       setDragId(id)
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', id)
-      e.dataTransfer.setData('application/x-phase-key', ownerPhaseKey)
     },
     []
   )
 
   const handleDragOver = useCallback(
-    (e: React.DragEvent, targetId: string, targetPhaseKey: string) => {
+    (e: React.DragEvent, targetId: string) => {
       e.preventDefault()
       if (targetId === dragId) return
-      // Only allow drops within same phase
-      const sourceRow = rows.find(r => r.id === dragId)
-      if (sourceRow && sourceRow.ownerPhaseKey !== targetPhaseKey) return
       const rect = e.currentTarget.getBoundingClientRect()
       setDropTargetId(targetId)
       setDropPos(e.clientY < rect.top + rect.height / 2 ? 'before' : 'after')
     },
-    [dragId, rows]
+    [dragId]
   )
 
   const handleDrop = useCallback(
@@ -128,9 +120,6 @@ export function FlatMilestoneList({
       const fromIdx = rows.findIndex(r => r.id === dragId)
       const toIdx = rows.findIndex(r => r.id === targetId)
       if (fromIdx === -1 || toIdx === -1) return
-
-      // Prevent cross-phase drops
-      if (rows[fromIdx].ownerPhaseKey !== rows[toIdx].ownerPhaseKey) return
 
       const reordered = [...rows]
       const [moved] = reordered.splice(fromIdx, 1)
@@ -336,15 +325,15 @@ export function FlatMilestoneList({
           if (hasIssue) rowBg = 'rgba(254,242,242,0.03)'
           if (isOverridden) rowBg = '#FFFBEB'
 
-          const canDrag = draggable && !row.is_boundary
+          const canDrag = draggable
           const canToggle = !row.is_boundary && onToggle
 
           return (
             <div
               key={row.id}
               draggable={canDrag || undefined}
-              onDragStart={canDrag ? (e) => handleDragStart(e, row.id, row.ownerPhaseKey) : undefined}
-              onDragOver={canDrag ? (e) => handleDragOver(e, row.id, row.ownerPhaseKey) : undefined}
+              onDragStart={canDrag ? (e) => handleDragStart(e, row.id) : undefined}
+              onDragOver={canDrag ? (e) => handleDragOver(e, row.id) : undefined}
               onDragEnd={canDrag ? handleDragEnd : undefined}
               onDrop={canDrag ? (e) => handleDrop(e, row.id) : undefined}
               onMouseEnter={() => setHoveredId(row.id)}
