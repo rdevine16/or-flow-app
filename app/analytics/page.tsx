@@ -1,14 +1,13 @@
 // app/analytics/page.tsx
 'use client'
  
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import DateRangeSelector from '@/components/ui/DateRangeSelector'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { PageLoader } from '@/components/ui/Loading'
 import AccessDenied from '@/components/ui/AccessDenied'
 
@@ -25,7 +24,6 @@ import {
 import {
   calculateAnalyticsOverview,
   calculateAvgCaseTime,  // ADD THIS
-  formatMinutes,
   type CaseWithMilestones,
   type FlipRoomAnalysis,
 } from '@/lib/analyticsV2'
@@ -37,17 +35,6 @@ import { AlertTriangle, ArrowRight, BarChart3, CalendarDays, Clock, DollarSign, 
 // ============================================
 // TYPES
 // ============================================
-
-interface KPIData {
-  value: number
-  displayValue: string
-  subtitle: string
-  target?: number
-  targetMet?: boolean
-  delta?: number
-  deltaType?: 'increase' | 'decrease' | 'unchanged'
-  dailyData?: Array<{ color: Color; tooltip: string }>
-}
 
 interface ProcedureCategory {
   id: string
@@ -390,14 +377,13 @@ function FlipRoomModal({
 
 export default function AnalyticsHubPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
+  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
   
   const [cases, setCases] = useState<CaseWithMilestones[]>([])
   const [previousPeriodCases, setPreviousPeriodCases] = useState<CaseWithMilestones[]>([])
   const [procedureCategories, setProcedureCategories] = useState<ProcedureCategory[]>([])
   const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [dateFilter, setDateFilter] = useState('month')
   const [currentStartDate, setCurrentStartDate] = useState<string | undefined>()
   const [currentEndDate, setCurrentEndDate] = useState<string | undefined>()
@@ -411,18 +397,18 @@ export default function AnalyticsHubPage() {
         supabase.from('procedure_categories').select('id, name, display_name').order('display_order'),
         supabase.from('procedure_techniques').select('id, name, display_name').order('display_order'),
       ])
-      
+
       if (categoriesRes.data) setProcedureCategories(categoriesRes.data)
       if (techniquesRes.data) setProcedureTechniques(techniquesRes.data)
     }
     fetchLookups()
 
-  }, [])
+  }, [supabase])
 
   // Fetch data
-  const fetchData = async (startDate?: string, endDate?: string) => {
+  const fetchData = useCallback(async (startDate?: string, endDate?: string) => {
     if (!effectiveFacilityId) return
-    
+
     setLoading(true)
 
     let query = supabase
@@ -509,9 +495,9 @@ case_milestones (
       
       setPreviousPeriodCases((prevData as unknown as CaseWithMilestones[]) || [])
     }
-    
+
     setLoading(false)
-  }
+  }, [effectiveFacilityId, supabase])
 
   useEffect(() => {
     if (!effectiveFacilityId) return
@@ -519,10 +505,11 @@ case_milestones (
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
     const start = monthStart.toISOString().split('T')[0]
     const end = today.toISOString().split('T')[0]
+    // eslint-disable-next-line
     setCurrentStartDate(start)
     setCurrentEndDate(end)
     fetchData(start, end)
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, fetchData])
 
   const handleFilterChange = (filter: string, startDate: string, endDate: string) => {
     setDateFilter(filter)

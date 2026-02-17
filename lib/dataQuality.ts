@@ -603,9 +603,9 @@ async function detectStaleInProgress(
     .lt('case_milestones.recorded_at', twentyFourHoursAgo)
   
   return (cases || []).map(c => {
-    const patientInTime = Array.isArray(c.case_milestones) 
-      ? c.case_milestones[0]?.recorded_at 
-      : (c.case_milestones as any)?.recorded_at
+    const patientInTime = Array.isArray(c.case_milestones)
+      ? c.case_milestones[0]?.recorded_at
+      : (c.case_milestones as { recorded_at?: string })?.recorded_at
     
     const hoursElapsed = patientInTime 
       ? (Date.now() - new Date(patientInTime).getTime()) / (1000 * 60 * 60)

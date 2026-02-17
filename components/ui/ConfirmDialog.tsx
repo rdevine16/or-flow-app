@@ -299,7 +299,7 @@ const { showToast } = useToast()
     } finally {
       setLoading(false)
     }
-  }, [options])
+  }, [options, showToast])
 
   const handleClose = useCallback(() => {
     if (loading) return

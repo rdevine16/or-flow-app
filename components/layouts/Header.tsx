@@ -5,6 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import GlobalSearch from '../GlobalSearch'
 import { NavItem, isNavItemActive } from './navigation-config'
 import { NotificationBell } from '../global/NotificationBell'
@@ -50,7 +51,6 @@ export default function Header({
   impersonation,
   facilityStatus,
   isAdmin,
-  onEndImpersonation,
   onLogout,
 }: HeaderProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -101,9 +101,11 @@ export default function Header({
       <div className="flex items-center gap-4 min-w-0 flex-1">
         {facilityLogo && (
           <div className="w-8 h-8 bg-white rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img
+            <Image
               src={facilityLogo}
               alt=""
+              width={32}
+              height={32}
               className="max-w-full max-h-full object-contain"
             />
           </div>

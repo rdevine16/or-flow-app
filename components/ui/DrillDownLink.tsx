@@ -17,7 +17,7 @@ interface DrillDownLinkProps {
   /** Additional CSS classes */
   className?: string
   /** Any other props to pass to Link */
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**

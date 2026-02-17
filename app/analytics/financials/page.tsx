@@ -1,7 +1,7 @@
 //app/analytics/financials/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -28,11 +28,10 @@ import DateRangeSelector from '@/components/ui/DateRangeSelector'
 import OverviewTab from '@/components/analytics/financials/OverviewTab'
 import ProcedureTab from '@/components/analytics/financials/ProcedureTab'
 import SurgeonTab from '@/components/analytics/financials/SurgeonTab'
-import { Sign } from 'crypto'
 
 export default function FinancialsAnalyticsPage() {
   const supabase = createClient()
-  const { userData, loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
+  const { loading: userLoading, isGlobalAdmin, effectiveFacilityId, can } = useUser()
   
   // Data state - Using view data
   const [caseStats, setCaseStats] = useState<CaseCompletionStats[]>([])
@@ -57,7 +56,7 @@ export default function FinancialsAnalyticsPage() {
   )
 
   // Fetch data from views
-  const fetchData = async (startDate?: string, endDate?: string) => {
+  const fetchData = useCallback(async (startDate?: string, endDate?: string) => {
     if (!effectiveFacilityId) return
     
     setLoading(true)
@@ -184,7 +183,7 @@ if (facilityStatsRes.error) {
 
       // Merge lookup data onto each case stat row
       // This replicates the nested objects that PostgREST joins would have produced
-      const enrichedCaseStats = (caseStatsRes.data || []).map((row: any) => ({
+      const enrichedCaseStats = (caseStatsRes.data || []).map((row: CaseCompletionStats) => ({
         ...row,
         procedure_types: row.procedure_type_id ? procedureMap.get(row.procedure_type_id) || null : null,
         payers: row.payer_id ? payerMap.get(row.payer_id) || null : null,
@@ -204,15 +203,16 @@ if (facilityStatsRes.error) {
         message: err instanceof Error ? err.message : 'Please try again'
       })
     }
-    
+
     setLoading(false)
-  }
+  }, [effectiveFacilityId, supabase, showToast])
 
   useEffect(() => {
     if (effectiveFacilityId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchData()
     }
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, fetchData])
 
   const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
     setDateRange(range)

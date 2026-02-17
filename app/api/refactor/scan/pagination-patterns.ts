@@ -32,7 +32,7 @@ interface CodeContext {
 /**
  * Detect pagination type by analyzing the code
  */
-export function detectPaginationType(content: string, filePath: string): PaginationDetection {
+export function detectPaginationType(content: string): PaginationDetection {
   const lines = content.split('\n')
   
   const evidence: string[] = []

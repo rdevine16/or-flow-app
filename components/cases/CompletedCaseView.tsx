@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
 import CaseFlagsSection from './CaseFlagsSection'
-import { getRoleColors, alertColors, getTrayStatusColors, getVarianceColors } from '@/lib/design-tokens'
+import { getRoleColors, alertColors, getTrayStatusColors } from '@/lib/design-tokens'
 
 // ============================================================================
 // TYPES
@@ -93,7 +93,13 @@ interface CompletedCaseViewProps {
   staff: StaffMember[]
   facilityId: string
   userId: string | null
-  supabase: any
+  supabase: {
+    from: (table: string) => {
+      select: (query: string) => {
+        eq: (col: string, val: string) => Promise<{ data: unknown; error: unknown }>
+      }
+    }
+  }
   patientCallTime: string | null
   // Averages from surgeon_procedure_averages
   surgeonAverage: {
@@ -170,23 +176,13 @@ function minutesBetween(start: string | null, end: string | null): number | null
   return diff / (1000 * 60)
 }
 
-// Get variance indicator color and icon
-function getVarianceIndicator(actualMinutes: number, avgMinutes: number, thresholds = { good: 5, warning: 15 }) {
-  const diff = actualMinutes - avgMinutes
-  const { color, bg, text, border } = getVarianceColors(actualMinutes, avgMinutes, thresholds)
-
-  const labels = { good: 'On target', warning: diff > 0 ? 'Slightly over' : 'Slightly under', bad: diff > 0 ? 'Over average' : 'Under average' }
-  const icons = { good: '✓', warning: '~', bad: '!' }
-
-  return { color, icon: icons[color], label: labels[color], bgClass: bg, textClass: text, borderClass: border }
-}
 
 // Get start variance (scheduled vs actual patient in)
-function getStartVariance(scheduledTime: string | null, patientInTime: string | null, scheduledDate: string): { minutes: number; isLate: boolean } | null {
+function getStartVariance(scheduledTime: string | null, patientInTime: string | null): { minutes: number; isLate: boolean } | null {
   if (!scheduledTime || !patientInTime) return null
-  
+
   // Parse scheduled time (HH:MM:SS) - e.g., "13:26:00"
-  const [hours, minutes, seconds] = scheduledTime.split(':').map(Number)
+  const [hours, minutes] = scheduledTime.split(':').map(Number)
   
   // Parse the actual patient-in time (ISO string)
   const actualDateTime = new Date(patientInTime)
@@ -764,9 +760,9 @@ export default function CompletedCaseView({
               </div>
               {/* Phase Labels */}
               <div className="flex items-center gap-1 mt-1">
-                {phases.map((phase, idx) => {
+                {phases.map((phase) => {
                   const totalPhaseDuration = phases.reduce((sum, p) => sum + (p.durationMin || 0), 0)
-                  const widthPercent = phase.durationMin && totalPhaseDuration > 0 
+                  const widthPercent = phase.durationMin && totalPhaseDuration > 0
                     ? Math.max((phase.durationMin / totalPhaseDuration) * 100, 8)
                     : 10
                   return (

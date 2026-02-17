@@ -3,9 +3,6 @@
 
 import { ReactNode, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
-import { logger } from '@/lib/logger'
-
-const log = logger('Alert')
 
 type AlertVariant = 'info' | 'success' | 'warning' | 'error'
 

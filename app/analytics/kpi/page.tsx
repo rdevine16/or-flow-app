@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -12,15 +12,7 @@ import DateFilter from '@/components/ui/DateFilter'
 
 // Tremor components
 import {
-  Card,
-  Metric,
   Text,
-  Title,
-  Subtitle,
-  Flex,
-  Grid,
-  BadgeDelta,
-  ProgressBar,
   Tracker,
   BarChart,
   DonutChart,
@@ -32,14 +24,10 @@ import {
 import {
   calculateAnalyticsOverview,
   formatMinutes,
-  filterActiveCases,
-  type CaseWithMilestones,
   type CaseWithMilestonesAndSurgeon,
-  type FlipRoomAnalysis,
   type FCOTSConfig,
   type RoomHoursMap,
   type ORUtilizationResult,
-  type RoomUtilizationDetail,
   type SurgeonIdleSummary,
 } from '@/lib/analyticsV2'
 
@@ -258,13 +246,13 @@ function SurgeonIdleTimeCard({
   flipKpi,
   sameRoomKpi,
   summaries,
-  onClick 
-}: { 
+  // onClick
+}: {
   combined: KPIData
   flipKpi: KPIData
   sameRoomKpi: KPIData
   summaries: SurgeonIdleSummary[]
-  onClick?: () => void 
+  onClick?: () => void
 }) {
   const statusConfig = {
     on_track: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200', dot: 'bg-green-500' },
@@ -602,218 +590,6 @@ function SectionHeader({
   )
 }
 
-// ============================================
-// FLIP ROOM MODAL
-// ============================================
-
-function FlipRoomModal({ 
-  isOpen, 
-  onClose, 
-  data 
-}: { 
-  isOpen: boolean
-  onClose: () => void
-  data: FlipRoomAnalysis[]
-}) {
-  const [filter, setFilter] = useState<'all' | 'flip' | 'same_room'>('all')
-  
-  if (!isOpen) return null
-  
-  const filteredData = filter === 'all' 
-    ? data 
-    : filter === 'flip'
-    ? data.filter(d => d.idleGaps.some(g => g.gapType === 'flip'))
-    : data.filter(d => d.idleGaps.some(g => g.gapType === 'same_room'))
-  
-  const totalFlipGaps = data.reduce((sum, d) => sum + d.idleGaps.filter(g => g.gapType === 'flip').length, 0)
-  const totalSameGaps = data.reduce((sum, d) => sum + d.idleGaps.filter(g => g.gapType === 'same_room').length, 0)
-  
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-        
-        <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden border border-slate-200">
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Surgeon Idle Time Analysis</h2>
-                <p className="text-sm text-slate-500">All idle gaps between consecutive surgeon cases</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          
-          {/* Filter tabs */}
-          <div className="px-6 pt-4 pb-2 flex items-center gap-2">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                filter === 'all' 
-                  ? 'bg-blue-100 text-blue-700' 
-                  : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              All Gaps ({totalFlipGaps + totalSameGaps})
-            </button>
-            <button
-              onClick={() => setFilter('flip')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                filter === 'flip' 
-                  ? 'bg-violet-100 text-violet-700' 
-                  : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              Flip Room ({totalFlipGaps})
-            </button>
-            <button
-              onClick={() => setFilter('same_room')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                filter === 'same_room' 
-                  ? 'bg-amber-100 text-amber-700' 
-                  : 'text-slate-500 hover:bg-slate-100'
-              }`}
-            >
-              Same Room ({totalSameGaps})
-            </button>
-          </div>
-          
-          {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
-            {filteredData.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-4">
-                  <CalendarDays className="w-8 h-8 text-slate-400" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-900 mb-1">No idle gaps found</h3>
-                <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                  {filter === 'flip'
-                    ? 'No flip room transitions detected in this period.'
-                    : filter === 'same_room'
-                    ? 'No same-room idle gaps detected in this period.'
-                    : 'Surgeon idle gaps occur when a surgeon waits between consecutive cases.'}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredData.map((analysis, idx) => {
-                  const visibleGaps = filter === 'all' 
-                    ? analysis.idleGaps 
-                    : analysis.idleGaps.filter(g => g.gapType === filter)
-                  
-                  if (visibleGaps.length === 0) return null
-                  
-                  return (
-                    <div key={idx} className="bg-slate-50 rounded-xl border border-slate-200 p-4">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-700">
-                            {analysis.surgeonName.replace('Dr. ', '').charAt(0)}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-slate-900">{analysis.surgeonName}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-sm text-slate-500">{analysis.date}</p>
-                              {analysis.isFlipRoom && (
-                                <span className="px-1.5 py-0.5 text-xs font-medium bg-violet-100 text-violet-700 rounded">
-                                  Multi-room
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Total Idle</p>
-                          <p className="text-2xl font-semibold text-amber-700">{Math.round(analysis.totalIdleTime)} min</p>
-                        </div>
-                      </div>
-                      
-                      {/* Room sequence */}
-                      <div className="mb-4">
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Case Sequence</p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {analysis.cases.map((c, i) => (
-                            <div key={c.caseId} className="flex items-center">
-                              <div className="px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                                <span className="font-semibold text-slate-900">{c.roomName}</span>
-                                <span className="text-slate-400 ml-2 text-sm">{c.scheduledStart}</span>
-                              </div>
-                              {i < analysis.cases.length - 1 && (
-                                <ArrowRight className="w-4 h-4 mx-2 text-slate-300" />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* Gaps */}
-                      <div>
-                        <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-2">Idle Gaps</p>
-                        <div className="space-y-2">
-                          {visibleGaps.map((gap, i) => (
-                            <div key={i} className={`flex items-center justify-between p-3 bg-white rounded-lg border ${
-                              gap.gapType === 'flip' ? 'border-violet-200' : 'border-amber-200'
-                            }`}>
-                              <div className="flex items-center gap-2">
-                                <span className={`px-1.5 py-0.5 text-xs font-medium rounded ${
-                                  gap.gapType === 'flip' 
-                                    ? 'bg-violet-100 text-violet-700' 
-                                    : 'bg-amber-100 text-amber-700'
-                                }`}>
-                                  {gap.gapType === 'flip' ? 'Flip' : 'Same'}
-                                </span>
-                                <span className="font-medium text-slate-700">{gap.fromCase}</span>
-                                {gap.fromRoom && gap.toRoom && gap.fromRoom !== gap.toRoom && (
-                                  <span className="text-xs text-slate-400">({gap.fromRoom})</span>
-                                )}
-                                <ArrowRight className="w-4 h-4 text-slate-300" />
-                                <span className="font-medium text-slate-700">{gap.toCase}</span>
-                                {gap.fromRoom && gap.toRoom && gap.fromRoom !== gap.toRoom && (
-                                  <span className="text-xs text-slate-400">({gap.toRoom})</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className="text-xs text-slate-400">Idle</p>
-                                  <p className={`font-semibold ${gap.idleMinutes > 15 ? 'text-rose-600' : gap.idleMinutes > 10 ? 'text-amber-700' : 'text-slate-700'}`}>
-                                    {Math.round(gap.idleMinutes)} min
-                                  </p>
-                                </div>
-                                {gap.optimalCallDelta > 0 && (
-                                  <div className="text-right pl-4 border-l border-slate-200">
-                                    <p className="text-xs text-blue-600">
-                                      {gap.gapType === 'flip' ? 'Call earlier' : 'Speed up'}
-                                    </p>
-                                    <p className="font-semibold text-blue-600">
-                                      {Math.round(gap.optimalCallDelta)} min
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ============================================
 // OR UTILIZATION MODAL (Room Breakdown)
@@ -988,7 +764,7 @@ export default function AnalyticsOverviewPage() {
         .is('deleted_at', null)
       if (data) {
         const map: RoomHoursMap = {}
-        data.forEach((r: any) => {
+        data.forEach((r: { id: string; available_hours?: number }) => {
           if (r.available_hours) map[r.id] = r.available_hours
         })
         setRoomHoursMap(map)
@@ -1013,15 +789,16 @@ export default function AnalyticsOverviewPage() {
     
     fetchRoomHours()
     fetchAnalyticsSettings()
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, supabase])
 
   // Determine effective facility ID
   useEffect(() => {
     if (userLoading) return
-    
+
     if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
       const impersonation = getImpersonationState()
       if (impersonation?.facilityId) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEffectiveFacilityId(impersonation.facilityId)
       } else {
         setNoFacilitySelected(true)
@@ -1029,14 +806,14 @@ export default function AnalyticsOverviewPage() {
     } else if (userData.facilityId) {
       setEffectiveFacilityId(userData.facilityId)
     }
-    
+
     setFacilityCheckComplete(true)
   }, [userLoading, isGlobalAdmin, userData.accessLevel, userData.facilityId])
 
   // Fetch data
-  const fetchData = async (startDate?: string, endDate?: string) => {
+  const fetchData = useCallback(async (startDate?: string, endDate?: string) => {
     if (!effectiveFacilityId) return
-    
+
     setLoading(true)
 
     let query = supabase
@@ -1077,16 +854,20 @@ export default function AnalyticsOverviewPage() {
     }
 
     const { data: casesData } = await query
-    
+
     // Transform: Extract surgeon_profile from the joined surgeon data
-    const transformedCases = ((casesData || []) as any[]).map(c => ({
-      ...c,
-      surgeon_profile: c.surgeon ? {
-        id: c.surgeon.id,
-        closing_workflow: c.surgeon.closing_workflow || 'surgeon_closes',
-        closing_handoff_minutes: c.surgeon.closing_handoff_minutes || 0,
-      } : null,
-    }))
+    const transformedCases = ((casesData || []) as unknown[]).map((c: unknown) => {
+      const caseObj = c as Record<string, unknown>
+      const surgeon = caseObj.surgeon as Record<string, unknown> | null | undefined
+      return {
+        ...caseObj,
+        surgeon_profile: surgeon ? {
+          id: surgeon.id,
+          closing_workflow: surgeon.closing_workflow || 'surgeon_closes',
+          closing_handoff_minutes: surgeon.closing_handoff_minutes || 0,
+        } : null,
+      }
+    })
     setCases(transformedCases as unknown as CaseWithMilestonesAndSurgeon[])
     
     // Fetch previous period for comparison
@@ -1133,27 +914,32 @@ export default function AnalyticsOverviewPage() {
         .eq('facility_id', effectiveFacilityId)
         .gte('scheduled_date', prevStart.toISOString().split('T')[0])
         .lte('scheduled_date', prevEnd.toISOString().split('T')[0])
-      
-      const transformedPrev = ((prevData || []) as any[]).map(c => ({
-        ...c,
-        surgeon_profile: c.surgeon ? {
-          id: c.surgeon.id,
-          closing_workflow: c.surgeon.closing_workflow || 'surgeon_closes',
-          closing_handoff_minutes: c.surgeon.closing_handoff_minutes || 0,
-        } : null,
-      }))
+
+      const transformedPrev = ((prevData || []) as unknown[]).map((c: unknown) => {
+        const caseObj = c as Record<string, unknown>
+        const surgeon = caseObj.surgeon as Record<string, unknown> | null | undefined
+        return {
+          ...caseObj,
+          surgeon_profile: surgeon ? {
+            id: surgeon.id,
+            closing_workflow: surgeon.closing_workflow || 'surgeon_closes',
+            closing_handoff_minutes: surgeon.closing_handoff_minutes || 0,
+          } : null,
+        }
+      })
       setPreviousPeriodCases(transformedPrev as unknown as CaseWithMilestonesAndSurgeon[])
     }
-    
+
     setLoading(false)
-  }
+  }, [effectiveFacilityId, supabase])
 
   useEffect(() => {
     if (!effectiveFacilityId) return
     const today = new Date()
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData(monthStart.toISOString().split('T')[0], today.toISOString().split('T')[0])
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, fetchData])
 
   const handleFilterChange = (filter: string, startDate?: string, endDate?: string) => {
     setDateFilter(filter)

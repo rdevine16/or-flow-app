@@ -3,16 +3,15 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { facilityAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
-import { Building2, CalendarDays, Check, ClipboardList, Copy, LayoutDashboard, Loader2, Lock, Pencil, UsersRound } from 'lucide-react'
+import { Building2, CalendarDays, Check, ClipboardList, Copy, LayoutDashboard, Lock, Pencil, UsersRound } from 'lucide-react'
 
 // =====================================================
 // TYPES
@@ -165,7 +164,7 @@ export default function GeneralOverviewPage() {
   const { showToast } = useToast() 
   
   // Data fetching
-  const { data: facility, loading: facilityLoading, error, setData: setFacility, refetch } = useSupabaseQuery<Facility | null>(
+  const { data: facility, loading: facilityLoading, error, setData: setFacility } = useSupabaseQuery<Facility | null>(
     async (sb) => {
       const { data, error } = await sb
         .from('facilities')
@@ -335,7 +334,7 @@ showToast({
   return (
     <>
       <h1 className="text-2xl font-semibold text-slate-900 mb-1">General</h1>
-      <p className="text-slate-500 mb-6">Manage your facility's basic information and settings</p>
+      <p className="text-slate-500 mb-6">Manage your facility&apos;s basic information and settings</p>
 
       <ErrorBanner message={error} />
 

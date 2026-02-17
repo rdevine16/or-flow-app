@@ -423,7 +423,7 @@ showToast({
             </div>
           ) : results.length === 0 && query ? (
             <div className="px-4 py-6 text-center">
-              <p className="text-sm text-slate-500">No results for "{query}"</p>
+              <p className="text-sm text-slate-500">No results for &quot;{query}&quot;</p>
               <p className="text-xs text-slate-400 mt-1">Try a case number, surgeon name, or procedure</p>
             </div>
           ) : (

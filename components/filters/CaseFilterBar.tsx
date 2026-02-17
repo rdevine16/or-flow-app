@@ -377,6 +377,7 @@ function InlineSearch({
 
   // Reset selected index when results change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIndex(0)
   }, [results.length])
 
@@ -489,7 +490,7 @@ function InlineSearch({
       {/* No results state */}
       {isOpen && value && results.length === 0 && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-slate-200 shadow-xl z-[100] py-6 px-4 text-center">
-          <p className="text-sm text-slate-500">No results for "{value}"</p>
+          <p className="text-sm text-slate-500">No results for &quot;{value}&quot;</p>
           <p className="text-xs text-slate-400 mt-1">Try a different search term</p>
         </div>
       )}
@@ -528,27 +529,28 @@ export default function CasesFilterBar({
   // Sync URL when filters change
 useEffect(() => {
   const params = new URLSearchParams()
-  
+
   if (filters.dateRange !== 'week') params.set('date', filters.dateRange)
   filters.status.forEach(s => params.append('status', s))
   filters.surgeonIds.forEach(s => params.append('surgeon', s))
   filters.roomIds.forEach(r => params.append('room', r))
   filters.procedureIds.forEach(p => params.append('procedure', p))
   if (filters.search) params.set('q', filters.search)
-  
+
   const queryString = params.toString()
   const newUrl = queryString ? `/cases?${queryString}` : '/cases'
-  
+
   // Use History API to update URL without triggering server navigation
   window.history.replaceState(null, '', newUrl)
-  
+
   // Notify parent
   onFiltersChange(filters)
-}, [filters, onFiltersChange])
+}, [filters, onFiltersChange, router])
 
   // Initialize search input from URL
   useEffect(() => {
     setSearchInput(filters.search)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Debounced search (for filtering the list, not the dropdown)

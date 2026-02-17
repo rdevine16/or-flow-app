@@ -281,7 +281,7 @@ export function RefactorDashboard({ initialIssues }: RefactorDashboardProps) {
           </div>
         ) : (
           <div className="bg-white rounded-lg p-8 text-center border border-slate-200">
-            <p className="text-slate-600">Click "POST - Scan Codebase" to find refactoring opportunities</p>
+            <p className="text-slate-600">Click &quot;POST - Scan Codebase&quot; to find refactoring opportunities</p>
           </div>
         )}
 

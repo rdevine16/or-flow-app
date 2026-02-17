@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
@@ -11,7 +10,6 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 
-import { useSurgeons, useProcedureTypes } from '@/hooks'
 import { chartHex } from '@/lib/design-tokens'
 import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
 
@@ -20,9 +18,6 @@ import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/compone
 import {
   AreaChart,
   BarChart,
-  DonutChart,
-  BarList,
-  Legend,
 } from '@tremor/react'
 
 import {
@@ -49,13 +44,10 @@ import {
   SectionHeader,
   EnhancedMetricCard,
   TrendPill,
-  RadialProgress,
   SurgeonSelector,
   ConsistencyBadge,
-  InlineBar,
   CasePhaseBar,
   PhaseLegend,
-  InsightCard,
   EmptyState,
   ProcedureComparisonChart,
   type ProcedureComparisonData,
@@ -73,12 +65,6 @@ interface Surgeon {
   id: string
   first_name: string
   last_name: string
-}
-
-interface ProcedureType {
-  id: string
-  name: string
-  technique_id?: string
 }
 
 interface ProcedureTechnique {
@@ -173,7 +159,6 @@ export default function SurgeonPerformancePage() {
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [facilityTimezone, setFacilityTimezone] = useState<string>('America/New_York')
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
-  const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'day'>('overview')
@@ -206,6 +191,7 @@ export default function SurgeonPerformancePage() {
     if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
       const impersonation = getImpersonationState()
       if (impersonation?.facilityId) {
+        // eslint-disable-next-line
         setEffectiveFacilityId(impersonation.facilityId)
       }
     } else if (userData.facilityId) {
@@ -225,7 +211,7 @@ export default function SurgeonPerformancePage() {
       if (data?.timezone) setFacilityTimezone(data.timezone)
     }
     fetchTimezone()
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, supabase])
 
   // Fetch surgeons, procedures, and techniques
   useEffect(() => {
@@ -238,17 +224,12 @@ export default function SurgeonPerformancePage() {
         .eq('name', 'surgeon')
         .single()
 
-      const [surgeonsRes, proceduresRes, techniquesRes] = await Promise.all([
+      const [surgeonsRes, techniquesRes] = await Promise.all([
         supabase
           .from('users')
           .select('id, first_name, last_name, role_id')
           .eq('facility_id', effectiveFacilityId)
           .order('last_name'),
-        supabase
-          .from('procedure_types')
-          .select('id, name, technique_id')
-          .eq('facility_id', effectiveFacilityId)
-          .order('name'),
         supabase
           .from('procedure_techniques')
           .select('id, name, display_name')
@@ -256,15 +237,14 @@ export default function SurgeonPerformancePage() {
       ])
 
       setSurgeons((surgeonsRes.data?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || [])
-      setProcedures(proceduresRes.data || [])
       setProcedureTechniques(techniquesRes.data || [])
       setInitialLoading(false)
     }
     fetchData()
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, supabase])
 
   // Helper to get date range (handles custom dates)
-  const getEffectiveDateRange = () => {
+  const getEffectiveDateRange = useCallback(() => {
   const { prevStart, prevEnd } = getPrevPeriodDates(overviewStart, overviewEnd)
   const { label } = getPresetDates(dateRange)
   return {
@@ -276,7 +256,67 @@ label: dateRange === 'custom'
 ? `${formatDateDisplay(overviewStart)} – ${formatDateDisplay(overviewEnd)}`
 : label,
    }
- }
+ }, [overviewStart, overviewEnd, dateRange])
+
+  // Get completed cases
+  const getCompletedCases = useCallback((cases: CaseWithMilestones[]) => {
+    return cases.filter(c => {
+      const m = getMilestoneMap(c)
+      return m.patient_in && m.patient_out
+    })
+  }, [])
+
+  // Calculate procedure breakdown for overview
+  const calculateProcedureBreakdown = useCallback((cases: CaseWithMilestones[]) => {
+    const procedureMap = new Map<string, { id: string; name: string; surgicalTimes: number[]; totalTimes: number[] }>()
+
+    cases.forEach(c => {
+      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!proc) return
+
+      if (!procedureMap.has(proc.id)) {
+        procedureMap.set(proc.id, { id: proc.id, name: proc.name, surgicalTimes: [], totalTimes: [] })
+      }
+
+      const entry = procedureMap.get(proc.id)!
+      const m = getMilestoneMap(c)
+
+      const surgicalTime = getIncisionToClosing(m)
+      const totalTime = getTotalORTime(m)
+
+      if (surgicalTime && surgicalTime > 0 && surgicalTime < 36000) entry.surgicalTimes.push(surgicalTime)
+      if (totalTime && totalTime > 0 && totalTime < 36000) entry.totalTimes.push(totalTime)
+    })
+
+    const breakdown: ProcedureBreakdown[] = Array.from(procedureMap.values())
+      .map(proc => {
+        const avgSurgical = proc.surgicalTimes.length > 0
+          ? proc.surgicalTimes.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length
+          : null
+        const avgTotal = proc.totalTimes.length > 0
+          ? proc.totalTimes.reduce((a, b) => a + b, 0) / proc.totalTimes.length
+          : null
+
+        let stddev: number | null = null
+        if (proc.surgicalTimes.length > 1 && avgSurgical) {
+          const squaredDiffs = proc.surgicalTimes.map(t => Math.pow(t - avgSurgical, 2))
+          stddev = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length)
+        }
+
+        return {
+          procedure_id: proc.id,
+          procedure_name: proc.name,
+          case_count: proc.surgicalTimes.length,
+          avg_surgical_seconds: avgSurgical,
+          stddev_surgical_seconds: stddev,
+          avg_total_seconds: avgTotal,
+        }
+      })
+      .filter(p => p.case_count > 0)
+      .sort((a, b) => b.case_count - a.case_count)
+
+    setProcedureBreakdown(breakdown)
+  }, [])
 
   // Fetch Overview data
   useEffect(() => {
@@ -321,7 +361,7 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
     }
 
     fetchOverviewData()
-}, [selectedSurgeon, overviewStart, overviewEnd, effectiveFacilityId, activeTab])
+}, [selectedSurgeon, overviewStart, overviewEnd, effectiveFacilityId, activeTab, calculateProcedureBreakdown, supabase, getEffectiveDateRange])
   // Handle custom date change
 const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
   setDateRange(range)
@@ -332,6 +372,7 @@ const handleDateRangeChange = (range: string, startDate: string, endDate: string
   // Fetch Day Analysis data
   useEffect(() => {
     if (!selectedSurgeon || !effectiveFacilityId || activeTab !== 'day') {
+      // eslint-disable-next-line
       setDayCases([])
       setLast30DaysCases([])
       setAllTimeCases([])
@@ -375,67 +416,7 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
     }
 
     fetchDayData()
-  }, [selectedSurgeon, selectedDate, effectiveFacilityId, activeTab])
-
-  // Calculate procedure breakdown for overview
-  const calculateProcedureBreakdown = (cases: CaseWithMilestones[]) => {
-    const procedureMap = new Map<string, { id: string; name: string; surgicalTimes: number[]; totalTimes: number[] }>()
-
-    cases.forEach(c => {
-      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!proc) return
-      
-      if (!procedureMap.has(proc.id)) {
-        procedureMap.set(proc.id, { id: proc.id, name: proc.name, surgicalTimes: [], totalTimes: [] })
-      }
-      
-      const entry = procedureMap.get(proc.id)!
-      const m = getMilestoneMap(c)
-      
-      const surgicalTime = getIncisionToClosing(m)
-      const totalTime = getTotalORTime(m)
-      
-      if (surgicalTime && surgicalTime > 0 && surgicalTime < 36000) entry.surgicalTimes.push(surgicalTime)
-      if (totalTime && totalTime > 0 && totalTime < 36000) entry.totalTimes.push(totalTime)
-    })
-
-    const breakdown: ProcedureBreakdown[] = Array.from(procedureMap.values())
-      .map(proc => {
-        const avgSurgical = proc.surgicalTimes.length > 0
-          ? proc.surgicalTimes.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length
-          : null
-        const avgTotal = proc.totalTimes.length > 0
-          ? proc.totalTimes.reduce((a, b) => a + b, 0) / proc.totalTimes.length
-          : null
-        
-        let stddev: number | null = null
-        if (proc.surgicalTimes.length > 1 && avgSurgical) {
-          const squaredDiffs = proc.surgicalTimes.map(t => Math.pow(t - avgSurgical, 2))
-          stddev = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length)
-        }
-
-        return {
-          procedure_id: proc.id,
-          procedure_name: proc.name,
-          case_count: proc.surgicalTimes.length,
-          avg_surgical_seconds: avgSurgical,
-          stddev_surgical_seconds: stddev,
-          avg_total_seconds: avgTotal,
-        }
-      })
-      .filter(p => p.case_count > 0)
-      .sort((a, b) => b.case_count - a.case_count)
-
-    setProcedureBreakdown(breakdown)
-  }
-
-  // Get completed cases
-  const getCompletedCases = (cases: CaseWithMilestones[]) => {
-    return cases.filter(c => {
-      const m = getMilestoneMap(c)
-      return m.patient_in && m.patient_out
-    })
-  }
+  }, [selectedSurgeon, selectedDate, effectiveFacilityId, activeTab, supabase])
 
   // Helper to get surgical time from milestones (in minutes)
   const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
@@ -552,7 +533,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
   const hasComparisonData = tkaComparisonData.length > 0 || thaComparisonData.length > 0
 
   // Calculate metrics for day analysis
-  const calculateDayMetrics = (cases: CaseWithMilestones[]) => {
+  const calculateDayMetrics = useCallback((cases: CaseWithMilestones[]) => {
     const completed = getCompletedCases(cases)
     
     const orTimes = completed.map(c => getTotalORTime(getMilestoneMap(c)))
@@ -591,7 +572,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       roomTurnoverCount: roomTurnovers.length,
       surgicalTurnoverCount: surgicalTurnovers.length,
     }
-  }
+  }, [getCompletedCases])
 
   // Overview metrics
   const overviewMetrics = useMemo(() => {
@@ -615,12 +596,12 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       prevAvgTurnover: calculateAverage(prevTurnovers),
       totalORTime: calculateSum(orTimes) || 0,
     }
-  }, [periodCases, prevPeriodCases])
+  }, [periodCases, prevPeriodCases, getCompletedCases])
 
   // Day metrics
-  const dayMetrics = useMemo(() => calculateDayMetrics(dayCases), [dayCases])
-  const last30Metrics = useMemo(() => calculateDayMetrics(last30DaysCases), [last30DaysCases])
-  const allTimeMetrics = useMemo(() => calculateDayMetrics(allTimeCases), [allTimeCases])
+  const dayMetrics = useMemo(() => calculateDayMetrics(dayCases), [dayCases, calculateDayMetrics])
+  const last30Metrics = useMemo(() => calculateDayMetrics(last30DaysCases), [last30DaysCases, calculateDayMetrics])
+  const allTimeMetrics = useMemo(() => calculateDayMetrics(allTimeCases), [allTimeCases, calculateDayMetrics])
 
   // Percentage changes for day analysis
   const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
@@ -644,12 +625,12 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
         closedToWheelsOut: getClosedToWheelsOut(m) || 0,
       }
     })
-  }, [dayCases])
+  }, [dayCases, getCompletedCases])
 
   const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
 
   // Procedure performance for day analysis
-  const getProcedurePerformance = (): ProcedureComparisonData[] => {
+  const getProcedurePerformance = useCallback((): ProcedureComparisonData[] => {
     const completedCases = getCompletedCases(dayCases)
     const completed30DayCases = getCompletedCases(last30DaysCases)
     
@@ -688,9 +669,9 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
         avgSurgicalTime: calculateAverage(baselineSurgTimes) || 0,
       }
     })
-  }
+  }, [dayCases, last30DaysCases, getCompletedCases])
 
-  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases])
+  const procedurePerformance = useMemo(() => getProcedurePerformance(), [getProcedurePerformance])
 
   // Daily trend data for overview chart
   const dailyTrendData = useMemo(() => {
@@ -712,7 +693,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
         }
       })
       .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [periodCases])
+  }, [periodCases, getCompletedCases])
 
   const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
   const { label: periodLabel } = getEffectiveDateRange()

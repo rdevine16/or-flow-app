@@ -11,7 +11,6 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { formatAuditAction } from '@/lib/audit'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertTriangle, Building2, CheckCircle2, ClipboardList, Clock, FileText, FlaskConical, Plus, Users, Zap } from 'lucide-react'
 
@@ -140,7 +139,7 @@ const { showToast } = useToast()
     }
 
     fetchData()
-  }, [isGlobalAdmin, supabase])
+  }, [isGlobalAdmin, supabase, showToast])
 
   // Format relative time
   const formatRelativeTime = (dateString: string) => {
@@ -428,11 +427,11 @@ const { showToast } = useToast()
                           <p className="text-sm text-slate-900">
                             <span className="font-medium">{entry.user_email}</span>
                             {' '}
-                            <span className="text-slate-600">{formatAuditAction(entry.action as any)}</span>
+                            <span className="text-slate-600">{formatAuditAction(entry.action)}</span>
                           </p>
                           {entry.facility && (
                             <p className="text-xs text-slate-500 mt-0.5">
-                              {(entry.facility as any).name}
+                              {(entry.facility as { name: string }).name}
                             </p>
                           )}
                         </div>

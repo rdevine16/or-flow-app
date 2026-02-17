@@ -248,7 +248,7 @@ describe('Phase 9: Accessibility', () => {
       const setActiveTab = vi.fn()
 
       // We test the tabIndex pattern: active tab = 0, inactive = -1
-      const { rerender } = render(
+      render(
         <div role="tablist" aria-label="Test tabs">
           <button
             role="tab"

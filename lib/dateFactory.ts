@@ -76,10 +76,7 @@ export function parseToUTC(
 ): string {
   // Normalize time to HH:MM:SS
   const timeNormalized = time.length === 5 ? `${time}:00` : time
-  
-  // Create datetime string in ISO format (local interpretation)
-  const dateTimeStr = `${date}T${timeNormalized}`
-  
+
   // Parse the datetime as if it's in the facility timezone
   // We do this by creating a Date object and then adjusting for the timezone offset
   const [year, month, day] = date.split('-').map(Number)
@@ -123,9 +120,9 @@ export function parseToUTCSimple(
 ): string {
   const timeNormalized = time.length === 5 ? `${time}:00` : time
   const combinedStr = `${date}T${timeNormalized}`
-  
+
   // Create formatter for the facility timezone
-  const dtf = new Intl.DateTimeFormat('en-US', {
+  new Intl.DateTimeFormat('en-US', {
     timeZone: facility.timezone,
     year: 'numeric',
     month: '2-digit',
@@ -135,7 +132,7 @@ export function parseToUTCSimple(
     second: '2-digit',
     hour12: false,
   })
-  
+
   // Parse the local time as UTC first (wrong, but we'll correct)
   const parts = combinedStr.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
   if (!parts) throw new Error('Invalid date/time format')

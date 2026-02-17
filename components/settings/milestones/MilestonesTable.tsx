@@ -166,6 +166,7 @@ export function MilestonesTable({
     onReorder(activePhase, newIds)
   }, [phaseGroups, idToPhase, onReorder])
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: milestones,
     columns,
@@ -208,7 +209,7 @@ export function MilestonesTable({
           </thead>
 
           {/* Phase-grouped body sections */}
-          {phaseGroups.map(({ config, milestones: groupMilestones, phaseKey }) => (
+          {phaseGroups.map(({ config, milestones: groupMilestones }) => (
             <SortableContext
               key={config.label}
               items={groupMilestones.map(m => m.id)}

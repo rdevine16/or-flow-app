@@ -5,6 +5,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { getInitials, getFullName } from '@/types/staff-assignment'
 import { getRoleColors } from '@/lib/design-tokens'
 
@@ -59,9 +60,11 @@ export default function StaffAvatar({
         title={showTooltip ? `${fullName}${roleName ? ` (${roleName})` : ''}` : undefined}
       >
         {showImage ? (
-          <img
+          <Image
             src={profileImageUrl}
             alt={fullName}
+            width={48}
+            height={48}
             className="w-full h-full rounded-full object-cover"
             onError={() => setImageError(true)}
           />
@@ -130,9 +133,11 @@ export function DraggableStaffAvatarDisplay({
       `}
     >
       {showImage ? (
-        <img
+        <Image
           src={profileImageUrl}
           alt={`${firstName} ${lastName}`}
+          width={48}
+          height={48}
           className="w-full h-full rounded-full object-cover"
           onError={() => setImageError(true)}
         />
@@ -180,9 +185,11 @@ export function AssignedStaffAvatar({
         `}
       >
         {showImage ? (
-          <img
+          <Image
             src={profileImageUrl}
             alt={fullName}
+            width={32}
+            height={32}
             className="w-full h-full rounded-full object-cover"
             onError={() => setImageError(true)}
           />
@@ -190,7 +197,7 @@ export function AssignedStaffAvatar({
           initials
         )}
       </div>
-      
+
       {/* Remove button on hover */}
       {canRemove && onRemove && (
         <button

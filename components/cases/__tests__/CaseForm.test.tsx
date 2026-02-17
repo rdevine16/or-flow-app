@@ -40,8 +40,8 @@ vi.mock('@/lib/audit-logger', () => ({
 }))
 
 // Build a chainable Supabase mock
-function createSupabaseMock(overrides: Record<string, any> = {}) {
-  const defaultResults: Record<string, any> = {
+function createSupabaseMock(overrides: Record<string, unknown> = {}) {
+  const defaultResults: Record<string, unknown> = {
     users: { data: { facility_id: 'facility-1' }, error: null },
     or_rooms: { data: [{ id: 'room-1', name: 'OR 1' }], error: null },
     procedure_types: {
@@ -88,7 +88,7 @@ function createSupabaseMock(overrides: Record<string, any> = {}) {
     or: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
-    insert: vi.fn((_data: any) => {
+    insert: vi.fn(() => {
       if (currentTable === 'cases') {
         return {
           select: vi.fn(() => ({
@@ -123,24 +123,23 @@ function createSupabaseMock(overrides: Record<string, any> = {}) {
     if (table === 'or_rooms') Object.assign(chainable, { then: undefined })
     if (table === 'procedure_milestone_config') {
       // Return the milestone config result at the end of the chain
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const milestoneChain: Record<string, any> = {}
+      const milestoneChain: Record<string, (...args: unknown[]) => unknown> = {}
       milestoneChain.select = vi.fn().mockReturnValue(milestoneChain)
       milestoneChain.eq = vi.fn().mockReturnValue(milestoneChain)
       milestoneChain.order = vi.fn().mockReturnValue(milestoneChain)
-      milestoneChain.then = (resolve: Function) => resolve(defaultResults.procedure_milestone_config)
+      milestoneChain.then = (resolve: (value: unknown) => void) => resolve(defaultResults.procedure_milestone_config)
       // Make it thenable for await
       return {
         ...milestoneChain,
         [Symbol.toStringTag]: 'Promise',
-      } as any
+      } as unknown
     }
 
     return chainable
   })
 
   // RPC mock — used by Phase 1.1 atomic case creation
-  const rpc = vi.fn((_fnName: string, _params?: any) => {
+  const rpc = vi.fn(() => {
     const rpcResult = defaultResults.rpc_create_case || { data: 'new-case-1', error: null }
     return Promise.resolve(rpcResult)
   })
@@ -166,7 +165,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 vi.mock('@/components/cases/ImplantCompanySelect', () => ({
-  default: ({ selectedIds, onChange }: any) => (
+  default: ({ selectedIds }: { selectedIds: string[] }) => (
     <div data-testid="implant-company-select">
       {selectedIds.length} companies selected
     </div>
@@ -182,7 +181,12 @@ vi.mock('@/components/cases/CaseComplexitySelector', () => ({
 }))
 
 vi.mock('@/components/cases/StaffMultiSelect', () => ({
-  default: ({ selectedStaff, onChange, excludeUserIds, facilityId, disabled }: any) => (
+  default: ({ selectedStaff, onChange, excludeUserIds, facilityId }: {
+    selectedStaff: unknown[]
+    onChange: (staff: unknown[]) => void
+    excludeUserIds?: string[]
+    facilityId: string
+  }) => (
     <div
       data-testid="staff-multi-select"
       data-facility={facilityId}
@@ -791,7 +795,7 @@ describe('CaseForm — Phase 2: Drafts + Unsaved Changes', () => {
 
     it('shows Finalize Case button when editing a draft', async () => {
       // Mock loading an existing draft case
-      const draftChainable: Record<string, any> = {
+      const draftChainable: Record<string, (...args: unknown[]) => unknown> = {
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
         neq: vi.fn().mockReturnThis(),
@@ -816,7 +820,7 @@ describe('CaseForm — Phase 2: Drafts + Unsaved Changes', () => {
           },
           error: null,
         })),
-        then: (resolve: Function) => resolve({ data: [], error: null }),
+        then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
       }
       // Make chainable methods return self
       draftChainable.select.mockReturnValue(draftChainable)
@@ -828,7 +832,7 @@ describe('CaseForm — Phase 2: Drafts + Unsaved Changes', () => {
       // Patch the from mock to return draft case data
       const originalFrom = mockSupabase.from
       mockSupabase.from = vi.fn((table: string) => {
-        if (table === 'cases') return draftChainable as any
+        if (table === 'cases') return draftChainable as unknown
         return originalFrom(table)
       })
 
@@ -1134,14 +1138,14 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
   describe('3.3 — Room Conflict Detection', () => {
     /** Helper: create an edit-mode mock where the case has a room set,
      *  and the conflict query returns the given conflicts. */
-    function setupEditModeWithConflicts(conflicts: any[] = []) {
+    function setupEditModeWithConflicts(conflicts: unknown[] = []) {
       const baseMock = createSupabaseMock()
       const originalFrom = baseMock.from
 
       baseMock.from = vi.fn((table: string) => {
         if (table === 'cases') {
           // Return a fresh chain for each from('cases') call
-          const chain: Record<string, any> = {
+          const chain: Record<string, (...args: unknown[]) => unknown> = {
             select: vi.fn(() => chain),
             eq: vi.fn(() => chain),
             neq: vi.fn(() => chain),
@@ -1167,17 +1171,17 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
               error: null,
             })),
             maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
-            then: (resolve: Function) => resolve({ data: conflicts, error: null }),
+            then: (resolve: (value: unknown) => void) => resolve({ data: conflicts, error: null }),
           }
           return chain
         }
 
         if (table === 'case_staff' || table === 'case_implant_companies' || table === 'case_complexities') {
-          const chain: Record<string, any> = {
+          const chain: Record<string, (...args: unknown[]) => unknown> = {
             select: vi.fn(() => chain),
             eq: vi.fn(() => chain),
             is: vi.fn(() => chain),
-            then: (resolve: Function) => resolve({ data: [], error: null }),
+            then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
           }
           return chain
         }
@@ -1295,14 +1299,14 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
   // -------------------------------------------
   describe('3.5 — Draft Finalization', () => {
     /** Helper: create an edit-mode mock for a draft case */
-    function setupDraftEditMode(rpcOverride?: { data: any; error: any }) {
+    function setupDraftEditMode(rpcOverride?: { data: unknown; error: unknown }) {
       const baseMock = createSupabaseMock(
         rpcOverride ? { rpc_create_case: rpcOverride } : {}
       )
       const originalFrom = baseMock.from
 
       // Override rpc to handle finalize_draft_case specifically
-      baseMock.rpc = vi.fn((fnName: string, _params?: any) => {
+      baseMock.rpc = vi.fn((fnName: string) => {
         if (fnName === 'finalize_draft_case') {
           if (rpcOverride) return Promise.resolve(rpcOverride)
           return Promise.resolve({ data: 'draft-case-1', error: null })
@@ -1313,7 +1317,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
 
       baseMock.from = vi.fn((table: string) => {
         if (table === 'cases') {
-          const chain: Record<string, any> = {
+          const chain: Record<string, (...args: unknown[]) => unknown> = {
             select: vi.fn(() => chain),
             eq: vi.fn(() => chain),
             neq: vi.fn(() => chain),
@@ -1340,17 +1344,17 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
               error: null,
             })),
             maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
-            then: (resolve: Function) => resolve({ data: [], error: null }),
+            then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
           }
           return chain
         }
 
         if (table === 'case_staff' || table === 'case_implant_companies' || table === 'case_complexities') {
-          const chain: Record<string, any> = {
+          const chain: Record<string, (...args: unknown[]) => unknown> = {
             select: vi.fn(() => chain),
             eq: vi.fn(() => chain),
             is: vi.fn(() => chain),
-            then: (resolve: Function) => resolve({ data: [], error: null }),
+            then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
           }
           return chain
         }
@@ -1463,7 +1467,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
       const fromCalls = mockSupabase.from.mock.calls
       const caseUpdateCalls = fromCalls.filter(([t]: [string]) => t === 'cases')
       // Cases is called for initial data fetch, but NOT for .update()
-      for (const [_table] of caseUpdateCalls) {
+      for (let i = 0; i < caseUpdateCalls.length; i++) {
         // Verify no update was called through the chain
         const chain = mockSupabase.from('cases')
         if (chain.update) {

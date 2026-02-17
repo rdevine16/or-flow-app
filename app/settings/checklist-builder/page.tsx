@@ -12,7 +12,6 @@ import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
@@ -159,17 +158,18 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
   })
 
   useEffect(() => {
-    if (field) {
-      setFormData({
-        field_key: field.field_key,
-        display_label: field.display_label,
-        field_type: field.field_type,
-        options: field.options || [''],
-        is_required: field.is_required,
-        show_on_escort_page: field.show_on_escort_page,
-        placeholder: field.placeholder || '',
-      })
-    }
+    if (!field) return
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFormData({
+      field_key: field.field_key,
+      display_label: field.display_label,
+      field_type: field.field_type,
+      options: field.options || [''],
+      is_required: field.is_required,
+      show_on_escort_page: field.show_on_escort_page,
+      placeholder: field.placeholder || '',
+    })
   }, [field])
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -347,7 +347,7 @@ function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalPro
 export default function ChecklistBuilderPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, isAdmin, loading: userLoading } = useUser()
+  const { userData, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
   const { data: currentUserData } = useCurrentUser()

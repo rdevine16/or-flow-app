@@ -12,7 +12,7 @@
 
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -49,13 +49,7 @@ function AcceptInviteContent() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  useEffect(() => {
-    if (token) {
-      fetchInvite()
-    }
-  }, [token])
-
-  const fetchInvite = async () => {
+  const fetchInvite = useCallback(async () => {
     // Fetch invite details from user_invites table
     const { data, error } = await supabase
       .from('user_invites')
@@ -107,7 +101,13 @@ function AcceptInviteContent() {
     })
 
     setLoading(false)
-  }
+  }, [token, supabase])
+
+  useEffect(() => {
+    if (token) {
+      fetchInvite()
+    }
+  }, [token, fetchInvite])
 
   // Password validation
   const passwordRequirements = {
@@ -213,7 +213,7 @@ try {
     <>
       {/* Invite Details Card */}
       <div className="bg-slate-50 rounded-xl p-4 mb-6">
-        <p className="text-sm text-slate-600 mb-3">You've been invited to join:</p>
+        <p className="text-sm text-slate-600 mb-3">You&apos;ve been invited to join:</p>
         
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -378,7 +378,7 @@ try {
       </form>
 
       <p className="text-xs text-center text-slate-500 mt-6">
-        By creating an account, you agree to ORbit's Terms of Service and Privacy Policy.
+        By creating an account, you agree to ORbit&apos;s Terms of Service and Privacy Policy.
       </p>
     </>
   )

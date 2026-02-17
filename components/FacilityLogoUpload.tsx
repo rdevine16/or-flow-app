@@ -4,6 +4,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 
@@ -161,11 +162,12 @@ export default function FacilityLogoUpload({
       {/* Current Logo Preview */}
       {currentLogoUrl ? (
         <div className="flex items-start gap-4">
-          <div className="w-24 h-24 rounded-xl border border-slate-200 bg-white p-2 flex items-center justify-center">
-            <img
+          <div className="w-24 h-24 rounded-xl border border-slate-200 bg-white p-2 flex items-center justify-center relative">
+            <Image
               src={currentLogoUrl}
               alt="Facility logo"
-              className="max-w-full max-h-full object-contain"
+              fill
+              className="object-contain"
             />
           </div>
           <div className="flex-1">

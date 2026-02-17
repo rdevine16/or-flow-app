@@ -69,7 +69,7 @@ describe('TeamMember', () => {
     })
 
     it('applies colored background to avatar based on role', () => {
-      const { container } = render(<TeamMember name="Charlie Brown" role="Surgeon" />)
+      render(<TeamMember name="Charlie Brown" role="Surgeon" />)
       const avatar = screen.getByText('CB')
       // getRoleColors('Surgeon') returns bg-blue-50 text-blue-700 (from design-tokens)
       expect(avatar).toHaveClass('bg-blue-50')
@@ -77,7 +77,7 @@ describe('TeamMember', () => {
     })
 
     it('uses roleName if provided for color lookup', () => {
-      const { container } = render(<TeamMember name="Dana White" role="RN" roleName="Registered Nurse" />)
+      render(<TeamMember name="Dana White" role="RN" roleName="Registered Nurse" />)
       const avatar = screen.getByText('DW')
       // roleName overrides role for getRoleColors lookup
       expect(avatar.className).toContain('bg-')
@@ -139,7 +139,7 @@ describe('TeamMember', () => {
     })
 
     it('truncates long name with CSS', () => {
-      const { container } = render(
+      render(
         <TeamMember name="Leonardo Wilhelm DiCaprio Anderson" role="RN" />
       )
       const nameElement = screen.getByText('Leonardo Wilhelm DiCaprio Anderson')

@@ -14,14 +14,14 @@ import {
 // ============================================================================
 
 function createMockChannel() {
-  let changeCallback: Function | null = null
+  let changeCallback: ((payload: unknown) => void) | null = null
 
   const channel = {
-    on: vi.fn((_type: string, _config: any, cb: Function) => {
+    on: vi.fn((_type: string, _config: unknown, cb: (payload: unknown) => void) => {
       changeCallback = cb
       return channel
     }),
-    subscribe: vi.fn((cb?: Function) => {
+    subscribe: vi.fn((cb?: (status: string) => void) => {
       if (cb) cb('SUBSCRIBED')
       return channel
     }),
@@ -29,13 +29,13 @@ function createMockChannel() {
 
   return {
     channel,
-    simulateEvent: (payload: any) => {
+    simulateEvent: (payload: unknown) => {
       if (changeCallback) changeCallback(payload)
     },
   }
 }
 
-function createMockSupabase(mockChannel: any) {
+function createMockSupabase(mockChannel: { on: unknown; subscribe: unknown }) {
   return {
     channel: vi.fn(() => mockChannel),
     removeChannel: vi.fn(),

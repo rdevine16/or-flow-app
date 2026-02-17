@@ -3,7 +3,7 @@
 // Replaces basic Card.tsx with full-featured version
 
 import React, { ReactNode, forwardRef } from 'react'
-import { tokens, trendColors, alertColors } from '@/lib/design-tokens'
+import { trendColors, alertColors } from '@/lib/design-tokens'
 
 /**
  * USAGE:
@@ -151,7 +151,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
 
     return (
       <Component
-        ref={ref as any}
+        ref={ref as React.Ref<HTMLDivElement | HTMLButtonElement>}
         onClick={onClick}
         aria-label={ariaLabel}
         className={`

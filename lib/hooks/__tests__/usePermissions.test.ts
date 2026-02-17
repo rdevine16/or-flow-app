@@ -9,10 +9,9 @@ import { usePermissions } from '../usePermissions'
 const mockRpc = vi.fn()
 
 vi.mock('@/hooks/useSupabaseQuery', () => ({
-  useSupabaseQuery: (queryFn: (supabase: unknown) => Promise<unknown>, options: { deps: unknown[]; enabled: boolean }) => {
+  useSupabaseQuery: (_queryFn: (supabase: unknown) => Promise<unknown>, options: { deps: unknown[]; enabled: boolean }) => {
     // When enabled, call the queryFn with a mock supabase client
     if (options.enabled) {
-      const mockSupabase = { rpc: mockRpc }
       // Call queryFn synchronously for test simplicity — store result
       let data: unknown = null
       let error: string | null = null

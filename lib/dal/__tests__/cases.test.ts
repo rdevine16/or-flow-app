@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { CaseListItem, CaseDetail, CaseMilestone, CasesFilterParams } from '../cases'
 import { casesDAL } from '../cases'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+type MockSupabaseClient = unknown
 
 // ============================================
 // TYPE ALIGNMENT TESTS — Phase 5.2
@@ -167,7 +170,7 @@ describe('casesDAL.recordMilestone — Phase 5.2', () => {
     })
 
     await casesDAL.recordMilestone(
-      mockSupabase as any,
+      mockSupabase as MockSupabaseClient as SupabaseClient,
       'case-1',
       'fm-1',
       '2026-03-15T07:30:00Z',
@@ -199,7 +202,7 @@ describe('casesDAL.recordMilestone — Phase 5.2', () => {
     })
 
     const result = await casesDAL.recordMilestone(
-      mockSupabase as any,
+      mockSupabase as MockSupabaseClient as SupabaseClient,
       'case-1',
       'fm-1',
       '2026-03-15T07:30:00Z'
@@ -214,7 +217,7 @@ describe('casesDAL.recordMilestone — Phase 5.2', () => {
     chainable.single.mockResolvedValue({ data: null, error: pgError })
 
     const result = await casesDAL.recordMilestone(
-      mockSupabase as any,
+      mockSupabase as MockSupabaseClient as SupabaseClient,
       'case-1',
       'fm-1',
       '2026-03-15T07:30:00Z'
@@ -246,7 +249,7 @@ describe('casesDAL.search — Phase 5.2', () => {
   it('should search by case_number only (no patient_name)', async () => {
     chainable.limit.mockResolvedValue({ data: [], error: null })
 
-    await casesDAL.search(mockSupabase as any, 'facility-1', 'C-001')
+    await casesDAL.search(mockSupabase as MockSupabaseClient as SupabaseClient, 'facility-1', 'C-001')
 
     expect(chainable.ilike).toHaveBeenCalledWith('case_number', '%C-001%')
     // Should NOT use .or() with patient_name

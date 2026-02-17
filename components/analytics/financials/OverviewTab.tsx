@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react'
 import { FinancialsMetrics, ProcedureStats, SurgeonStats } from './types'
 import { formatCurrency } from './utils'
-import { ArrowDown, Banknote, BanknoteIcon, ChevronDown, ChevronUp, Clock, DollarSign, DollarSignIcon, Info, Receipt, TrendingDown } from 'lucide-react'
+import { ArrowDown, BanknoteIcon, ChevronDown, ChevronUp, Clock, DollarSignIcon, Info, Receipt } from 'lucide-react'
 import { varianceColors } from '@/lib/design-tokens'
 
 // ============================================

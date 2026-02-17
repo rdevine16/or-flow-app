@@ -237,11 +237,9 @@ function PhaseHeaderRow({
 export function MilestoneTable({
   intervals,
   comparisonSource,
-  surgeonCaseCount,
   facilityCaseCount,
   missingFlags,
   totalCaseMinutes,
-  totalSurgicalMinutes,
   phaseGroups,
 }: MilestoneTableProps) {
   const medianLabel = comparisonSource === 'surgeon' ? 'Surg Med' : 'Fac Med'

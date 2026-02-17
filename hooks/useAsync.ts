@@ -146,7 +146,7 @@ export function useToggle(initialValue = false): [boolean, () => void, (value: b
 // Debounced value hook
 // ============================================
 
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 
 export function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value)
@@ -169,11 +169,11 @@ export function useDebounce<T>(value: T, delay: number): T {
 // ============================================
 
 export function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T>(undefined)
+  const [tuple, setTuple] = useState<[T, T | undefined]>([value, undefined])
 
-  useEffect(() => {
-    ref.current = value
-  }, [value])
+  if (tuple[0] !== value) {
+    setTuple([value, tuple[0]])
+  }
 
-  return ref.current
+  return tuple[1]
 }

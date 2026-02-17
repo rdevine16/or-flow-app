@@ -92,6 +92,7 @@ export default function MilestonesSettingsPage() {
     if (effectiveFacilityId && milestones) {
       fetchUsageCounts()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveFacilityId, milestones])
 
   const fetchUsageCounts = async () => {

@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { withErrorHandler } from '@/lib/errorHandling'
 import { createClient } from '@/lib/supabase-server'
 
-export const GET = withErrorHandler(async (req: NextRequest) => {
+export const GET = withErrorHandler(async () => {
   const supabase = await createClient()
   
   const { data: { user }, error } = await supabase.auth.getUser()

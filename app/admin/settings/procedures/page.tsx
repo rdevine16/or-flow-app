@@ -14,7 +14,6 @@ import { adminAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Check, ChevronDown, ClipboardList, Info, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 

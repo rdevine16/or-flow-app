@@ -7,11 +7,9 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { genericAuditLog } from '@/lib/audit-logger'
-import { useProcedureTypes, usePayers } from '@/hooks'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { AlertTriangle, ClipboardList, ExternalLink, Info, Pencil, X } from 'lucide-react'
 
@@ -92,6 +90,7 @@ export default function ProcedurePricingPage() {
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLoading, effectiveFacilityId])
 
   const fetchData = async () => {
@@ -219,7 +218,7 @@ export default function ProcedurePricingPage() {
 
       // Insert new cost items
       const costItemsToInsert = Array.from(editingCostItems.entries())
-        .filter(([_, amount]) => amount > 0)
+        .filter(([, amount]) => amount > 0)
         .map(([categoryId, amount]) => ({
           facility_id: effectiveFacilityId,
           procedure_type_id: selectedProcedure.id,
@@ -238,7 +237,13 @@ export default function ProcedurePricingPage() {
         .eq('procedure_type_id', selectedProcedure.id)
 
       // Insert default reimbursement
-      const reimbursementsToInsert: any[] = []
+      const reimbursementsToInsert: Array<{
+        facility_id: string
+        procedure_type_id: string
+        payer_id: string | null
+        reimbursement: number
+        effective_date: string
+      }> = []
       if (defaultReimbursement > 0) {
         reimbursementsToInsert.push({
           facility_id: effectiveFacilityId,

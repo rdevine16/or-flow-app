@@ -115,7 +115,7 @@ export default function BlockSchedulePage() {
     loading: hookLoading,
   } = useBlockSchedules({ facilityId })
 
-  const { holidays, closures, fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
+  const { fetchHolidays, fetchClosures, isDateClosed } = useFacilityClosures({ facilityId })
   const { fetchColors, getColorMap, setColor } = useSurgeonColors({ facilityId })
   const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
 
@@ -182,7 +182,7 @@ export default function BlockSchedulePage() {
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [popoverOpen])
+  }, [popoverOpen, can, handleAddBlockButton])
 
   // Navigation
   const goToPreviousWeek = () => setCurrentWeekStart(prev => addDays(prev, -7))
@@ -244,13 +244,13 @@ export default function BlockSchedulePage() {
   }
 
   // Handle "Create" button
-  const handleAddBlockButton = () => {
+  const handleAddBlockButton = useCallback(() => {
     if (!can('scheduling.create')) return
     setEditingBlock(null)
     setDragSelection(null)
     setClickPosition({ x: 300, y: 150 })
     setPopoverOpen(true)
-  }
+  }, [can])
 
   // Handle popover save
   const handleSave = async () => {

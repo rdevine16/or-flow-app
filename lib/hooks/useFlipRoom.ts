@@ -3,12 +3,12 @@
 // Manages surgeon's next case in a different room with Realtime updates
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   findNextCase,
   getCurrentMilestoneStatus,
   type SurgeonDayCase,
   type FlipRoomMilestoneData,
-  type CurrentMilestoneStatus,
 } from '@/lib/flip-room'
 
 // ============================================================================
@@ -16,11 +16,7 @@ import {
 // ============================================================================
 
 interface UseFlipRoomOptions {
-  supabase: {
-    from: (table: string) => any
-    channel: (name: string) => any
-    removeChannel: (channel: any) => void
-  }
+  supabase: SupabaseClient
   surgeonId: string | null
   currentCaseId: string
   currentRoomId: string | null
@@ -88,7 +84,7 @@ const fetchRef = useRef<() => Promise<void>>(null)
       }
 
       // Normalize Supabase joined values (can be array or object)
-      const normalized: SurgeonDayCase[] = dayCases.map((c: any) => ({
+      const normalized: SurgeonDayCase[] = dayCases.map((c: Record<string, unknown>) => ({
         id: c.id,
         case_number: c.case_number,
         or_room_id: c.or_room_id,
@@ -125,7 +121,7 @@ const fetchRef = useRef<() => Promise<void>>(null)
       let lastMilestoneRecordedAt: string | null = null
 
       if (flipMilestones) {
-        const msData: FlipRoomMilestoneData[] = flipMilestones.map((m: any) => {
+        const msData: FlipRoomMilestoneData[] = flipMilestones.map((m: Record<string, unknown>) => {
           const fm = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
           return {
             facility_milestone_id: m.facility_milestone_id,
@@ -200,7 +196,7 @@ const fetchRef = useRef<() => Promise<void>>(null)
           table: 'cases',
           filter: `id=eq.${flipCaseId}`,
         },
-        (payload: any) => {
+        (payload: { new?: { called_back_at?: string | null } }) => {
           if (payload.new) {
             setFlipRoom(prev => prev ? {
               ...prev,

@@ -64,7 +64,7 @@ interface CaseFlagsSectionProps {
   facilityId: string
   isCompleted: boolean
   userId: string | null
-  supabase: any // SupabaseClient
+  supabase: Record<string, unknown>
 }
 
 // =====================================================
@@ -184,6 +184,7 @@ export default function CaseFlagsSection({
   }, [facilityId, supabase])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFlags()
     fetchDelayTypes()
   }, [fetchFlags, fetchDelayTypes])

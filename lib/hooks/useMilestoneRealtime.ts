@@ -20,7 +20,7 @@ export interface CaseMilestoneState {
 
 export interface UseMilestoneRealtimeOptions {
   supabase: {
-    channel: (name: string) => any
+    channel: (name: string) => RealtimeChannel
     removeChannel: (channel: RealtimeChannel) => void
   }
   caseId: string
@@ -146,7 +146,7 @@ export function useMilestoneRealtime({
           table: 'case_milestones',
           filter: `case_id=eq.${caseId}`,
         },
-        (payload: any) => {
+        (payload: { eventType: string; new?: RealtimeCaseMilestone; old?: { id: string } }) => {
           const eventType = payload.eventType
 
           if (eventType === 'INSERT') {

@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, ChevronUp, ChevronDown } from 'lucide-react'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 
 interface CustomRecurrenceModalProps {
   open: boolean
@@ -40,33 +40,32 @@ export function CustomRecurrenceModal({
 
   // Reset form when modal opens
   useEffect(() => {
-    if (open) {
-      if (initialConfig) {
-        setRepeatEvery(initialConfig.repeatEvery)
-        setRepeatUnit(initialConfig.repeatUnit)
-        setRepeatOnDays(initialConfig.repeatOnDays)
-        setEndType(initialConfig.endType)
-        setEndDate(initialConfig.endDate || '')
-        setEndAfterOccurrences(initialConfig.endAfterOccurrences || 13)
-      } else {
-        setRepeatEvery(1)
-        setRepeatUnit('week')
-        setRepeatOnDays([initialDayOfWeek])
-        setEndType('never')
-        setEndDate('')
-        setEndAfterOccurrences(13)
-      }
-    }
-  }, [open, initialConfig, initialDayOfWeek])
+    if (!open) return
 
-  // Set default end date to 3 months from now
-  useEffect(() => {
-    if (!endDate) {
+    if (initialConfig) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRepeatEvery(initialConfig.repeatEvery)
+      setRepeatUnit(initialConfig.repeatUnit)
+      setRepeatOnDays(initialConfig.repeatOnDays)
+      setEndType(initialConfig.endType)
+      const defaultEndDate = initialConfig.endDate || (() => {
+        const date = new Date()
+        date.setMonth(date.getMonth() + 3)
+        return date.toISOString().split('T')[0]
+      })()
+      setEndDate(defaultEndDate)
+      setEndAfterOccurrences(initialConfig.endAfterOccurrences || 13)
+    } else {
+      setRepeatEvery(1)
+      setRepeatUnit('week')
+      setRepeatOnDays([initialDayOfWeek])
+      setEndType('never')
       const date = new Date()
       date.setMonth(date.getMonth() + 3)
       setEndDate(date.toISOString().split('T')[0])
+      setEndAfterOccurrences(13)
     }
-  }, [endDate])
+  }, [open, initialConfig, initialDayOfWeek])
 
   const toggleDay = (day: number) => {
     setRepeatOnDays(prev => {
@@ -95,12 +94,6 @@ export function CustomRecurrenceModal({
   const incrementOccurrences = () => setEndAfterOccurrences(prev => Math.min(prev + 1, 99))
   const decrementOccurrences = () => setEndAfterOccurrences(prev => Math.max(prev - 1, 1))
 
-  // Format end date for display
-  const formatEndDate = (dateStr: string) => {
-    if (!dateStr) return ''
-    const date = new Date(dateStr + 'T00:00:00')
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
 
   if (!open) return null
 

@@ -2,6 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import CaseFlagsSection from '../CaseFlagsSection'
 
+interface CaseFlagsSectionProps {
+  caseId: string
+  facilityId: string
+  isCompleted: boolean
+  userId: string
+  supabase: unknown
+}
+
 // ============================================
 // MOCKS
 // ============================================
@@ -53,8 +61,8 @@ vi.mock('@/lib/formatters', () => ({
 function createSupabaseMock() {
   const insertMock = vi.fn().mockResolvedValue({ data: null, error: null })
 
-  const makeChain = (data: any) => {
-    const chain: any = {}
+  const makeChain = (data: unknown) => {
+    const chain: Record<string, (...args: unknown[]) => unknown> = {}
     chain.select = vi.fn().mockReturnValue(chain)
     chain.eq = vi.fn().mockReturnValue(chain)
     chain.or = vi.fn().mockReturnValue(chain)
@@ -83,7 +91,7 @@ function createSupabaseMock() {
 // HELPERS
 // ============================================
 
-async function renderAndWaitForLoad(overrides: Partial<any> = {}) {
+async function renderAndWaitForLoad(overrides: Partial<CaseFlagsSectionProps> = {}) {
   const { insertMock, ...supabase } = createSupabaseMock()
   const props = {
     caseId: 'case-1',
@@ -301,7 +309,7 @@ describe('CaseFlagsSection timer — integration: stop populates duration', () =
   })
 
   it('should show computed duration after timer stop', async () => {
-    const { insertMock, ...supabase } = createSupabaseMock()
+    const { ...supabase } = createSupabaseMock()
     const props = {
       caseId: 'case-1',
       facilityId: 'fac-1',
@@ -326,7 +334,7 @@ describe('CaseFlagsSection timer — integration: stop populates duration', () =
   })
 
   it('should accumulate only running time across pause/resume', async () => {
-    const { insertMock, ...supabase } = createSupabaseMock()
+    const { ...supabase } = createSupabaseMock()
     const props = {
       caseId: 'case-1',
       facilityId: 'fac-1',
@@ -362,7 +370,7 @@ describe('CaseFlagsSection timer — integration: stop populates duration', () =
   })
 
   it('should show minimum 1 min for very short timer', async () => {
-    const { insertMock, ...supabase } = createSupabaseMock()
+    const { ...supabase } = createSupabaseMock()
     const props = {
       caseId: 'case-1',
       facilityId: 'fac-1',
@@ -493,7 +501,7 @@ describe('CaseFlagsSection timer — workflow', () => {
   })
 
   it('should complete timer flow: type → start → pause → resume → stop → save', async () => {
-    const { insertMock, ...supabase } = createSupabaseMock()
+    const { ...supabase } = createSupabaseMock()
     const props = {
       caseId: 'case-1',
       facilityId: 'fac-1',
@@ -532,7 +540,7 @@ describe('CaseFlagsSection timer — workflow', () => {
   })
 
   it('should complete manual flow: type → duration → note → save', async () => {
-    const { insertMock, ...supabase } = createSupabaseMock()
+    const { ...supabase } = createSupabaseMock()
     const props = {
       caseId: 'case-1',
       facilityId: 'fac-1',
@@ -560,7 +568,7 @@ describe('CaseFlagsSection timer — workflow', () => {
   })
 
   it('should reset form completely after save and re-open in default state', async () => {
-    const { insertMock, ...supabase } = createSupabaseMock()
+    const { ...supabase } = createSupabaseMock()
     const props = {
       caseId: 'case-1',
       facilityId: 'fac-1',

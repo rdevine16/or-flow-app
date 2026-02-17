@@ -26,12 +26,9 @@ export function useElapsedTime(
     return Math.max(0, Math.floor((Date.now() - startTime.getTime()) / 1000))
   }, [startTime])
 
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(calculateElapsed)
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => calculateElapsed())
 
   useEffect(() => {
-    // Update immediately when startTime changes
-    setElapsedSeconds(calculateElapsed())
-
     // Only run interval if we have a start time and timer is active
     if (!startTime || !isActive) return
 

@@ -9,7 +9,7 @@
 
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 
 // ============================================
@@ -49,7 +49,7 @@ export function usePermissions(
     },
   )
 
-  const permissions = data ?? {}
+  const permissions = useMemo(() => data ?? {}, [data])
 
   const can = useCallback(
     (key: string) => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 // Test the date range helper by extracting its logic.
 // The getDateRanges function is not exported, so we test it indirectly

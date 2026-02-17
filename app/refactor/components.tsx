@@ -33,8 +33,18 @@ interface FilterBarProps {
     file?: string
     showFixed: boolean
   }
-  onChange: (filter: any) => void
-  stats: any
+  onChange: (filter: {
+    risk?: RiskLevel
+    type?: IssueType
+    file?: string
+    showFixed: boolean
+  }) => void
+  stats: {
+    total: number
+    byRisk: Record<RiskLevel, number>
+    byType: Record<IssueType, number>
+    fixed: number
+  }
 }
 
 export function FilterBar({ filter, onChange, stats }: FilterBarProps) {

@@ -66,12 +66,6 @@ import {
 // TYPES
 // ============================================
 
-interface Surgeon {
-  id: string
-  first_name: string
-  last_name: string
-}
-
 interface BlockScheduleRow {
   id: string
   facility_id: string
@@ -325,7 +319,7 @@ function resolveHolidayDates(holidays: FacilityHolidayRow[], startDate: Date, en
 function getNthWeekdayOfMonth(year: number, month: number, dayOfWeek: number, n: number): Date | null {
   if (n === 5) {
     const lastDay = new Date(year, month + 1, 0)
-    let d = new Date(lastDay)
+    const d = new Date(lastDay)
     while (d.getDay() !== dayOfWeek) d.setDate(d.getDate() - 1)
     return d
   }
@@ -414,7 +408,6 @@ function matchCasesToBlocks(
   return blockDays.map(bd => {
     const key = `${bd.surgeonId}|${bd.date}`
     const dayCases = caseMap.get(key) || []
-    const blockStart = timeToMinutes(bd.startTime)
     const blockEnd = timeToMinutes(bd.endTime)
 
     const casesOnDay: CaseOnBlockDay[] = []
@@ -439,7 +432,7 @@ function matchCasesToBlocks(
           id: c.id,
           caseNumber: c.case_number,
           procedureName: pt?.name || 'Unknown',
-          procedureTypeId: (pt as any)?.id || null,
+          procedureTypeId: (pt && 'id' in pt) ? pt.id : null,
           surgeonId: c.surgeon_id || '',
           roomId: c.or_room_id || null,
           startMinute: piTime,
@@ -707,7 +700,7 @@ function calculateWhatFits(
 
   for (const c of surgeonCases) {
     const pt = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-    const procId = (pt as any)?.id
+    const procId = (pt && 'id' in pt) ? pt.id : null
     if (!pt || !procId) continue
 
     if (!byProcedure.has(procId)) {
@@ -853,7 +846,7 @@ function UtilizationBar({ pct, height = 8 }: { pct: number; height?: number }) {
 
 function BlockDayTimeline({
   day,
-  maxWidth = 600,
+  // maxWidth = 600,
   showLabels = true,
 }: {
   day: BlockDayWithCases
@@ -1048,7 +1041,7 @@ function SurgeonUtilizationRow({
   data: SurgeonUtilization
   onSelect: (surgeonId: string) => void
 }) {
-  const colors = utilizationColor(data.avgUtilizationPct)
+  // const colors = utilizationColor(data.avgUtilizationPct)
 
   return (
     <tr
@@ -1099,7 +1092,7 @@ function SurgeonUtilizationRow({
 /** NEW: Room utilization row */
 function RoomUtilizationRow({ data }: { data: RoomUtilization }) {
   const [expanded, setExpanded] = useState(false)
-  const colors = utilizationColor(data.avgUtilizationPct)
+  // const colors = utilizationColor(data.avgUtilizationPct)
 
   return (
     <>
@@ -1208,8 +1201,8 @@ function CapacityInsightBanner({
   const totalOutside = utilizations.reduce((s, u) => s + u.casesOutsideBlock, 0)
 
   // Room insights
-  const totalRoomIdle = roomUtilizations.reduce((s, r) => s + r.totalIdleMinutes, 0)
-  const totalRoomIdleHours = Math.round(totalRoomIdle / 60 * 10) / 10
+  // const totalRoomIdle = roomUtilizations.reduce((s, r) => s + r.totalIdleMinutes, 0)
+  // const totalRoomIdleHours = Math.round(totalRoomIdle / 60 * 10) / 10
   const lowestRoom = roomUtilizations.length > 0 ? roomUtilizations[0] : null
 
   const insights: string[] = []
@@ -1306,7 +1299,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
   setDateEnd(endDate)
 }
 
-  const { data: surgeons, loading: surgeonsLoading } = useSurgeons(facilityId)
+  const { data: surgeons } = useSurgeons(facilityId)
 
   // Load all data
   useEffect(() => {
@@ -1316,7 +1309,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
     // A facility with 5 surgeons doing 6+ cases/week can hit 1000+ in 6 months.
     async function fetchAllCases(startStr: string, endStr: string) {
       const pageSize = 1000
-      let allCases: any[] = []
+      let allCases: CaseWithMilestones[] = []
       let from = 0
       let hasMore = true
 
@@ -1462,7 +1455,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
     }
 
     loadData()
-  }, [facilityId, dateStart, dateEnd, supabase])
+  }, [facilityId, dateStart, dateEnd, supabase, showToast])
 
 
   // ============================================

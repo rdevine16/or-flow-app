@@ -7,7 +7,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Check, Clock } from 'lucide-react'
 
@@ -109,7 +108,7 @@ function SubscriptionSkeleton() {
 
 export default function SubscriptionPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, isGlobalAdmin, loading: userLoading } = useUser()
+  const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast()
   const [stats, setStats] = useState<UsageStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -162,7 +161,7 @@ export default function SubscriptionPage() {
     } finally {
       setLoading(false)
     }
-  }, [effectiveFacilityId, supabase])
+  }, [effectiveFacilityId, supabase, showToast])
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId) {

@@ -10,7 +10,7 @@ import { formatCurrency } from './utils'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { ArrowDown, BarChart3, CalendarDays, ChartBar, ChartBarIcon, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock, DollarSign, DollarSignIcon, Info, TrendingDown, TrendingUp, UserIcon } from 'lucide-react'
+import { ArrowDown, BarChart3, CalendarDays, ChartBar, ChartBarIcon, ChevronDown, ChevronRight, ChevronUp, Clock, DollarSignIcon, Info, TrendingDown, TrendingUp, UserIcon } from 'lucide-react'
 
 interface SurgeonTabProps {
   metrics: FinancialsMetrics
@@ -59,20 +59,6 @@ function formatTime(timeStr: string | null, dateStr?: string | null): string {
   const suffix = hours >= 12 ? 'PM' : 'AM'
   const displayHour = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours)
   return `${displayHour}:${String(minutes).padStart(2, '0')} ${suffix}`
-}
-
-function formatTimestampLocal(isoString: string): string {
-  try {
-    const date = new Date(isoString)
-    if (isNaN(date.getTime())) return '—'
-    return date.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    })
-  } catch {
-    return '—'
-  }
 }
 
 function formatDateDisplay(dateStr: string): string {
@@ -241,12 +227,11 @@ type LeaderboardSortKey = 'totalProfit' | 'caseCount' | 'profitPerORHour' | 'avg
 
 function AllSurgeonsOverview({ 
   metrics, 
-  onSurgeonSelect 
-}: { 
+  onSurgeonSelect
+}: {
   metrics: FinancialsMetrics
-  onSurgeonSelect: (surgeonId: string) => void 
+  onSurgeonSelect: (surgeonId: string) => void
 }) {
-  const { showToast } = useToast()
   const [sortKey, setSortKey] = useState<LeaderboardSortKey>('totalProfit')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
@@ -553,12 +538,11 @@ function SurgeonDetail({
 // SURGEON OVERVIEW TAB — Enhanced with cost breakdown
 // ============================================
 
-function SurgeonOverviewTab({ 
+function SurgeonOverviewTab({
   surgeon,
   efficiencyMetrics,
-  metrics,
   surgeonCases,
-}: { 
+}: {
   surgeon: SurgeonStats
   efficiencyMetrics: {
     medianDuration: number | null
@@ -966,7 +950,7 @@ showToast({
 })    } finally {
       setLoadingMilestones(false)
     }
-  }, [])
+  }, [showToast])
 
   useEffect(() => {
     const caseIds = dayCases.map(c => c.case_id)

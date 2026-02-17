@@ -39,7 +39,7 @@ interface DeleteModalState {
 
 export default function CostCategoriesPage() {
   const supabase = createClient()
-  const { effectiveFacilityId, loading: userLoading, isGlobalAdmin } = useUser()
+  const { effectiveFacilityId, loading: userLoading } = useUser()
   const { showToast } = useToast() 
   const [categories, setCategories] = useState<CostCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -57,8 +57,6 @@ export default function CostCategoriesPage() {
   })
 
   // Delete confirmation modal
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [categoryToDelete, setCategoryToDelete] = useState<CostCategory | null>(null)
 
   // Show/hide recently deleted section
   const [showDeleted, setShowDeleted] = useState(false)
@@ -77,7 +75,7 @@ export default function CostCategoriesPage() {
       setCurrentUserId(user?.id || null)
     }
     getCurrentUser()
-  }, [])
+  }, [supabase])
 
  
   useEffect(() => {
@@ -86,6 +84,7 @@ export default function CostCategoriesPage() {
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLoading, effectiveFacilityId])
 
 const fetchCategories = async () => {
@@ -318,7 +317,7 @@ const openDeleteModal = async (category: CostCategory) => {
         },
         loading: false
       }))
-    } catch (err) {
+    } catch {
       setDeleteModalState(prev => ({ ...prev, loading: false }))
       showToast({ type: 'error', title: 'Failed to check dependencies' })
     }
@@ -737,7 +736,7 @@ await genericAuditLog(supabase, 'cost_category.restored', {
               ) : (
                 <>
                   <p className="text-slate-600 mb-4">
-                    Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModalState.category?.name}"</span>?
+                    Are you sure you want to archive <span className="font-semibold text-slate-900">&quot;{deleteModalState.category?.name}&quot;</span>?
                   </p>
                   {(deleteModalState.dependencies.procedureCostItems > 0 || deleteModalState.dependencies.surgeonCostItems > 0) && (
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-4">

@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -24,7 +24,14 @@ function RepSignupForm() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [invite, setInvite] = useState<any>(null)
+  const [invite, setInvite] = useState<{
+    id: string
+    email: string
+    facility_id: string
+    implant_company_id: string
+    facilities?: { name: string }
+    implant_companies?: { name: string }
+  } | null>(null)
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -35,22 +42,7 @@ function RepSignupForm() {
     confirmPassword: '',
   })
 
-  useEffect(() => {
-    if (token) {
-      fetchInvite()
-    } else {
-      const message = 'Invalid signup link. Please use the link from your invitation email.'
-      setError(message)
-      setLoading(false)
-      showToast({
-        type: 'error',
-        title: 'Invalid Link',
-        message
-      })
-    }
-  }, [token])
-
-  const fetchInvite = async () => {
+  const fetchInvite = useCallback(async () => {
     const { data, error } = await supabase
       .from('device_rep_invites')
       .select(`
@@ -101,7 +93,22 @@ function RepSignupForm() {
     })
     setFormData(prev => ({ ...prev, email: data.email }))
     setLoading(false)
-  }
+  }, [token, supabase, showToast])
+
+  useEffect(() => {
+    if (token) {
+      fetchInvite()
+    } else {
+      const message = 'Invalid signup link. Please use the link from your invitation email.'
+      setError(message)
+      setLoading(false)
+      showToast({
+        type: 'error',
+        title: 'Invalid Link',
+        message
+      })
+    }
+  }, [token, fetchInvite, showToast])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -327,7 +334,7 @@ function RepSignupForm() {
       </form>
 
       <p className="text-xs text-center text-slate-500 mt-6">
-        By creating an account, you agree to ORbit's Terms of Service and Privacy Policy.
+        By creating an account, you agree to ORbit&apos;s Terms of Service and Privacy Policy.
       </p>
     </>
   )

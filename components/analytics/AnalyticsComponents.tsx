@@ -414,9 +414,8 @@ interface CallTimingTimelineProps {
 }
 
 export function CallTimingTimeline({ callEarliness, prepDuration, waitForSurgeon, casesAnalyzed }: CallTimingTimelineProps) {
-  const totalSpan = callEarliness || 1
-  const prepPct = Math.min((prepDuration / totalSpan) * 100, 90)
-  const waitPct = waitForSurgeon !== null ? Math.min((waitForSurgeon / totalSpan) * 100, 90 - prepPct) : 0
+  // const totalSpan = callEarliness || 1
+  // const prepPct = Math.min((prepDuration / totalSpan) * 100, 90)
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
@@ -519,7 +518,16 @@ export function DelayDonut({ delays, totalDelays, totalMinutes }: DelayDonutProp
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
 
-  let currentOffset = 0
+  // Calculate offsets for each segment
+  const segments = delays.map((delay, idx) => {
+    const pct = totalDelays > 0 ? delay.count / totalDelays : 0
+    const dashLength = pct * circumference
+    const offset = delays.slice(0, idx).reduce((sum, d) => {
+      const prevPct = totalDelays > 0 ? d.count / totalDelays : 0
+      return sum + prevPct * circumference
+    }, 0)
+    return { delay, dashLength, offset }
+  })
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -533,26 +541,20 @@ export function DelayDonut({ delays, totalDelays, totalMinutes }: DelayDonutProp
             stroke={chartHex.track}
             strokeWidth={strokeWidth}
           />
-          {delays.map((delay, idx) => {
-            const pct = totalDelays > 0 ? delay.count / totalDelays : 0
-            const dashLength = pct * circumference
-            const segment = (
-              <circle
-                key={idx}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={delay.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${dashLength} ${circumference - dashLength}`}
-                strokeDashoffset={-currentOffset}
-                className="transition-all duration-500"
-              />
-            )
-            currentOffset += dashLength
-            return segment
-          })}
+          {segments.map(({ delay, dashLength, offset }, idx) => (
+            <circle
+              key={idx}
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="none"
+              stroke={delay.color}
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+              strokeDashoffset={-offset}
+              className="transition-all duration-500"
+            />
+          ))}
         </svg>
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">

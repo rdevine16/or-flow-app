@@ -38,7 +38,7 @@ export interface RefactorIssue {
   context: string
   imports?: string[]
   warnings?: string[]
-  metadata?: any
+  metadata?: Record<string, unknown>
 }
 
 export default function RefactorPage() {

@@ -53,9 +53,9 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 const WEEKDAY_VALUES = [1, 2, 3, 4, 5]
 
 const VENDORS = [
-  { value: 'Stryker', label: 'Stryker' },
-  { value: 'Zimmer Biomet', label: 'Zimmer Biomet' },
-  { value: 'DePuy Synthes', label: 'DePuy Synthes' },
+  { value: 'Stryker' as const, label: 'Stryker' },
+  { value: 'Zimmer Biomet' as const, label: 'Zimmer Biomet' },
+  { value: 'DePuy Synthes' as const, label: 'DePuy Synthes' },
 ]
 
 const SPEED_PROFILES = [
@@ -80,7 +80,7 @@ const SPECIALTY_PROCS: Record<string, string[]> = {
 // API HELPER
 // ============================================================================
 
-async function apiCall(action: string, extra: Record<string, any> = {}) {
+async function apiCall(action: string, extra: Record<string, unknown> = {}) {
   const res = await fetch('/api/demo-data', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -239,8 +239,8 @@ export default function DemoDataWizard() {
       } else {
         setProgress(null)
       }
-    } catch (e: any) {
-      setResult({ success: false, error: e.message })
+    } catch (e) {
+      setResult({ success: false, error: e instanceof Error ? e.message : 'Unknown error' })
       setProgress(null)
     }
   }
@@ -252,8 +252,8 @@ export default function DemoDataWizard() {
       const d = await apiCall('clear', { facilityId: selectedFacilityId })
       setResult(d.success ? { success: true, casesGenerated: 0, error: `Purged ${d.casesDeleted || 'all'} cases` } : { success: false, error: d.error })
       await loadFacility(selectedFacilityId)
-    } catch (e: any) {
-      setResult({ success: false, error: e.message })
+    } catch (e) {
+      setResult({ success: false, error: e instanceof Error ? e.message : 'Unknown error' })
     }
     setProgress(null)
   }
@@ -530,7 +530,7 @@ export default function DemoDataWizard() {
                                 <FieldGroup label="Preferred Vendor">
                                   <div className="flex gap-2">
                                     {VENDORS.map(v => (
-                                      <button key={v.value} onClick={() => updateProfile(surgeon.id, { preferredVendor: v.value as any })}
+                                      <button key={v.value} onClick={() => updateProfile(surgeon.id, { preferredVendor: v.value })}
                                         className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
                                           p.preferredVendor === v.value ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-500 hover:border-slate-300'
                                         }`}>

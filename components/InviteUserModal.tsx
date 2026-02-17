@@ -67,7 +67,7 @@ export default function InviteUserModal({
     if (isOpen) {
       fetchFacilities()
     }
-  }, [isOpen, facilityId, supabase])
+  }, [isOpen, facilityId, supabase, selectedFacilityId])
 
   // Reset form when modal opens
   useEffect(() => {
@@ -155,7 +155,7 @@ if (insertError) {
       onSuccess()
       onClose()
 
-    } catch (err) {
+    } catch {
       setError('Failed to add staff member. Please try again.')
     } finally {
       setLoading(false)

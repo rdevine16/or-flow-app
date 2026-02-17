@@ -1521,7 +1521,6 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
   // Combined KPI
   const avgIdleTime = calculateAverage(allIdleTimes)
   const flipDays = allAnalysis.filter(a => a.isFlipRoom).length
-  const sameRoomDays = allAnalysis.filter(a => !a.isFlipRoom).length
   const totalSurgeonDays = allAnalysis.length
   
   // Flip KPI

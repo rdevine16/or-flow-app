@@ -12,7 +12,6 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Ban, Info, Loader2, PenLine, Plus, RefreshCw } from 'lucide-react'
 

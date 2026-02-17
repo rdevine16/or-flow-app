@@ -20,7 +20,6 @@ import CaseDrawerFinancials from '@/components/cases/CaseDrawerFinancials'
 import CaseDrawerMilestones from '@/components/cases/CaseDrawerMilestones'
 import CaseDrawerValidation from '@/components/cases/CaseDrawerValidation'
 import { fetchMetricIssues, type MetricIssue } from '@/lib/dataQuality'
-import type { CaseDetail } from '@/lib/dal/cases'
 import {
   X,
   Ban,
@@ -112,7 +111,6 @@ export default function CaseDrawer({
   onClose,
   categoryNameById,
   dqCaseIds,
-  onCaseUpdated,
   onCancelCase,
 }: CaseDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>('financials')

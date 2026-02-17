@@ -689,7 +689,7 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            <CaseListView cases={cases as any} />
+            <CaseListView cases={cases as CaseWithRelations[]} />
           </div>
         </div>
 

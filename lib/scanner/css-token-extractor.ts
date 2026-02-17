@@ -192,8 +192,8 @@ export function getSuggestedReplacements(
   // Similar colors
   const colorName = hardcodedColor.match(/(?:text|bg|border)-([a-z]+)-?(\d+)?/)
   if (colorName) {
-    const [, name, shade] = colorName
-    
+    const [, name] = colorName
+
     // Same color family
     const sameFamily = tokenList.filter(t => t.className.includes(name))
     suggestions.push(...sameFamily.slice(0, 5))

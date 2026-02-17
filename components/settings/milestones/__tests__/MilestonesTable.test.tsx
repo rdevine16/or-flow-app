@@ -1,6 +1,6 @@
 // components/settings/milestones/__tests__/MilestonesTable.test.tsx
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MilestonesTable } from '../MilestonesTable'
 import type { MilestoneRowData } from '../MilestoneRow'

@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { ChevronRight } from 'lucide-react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
+import type { Session, SupabaseClient } from '@supabase/supabase-js'
 import {
   fetchPages,
   insertPage,
@@ -25,15 +26,11 @@ import {
   insertCategory,
   updateCategory,
   deleteCategory,
-  generateCategorySlug,
-  DEFAULT_CATEGORIES,
   CATEGORY_COLOR_OPTIONS,
   ROLE_OPTIONS,
   type PageEntry,
   type PageEntryInsert,
-  type PageCategory,
   type Category,
-  type CategoryInsert,
   type DriftResult,
 } from '@/lib/pageRegistry'
 import {
@@ -238,7 +235,9 @@ export default function AdminDocsPage() {
 
   const handleEdit = () => {
     if (!selectedPage) return
-    const { created_at, updated_at, ...rest } = selectedPage
+    const { created_at: _created_at, updated_at: _updated_at, ...rest } = selectedPage
+    void _created_at
+    void _updated_at
     setEditingPage(rest)
     setIsEditMode(true)
     setShowForm(true)
@@ -304,7 +303,7 @@ export default function AdminDocsPage() {
   }
 
   /** Scan a single file and sync auto fields */
-  const rescanEntry = async (page: PageEntry, session: any): Promise<boolean> => {
+  const rescanEntry = async (page: PageEntry, session: Session): Promise<boolean> => {
     let filePath = deriveFilePath(page)
 
     let res = await fetch('/api/admin/scan-pages', {
@@ -344,8 +343,8 @@ export default function AdminDocsPage() {
       if (!ok) throw new Error('File not found — add the file path via Edit → Notes')
       addToast(`Re-scanned ${selectedPage.name} — auto fields updated`, 'success')
       await loadPages()
-    } catch (err: any) {
-      addToast(err.message || 'Re-scan failed', 'error')
+    } catch (err) {
+      addToast((err as Error).message || 'Re-scan failed', 'error')
     }
     setIsRescanning(false)
   }
@@ -367,8 +366,8 @@ export default function AdminDocsPage() {
       }
       await loadPages()
       addToast(`Re-scanned ${synced} entries${failed > 0 ? ` (${failed} failed)` : ''}`, synced > 0 ? 'success' : 'error')
-    } catch (err: any) {
-      addToast(err.message || 'Bulk re-scan failed', 'error')
+    } catch (err) {
+      addToast((err as Error).message || 'Bulk re-scan failed', 'error')
     }
     setIsBulkRescanning(false)
   }
@@ -767,7 +766,7 @@ function PageFormModal({
 }) {
   const [form, setForm] = useState<PageEntryInsert>(page)
 
-  const set = (field: keyof PageEntryInsert, value: any) =>
+  const set = <K extends keyof PageEntryInsert>(field: K, value: PageEntryInsert[K]) =>
     setForm(prev => ({ ...prev, [field]: value }))
 
   const handleNameChange = (name: string) => {
@@ -1076,7 +1075,7 @@ function ScannerModal({
   onClose,
   addToast,
 }: {
-  supabase: any
+  supabase: SupabaseClient
   onImport: (page: PageEntryInsert) => void
   onBulkDone: () => void
   onClose: () => void
@@ -1132,8 +1131,8 @@ function ScannerModal({
       setHasScanned(true)
       setScannedMeta({})
       setFileDrift({})
-    } catch (err: any) {
-      addToast(err.message || 'Scan failed', 'error')
+    } catch (err) {
+      addToast((err as Error).message || 'Scan failed', 'error')
     }
     setIsScanning(false)
   }
@@ -1162,14 +1161,17 @@ function ScannerModal({
         const drift = detectDrift(existing, meta)
         setFileDrift(prev => ({ ...prev, [filePath]: drift }))
       }
-    } catch (err: any) {
-      addToast(`Failed to scan: ${err.message}`, 'error')
+    } catch (err) {
+      addToast(`Failed to scan: ${(err as Error).message}`, 'error')
     }
     setScanningFile(null)
   }
 
   const importFromScan = (meta: ScannedMetadata) => {
     const { _scan_confidence, _source_lines, _scope, ...rest } = meta
+    void _scan_confidence
+    void _source_lines
+    void _scope
     const entry: PageEntryInsert = {
       ...rest,
       category: rest.category || 'Shared',
@@ -1192,6 +1194,9 @@ function ScannerModal({
     if (!existing) return
 
     const { _scan_confidence, _source_lines, _scope, ...scannedFields } = meta
+    void _scan_confidence
+    void _source_lines
+    void _scope
     const { error } = await syncAutoFields(supabase, existing.id, scannedFields)
     if (error) {
       addToast(`Sync failed: ${error}`, 'error')
@@ -1234,6 +1239,9 @@ function ScannerModal({
         const drift = detectDrift(existing, meta)
         if (drift.length > 0) {
           const { _scan_confidence, _source_lines, _scope, ...scannedFields } = meta
+          void _scan_confidence
+          void _source_lines
+          void _scope
           await syncAutoFields(supabase, existing.id, scannedFields)
           synced++
         }
@@ -1265,6 +1273,9 @@ function ScannerModal({
         const data = await res.json()
         const meta = data.metadata as ScannedMetadata
         const { _scan_confidence, _source_lines, _scope, ...rest } = meta
+        void _scan_confidence
+        void _source_lines
+        void _scope
 
         const entry: PageEntryInsert = {
           ...rest,
@@ -1629,7 +1640,7 @@ function CategoryManagerModal({
   onClose,
   addToast,
 }: {
-  supabase: any
+  supabase: SupabaseClient
   categories: Category[]
   onClose: () => void
   addToast: (msg: string, type: 'success' | 'error') => void
@@ -1728,8 +1739,8 @@ function CategoryManagerModal({
     </div>
   )
 
-  // Inline edit form
-  const EditForm = ({ isNew }: { isNew: boolean }) => (
+  // Inline edit form - render inline instead of as component to avoid render-time component creation
+  const renderEditForm = (isNew: boolean) => (
     <div className={`p-4 border rounded-lg space-y-3 ${isNew ? 'border-dashed border-slate-300 bg-slate-50/50' : 'border-slate-300 bg-slate-50'}`}>
       <div>
         <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1 block">Name</label>
@@ -1800,7 +1811,7 @@ function CategoryManagerModal({
           <div className="space-y-2">
             {cats.map(cat => {
               if (editingId === cat.id) {
-                return <div key={cat.id}><EditForm isNew={false} /></div>
+                return <div key={cat.id}>{renderEditForm(false)}</div>
               }
               return (
                 <div
@@ -1839,7 +1850,7 @@ function CategoryManagerModal({
               )
             })}
 
-            {isAdding && <EditForm isNew />}
+            {isAdding && renderEditForm(true)}
           </div>
         </div>
 
@@ -2597,7 +2608,7 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
   const issues: HealthIssue[] = []
 
   // ── Build lookup maps ──────────────────────────────────────────────────
-  const pagesByRoute = new Map(pages.map(p => [p.route, p]))
+  // const pagesByRoute = new Map(pages.map(p => [p.route, p]))
 
   // Entries by implicit scope (inferred from route pattern)
   const componentEntries = pages.filter(p => p.route.startsWith('components/'))
@@ -2624,15 +2635,14 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
   }
 
   // All API routes that exist as registered entries
-  const registeredApiRoutes = new Set(apiEntries.map(p => p.route))
+  // const registeredApiRoutes = new Set(apiEntries.map(p => p.route))
 
   // All lib file routes that exist as registered entries
-  const registeredLibRoutes = new Set(libEntries.map(p => p.route))
+  // const registeredLibRoutes = new Set(libEntries.map(p => p.route))
 
   // Track what's actually referenced
   const referencedComponents = new Set<string>()
   const referencedApiRoutes = new Set<string>()
-  const referencedLibRoutes = new Set<string>()
 
   // Collect all table reads/writes across the registry
   const allReads = new Map<string, PageEntry[]>()
@@ -2934,7 +2944,7 @@ const SEVERITY_STYLES = {
 
 function HealthPanel({
   pages,
-  categories,
+  // categories,
   onNavigate,
   onRescanAll,
   isRescanning,

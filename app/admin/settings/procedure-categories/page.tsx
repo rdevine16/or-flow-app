@@ -10,7 +10,6 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Info, Package, Pencil, Plus } from 'lucide-react'
 
@@ -208,8 +207,7 @@ export default function AdminProcedureCategoriesPage() {
       .single()
 
     if (!error && data) {
-      const newRegionName = bodyRegions.find(r => r.id === formBodyRegionId)?.display_name
-await procedureCategoryAudit.updated(
+      await procedureCategoryAudit.updated(
   supabase,
   editingCategory.id,
   oldDisplayName,
@@ -237,7 +235,7 @@ await procedureCategoryAudit.updated(
       title: 'Archive Category',
       message: (
         <p>
-          Are you sure you want to archive <strong>"{category.display_name}"</strong>?
+          Are you sure you want to archive <strong>&quot;{category.display_name}&quot;</strong>?
           <br /><br />
           <span className="text-slate-500">This category will be hidden but can be restored later.</span>
         </p>
@@ -468,8 +466,8 @@ await procedureCategoryAudit.updated(
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">How categories work</p>
                 <p>
-                  Categories group procedure types for analytics comparisons. For example, both "TKA" and "Mako TKA" 
-                  can be assigned to the "Total Knee Arthroplasty" category, allowing you to compare all total knee 
+                  Categories group procedure types for analytics comparisons. For example, both &quot;TKA&quot; and &quot;Mako TKA&quot;
+                  can be assigned to the &quot;Total Knee Arthroplasty&quot; category, allowing you to compare all total knee
                   cases regardless of technique.
                 </p>
               </div>

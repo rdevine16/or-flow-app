@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -16,7 +16,7 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 // Layout components
-import Sidebar, { useSidebarWidth } from './Sidebar'
+import Sidebar from './Sidebar'
 import SubNavigation, { SUBNAV_WIDTH } from './SubNavigation'
 import Header, { TrialBanner, ImpersonationBanner, BranchBanner } from './Header'
 import BlockedScreen from './BlockedScreen'
@@ -57,7 +57,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [impersonation, setImpersonation] = useState<ImpersonationState | null>(null)
   const [facilityStatus, setFacilityStatus] = useState<FacilityStatus | null>(null)
   const [mustChangePassword, setMustChangePassword] = useState(false)
-  const [checkingAccess, setCheckingAccess] = useState(true)
   const [userAccessLevel, setUserAccessLevel] = useState<string | null>(null)
 
   // Derived state
@@ -127,7 +126,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 }
     }
     if (!loading) checkFacilityAccess()
-  }, [loading, supabase])
+  }, [loading, supabase, showToast])
 
   // Load impersonation state
   useEffect(() => {
@@ -188,13 +187,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isDisabled = () => facilityStatus?.subscriptionStatus === 'disabled'
 
-  const getTrialDaysRemaining = () => {
+  const trialDaysRemaining = useMemo(() => {
     if (!facilityStatus?.trialEndsAt || facilityStatus.subscriptionStatus !== 'trial') return null
+    // eslint-disable-next-line react-hooks/purity
     const diff = new Date(facilityStatus.trialEndsAt).getTime() - Date.now()
     return Math.ceil(diff / 86400000)
-  }
-
-  const trialDaysRemaining = getTrialDaysRemaining()
+  }, [facilityStatus?.trialEndsAt, facilityStatus?.subscriptionStatus])
   const showTrialWarning = trialDaysRemaining !== null && trialDaysRemaining > 0 && trialDaysRemaining <= 7
 
   // ============================================

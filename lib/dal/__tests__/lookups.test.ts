@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { FacilityMilestone, SurgeonMilestoneConfig } from '../lookups'
 import { lookupsDAL } from '../lookups'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+type MockSupabaseClient = unknown
 
 // ============================================
 // LOOKUPS DAL TESTS — Phase 5.2b
@@ -60,7 +63,7 @@ describe('lookupsDAL.facilityMilestones — Phase 5.2b', () => {
       error: null,
     })
 
-    const result = await lookupsDAL.facilityMilestones(mockSupabase as any, 'facility-1')
+    const result = await lookupsDAL.facilityMilestones(mockSupabase as MockSupabaseClient as SupabaseClient, 'facility-1')
 
     expect(mockSupabase.from).toHaveBeenCalledWith('facility_milestones')
     expect(chainable.select).toHaveBeenCalledWith('id, name, display_name, display_order, is_active, source_milestone_type_id')
@@ -73,7 +76,7 @@ describe('lookupsDAL.facilityMilestones — Phase 5.2b', () => {
   it('should return empty array when no milestones found', async () => {
     chainable.order.mockResolvedValue({ data: null, error: null })
 
-    const result = await lookupsDAL.facilityMilestones(mockSupabase as any, 'facility-1')
+    const result = await lookupsDAL.facilityMilestones(mockSupabase as MockSupabaseClient as SupabaseClient, 'facility-1')
 
     expect(result.data).toEqual([])
   })
@@ -82,7 +85,7 @@ describe('lookupsDAL.facilityMilestones — Phase 5.2b', () => {
     const pgError = { message: 'table not found', code: '42P01', details: '', hint: '' }
     chainable.order.mockResolvedValue({ data: null, error: pgError })
 
-    const result = await lookupsDAL.facilityMilestones(mockSupabase as any, 'facility-1')
+    const result = await lookupsDAL.facilityMilestones(mockSupabase as MockSupabaseClient as SupabaseClient, 'facility-1')
 
     expect(result.error).toBe(pgError)
   })
@@ -151,7 +154,7 @@ describe('lookupsDAL.surgeonMilestoneConfig', () => {
       return chainable
     })
 
-    const result = await lookupsDAL.surgeonMilestoneConfig(mockSupabase as any, 'fac-1', 'surg-1', 'proc-1')
+    const result = await lookupsDAL.surgeonMilestoneConfig(mockSupabase as MockSupabaseClient as SupabaseClient, 'fac-1', 'surg-1', 'proc-1')
 
     expect(mockSupabase.from).toHaveBeenCalledWith('surgeon_milestone_config')
     expect(chainable.eq).toHaveBeenCalledWith('facility_id', 'fac-1')
@@ -171,7 +174,7 @@ describe('lookupsDAL.surgeonMilestoneConfig', () => {
       return chainable
     })
 
-    const result = await lookupsDAL.surgeonMilestoneConfig(mockSupabase as any, 'fac-1', 'surg-1', 'proc-1')
+    const result = await lookupsDAL.surgeonMilestoneConfig(mockSupabase as MockSupabaseClient as SupabaseClient, 'fac-1', 'surg-1', 'proc-1')
 
     expect(result.data).toEqual([])
   })

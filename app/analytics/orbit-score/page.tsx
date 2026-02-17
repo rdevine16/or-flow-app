@@ -1,7 +1,7 @@
 // app/analytics/orbit-score/page.tsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import DateRangeSelector, { getPresetDates } from '@/components/ui/DateRangeSelector'
@@ -22,8 +22,6 @@ import {
   type ScorecardFinancials,
   type ScorecardFlag,
   type ScorecardSettings,
-  type PillarScores,
-  type ImprovementPlan,
   type ImprovementRecommendation,
 } from '@/lib/orbitScoreEngine'
 import { chartHex } from '@/lib/design-tokens'
@@ -31,7 +29,7 @@ import { chartHex } from '@/lib/design-tokens'
 // ─── DATA FETCHING ────────────────────────────────────────────
 
 async function fetchScorecardData(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   facilityId: string,
   startDate: string,
   endDate: string,
@@ -65,10 +63,10 @@ async function fetchScorecardData(
   }
 
   const completedCases = (rawCases || []).filter(
-    (c: any) => c.case_statuses?.name === 'completed'
+    (c: Record<string, unknown>) => (c.case_statuses as Record<string, unknown> | undefined)?.name === 'completed'
   )
 
-  const cases: ScorecardCase[] = completedCases.map((c: any) => {
+  const cases: ScorecardCase[] = completedCases.map((c: Record<string, unknown>) => {
     const milestones: Record<string, string | null> = {}
     for (const cm of (c.case_milestones || [])) {
       const name = cm.facility_milestones?.name
@@ -127,9 +125,9 @@ async function fetchScorecardData(
         `)
         .in('case_id', chunk)
       if (flagData) {
-        flags = [...flags, ...flagData.map((f: any) => ({
-          case_id: f.case_id,
-          flag_type: f.flag_type,
+        flags = [...flags, ...flagData.map((f: Record<string, unknown>) => ({
+          case_id: f.case_id as string,
+          flag_type: f.flag_type as string,
           severity: f.severity,
           delay_type_name: f.delay_types?.name || null,
           created_by: f.created_by,
@@ -540,18 +538,15 @@ export default function ORbitScorePage() {
   const [facilitySettings, setFacilitySettings] = useState<ScorecardSettings | null>(null)
   const [sortBy, setSortBy] = useState<string>('composite')
   const [dateFilter, setDateFilter] = useState('last_90')
-  const [currentStartDate, setCurrentStartDate] = useState('')
-  const [currentEndDate, setCurrentEndDate] = useState('')
+
+  // Initialize dates from preset
+  const initialDates = useMemo(() => getPresetDates('last_90'), [])
+  const [currentStartDate, setCurrentStartDate] = useState(initialDates.start)
+  const [currentEndDate, setCurrentEndDate] = useState(initialDates.end)
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [insufficientSurgeons, setInsufficientSurgeons] = useState<{ name: string; count: number }[]>([])
-
-  // Initialize dates
-  useEffect(() => {
-    const { start, end } = getPresetDates('last_90')
-    setCurrentStartDate(start)
-    setCurrentEndDate(end)
-  }, [])
 
   const handleFilterChange = (range: string, startDate: string, endDate: string) => {
     setDateFilter(range)
@@ -559,7 +554,7 @@ export default function ORbitScorePage() {
     setCurrentEndDate(endDate)
   }
 
-  const loadORbitScores = async () => {
+  const loadORbitScores = useCallback(async () => {
     if (!effectiveFacilityId || !currentStartDate || !currentEndDate) return
 
     setLoading(true)
@@ -620,20 +615,21 @@ export default function ORbitScorePage() {
       setInsufficientSurgeons(
         Object.values(allSurgeonCases).filter(s => s.count < MIN_CASE_THRESHOLD)
       )
-    } catch (err) {
+    } catch {
       setError('Failed to calculate ORbit Scores')
     }
 
     setLoading(false)
-  }
+  }, [effectiveFacilityId, currentStartDate, currentEndDate, supabase])
 
   useEffect(() => {
     if (!userLoading && effectiveFacilityId && currentStartDate && currentEndDate) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       loadORbitScores()
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
-  }, [userLoading, effectiveFacilityId, currentStartDate, currentEndDate])
+  }, [userLoading, effectiveFacilityId, currentStartDate, currentEndDate, loadORbitScores])
 
   const sorted = [...scorecards].sort((a, b) => {
     if (sortBy === 'composite') return b.composite - a.composite

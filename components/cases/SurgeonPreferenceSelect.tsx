@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
 // Transformed preference for display
@@ -36,16 +36,7 @@ export default function SurgeonPreferenceSelect({
   const [loading, setLoading] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (surgeonId) {
-      fetchPreferences()
-    } else {
-      setPreferences([])
-      setSelectedId(null)
-    }
-  }, [surgeonId])
-
-  const fetchPreferences = async () => {
+  const fetchPreferences = useCallback(async () => {
     if (!surgeonId) return
 
     setLoading(true)
@@ -65,9 +56,9 @@ export default function SurgeonPreferenceSelect({
       .order('created_at')
 
     // Transform data - Supabase returns joined tables as arrays
-    const transformed: SurgeonPreference[] = (data || []).map((pref: any) => {
+    const transformed: SurgeonPreference[] = (data || []).map((pref: Record<string, unknown>) => {
       const procedure = getFirst(pref.procedure_types)
-      const companies = (pref.surgeon_preference_companies || []).map((spc: any) => {
+      const companies = (pref.surgeon_preference_companies || []).map((spc: Record<string, unknown>) => {
         const company = getFirst(spc.implant_companies)
         return company ? { id: company.id, name: company.name } : null
       }).filter(Boolean)
@@ -82,7 +73,17 @@ export default function SurgeonPreferenceSelect({
 
     setPreferences(transformed)
     setLoading(false)
-  }
+  }, [surgeonId, facilityId, supabase])
+
+  useEffect(() => {
+    if (surgeonId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchPreferences()
+    } else {
+      setPreferences([])
+      setSelectedId(null)
+    }
+  }, [surgeonId, fetchPreferences])
 
   const handleSelect = (pref: SurgeonPreference) => {
     setSelectedId(pref.id)

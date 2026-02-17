@@ -184,7 +184,7 @@ export default function IntegrationsPage() {
               <div>
                 <h3 className="font-semibold text-slate-900">Integrations Coming Soon</h3>
                 <p className="text-sm text-slate-600 mt-1">
-                  We're building integrations with popular healthcare systems. Interested in a specific integration? 
+                  We&apos;re building integrations with popular healthcare systems. Interested in a specific integration?
                   <a href="mailto:support@orbitsurgical.com" className="text-blue-600 hover:underline ml-1">Let us know</a>.
                 </p>
               </div>
@@ -245,7 +245,7 @@ export default function IntegrationsPage() {
             </div>
             <h4 className="font-semibold text-slate-900 mb-1">Need a different integration?</h4>
             <p className="text-sm text-slate-500 mb-4">
-              We're always looking to expand our integration options. Let us know what tools you'd like to connect.
+              We&apos;re always looking to expand our integration options. Let us know what tools you&apos;d like to connect.
             </p>
             <a
               href="mailto:support@orbitsurgical.com?subject=Integration%20Request"

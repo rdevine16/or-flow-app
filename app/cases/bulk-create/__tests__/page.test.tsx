@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 // ============================================
@@ -82,7 +82,7 @@ vi.mock('@/hooks', () => ({
 
 // Mock ImplantCompanySelect
 vi.mock('@/components/cases/ImplantCompanySelect', () => ({
-  default: ({ selectedIds, onChange }: any) => (
+  default: ({ selectedIds }: { selectedIds: string[] }) => (
     <div data-testid="implant-company-select">
       {selectedIds.length} companies selected
     </div>
@@ -91,35 +91,43 @@ vi.mock('@/components/cases/ImplantCompanySelect', () => ({
 
 // Mock ConfirmDialog
 vi.mock('@/components/ui/ConfirmDialog', () => ({
-  LeaveConfirm: ({ open }: any) => open ? <div data-testid="leave-confirm">Leave?</div> : null,
+  LeaveConfirm: ({ open }: { open: boolean }) => open ? <div data-testid="leave-confirm">Leave?</div> : null,
 }))
 
 // Mock DashboardLayout, Container, Card
 vi.mock('@/components/layouts/DashboardLayout', () => ({
-  default: ({ children }: any) => <div data-testid="dashboard-layout">{children}</div>,
+  default: ({ children }: { children: React.ReactNode }) => <div data-testid="dashboard-layout">{children}</div>,
 }))
 vi.mock('@/components/ui/Container', () => ({
-  default: ({ children, className }: any) => <div className={className}>{children}</div>,
+  default: ({ children, className }: { children: React.ReactNode; className?: string }) => <div className={className}>{children}</div>,
 }))
 vi.mock('@/components/ui/Card', () => ({
-  default: ({ children, className }: any) => <div className={className}>{children}</div>,
+  default: ({ children, className }: { children: React.ReactNode; className?: string }) => <div className={className}>{children}</div>,
 }))
 vi.mock('@/components/ui/Loading', () => ({
   PageLoader: () => <div>Loading...</div>,
 }))
 
 // Mock SearchableDropdown with a basic select
+interface MockDropdownProps {
+  label?: string
+  options?: Array<{ id: string; label: string }>
+  value?: string
+  onChange: (value: string) => void
+  error?: string
+}
+
 vi.mock('@/components/ui/SearchableDropdown', () => ({
-  default: ({ label, options, value, onChange, error }: any) => (
+  default: ({ label, options, value, onChange, error }: MockDropdownProps) => (
     <div>
       {label && <label>{label}</label>}
       <select
         data-testid={`dropdown-${label?.replace(/[^a-zA-Z]/g, '').toLowerCase() || 'unknown'}`}
         value={value || ''}
-        onChange={(e: any) => onChange(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
       >
         <option value="">Select...</option>
-        {options?.map((o: any) => (
+        {options?.map((o) => (
           <option key={o.id} value={o.id}>{o.label}</option>
         ))}
       </select>
@@ -135,7 +143,7 @@ const mockSingle = vi.fn(() => Promise.resolve({ data: { id: 'status-scheduled' 
 
 vi.mock('@/lib/supabase', () => ({
   createClient: () => ({
-    from: vi.fn((table: string) => ({
+    from: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       single: mockSingle,

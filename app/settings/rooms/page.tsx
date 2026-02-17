@@ -10,7 +10,6 @@ import {
   useRoomSchedules,
   RoomDaySchedule,
   DAY_LABELS,
-  DAY_LABELS_SHORT,
   getDefaultWeekSchedule,
 } from '@/hooks/useRoomSchedules'
 import { formatTime12Hour } from '@/types/block-scheduling'
@@ -179,7 +178,7 @@ function RoomScheduleEditor({
             onClick={() => applyToWeekdays(1)}
             className="text-xs text-blue-600 hover:text-blue-700 font-medium px-2"
           >
-            Apply Monday's hours to all weekdays
+            Apply Monday&apos;s hours to all weekdays
           </button>
         </div>
       )}
@@ -226,7 +225,7 @@ export default function RoomsSettingsPage() {
   const { data: currentUserData } = useCurrentUser()
   const currentUserId = currentUserData?.userId || null
 
-  const { data: rooms, loading, error, setData: setRooms, refetch: refetchRooms } = useSupabaseQuery<ORRoom[]>(
+  const { data: rooms, loading, error, setData: setRooms } = useSupabaseQuery<ORRoom[]>(
     async (sb) => {
       const { data, error } = await sb
         .from('or_rooms')
@@ -254,7 +253,6 @@ export default function RoomsSettingsPage() {
   const {
     fetchRoomSchedule,
     saveRoomSchedule,
-    loading: scheduleLoading,
   } = useRoomSchedules({ facilityId: effectiveFacilityId })
 
   const openAddModal = () => {
@@ -628,7 +626,7 @@ export default function RoomsSettingsPage() {
             ) : deleteModal.room && (
               <>
                 <p className="text-slate-600">
-                  Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.room.name}"</span>?
+                  Are you sure you want to archive <span className="font-semibold text-slate-900">&quot;{deleteModal.room.name}&quot;</span>?
                 </p>
                 {(deleteModal.dependencies.cases > 0 || deleteModal.dependencies.blockSchedules > 0) && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">

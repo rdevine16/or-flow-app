@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { SupabaseClient } from '@supabase/supabase-js'
 
 interface ImplantSectionProps {
@@ -189,18 +189,7 @@ export default function ImplantSection({ caseId, procedureTypeId, supabase, read
     fetchImplantData()
   }, [caseId, supabase])
 
-  // Auto-save with debounce
-  useEffect(() => {
-    if (!hasChanges || readOnly) return
-
-    const timer = setTimeout(async () => {
-      await saveImplantData()
-    }, 1000)
-
-    return () => clearTimeout(timer)
-  }, [implantData, hasChanges])
-
-  const saveImplantData = async () => {
+  const saveImplantData = useCallback(async () => {
     setSaving(true)
     
     if (implantData.id) {
@@ -225,7 +214,18 @@ export default function ImplantSection({ caseId, procedureTypeId, supabase, read
     setSaving(false)
     setHasChanges(false)
     setLastSaved(new Date())
-  }
+  }, [implantData, supabase])
+
+  // Auto-save with debounce
+  useEffect(() => {
+    if (!hasChanges || readOnly) return
+
+    const timer = setTimeout(async () => {
+      await saveImplantData()
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [implantData, hasChanges, readOnly, saveImplantData])
 
   const updateField = (field: keyof ImplantData, value: string | null) => {
     setImplantData(prev => ({ ...prev, [field]: value || null }))

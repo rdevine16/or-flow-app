@@ -50,7 +50,7 @@ export default function PaceProgressBar({ paceData }: PaceProgressBarProps) {
     return null
   }
   
-  const { progress, progressPercent, paceMinutes, status, colors, expectedDuration, durationRange } = progressData
+  const { progress, paceMinutes, status, colors, expectedDuration, durationRange } = progressData
   const absMinutes = Math.abs(Math.round(paceMinutes))
   
   // Determine pace text

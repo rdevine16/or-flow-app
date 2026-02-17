@@ -1,16 +1,15 @@
 // app/settings/facilities/page.tsx
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { facilityAudit, procedureAudit, genericAuditLog } from '@/lib/audit-logger'
+import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Button, IconButton } from '@/components/ui/Button'
+import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { Input, Select, Label, FormField } from '@/components/ui/Input'
-import { EmptyState } from '@/components/ui/EmptyState'
+import { Input, Label } from '@/components/ui/Input'
 import { Plus, Pencil, Trash2, X, ChevronRight, ChevronDown } from 'lucide-react'
 
 // =====================================================
@@ -101,6 +100,7 @@ export default function FinancialsSettingsPage() {
 
   useEffect(() => {
     fetchCurrentUser()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchCurrentUser = async () => {
@@ -156,7 +156,7 @@ export default function FinancialsSettingsPage() {
           }
         }
       }
-    } catch (err) {
+    } catch {
       setError('Failed to load facility data. Please try again.')
       setLoading(false)
     }

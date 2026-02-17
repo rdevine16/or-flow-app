@@ -1,6 +1,7 @@
 // components/ui/TableActions.tsx
-import { Copy, ExternalLink, Eye, Pencil, Trash2 } from 'lucide-react'
 'use client'
+
+import { Copy, ExternalLink, Eye, Pencil, Trash2 } from 'lucide-react'
 
 
 interface TableActionsProps {

@@ -2,7 +2,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -466,7 +465,6 @@ function SlideoutPanel({ caseData, isOpen, onClose, activities, loadingActivitie
 // =====================================================
 
 export default function SPDDashboardPage() {
-  const router = useRouter()
   const supabase = createClient()
   const { showToast } = useToast()
   const { loading: userLoading, isGlobalAdmin, effectiveFacilityId } = useUser()
@@ -536,7 +534,7 @@ export default function SPDDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase, effectiveFacilityId, dateFilter])
+  }, [supabase, effectiveFacilityId, dateFilter, showToast])
 
   useEffect(() => {
     fetchCases()
@@ -570,7 +568,7 @@ export default function SPDDashboardPage() {
       setActivities(data || [])
     }
     setLoadingActivities(false)
-  }, [supabase])
+  }, [supabase, showToast])
 
   // Handle row click
   const handleRowClick = (caseData: SPDCase) => {
@@ -772,7 +770,6 @@ const handleRemindRep = async (caseId: string, companyId: string, e: React.Mouse
               const procedureName = c.procedure_types?.name || 'Not specified'
               const deviceCompanies = c.case_device_companies || []
               const requiresRep = caseRequiresRep(c)
-              const hasNotes = deviceCompanies.some(dc => dc.rep_notes)
 
               return (
                 <div

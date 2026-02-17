@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -82,25 +82,30 @@ export default function AnalyticsSettingsPage() {
   })
 
   // Sync fetched settings to form state
-  useEffect(() => {
-    if (settings) {
-      setForm({
-        fcots_milestone: settings.fcots_milestone || 'patient_in',
-        fcots_grace_minutes: String(settings.fcots_grace_minutes ?? 2),
-        fcots_target_percent: String(settings.fcots_target_percent ?? 85),
-        turnover_target_same_surgeon: String(settings.turnover_target_same_surgeon ?? 30),
-        turnover_target_flip_room: String(settings.turnover_target_flip_room ?? 45),
-        utilization_target_percent: String(settings.utilization_target_percent ?? 80),
-        cancellation_target_percent: String(settings.cancellation_target_percent ?? 5),
-        start_time_milestone: settings.start_time_milestone || settings.fcots_milestone || 'patient_in',
-        start_time_grace_minutes: String(settings.start_time_grace_minutes ?? settings.fcots_grace_minutes ?? 3),
-        start_time_floor_minutes: String(settings.start_time_floor_minutes ?? 20),
-        waiting_on_surgeon_minutes: String(settings.waiting_on_surgeon_minutes ?? 3),
-        waiting_on_surgeon_floor_minutes: String(settings.waiting_on_surgeon_floor_minutes ?? 10),
-        min_procedure_cases: String(settings.min_procedure_cases ?? 3),
-      })
-    }
+  const syncFormFromSettings = useCallback(() => {
+    if (!settings) return
+
+    setForm({
+      fcots_milestone: settings.fcots_milestone || 'patient_in',
+      fcots_grace_minutes: String(settings.fcots_grace_minutes ?? 2),
+      fcots_target_percent: String(settings.fcots_target_percent ?? 85),
+      turnover_target_same_surgeon: String(settings.turnover_target_same_surgeon ?? 30),
+      turnover_target_flip_room: String(settings.turnover_target_flip_room ?? 45),
+      utilization_target_percent: String(settings.utilization_target_percent ?? 80),
+      cancellation_target_percent: String(settings.cancellation_target_percent ?? 5),
+      start_time_milestone: settings.start_time_milestone || settings.fcots_milestone || 'patient_in',
+      start_time_grace_minutes: String(settings.start_time_grace_minutes ?? settings.fcots_grace_minutes ?? 3),
+      start_time_floor_minutes: String(settings.start_time_floor_minutes ?? 20),
+      waiting_on_surgeon_minutes: String(settings.waiting_on_surgeon_minutes ?? 3),
+      waiting_on_surgeon_floor_minutes: String(settings.waiting_on_surgeon_floor_minutes ?? 10),
+      min_procedure_cases: String(settings.min_procedure_cases ?? 3),
+    })
   }, [settings])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    syncFormFromSettings()
+  }, [syncFormFromSettings])
 
   const handleSave = async () => {
     if (!effectiveFacilityId) return
@@ -171,7 +176,7 @@ export default function AnalyticsSettingsPage() {
     return (
       <>
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
-        <p className="text-slate-500 mb-6">Configure how your facility's OR metrics are calculated and what targets to measure against.</p>
+        <p className="text-slate-500 mb-6">Configure how your facility&apos;s OR metrics are calculated and what targets to measure against.</p>
         <div className="flex items-center justify-center py-16">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -183,7 +188,7 @@ export default function AnalyticsSettingsPage() {
     return (
       <>
         <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
-        <p className="text-slate-500 mb-6">Configure how your facility's OR metrics are calculated and what targets to measure against.</p>
+        <p className="text-slate-500 mb-6">Configure how your facility&apos;s OR metrics are calculated and what targets to measure against.</p>
         <div className="text-center py-16 text-slate-500">
           <p>No facility selected. Please select a facility to configure analytics settings.</p>
         </div>
@@ -194,7 +199,7 @@ export default function AnalyticsSettingsPage() {
   return (
     <>
       <h1 className="text-2xl font-semibold text-slate-900 mb-1">Analytics Settings</h1>
-      <p className="text-slate-500 mb-6">Configure how your facility's OR metrics are calculated and what targets to measure against.</p>
+      <p className="text-slate-500 mb-6">Configure how your facility&apos;s OR metrics are calculated and what targets to measure against.</p>
 
       <div className="space-y-8">
             {/* FCOTS Configuration */}

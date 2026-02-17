@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   DndContext,
   DragEndEvent,
@@ -130,6 +130,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
   // Sync local state with fetched rooms
   useEffect(() => {
     if (rooms.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalRooms(rooms)
       setHasChanges(false)
     }
@@ -168,11 +169,11 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
   }
 
   // Handle cancel
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setLocalRooms(rooms) // Reset to original order
     setHasChanges(false)
     onClose()
-  }
+  }, [rooms, onClose])
 
   // Reset order to alphabetical
   const handleResetAlphabetical = () => {
@@ -197,7 +198,7 @@ export default function RoomOrderModal({ isOpen, onClose, facilityId, onSaved }:
     }
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen])
+  }, [isOpen, handleCancel])
 
   if (!isOpen) return null
 

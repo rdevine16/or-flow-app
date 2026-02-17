@@ -4,12 +4,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useFeature, FEATURES } from '@/lib/features/useFeature'
-import { FeatureGate, TrialBanner } from '@/components/FeatureGate'
+import { TrialBanner } from '@/components/FeatureGate'
 import { checkinAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
@@ -37,9 +36,8 @@ interface ProcedureType {
 // =====================================================
 
 export default function CheckInSettingsPage() {
-  const router = useRouter()
   const supabase = createClient()
-  const { userData, isAdmin, loading: userLoading } = useUser()
+  const { userData, loading: userLoading } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
 
@@ -152,7 +150,8 @@ export default function CheckInSettingsPage() {
     } else {
       setProcedureOverrides(prev => {
         if (minutes === null) {
-          const { [procedureId]: _, ...rest } = prev
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { [procedureId]: _removed, ...rest } = prev
           return rest
         }
         return { ...prev, [procedureId]: minutes }
@@ -268,8 +267,8 @@ export default function CheckInSettingsPage() {
               )}
 
               <p className="text-xs text-slate-400 mt-4">
-                Example: If surgery is at 8:00 AM and lead time is 90 minutes, 
-                the patient's expected arrival is 6:30 AM.
+                Example: If surgery is at 8:00 AM and lead time is 90 minutes,
+                the patient&apos;s expected arrival is 6:30 AM.
               </p>
             </div>
           </div>

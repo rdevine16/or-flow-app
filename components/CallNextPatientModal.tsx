@@ -68,44 +68,10 @@ export default function CallNextPatientModal({
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false)
   const [duplicateMinutesAgo, setDuplicateMinutesAgo] = useState(0)
   const { showToast } = useToast()
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    const now = new Date()
-    return now.toISOString().split('T')[0]
-  }
 
   // Load rooms and recent calls on mount
-  const loadInitialData = useCallback(async () => {
-    if (!facilityId) return
-
-    setIsLoading(true)
-    try {
-      // Fetch rooms
-      const { data: roomsData } = await supabase
-        .from('or_rooms')
-        .select('id, name')
-        .eq('facility_id', facilityId)
-        .order('name')
-
-      if (roomsData) {
-        setRooms(roomsData)
-      }
-
-      // Fetch recent calls (last 30 minutes)
-      await loadRecentCalls()
-    } catch (error) {
-      showToast({
-        type: 'error',
-        title: 'Error loading initial data',
-        message: error instanceof Error ? error.message : 'Failed to load initial data'
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }, [facilityId, supabase])
-
   // Load recent calls (grouped by case)
-  const loadRecentCalls = async () => {
+  const loadRecentCalls = useCallback(async () => {
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
 
     const { data: calls } = await supabase
@@ -127,8 +93,16 @@ export default function CallNextPatientModal({
     if (calls) {
       // Group by case_id and count
       const grouped: Record<string, RecentCall> = {}
-      
-      for (const call of calls as any[]) {
+
+      for (const call of calls as Array<{
+        id: string
+        case_id: string
+        room_id: string
+        created_at: string
+        or_rooms?: { name: string }
+        cases?: { case_number: string; procedure_types?: { name: string } }
+        sender?: { first_name: string; last_name: string }
+      }>) {
         const caseId = call.case_id
         if (!caseId) continue
 
@@ -164,11 +138,41 @@ export default function CallNextPatientModal({
 
       setRecentCalls(Object.values(grouped))
     }
-  }
+  }, [facilityId, supabase])
+
+  const loadInitialData = useCallback(async () => {
+    if (!facilityId) return
+
+    setIsLoading(true)
+    try {
+      // Fetch rooms
+      const { data: roomsData } = await supabase
+        .from('or_rooms')
+        .select('id, name')
+        .eq('facility_id', facilityId)
+        .order('name')
+
+      if (roomsData) {
+        setRooms(roomsData)
+      }
+
+      // Fetch recent calls (last 30 minutes)
+      await loadRecentCalls()
+    } catch (error) {
+      showToast({
+        type: 'error',
+        title: 'Error loading initial data',
+        message: error instanceof Error ? error.message : 'Failed to load initial data'
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [facilityId, supabase, loadRecentCalls, showToast])
+
 
   // Fetch next case for selected room
-  const fetchCasesForRoom = async (room: Room) => {
- const today = getLocalDateString() 
+  const fetchCasesForRoom = useCallback(async (room: Room) => {
+ const today = getLocalDateString()
     // Fetch in_progress case (current)
     const { data: currentCaseData } = await supabase
       .from('cases')
@@ -213,11 +217,11 @@ export default function CallNextPatientModal({
       .single()
 
     if (nextCaseData) {
-      const surgeon = nextCaseData.surgeon as any
-      const surgeonName = surgeon 
-        ? `Dr. ${surgeon.last_name}` 
+      const surgeon = nextCaseData.surgeon as { first_name: string; last_name: string } | null
+      const surgeonName = surgeon
+        ? `Dr. ${surgeon.last_name}`
         : 'Unassigned'
-      const procedureName = (nextCaseData.procedure_types as any)?.name || 'Unknown'
+      const procedureName = (nextCaseData.procedure_types as { name: string } | null)?.name || 'Unknown'
 
       setNextCase({
         id: nextCaseData.id,
@@ -229,7 +233,7 @@ export default function CallNextPatientModal({
     } else {
       setNextCase(null)
     }
-  }
+  }, [facilityId, supabase])
 
   // Check for duplicate call
   const checkDuplicateCall = (): number | null => {
@@ -301,7 +305,7 @@ await supabase
             exclude_user_id: userId   // snake_case to match edge function
           }
         })
-      } catch (pushError) {
+      } catch {
         showToast({
           type: 'error',
           title: 'Push Notification Failed',
@@ -375,9 +379,9 @@ await supabase
         return
       }
 
-      const surgeon = caseData.surgeon as any
+      const surgeon = caseData.surgeon as { first_name: string; last_name: string } | null
       const surgeonName = surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'
-      const procedureName = (caseData.procedure_types as any)?.name || 'Unknown'
+      const procedureName = (caseData.procedure_types as { name: string } | null)?.name || 'Unknown'
 
       const title = `${call.room_name} Can Go Back`
       const message = `${caseData.case_number}: ${surgeonName} - ${procedureName}`
@@ -405,7 +409,7 @@ await supabase
             exclude_user_id: userId
           }
         })
-      } catch (pushError) {
+      } catch {
         showToast({ type: 'error', title: 'Push notification failed', message: 'The call was resent but push notifications could not be delivered.' })
       }
 
@@ -456,9 +460,9 @@ await supabase
         .eq('id', call.case_id)
         .single()
 
-      const surgeon = caseData?.surgeon as any
+      const surgeon = caseData?.surgeon as { first_name: string; last_name: string } | null
       const surgeonName = surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'
-      const procedureName = (caseData?.procedure_types as any)?.name || call.procedure_name
+      const procedureName = (caseData?.procedure_types as { name: string } | null)?.name || call.procedure_name
 
       // Delete ALL recent notifications for this case (not just one)
       const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()
@@ -548,7 +552,7 @@ await supabase
     if (selectedRoom) {
       fetchCasesForRoom(selectedRoom)
     }
-  }, [selectedRoom])
+  }, [selectedRoom, fetchCasesForRoom])
 
   // Format time ago
   const formatTimeAgo = (dateString: string) => {

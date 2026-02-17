@@ -12,7 +12,7 @@ import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Button } from '@/components/ui/Button'
-import { AlertCircle, Archive, Ban, Check, Info, Pencil, Plus } from 'lucide-react'
+import { Archive, Ban, Info, Pencil, Plus } from 'lucide-react'
 import { categoryColors } from '@/lib/design-tokens'
 
 // ============================================================================
@@ -54,7 +54,7 @@ export default function CancellationReasonsSettingsPage() {
   // Data state
   const [showArchived, setShowArchived] = useState(false)
 
-  const { data: reasons, loading, error, setData: setReasons, refetch: refetchReasons } = useSupabaseQuery<CancellationReason[]>(
+  const { data: reasons, loading, error, refetch: refetchReasons } = useSupabaseQuery<CancellationReason[]>(
     async (sb) => {
       let query = sb
         .from('cancellation_reasons')

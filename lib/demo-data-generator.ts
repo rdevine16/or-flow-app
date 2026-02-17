@@ -48,6 +48,57 @@ export interface GenerationResult {
   details?: { milestones: number; staff: number; implants: number }
 }
 
+interface CaseRecord {
+  id: string
+  case_number: string
+  facility_id: string
+  scheduled_date: string
+  start_time: string
+  or_room_id: string | null
+  surgeon_id: string
+  procedure_type_id: string | null
+  payer_id: string | null
+  status_id: string
+  scheduled_duration_minutes: number | null
+  created_at: string
+  created_by: string
+  called_next_case_id?: string | null
+  operative_side?: string | null
+  anesthesiologist_id?: string | null
+  call_time?: string | null
+  is_excluded_from_metrics?: boolean
+  surgeon_left_at?: string | null
+}
+
+interface MilestoneRecord {
+  id: string
+  case_id: string
+  facility_milestone_id: string
+  recorded_at: string
+  recorded_by: string | null
+  created_at: string
+}
+
+interface StaffAssignmentRecord {
+  id: string
+  case_id: string
+  staff_id: string
+  role_id: string
+  facility_id: string
+  created_at: string
+  created_by: string
+}
+
+interface ImplantRecord {
+  id: string
+  case_id: string
+  implant_id: string
+  quantity: number
+  facility_id: string
+  created_at: string
+  created_by: string
+}
+
 export interface GenerationProgress {
   phase: string; current: number; total: number; message: string
 }
@@ -485,10 +536,10 @@ export async function generateDemoData(
     // ── Generate cases ──
     onProgress?.({ phase: 'generating', current: 25, total: 100, message: 'Generating cases...' })
 
-    const allCases: any[] = []
-    const allMilestones: any[] = []
-    const allStaffAssignments: any[] = []
-    const allImplants: any[] = []
+    const allCases: CaseRecord[] = []
+    const allMilestones: MilestoneRecord[] = []
+    const allStaffAssignments: StaffAssignmentRecord[] = []
+    const allImplants: ImplantRecord[] = []
     const allFlipLinks: { fromCaseId: string; toCaseId: string }[] = []
 
     let caseNum = 1
@@ -539,7 +590,7 @@ export async function generateDemoData(
     }
     for (let i = 0; i < allMilestones.length; i += BATCH_SIZE) {
       const batch = allMilestones.slice(i, i + BATCH_SIZE)
-      const { error, data, count } = await supabase.from('case_milestones').insert(batch).select('id')
+      const { error, data } = await supabase.from('case_milestones').insert(batch).select('id')
       if (error) { console.error(`Milestone batch ${i} err:`, error.message, 'Code:', error.code, 'Details:', error.details, 'Sample:', JSON.stringify(batch[0])); }
       else { console.log(`[DEMO-GEN] Milestone batch ${i}: inserted ${data?.length ?? 'unknown'} rows`) }
     }
@@ -547,17 +598,26 @@ export async function generateDemoData(
     // ── Build case_milestone_stats (bypasses triggers we disabled) ──
     // Groups milestones by case, finds patient_in time, computes minutes_from_start
     onProgress?.({ phase: 'inserting', current: 75, total: 100, message: 'Building milestone stats...' })
-    const allMilestoneStats: any[] = []
+    const allMilestoneStats: Array<{
+      case_id: string
+      facility_id: string
+      surgeon_id: string
+      procedure_type_id: string | null
+      milestone_type_id: string
+      case_date: string
+      minutes_from_start: number
+      recorded_at: string
+    }> = []
 
     // Build a case lookup from allCases for facility_id, surgeon_id, procedure_type_id, scheduled_date
-    const caseMap = new Map<string, any>()
+    const caseMap = new Map<string, CaseRecord>()
     for (const c of allCases) caseMap.set(c.id, c)
 
     // Find patient_in facility_milestone_id
     const patientInFmId = milestoneTypes.find(m => m.name === 'patient_in')?.id
 
     // Group milestones by case_id
-    const msByCaseId = new Map<string, any[]>()
+    const msByCaseId = new Map<string, MilestoneRecord[]>()
     for (const ms of allMilestones) {
       if (!ms.recorded_at) continue  // skip future case placeholders
       if (!msByCaseId.has(ms.case_id)) msByCaseId.set(ms.case_id, [])
@@ -569,7 +629,7 @@ export async function generateDemoData(
       if (!caseData) continue
 
       // Find patient_in time for this case
-      const piMs = caseMilestones.find((m: any) => m.facility_milestone_id === patientInFmId)
+      const piMs = caseMilestones.find((m) => m.facility_milestone_id === patientInFmId)
       if (!piMs) continue
       const piTime = new Date(piMs.recorded_at).getTime()
 
@@ -625,13 +685,13 @@ export async function generateDemoData(
     }
 
     onProgress?.({ phase: 'finalizing', current: 93, total: 100, message: 'Recalculating averages...' })
-    await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: any) => console.warn('Avg recalc:', e.message))
+    await supabase.rpc('recalculate_surgeon_averages', { p_facility_id: facilityId }).then(() => {}, (e: Error) => console.warn('Avg recalc:', e.message))
 
     // Refresh materialized views so analytics reflect new data
     onProgress?.({ phase: 'finalizing', current: 96, total: 100, message: 'Refreshing analytics views...' })
     await supabase.rpc('refresh_all_stats').then(
       () => console.log('Refreshed all materialized views'),
-      (e: any) => console.warn('MatView refresh failed:', e.message)
+      (e: Error) => console.warn('MatView refresh failed:', e.message)
     )
 
     // Verification counts
@@ -670,10 +730,10 @@ function generateSurgeonCases(
   fmToMtMap: Map<string, string>,
   createdByUserId: string | null
 ) {
-  const cases: any[] = []
-  const milestones: any[] = []
-  const staffAssignments: any[] = []
-  const implants: any[] = []
+  const cases: CaseRecord[] = []
+  const milestones: MilestoneRecord[] = []
+  const staffAssignments: StaffAssignmentRecord[] = []
+  const implants: ImplantRecord[] = []
   const flipLinks: { fromCaseId: string; toCaseId: string }[] = []
 
   let caseNum = startingNumber
@@ -705,13 +765,10 @@ function generateSurgeonCases(
     // Build start time in facility's local timezone → stored as UTC
     let currentTime = facilityDate(dk, h, m, facilityTz)
 
-    // Track which staff we've already added per room for this day (avoid dupes per case)
-    const roomStaffAdded = new Set<string>()
+    // Track room index
     let roomIdx = 0
 
     // Track previous case data for flip room callback calculation
-    let prevCaseMilestones: any[] = []
-    let prevCaseData: any = null
     let prevCaseLinkId: string | null = null  // for called_next_case_id deferred linking
 
     for (let i = 0; i < numCases; i++) {
@@ -757,7 +814,7 @@ function generateSurgeonCases(
         ? surgicalTime + randomInt(45, 60)    // spine: longer setup
         : surgicalTime + randomInt(35, 50)    // joint: anesthesia + prep + close
 
-      const caseData: any = {
+      const caseData: CaseRecord = {
         id: caseId,
         facility_id: surgeon.facilityId,
         case_number: `${prefix}-${String(caseNum).padStart(5, '0')}`,
@@ -785,7 +842,7 @@ function generateSurgeonCases(
       const allowedMilestones = procMilestoneMap.get(proc.id)
       if (!isFuture) {
         // Completed cases: insert milestones WITH timestamps
-        const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, allowedMilestones, patientInTime, surgicalTime, fmToMtMap)
+        const cms = buildMilestones(caseId, surgeon, proc, milestoneTypes, allowedMilestones, patientInTime, surgicalTime)
         milestones.push(...cms)
 
         // surgeon_left_at
@@ -813,9 +870,6 @@ function generateSurgeonCases(
             caseData.called_back_at = addMinutes(pdcTime, callbackOffset).toISOString()
           }
         }
-
-        prevCaseMilestones = cms
-        prevCaseData = caseData
 
         // Link flip room cases (deferred — applied after all cases inserted)
         if (flipRoom && i > 0 && prevCaseLinkId) {
@@ -850,7 +904,7 @@ function generateSurgeonCases(
         const base = proc.name.replace('Mako ', '')
         const specs = IMPLANT_SPECS[surgeon.preferredVendor]?.[base]
         if (specs) {
-          for (const [comp, spec] of Object.entries(specs)) {
+          for (const [, spec] of Object.entries(specs)) {
             const size = Math.random() < 0.7 ? randomChoice(spec.common) : randomChoice(spec.sizes)
             implants.push({
               case_id: caseId, implant_name: spec.name, implant_size: size,
@@ -887,10 +941,9 @@ function buildMilestones(
   caseId: string, surgeon: ResolvedSurgeon, proc: { id: string; name: string },
   milestoneTypes: { id: string; name: string; source_milestone_type_id: string | null }[],
   allowedMilestones: Set<string> | undefined,
-  patientInTime: Date, surgicalTime: number,
-  fmToMtMap: Map<string, string>
-): any[] {
-  const ms: any[] = []
+  patientInTime: Date, surgicalTime: number
+): MilestoneRecord[] {
+  const ms: MilestoneRecord[] = []
 
   // Resolve facility_milestone_id by name, but ONLY if it's in the procedure_milestone_config
   const getFmId = (name: string): string | null => {
@@ -915,15 +968,18 @@ function buildMilestones(
     if (off <= lastOff) off = lastOff + 1
     lastOff = off
     ms.push({
+      id: crypto.randomUUID(),
       case_id: caseId,
       facility_milestone_id: fmId,
       recorded_at: addMinutes(base, off).toISOString(),
+      recorded_by: null,
+      created_at: new Date().toISOString(),
     })
   }
 
   push('patient_in', tmpl.patient_in)
-  if ('anes_start' in tmpl) push('anes_start', (tmpl as any).anes_start)
-  if ('anes_end' in tmpl) push('anes_end', (tmpl as any).anes_end, 0.15, { min: 5, max: 12 })
+  if ('anes_start' in tmpl) push('anes_start', tmpl.anes_start as number)
+  if ('anes_end' in tmpl) push('anes_end', tmpl.anes_end as number, 0.15, { min: 5, max: 12 })
   push('prep_drape_start', tmpl.prep_drape_start)
   push('prep_drape_complete', tmpl.prep_drape_complete)
   push('incision', tmpl.incision)

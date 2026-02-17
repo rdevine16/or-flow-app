@@ -3,7 +3,7 @@
 'use client'
 
 import { memo } from 'react'
-import { ExpandedBlock, formatTime12Hour, RECURRENCE_LABELS } from '@/types/block-scheduling'
+import { ExpandedBlock, RECURRENCE_LABELS } from '@/types/block-scheduling'
 
 interface BlockCardProps {
   block: ExpandedBlock
@@ -37,15 +37,15 @@ function BlockCard({
 
   // Layout depends on whether blocks have same start time
   let leftPercent: number
-  let rightPercent: number
+  let rightPercent: number | undefined
   let widthStyle: string | undefined
-  
+
   if (isSameStart && totalColumns > 1) {
     // Same start time: side by side (equal width columns)
     const columnWidth = (100 - 4) / totalColumns // 4% for margins
     leftPercent = 2 + (columnIndex * columnWidth)
     widthStyle = `${columnWidth - 1}%`
-    rightPercent = undefined as any // Use width instead
+    rightPercent = undefined // Use width instead
   } else if (columnIndex > 0) {
     // Different start times, overlapping: cascading/staggered
     const offsetPercent = columnIndex * 12  // Each block offset 12% more

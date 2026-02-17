@@ -110,7 +110,6 @@ describe('ProcedureMilestoneList', () => {
   it('renders boundary milestones with locked checkboxes', () => {
     render(<ProcedureMilestoneList {...defaultProps} />)
     // Boundary milestones should have disabled checkboxes
-    const checkboxes = screen.getAllByRole('checkbox')
     // Patient In (boundary) should be disabled
     const patientInRow = screen.getByText('Patient In Room').closest('div')
     const patientInCheckbox = patientInRow?.querySelector('input[type="checkbox"]')

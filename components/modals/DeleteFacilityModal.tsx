@@ -67,13 +67,14 @@ export default function DeleteFacilityModal({
 
       // Success - notify parent
       onDeleted()
-} catch (err: any) {
+} catch (err) {
+  const message = err instanceof Error ? err.message : 'Failed to delete facility. Please try again.'
   showToast({
     type: 'error',
     title: 'Delete Failed',
-    message: err.message || 'Failed to delete facility. Please try again.'
+    message
   })
-  setError(err.message || 'Failed to delete facility. Please try again.')
+  setError(message)
 } finally {
       setIsDeleting(false)
     }
@@ -162,7 +163,7 @@ export default function DeleteFacilityModal({
             />
             {confirmText.length > 0 && !isConfirmed && (
               <p className="text-xs text-red-600 mt-1.5">
-                Text doesn't match facility name
+                Text doesn&apos;t match facility name
               </p>
             )}
           </div>

@@ -9,7 +9,6 @@ import { checkPasswordStrength } from '@/lib/passwords'
 import { authAudit } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertCircle, Check, LogOut, X } from 'lucide-react'
 
@@ -36,7 +35,7 @@ export default function ProfilePage() {
   const { showToast } = useToast()
 
   // Profile fetch via useSupabaseQuery
-  const { data: profile, loading, error, refetch, setData: setProfile } = useSupabaseQuery<UserProfile>(
+  const { data: profile, loading, error, setData: setProfile } = useSupabaseQuery<UserProfile>(
     async (sb) => {
       const { data: { user } } = await sb.auth.getUser()
       if (!user) {

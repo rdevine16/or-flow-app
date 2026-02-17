@@ -115,10 +115,14 @@ export function ToastProvider({
 }: ToastProviderProps) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id))
+  }, [])
+
   const showToast = useCallback((options: ToastOptions) => {
     const id = Math.random().toString(36).substring(2, 9)
     const defaultDuration = options.type === 'error' ? 6000 : 4000
-    
+
     const newToast: Toast = {
       id,
       dismissible: options.dismissible ?? true,
@@ -140,11 +144,7 @@ export function ToastProvider({
     }
 
     return id
-  }, [maxToasts])
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id))
-  }, [])
+  }, [maxToasts, dismissToast])
 
   const dismissAll = useCallback(() => {
     setToasts([])
@@ -336,7 +336,7 @@ export function useToastHelpers() {
         error: string
       }
     ): Promise<T> => {
-      const loadingId = showToast({
+      showToast({
         type: 'info',
         title: messages.loading,
         duration: 0, // Don't auto-dismiss
