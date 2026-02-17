@@ -1,7 +1,7 @@
 // app/settings/surgeon-milestones/page.tsx
 'use client'
 
-import { useState, useCallback, useMemo, useRef, useEffect, Fragment } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -11,16 +11,11 @@ import { useSurgeons } from '@/hooks'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Search, Undo2, X, CheckCircle2 } from 'lucide-react'
-import { PhaseBlock, type PhaseBlockMilestone } from '@/components/settings/milestones/PhaseBlock'
-import { BoundaryMarker } from '@/components/settings/milestones/BoundaryMarker'
 import { InheritanceBreadcrumb } from '@/components/settings/milestones/InheritanceBreadcrumb'
-import {
-  PairBracketOverlay,
-  computeBracketData,
-  computeBracketAreaWidth,
-} from '@/components/settings/milestones/PairBracketOverlay'
-import { detectPairIssues, countPairIssuesInPhase } from '@/lib/utils/pairIssues'
-import { resolveColorKey, buildPhaseTree } from '@/lib/milestone-phase-config'
+import { FlatMilestoneList } from '@/components/settings/milestones/FlatMilestoneList'
+import { buildFlatRows, type FlatRow } from '@/lib/utils/buildFlatRows'
+import { detectPairIssues } from '@/lib/utils/pairIssues'
+import { buildPhaseTree } from '@/lib/milestone-phase-config'
 import { AddProcedureDropdown } from '@/components/settings/surgeon-milestones/AddProcedureDropdown'
 
 // ── Types ────────────────────────────────────────────
@@ -469,163 +464,17 @@ export default function SurgeonMilestonesSettingsPage() {
     [getParentConfig, safeSurgeonConfigs]
   )
 
-  // ── Phase Block Render Data ──────────────────────
+  // ── Flat list data ──────────────────────────────────
 
-  // Phase tree: only top-level phases become PhaseBlocks, children are nested
   const phaseTree = useMemo(() => {
     if (!phaseDefinitions?.length) return []
     return buildPhaseTree(phaseDefinitions)
   }, [phaseDefinitions])
 
-  const toBlockMilestones = useCallback(
-    (phaseName: string): PhaseBlockMilestone[] =>
-      safeMilestones
-        .filter((m) => m.phase_group === phaseName && !boundaryMilestoneIds.has(m.id))
-        .sort((a, b) => {
-          const aOrder = configOrderMap.get(a.id) ?? a.display_order
-          const bOrder = configOrderMap.get(b.id) ?? b.display_order
-          return aOrder - bOrder
-        })
-        .map((m) => ({
-          id: m.id,
-          display_name: m.display_name,
-          phase_group: m.phase_group,
-          is_boundary: false,
-          pair_with_id: m.pair_with_id,
-          pair_position: m.pair_position,
-          pair_group: pairGroupMap.get(m.id) || null,
-          min_minutes: m.min_minutes,
-          max_minutes: m.max_minutes,
-        })),
-    [safeMilestones, boundaryMilestoneIds, pairGroupMap, configOrderMap]
-  )
-
-  const phaseBlockData = useMemo(() => {
-    if (!phaseTree.length) return []
-    return phaseTree.map((node) => {
-      const pd = node.phase
-      const color = resolveColorKey(pd.color_key).hex
-      const parentMilestones = toBlockMilestones(pd.name)
-
-      const childPhases = node.children.map((childNode) => {
-        const childPd = childNode.phase
-        const childColor = resolveColorKey(childPd.color_key).hex
-        return {
-          phaseColor: childColor,
-          phaseLabel: childPd.display_name,
-          phaseKey: childPd.name,
-          milestones: toBlockMilestones(childPd.name),
-        }
-      })
-
-      return { phaseDef: pd, color, milestones: parentMilestones, childPhases }
-    })
-  }, [phaseTree, toBlockMilestones])
-
-  // Milestones with no phase_group (unphased, e.g. after Patient Out)
-  const unphasedMilestones: PhaseBlockMilestone[] = useMemo(() => {
-    return safeMilestones
-      .filter((m) => !m.phase_group && !boundaryMilestoneIds.has(m.id))
-      .map((m) => ({
-        id: m.id,
-        display_name: m.display_name,
-        phase_group: m.phase_group,
-        is_boundary: false,
-        pair_with_id: m.pair_with_id,
-        pair_position: m.pair_position,
-        pair_group: pairGroupMap.get(m.id) || null,
-        min_minutes: m.min_minutes,
-        max_minutes: m.max_minutes,
-      }))
-  }, [safeMilestones, boundaryMilestoneIds, pairGroupMap])
-
-  const renderData = useMemo(() => {
-    if (!phaseBlockData.length) return []
-    return phaseBlockData.map((phase, idx) => {
-      const isFirst = idx === 0
-      const isLast = idx === phaseBlockData.length - 1
-
-      let boundaryBefore: {
-        name: string
-        topColor: string
-        bottomColor: string
-        solid: boolean
-      } | null = null
-      if (isFirst) {
-        const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
-        if (ms) {
-          boundaryBefore = {
-            name: ms.display_name,
-            topColor: phase.color,
-            bottomColor: phase.color,
-            solid: true,
-          }
-        }
-      } else {
-        // Show start boundary for non-first phases when not shared with previous phase's end
-        const prevPhase = phaseBlockData[idx - 1]
-        if (prevPhase.phaseDef.end_milestone_id !== phase.phaseDef.start_milestone_id) {
-          const ms = milestoneById.get(phase.phaseDef.start_milestone_id)
-          if (ms) {
-            boundaryBefore = {
-              name: ms.display_name,
-              topColor: phase.color,
-              bottomColor: phase.color,
-              solid: true,
-            }
-          }
-        }
-      }
-
-      let boundaryAfter: {
-        name: string
-        topColor: string
-        bottomColor: string
-        solid: boolean
-      } | null = null
-      if (isLast) {
-        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
-        if (ms) {
-          boundaryAfter = {
-            name: ms.display_name,
-            topColor: phase.color,
-            bottomColor: phase.color,
-            solid: true,
-          }
-        }
-      } else {
-        const nextPhase = phaseBlockData[idx + 1]
-        const nextColor = nextPhase.color
-        const isShared = phase.phaseDef.end_milestone_id === nextPhase.phaseDef.start_milestone_id
-        const ms = milestoneById.get(phase.phaseDef.end_milestone_id)
-        if (ms) {
-          boundaryAfter = {
-            name: ms.display_name,
-            topColor: phase.color,
-            bottomColor: nextColor,
-            solid: !isShared,
-          }
-        }
-      }
-
-      const brackets = computeBracketData(phase.milestones, pairIssues)
-      const bracketWidth = computeBracketAreaWidth(brackets)
-      const issueCount = countPairIssuesInPhase(
-        pairIssueMilestones,
-        pairIssues,
-        phase.phaseDef.name
-      )
-
-      return {
-        ...phase,
-        boundaryBefore,
-        boundaryAfter,
-        brackets,
-        bracketWidth,
-        issueCount,
-      }
-    })
-  }, [phaseBlockData, milestoneById, pairIssues, pairIssueMilestones])
+  const flatRowsResult = useMemo(() => {
+    if (!phaseTree.length) return { rows: [] as FlatRow[], subPhaseRails: [], legendPhases: [] }
+    return buildFlatRows(phaseTree, safeMilestones, pairGroupMap, milestoneById, configOrderMap)
+  }, [phaseTree, safeMilestones, pairGroupMap, milestoneById, configOrderMap])
 
   // ── Toggle Handler ─────────────────────────────────
 
@@ -738,9 +587,9 @@ export default function SurgeonMilestonesSettingsPage() {
   // ── Reorder Handler ────────────────────────────────
 
   const handleReorder = useCallback(
-    async (phaseKey: string, newOrder: PhaseBlockMilestone[]) => {
+    async (reorderedRows: FlatRow[]) => {
       if (!effectiveFacilityId || !selectedSurgeon || !selectedSurgeonProc) return
-      const milestoneIds = newOrder.map((m) => m.id)
+      const milestoneIds = reorderedRows.map((r) => r.id)
 
       // Optimistic update
       setSurgeonConfigs((prev) => {
@@ -1209,69 +1058,21 @@ export default function SurgeonMilestonesSettingsPage() {
                       </div>
                     )}
 
-                    {/* Phase blocks */}
-                    <div className="flex flex-col">
-                      {renderData.map((phase) => (
-                        <Fragment key={phase.phaseDef.id}>
-                          {phase.boundaryBefore && (
-                            <BoundaryMarker
-                              name={phase.boundaryBefore.name}
-                              topColor={phase.boundaryBefore.topColor}
-                              bottomColor={phase.boundaryBefore.bottomColor}
-                              solid={phase.boundaryBefore.solid}
-                            />
-                          )}
-                          <PhaseBlock
-                            phaseColor={phase.color}
-                            phaseLabel={phase.phaseDef.display_name}
-                            phaseKey={phase.phaseDef.name}
-                            mode="config"
-                            milestones={phase.milestones}
-                            config={effectiveConfig}
-                            parentConfig={parentConfig}
-                            overriddenIds={overriddenIds}
-                            overrideLabel="SURGEON"
-                            pairIssueCount={phase.issueCount}
-                            onToggle={handleToggle}
-                            onReorder={handleReorder}
-                            draggable={true}
-                            bracketAreaWidth={phase.bracketWidth}
-                            childPhases={phase.childPhases}
-                          >
-                            {phase.brackets.length > 0 && (
-                              <PairBracketOverlay
-                                milestones={phase.milestones}
-                                pairIssues={pairIssues}
-                              />
-                            )}
-                          </PhaseBlock>
-                          {phase.boundaryAfter && (
-                            <BoundaryMarker
-                              name={phase.boundaryAfter.name}
-                              topColor={phase.boundaryAfter.topColor}
-                              bottomColor={phase.boundaryAfter.bottomColor}
-                              solid={phase.boundaryAfter.solid}
-                            />
-                          )}
-                        </Fragment>
-                      ))}
-
-                      {/* Unphased milestones (no phase_group assigned) */}
-                      {unphasedMilestones.length > 0 && (
-                        <PhaseBlock
-                          phaseColor="#94A3B8"
-                          phaseLabel="Unphased"
-                          phaseKey="unphased"
-                          mode="config"
-                          milestones={unphasedMilestones}
-                          config={effectiveConfig}
-                          parentConfig={parentConfig}
-                          overriddenIds={overriddenIds}
-                          overrideLabel="SURGEON"
-                          onToggle={handleToggle}
-                        />
-                      )}
-                    </div>
+                    {/* Flat milestone list */}
+                    <FlatMilestoneList
+                      rows={flatRowsResult.rows}
+                      mode="config"
+                      phaseDefinitions={flatRowsResult.legendPhases}
+                      subPhaseRails={flatRowsResult.subPhaseRails}
+                      pairIssues={pairIssues}
+                      config={effectiveConfig}
+                      parentConfig={parentConfig}
+                      overriddenIds={overriddenIds}
+                      overrideLabel="SURGEON"
+                      onToggle={handleToggle}
+                      draggable
+                      onReorder={handleReorder}
+                    />
                   </>
                 ) : !surgeonConfigsLoading && !selectedSurgeonProc ? (
                   /* Empty state when no procedure selected */
