@@ -55,7 +55,9 @@ export interface PhaseBlockProps {
   onDelete?: (milestoneId: string) => void
   /** Starting counter value for numbered rows (table mode). Defaults to 1. */
   startCounter?: number
-  /** Optional children to render (e.g. PairBracketOverlay in Phase 2) */
+  /** Width in pixels of the bracket overlay area. Rows are padded-left by this amount. */
+  bracketAreaWidth?: number
+  /** Optional children to render (e.g. PairBracketOverlay) */
   children?: React.ReactNode
 }
 
@@ -79,6 +81,7 @@ export function PhaseBlock({
   draggable = false,
   onDelete,
   startCounter = 1,
+  bracketAreaWidth = 0,
   children,
 }: PhaseBlockProps) {
   const [expanded, setExpanded] = useState(true)
@@ -189,7 +192,7 @@ export function PhaseBlock({
         {/* Expanded row list */}
         {expanded && milestones.length > 0 && (
           <div className="relative">
-            {/* Slot for bracket overlays (Phase 2 will inject here) */}
+            {/* Slot for bracket overlays (PairBracketOverlay) */}
             {children}
 
             {milestones.map((ms, i) => {
@@ -229,13 +232,19 @@ export function PhaseBlock({
                 >
                   {/* Drop indicator — before */}
                   {isTarget && dropPos === 'before' && (
-                    <div className="absolute top-[-1px] left-2 right-2 h-0.5 bg-blue-500 rounded-sm z-20">
+                    <div
+                      className="absolute top-[-1px] right-2 h-0.5 bg-blue-500 rounded-sm z-20"
+                      style={{ left: bracketAreaWidth > 0 ? bracketAreaWidth + 8 : 8 }}
+                    >
                       <div className="absolute left-[-3px] top-[-3px] w-2 h-2 rounded-full bg-blue-500" />
                     </div>
                   )}
                   {/* Drop indicator — after */}
                   {isTarget && dropPos === 'after' && (
-                    <div className="absolute bottom-[-1px] left-2 right-2 h-0.5 bg-blue-500 rounded-sm z-20">
+                    <div
+                      className="absolute bottom-[-1px] right-2 h-0.5 bg-blue-500 rounded-sm z-20"
+                      style={{ left: bracketAreaWidth > 0 ? bracketAreaWidth + 8 : 8 }}
+                    >
                       <div className="absolute left-[-3px] top-[-3px] w-2 h-2 rounded-full bg-blue-500" />
                     </div>
                   )}
@@ -243,14 +252,17 @@ export function PhaseBlock({
                   {/* Row content */}
                   <div
                     onClick={onToggle ? () => onToggle(ms.id) : undefined}
-                    className={`flex items-center gap-1.5 h-full pl-1.5 pr-2.5 border-b border-[#F5F5F5] relative z-[3] transition-colors ${
+                    className={`flex items-center gap-1.5 h-full pr-2.5 border-b border-[#F5F5F5] relative z-[3] transition-colors ${
                       draggable
                         ? 'cursor-grab'
                         : onToggle
                           ? 'cursor-pointer'
                           : 'cursor-default'
                     }`}
-                    style={{ background: rowBg }}
+                    style={{
+                      background: rowBg,
+                      paddingLeft: bracketAreaWidth > 0 ? bracketAreaWidth + 6 : 6,
+                    }}
                     onMouseEnter={(e) => {
                       if (rowBg === 'transparent')
                         e.currentTarget.style.background = '#F8FAFC'
