@@ -84,16 +84,21 @@ const fetchRef = useRef<() => Promise<void>>(null)
       }
 
       // Normalize Supabase joined values (can be array or object)
-      const normalized: SurgeonDayCase[] = dayCases.map((c: Record<string, unknown>) => ({
-        id: c.id,
-        case_number: c.case_number,
-        or_room_id: c.or_room_id,
-        room_name: Array.isArray(c.or_rooms) ? c.or_rooms[0]?.name : c.or_rooms?.name || null,
-        start_time: c.start_time,
-        status_name: Array.isArray(c.case_statuses) ? c.case_statuses[0]?.name : c.case_statuses?.name || 'scheduled',
-        procedure_name: Array.isArray(c.procedure_types) ? c.procedure_types[0]?.name : c.procedure_types?.name || null,
-        called_back_at: c.called_back_at,
-      }))
+      const normalized: SurgeonDayCase[] = dayCases.map((c: Record<string, unknown>) => {
+        const orRooms = c.or_rooms as { name: string }[] | { name: string } | null
+        const caseStatuses = c.case_statuses as { name: string }[] | { name: string } | null
+        const procedureTypes = c.procedure_types as { name: string }[] | { name: string } | null
+        return {
+          id: c.id as string,
+          case_number: c.case_number as string,
+          or_room_id: c.or_room_id as string | null,
+          room_name: Array.isArray(orRooms) ? orRooms[0]?.name : orRooms?.name || null,
+          start_time: c.start_time as string | null,
+          status_name: Array.isArray(caseStatuses) ? caseStatuses[0]?.name : caseStatuses?.name || 'scheduled',
+          procedure_name: Array.isArray(procedureTypes) ? procedureTypes[0]?.name : procedureTypes?.name || null,
+          called_back_at: c.called_back_at as string | null,
+        }
+      })
 
       const { flipCase, nextSameRoomCase } = findNextCase(normalized, currentCaseId, currentRoomId)
 
@@ -122,10 +127,11 @@ const fetchRef = useRef<() => Promise<void>>(null)
 
       if (flipMilestones) {
         const msData: FlipRoomMilestoneData[] = flipMilestones.map((m: Record<string, unknown>) => {
-          const fm = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : m.facility_milestones
+          const fmRaw = m.facility_milestones as { name?: string; display_name?: string; display_order?: number }[] | { name?: string; display_name?: string; display_order?: number } | null
+          const fm = Array.isArray(fmRaw) ? fmRaw[0] : fmRaw
           return {
-            facility_milestone_id: m.facility_milestone_id,
-            recorded_at: m.recorded_at,
+            facility_milestone_id: m.facility_milestone_id as string,
+            recorded_at: m.recorded_at as string | null,
             display_name: fm?.display_name || '',
             display_order: fm?.display_order || 0,
             name: fm?.name || '',
@@ -197,10 +203,11 @@ const fetchRef = useRef<() => Promise<void>>(null)
           filter: `id=eq.${flipCaseId}`,
         },
         (payload: { new?: { called_back_at?: string | null } }) => {
-          if (payload.new) {
+          const newPayload = payload.new
+          if (newPayload) {
             setFlipRoom(prev => prev ? {
               ...prev,
-              calledBackAt: payload.new.called_back_at || null,
+              calledBackAt: newPayload.called_back_at || null,
             } : null)
           }
         }

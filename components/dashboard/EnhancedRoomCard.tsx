@@ -289,7 +289,7 @@ function CompactCaseRow({
           <p className="text-sm font-medium text-slate-700 truncate">
             {getProcedureName(caseItem.procedure_types)}
           </p>
-          <OperativeSideBadge side={(caseItem as Record<string, unknown>).operative_side} />
+          <OperativeSideBadge side={(caseItem as EnhancedCase & { operative_side?: string | null }).operative_side} />
         </div>
         <p className="text-xs text-slate-400 truncate">
           {getSurgeonName(caseItem.surgeon)} • {caseItem.case_number}
@@ -363,7 +363,7 @@ function EnhancedRoomCard({
   const isActive = status === 'active'
   
   // Check if the next case has been called back
-  const nextCaseCalledBack = !currentCase && nextCase && (nextCase as Record<string, unknown>).called_back_at
+  const nextCaseCalledBack = !currentCase && nextCase && Boolean((nextCase as EnhancedCase & { called_back_at?: string | null }).called_back_at)
   
   // Get other cases (exclude the primary case from the upcoming list)
   // NEW: Filter out completed cases if hideCompleted is true
@@ -405,7 +405,7 @@ function EnhancedRoomCard({
             <h4 className="text-base font-semibold text-slate-900 truncate">
               {getProcedureName(primaryCase.procedure_types)}
             </h4>
-            <OperativeSideBadge side={(primaryCase as Record<string, unknown>).operative_side} />
+            <OperativeSideBadge side={(primaryCase as EnhancedCase & { operative_side?: string | null }).operative_side} />
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <span className="font-medium">{getSurgeonName(primaryCase.surgeon)}</span>

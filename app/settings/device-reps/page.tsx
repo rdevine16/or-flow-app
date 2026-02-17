@@ -103,14 +103,14 @@ export default function DeviceRepsPage() {
           last_name: string
           email: string
           phone: string | null
-          implant_companies: { name: string }
+          implant_companies: { name: string }[]
         }[]
       }) => {
         const user = getFirst(rep.users)
         const company = user ? getFirst(user.implant_companies) : null
         return {
           id: rep.id, user_id: rep.user_id, facility_id: rep.facility_id,
-          status: rep.status, created_at: rep.created_at, accepted_at: rep.accepted_at,
+          status: rep.status as DeviceRep['status'], created_at: rep.created_at, accepted_at: rep.accepted_at,
           user_first_name: user?.first_name || '', user_last_name: user?.last_name || '',
           user_email: user?.email || '', user_phone: user?.phone || null,
           company_name: company?.name || 'Unknown Company', type: 'rep' as const,

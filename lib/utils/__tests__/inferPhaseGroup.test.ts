@@ -55,8 +55,8 @@ describe('inferPhaseGroup', () => {
       expect(inferPhaseGroup('patient_out')).toBe('post_op')
     })
 
-    it('returns post_op for room_cleaned', () => {
-      expect(inferPhaseGroup('room_cleaned')).toBe('post_op')
+    it('returns null for room_cleaned (occurs after Patient Out, outside post_op)', () => {
+      expect(inferPhaseGroup('room_cleaned')).toBeNull()
     })
   })
 
@@ -86,7 +86,7 @@ describe('inferPhaseGroup', () => {
       expect(inferPhaseGroup('Patient_In')).toBe('pre_op')
       expect(inferPhaseGroup('Incision')).toBe('surgical')
       expect(inferPhaseGroup('Closing_Complete')).toBe('closing')
-      expect(inferPhaseGroup('Room_Cleaned')).toBe('post_op')
+      expect(inferPhaseGroup('Room_Cleaned')).toBeNull()
     })
 
     it('trims whitespace', () => {

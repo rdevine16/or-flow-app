@@ -252,7 +252,7 @@ if (typeof window === 'undefined') {
  */
 
 export async function checkRateLimitDB(
-  supabase: { from: (table: string) => unknown },
+  supabase: { from: (table: string) => ReturnType<import('@supabase/supabase-js').SupabaseClient['from']> },
   email: string
 ): Promise<{
   allowed: boolean
@@ -307,7 +307,7 @@ export async function checkRateLimitDB(
 }
 
 export async function recordFailedAttemptDB(
-  supabase: { from: (table: string) => unknown },
+  supabase: { from: (table: string) => ReturnType<import('@supabase/supabase-js').SupabaseClient['from']> },
   email: string,
   ip: string
 ): Promise<void> {
@@ -349,7 +349,7 @@ export async function recordFailedAttemptDB(
 }
 
 export async function clearRateLimitDB(
-  supabase: { from: (table: string) => unknown },
+  supabase: { from: (table: string) => ReturnType<import('@supabase/supabase-js').SupabaseClient['from']> },
   email: string
 ): Promise<void> {
   await supabase

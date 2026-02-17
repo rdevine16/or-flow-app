@@ -27,7 +27,7 @@ vi.mock('@/lib/supabase', () => ({
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
         order: vi.fn(() => chain),
-        then: (resolve: (value: unknown) => void) => resolve(mockQueryResult),
+        then: ((resolve: (value: unknown) => void) => resolve(mockQueryResult)) as (...args: unknown[]) => unknown,
       }
       return chain
     }),

@@ -172,7 +172,7 @@ export function PairBracketOverlay({
 
   return (
     <div
-      className="absolute top-0 left-0 pointer-events-none z-[1]"
+      className="absolute top-0 left-0 pointer-events-none z-[5]"
       style={{ width: areaWidth, height: totalHeight }}
     >
       {brackets.map((b) => {

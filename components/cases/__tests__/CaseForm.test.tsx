@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
@@ -127,7 +127,7 @@ function createSupabaseMock(overrides: Record<string, unknown> = {}) {
       milestoneChain.select = vi.fn().mockReturnValue(milestoneChain)
       milestoneChain.eq = vi.fn().mockReturnValue(milestoneChain)
       milestoneChain.order = vi.fn().mockReturnValue(milestoneChain)
-      milestoneChain.then = (resolve: (value: unknown) => void) => resolve(defaultResults.procedure_milestone_config)
+      milestoneChain.then = ((resolve: (value: unknown) => void) => resolve(defaultResults.procedure_milestone_config)) as (...args: unknown[]) => unknown
       // Make it thenable for await
       return {
         ...milestoneChain,
@@ -679,7 +679,7 @@ describe('CaseForm — Phase 2: Drafts + Unsaved Changes', () => {
       const baseMock = createSupabaseMock()
       const originalFrom = baseMock.from
       baseMock.from = vi.fn((table: string) => {
-        const chain = originalFrom(table)
+        const chain = originalFrom(table) as Record<string, unknown>
         if (table === 'cases') {
           // Override single() for the edit-mode case fetch
           chain.single = vi.fn(() => Promise.resolve({
@@ -820,14 +820,14 @@ describe('CaseForm — Phase 2: Drafts + Unsaved Changes', () => {
           },
           error: null,
         })),
-        then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
+        then: ((resolve: (value: unknown) => void) => resolve({ data: [], error: null })) as (...args: unknown[]) => unknown,
       }
       // Make chainable methods return self
-      draftChainable.select.mockReturnValue(draftChainable)
-      draftChainable.eq.mockReturnValue(draftChainable)
-      draftChainable.neq.mockReturnValue(draftChainable)
-      draftChainable.is.mockReturnValue(draftChainable)
-      draftChainable.order.mockReturnValue(draftChainable)
+      ;(draftChainable.select as Mock).mockReturnValue(draftChainable)
+      ;(draftChainable.eq as Mock).mockReturnValue(draftChainable)
+      ;(draftChainable.neq as Mock).mockReturnValue(draftChainable)
+      ;(draftChainable.is as Mock).mockReturnValue(draftChainable)
+      ;(draftChainable.order as Mock).mockReturnValue(draftChainable)
 
       // Patch the from mock to return draft case data
       const originalFrom = mockSupabase.from
@@ -1171,7 +1171,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
               error: null,
             })),
             maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
-            then: (resolve: (value: unknown) => void) => resolve({ data: conflicts, error: null }),
+            then: ((resolve: (value: unknown) => void) => resolve({ data: conflicts, error: null })) as (...args: unknown[]) => unknown,
           }
           return chain
         }
@@ -1181,7 +1181,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
             select: vi.fn(() => chain),
             eq: vi.fn(() => chain),
             is: vi.fn(() => chain),
-            then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
+            then: ((resolve: (value: unknown) => void) => resolve({ data: [], error: null })) as (...args: unknown[]) => unknown,
           }
           return chain
         }
@@ -1306,7 +1306,8 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
       const originalFrom = baseMock.from
 
       // Override rpc to handle finalize_draft_case specifically
-      baseMock.rpc = vi.fn((fnName: string) => {
+      baseMock.rpc = vi.fn((...args: unknown[]) => {
+        const fnName = args[0]
         if (fnName === 'finalize_draft_case') {
           if (rpcOverride) return Promise.resolve(rpcOverride)
           return Promise.resolve({ data: 'draft-case-1', error: null })
@@ -1344,7 +1345,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
               error: null,
             })),
             maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
-            then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
+            then: ((resolve: (value: unknown) => void) => resolve({ data: [], error: null })) as (...args: unknown[]) => unknown,
           }
           return chain
         }
@@ -1354,7 +1355,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
             select: vi.fn(() => chain),
             eq: vi.fn(() => chain),
             is: vi.fn(() => chain),
-            then: (resolve: (value: unknown) => void) => resolve({ data: [], error: null }),
+            then: ((resolve: (value: unknown) => void) => resolve({ data: [], error: null })) as (...args: unknown[]) => unknown,
           }
           return chain
         }
@@ -1469,7 +1470,7 @@ describe('CaseForm — Phase 3: Staff Assignment + Room Conflicts + Create Anoth
       // Cases is called for initial data fetch, but NOT for .update()
       for (let i = 0; i < caseUpdateCalls.length; i++) {
         // Verify no update was called through the chain
-        const chain = mockSupabase.from('cases')
+        const chain = mockSupabase.from('cases') as Record<string, unknown>
         if (chain.update) {
           expect(chain.update).not.toHaveBeenCalled()
         }

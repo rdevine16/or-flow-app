@@ -60,43 +60,37 @@ interface CaseRecord {
   payer_id: string | null
   status_id: string
   scheduled_duration_minutes: number | null
-  created_at: string
+  created_at?: string
   created_by: string
   called_next_case_id?: string | null
   operative_side?: string | null
   anesthesiologist_id?: string | null
   call_time?: string | null
+  called_back_at?: string | null
   is_excluded_from_metrics?: boolean
   surgeon_left_at?: string | null
 }
 
 interface MilestoneRecord {
-  id: string
+  id?: string
   case_id: string
   facility_milestone_id: string
-  recorded_at: string
-  recorded_by: string | null
-  created_at: string
+  recorded_at: string | null
+  recorded_by?: string | null
+  created_at?: string
 }
 
 interface StaffAssignmentRecord {
-  id: string
   case_id: string
   staff_id: string
   role_id: string
-  facility_id: string
-  created_at: string
-  created_by: string
 }
 
 interface ImplantRecord {
-  id: string
   case_id: string
-  implant_id: string
-  quantity: number
-  facility_id: string
-  created_at: string
-  created_by: string
+  implant_name: string
+  implant_size: string
+  manufacturer: string | null
 }
 
 export interface GenerationProgress {
@@ -631,13 +625,13 @@ export async function generateDemoData(
       // Find patient_in time for this case
       const piMs = caseMilestones.find((m) => m.facility_milestone_id === patientInFmId)
       if (!piMs) continue
-      const piTime = new Date(piMs.recorded_at).getTime()
+      const piTime = new Date(piMs.recorded_at!).getTime()
 
       for (const ms of caseMilestones) {
         const mtId = fmToMtMap.get(ms.facility_milestone_id)
         if (!mtId) continue  // skip if no global milestone_type mapping
 
-        const msTime = new Date(ms.recorded_at).getTime()
+        const msTime = new Date(ms.recorded_at!).getTime()
         const minutesFromStart = Math.round(((msTime - piTime) / 60000) * 100) / 100
 
         allMilestoneStats.push({
@@ -648,7 +642,7 @@ export async function generateDemoData(
           milestone_type_id: mtId,
           case_date: caseData.scheduled_date,
           minutes_from_start: minutesFromStart,
-          recorded_at: ms.recorded_at,
+          recorded_at: ms.recorded_at!,
         })
       }
     }
@@ -833,7 +827,7 @@ function generateSurgeonCases(
         scheduled_duration_minutes: scheduledDuration,
         is_excluded_from_metrics: false,
         surgeon_left_at: null,
-        created_by: createdByUserId,
+        created_by: createdByUserId!,
       }
 
       cases.push(caseData)
@@ -848,17 +842,17 @@ function generateSurgeonCases(
         // surgeon_left_at
         if (surgeon.closingWorkflow === 'pa_closes') {
           const closingMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'closing'))
-          if (closingMs) caseData.surgeon_left_at = addMinutes(new Date(closingMs.recorded_at), surgeon.closingHandoffMinutes).toISOString()
+          if (closingMs) caseData.surgeon_left_at = addMinutes(new Date(closingMs.recorded_at!), surgeon.closingHandoffMinutes).toISOString()
         } else {
           const ccMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'closing_complete'))
           if (ccMs) caseData.surgeon_left_at = ccMs.recorded_at
         }
 
         // ── Callback timing for flip room cases ──
-        if (flipRoom && i > 0 && prevCaseData) {
+        if (flipRoom && i > 0 && caseData) {
           const pdcMs = cms.find(ms => milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'prep_drape_complete'))
           if (pdcMs) {
-            const pdcTime = new Date(pdcMs.recorded_at)
+            const pdcTime = new Date(pdcMs.recorded_at!)
             let callbackOffset: number
             if (surgeon.speedProfile === 'fast') {
               callbackOffset = randomInt(-3, 3)
@@ -894,9 +888,9 @@ function generateSurgeonCases(
       const rdKey = `${dk}|${roomId}`
       const rdStaff = roomDayStaffMap.get(rdKey)
       if (rdStaff) {
-        if (rdStaff.nurse) staffAssignments.push({ case_id: caseId, user_id: rdStaff.nurse.userId, role_id: rdStaff.nurse.roleId })
-        for (const tech of rdStaff.techs) staffAssignments.push({ case_id: caseId, user_id: tech.userId, role_id: tech.roleId })
-        if (anesId && rdStaff.anes) staffAssignments.push({ case_id: caseId, user_id: rdStaff.anes.userId, role_id: rdStaff.anes.roleId })
+        if (rdStaff.nurse) staffAssignments.push({ case_id: caseId, staff_id: rdStaff.nurse.userId, role_id: rdStaff.nurse.roleId })
+        for (const tech of rdStaff.techs) staffAssignments.push({ case_id: caseId, staff_id: tech.userId, role_id: tech.roleId })
+        if (anesId && rdStaff.anes) staffAssignments.push({ case_id: caseId, staff_id: rdStaff.anes.userId, role_id: rdStaff.anes.roleId })
       }
 
       // ── Implants (joint only, all cases) ──
@@ -922,7 +916,7 @@ function generateSurgeonCases(
       } else {
         const poMs = milestones.filter(ms => ms.case_id === caseId).find(ms =>
           milestoneTypes.find(mt => mt.id === ms.facility_milestone_id && mt.name === 'patient_out'))
-        currentTime = poMs ? addMinutes(new Date(poMs.recorded_at), randomInt(15, 25)) : addMinutes(currentTime, 90)
+        currentTime = poMs ? addMinutes(new Date(poMs.recorded_at!), randomInt(15, 25)) : addMinutes(currentTime, 90)
       }
 
       caseNum++

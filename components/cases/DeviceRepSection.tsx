@@ -199,19 +199,17 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
         const transformed: DeviceCompany[] = companies.map((c: {
           id: string
           implant_company_id: string
-          implant_companies: { id: string; name: string; display_name: string } | { id: string; name: string; display_name: string }[]
-          device_rep_id: string | null
-          device_rep_name: string | null
-          was_present: boolean
-          tray_count: number
-          loan_status: string
-          tray_delivered_at: string | null
-          tray_confirmed_at: string | null
-          delivered_by: string | null
+          tray_status: 'pending' | 'consignment' | 'loaners_confirmed' | 'delivered'
+          loaner_tray_count: number | null
+          delivered_tray_count: number | null
+          rep_notes: string | null
+          confirmed_at: string | null
           confirmed_by: string | null
-          delivered_by_user: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+          delivered_at: string | null
+          delivered_by: string | null
+          implant_companies: { name: string } | { name: string }[] | null
           confirmed_by_user: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
-          notes: string | null
+          delivered_by_user: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
         }) => {
           // Handle nested objects - Supabase may return single object or array
           const implantCompany = Array.isArray(c.implant_companies)

@@ -339,6 +339,7 @@ export default function AdminDocsPage() {
     setIsRescanning(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
       const ok = await rescanEntry(selectedPage, session)
       if (!ok) throw new Error('File not found — add the file path via Edit → Notes')
       addToast(`Re-scanned ${selectedPage.name} — auto fields updated`, 'success')
@@ -355,6 +356,7 @@ export default function AdminDocsPage() {
     let failed = 0
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
       for (const page of pages) {
         try {
           const ok = await rescanEntry(page, session)
@@ -1041,6 +1043,7 @@ interface DiscoveredFile {
 }
 
 interface ScannedMetadata {
+  [key: string]: unknown
   id: string
   name: string
   route: string
@@ -2635,7 +2638,7 @@ function analyzeHealth(pages: PageEntry[]): HealthIssue[] {
   }
 
   // All API routes that exist as registered entries
-  // const registeredApiRoutes = new Set(apiEntries.map(p => p.route))
+  const registeredApiRoutes = new Set(apiEntries.map(p => p.route))
 
   // All lib file routes that exist as registered entries
   // const registeredLibRoutes = new Set(libEntries.map(p => p.route))

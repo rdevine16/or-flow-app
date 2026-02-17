@@ -68,23 +68,31 @@ async function fetchScorecardData(
 
   const cases: ScorecardCase[] = completedCases.map((c: Record<string, unknown>) => {
     const milestones: Record<string, string | null> = {}
-    for (const cm of (c.case_milestones || [])) {
-      const name = cm.facility_milestones?.name
+    const caseMilestones = c.case_milestones as Array<{ facility_milestone_id: string; recorded_at: string | null; facility_milestones?: { name?: string } | Array<{ name?: string }> | null }> | null
+    for (const cm of (caseMilestones || [])) {
+      const fmRaw = cm.facility_milestones
+      const fm = Array.isArray(fmRaw) ? fmRaw[0] : fmRaw
+      const name = fm?.name
       if (name && cm.recorded_at) {
         milestones[name] = cm.recorded_at
       }
     }
 
+    const usersRaw = c.users as { first_name?: string; last_name?: string } | Array<{ first_name?: string; last_name?: string }> | null
+    const users = Array.isArray(usersRaw) ? usersRaw[0] : usersRaw
+    const procedureTypesRaw = c.procedure_types as { name?: string } | Array<{ name?: string }> | null
+    const procedureType = Array.isArray(procedureTypesRaw) ? procedureTypesRaw[0] : procedureTypesRaw
+
     return {
-      id: c.id,
-      surgeon_id: c.surgeon_id,
-      surgeon_first_name: c.users?.first_name || '',
-      surgeon_last_name: c.users?.last_name || '',
-      procedure_type_id: c.procedure_type_id,
-      procedure_name: c.procedure_types?.name || 'Unknown',
-      or_room_id: c.or_room_id,
-      scheduled_date: c.scheduled_date,
-      start_time: c.start_time,
+      id: c.id as string,
+      surgeon_id: c.surgeon_id as string,
+      surgeon_first_name: users?.first_name || '',
+      surgeon_last_name: users?.last_name || '',
+      procedure_type_id: c.procedure_type_id as string,
+      procedure_name: procedureType?.name || 'Unknown',
+      or_room_id: c.or_room_id as string,
+      scheduled_date: c.scheduled_date as string,
+      start_time: c.start_time as string | null,
       patient_in_at: milestones['patient_in'] || null,
       incision_at: milestones['incision'] || null,
       prep_drape_complete_at: milestones['prep_drape_complete'] || null,
@@ -125,13 +133,17 @@ async function fetchScorecardData(
         `)
         .in('case_id', chunk)
       if (flagData) {
-        flags = [...flags, ...flagData.map((f: Record<string, unknown>) => ({
-          case_id: f.case_id as string,
-          flag_type: f.flag_type as string,
-          severity: f.severity,
-          delay_type_name: f.delay_types?.name || null,
-          created_by: f.created_by,
-        }))]
+        flags = [...flags, ...flagData.map((f: Record<string, unknown>) => {
+          const delayTypesRaw = f.delay_types as { name?: string } | Array<{ name?: string }> | null
+          const delayType = Array.isArray(delayTypesRaw) ? delayTypesRaw[0] : delayTypesRaw
+          return {
+            case_id: f.case_id as string,
+            flag_type: f.flag_type as string,
+            severity: f.severity as string,
+            delay_type_name: delayType?.name || null,
+            created_by: f.created_by as string | null,
+          }
+        })]
       }
     }
   }

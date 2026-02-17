@@ -147,23 +147,36 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
     },
     ref
   ) => {
-    const Component = onClick ? 'button' : 'div'
-
-    return (
-      <Component
-        ref={ref as React.Ref<HTMLDivElement | HTMLButtonElement>}
-        onClick={onClick}
-        aria-label={ariaLabel}
-        className={`
+    const sharedClassName = `
           relative rounded-xl overflow-hidden
           ${variantClasses[variant]}
           ${paddingClasses[padding]}
           ${className}
-        `}
+        `
+
+    if (onClick) {
+      return (
+        <button
+          ref={ref as React.Ref<HTMLButtonElement>}
+          onClick={onClick}
+          aria-label={ariaLabel}
+          className={sharedClassName}
+        >
+          {loading && <CardLoadingOverlay />}
+          {children}
+        </button>
+      )
+    }
+
+    return (
+      <div
+        ref={ref as React.Ref<HTMLDivElement>}
+        aria-label={ariaLabel}
+        className={sharedClassName}
       >
         {loading && <CardLoadingOverlay />}
         {children}
-      </Component>
+      </div>
     )
   }
 )

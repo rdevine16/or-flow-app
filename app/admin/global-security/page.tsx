@@ -33,7 +33,12 @@ interface AuditLog {
   target_label: string
   success: boolean
   created_at: string
-  metadata?: Record<string, unknown>
+  metadata?: {
+    email?: string
+    reason?: string
+    ip_address?: string
+    [key: string]: unknown
+  }
   facility_id?: string
 }
 
@@ -89,21 +94,6 @@ export default function GlobalSecurityDashboard() {
 
     loadFacilities()
   }, [supabase])
-
-  useEffect(() => {
-    if (facilities.length > 0) {
-      loadDashboardData()
-    }
-  }, [timeRange, selectedFacility, facilities, loadDashboardData])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (facilities.length > 0) {
-        loadDashboardData()
-      }
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [timeRange, selectedFacility, facilities, loadDashboardData])
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true)
@@ -176,6 +166,21 @@ export default function GlobalSecurityDashboard() {
       setLoading(false)
     }
   }, [timeRange, selectedFacility, facilities, supabase, showToast])
+
+  useEffect(() => {
+    if (facilities.length > 0) {
+      loadDashboardData()
+    }
+  }, [timeRange, selectedFacility, facilities, loadDashboardData])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (facilities.length > 0) {
+        loadDashboardData()
+      }
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [timeRange, selectedFacility, facilities, loadDashboardData])
 
   const aggregateStats = {
     totalErrors: errorLogs.length,

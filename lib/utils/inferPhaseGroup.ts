@@ -31,7 +31,7 @@ const SURGICAL_NAMES = new Set(['incision'])
 
 const CLOSING_NAMES = new Set(['closing', 'closing_complete', 'surgeon_left'])
 
-const POST_OP_NAMES = new Set(['patient_out', 'room_cleaned'])
+const POST_OP_NAMES = new Set(['patient_out'])
 
 /**
  * Infer the phase_group from a milestone's internal name.

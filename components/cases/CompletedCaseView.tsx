@@ -445,7 +445,7 @@ export default function CompletedCaseView({
   const totalMinutes = minutesBetween(patientIn, patientOut)
   const surgicalMinutes = minutesBetween(incision, closing)
   const anesthesiaMinutes = minutesBetween(anesStart, anesEnd)
-  const startVariance = getStartVariance(caseData.startTime, patientIn, caseData.scheduledDate)
+  const startVariance = getStartVariance(caseData.startTime, patientIn)
   
   // ========================================
   // MILESTONE AVERAGES COMPARISON
@@ -848,7 +848,7 @@ export default function CompletedCaseView({
           facilityId={facilityId}
           isCompleted={true}
           userId={userId}
-          supabase={supabase}
+          supabase={supabase as unknown as ReturnType<typeof import('@/lib/supabase').createClient>}
         />
 
         {/* Surgical Team Card */}

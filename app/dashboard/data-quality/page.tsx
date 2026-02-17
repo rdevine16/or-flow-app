@@ -22,6 +22,7 @@ import {
   getDaysUntilExpiration,
   type MetricIssue,
   type IssueType,
+  type ResolutionType,
   type DataQualitySummary
 } from '@/lib/dataQuality'
 
@@ -204,6 +205,7 @@ function DataQualityContent() {
   // Data state
   const [issues, setIssues] = useState<MetricIssue[]>([])
   const [issueTypes, setIssueTypes] = useState<IssueType[]>([])
+  const [resolutionTypes, setResolutionTypes] = useState<ResolutionType[]>([])
   const [summary, setSummary] = useState<DataQualitySummary | null>(null)
   const [loading, setLoading] = useState(true)
   const { showToast } = useToast()

@@ -1334,7 +1334,7 @@ const [orHourlyRate, setOrHourlyRate] = useState<number | null>(null)
 
         if (error) throw error
 
-        allCases = allCases.concat(data || [])
+        allCases = allCases.concat((data || []) as unknown as CaseWithMilestones[])
         hasMore = (data?.length || 0) === pageSize
         from += pageSize
       }

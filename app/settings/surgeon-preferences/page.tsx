@@ -47,7 +47,7 @@ export default function SurgeonPreferencesPage() {
   const loading = userLoading || surgeonsLoading || proceduresLoading || companiesLoading
 
   // Preferences for selected surgeon
-  const { data: prefData, loading: prefsLoading, error } = useSupabaseQuery<{
+  const { data: prefData, loading: prefsLoading, error, refetch: refetchPreferences } = useSupabaseQuery<{
     preferences: SurgeonPreference[]
     workflow: string
     handoffMinutes: number
@@ -77,11 +77,11 @@ export default function SurgeonPreferencesPage() {
       if (prefsErr) throw prefsErr
 
       const transformed: SurgeonPreference[] = (data || []).map((pref: { id: string; surgeon_id: string; procedure_type_id: string; procedure_types: unknown; surgeon_preference_companies: unknown[] }) => {
-        const procedure = getFirst(pref.procedure_types)
-        const companies = (pref.surgeon_preference_companies || []).map((spc: { implant_companies: unknown }) => {
-          const company = getFirst(spc.implant_companies)
+        const procedure = getFirst(pref.procedure_types) as { id: string; name: string } | null
+        const companies = ((pref.surgeon_preference_companies || []) as { implant_companies: unknown }[]).map((spc) => {
+          const company = getFirst(spc.implant_companies) as { id: string; name: string } | null
           return company ? { id: company.id, name: company.name } : null
-        }).filter(Boolean)
+        }).filter(Boolean) as { id: string; name: string }[]
         return {
           id: pref.id, surgeon_id: pref.surgeon_id,
           procedure_type_id: pref.procedure_type_id,

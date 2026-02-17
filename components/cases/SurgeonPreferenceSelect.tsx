@@ -57,17 +57,18 @@ export default function SurgeonPreferenceSelect({
 
     // Transform data - Supabase returns joined tables as arrays
     const transformed: SurgeonPreference[] = (data || []).map((pref: Record<string, unknown>) => {
-      const procedure = getFirst(pref.procedure_types)
-      const companies = (pref.surgeon_preference_companies || []).map((spc: Record<string, unknown>) => {
-        const company = getFirst(spc.implant_companies)
+      const procedure = getFirst(pref.procedure_types as { id: string; name: string }[] | { id: string; name: string } | null) as { id: string; name: string } | null
+      const spcList = pref.surgeon_preference_companies as Array<Record<string, unknown>> || []
+      const companies = spcList.map((spc: Record<string, unknown>) => {
+        const company = getFirst(spc.implant_companies as { id: string; name: string }[] | { id: string; name: string } | null) as { id: string; name: string } | null
         return company ? { id: company.id, name: company.name } : null
       }).filter(Boolean)
 
       return {
-        id: pref.id,
-        procedure_type_id: pref.procedure_type_id,
+        id: pref.id as string,
+        procedure_type_id: pref.procedure_type_id as string,
         procedure_name: procedure?.name || 'Unknown Procedure',
-        companies,
+        companies: companies as { id: string; name: string }[],
       }
     })
 

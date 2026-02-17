@@ -138,8 +138,8 @@ export function useMilestoneRealtime({
 
     const channel = supabase
       .channel(`case-milestones:${caseId}`)
-      .on(
-        'postgres_changes',
+      // @ts-expect-error Supabase Realtime types use a narrow union for the event param; 'postgres_changes' is valid at runtime
+      .on('postgres_changes',
         {
           event: '*',
           schema: 'public',

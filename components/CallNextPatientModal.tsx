@@ -94,7 +94,7 @@ export default function CallNextPatientModal({
       // Group by case_id and count
       const grouped: Record<string, RecentCall> = {}
 
-      for (const call of calls as Array<{
+      for (const call of (calls as unknown as Array<{
         id: string
         case_id: string
         room_id: string
@@ -102,7 +102,7 @@ export default function CallNextPatientModal({
         or_rooms?: { name: string }
         cases?: { case_number: string; procedure_types?: { name: string } }
         sender?: { first_name: string; last_name: string }
-      }>) {
+      }>)) {
         const caseId = call.case_id
         if (!caseId) continue
 
@@ -217,11 +217,14 @@ export default function CallNextPatientModal({
       .single()
 
     if (nextCaseData) {
-      const surgeon = nextCaseData.surgeon as { first_name: string; last_name: string } | null
+      const surgeonRaw = nextCaseData.surgeon as unknown as { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+      const surgeon = Array.isArray(surgeonRaw) ? surgeonRaw[0] : surgeonRaw
       const surgeonName = surgeon
         ? `Dr. ${surgeon.last_name}`
         : 'Unassigned'
-      const procedureName = (nextCaseData.procedure_types as { name: string } | null)?.name || 'Unknown'
+      const procedureTypesRaw = nextCaseData.procedure_types as unknown as { name: string } | { name: string }[] | null
+      const procedureType = Array.isArray(procedureTypesRaw) ? procedureTypesRaw[0] : procedureTypesRaw
+      const procedureName = procedureType?.name || 'Unknown'
 
       setNextCase({
         id: nextCaseData.id,
@@ -379,9 +382,12 @@ await supabase
         return
       }
 
-      const surgeon = caseData.surgeon as { first_name: string; last_name: string } | null
+      const surgeonRaw2 = caseData.surgeon as unknown as { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+      const surgeon = Array.isArray(surgeonRaw2) ? surgeonRaw2[0] : surgeonRaw2
       const surgeonName = surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'
-      const procedureName = (caseData.procedure_types as { name: string } | null)?.name || 'Unknown'
+      const procedureTypesRaw2 = caseData.procedure_types as unknown as { name: string } | { name: string }[] | null
+      const procedureType2 = Array.isArray(procedureTypesRaw2) ? procedureTypesRaw2[0] : procedureTypesRaw2
+      const procedureName = procedureType2?.name || 'Unknown'
 
       const title = `${call.room_name} Can Go Back`
       const message = `${caseData.case_number}: ${surgeonName} - ${procedureName}`
@@ -460,9 +466,12 @@ await supabase
         .eq('id', call.case_id)
         .single()
 
-      const surgeon = caseData?.surgeon as { first_name: string; last_name: string } | null
+      const surgeonRaw3 = caseData?.surgeon as unknown as { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+      const surgeon = Array.isArray(surgeonRaw3) ? surgeonRaw3[0] : surgeonRaw3
       const surgeonName = surgeon ? `Dr. ${surgeon.last_name}` : 'Unassigned'
-      const procedureName = (caseData?.procedure_types as { name: string } | null)?.name || call.procedure_name
+      const procedureTypesRaw3 = caseData?.procedure_types as unknown as { name: string } | { name: string }[] | null
+      const procedureType3 = Array.isArray(procedureTypesRaw3) ? procedureTypesRaw3[0] : procedureTypesRaw3
+      const procedureName = procedureType3?.name || call.procedure_name
 
       // Delete ALL recent notifications for this case (not just one)
       const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString()

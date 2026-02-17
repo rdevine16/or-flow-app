@@ -689,7 +689,7 @@ export default function DashboardPage() {
               </div>
             </div>
             
-            <CaseListView cases={cases as CaseWithRelations[]} />
+            <CaseListView cases={cases.map(c => ({ ...c, operative_side: c.operative_side ?? null }))} />
           </div>
         </div>
 

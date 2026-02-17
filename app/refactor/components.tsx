@@ -74,7 +74,7 @@ export function FilterBar({ filter, onChange, stats }: FilterBarProps) {
         {/* Risk Level */}
         <select
           value={filter.risk || ''}
-          onChange={(e) => onChange({ ...filter, risk: e.target.value || undefined })}
+          onChange={(e) => onChange({ ...filter, risk: (e.target.value || undefined) as RiskLevel | undefined })}
           className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Risk Levels</option>
@@ -86,7 +86,7 @@ export function FilterBar({ filter, onChange, stats }: FilterBarProps) {
         {/* Issue Type */}
         <select
           value={filter.type || ''}
-          onChange={(e) => onChange({ ...filter, type: e.target.value || undefined })}
+          onChange={(e) => onChange({ ...filter, type: (e.target.value || undefined) as IssueType | undefined })}
           className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Issue Types</option>

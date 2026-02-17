@@ -7,6 +7,7 @@ import {
   mergeDelete,
   type CaseMilestoneState,
   type RealtimeCaseMilestone,
+  type UseMilestoneRealtimeOptions,
 } from '../useMilestoneRealtime'
 
 // ============================================================================
@@ -39,7 +40,7 @@ function createMockSupabase(mockChannel: { on: unknown; subscribe: unknown }) {
   return {
     channel: vi.fn(() => mockChannel),
     removeChannel: vi.fn(),
-  }
+  } as unknown as UseMilestoneRealtimeOptions['supabase']
 }
 
 function makeRow(

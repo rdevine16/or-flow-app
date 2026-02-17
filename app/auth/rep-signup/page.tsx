@@ -29,6 +29,8 @@ function RepSignupForm() {
     email: string
     facility_id: string
     implant_company_id: string
+    facility_name?: string
+    company_name?: string
     facilities?: { name: string }
     implant_companies?: { name: string }
   } | null>(null)
@@ -87,7 +89,10 @@ function RepSignupForm() {
     const company = Array.isArray(data.implant_companies) ? data.implant_companies[0] : data.implant_companies
 
     setInvite({
-      ...data,
+      id: data.id,
+      email: data.email,
+      facility_id: data.facility_id,
+      implant_company_id: data.implant_company_id,
       facility_name: facility?.name || 'Unknown Facility',
       company_name: company?.name || 'Unknown Company',
     })
@@ -134,6 +139,8 @@ function RepSignupForm() {
       })
       return
     }
+
+    if (!invite) return
 
     setSubmitting(true)
     setError(null)

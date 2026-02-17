@@ -156,6 +156,15 @@ export default function BlockSchedulePage() {
     fetchClosures(startDate, endDate)
   }, [facilityId, currentWeekStart, fetchBlocksForRange, fetchHolidays, fetchClosures])
 
+  // Handle "Create" button
+  const handleAddBlockButton = useCallback(() => {
+    if (!can('scheduling.create')) return
+    setEditingBlock(null)
+    setDragSelection(null)
+    setClickPosition({ x: 300, y: 150 })
+    setPopoverOpen(true)
+  }, [can])
+
   // FIX #9: Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -242,15 +251,6 @@ export default function BlockSchedulePage() {
       })
     }
   }
-
-  // Handle "Create" button
-  const handleAddBlockButton = useCallback(() => {
-    if (!can('scheduling.create')) return
-    setEditingBlock(null)
-    setDragSelection(null)
-    setClickPosition({ x: 300, y: 150 })
-    setPopoverOpen(true)
-  }, [can])
 
   // Handle popover save
   const handleSave = async () => {

@@ -256,6 +256,7 @@ function CheckInDetailModal({
   const [generatingLink, setGeneratingLink] = useState(false)
   const [escortName, setEscortName] = useState(checkin?.escort_name || '')
   const [escortPhone, setEscortPhone] = useState(checkin?.escort_phone || '')
+  const [escortRelationship, setEscortRelationship] = useState('')
   const [showCopySuccess, setShowCopySuccess] = useState(false)
   const [currentCheckinId, setCurrentCheckinId] = useState<string | null>(null)
 

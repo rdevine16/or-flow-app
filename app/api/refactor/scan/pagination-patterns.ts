@@ -309,7 +309,7 @@ export function generatePaginationFixGuide(detection: PaginationDetection, fileP
  * Main function to analyze a file for pagination issues
  */
 export function analyzePaginationPatterns(content: string, filePath: string) {
-  const detection = detectPaginationType(content, filePath)
+  const detection = detectPaginationType(content)
   const guide = generatePaginationFixGuide(detection, filePath)
   
   return {

@@ -126,7 +126,7 @@ export function IssueCard({ issue, isFixed, onMarkFixed, onMarkUnfixed }: IssueC
   const steps = stepByStepWarning ? parseSteps(stepByStepWarning) : []
 
   // Show related locations count if available
-  const relatedCount = issue.metadata?.relatedLocations?.length
+  const relatedCount = Array.isArray(issue.metadata?.relatedLocations) ? (issue.metadata!.relatedLocations as unknown[]).length : 0
 
   return (
     <div 

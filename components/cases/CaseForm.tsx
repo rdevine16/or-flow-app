@@ -198,11 +198,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
     if (!roomId || !date || !time || !userFacilityId) {
       setRoomConflicts([])
-      setCheckingConflicts(false)
       return
     }
-
-    setCheckingConflicts(true)
 
     conflictTimerRef.current = setTimeout(async () => {
       const query = supabase
@@ -221,7 +218,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const { data, error: queryError } = await query
 
       if (queryError) {
-        setCheckingConflicts(false)
         setRoomConflicts([])
         return
       }
@@ -722,7 +718,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     if (mode === 'create') {
       // Phase 1.1: Atomic case+milestone creation via RPC
       const currentUser = (await supabase.auth.getUser()).data.user
-      const { error: rpcError } = await supabase.rpc('create_case_with_milestones', {
+      const { data: rpcCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
         p_case_number: formData.case_number,
         p_scheduled_date: formData.scheduled_date,
         p_start_time: formData.start_time,

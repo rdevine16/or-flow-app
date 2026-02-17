@@ -5,12 +5,12 @@ import { useState, useMemo } from 'react'
 import { Info } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { inferPhaseGroup, PHASE_GROUP_OPTIONS, type PhaseGroup } from '@/lib/utils/inferPhaseGroup'
+import { inferPhaseGroup, PHASE_GROUP_OPTIONS } from '@/lib/utils/inferPhaseGroup'
 
 export interface MilestoneFormData {
   displayName: string
   internalName: string
-  phaseGroup: PhaseGroup | ''
+  phaseGroup: string
   minMinutes: number
   maxMinutes: number
   pairWithId: string
@@ -32,7 +32,7 @@ interface EditingMilestone {
   pair_position: 'start' | 'end' | null
   min_minutes: number | null
   max_minutes: number | null
-  phase_group: PhaseGroup | null
+  phase_group: string | null
   validation_type: 'duration' | 'sequence_gap' | null
 }
 
@@ -47,6 +47,8 @@ interface MilestoneFormModalProps {
   onArchive?: () => void
   /** Unpaired milestones available for pairing in add mode */
   availableForPairing?: PairingCandidate[]
+  /** Dynamic phase options from phase_definitions. Falls back to PHASE_GROUP_OPTIONS if not provided. */
+  phaseOptions?: { value: string; label: string }[]
 }
 
 function generateName(displayName: string): string {
@@ -67,12 +69,13 @@ function MilestoneFormContent({
   onArchive,
   onClose,
   availableForPairing,
+  phaseOptions,
 }: Omit<MilestoneFormModalProps, 'open'>) {
   const [displayName, setDisplayName] = useState(
     mode === 'edit' && milestone ? milestone.display_name : ''
   )
   const [internalName, setInternalName] = useState('')
-  const [phaseGroup, setPhaseGroup] = useState<PhaseGroup | ''>(
+  const [phaseGroup, setPhaseGroup] = useState<string>(
     mode === 'edit' && milestone ? (milestone.phase_group ?? '') : ''
   )
   const [minMinutes, setMinMinutes] = useState(
@@ -171,7 +174,7 @@ function MilestoneFormContent({
         )}
         <select
           value={phaseGroup}
-          onChange={(e) => setPhaseGroup(e.target.value as PhaseGroup | '')}
+          onChange={(e) => setPhaseGroup(e.target.value)}
           className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
           <option value="">
@@ -183,7 +186,7 @@ function MilestoneFormContent({
               : 'None (unassigned)'
             }
           </option>
-          {PHASE_GROUP_OPTIONS.map((opt) => (
+          {(phaseOptions || PHASE_GROUP_OPTIONS).map((opt) => (
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
@@ -310,6 +313,7 @@ export function MilestoneFormModal({
   onSubmit,
   onArchive,
   availableForPairing,
+  phaseOptions,
 }: MilestoneFormModalProps) {
   // Key forces inner form to remount (reset state) when modal reopens or milestone changes
   const formKey = `${mode}-${milestone?.id ?? 'new'}-${open}`
@@ -331,6 +335,7 @@ export function MilestoneFormModal({
           onArchive={onArchive}
           onClose={onClose}
           availableForPairing={availableForPairing}
+          phaseOptions={phaseOptions}
         />
       )}
     </Modal>
