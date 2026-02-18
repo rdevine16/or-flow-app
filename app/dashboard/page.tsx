@@ -1,13 +1,14 @@
 // app/dashboard/page.tsx
-// Facility admin dashboard — home base for operational overview
-// Phase 6: Global search (Cmd+K), notification bell, and final polish.
+// Facility admin dashboard — operational command center.
+// Phase 3: LivePulseBanner, DashboardKpiCard with sparklines, FacilityScoreMini.
 
 'use client'
 
 import { useState } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
-import { MetricCard } from '@/components/ui/MetricCard'
-import { FacilityScoreCard } from '@/components/dashboard/FacilityScoreCard'
+import { LivePulseBanner } from '@/components/dashboard/LivePulseBanner'
+import { DashboardKpiCard } from '@/components/dashboard/DashboardKpiCard'
+import { FacilityScoreMini } from '@/components/dashboard/FacilityScoreMini'
 import { NeedsAttention } from '@/components/dashboard/NeedsAttention'
 import { RoomStatusCard, RoomStatusCardSkeleton } from '@/components/dashboard/RoomStatusCard'
 import { TodaysSurgeons } from '@/components/dashboard/TodaysSurgeons'
@@ -29,6 +30,17 @@ function getTrendLabel(timeRange: TimeRange): string {
     case 'week': return 'vs last week'
     case 'month': return 'vs last month'
   }
+}
+
+/** Compute target achievement percentage for a KPI */
+function targetPct(value: number, target: number | undefined, lowerIsBetter = false): number {
+  if (!target || target === 0) return 0
+  if (lowerIsBetter) {
+    // For turnover: being under target is good. 25min actual / 30min target = 120% achievement
+    if (value <= 0) return 100
+    return Math.round((target / value) * 100)
+  }
+  return Math.round((value / target) * 100)
 }
 
 export default function DashboardPage() {
@@ -73,48 +85,59 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* Live Pulse Banner */}
+        <LivePulseBanner data={todayStatus ?? null} loading={todayStatusLoading} />
+
         {/* KPI Cards Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          <MetricCard
+          <DashboardKpiCard
             title="OR Utilization"
-            value={kpis?.utilization.value ?? 0}
-            suffix="%"
-            decimals={1}
-            trend={kpis?.utilization.delta ?? undefined}
-            trendLabel={trendLabel}
-            color="blue"
+            value={kpis ? `${kpis.utilization.value.toFixed(1)}%` : '—'}
+            trendPct={kpis?.utilization.delta !== undefined ? Math.abs(kpis.utilization.delta) : undefined}
+            trendDir={kpis?.utilization.deltaType}
+            sparkData={kpis?.utilization.dailyData?.map(d => ({ v: d.numericValue }))}
+            sparkColor="#3b82f6"
+            target={kpis?.utilization.target ? {
+              pct: targetPct(kpis.utilization.value, kpis.utilization.target),
+              label: `${kpis.utilization.target}% target`,
+            } : undefined}
             loading={loading}
           />
-          <MetricCard
+          <DashboardKpiCard
             title="Cases"
-            value={kpis?.casesCompleted ?? 0}
-            suffix={kpis ? ` / ${kpis.casesScheduled}` : ''}
-            trend={undefined}
-            trendLabel={trendLabel}
-            color="green"
+            value={kpis ? `${kpis.casesCompleted} / ${kpis.casesScheduled}` : '—'}
+            subtitle={trendLabel}
+            sparkColor="#10b981"
             loading={loading}
           />
-          <MetricCard
+          <DashboardKpiCard
             title="Median Turnover"
-            value={kpis?.medianTurnover.value ?? 0}
-            suffix=" min"
-            decimals={0}
-            trend={kpis?.medianTurnover.delta ?? undefined}
-            trendLabel={trendLabel}
-            color="amber"
+            value={kpis ? `${Math.round(kpis.medianTurnover.value)} min` : '—'}
+            trendPct={kpis?.medianTurnover.delta !== undefined ? Math.abs(kpis.medianTurnover.delta) : undefined}
+            trendDir={kpis?.medianTurnover.deltaType}
+            increaseIsGood={false}
+            sparkData={kpis?.medianTurnover.dailyData?.map(d => ({ v: d.numericValue }))}
+            sparkColor="#f59e0b"
+            target={kpis?.medianTurnover.target ? {
+              pct: targetPct(kpis.medianTurnover.value, kpis.medianTurnover.target, true),
+              label: `${kpis.medianTurnover.target} min target`,
+            } : undefined}
             loading={loading}
           />
-          <MetricCard
+          <DashboardKpiCard
             title="On-Time Starts"
-            value={kpis?.onTimeStartPct.value ?? 0}
-            suffix="%"
-            decimals={1}
-            trend={kpis?.onTimeStartPct.delta ?? undefined}
-            trendLabel={trendLabel}
-            color="green"
+            value={kpis ? `${kpis.onTimeStartPct.value.toFixed(1)}%` : '—'}
+            trendPct={kpis?.onTimeStartPct.delta !== undefined ? Math.abs(kpis.onTimeStartPct.delta) : undefined}
+            trendDir={kpis?.onTimeStartPct.deltaType}
+            sparkData={kpis?.onTimeStartPct.dailyData?.map(d => ({ v: d.numericValue }))}
+            sparkColor="#10b981"
+            target={kpis?.onTimeStartPct.target ? {
+              pct: targetPct(kpis.onTimeStartPct.value, kpis.onTimeStartPct.target),
+              label: `${kpis.onTimeStartPct.target}% target`,
+            } : undefined}
             loading={loading}
           />
-          <FacilityScoreCard
+          <FacilityScoreMini
             score={kpis?.facilityScore ?? null}
             loading={loading}
             trendLabel={trendLabel}
