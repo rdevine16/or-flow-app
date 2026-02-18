@@ -1,9 +1,7 @@
 // components/ui/SearchInput.tsx
-import { Search, X } from 'lucide-react'
-import { logger } from '@/lib/logger'
-
-const log = logger('SearchInput')
 'use client'
+
+import { Search, X } from 'lucide-react'
 
 
 interface SearchInputProps {

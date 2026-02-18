@@ -24,7 +24,6 @@ import IncompleteCaseModal from '@/components/cases/IncompleteCaseModal'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Check, ChevronLeft, ClipboardList, Flag, LogOut } from 'lucide-react'
-import { PageLoader } from '@/components/ui/Loading'
 import { StatusBadgeDot } from '@/components/ui/StatusBadge'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import {
@@ -134,7 +133,18 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [caseSequence, setCaseSequence] = useState<{ current: number; total: number } | null>(null)
 
   // Implants
-  const [implants, setImplants] = useState<any>(null)
+  const [implants, setImplants] = useState<{
+    hip?: { femoral_head_size?: string; acetabular_liner?: string }
+    knee?: { femoral_component_size?: string; tibial_insert_size?: string }
+    cup_size_final?: string | null
+    stem_size_final?: string | null
+    head_size_final?: string | null
+    liner_size_final?: string | null
+    femur_size_final?: string | null
+    tibia_size_final?: string | null
+    poly_size_final?: string | null
+    patella_size_final?: string | null
+  } | null>(null)
   const [implantCategory, setImplantCategory] = useState<'hip' | 'knee' | 'total_hip' | 'total_knee' | null>(null)
 
   // Flags & delays (Phase 4: inline on timeline)
@@ -249,13 +259,13 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
         .eq('facility_id', effectiveFacilityId)
 
       const staffUsers = (allFacilityUsers || []).filter(u => {
-        const roleName = Array.isArray(u.user_roles) ? u.user_roles[0]?.name : (u.user_roles as any)?.name
+        const roleName = Array.isArray(u.user_roles) ? u.user_roles[0]?.name : (u.user_roles as unknown as { name?: string })?.name
         return roleName === 'nurse' || roleName === 'tech' || roleName === 'anesthesiologist'
       })
 
       // Fetch dropdown options for incomplete case modal
       const surgeonUsers = (allFacilityUsers || []).filter(u => {
-        const roleName = Array.isArray(u.user_roles) ? u.user_roles[0]?.name : (u.user_roles as any)?.name
+        const roleName = Array.isArray(u.user_roles) ? u.user_roles[0]?.name : (u.user_roles as unknown as { name?: string })?.name
         return roleName === 'surgeon'
       })
       setAllSurgeons(surgeonUsers.map(s => ({ id: s.id, label: `Dr. ${s.first_name} ${s.last_name}` })))
@@ -413,7 +423,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
 
         if (daysCases) {
           const nonCancelled = daysCases.filter(c => {
-            const s = getJoinedValue(c.case_statuses as any)
+            const s = getJoinedValue(c.case_statuses as { name: string }[] | { name: string } | null)
             return s?.name !== 'cancelled'
           })
           const currentIndex = nonCancelled.findIndex(c => c.id === id)
@@ -954,7 +964,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
     if (!error && data) {
       setCaseStaff([...caseStaff, data as CaseStaff])
       if (caseData) {
-        const roleName = Array.isArray(staffMember.user_roles) ? staffMember.user_roles[0]?.name : (staffMember.user_roles as any)?.name
+        const roleName = Array.isArray(staffMember.user_roles) ? staffMember.user_roles[0]?.name : (staffMember.user_roles as unknown as { name?: string })?.name
         await staffAudit.added(supabase, caseData.case_number, `${staffMember.first_name} ${staffMember.last_name}`, roleName || 'staff', data.id)
       }
     }
@@ -1497,7 +1507,7 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
                       >
                         <option value="" disabled>Select staff...</option>
                         {unassignedStaff.map(s => {
-                          const roleName = Array.isArray(s.user_roles) ? s.user_roles[0]?.name : (s.user_roles as any)?.name
+                          const roleName = Array.isArray(s.user_roles) ? s.user_roles[0]?.name : (s.user_roles as unknown as { name?: string })?.name
                           return <option key={s.id} value={s.id}>{s.first_name} {s.last_name} ({roleName})</option>
                         })}
                       </select>

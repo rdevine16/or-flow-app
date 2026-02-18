@@ -106,11 +106,7 @@ export function setUser(user: UserContext | null): void {
 /**
  * Add breadcrumb for debugging context
  */
-export function addBreadcrumb(
-  category: string,
-  message: string,
-  data?: Record<string, unknown>,
-): void {
+export function addBreadcrumb(): void {
   // Sentry.addBreadcrumb({ category, message, data, level: 'info' })
 }
 

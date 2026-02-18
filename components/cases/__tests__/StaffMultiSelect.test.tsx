@@ -23,11 +23,11 @@ let mockQueryResult: { data: typeof mockStaffData | null; error: null } = {
 vi.mock('@/lib/supabase', () => ({
   createClient: () => ({
     from: vi.fn(() => {
-      const chain: Record<string, any> = {
+      const chain: Record<string, (...args: unknown[]) => unknown> = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
         order: vi.fn(() => chain),
-        then: (resolve: Function) => resolve(mockQueryResult),
+        then: ((resolve: (value: unknown) => void) => resolve(mockQueryResult)) as (...args: unknown[]) => unknown,
       }
       return chain
     }),
@@ -139,7 +139,6 @@ describe('StaffMultiSelect', () => {
   })
 
   it('shows selected staff as colored tags', async () => {
-    const user = userEvent.setup()
     render(
       <StaffMultiSelect
         {...defaultProps}

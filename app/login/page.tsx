@@ -8,7 +8,7 @@ import { authAudit } from '@/lib/audit-logger'
 import Image from 'next/image'
 import { checkRateLimit, recordFailedAttempt, clearRateLimit } from '@/lib/rate-limiter'
 import { signInWithSession } from '@/lib/session-manager'
-import { errorLogger, ErrorCategory } from '@/lib/error-logger'
+import { errorLogger } from '@/lib/error-logger'
 import { AlertCircle, ArrowLeft, Eye, EyeOff, Loader2, Mail, ShieldCheck } from 'lucide-react'
 
 export default function LoginPage() {

@@ -32,7 +32,7 @@ interface CodeContext {
 /**
  * Detect pagination type by analyzing the code
  */
-export function detectPaginationType(content: string, filePath: string): PaginationDetection {
+export function detectPaginationType(content: string): PaginationDetection {
   const lines = content.split('\n')
   
   const evidence: string[] = []
@@ -309,7 +309,7 @@ export function generatePaginationFixGuide(detection: PaginationDetection, fileP
  * Main function to analyze a file for pagination issues
  */
 export function analyzePaginationPatterns(content: string, filePath: string) {
-  const detection = detectPaginationType(content, filePath)
+  const detection = detectPaginationType(content)
   const guide = generatePaginationFixGuide(detection, filePath)
   
   return {

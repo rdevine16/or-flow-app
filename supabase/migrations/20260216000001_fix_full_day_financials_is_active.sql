@@ -147,10 +147,8 @@ BEGIN
   ORDER BY dc.case_number;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.get_full_day_financials(UUID, DATE, UUID)
   TO authenticated;
-
 COMMENT ON FUNCTION public.get_full_day_financials IS
   'Returns all cases + financials for a surgeon on a given date. '
   'Completed cases use actuals from case_completion_stats. '

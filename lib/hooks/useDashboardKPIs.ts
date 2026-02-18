@@ -12,10 +12,12 @@ import {
   calculateORUtilization,
   calculateCancellationRate,
   type CaseWithMilestones,
+  type FacilityAnalyticsConfig,
   type KPIResult,
   type ORUtilizationResult,
   type CancellationResult,
 } from '@/lib/analyticsV2'
+import { mapRowToConfig } from '@/lib/hooks/useAnalyticsConfig'
 import { computeFacilityScore, type FacilityScoreResult } from '@/lib/facilityScoreStub'
 
 // ============================================
@@ -126,8 +128,8 @@ export function useDashboardKPIs(timeRange: TimeRange) {
 
   return useSupabaseQuery<DashboardKPIs>(
     async (supabase) => {
-      // Fetch current and prior period cases in parallel
-      const [currentResult, previousResult] = await Promise.all([
+      // Fetch cases, analytics settings, and facility hourly rate in parallel
+      const [currentResult, previousResult, settingsResult, facilityResult] = await Promise.all([
         supabase
           .from('cases')
           .select(DASHBOARD_CASE_SELECT)
@@ -142,10 +144,33 @@ export function useDashboardKPIs(timeRange: TimeRange) {
           .gte('scheduled_date', ranges.previous.start)
           .lte('scheduled_date', ranges.previous.end)
           .order('scheduled_date', { ascending: false }),
+        supabase
+          .from('facility_analytics_settings')
+          .select('fcots_milestone, fcots_grace_minutes, fcots_target_percent, turnover_target_same_surgeon, turnover_target_flip_room, turnover_threshold_minutes, turnover_compliance_target_percent, utilization_target_percent, cancellation_target_percent, idle_combined_target_minutes, idle_flip_target_minutes, idle_same_room_target_minutes, tardiness_target_minutes, non_op_warn_minutes, non_op_bad_minutes, operating_days_per_year')
+          .eq('facility_id', effectiveFacilityId!)
+          .single(),
+        supabase
+          .from('facilities')
+          .select('or_hourly_rate')
+          .eq('id', effectiveFacilityId!)
+          .single(),
       ])
 
       if (currentResult.error) throw currentResult.error
       if (previousResult.error) throw previousResult.error
+      // Settings row may not exist yet (PGRST116 = no rows) — use defaults
+      const settingsRow = settingsResult.error?.code === 'PGRST116'
+        ? null
+        : settingsResult.error
+          ? (() => { throw settingsResult.error })()
+          : settingsResult.data
+      if (facilityResult.error) throw facilityResult.error
+
+      // Build facility analytics config
+      const config: FacilityAnalyticsConfig = mapRowToConfig(
+        settingsRow as Record<string, unknown> | null,
+        (facilityResult.data as { or_hourly_rate: number | null }).or_hourly_rate
+      )
 
       const cases = (currentResult.data as unknown as CaseWithMilestones[]) || []
       const prevCases = (previousResult.data as unknown as CaseWithMilestones[]) || []
@@ -156,11 +181,22 @@ export function useDashboardKPIs(timeRange: TimeRange) {
         (c) => c.case_statuses?.name === 'completed'
       ).length
 
-      // Calculate KPIs using analyticsV2 functions
-      const utilization = calculateORUtilization(cases, 10, prevCases)
-      const medianTurnover = calculateTurnoverTime(cases, prevCases)
-      const onTimeStartPct = calculateFCOTS(cases, prevCases)
-      const cancellation = calculateCancellationRate(cases, prevCases)
+      // Calculate KPIs using analyticsV2 functions with facility config
+      const utilization = calculateORUtilization(cases, 10, prevCases, undefined, {
+        utilizationTargetPercent: config.utilizationTargetPercent,
+      })
+      const medianTurnover = calculateTurnoverTime(cases, prevCases, {
+        turnoverThresholdMinutes: config.turnoverThresholdMinutes,
+        turnoverComplianceTarget: config.turnoverComplianceTarget,
+      })
+      const onTimeStartPct = calculateFCOTS(cases, prevCases, {
+        milestone: config.fcotsMilestone,
+        graceMinutes: config.fcotsGraceMinutes,
+        targetPercent: config.fcotsTargetPercent,
+      })
+      const cancellation = calculateCancellationRate(cases, prevCases, {
+        cancellationTargetPercent: config.cancellationTargetPercent,
+      })
 
       // Compute facility score stub from KPI results
       const facilityScore = computeFacilityScore({

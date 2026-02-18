@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import CasesTable from '../CasesTable'
 import type { CaseListItem } from '@/lib/dal/cases'
@@ -136,7 +136,7 @@ describe('CasesTable — Duration column', () => {
       scheduled_date: '2026-02-14',
       scheduled_duration_minutes: null,
     })]
-    const { container } = renderTable(cases)
+    renderTable(cases)
 
     // Elapsed should be 150 minutes = 2h 30m
     const durationEl = screen.getByText('2h 30m')

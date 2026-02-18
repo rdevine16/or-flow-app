@@ -72,8 +72,7 @@ function analyzePage(filePath) {
   if (!PATTERNS.loadingState.test(content)) return null
   
   const lines = content.split('\n')
-  const issues = []
-  
+
   // Find manual state declarations
   const listMatches = content.match(PATTERNS.listState)
   const singleMatches = content.match(PATTERNS.singleState)
@@ -113,9 +112,7 @@ function analyzePage(filePath) {
   if (isAuthFlow) complexity = 'auth-flow'
   
   // Determine which hook to use
-  let hook = 'useSupabaseQuery'
-  if (listMatches) hook = 'useSupabaseList'
-  if (queryCount > 3) hook = 'useSupabaseQueries'
+  const hook = queryCount > 3 ? 'useSupabaseQueries' : listMatches ? 'useSupabaseList' : 'useSupabaseQuery'
   
   return {
     path: rel,
@@ -143,7 +140,7 @@ function analyzePage(filePath) {
 // ── Migration generator ───────────────────────────────────────────────
 
 function generateMigration(analysis) {
-  const { hook, listState, singleState, tables, fetchFn } = analysis
+  const { listState, singleState, tables, fetchFn } = analysis
   
   if (listState) {
     return `

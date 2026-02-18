@@ -89,8 +89,9 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
         <p>This invitation expires in 7 days.</p>
       `,
     })
-  } catch (emailError: any) {
-    throw new Error(`Failed to send email: ${emailError.message}`)
+  } catch (emailError: unknown) {
+    const message = emailError instanceof Error ? emailError.message : 'Unknown error'
+    throw new Error(`Failed to send email: ${message}`)
   }
 
   return NextResponse.json({

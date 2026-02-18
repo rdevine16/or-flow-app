@@ -423,6 +423,14 @@ textarea::placeholder {
 .stagger-item:nth-child(9) { animation-delay: 400ms; }
 .stagger-item:nth-child(10) { animation-delay: 450ms; }
 
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-item {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* Pulse animation for live indicators */
 @keyframes pulse-ring {
   0% {

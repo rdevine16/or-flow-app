@@ -20,7 +20,6 @@ import { sendInvitationEmail } from '@/lib/email'
 import { formatLastLogin } from '@/lib/auth-helpers'
 import FacilityLogoUpload from '@/components/FacilityLogoUpload'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Building2, CheckCircle2, ChevronLeft, ClipboardList, Clock, Eye, FlaskConical, Plus, Trash2, TrendingUp, UserPlus, Users } from 'lucide-react'
 
@@ -402,7 +401,7 @@ export default function FacilityDetailPage() {
 } finally {
       setStatsLoading(false)
     }
-  }, [facilityId, supabase])
+  }, [facilityId, supabase, showToast])
 
   // Fetch facility data
   useEffect(() => {
@@ -491,7 +490,7 @@ export default function FacilityDetailPage() {
 
     fetchData()
     fetchStats()
-  }, [isGlobalAdmin, facilityId, supabase, fetchStats])
+  }, [isGlobalAdmin, facilityId, supabase, fetchStats, showToast])
 
   // Save facility changes
   const handleSaveFacility = async () => {
@@ -1108,7 +1107,7 @@ export default function FacilityDetailPage() {
                           <p className="text-sm text-slate-700 truncate">
                             <span className="font-medium">{entry.user_email.split('@')[0]}</span>
                             {' '}
-                            <span className="text-slate-500">{formatAuditAction(entry.action as any)}</span>
+                            <span className="text-slate-500">{formatAuditAction(entry.action)}</span>
                           </p>
                         </div>
                         <span className="text-xs text-slate-400 flex-shrink-0">
@@ -1500,7 +1499,7 @@ export default function FacilityDetailPage() {
                       <p className="text-sm text-slate-900">
                         <span className="font-medium">{entry.user_email}</span>
                         {' '}
-                        <span className="text-slate-600">{formatAuditAction(entry.action as any)}</span>
+                        <span className="text-slate-600">{formatAuditAction(entry.action)}</span>
                         {entry.target_label && (
                           <span className="text-slate-400 ml-1">• {entry.target_label}</span>
                         )}

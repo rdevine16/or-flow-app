@@ -4,7 +4,7 @@
 
 'use client'
 
-import React, { useState, useRef, useEffect, ReactNode, cloneElement, isValidElement } from 'react'
+import React, { useState, useRef, useEffect, ReactNode } from 'react'
 import { tokens } from '@/lib/design-tokens'
 import { HelpCircle, Info } from 'lucide-react'
 
@@ -100,6 +100,7 @@ export function Tooltip({
       newPosition = 'left'
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCalculatedPosition(newPosition)
   }, [isVisible, position])
 
@@ -117,24 +118,22 @@ export function Tooltip({
     setIsVisible(false)
   }
 
-  // Clone child to add event handlers and ref
-  const trigger = isValidElement(children)
-    ? cloneElement(children as React.ReactElement<any>, {
-        ref: triggerRef,
-        onMouseEnter: showTooltip,
-        onMouseLeave: hideTooltip,
-        onFocus: showTooltip,
-        onBlur: hideTooltip,
-      })
-    : children
-
   if (!content || disabled) {
     return <>{children}</>
   }
 
   return (
     <>
-      {trigger}
+      <span
+        ref={triggerRef}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        onFocus={showTooltip}
+        onBlur={hideTooltip}
+        style={{ display: 'inline-block' }}
+      >
+        {children}
+      </span>
       {isVisible && (
         <TooltipContent
           ref={tooltipRef}
@@ -193,6 +192,7 @@ const TooltipContent = React.forwardRef<HTMLDivElement, TooltipContentProps>(
           break
       }
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCoords({ top, left })
     }, [triggerRef, position])
 
@@ -382,6 +382,7 @@ export function InfoTooltip({ text, maxWidth = 280, iconSize = 'w-3.5 h-3.5' }: 
 
     // Prefer below; flip above if near viewport bottom
     const showAbove = rect.bottom + estimatedHeight + gap > window.innerHeight
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPosition(showAbove ? 'above' : 'below')
 
     setCoords({
@@ -402,6 +403,7 @@ export function InfoTooltip({ text, maxWidth = 280, iconSize = 'w-3.5 h-3.5' }: 
 
     // Check if it overflows viewport bottom
     if (position === 'below' && popRect.bottom > window.innerHeight - 10) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPosition('above')
       setCoords(prev => ({
         ...prev,

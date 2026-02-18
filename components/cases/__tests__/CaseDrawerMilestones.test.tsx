@@ -18,6 +18,7 @@ let mockReturn: {
   setComparisonSource: (source: 'surgeon' | 'facility') => void
   surgeonCaseCount: number
   facilityCaseCount: number
+  facilityPhaseN: number
   refetch: () => Promise<void>
 }
 
@@ -29,6 +30,7 @@ vi.mock('@/lib/hooks/useMilestoneComparison', () => ({
 // FIXTURES
 // ============================================
 
+// Forward-looking intervals: each milestone's duration = time until next milestone
 const INTERVALS: MilestoneInterval[] = [
   {
     milestone_name: 'Patient In',
@@ -36,19 +38,6 @@ const INTERVALS: MilestoneInterval[] = [
     display_order: 1,
     phase_group: 'pre_op',
     recorded_at: '2024-06-15T08:00:00Z',
-    interval_minutes: null,
-    surgeon_median_minutes: null,
-    facility_median_minutes: null,
-    delta_from_surgeon: null,
-    delta_from_facility: null,
-    delta_severity: null,
-  },
-  {
-    milestone_name: 'Incision',
-    facility_milestone_id: 'fm-2',
-    display_order: 3,
-    phase_group: 'surgical',
-    recorded_at: '2024-06-15T08:20:00Z',
     interval_minutes: 20,
     surgeon_median_minutes: 18,
     facility_median_minutes: 22,
@@ -57,11 +46,11 @@ const INTERVALS: MilestoneInterval[] = [
     delta_severity: 'on-pace',
   },
   {
-    milestone_name: 'Closing',
-    facility_milestone_id: 'fm-3',
-    display_order: 5,
-    phase_group: 'closing',
-    recorded_at: '2024-06-15T09:15:00Z',
+    milestone_name: 'Incision',
+    facility_milestone_id: 'fm-2',
+    display_order: 3,
+    phase_group: 'surgical',
+    recorded_at: '2024-06-15T08:20:00Z',
     interval_minutes: 55,
     surgeon_median_minutes: 50,
     facility_median_minutes: 52,
@@ -70,17 +59,30 @@ const INTERVALS: MilestoneInterval[] = [
     delta_severity: 'on-pace',
   },
   {
-    milestone_name: 'Patient Out',
-    facility_milestone_id: 'fm-4',
-    display_order: 7,
-    phase_group: 'post_op',
-    recorded_at: '2024-06-15T09:30:00Z',
+    milestone_name: 'Closing',
+    facility_milestone_id: 'fm-3',
+    display_order: 5,
+    phase_group: 'closing',
+    recorded_at: '2024-06-15T09:15:00Z',
     interval_minutes: 15,
     surgeon_median_minutes: 12,
     facility_median_minutes: 14,
     delta_from_surgeon: 3,
     delta_from_facility: 1,
     delta_severity: 'slower',
+  },
+  {
+    milestone_name: 'Patient Out',
+    facility_milestone_id: 'fm-4',
+    display_order: 7,
+    phase_group: 'post_op',
+    recorded_at: '2024-06-15T09:30:00Z',
+    interval_minutes: null,
+    surgeon_median_minutes: null,
+    facility_median_minutes: null,
+    delta_from_surgeon: null,
+    delta_from_facility: null,
+    delta_severity: null,
   },
 ]
 
@@ -91,6 +93,7 @@ const FULL_DATA: MilestoneComparisonData = {
     { label: 'Surgical', phase_group: 'surgical', minutes: 55, percentage: 61, color: 'bg-teal-500' },
     { label: 'Post-Op', phase_group: 'post_op', minutes: 15, percentage: 17, color: 'bg-slate-400' },
   ],
+  phase_groups: [],
   missing_milestones: [],
   total_case_minutes: 90,
   total_surgical_minutes: 55,
@@ -119,6 +122,7 @@ beforeEach(() => {
     setComparisonSource: mockSetComparisonSource,
     surgeonCaseCount: 25,
     facilityCaseCount: 150,
+    facilityPhaseN: 150,
     refetch: mockRefetch,
   }
 })
@@ -176,8 +180,8 @@ describe('CaseDrawerMilestones — comparison toggle', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     expect(screen.getByText('Surgeon Median')).toBeDefined()
     expect(screen.getByText('Facility Median')).toBeDefined()
-    expect(screen.getByText('(25)')).toBeDefined()
-    expect(screen.getByText('(150)')).toBeDefined()
+    expect(screen.getByText('(n=25)')).toBeDefined()
+    expect(screen.getByText('(n=150)')).toBeDefined()
   })
 
   it('calls setComparisonSource when toggle clicked', () => {
@@ -284,10 +288,10 @@ describe('CaseDrawerMilestones — surgeon first case (no median data)', () => {
     render(<CaseDrawerMilestones {...DEFAULT_PROPS} />)
     // Should still render the table and toggle
     expect(screen.getByText('Surgeon Median')).toBeDefined()
-    // Toggle hides count when count === 0, so "(0)" should not appear
-    expect(screen.queryByText('(0)')).toBeNull()
+    // Toggle hides count when count === 0, so "(n=0)" should not appear
+    expect(screen.queryByText('(n=0)')).toBeNull()
     // But facility count should still show
-    expect(screen.getByText('(100)')).toBeDefined()
+    expect(screen.getByText('(n=100)')).toBeDefined()
   })
 })
 

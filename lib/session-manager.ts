@@ -21,14 +21,6 @@ const SESSION_DURATION = {
   LONG: 30 * 24 * 60 * 60, // 30 days (seconds)
 } as const
 
-// Cookie settings
-const COOKIE_OPTIONS = {
-  path: '/',
-  secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-  sameSite: 'lax' as const,
-  httpOnly: true, // Prevent XSS
-}
-
 /**
  * Sign in with enhanced session management
  */
@@ -330,8 +322,10 @@ $$ LANGUAGE plpgsql;
 /**
  * React Hook for session management
  */
+import type { Session } from '@supabase/supabase-js'
+
 export function useSession() {
-  const [session, setSession] = useState<any>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
   
@@ -350,7 +344,7 @@ export function useSession() {
     })
     
     return () => subscription.unsubscribe()
-  }, [])
+  }, [supabase.auth])
   
   return { session, loading }
 }

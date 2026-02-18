@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   // Handle token_hash flow (from email links)
   if (token_hash && type) {
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       token_hash,
       type,
     })
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
   // Handle code flow (OAuth or PKCE)
   if (code) {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (error) {
       log.error('Code exchange failed', error)

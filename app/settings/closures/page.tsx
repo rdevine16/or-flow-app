@@ -20,15 +20,11 @@ import {
   CalendarX,
   Trash2,
   Edit2,
-  X,
   AlertCircle,
-  Check,
-  ChevronRight,
 } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
-import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Toggle } from '@/components/ui/Toggle'
 import { Button } from '@/components/ui/Button'
 import { logger } from '@/lib/logger'
@@ -95,8 +91,9 @@ export default function FacilityClosuresPage() {
 
         if (userData?.facility_id) {
           setFacilityId(userData.facility_id)
-          const facilityData = userData.facilities as any
-          setFacilityName(facilityData?.name || '')
+          const facilityData = userData.facilities as { name: string } | { name: string }[] | null
+          const name = Array.isArray(facilityData) ? facilityData[0]?.name : facilityData?.name
+          setFacilityName(name || '')
         }
       } catch (err) {
         log.error('Failed to load user:', err)
@@ -187,7 +184,7 @@ export default function FacilityClosuresPage() {
     }
 
     const firstDay = new Date(year, month, 1)
-    let firstOccurrence = 1 + ((dayOfWeek - firstDay.getDay() + 7) % 7)
+    const firstOccurrence = 1 + ((dayOfWeek - firstDay.getDay() + 7) % 7)
     const targetDate = firstOccurrence + (week - 1) * 7
 
     if (targetDate > new Date(year, month + 1, 0).getDate()) {
@@ -521,7 +518,6 @@ interface ClosureRowProps {
 function ClosureRow({
   closure,
   onDelete,
-  loading,
   past,
 }: ClosureRowProps) {
   const date = new Date(closure.closure_date + 'T00:00:00')
@@ -622,26 +618,39 @@ function HolidayDialog({ open, onClose, onSave, editingHoliday, loading }: Holid
 
   // Reset form when dialog opens
   useEffect(() => {
-    if (open) {
-      if (editingHoliday) {
-        setName(editingHoliday.name)
-        setMonth(editingHoliday.month)
-        if (editingHoliday.day !== null) {
-          setDateType('fixed')
-          setDay(editingHoliday.day)
-        } else {
-          setDateType('dynamic')
-          setWeekOfMonth(editingHoliday.week_of_month || 1)
-          setDayOfWeek(editingHoliday.day_of_week || 0)
-        }
-      } else {
-        setName('')
+    if (!open) return
+
+    if (editingHoliday) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setName(editingHoliday.name)
+       
+      setMonth(editingHoliday.month)
+      if (editingHoliday.day !== null) {
+         
         setDateType('fixed')
-        setMonth(1)
-        setDay(1)
-        setWeekOfMonth(1)
-        setDayOfWeek(0)
+         
+        setDay(editingHoliday.day)
+      } else {
+         
+        setDateType('dynamic')
+         
+        setWeekOfMonth(editingHoliday.week_of_month || 1)
+         
+        setDayOfWeek(editingHoliday.day_of_week || 0)
       }
+    } else {
+       
+      setName('')
+       
+      setDateType('fixed')
+       
+      setMonth(1)
+       
+      setDay(1)
+       
+      setWeekOfMonth(1)
+       
+      setDayOfWeek(0)
     }
   }, [open, editingHoliday])
 
@@ -826,10 +835,12 @@ function ClosureDialog({ open, onClose, onSave, loading }: ClosureDialogProps) {
 
   // Reset form when dialog opens
   useEffect(() => {
-    if (open) {
-      setClosureDate('')
-      setReason('')
-    }
+    if (!open) return
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setClosureDate('')
+     
+    setReason('')
   }, [open])
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -6,7 +6,6 @@
 
 import Link from 'next/link'
 import {
-  AlertTriangle,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,

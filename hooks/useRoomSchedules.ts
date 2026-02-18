@@ -270,7 +270,7 @@ export function useRoomSchedules({ facilityId }: UseRoomSchedulesOptions) {
     } finally {
       setLoading(false)
     }
-  }, [facilityId, supabase])
+  }, [facilityId, supabase, fetchRoomSchedule])
 
   /**
    * Get available minutes for a specific room on a specific date.

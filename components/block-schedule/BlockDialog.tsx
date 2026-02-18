@@ -9,7 +9,6 @@ import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import {
   BlockSchedule,
   RecurrenceType,
-  CreateBlockInput,
   DAY_OF_WEEK_LABELS,
   RECURRENCE_LABELS,
   formatTime12Hour,

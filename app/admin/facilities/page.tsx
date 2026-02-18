@@ -14,7 +14,6 @@ import { adminAudit } from '@/lib/audit-logger'
 import DeleteFacilityModal from '@/components/modals/DeleteFacilityModal'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Building2, Eye, Plus, Search, Trash2, User } from 'lucide-react'
 
@@ -36,7 +35,7 @@ type StatusFilter = 'all' | 'active' | 'trial' | 'past_due' | 'disabled' | 'demo
 export default function FacilitiesListPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
+  const { isGlobalAdmin, loading: userLoading, refreshImpersonation } = useUser()
   const { showToast } = useToast()
 
   const [searchQuery, setSearchQuery] = useState('')

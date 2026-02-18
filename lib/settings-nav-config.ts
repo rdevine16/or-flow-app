@@ -19,6 +19,7 @@ import {
   Flag,
   FlaskConical,
   KeyRound,
+  Layers,
   LayoutGrid,
   Puzzle,
   Tag,
@@ -42,6 +43,8 @@ export interface SettingsNavItem {
   badge?: BadgeType
   /** Permission key for can() gating. Takes precedence over requiredAccess. */
   permission?: string
+  /** Show a notification dot indicator (e.g., amber dot for active overrides) */
+  notificationDot?: boolean
 }
 
 export interface SettingsCategory {
@@ -154,6 +157,15 @@ export const settingsCategories: SettingsCategory[] = [
         description: 'Tracking points during cases',
       },
       {
+        id: 'phases',
+        label: 'Phases',
+        href: '/settings/phases',
+        icon: Layers,
+        description: 'Surgical phase boundaries for analytics',
+        badge: 'new',
+        permission: 'settings.manage',
+      },
+      {
         id: 'procedure-milestones',
         label: 'Procedure Milestones',
         href: '/settings/procedure-milestones',
@@ -167,6 +179,15 @@ export const settingsCategories: SettingsCategory[] = [
         href: '/settings/surgeon-preferences',
         icon: Zap,
         description: 'Quick-fill templates for surgeons',
+        badge: 'new',
+        permission: 'settings.manage',
+      },
+      {
+        id: 'surgeon-milestones',
+        label: 'Surgeon Milestones',
+        href: '/settings/surgeon-milestones',
+        icon: User,
+        description: 'Per-surgeon milestone overrides',
         badge: 'new',
         permission: 'settings.manage',
       },

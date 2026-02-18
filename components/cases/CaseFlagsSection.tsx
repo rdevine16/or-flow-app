@@ -64,7 +64,7 @@ interface CaseFlagsSectionProps {
   facilityId: string
   isCompleted: boolean
   userId: string | null
-  supabase: any // SupabaseClient
+  supabase: ReturnType<typeof import('@/lib/supabase').createClient>
 }
 
 // =====================================================
@@ -168,7 +168,7 @@ export default function CaseFlagsSection({
       .eq('case_id', caseId)
       .order('created_at', { ascending: true })
 
-    if (data) setFlags(data as CaseFlagRow[])
+    if (data) setFlags(data as unknown as CaseFlagRow[])
     setLoading(false)
   }, [caseId, supabase])
 
@@ -184,6 +184,7 @@ export default function CaseFlagsSection({
   }, [facilityId, supabase])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFlags()
     fetchDelayTypes()
   }, [fetchFlags, fetchDelayTypes])

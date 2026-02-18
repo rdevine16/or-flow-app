@@ -76,7 +76,7 @@ export default function DeviceRepsPage() {
   const facilityName = facilityData?.name || ''
 
   // Device reps
-  const { data: reps, loading: repsLoading, error, setData: setReps, refetch: refetchReps } = useSupabaseQuery<DeviceRep[]>(
+  const { data: reps, loading: repsLoading, error, setData: setReps } = useSupabaseQuery<DeviceRep[]>(
     async (sb) => {
       const { data, error } = await sb
         .from('facility_device_reps')
@@ -91,12 +91,26 @@ export default function DeviceRepsPage() {
         .neq('status', 'revoked')
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data || []).map((rep: any) => {
+      return (data || []).map((rep: {
+        id: string
+        user_id: string
+        facility_id: string
+        status: string
+        created_at: string
+        accepted_at: string | null
+        users: {
+          first_name: string
+          last_name: string
+          email: string
+          phone: string | null
+          implant_companies: { name: string }[]
+        }[]
+      }) => {
         const user = getFirst(rep.users)
         const company = user ? getFirst(user.implant_companies) : null
         return {
           id: rep.id, user_id: rep.user_id, facility_id: rep.facility_id,
-          status: rep.status, created_at: rep.created_at, accepted_at: rep.accepted_at,
+          status: rep.status as DeviceRep['status'], created_at: rep.created_at, accepted_at: rep.accepted_at,
           user_first_name: user?.first_name || '', user_last_name: user?.last_name || '',
           user_email: user?.email || '', user_phone: user?.phone || null,
           company_name: company?.name || 'Unknown Company', type: 'rep' as const,
@@ -107,7 +121,7 @@ export default function DeviceRepsPage() {
   )
 
   // Pending invites
-  const { data: pendingInvites, setData: setPendingInvites, refetch: refetchInvites } = useSupabaseQuery<PendingInvite[]>(
+  const { data: pendingInvites, setData: setPendingInvites } = useSupabaseQuery<PendingInvite[]>(
     async (sb) => {
       const { data, error } = await sb
         .from('device_rep_invites')
@@ -117,7 +131,14 @@ export default function DeviceRepsPage() {
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data || []).map((invite: any) => {
+      return (data || []).map((invite: {
+        id: string
+        email: string
+        facility_id: string
+        created_at: string
+        expires_at: string
+        implant_companies: { name: string } | { name: string }[] | null
+      }) => {
         const company = getFirst(invite.implant_companies)
         return {
           id: invite.id, email: invite.email, facility_id: invite.facility_id,
@@ -191,7 +212,14 @@ export default function DeviceRepsPage() {
 
       if (error) throw error
 
-      const company = getFirst((data as any).implant_companies)
+      const company = getFirst((data as {
+        id: string
+        email: string
+        facility_id: string
+        created_at: string
+        expires_at: string
+        implant_companies: { name: string } | { name: string }[] | null
+      }).implant_companies)
       const newInvite: PendingInvite = {
         id: data.id,
         email: data.email,
@@ -476,7 +504,7 @@ export default function DeviceRepsPage() {
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-blue-600 mt-0.5">•</span>
-                    Reps can only view cases where their company's implants are assigned
+                    Reps can only view cases where their company&apos;s implants are assigned
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-blue-600 mt-0.5">•</span>

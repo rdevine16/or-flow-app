@@ -16,7 +16,7 @@ import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import AccessDenied from '@/components/ui/AccessDenied'
 import { Button } from '@/components/ui/Button'
-import { Archive, Ban, CheckCircle2, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Users, X } from 'lucide-react'
+import { Archive, Ban, CheckCircle2, Loader2, Mail, Pencil, Plus, RefreshCw, Send, Users } from 'lucide-react'
 
 interface User {
   id: string
@@ -139,62 +139,63 @@ export default function UsersSettingsPage() {
 
   // Sync query data to local state
   useEffect(() => {
-    if (queryData) {
-      setUsers(queryData.users)
-      setRoles(queryData.roles)
-      setFacilities(queryData.facilities)
-    }
+    if (!queryData) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUsers(queryData.users)
+    setRoles(queryData.roles)
+    setFacilities(queryData.facilities)
   }, [queryData])
 
   // Fetch pending/auth status after users load
   useEffect(() => {
     if (!queryData?.users.length) return
+
+    const fetchPendingStatus = async (emails: string[]) => {
+      try {
+        const response = await fetch('/api/check-user-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emails }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setPendingUserIds(new Set(data.pendingUserIds || []))
+        }
+      } catch {
+        showToast({
+          type: 'error',
+          title: 'Error fetching pending status',
+          message: 'Failed to fetch pending status'
+        })
+      }
+    }
+
+    const fetchAuthStatus = async (userIds: string[]) => {
+      try {
+        const response = await fetch('/api/check-auth-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userIds }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setAuthUserIds(new Set(data.authUserIds || []))
+        }
+      } catch {
+        showToast({
+          type: 'error',
+          title: 'Error fetching auth status',
+          message: 'Failed to fetch auth status'
+        })
+      }
+    }
+
     const emailsToCheck = queryData.users.filter(u => u.email).map(u => u.email as string)
     if (emailsToCheck.length > 0) fetchPendingStatus(emailsToCheck)
     fetchAuthStatus(queryData.users.map(u => u.id))
-  }, [queryData])
-
-  const fetchPendingStatus = async (emails: string[]) => {
-    try {
-      const response = await fetch('/api/check-user-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setPendingUserIds(new Set(data.pendingUserIds || []))
-      }
-    } catch (error) {
-      showToast({
-        type: 'error',
-        title: 'Error fetching pending status',
-        message: error instanceof Error ? error.message : 'Failed to fetch pending status'
-      })
-    }
-  }
-
-  const fetchAuthStatus = async (userIds: string[]) => {
-    try {
-      const response = await fetch('/api/check-auth-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userIds }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setAuthUserIds(new Set(data.authUserIds || []))
-      }
-    } catch (error) {
-      showToast({
-        type: 'error',
-        title: 'Error fetching auth status',
-        message: error instanceof Error ? error.message : 'Failed to fetch auth status'
-      })
-    }
-  }
+  }, [queryData, showToast])
 
   const getAccountStatus = (user: User): AccountStatus => {
     if (!user.email) return 'no_account'
@@ -227,7 +228,7 @@ export default function UsersSettingsPage() {
       } else {
         showToast({ type: 'success', title: `Invite resent to ${user.email}` })
       }
-    } catch (error) {
+    } catch {
       showToast({ type: 'error', title: 'Failed to resend invite' })
     }
 
@@ -261,11 +262,11 @@ export default function UsersSettingsPage() {
       } else {
         // Audit log the invite
         await userAudit.invited(supabase, user.email!, user.id)
-        
+
         showToast({ type: 'success', title: `Invitation sent to ${user.email}` })
         refetchUsers()
       }
-    } catch (error) {
+    } catch {
       showToast({ type: 'error', title: 'Failed to send invitation' })
     }
 

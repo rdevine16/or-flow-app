@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -108,13 +108,52 @@ export default function CancelCasePage() {
   // DATA FETCHING
   // ============================================================================
 
-  useEffect(() => {
-    if (!userLoading && caseId) fetchData()
-  }, [userLoading, caseId])
+  const calculateMetrics = useCallback(async (caseResult: CaseData) => {
+    const today = new Date().toISOString().split('T')[0]
+    const monthStart = new Date()
+    monthStart.setDate(1)
 
-  const fetchData = async () => {
+    // Month cancellations
+    const { count: monthCount } = await supabase
+      .from('cases')
+      .select('id', { count: 'exact', head: true })
+      .eq('facility_id', caseResult.facility_id)
+      .not('cancelled_at', 'is', null)
+      .gte('cancelled_at', monthStart.toISOString().split('T')[0])
+
+    // Surgeon rate (90 days)
+    let surgeonRate: number | null = null
+    if (caseResult.surgeon_id) {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+      const { count: total } = await supabase
+        .from('cases')
+        .select('id', { count: 'exact', head: true })
+        .eq('surgeon_id', caseResult.surgeon_id)
+        .gte('scheduled_date', ninetyDaysAgo)
+
+      const { count: cancelled } = await supabase
+        .from('cases')
+        .select('id', { count: 'exact', head: true })
+        .eq('surgeon_id', caseResult.surgeon_id)
+        .not('cancelled_at', 'is', null)
+        .gte('scheduled_date', ninetyDaysAgo)
+
+      if (total && total > 0) {
+        surgeonRate = ((cancelled || 0) / total) * 100
+      }
+    }
+
+    setMetrics({
+      monthCancellations: monthCount || 0,
+      surgeonCancelRate: surgeonRate,
+      isDayOf: caseResult.scheduled_date === today,
+    })
+  }, [supabase])
+
+  const fetchData = useCallback(async () => {
     setLoading(true)
-    
+
     try {
       // Fetch case
       const { data: caseResult, error: caseError } = await supabase
@@ -128,12 +167,12 @@ export default function CancelCasePage() {
         `)
         .eq('id', caseId)
         .single()
-      
+
       if (caseError) throw caseError
       if (!caseResult) { setError('Case not found'); setLoading(false); return }
-      
+
       setCaseData(caseResult as CaseData)
-      
+
       // Check if cancellable
       const statusName = extractName(caseResult.case_statuses as CaseData['case_statuses'])
       if (statusName === 'completed' || statusName === 'cancelled') {
@@ -141,16 +180,16 @@ export default function CancelCasePage() {
         setLoading(false)
         return
       }
-      
+
       // Fetch milestones
       const { data: milestonesResult } = await supabase
         .from('case_milestones')
         .select('id, recorded_at, facility_milestones(display_name, display_order)')
         .eq('case_id', caseId)
         .order('recorded_at')
-      
+
       setMilestones((milestonesResult as CaseMilestone[]) || [])
-      
+
       // Fetch reasons
       const { data: reasonsResult } = await supabase
         .from('cancellation_reasons')
@@ -160,13 +199,13 @@ export default function CancelCasePage() {
         .is('deleted_at', null)
         .order('category')
         .order('display_order')
-      
+
       setReasons(reasonsResult || [])
-      
+
       // Calculate metrics
       await calculateMetrics(caseResult as CaseData)
-      
-    } catch (err) {
+
+    } catch {
       setError('Failed to load case data')
       showToast({
         type: 'error',
@@ -174,52 +213,13 @@ export default function CancelCasePage() {
         message: 'An error occurred while loading case data.'
       })
     }
-    
-    setLoading(false)
-  }
 
-  const calculateMetrics = async (caseResult: CaseData) => {
-    const today = new Date().toISOString().split('T')[0]
-    const monthStart = new Date()
-    monthStart.setDate(1)
-    
-    // Month cancellations
-    const { count: monthCount } = await supabase
-      .from('cases')
-      .select('id', { count: 'exact', head: true })
-      .eq('facility_id', caseResult.facility_id)
-      .not('cancelled_at', 'is', null)
-      .gte('cancelled_at', monthStart.toISOString().split('T')[0])
-    
-    // Surgeon rate (90 days)
-    let surgeonRate: number | null = null
-    if (caseResult.surgeon_id) {
-      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      
-      const { count: total } = await supabase
-        .from('cases')
-        .select('id', { count: 'exact', head: true })
-        .eq('surgeon_id', caseResult.surgeon_id)
-        .gte('scheduled_date', ninetyDaysAgo)
-      
-      const { count: cancelled } = await supabase
-        .from('cases')
-        .select('id', { count: 'exact', head: true })
-        .eq('surgeon_id', caseResult.surgeon_id)
-        .not('cancelled_at', 'is', null)
-        .gte('scheduled_date', ninetyDaysAgo)
-      
-      if (total && total > 0) {
-        surgeonRate = ((cancelled || 0) / total) * 100
-      }
-    }
-    
-    setMetrics({
-      monthCancellations: monthCount || 0,
-      surgeonCancelRate: surgeonRate,
-      isDayOf: caseResult.scheduled_date === today,
-    })
-  }
+    setLoading(false)
+  }, [caseId, supabase, showToast, calculateMetrics])
+
+  useEffect(() => {
+    if (!userLoading && caseId) fetchData()
+  }, [userLoading, caseId, fetchData])
 
   // ============================================================================
   // HANDLERS

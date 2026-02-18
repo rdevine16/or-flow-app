@@ -123,7 +123,7 @@ const { effectiveFacilityId, loading: userLoading, can } = useUser()
   const procedureCategories = refData?.procedureCategories || []
 
   // Procedures + archived count - depends on showArchived
-  const { data: procData, loading, error, setData: setProcData, refetch: refetchProcedures } = useSupabaseQuery<{
+  const { data: procData, loading, error, setData: setProcData } = useSupabaseQuery<{
     procedures: ProcedureType[]
     archivedCount: number
   }>(
@@ -355,7 +355,7 @@ const { effectiveFacilityId, loading: userLoading, can } = useUser()
         },
         loading: false
       }))
-    } catch (err) {
+    } catch {
       setDeleteModal(prev => ({ ...prev, loading: false }))
       showToast({ type: 'error', title: 'Failed to check dependencies' })
     }
@@ -557,7 +557,7 @@ deleted_by: currentUserId
               {filteredProcedures.length === 0 ? (
                 <div className="px-6 py-12 text-center">
                   {searchQuery ? (
-                    <p className="text-slate-500">No procedures match "{searchQuery}"</p>
+                    <p className="text-slate-500">No procedures match &quot;{searchQuery}&quot;</p>
                   ) : showArchived ? (
                     <p className="text-slate-500">No archived procedures.</p>
                   ) : (
@@ -815,7 +815,7 @@ deleted_by: currentUserId
             ) : deleteModal.procedure && (
               <>
                 <p className="text-slate-600">
-                  Are you sure you want to archive <span className="font-semibold text-slate-900">"{deleteModal.procedure.name}"</span>?
+                  Are you sure you want to archive <span className="font-semibold text-slate-900">&quot;{deleteModal.procedure.name}&quot;</span>?
                 </p>
 
                 {/* Dependency Warning */}

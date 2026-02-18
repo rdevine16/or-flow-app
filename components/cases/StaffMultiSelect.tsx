@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { getRoleColors } from '@/lib/design-tokens'
 
@@ -47,22 +47,7 @@ export default function StaffMultiSelect({
   const [searchQuery, setSearchQuery] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    fetchStaff()
-  }, [facilityId])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const fetchStaff = async () => {
+  const fetchStaff = useCallback(async () => {
     const { data } = await supabase
       .from('users')
       .select('id, first_name, last_name, role_id, user_roles(name)')
@@ -82,7 +67,23 @@ export default function StaffMultiSelect({
     }
 
     setLoading(false)
-  }
+  }, [facilityId, supabase])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchStaff()
+  }, [fetchStaff])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const selectedIds = selectedStaff.map(s => s.user_id)
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 
 /* ═══════════════════════════════════════════
    DATA
@@ -96,7 +96,7 @@ function PhaseGroupHeader({ phase }) {
    ═══════════════════════════════════════════ */
 
 function MilestonesContent() {
-  const [milestones, setMilestones] = useState(MILESTONES);
+  const [milestones] = useState(MILESTONES);
   const [hoveredRow, setHoveredRow] = useState(null);
 
   // Group milestones by phase, maintaining order
@@ -177,7 +177,7 @@ function MilestonesContent() {
             {grouped.map(({ phase, items }) => (
               <>
                 <PhaseGroupHeader key={`phase-${phase}`} phase={phase} />
-                {items.map((m, idx) => (
+                {items.map((m) => (
                   <tr key={m.id}
                     onMouseEnter={() => setHoveredRow(m.id)}
                     onMouseLeave={() => setHoveredRow(null)}

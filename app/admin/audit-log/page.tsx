@@ -4,14 +4,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { Spinner } from '@/components/ui/Loading'
 import { usePagination } from '@/hooks/usePagination'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertTriangle, CheckCircle2, ChevronDown, Download, FileText, Loader2, Search, XCircle } from 'lucide-react'
 
@@ -126,19 +124,7 @@ export default function GlobalAuditLogPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  useEffect(() => {
-    if (isGlobalAdmin) {
-      fetchFacilities()
-    }
-  }, [isGlobalAdmin])
-
-  useEffect(() => {
-    if (isGlobalAdmin) {
-      fetchLogs()
-    }
-  }, [isGlobalAdmin, pagination.currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter])
-
-  const fetchFacilities = async () => {
+  const fetchFacilities = useCallback(async () => {
     const { data } = await supabase
       .from('facilities')
       .select('id, name')
@@ -147,7 +133,7 @@ export default function GlobalAuditLogPage() {
     if (data) {
       setFacilities(data)
     }
-  }
+  }, [supabase])
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
@@ -190,6 +176,20 @@ export default function GlobalAuditLogPage() {
 
     setLoading(false)
   }, [pagination.currentPage, pagination.itemsPerPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter, supabase])
+
+  useEffect(() => {
+    if (isGlobalAdmin) {
+      fetchFacilities()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGlobalAdmin])
+
+  useEffect(() => {
+    if (isGlobalAdmin) {
+      fetchLogs()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGlobalAdmin, pagination.currentPage, dateFrom, dateTo, actionFilter, facilityFilter, successFilter])
 
   const exportToCSV = async () => {
     // Fetch all matching logs for export (up to 10000)

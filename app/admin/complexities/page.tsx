@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -12,7 +12,6 @@ import Container from '@/components/ui/Container'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { Modal } from '@/components/ui/Modal'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertTriangle, ChevronDown, Info, Loader2, PenLine, Plus, Trash2 } from 'lucide-react'
 
@@ -33,9 +32,9 @@ interface ProcedureCategory {
   name: string
   display_name: string
 }
-const { showToast } = useToast()
 
 export default function ComplexitiesAdminPage() {
+  const { showToast } = useToast()
   const router = useRouter()
   const supabase = createClient()
   const { isGlobalAdmin, loading: userLoading } = useUser()
@@ -60,11 +59,7 @@ export default function ComplexitiesAdminPage() {
     }
   }, [userLoading, isGlobalAdmin, router])
 
-  useEffect(() => {
-    if (isGlobalAdmin) fetchData()
-  }, [isGlobalAdmin])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
 const [complexitiesRes, categoriesRes] = await Promise.all([
@@ -92,7 +87,11 @@ const [complexitiesRes, categoriesRes] = await Promise.all([
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase, showToast])
+
+  useEffect(() => {
+    if (isGlobalAdmin) fetchData()
+  }, [isGlobalAdmin, fetchData])
 
   const handleNew = () => {
     setEditingComplexity(null)
@@ -433,8 +432,8 @@ const { data, error } = await supabase
               <div className="text-sm text-blue-800">
                 <p className="font-medium mb-1">Template System</p>
                 <p className="text-blue-700">
-                  These templates are copied to new facilities when they're created. 
-                  Changes here don't affect existing facilities — each facility manages their own copy.
+                  These templates are copied to new facilities when they&apos;re created.
+                  Changes here don&apos;t affect existing facilities — each facility manages their own copy.
                 </p>
               </div>
             </div>

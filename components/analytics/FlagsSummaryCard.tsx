@@ -138,7 +138,7 @@ export default function FlagsSummaryCard({ facilityId, startDate, endDate }: Fla
     }
 
     fetchFlags()
-  }, [facilityId, startDate, endDate])
+  }, [facilityId, startDate, endDate, supabase])
 
   // =====================================================
   // COMPUTED STATS

@@ -2,7 +2,7 @@
 // Example: /invite/accept/abc123-def456-...
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -31,12 +31,9 @@ export default function AcceptInvitePage() {
   const [error, setError] = useState<string | null>(null)
   const [accepting, setAccepting] = useState(false)
   const [existingUser, setExistingUser] = useState(false)
+  const hasFetched = useRef(false)
 
-  useEffect(() => {
-    fetchInvite()
-  }, [token])
-
-  const fetchInvite = async () => {
+  const fetchInvite = useCallback(async () => {
     // Fetch invite details
     const { data, error } = await supabase
       .from('device_rep_invites')
@@ -90,7 +87,17 @@ export default function AcceptInvitePage() {
 
     setExistingUser(!!existingUserData)
     setLoading(false)
-  }
+  }, [token, supabase])
+
+  useEffect(() => {
+    if (!hasFetched.current) {
+      hasFetched.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchInvite().catch(() => {
+        // Error handling is done within fetchInvite
+      })
+    }
+  }, [fetchInvite])
 
   const handleAccept = async () => {
     if (!invite) return
@@ -181,7 +188,7 @@ export default function AcceptInvitePage() {
 
         {/* Invite Details */}
         <div className="bg-slate-50 rounded-xl p-4 mb-6">
-          <p className="text-sm text-slate-600 mb-3">You've been invited to access:</p>
+          <p className="text-sm text-slate-600 mb-3">You&apos;ve been invited to access:</p>
           
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -207,7 +214,7 @@ export default function AcceptInvitePage() {
 
         {/* Info */}
         <div className="text-sm text-slate-600 mb-6">
-          <p className="mb-2">As a device rep, you'll be able to:</p>
+          <p className="mb-2">As a device rep, you&apos;ll be able to:</p>
           <ul className="space-y-1.5">
             <li className="flex items-start gap-2">
               <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />

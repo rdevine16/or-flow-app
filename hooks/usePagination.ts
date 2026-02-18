@@ -66,11 +66,11 @@ export function usePagination({
 
   // Auto-correct page if it exceeds total pages
   // (e.g., if items are deleted and current page becomes invalid)
-  useMemo(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
+  // This runs during render to avoid cascade effects
+  if (currentPage > totalPages && totalPages > 0) {
+    // Synchronously update to prevent rendering with invalid state
+    setCurrentPage(totalPages)
+  }
 
   return {
     currentPage,

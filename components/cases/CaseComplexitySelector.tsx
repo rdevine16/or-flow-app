@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 
@@ -32,11 +32,8 @@ export default function CaseComplexitySelector({
   const [allComplexities, setAllComplexities] = useState<Complexity[]>([])
   const [loading, setLoading] = useState(true)
   const { showToast } = useToast()
-  useEffect(() => {
-    fetchComplexities()
-  }, [facilityId])
 
-  const fetchComplexities = async () => {
+  const fetchComplexities = useCallback(async () => {
     setLoading(true)
     try {
       const { data, error } = await supabase
@@ -57,7 +54,11 @@ export default function CaseComplexitySelector({
     } finally {
       setLoading(false)
     }
-  }
+  }, [facilityId, supabase, showToast])
+
+  useEffect(() => {
+    fetchComplexities()
+  }, [fetchComplexities])
 
   // Filter complexities based on procedure category
   const filteredComplexities = allComplexities.filter(c => {

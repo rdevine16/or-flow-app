@@ -167,7 +167,7 @@ export default function NotificationsPage() {
               <div>
                 <h3 className="font-semibold text-slate-900">Coming Soon</h3>
                 <p className="text-sm text-slate-600 mt-1">
-                  Customizable notification preferences are in development. Below is a preview of the settings you'll be able to configure.
+                  Customizable notification preferences are in development. Below is a preview of the settings you&apos;ll be able to configure.
                 </p>
               </div>
             </div>

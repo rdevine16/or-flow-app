@@ -47,7 +47,6 @@ function formatElapsed(ms: number): string {
 }
 
 export default function PiPMilestonePanel({
-  caseId,
   caseNumber,
   procedureName,
   roomName,
@@ -57,7 +56,6 @@ export default function PiPMilestonePanel({
   onRecordMilestone,
   onUndoMilestone,
   onClose,
-  onRefresh,
   timeZone,
 }: PiPMilestonePanelProps) {
   const [loading, setLoading] = useState<string | null>(null)
@@ -117,7 +115,7 @@ export default function PiPMilestonePanel({
     } else if (displayItems.length > 0) {
       setActiveIndex(displayItems.length - 1)
     }
-  }, [recordedMilestones.length])
+  }, [recordedMilestones.length, displayItems])
 
   const activeItem = displayItems[activeIndex]
   const completedCount = displayItems.filter(i => i.isComplete).length

@@ -10,10 +10,10 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Check, Clock, Info, Link, Pencil, Plus } from 'lucide-react'
 import { inferPhaseGroup } from '@/lib/utils/inferPhaseGroup'
+import { PhaseTemplateSection } from '@/components/settings/phases/PhaseTemplateSection'
 
 
 interface MilestoneType {
@@ -200,8 +200,7 @@ export default function AdminMilestonesSettingsPage() {
 
   const handleToggleActive = async (milestone: MilestoneType) => {
     const newIsActive = !milestone.is_active
-    const action = newIsActive ? 'reactivate' : 'deactivate'
-    
+
     setConfirmModal({
       isOpen: true,
       title: `${newIsActive ? 'Activate' : 'Deactivate'} Milestone`,
@@ -330,7 +329,7 @@ export default function AdminMilestonesSettingsPage() {
         title: 'Archive Paired Milestone',
         message: (
           <div>
-            <p>This milestone is paired with <strong>"{partner?.display_name}"</strong>.</p>
+            <p>This milestone is paired with <strong>&quot;{partner?.display_name}&quot;</strong>.</p>
             <p className="mt-2">Archiving will remove the pairing. The partner milestone will remain active.</p>
           </div>
         ),
@@ -374,7 +373,7 @@ export default function AdminMilestonesSettingsPage() {
       isOpen: true,
       title: 'Archive Milestone',
       message: (
-        <p>Archive <strong>"{milestone.display_name}"</strong>? It will be hidden from new facilities. You can restore it later.</p>
+        <p>Archive <strong>&quot;{milestone.display_name}&quot;</strong>? It will be hidden from new facilities. You can restore it later.</p>
       ),
       confirmLabel: 'Archive',
       confirmVariant: 'danger',
@@ -436,12 +435,18 @@ export default function AdminMilestonesSettingsPage() {
       <Container className="py-8">
           <ErrorBanner message={error} />
 <div className="max-w-4xl mx-auto">
+          {/* Phase Definition Templates Section */}
+          <PhaseTemplateSection />
+
+          {/* Divider */}
+          <div className="border-t border-slate-200 mb-8" />
+
           {/* Header */}
           <div className="flex items-start justify-between mb-6">
             <div>
               <h1 className="text-2xl font-semibold text-slate-900">Global Milestones</h1>
               <p className="text-slate-500 mt-1">
-                Milestone templates for new facilities. Changes here don't affect existing facilities.
+                Milestone templates for new facilities. Changes here don&apos;t affect existing facilities.
               </p>
             </div>
             <div className="flex items-center gap-3">

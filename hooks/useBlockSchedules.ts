@@ -326,7 +326,6 @@ export function useBlockSchedules({ facilityId }: UseBlockSchedulesOptions) {
 
         // FIX #4: Use proper audit metadata instead of shoehorning into effective_end
         const surgeonName = `Dr. ${surgeon.last_name}`
-        const dayName = DAY_OF_WEEK_LABELS[currentBlock?.day_of_week ?? 0]
         await blockScheduleAudit.updated(
           supabase,
           blockId,

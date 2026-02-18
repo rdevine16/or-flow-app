@@ -214,11 +214,11 @@ export async function deletePage(
 
 export interface DriftResult {
   field: string
-  registryValue: any
-  scannedValue: any
+  registryValue: unknown
+  scannedValue: unknown
 }
 
-export function detectDrift(existing: PageEntry, scanned: Record<string, any>): DriftResult[] {
+export function detectDrift(existing: PageEntry, scanned: Record<string, unknown>): DriftResult[] {
   const drifts: DriftResult[] = []
   for (const field of AUTO_FIELDS) {
     const regVal = existing[field]
@@ -238,9 +238,9 @@ export function detectDrift(existing: PageEntry, scanned: Record<string, any>): 
 export async function syncAutoFields(
   supabase: SupabaseClient,
   id: string,
-  scannedData: Record<string, any>
+  scannedData: Record<string, unknown>
 ): Promise<{ error: string | null }> {
-  const updates: Record<string, any> = {}
+  const updates: Record<string, unknown> = {}
   for (const field of AUTO_FIELDS) {
     if (scannedData[field] !== undefined) updates[field] = scannedData[field]
   }

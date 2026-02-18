@@ -1,18 +1,13 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
-import { RefactorIssue, RiskLevel, IssueType } from '@/app/refactor/page'
+import { RefactorIssue, IssueType } from '@/app/refactor/page'
 
 // Directories to scan
 const SCAN_DIRS = ['app', 'components']
 const EXCLUDE_DIRS = ['node_modules', '.next', '.git', 'dist', 'build']
 const FILE_EXTENSIONS = ['.tsx', '.ts', '.jsx', '.js']
 
-interface PatternMatch {
-  line: number
-  match: string
-  context: string
-}
 
 export async function POST() {
   try {
@@ -332,23 +327,6 @@ function isApiRoute(filePath: string): boolean {
 }
 
 
-
-function detectConditionVariableInline(line: string): string {
-  const patterns = [
-    /(\w+\.is_active)\s*\?/,
-    /(\w+\.active)\s*\?/,
-    /(\w+\.status)\s*\?/,
-    /(\w+)\s*===\s*['"`]active['"`]/,
-    /(\w+)\s*\?/
-  ]
-
-  for (const pattern of patterns) {
-    const match = line.match(pattern)
-    if (match) return match[1]
-  }
-
-  return 'isActive'
-}
 
 function findInlineSpinners(
   file: string,
@@ -729,7 +707,7 @@ function findIncorrectApiRoutes(
   let hasUseToastImport = false
   let importLine = -1
   let hasShowToastCall = false
-  let showToastLines: number[] = []
+  const showToastLines: number[] = []
   
   lines.forEach((line, index) => {
     // Check for useToast import

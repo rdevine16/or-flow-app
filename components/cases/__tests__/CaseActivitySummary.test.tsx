@@ -83,7 +83,7 @@ describe('CaseActivitySummary', () => {
   })
 
   it('applies amber color to delay count when greater than 0', () => {
-    const { container } = render(
+    render(
       <CaseActivitySummary
         completedMilestones={0}
         totalMilestones={0}
@@ -99,7 +99,7 @@ describe('CaseActivitySummary', () => {
   })
 
   it('does not apply amber color to delay count when 0', () => {
-    const { container } = render(
+    render(
       <CaseActivitySummary
         completedMilestones={0}
         totalMilestones={0}
@@ -222,7 +222,7 @@ describe('CaseActivitySummary', () => {
   })
 
   it('applies monospace font to values for tabular alignment', () => {
-    const { container } = render(
+    render(
       <CaseActivitySummary
         completedMilestones={5}
         totalMilestones={10}

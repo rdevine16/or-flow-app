@@ -58,7 +58,7 @@ function ChevronIcon() {
 /**
  * Compact version with back arrow - use when space is limited
  */
-export function BreadcrumbCompact({ items, currentPage }: BreadcrumbProps) {
+export function BreadcrumbCompact({ items }: BreadcrumbProps) {
   const searchParams = useSearchParams()
   
   const breadcrumbs = items || getBreadcrumbsFromParam(searchParams.get('from'))

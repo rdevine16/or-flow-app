@@ -171,7 +171,7 @@ function BulkCreateContent() {
     })
   }, [])
 
-  const updateRow = useCallback((rowId: string, field: keyof BulkCaseRow, value: any) => {
+  const updateRow = useCallback((rowId: string, field: keyof BulkCaseRow, value: string | string[] | boolean | null) => {
     setRows(prev => prev.map(r => {
       if (r.id !== rowId) return r
       const updated = { ...r, [field]: value }
@@ -246,7 +246,6 @@ function BulkCreateContent() {
     }
 
     // Check for duplicate case numbers across rows
-    const caseNumbers = rows.map(r => r.case_number).filter(Boolean)
     const seen = new Set<string>()
     for (const row of rows) {
       if (row.case_number && seen.has(row.case_number)) {

@@ -218,8 +218,8 @@ export function validate<T>(
 /**
  * Validate partial updates (only provided fields)
  */
-export function validatePartial<T extends Record<string, any>>(
-  schema: z.ZodObject<any>,
+export function validatePartial<T extends Record<string, unknown>>(
+  schema: z.ZodObject<z.ZodRawShape>,
   data: unknown
 ): Partial<T> {
   const partialSchema = schema.partial()
@@ -231,14 +231,14 @@ export function validatePartial<T extends Record<string, any>>(
  * Returns the error message string or null if valid.
  */
 export function validateField(
-  schema: z.ZodObject<any>,
+  schema: z.ZodObject<z.ZodRawShape>,
   field: string,
   value: unknown
 ): string | null {
   const fieldSchema = schema.shape[field]
   if (!fieldSchema) return null
 
-  const result = fieldSchema.safeParse(value)
+  const result = (fieldSchema as z.ZodTypeAny).safeParse(value)
   if (result.success) return null
 
   return result.error.issues[0]?.message || 'Invalid value'

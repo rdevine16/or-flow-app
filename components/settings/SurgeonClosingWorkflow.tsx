@@ -130,7 +130,7 @@ export default function SurgeonClosingWorkflow({
       {/* Info box */}
       <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
         <p className="text-xs text-blue-700">
-          <strong>Tip:</strong> If staff records a "Surgeon Left" milestone during a case, 
+          <strong>Tip:</strong> If staff records a &quot;Surgeon Left&quot; milestone during a case,
           it will override this setting for that specific case.
         </p>
       </div>

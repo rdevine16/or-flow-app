@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { Check } from 'lucide-react'
 
 export default function InviteSuccessPage() {
@@ -12,7 +11,7 @@ export default function InviteSuccessPage() {
           <Check className="w-10 h-10 text-green-600" />
         </div>
 
-        <h1 className="text-2xl font-semibold text-slate-900 mb-2">You're All Set!</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 mb-2">You&apos;re All Set!</h1>
         <p className="text-slate-600 mb-8">
           Your account has been created and you now have access to view surgical cases.
         </p>

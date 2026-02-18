@@ -47,7 +47,7 @@ const defaultUserData: UserData = {
 }
 
 const defaultCan = () => false
-const defaultCanMulti = (..._keys: string[]) => false
+const defaultCanMulti = () => false
 
 const UserContext = createContext<UserContextType>({
   userData: defaultUserData,
@@ -89,7 +89,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const fetchUser = async () => {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase.auth.getUser()
         
         if (!isMounted) return
         
@@ -103,7 +103,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         const authUserId = user.id
         const authUserEmail = user.email || null
 
-        const { data: userRecord, error: dbError } = await supabase
+        const { data: userRecord } = await supabase
           .from('users')
           .select(`
             first_name,

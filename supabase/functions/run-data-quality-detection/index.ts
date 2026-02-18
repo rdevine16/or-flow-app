@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
           
           // Build milestone map
           const milestoneMap = new Map<string, { recorded_at: string; facility_milestone_id: string }>()
-          milestones.forEach((m: any) => {
+          milestones.forEach((m: Record<string, unknown>) => {
             const fm = normalizeJoin(m.facility_milestones)
             if (fm?.name) {
               milestoneMap.set(fm.name, {
@@ -334,8 +334,10 @@ async function getIssueTypeIds(supabase: SupabaseClient): Promise<Record<string,
     .select('id, name')
   
   const map: Record<string, string> = {}
-  data?.forEach((t: any) => {
-    map[t.name] = t.id
+  data?.forEach((t: Record<string, unknown>) => {
+    if (typeof t.name === 'string' && typeof t.id === 'string') {
+      map[t.name] = t.id
+    }
   })
   return map
 }
@@ -534,9 +536,9 @@ async function detectStaleInProgress(
     .lt('case_milestones.recorded_at', twentyFourHoursAgo)
   
   return (cases || []).map(c => {
-    const patientInTime = Array.isArray(c.case_milestones) 
-      ? c.case_milestones[0]?.recorded_at 
-      : (c.case_milestones as any)?.recorded_at
+    const patientInTime = Array.isArray(c.case_milestones)
+      ? c.case_milestones[0]?.recorded_at
+      : (c.case_milestones as { recorded_at?: string })?.recorded_at
     
     const hoursElapsed = patientInTime 
       ? (Date.now() - new Date(patientInTime).getTime()) / (1000 * 60 * 60)
@@ -625,12 +627,12 @@ async function detectNoActivity(
   
   for (const c of cases || []) {
     const milestones = Array.isArray(c.case_milestones) ? c.case_milestones : []
-    const recordedMilestones = milestones.filter((m: any) => m.recorded_at)
-    
+    const recordedMilestones = milestones.filter((m: { recorded_at?: string }) => m.recorded_at)
+
     if (recordedMilestones.length === 0) continue // Skip if no milestones at all
-    
+
     // Find most recent activity
-    const lastActivity = recordedMilestones.reduce((latest: string | null, m: any) => {
+    const lastActivity = recordedMilestones.reduce((latest: string | null, m: { recorded_at?: string }) => {
       if (!latest || m.recorded_at > latest) return m.recorded_at
       return latest
     }, null)

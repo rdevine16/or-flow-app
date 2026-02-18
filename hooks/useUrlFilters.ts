@@ -27,29 +27,29 @@ import { useSearchParams } from 'next/navigation'
  * setFilters({ ...filters, dateRange: 'month' })
  */
 
-export interface FilterOptions {
-  /** 
+export interface FilterOptions<T = Record<string, unknown>> {
+  /**
    * Called when filters change
    * Use this to trigger data fetching
    */
-  onChange?: (filters: any) => void
-  
+  onChange?: (filters: T) => void
+
   /**
    * Custom URL builder
    * Override to customize how filters map to URL params
    */
-  toUrl?: (filters: any) => URLSearchParams
-  
+  toUrl?: (filters: T) => URLSearchParams
+
   /**
    * Custom URL parser
    * Override to customize how URL params map to filters
    */
-  fromUrl?: (searchParams: URLSearchParams, defaults: any) => any
+  fromUrl?: (searchParams: URLSearchParams, defaults: T) => T
 }
 
-export function useUrlFilters<T extends Record<string, any>>(
+export function useUrlFilters<T extends Record<string, unknown>>(
   defaultFilters: T,
-  options: FilterOptions = {}
+  options: FilterOptions<T> = {}
 ) {
   const searchParams = useSearchParams()
   
@@ -65,21 +65,21 @@ export function useUrlFilters<T extends Record<string, any>>(
 
   // Update URL when filters change (no navigation)
   useEffect(() => {
-    const params = options.toUrl 
+    const params = options.toUrl
       ? options.toUrl(filters)
       : buildUrlFromFilters(filters, defaultFilters)
-    
+
     const queryString = params.toString()
     const newUrl = queryString ? `${window.location.pathname}?${queryString}` : window.location.pathname
-    
+
     // Use History API instead of router to avoid server navigation
     window.history.replaceState(null, '', newUrl)
-    
+
     // Notify parent if callback provided
     if (options.onChange) {
       options.onChange(filters)
     }
-  }, [filters, options])
+  }, [filters, options, defaultFilters])
 
   const setFilters = useCallback((newFilters: T | ((prev: T) => T)) => {
     setFiltersState(newFilters)
@@ -95,7 +95,7 @@ function parseFiltersFromUrl<T>(
   searchParams: URLSearchParams,
   defaults: T
 ): T {
-  const result: any = { ...defaults }
+  const result = { ...defaults } as Record<string, unknown>
   
   for (const key in defaults) {
     const defaultValue = defaults[key]
@@ -115,8 +115,8 @@ function parseFiltersFromUrl<T>(
       }
     }
   }
-  
-  return result
+
+  return result as T
 }
 
 /**

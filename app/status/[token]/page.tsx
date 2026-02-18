@@ -4,7 +4,7 @@
 
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
@@ -62,14 +62,6 @@ function formatDate(dateString: string): string {
   })
 }
 
-function formatDateTime(isoString: string): string {
-  const date = new Date(isoString)
-  return date.toLocaleTimeString('en-US', { 
-    hour: 'numeric', 
-    minute: '2-digit',
-    hour12: true 
-  })
-}
 
 function getStatusColor(color: string): { bg: string; text: string; border: string } {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
@@ -253,9 +245,10 @@ export default function EscortStatusPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const hasFetched = useRef(false)
 
   // Fetch status data
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     const supabase = createClient()
 
     const { data: result, error: fetchError } = await supabase.rpc('get_escort_status', {
@@ -273,7 +266,7 @@ export default function EscortStatusPage() {
     }
 
     if (result?.error) {
-      setError(result.error === 'Link not found or expired' 
+      setError(result.error === 'Link not found or expired'
         ? 'This status link has expired or is no longer available.'
         : result.error
       )
@@ -284,15 +277,21 @@ export default function EscortStatusPage() {
     setData(result as StatusData)
     setLastRefresh(new Date())
     setLoading(false)
-  }
+  }, [token, showToast])
 
   // Initial fetch and auto-refresh every 30 seconds
   useEffect(() => {
-    fetchStatus()
+    if (!hasFetched.current) {
+      hasFetched.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchStatus().catch(() => {
+        // Error handling is done within fetchStatus
+      })
+    }
 
     const interval = setInterval(fetchStatus, 30000)
     return () => clearInterval(interval)
-  }, [token])
+  }, [fetchStatus])
 
   if (loading) {
     return <LoadingSkeleton />

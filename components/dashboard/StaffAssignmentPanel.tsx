@@ -28,7 +28,6 @@ const ROLE_FILTERS: { value: StaffRoleFilter; label: string }[] = [
 export default function StaffAssignmentPanel({
   staff,
   isVisible,
-  onToggle,
   loading = false
 }: StaffAssignmentPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')

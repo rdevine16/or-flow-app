@@ -5,10 +5,11 @@
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import GlobalSearch from '../GlobalSearch'
 import { NavItem, isNavItemActive } from './navigation-config'
 import { NotificationBell } from '../global/NotificationBell'
-import { ChevronDown, ChevronRight, Clock, Eye, LogOut, Settings, User, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Clock, Eye, FlaskConical, LogOut, Settings, User, X } from 'lucide-react'
 
 interface UserData {
   firstName: string
@@ -50,7 +51,6 @@ export default function Header({
   impersonation,
   facilityStatus,
   isAdmin,
-  onEndImpersonation,
   onLogout,
 }: HeaderProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -101,9 +101,11 @@ export default function Header({
       <div className="flex items-center gap-4 min-w-0 flex-1">
         {facilityLogo && (
           <div className="w-8 h-8 bg-white rounded-lg border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img
+            <Image
               src={facilityLogo}
               alt=""
+              width={32}
+              height={32}
               className="max-w-full max-h-full object-contain"
             />
           </div>
@@ -248,6 +250,22 @@ export function TrialBanner({ daysRemaining }: TrialBannerProps) {
       >
         Contact Support
       </a>
+    </div>
+  )
+}
+
+const BRANCH_PROJECT_REF = 'pytonqwejaxagwywvitb'
+
+export function BranchBanner() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  if (!supabaseUrl.includes(BRANCH_PROJECT_REF)) return null
+
+  return (
+    <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-2 flex items-center justify-center gap-3">
+      <FlaskConical className="w-4 h-4" />
+      <span className="text-sm font-medium">
+        Development Branch — not production
+      </span>
     </div>
   )
 }

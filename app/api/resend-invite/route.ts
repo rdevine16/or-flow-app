@@ -44,8 +44,9 @@ export const POST = withErrorHandler(async (req: NextRequest) => {
         <a href="${inviteUrl}">${inviteUrl}</a>
       `,
     })
-  } catch (emailError: any) {
-    throw new Error(`Failed to send email: ${emailError.message}`)
+  } catch (emailError: unknown) {
+    const message = emailError instanceof Error ? emailError.message : 'Unknown error'
+    throw new Error(`Failed to send email: ${message}`)
   }
 
   return NextResponse.json({

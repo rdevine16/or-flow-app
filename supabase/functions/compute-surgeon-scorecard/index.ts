@@ -241,11 +241,11 @@ async function fetchCases(
   if (error) throw new Error(`Failed to fetch cases: ${error.message}`)
 
   return (data || [])
-    .filter((c: any) => {
+    .filter((c: Record<string, unknown>) => {
       const status = normalizeJoin(c.case_statuses)
       return status?.name === 'completed'
     })
-    .map((c: any) => {
+    .map((c: Record<string, unknown>) => {
       const user = normalizeJoin(c.users)
       const procType = normalizeJoin(c.procedure_types)
       const milestones = c.case_milestones || []
@@ -317,7 +317,7 @@ async function fetchFlags(
       .in('case_id', batch)
 
     if (!error && data) {
-      results.push(...data.map((f: any) => ({
+      results.push(...data.map((f: Record<string, unknown>) => ({
         case_id: f.case_id,
         flag_type: f.flag_type,
         severity: f.severity,

@@ -1,7 +1,8 @@
 // lib/hooks/useMilestoneComparison.ts
 // Fetches per-interval milestone medians via the get_milestone_interval_medians
-// database function and this case's milestone timestamps, then merges them into
-// enriched MilestoneComparisonData for the revamped Milestones tab.
+// database function, phase medians via get_phase_medians, phase definitions,
+// and this case's milestone timestamps, then merges them into enriched
+// MilestoneComparisonData for the Milestones tab.
 
 'use client'
 
@@ -10,11 +11,15 @@ import { useSupabaseQueries } from '@/hooks/useSupabaseQuery'
 import type { CaseMilestone } from '@/lib/dal/cases'
 import {
   calculateIntervals,
+  calculatePhaseTimeAllocation,
   calculateTimeAllocation,
+  buildPhaseGroups,
   identifyMissingMilestones,
   type MilestoneMedianRow,
   type MilestoneComparisonData,
   type CaseMilestoneWithDetails,
+  type PhaseDefinitionWithMilestones,
+  type PhaseMedianRow,
 } from '@/lib/utils/milestoneAnalytics'
 
 // ============================================
@@ -37,6 +42,8 @@ export interface UseMilestoneComparisonReturn {
   setComparisonSource: (source: 'surgeon' | 'facility') => void
   surgeonCaseCount: number
   facilityCaseCount: number
+  /** Minimum facility n-count across all phase medians */
+  facilityPhaseN: number
   refetch: () => Promise<void>
 }
 
@@ -55,11 +62,13 @@ export function useMilestoneComparison({
 
   const canFetch = enabled && !!caseId && !!facilityId && !!procedureTypeId
 
-  // Parallel fetch: case milestones + medians from DB function
+  // Parallel fetch: case milestones + medians + phase definitions + phase medians
   const { data: raw, loading, errors, refetch } = useSupabaseQueries<{
     milestones: CaseMilestone[]
     medians: MilestoneMedianRow[]
     expectedNames: string[]
+    phaseDefinitions: PhaseDefinitionWithMilestones[]
+    phaseMedians: PhaseMedianRow[]
   }>(
     {
       // This case's milestone timestamps
@@ -119,6 +128,67 @@ export function useMilestoneComparison({
           },
         ).filter(Boolean)
       },
+
+      // Phase definitions with boundary milestone details
+      phaseDefinitions: async (supabase) => {
+        if (!facilityId) return []
+        const { data, error } = await supabase
+          .from('phase_definitions')
+          .select(`
+            id,
+            name,
+            display_name,
+            display_order,
+            color_key,
+            start_milestone_id,
+            end_milestone_id,
+            start_milestone:facility_milestones!phase_definitions_start_milestone_id_fkey (
+              id,
+              name,
+              display_name,
+              display_order
+            ),
+            end_milestone:facility_milestones!phase_definitions_end_milestone_id_fkey (
+              id,
+              name,
+              display_name,
+              display_order
+            )
+          `)
+          .eq('facility_id', facilityId)
+          .eq('is_active', true)
+          .order('display_order')
+        if (error) throw new Error(error.message)
+        // Supabase returns joined rows as objects or arrays; normalize
+        return ((data ?? []) as Record<string, unknown>[]).map((row) => {
+          const startMs = row.start_milestone
+          const endMs = row.end_milestone
+          return {
+            id: row.id as string,
+            name: row.name as string,
+            display_name: row.display_name as string,
+            display_order: row.display_order as number,
+            color_key: row.color_key as string | null,
+            start_milestone_id: row.start_milestone_id as string,
+            end_milestone_id: row.end_milestone_id as string,
+            start_milestone: Array.isArray(startMs) ? startMs[0] : startMs,
+            end_milestone: Array.isArray(endMs) ? endMs[0] : endMs,
+          } as PhaseDefinitionWithMilestones
+        })
+      },
+
+      // Phase-level medians from DB function
+      phaseMedians: async (supabase) => {
+        if (!surgeonId || !procedureTypeId || !facilityId) return []
+        const { data, error } = await supabase
+          .rpc('get_phase_medians', {
+            p_facility_id: facilityId,
+            p_procedure_type_id: procedureTypeId,
+            p_surgeon_id: surgeonId,
+          })
+        if (error) throw new Error(error.message)
+        return (data ?? []) as PhaseMedianRow[]
+      },
     },
     {
       enabled: canFetch,
@@ -133,9 +203,20 @@ export function useMilestoneComparison({
     const caseMilestones = raw.milestones as unknown as CaseMilestoneWithDetails[]
     const medians = raw.medians ?? []
     const expectedNames = raw.expectedNames ?? []
+    const phaseDefinitions = raw.phaseDefinitions ?? []
+    const phaseMedians = raw.phaseMedians ?? []
 
     const intervals = calculateIntervals(caseMilestones, medians, comparisonSource)
-    const timeAllocation = calculateTimeAllocation(intervals)
+
+    // Use phase_definitions-based time allocation when available, fall back to legacy
+    const timeAllocation = phaseDefinitions.length > 0
+      ? calculatePhaseTimeAllocation(phaseDefinitions, caseMilestones)
+      : calculateTimeAllocation(intervals)
+
+    const phaseGroups = phaseDefinitions.length > 0
+      ? buildPhaseGroups(phaseDefinitions, intervals, caseMilestones, phaseMedians, comparisonSource)
+      : []
+
     const missingMilestones = identifyMissingMilestones(caseMilestones, expectedNames)
 
     // Compute totals from recorded milestones
@@ -163,6 +244,7 @@ export function useMilestoneComparison({
     return {
       intervals,
       time_allocation: timeAllocation,
+      phase_groups: phaseGroups,
       missing_milestones: missingMilestones,
       total_case_minutes: totalCaseMinutes,
       total_surgical_minutes: totalSurgicalMinutes != null && totalSurgicalMinutes > 0
@@ -184,7 +266,15 @@ export function useMilestoneComparison({
     return Math.max(0, ...medians.map((m) => m.facility_case_count ?? 0))
   }, [medians])
 
-  const errorMessage = errors.milestones || errors.medians || errors.expectedNames || null
+  // Minimum facility n-count across phase medians (for phase-level confidence)
+  const phaseMedians = raw?.phaseMedians
+  const facilityPhaseN = useMemo(() => {
+    if (!phaseMedians || phaseMedians.length === 0) return 0
+    return Math.min(...phaseMedians.map((pm) => pm.facility_n ?? 0))
+  }, [phaseMedians])
+
+  const errorMessage = errors.milestones || errors.medians || errors.expectedNames
+    || errors.phaseDefinitions || errors.phaseMedians || null
 
   return {
     data: result,
@@ -194,6 +284,7 @@ export function useMilestoneComparison({
     setComparisonSource,
     surgeonCaseCount,
     facilityCaseCount,
+    facilityPhaseN,
     refetch,
   }
 }

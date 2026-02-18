@@ -96,23 +96,6 @@ function formatMilestoneTime(isoString: string | null): { time: string; date: st
   }
 }
 
-function formatDuration(timeString: string): string {
-  // Input format: "HH:MM:SS"
-  const parts = timeString.split(':')
-  if (parts.length !== 3) return timeString
-  
-  const hours = parseInt(parts[0])
-  const minutes = parseInt(parts[1])
-  const seconds = parseInt(parts[2])
-  
-  if (hours === 0 && minutes === 0 && seconds === 0) return '—'
-  
-  const hourStr = hours > 0 ? `${hours}h ` : ''
-  const minStr = `${minutes}m`
-  const secStr = ` ${seconds}s`
-  
-  return `${hourStr}${minStr}${secStr}`
-}
 
 function getOperativeSideLabel(side: string | null): string | null {
   if (!side || side === 'n/a') return null
@@ -161,14 +144,13 @@ function DataRow({ label, value, mono = false }: { label: string; value: string 
   )
 }
 
-function TimelineItem({ 
-  time, 
-  label, 
-  isFirst, 
+function TimelineItem({
+  time,
+  label,
   isLast,
   isPaired,
   pairType
-}: { 
+}: {
   time: string
   label: string
   isFirst?: boolean

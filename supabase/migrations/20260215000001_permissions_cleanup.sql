@@ -31,7 +31,6 @@ DELETE FROM permissions WHERE key IN (
   'implants.create',
   'implants.delete'
 );
-
 -- ---------------------------------------------------------------------------
 -- 2. Add milestones.manage (replaces milestones.record + milestones.edit)
 -- ---------------------------------------------------------------------------
@@ -48,7 +47,6 @@ VALUES (
   11
 )
 ON CONFLICT (key) DO NOTHING;
-
 -- ---------------------------------------------------------------------------
 -- 3. Update permission templates for milestones.manage
 -- ---------------------------------------------------------------------------
@@ -57,7 +55,6 @@ INSERT INTO permission_templates (access_level, permission_key, granted) VALUES
   ('user', 'milestones.manage', true),
   ('coordinator', 'milestones.manage', true)
 ON CONFLICT (access_level, permission_key) DO NOTHING;
-
 -- ---------------------------------------------------------------------------
 -- 4. Backfill facility_permissions for milestones.manage
 --    Grant to all facilities (matches both user + coordinator templates)
@@ -67,7 +64,6 @@ INSERT INTO facility_permissions (facility_id, access_level, permission_key, gra
 SELECT f.id, 'user', 'milestones.manage', true
 FROM facilities f
 ON CONFLICT (facility_id, access_level, permission_key) DO NOTHING;
-
 INSERT INTO facility_permissions (facility_id, access_level, permission_key, granted)
 SELECT f.id, 'coordinator', 'milestones.manage', true
 FROM facilities f

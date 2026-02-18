@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { getImpersonationState } from '@/lib/impersonation'
@@ -11,8 +10,7 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 
-import { useSurgeons, useProcedureTypes } from '@/hooks'
-import { chartHex } from '@/lib/design-tokens'
+import { buildPhaseTree, resolvePhaseHex, resolveSubphaseHex } from '@/lib/milestone-phase-config'
 import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
 
 
@@ -20,9 +18,6 @@ import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/compone
 import {
   AreaChart,
   BarChart,
-  DonutChart,
-  BarList,
-  Legend,
 } from '@tremor/react'
 
 import {
@@ -34,31 +29,46 @@ import {
   getClosingTime,
   getClosedToWheelsOut,
   calculateAverage,
+  calculateMedian,
   calculateSum,
-  calculatePercentageChange,
   formatMinutesToHHMMSS,
   formatSecondsToHHMMSS,
   getAllTurnovers,
   getAllSurgicalTurnovers,
+  computePhaseDurations,
+  buildMilestoneTimestampMap,
+  computeSubphaseOffsets,
   type CaseWithMilestones,
+  type PhaseDefInput,
 } from '@/lib/analyticsV2'
 
+import {
+  detectCaseFlags,
+  computeProcedureMedians,
+  aggregateDayFlags,
+  type CaseFlag,
+} from '@/lib/flag-detection'
+
 // Enterprise analytics components
-import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Pencil, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
 import {
   SectionHeader,
   EnhancedMetricCard,
-  TrendPill,
-  RadialProgress,
   SurgeonSelector,
   ConsistencyBadge,
-  InlineBar,
-  CasePhaseBar,
-  PhaseLegend,
-  InsightCard,
   EmptyState,
-  ProcedureComparisonChart,
-  type ProcedureComparisonData,
+  MetricPillStrip,
+  UptimeRing,
+  FlagCountPills,
+  DayTimeline,
+  CasePhaseBarNested,
+  PhaseMedianComparison,
+  CaseDetailPanel,
+  SidebarFlagList,
+  PhaseTreeLegend,
+  type TimelineCaseData,
+  type TimelineCasePhase,
+  type TimelineCaseSubphase,
   SkeletonMetricCards,
   SkeletonTable,
   SkeletonChart,
@@ -73,12 +83,6 @@ interface Surgeon {
   id: string
   first_name: string
   last_name: string
-}
-
-interface ProcedureType {
-  id: string
-  name: string
-  technique_id?: string
 }
 
 interface ProcedureTechnique {
@@ -149,19 +153,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 // ============================================
-// PHASE COLORS (shared constants)
-// ============================================
-
-const PHASE_COLORS = chartHex.phases
-
-const PHASE_LEGEND_ITEMS = [
-  { label: 'Pre-Op', color: PHASE_COLORS.preOp },
-  { label: 'Surgical', color: PHASE_COLORS.surgical },
-  { label: 'Closing', color: PHASE_COLORS.closing },
-  { label: 'Emergence', color: PHASE_COLORS.emergence },
-]
-
-// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
@@ -173,10 +164,10 @@ export default function SurgeonPerformancePage() {
   const [effectiveFacilityId, setEffectiveFacilityId] = useState<string | null>(null)
   const [facilityTimezone, setFacilityTimezone] = useState<string>('America/New_York')
   const [surgeons, setSurgeons] = useState<Surgeon[]>([])
-  const [procedures, setProcedures] = useState<ProcedureType[]>([])
   const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'day'>('overview')
+  const [phaseDefinitions, setPhaseDefinitions] = useState<PhaseDefInput[]>([])
   
   // Overview tab state
   const [dateRange, setDateRange] = useState('mtd')
@@ -194,7 +185,7 @@ export default function SurgeonPerformancePage() {
   const [selectedDate, setSelectedDate] = useState(getLocalDateString())
   const [dayCases, setDayCases] = useState<CaseWithMilestones[]>([])
   const [last30DaysCases, setLast30DaysCases] = useState<CaseWithMilestones[]>([])
-  const [allTimeCases, setAllTimeCases] = useState<CaseWithMilestones[]>([])
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null)
 
   
   const [loading, setLoading] = useState(true)
@@ -206,6 +197,7 @@ export default function SurgeonPerformancePage() {
     if (isGlobalAdmin || userData.accessLevel === 'global_admin') {
       const impersonation = getImpersonationState()
       if (impersonation?.facilityId) {
+        // eslint-disable-next-line
         setEffectiveFacilityId(impersonation.facilityId)
       }
     } else if (userData.facilityId) {
@@ -225,7 +217,7 @@ export default function SurgeonPerformancePage() {
       if (data?.timezone) setFacilityTimezone(data.timezone)
     }
     fetchTimezone()
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, supabase])
 
   // Fetch surgeons, procedures, and techniques
   useEffect(() => {
@@ -238,33 +230,34 @@ export default function SurgeonPerformancePage() {
         .eq('name', 'surgeon')
         .single()
 
-      const [surgeonsRes, proceduresRes, techniquesRes] = await Promise.all([
+      const [surgeonsRes, techniquesRes, phaseDefsRes] = await Promise.all([
         supabase
           .from('users')
           .select('id, first_name, last_name, role_id')
           .eq('facility_id', effectiveFacilityId)
           .order('last_name'),
         supabase
-          .from('procedure_types')
-          .select('id, name, technique_id')
-          .eq('facility_id', effectiveFacilityId)
-          .order('name'),
-        supabase
           .from('procedure_techniques')
           .select('id, name, display_name')
+          .order('display_order'),
+        supabase
+          .from('phase_definitions')
+          .select('id, name, display_name, display_order, color_key, parent_phase_id, start_milestone_id, end_milestone_id')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('is_active', true)
           .order('display_order'),
       ])
 
       setSurgeons((surgeonsRes.data?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || [])
-      setProcedures(proceduresRes.data || [])
       setProcedureTechniques(techniquesRes.data || [])
+      setPhaseDefinitions((phaseDefsRes.data as PhaseDefInput[]) || [])
       setInitialLoading(false)
     }
     fetchData()
-  }, [effectiveFacilityId])
+  }, [effectiveFacilityId, supabase])
 
   // Helper to get date range (handles custom dates)
-  const getEffectiveDateRange = () => {
+  const getEffectiveDateRange = useCallback(() => {
   const { prevStart, prevEnd } = getPrevPeriodDates(overviewStart, overviewEnd)
   const { label } = getPresetDates(dateRange)
   return {
@@ -276,7 +269,67 @@ label: dateRange === 'custom'
 ? `${formatDateDisplay(overviewStart)} – ${formatDateDisplay(overviewEnd)}`
 : label,
    }
- }
+ }, [overviewStart, overviewEnd, dateRange])
+
+  // Get completed cases
+  const getCompletedCases = useCallback((cases: CaseWithMilestones[]) => {
+    return cases.filter(c => {
+      const m = getMilestoneMap(c)
+      return m.patient_in && m.patient_out
+    })
+  }, [])
+
+  // Calculate procedure breakdown for overview
+  const calculateProcedureBreakdown = useCallback((cases: CaseWithMilestones[]) => {
+    const procedureMap = new Map<string, { id: string; name: string; surgicalTimes: number[]; totalTimes: number[] }>()
+
+    cases.forEach(c => {
+      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      if (!proc) return
+
+      if (!procedureMap.has(proc.id)) {
+        procedureMap.set(proc.id, { id: proc.id, name: proc.name, surgicalTimes: [], totalTimes: [] })
+      }
+
+      const entry = procedureMap.get(proc.id)!
+      const m = getMilestoneMap(c)
+
+      const surgicalTime = getIncisionToClosing(m)
+      const totalTime = getTotalORTime(m)
+
+      if (surgicalTime && surgicalTime > 0 && surgicalTime < 36000) entry.surgicalTimes.push(surgicalTime)
+      if (totalTime && totalTime > 0 && totalTime < 36000) entry.totalTimes.push(totalTime)
+    })
+
+    const breakdown: ProcedureBreakdown[] = Array.from(procedureMap.values())
+      .map(proc => {
+        const avgSurgical = proc.surgicalTimes.length > 0
+          ? proc.surgicalTimes.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length
+          : null
+        const avgTotal = proc.totalTimes.length > 0
+          ? proc.totalTimes.reduce((a, b) => a + b, 0) / proc.totalTimes.length
+          : null
+
+        let stddev: number | null = null
+        if (proc.surgicalTimes.length > 1 && avgSurgical) {
+          const squaredDiffs = proc.surgicalTimes.map(t => Math.pow(t - avgSurgical, 2))
+          stddev = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length)
+        }
+
+        return {
+          procedure_id: proc.id,
+          procedure_name: proc.name,
+          case_count: proc.surgicalTimes.length,
+          avg_surgical_seconds: avgSurgical,
+          stddev_surgical_seconds: stddev,
+          avg_total_seconds: avgTotal,
+        }
+      })
+      .filter(p => p.case_count > 0)
+      .sort((a, b) => b.case_count - a.case_count)
+
+    setProcedureBreakdown(breakdown)
+  }, [])
 
   // Fetch Overview data
   useEffect(() => {
@@ -321,7 +374,7 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
     }
 
     fetchOverviewData()
-}, [selectedSurgeon, overviewStart, overviewEnd, effectiveFacilityId, activeTab])
+}, [selectedSurgeon, overviewStart, overviewEnd, effectiveFacilityId, activeTab, calculateProcedureBreakdown, supabase, getEffectiveDateRange])
   // Handle custom date change
 const handleDateRangeChange = (range: string, startDate: string, endDate: string) => {
   setDateRange(range)
@@ -332,9 +385,9 @@ const handleDateRangeChange = (range: string, startDate: string, endDate: string
   // Fetch Day Analysis data
   useEffect(() => {
     if (!selectedSurgeon || !effectiveFacilityId || activeTab !== 'day') {
+      // eslint-disable-next-line
       setDayCases([])
       setLast30DaysCases([])
-      setAllTimeCases([])
       return
     }
 
@@ -352,7 +405,7 @@ const handleDateRangeChange = (range: string, startDate: string, endDate: string
 case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
       `
 
-      const [dayRes, last30Res, allTimeRes] = await Promise.all([
+      const [dayRes, last30Res] = await Promise.all([
         supabase.from('cases').select(caseSelect)
           .eq('facility_id', effectiveFacilityId)
           .eq('surgeon_id', selectedSurgeon)
@@ -363,79 +416,15 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
           .eq('surgeon_id', selectedSurgeon)
           .gte('scheduled_date', getLocalDateString(thirtyDaysAgo))
           .lte('scheduled_date', getLocalDateString(today)),
-        supabase.from('cases').select(caseSelect)
-          .eq('facility_id', effectiveFacilityId)
-          .eq('surgeon_id', selectedSurgeon),
       ])
 
       setDayCases((dayRes.data as unknown as CaseWithMilestones[]) || [])
       setLast30DaysCases((last30Res.data as unknown as CaseWithMilestones[]) || [])
-      setAllTimeCases((allTimeRes.data as unknown as CaseWithMilestones[]) || [])
       setLoading(false)
     }
 
     fetchDayData()
-  }, [selectedSurgeon, selectedDate, effectiveFacilityId, activeTab])
-
-  // Calculate procedure breakdown for overview
-  const calculateProcedureBreakdown = (cases: CaseWithMilestones[]) => {
-    const procedureMap = new Map<string, { id: string; name: string; surgicalTimes: number[]; totalTimes: number[] }>()
-
-    cases.forEach(c => {
-      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!proc) return
-      
-      if (!procedureMap.has(proc.id)) {
-        procedureMap.set(proc.id, { id: proc.id, name: proc.name, surgicalTimes: [], totalTimes: [] })
-      }
-      
-      const entry = procedureMap.get(proc.id)!
-      const m = getMilestoneMap(c)
-      
-      const surgicalTime = getIncisionToClosing(m)
-      const totalTime = getTotalORTime(m)
-      
-      if (surgicalTime && surgicalTime > 0 && surgicalTime < 36000) entry.surgicalTimes.push(surgicalTime)
-      if (totalTime && totalTime > 0 && totalTime < 36000) entry.totalTimes.push(totalTime)
-    })
-
-    const breakdown: ProcedureBreakdown[] = Array.from(procedureMap.values())
-      .map(proc => {
-        const avgSurgical = proc.surgicalTimes.length > 0
-          ? proc.surgicalTimes.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length
-          : null
-        const avgTotal = proc.totalTimes.length > 0
-          ? proc.totalTimes.reduce((a, b) => a + b, 0) / proc.totalTimes.length
-          : null
-        
-        let stddev: number | null = null
-        if (proc.surgicalTimes.length > 1 && avgSurgical) {
-          const squaredDiffs = proc.surgicalTimes.map(t => Math.pow(t - avgSurgical, 2))
-          stddev = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / proc.surgicalTimes.length)
-        }
-
-        return {
-          procedure_id: proc.id,
-          procedure_name: proc.name,
-          case_count: proc.surgicalTimes.length,
-          avg_surgical_seconds: avgSurgical,
-          stddev_surgical_seconds: stddev,
-          avg_total_seconds: avgTotal,
-        }
-      })
-      .filter(p => p.case_count > 0)
-      .sort((a, b) => b.case_count - a.case_count)
-
-    setProcedureBreakdown(breakdown)
-  }
-
-  // Get completed cases
-  const getCompletedCases = (cases: CaseWithMilestones[]) => {
-    return cases.filter(c => {
-      const m = getMilestoneMap(c)
-      return m.patient_in && m.patient_out
-    })
-  }
+  }, [selectedSurgeon, selectedDate, effectiveFacilityId, activeTab, supabase])
 
   // Helper to get surgical time from milestones (in minutes)
   const getSurgicalTimeMinutes = (caseData: CaseWithMilestones): number | null => {
@@ -552,7 +541,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
   const hasComparisonData = tkaComparisonData.length > 0 || thaComparisonData.length > 0
 
   // Calculate metrics for day analysis
-  const calculateDayMetrics = (cases: CaseWithMilestones[]) => {
+  const calculateDayMetrics = useCallback((cases: CaseWithMilestones[]) => {
     const completed = getCompletedCases(cases)
     
     const orTimes = completed.map(c => getTotalORTime(getMilestoneMap(c)))
@@ -591,7 +580,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       roomTurnoverCount: roomTurnovers.length,
       surgicalTurnoverCount: surgicalTurnovers.length,
     }
-  }
+  }, [getCompletedCases])
 
   // Overview metrics
   const overviewMetrics = useMemo(() => {
@@ -615,82 +604,224 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       prevAvgTurnover: calculateAverage(prevTurnovers),
       totalORTime: calculateSum(orTimes) || 0,
     }
-  }, [periodCases, prevPeriodCases])
+  }, [periodCases, prevPeriodCases, getCompletedCases])
 
   // Day metrics
-  const dayMetrics = useMemo(() => calculateDayMetrics(dayCases), [dayCases])
-  const last30Metrics = useMemo(() => calculateDayMetrics(last30DaysCases), [last30DaysCases])
-  const allTimeMetrics = useMemo(() => calculateDayMetrics(allTimeCases), [allTimeCases])
+  const dayMetrics = useMemo(() => calculateDayMetrics(dayCases), [dayCases, calculateDayMetrics])
+  // Case breakdown for day analysis — dynamic phases from phase_definitions
+  const phaseTree = useMemo(() => buildPhaseTree(phaseDefinitions), [phaseDefinitions])
 
-  // Percentage changes for day analysis
-  const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
-  const surgicalTurnoverVs30Day = calculatePercentageChange(dayMetrics.avgSurgicalTurnover, last30Metrics.avgSurgicalTurnover)
-  const uptimeImprovement = allTimeMetrics.uptimePercent > 0 ? dayMetrics.uptimePercent - allTimeMetrics.uptimePercent : null
+  // Procedure medians from last 30 days (for flag detection)
+  const procedureMedians = useMemo(
+    () => computeProcedureMedians(last30DaysCases, phaseDefinitions),
+    [last30DaysCases, phaseDefinitions],
+  )
 
-  // Case breakdown for day analysis
-  const caseBreakdown = useMemo(() => {
-    const completed = getCompletedCases(dayCases)
-    return completed.map(c => {
+  // Flag detection per case
+  const caseFlagsMap = useMemo(() => {
+    const completedCases = getCompletedCases(dayCases)
+    const map: Record<string, CaseFlag[]> = {}
+    completedCases.forEach((c, idx) => {
+      map[c.id] = detectCaseFlags(c, idx, completedCases, procedureMedians, phaseDefinitions)
+    })
+    return map
+  }, [dayCases, getCompletedCases, procedureMedians, phaseDefinitions])
+
+  // Aggregated day flags for sidebar
+  const allDayFlags = useMemo(
+    () => aggregateDayFlags(getCompletedCases(dayCases), caseFlagsMap),
+    [dayCases, getCompletedCases, caseFlagsMap],
+  )
+
+  // Flag counts for summary strip
+  const flagCounts = useMemo(() => {
+    let warningCount = 0
+    let positiveCount = 0
+    for (const flags of Object.values(caseFlagsMap)) {
+      for (const f of flags) {
+        if (f.severity === 'warning' || f.severity === 'caution') warningCount++
+        if (f.severity === 'positive') positiveCount++
+      }
+    }
+    return { warningCount, positiveCount }
+  }, [caseFlagsMap])
+
+  // Day medians — median per phase/sub-phase from today's cases
+  const dayMedians = useMemo(() => {
+    const completedCases = getCompletedCases(dayCases)
+    const buckets = new Map<string, number[]>()
+
+    for (const c of completedCases) {
+      const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
+      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
+      for (const phase of durations) {
+        if (phase.durationSeconds === null || phase.durationSeconds <= 0) continue
+        const existing = buckets.get(phase.phaseId) || []
+        existing.push(phase.durationSeconds)
+        buckets.set(phase.phaseId, existing)
+      }
+    }
+
+    const result: Record<string, number> = {}
+    for (const [key, values] of buckets) {
+      const median = calculateMedian(values)
+      if (median !== null) result[key] = median
+    }
+    return result
+  }, [dayCases, getCompletedCases, phaseDefinitions])
+
+  // Historical medians for phase comparison sidebar (keyed by phaseId, not procedureId:phaseId)
+  const historicalPhaseMedians = useMemo(() => {
+    const buckets = new Map<string, number[]>()
+
+    for (const c of last30DaysCases) {
+      const completedCheck = getMilestoneMap(c)
+      if (!completedCheck.patient_in || !completedCheck.patient_out) continue
+      const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
+      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
+      for (const phase of durations) {
+        if (phase.durationSeconds === null || phase.durationSeconds <= 0) continue
+        const existing = buckets.get(phase.phaseId) || []
+        existing.push(phase.durationSeconds)
+        buckets.set(phase.phaseId, existing)
+      }
+    }
+
+    const result: Record<string, number> = {}
+    for (const [key, values] of buckets) {
+      const median = calculateMedian(values)
+      if (median !== null) result[key] = median
+    }
+    return result
+  }, [last30DaysCases, phaseDefinitions])
+
+  // Timeline case data — transforms caseBreakdown into TimelineCaseData[] with sub-phase offsets
+  const timelineCases = useMemo((): TimelineCaseData[] => {
+    const completedCases = getCompletedCases(dayCases)
+
+    return completedCases.map(c => {
       const m = getMilestoneMap(c)
       const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
+      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
+      const subphaseOffsets = computeSubphaseOffsets(phaseDefinitions, durations, timestampMap, resolveSubphaseHex)
+
+      // Build a lookup of subphase offsets by parent phase ID
+      const subphaseByParent = new Map(subphaseOffsets.map(p => [p.phaseId, p.subphases]))
+
+      // Compute actual start/end timestamps for each phase (for timing-overlap detection)
+      const phaseTimings = new Map<string, { startMs: number; endMs: number }>()
+      for (const phaseDef of phaseDefinitions) {
+        const startTs = timestampMap.get(phaseDef.start_milestone_id)
+        const endTs = timestampMap.get(phaseDef.end_milestone_id)
+        if (startTs && endTs) {
+          const startMs = new Date(startTs).getTime()
+          const endMs = new Date(endTs).getTime()
+          if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
+            phaseTimings.set(phaseDef.id, { startMs, endMs })
+          }
+        }
+      }
+
+      // Build initial phases from phaseTree (includes all top-level nodes)
+      const allPhases: TimelineCasePhase[] = phaseTree.map(node => {
+        const dur = durations.find(d => d.phaseId === node.phase.id)
+        const subs = (subphaseByParent.get(node.phase.id) || []).map(sub => ({
+          label: sub.label,
+          color: sub.color,
+          durationSeconds: sub.durationSeconds,
+          offsetSeconds: sub.offsetSeconds,
+        }))
+
+        return {
+          phaseId: node.phase.id,
+          label: dur?.displayName ?? node.phase.display_name,
+          color: resolvePhaseHex(dur?.colorKey ?? (node.phase as typeof node.phase & { color_key?: string | null }).color_key),
+          durationSeconds: dur?.durationSeconds ?? 0,
+          subphases: subs,
+        }
+      }).filter(p => p.durationSeconds > 0)
+
+      // Detect timing containment: if phase A's time span is fully within phase B's,
+      // merge A into B as a sub-phase (handles cases where parent_phase_id isn't set)
+      const childIds = new Set<string>()
+      const mergedSubs = new Map<string, TimelineCaseSubphase[]>()
+
+      for (const phaseA of allPhases) {
+        const timingA = phaseTimings.get(phaseA.phaseId)
+        if (!timingA) continue
+
+        for (const phaseB of allPhases) {
+          if (phaseA.phaseId === phaseB.phaseId) continue
+          const timingB = phaseTimings.get(phaseB.phaseId)
+          if (!timingB) continue
+
+          // Check if A is fully contained within B
+          if (timingA.startMs >= timingB.startMs && timingA.endMs <= timingB.endMs) {
+            childIds.add(phaseA.phaseId)
+            const offsetSeconds = (timingA.startMs - timingB.startMs) / 1000
+            const existing = mergedSubs.get(phaseB.phaseId) || []
+            existing.push({
+              label: phaseA.label,
+              color: phaseA.color,
+              durationSeconds: phaseA.durationSeconds,
+              offsetSeconds,
+            })
+            mergedSubs.set(phaseB.phaseId, existing)
+            break // A can only be child of one parent
+          }
+        }
+      }
+
+      // Build final phases: remove children from top-level, add merged sub-phases
+      const phases = allPhases
+        .filter(p => !childIds.has(p.phaseId))
+        .map(p => {
+          const additional = mergedSubs.get(p.phaseId) || []
+          if (additional.length > 0 && p.subphases.length === 0) {
+            return { ...p, subphases: additional }
+          }
+          return p
+        })
+
+      const startTime = m.patient_in ?? new Date()
+      const endTime = m.patient_out ?? new Date()
+
       return {
         id: c.id,
         caseNumber: c.case_number,
-        procedureName: proc?.name || 'Unknown',
-        totalORTime: getTotalORTime(m) || 0,
-        wheelsInToIncision: getWheelsInToIncision(m) || 0,
-        incisionToClosing: getIncisionToClosing(m) || 0,
-        closingTime: getClosingTime(m) || 0,
-        closedToWheelsOut: getClosedToWheelsOut(m) || 0,
+        procedure: proc?.name || 'Unknown',
+        room: c.or_rooms?.name || 'Unknown',
+        startTime,
+        endTime,
+        phases,
       }
     })
-  }, [dayCases])
+  }, [dayCases, getCompletedCases, phaseDefinitions, phaseTree])
 
-  const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
+  // Max total seconds for the case breakdown bar scaling
+  const maxTimelineCaseSeconds = useMemo(() => {
+    return Math.max(...timelineCases.map(c => c.phases.reduce((s, p) => s + p.durationSeconds, 0)), 1)
+  }, [timelineCases])
 
-  // Procedure performance for day analysis
-  const getProcedurePerformance = (): ProcedureComparisonData[] => {
-    const completedCases = getCompletedCases(dayCases)
-    const completed30DayCases = getCompletedCases(last30DaysCases)
-    
-    // Group today's cases by procedure type
-    const byProcedure = new Map<string, { name: string; cases: CaseWithMilestones[] }>()
-    
-    completedCases.forEach(c => {
-      const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-      if (!proc?.id) return
-      if (!byProcedure.has(proc.id)) {
-        byProcedure.set(proc.id, { name: proc.name, cases: [] })
+  // Convert procedureMedians to Record<string, number> keyed by phaseId for CaseDetailPanel
+  const selectedCaseMedians = useMemo((): Record<string, number> => {
+    if (!selectedCaseId) return {}
+    const selectedCase = getCompletedCases(dayCases).find(c => c.id === selectedCaseId)
+    if (!selectedCase) return {}
+    const proc = Array.isArray(selectedCase.procedure_types) ? selectedCase.procedure_types[0] : selectedCase.procedure_types
+    if (!proc) return {}
+
+    const result: Record<string, number> = {}
+    for (const [key, value] of procedureMedians) {
+      // Keys are `procedureId:phaseId` — only include matching procedure
+      if (key.startsWith(`${proc.id}:`)) {
+        const phaseId = key.slice(proc.id.length + 1)
+        result[phaseId] = value
       }
-      byProcedure.get(proc.id)!.cases.push(c)
-    })
-
-    return Array.from(byProcedure.entries()).map(([procId, { name, cases }]) => {
-      // Today's averages for this procedure
-      const todayOrTimes = cases.map(c => getTotalORTime(getMilestoneMap(c)))
-      const todaySurgTimes = cases.map(c => getSurgicalTime(getMilestoneMap(c)))
-
-      // 30-day averages for this procedure (exclude today's cases)
-      const baseline30Day = completed30DayCases.filter(c => {
-        const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
-        return proc?.id === procId
-      })
-      const baselineOrTimes = baseline30Day.map(c => getTotalORTime(getMilestoneMap(c)))
-      const baselineSurgTimes = baseline30Day.map(c => getSurgicalTime(getMilestoneMap(c)))
-
-      return {
-        procedureName: name,
-        procedureId: procId,
-        caseCount: cases.length,
-        todayORTime: calculateAverage(todayOrTimes) || 0,
-        avgORTime: calculateAverage(baselineOrTimes) || 0,
-        todaySurgicalTime: calculateAverage(todaySurgTimes) || 0,
-        avgSurgicalTime: calculateAverage(baselineSurgTimes) || 0,
-      }
-    })
-  }
-
-  const procedurePerformance = useMemo(() => getProcedurePerformance(), [dayCases, last30DaysCases])
+    }
+    return result
+  }, [selectedCaseId, dayCases, getCompletedCases, procedureMedians])
 
   // Daily trend data for overview chart
   const dailyTrendData = useMemo(() => {
@@ -712,7 +843,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
         }
       })
       .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
-  }, [periodCases])
+  }, [periodCases, getCompletedCases])
 
   const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
   const { label: periodLabel } = getEffectiveDateRange()
@@ -1059,223 +1190,137 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     </div>
                   </div>
 
-                  {/* Day Overview Section */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                    <SectionHeader
-                      title="Day Overview"
-                      subtitle="Track efficiency by measuring key time metrics"
-                      accentColor="blue"
-                      icon={
-                        <Pencil className="w-4 h-4" />
-                      }
-                    />
-
-                    {/* Top Metrics Row */}
-                    <div className="grid grid-cols-4 gap-4 mt-6">
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                          First Case Start
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                          {formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone)}
-                        </div>
-                        {dayMetrics.firstCaseScheduledTime && (
-                          <div className="text-xs text-slate-500 mt-1">
-                            Scheduled: {(() => {
-                              const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
-                              const h = parseInt(hours)
-                              const suffix = h >= 12 ? 'pm' : 'am'
-                              const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
-                              return `${displayHour}:${minutes} ${suffix}`
-                            })()}
-                          </div>
-                        )}
+                  {/* 1. Summary Strip */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <MetricPillStrip
+                          items={[
+                            {
+                              label: 'First Case',
+                              value: formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone) || '--',
+                              sub: dayMetrics.firstCaseScheduledTime
+                                ? `Sched: ${(() => {
+                                    const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
+                                    const h = parseInt(hours)
+                                    const suffix = h >= 12 ? 'pm' : 'am'
+                                    const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
+                                    return `${displayHour}:${minutes} ${suffix}`
+                                  })()}`
+                                : undefined,
+                            },
+                            { label: 'Cases', value: dayMetrics.totalCases.toString() },
+                            { label: 'OR Time', value: formatMinutesToHHMMSS(dayMetrics.totalORTime) },
+                            { label: 'Surgical Time', value: formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime) },
+                          ]}
+                        />
+                        <FlagCountPills warningCount={flagCounts.warningCount} positiveCount={flagCounts.positiveCount} />
                       </div>
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <ClipboardList className="w-4 h-4 text-blue-600" />
-                          Cases
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.totalCases}</div>
-                      </div>
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-green-500" />
-                          Total OR Time
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalORTime)}</div>
-                      </div>
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-violet-500" />
-                          Total Surgical Time
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}</div>
-                      </div>
-                    </div>
-
-                    {/* Second Row - Turnovers and Uptime */}
-                    <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100">
-                      {/* Surgical Turnover */}
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <RefreshCw className="w-4 h-4 text-amber-500" />
-                          Surgical Turnover
-                        </div>
-                        {dayMetrics.surgicalTurnoverCount > 0 ? (
-                          <>
-                            <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.avgSurgicalTurnover)}</div>
-                            <div className="flex items-center gap-3 mt-2 text-sm">
-                              {surgicalTurnoverVs30Day !== null && (
-                                <TrendPill value={Math.abs(surgicalTurnoverVs30Day)} improved={surgicalTurnoverVs30Day >= 0} />
-                              )}
-                              <span className="text-slate-400 text-xs">avg. {formatMinutesToHHMMSS(last30Metrics.avgSurgicalTurnover)}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-xl font-bold text-slate-400 tabular-nums">N/A</div>
-                            <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Room Turnover */}
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <RefreshCw className="w-4 h-4 text-amber-500" />
-                          Room Turnover
-                        </div>
-                        {dayMetrics.roomTurnoverCount > 0 ? (
-                          <>
-                            <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}</div>
-                            <div className="flex items-center gap-3 mt-2 text-sm">
-                              {turnoverVs30Day !== null && (
-                                <TrendPill value={Math.abs(turnoverVs30Day)} improved={turnoverVs30Day >= 0} />
-                              )}
-                              <span className="text-slate-400 text-xs">avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-xl font-bold text-slate-400 tabular-nums">N/A</div>
-                            <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
-                          </>
-                        )}
-                      </div>
-                      
-                      {/* Uptime vs Downtime */}
-                      <div className="bg-slate-50/80 rounded-lg p-4 col-span-2">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <BarChart3 className="w-4 h-4 text-blue-600" />
-                          Uptime vs Downtime
-                        </div>
-                        
-                        {dayMetrics.totalORTime > 0 ? (
-                          <>
-                            <div className="flex items-baseline gap-2 mb-3">
-                              <span className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.uptimePercent}%</span>
-                              <span className="text-slate-300">·</span>
-                              <span className="text-lg font-semibold text-slate-500 tabular-nums">{100 - dayMetrics.uptimePercent}%</span>
-                              {uptimeImprovement !== null && (
-                                <div className="ml-2">
-                                  <TrendPill value={Math.abs(parseFloat(uptimeImprovement.toFixed(1)))} improved={uptimeImprovement >= 0} />
-                                </div>
-                              )}
-                            </div>
-                            <div className="h-3 w-full rounded-full overflow-hidden flex bg-slate-100">
-                              <div className="h-full bg-blue-600 rounded-l-full transition-all duration-500" style={{ width: `${dayMetrics.uptimePercent}%` }} />
-                              <div className="h-full bg-red-400 rounded-r-full transition-all duration-500" style={{ width: `${100 - dayMetrics.uptimePercent}%` }} />
-                            </div>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                                <span>Surgical ({formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)})</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                                <span>Other ({formatMinutesToHHMMSS(dayMetrics.totalORTime - dayMetrics.totalSurgicalTime)})</span>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-xl font-bold text-slate-400 tabular-nums">--</div>
-                        )}
-                      </div>
+                      <UptimeRing percent={dayMetrics.uptimePercent} />
                     </div>
                   </div>
 
-                  {/* Cases and Procedure Performance */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Cases List with Enhanced Stacked Bars */}
+                  {/* 2. Timeline Card */}
+                  {timelineCases.length > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-900">OR Timeline</h3>
+                        <PhaseTreeLegend
+                          phaseTree={phaseTree}
+                          resolveHex={resolvePhaseHex}
+                          resolveSubHex={resolveSubphaseHex}
+                        />
+                      </div>
+                      <DayTimeline
+                        cases={timelineCases}
+                        caseFlags={caseFlagsMap}
+                      />
+                    </div>
+                  )}
+
+                  {/* 3. Bottom Split — Case Breakdown + Sidebar */}
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Case Breakdown (flex-1) */}
+                    <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                       <SectionHeader
                         title="Case Breakdown"
                         subtitle={`${dayMetrics.totalCases} case${dayMetrics.totalCases !== 1 ? 's' : ''} completed`}
                         accentColor="blue"
-                        icon={
-                          <ClipboardList className="w-4 h-4" />
-                        }
+                        icon={<ClipboardList className="w-4 h-4" />}
                       />
 
-                      {caseBreakdown.length === 0 ? (
+                      {phaseDefinitions.length === 0 ? (
                         <div className="mt-4">
                           <EmptyState
-                            icon={
-                              <ClipboardList className="w-6 h-6 text-slate-400" />
-                            }
+                            icon={<Info className="w-6 h-6 text-slate-400" />}
+                            title="No Phases Configured"
+                            description="This facility has no phase definitions configured. Set up phases in Settings to see case breakdowns."
+                          />
+                        </div>
+                      ) : timelineCases.length === 0 ? (
+                        <div className="mt-4">
+                          <EmptyState
+                            icon={<ClipboardList className="w-6 h-6 text-slate-400" />}
                             title="No Cases"
                             description="No completed cases for this date."
                           />
                         </div>
                       ) : (
-                        <>
-                          <div className="mt-3 mb-3">
-                            <PhaseLegend items={PHASE_LEGEND_ITEMS} />
-                          </div>
-                          <div className="space-y-2">
-                            {caseBreakdown.map(c => (
-                              <CasePhaseBar
+                        <div className="space-y-1 mt-3">
+                          {timelineCases.map(c => {
+                            const totalSeconds = c.phases.reduce((s, p) => s + p.durationSeconds, 0)
+                            return (
+                              <CasePhaseBarNested
                                 key={c.id}
                                 caseNumber={c.caseNumber}
-                                procedureName={c.procedureName}
-                                totalValue={c.totalORTime}
-                                maxValue={maxCaseTime}
-                                caseId={c.id}
-                                formatValue={formatSecondsToHHMMSS}
-                                phases={[
-                                  { label: 'Pre-Op', value: c.wheelsInToIncision, color: PHASE_COLORS.preOp },
-                                  { label: 'Surgical', value: c.incisionToClosing, color: PHASE_COLORS.surgical },
-                                  { label: 'Closing', value: c.closingTime, color: PHASE_COLORS.closing },
-                                  { label: 'Emergence', value: c.closedToWheelsOut, color: PHASE_COLORS.emergence },
-                                ]}
+                                procedureName={c.procedure}
+                                phases={c.phases}
+                                totalSeconds={totalSeconds}
+                                maxTotalSeconds={maxTimelineCaseSeconds}
+                                isSelected={selectedCaseId === c.id}
+                                onSelect={() => setSelectedCaseId(prev => prev === c.id ? null : c.id)}
+                                flags={caseFlagsMap[c.id] || []}
                               />
-                            ))}
-                          </div>
-                        </>
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
 
-                    {/* Procedure Performance */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                      <SectionHeader
-                        title="Procedure Performance"
-                        subtitle="Today vs 30-day average by procedure"
-                        accentColor="green"
-                        icon={
-                          <BarChart3 className="w-4 h-4" />
-                        }
-                      />
-
-                      <div className="mt-4">
-                        <ProcedureComparisonChart 
-                          data={procedurePerformance} 
-                          formatValue={formatSecondsToHHMMSS}
+                    {/* Sidebar (425px) */}
+                    <div className="lg:w-[425px] w-full space-y-4">
+                      {/* Phase Medians Card (always visible) */}
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                        <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Phase Medians</h4>
+                        <PhaseMedianComparison
+                          dayMedians={dayMedians}
+                          historicalMedians={historicalPhaseMedians}
+                          phaseTree={phaseTree}
+                          resolveHex={resolvePhaseHex}
                         />
+                      </div>
+
+                      {/* Contextual Card — case detail or flag list */}
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 transition-all duration-200">
+                        {selectedCaseId && timelineCases.find(c => c.id === selectedCaseId) ? (
+                          <>
+                            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Case Detail</h4>
+                            <CaseDetailPanel
+                              caseData={timelineCases.find(c => c.id === selectedCaseId)!}
+                              flags={caseFlagsMap[selectedCaseId] || []}
+                              procedureMedians={selectedCaseMedians}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Day Flags</h4>
+                            <SidebarFlagList flags={allDayFlags} />
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
+
                 </div>
               )}
             </div>

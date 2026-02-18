@@ -188,6 +188,7 @@ export function WeekCalendar({
   }
 
   // Document-level mousemove — works even when cursor leaves the grid
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleDocumentMouseMove = useCallback((e: MouseEvent) => {
     if (!isDraggingRef.current || !dragStartRef.current) return
 
@@ -218,6 +219,7 @@ export function WeekCalendar({
   // Document-level mouseup — always fires, even outside the grid
   // Uses the continuously-updated drag state instead of recalculating
   // from cursor Y to avoid bugs when cursor is outside the grid
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const handleDocumentMouseUp = useCallback((e: MouseEvent) => {
     if (!isDraggingRef.current) return
 
@@ -278,13 +280,6 @@ export function WeekCalendar({
     const popX = Math.min(e.clientX, window.innerWidth - 400)
     const popY = Math.min(e.clientY, window.innerHeight - 300)
     onBlockClick(block, { x: popX, y: popY })
-  }
-
-  // Helper to get day index from date string safely (avoid timezone issues)
-  const getDayIndexFromDateString = (dateStr: string): number => {
-    const [year, month, day] = dateStr.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    return date.getDay()
   }
 
   // Helper to check if date string matches a weekDay

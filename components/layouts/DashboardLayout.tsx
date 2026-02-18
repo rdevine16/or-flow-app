@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
@@ -16,9 +16,9 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 
 
 // Layout components
-import Sidebar, { useSidebarWidth } from './Sidebar'
+import Sidebar from './Sidebar'
 import SubNavigation, { SUBNAV_WIDTH } from './SubNavigation'
-import Header, { TrialBanner, ImpersonationBanner } from './Header'
+import Header, { TrialBanner, ImpersonationBanner, BranchBanner } from './Header'
 import BlockedScreen from './BlockedScreen'
 import { getFilteredNavigation, SIDEBAR_COLLAPSED, SIDEBAR_EXPANDED } from './navigation-config'
 
@@ -57,7 +57,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [impersonation, setImpersonation] = useState<ImpersonationState | null>(null)
   const [facilityStatus, setFacilityStatus] = useState<FacilityStatus | null>(null)
   const [mustChangePassword, setMustChangePassword] = useState(false)
-  const [checkingAccess, setCheckingAccess] = useState(true)
   const [userAccessLevel, setUserAccessLevel] = useState<string | null>(null)
 
   // Derived state
@@ -77,7 +76,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
-          setCheckingAccess(false)
           return
         }
 
@@ -90,15 +88,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         if (userRecord?.access_level) setUserAccessLevel(userRecord.access_level)
         if (userRecord?.must_change_password) {
           setMustChangePassword(true)
-          setCheckingAccess(false)
           return
         }
         if (userRecord?.access_level === 'global_admin') {
-          setCheckingAccess(false)
           return
         }
         if (!userRecord?.facility_id) {
-          setCheckingAccess(false)
           return
         }
 
@@ -116,18 +111,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             facilityLogo: facility.logo_url,
           })
         }
-        setCheckingAccess(false)
 } catch (error) {
   showToast({
     type: 'error',
     title: 'Access Check Failed',
     message: error instanceof Error ? error.message : 'Unable to verify facility access'
   })
-  setCheckingAccess(false)
 }
     }
     if (!loading) checkFacilityAccess()
-  }, [loading, supabase])
+  }, [loading, supabase, showToast])
 
   // Load impersonation state
   useEffect(() => {
@@ -188,13 +181,12 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const isDisabled = () => facilityStatus?.subscriptionStatus === 'disabled'
 
-  const getTrialDaysRemaining = () => {
+  const trialDaysRemaining = useMemo(() => {
     if (!facilityStatus?.trialEndsAt || facilityStatus.subscriptionStatus !== 'trial') return null
+    // eslint-disable-next-line react-hooks/purity
     const diff = new Date(facilityStatus.trialEndsAt).getTime() - Date.now()
     return Math.ceil(diff / 86400000)
-  }
-
-  const trialDaysRemaining = getTrialDaysRemaining()
+  }, [facilityStatus?.trialEndsAt, facilityStatus?.subscriptionStatus])
   const showTrialWarning = trialDaysRemaining !== null && trialDaysRemaining > 0 && trialDaysRemaining <= 7
 
   // ============================================
@@ -253,6 +245,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         className="min-h-screen flex flex-col transition-all duration-300 ease-out"
       >
         {/* Banners */}
+        <BranchBanner />
         {showTrialWarning && <TrialBanner daysRemaining={trialDaysRemaining!} />}
         {impersonation && effectiveIsGlobalAdmin && (
           <ImpersonationBanner

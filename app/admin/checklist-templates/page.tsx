@@ -11,7 +11,6 @@ import { useUser } from '@/lib/UserContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Ban, CheckCircle2, ChevronRight, ClipboardCheck, Info, PenLine, Plus, Trash2, X } from 'lucide-react'
 
@@ -153,28 +152,14 @@ interface FieldEditorModalProps {
 
 function FieldEditorModal({ field, isNew, onClose, onSave }: FieldEditorModalProps) {
   const [formData, setFormData] = useState({
-    field_key: '',
-    display_label: '',
-    field_type: 'toggle' as ChecklistFieldTemplate['field_type'],
-    options: [''],
-    is_required: false,
-    show_on_escort_page: false,
-    placeholder: '',
+    field_key: field?.field_key || '',
+    display_label: field?.display_label || '',
+    field_type: (field?.field_type || 'toggle') as ChecklistFieldTemplate['field_type'],
+    options: field?.options || [''],
+    is_required: field?.is_required || false,
+    show_on_escort_page: field?.show_on_escort_page || false,
+    placeholder: field?.placeholder || '',
   })
-
-  useEffect(() => {
-    if (field) {
-      setFormData({
-        field_key: field.field_key,
-        display_label: field.display_label,
-        field_type: field.field_type,
-        options: field.options || [''],
-        is_required: field.is_required,
-        show_on_escort_page: field.show_on_escort_page,
-        placeholder: field.placeholder || '',
-      })
-    }
-  }, [field])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -420,7 +405,7 @@ export default function ChecklistTemplatesPage() {
         is_active: true,
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('preop_checklist_field_templates')
         .insert(newField)
         .select()
@@ -667,7 +652,7 @@ if (error) {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-slate-400">•</span>
-              <span><strong>Escort Visible</strong> — Fields marked as "Show on Escort Page" are visible to family members</span>
+              <span><strong>Escort Visible</strong> — Fields marked as &quot;Show on Escort Page&quot; are visible to family members</span>
             </li>
           </ul>
         </div>

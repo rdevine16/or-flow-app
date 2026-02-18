@@ -54,7 +54,7 @@ export default function PayersPage() {
       setCurrentUserId(user?.id || null)
     }
     getCurrentUser()
-  }, [])
+  }, [supabase.auth])
 
   // Fetch data
   useEffect(() => {
@@ -63,6 +63,7 @@ export default function PayersPage() {
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLoading, effectiveFacilityId])
 
   const fetchData = async () => {

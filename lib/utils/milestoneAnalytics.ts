@@ -2,6 +2,8 @@
 // Pure functions and types for milestone analytics.
 // Used by useMilestoneComparison hook and CaseDrawerMilestones component.
 
+import { resolveColorKey } from '@/lib/milestone-phase-config'
+
 // ============================================
 // TYPES
 // ============================================
@@ -12,7 +14,7 @@ export interface MilestoneInterval {
   display_order: number
   phase_group: string | null
   recorded_at: string | null
-  /** Minutes since previous milestone (null for first milestone or unrecorded) */
+  /** Minutes from this milestone to next recorded milestone (null for last milestone or unrecorded) */
   interval_minutes: number | null
   surgeon_median_minutes: number | null
   facility_median_minutes: number | null
@@ -33,6 +35,7 @@ export interface TimeAllocation {
 export interface MilestoneComparisonData {
   intervals: MilestoneInterval[]
   time_allocation: TimeAllocation[]
+  phase_groups: PhaseGroupData[]
   missing_milestones: string[]
   total_case_minutes: number | null
   total_surgical_minutes: number | null
@@ -64,18 +67,59 @@ export interface CaseMilestoneWithDetails {
   }
 }
 
-// ============================================
-// PHASE GROUP CONFIG
-// ============================================
-
-const PHASE_GROUP_CONFIG: Record<string, { label: string; color: string }> = {
-  pre_op: { label: 'Pre-Op', color: 'bg-blue-500' },
-  surgical: { label: 'Surgical', color: 'bg-teal-500' },
-  closing: { label: 'Closing', color: 'bg-indigo-500' },
-  post_op: { label: 'Post-Op', color: 'bg-slate-400' },
+/** Phase definition with boundary milestone details for analytics */
+export interface PhaseDefinitionWithMilestones {
+  id: string
+  name: string
+  display_name: string
+  display_order: number
+  color_key: string | null
+  start_milestone_id: string
+  end_milestone_id: string
+  start_milestone?: {
+    id: string
+    name: string
+    display_name: string | null
+    display_order: number
+  }
+  end_milestone?: {
+    id: string
+    name: string
+    display_name: string | null
+    display_order: number
+  }
 }
 
-const IDLE_GROUP = { label: 'Idle/Gap', color: 'bg-slate-300' }
+/** Row shape returned by the get_phase_medians RPC function */
+export interface PhaseMedianRow {
+  phase_name: string
+  phase_display_name: string
+  color_key: string | null
+  display_order: number
+  surgeon_median_minutes: number | null
+  surgeon_n: number
+  facility_median_minutes: number | null
+  facility_n: number
+}
+
+/** Phase group data for collapsible phase headers in the milestone table */
+export interface PhaseGroupData {
+  phaseId: string
+  phaseName: string
+  phaseDisplayName: string
+  colorKey: string | null
+  displayOrder: number
+  /** Phase duration from this case's boundary milestone timestamps */
+  durationMinutes: number | null
+  /** Active comparison median (surgeon or facility) */
+  medianMinutes: number | null
+  surgeonMedianMinutes: number | null
+  facilityMedianMinutes: number | null
+  surgeonN: number
+  facilityN: number
+  /** Milestone intervals belonging to this phase */
+  intervals: MilestoneInterval[]
+}
 
 // ============================================
 // DELTA SEVERITY (ratio-based per Q3/A3)
@@ -123,21 +167,22 @@ export function calculateIntervals(
   // Build median lookup by facility_milestone_id
   const medianMap = new Map(medians.map((m) => [m.facility_milestone_id, m]))
 
-  let prevRecordedAt: Date | null = null
-
-  return sorted.map((cm) => {
+  return sorted.map((cm, idx) => {
     const median = medianMap.get(cm.facility_milestone_id)
     const name = cm.facility_milestone?.display_name || cm.facility_milestone?.name || 'Unknown'
     const displayOrder = cm.facility_milestone?.display_order ?? 0
     const phaseGroup = median?.phase_group ?? cm.facility_milestone?.phase_group ?? null
 
+    // Duration = time from this milestone to the next recorded milestone
     let intervalMinutes: number | null = null
-    if (cm.recorded_at && prevRecordedAt) {
-      const diff = new Date(cm.recorded_at).getTime() - prevRecordedAt.getTime()
-      intervalMinutes = diff > 0 ? diff / 60000 : null
-    }
     if (cm.recorded_at) {
-      prevRecordedAt = new Date(cm.recorded_at)
+      for (let j = idx + 1; j < sorted.length; j++) {
+        if (sorted[j].recorded_at) {
+          const diff = new Date(sorted[j].recorded_at!).getTime() - new Date(cm.recorded_at).getTime()
+          intervalMinutes = diff > 0 ? diff / 60000 : null
+          break
+        }
+      }
     }
 
     const surgeonMedian = median?.surgeon_median_minutes ?? null
@@ -165,16 +210,69 @@ export function calculateIntervals(
 }
 
 // ============================================
-// TIME ALLOCATION
+// TIME ALLOCATION (phase_definitions-based)
 // ============================================
 
 /**
- * Bucket milestone intervals into phase groups (Pre-Op, Surgical, Closing, Post-Op).
- * Intervals without a phase_group are bucketed as "Idle/Gap".
+ * Calculate time allocation from phase_definitions boundary milestones.
+ * Each phase duration = end_milestone.recorded_at - start_milestone.recorded_at.
+ * Replaces the old phase_group bucketing approach.
+ */
+export function calculatePhaseTimeAllocation(
+  phaseDefinitions: PhaseDefinitionWithMilestones[],
+  caseMilestones: CaseMilestoneWithDetails[],
+): TimeAllocation[] {
+  // Build lookup: facility_milestone_id → recorded_at timestamp
+  const milestoneTimeMap = new Map<string, number>()
+  for (const cm of caseMilestones) {
+    if (cm.recorded_at) {
+      milestoneTimeMap.set(cm.facility_milestone_id, new Date(cm.recorded_at).getTime())
+    }
+  }
+
+  const phaseDurations: { phase: PhaseDefinitionWithMilestones; minutes: number }[] = []
+
+  for (const phase of phaseDefinitions) {
+    const startTime = milestoneTimeMap.get(phase.start_milestone_id)
+    const endTime = milestoneTimeMap.get(phase.end_milestone_id)
+    if (startTime != null && endTime != null && endTime > startTime) {
+      phaseDurations.push({
+        phase,
+        minutes: (endTime - startTime) / 60000,
+      })
+    }
+  }
+
+  const grandTotal = phaseDurations.reduce((s, pd) => s + pd.minutes, 0)
+  if (grandTotal <= 0) return []
+
+  // Sort by display_order
+  phaseDurations.sort((a, b) => a.phase.display_order - b.phase.display_order)
+
+  return phaseDurations.map((pd) => ({
+    label: pd.phase.display_name,
+    phase_group: pd.phase.name,
+    minutes: pd.minutes,
+    percentage: Math.round((pd.minutes / grandTotal) * 100),
+    color: resolveColorKey(pd.phase.color_key).accentBg,
+  }))
+}
+
+/**
+ * Legacy: Bucket milestone intervals into phase groups.
+ * @deprecated Use calculatePhaseTimeAllocation with phase_definitions instead.
  */
 export function calculateTimeAllocation(
   intervals: MilestoneInterval[],
 ): TimeAllocation[] {
+  const PHASE_GROUP_CONFIG: Record<string, { label: string; color: string }> = {
+    pre_op: { label: 'Pre-Op', color: 'bg-blue-500' },
+    surgical: { label: 'Surgical', color: 'bg-teal-500' },
+    closing: { label: 'Closing', color: 'bg-indigo-500' },
+    post_op: { label: 'Post-Op', color: 'bg-slate-400' },
+  }
+  const IDLE_GROUP = { label: 'Idle/Gap', color: 'bg-slate-300' }
+
   const totals: Record<string, number> = {}
 
   for (const iv of intervals) {
@@ -187,8 +285,6 @@ export function calculateTimeAllocation(
   if (grandTotal <= 0) return []
 
   const allocations: TimeAllocation[] = []
-
-  // Ordered: pre_op, surgical, closing, post_op, idle
   const orderedGroups = ['pre_op', 'surgical', 'closing', 'post_op', 'idle']
 
   for (const group of orderedGroups) {
@@ -208,6 +304,108 @@ export function calculateTimeAllocation(
   }
 
   return allocations
+}
+
+// ============================================
+// PHASE GROUPING
+// ============================================
+
+/**
+ * Assign milestone intervals to phases based on phase_definitions boundary display_orders.
+ * A milestone belongs to a phase if its display_order >= start_milestone.display_order
+ * and < the next phase's start_milestone.display_order (or <= end for the last phase).
+ */
+export function assignMilestonesToPhases(
+  intervals: MilestoneInterval[],
+  phaseDefinitions: PhaseDefinitionWithMilestones[],
+): { grouped: Map<string, MilestoneInterval[]>; ungrouped: MilestoneInterval[] } {
+  const sortedPhases = [...phaseDefinitions].sort((a, b) => a.display_order - b.display_order)
+
+  const grouped = new Map<string, MilestoneInterval[]>()
+  const ungrouped: MilestoneInterval[] = []
+
+  for (const iv of intervals) {
+    let assigned = false
+    for (let i = 0; i < sortedPhases.length; i++) {
+      const phase = sortedPhases[i]
+      const startOrder = phase.start_milestone?.display_order ?? 0
+      const endOrder = phase.end_milestone?.display_order ?? Infinity
+      const isLast = i === sortedPhases.length - 1
+
+      // Milestone belongs to this phase if display_order >= start AND < end
+      // (or <= end for the last phase)
+      if (iv.display_order >= startOrder && (isLast ? iv.display_order <= endOrder : iv.display_order < endOrder)) {
+        const existing = grouped.get(phase.id) ?? []
+        existing.push(iv)
+        grouped.set(phase.id, existing)
+        assigned = true
+        break
+      }
+    }
+    if (!assigned) {
+      ungrouped.push(iv)
+    }
+  }
+
+  return { grouped, ungrouped }
+}
+
+/**
+ * Build PhaseGroupData[] by combining phase_definitions, case milestones,
+ * milestone intervals, and phase medians.
+ */
+export function buildPhaseGroups(
+  phaseDefinitions: PhaseDefinitionWithMilestones[],
+  intervals: MilestoneInterval[],
+  caseMilestones: CaseMilestoneWithDetails[],
+  phaseMedians: PhaseMedianRow[],
+  comparisonSource: 'surgeon' | 'facility',
+): PhaseGroupData[] {
+  const { grouped } = assignMilestonesToPhases(intervals, phaseDefinitions)
+
+  // Build milestone time lookup
+  const milestoneTimeMap = new Map<string, number>()
+  for (const cm of caseMilestones) {
+    if (cm.recorded_at) {
+      milestoneTimeMap.set(cm.facility_milestone_id, new Date(cm.recorded_at).getTime())
+    }
+  }
+
+  // Build phase median lookup
+  const medianMap = new Map(phaseMedians.map((pm) => [pm.phase_name, pm]))
+
+  const sortedPhases = [...phaseDefinitions].sort((a, b) => a.display_order - b.display_order)
+
+  return sortedPhases.map((phase) => {
+    const phaseIntervals = grouped.get(phase.id) ?? []
+    const median = medianMap.get(phase.name)
+
+    // Calculate phase duration from boundary milestone timestamps
+    const startTime = milestoneTimeMap.get(phase.start_milestone_id)
+    const endTime = milestoneTimeMap.get(phase.end_milestone_id)
+    const durationMinutes = startTime != null && endTime != null && endTime > startTime
+      ? (endTime - startTime) / 60000
+      : null
+
+    const surgeonMedian = median?.surgeon_median_minutes != null ? Number(median.surgeon_median_minutes) : null
+    const facilityMedian = median?.facility_median_minutes != null ? Number(median.facility_median_minutes) : null
+    const activeMedian = comparisonSource === 'surgeon' ? surgeonMedian : facilityMedian
+
+    return {
+      phaseId: phase.id,
+      phaseName: phase.name,
+      phaseDisplayName: phase.display_name,
+      colorKey: phase.color_key,
+      displayOrder: phase.display_order,
+      durationMinutes,
+      medianMinutes: activeMedian,
+      surgeonMedianMinutes: surgeonMedian,
+      facilityMedianMinutes: facilityMedian,
+      surgeonN: median?.surgeon_n ?? 0,
+      facilityN: median?.facility_n ?? 0,
+      intervals: phaseIntervals,
+    }
+  })
 }
 
 // ============================================
@@ -247,7 +445,7 @@ export interface SwimlaneSectionData {
 
 /**
  * Calculate proportional widths for horizontal swimlane timeline segments.
- * Each segment width = its interval / total case time.
+ * Each segment width = its duration / total case time.
  */
 export function calculateSwimlaneSections(
   intervals: MilestoneInterval[],

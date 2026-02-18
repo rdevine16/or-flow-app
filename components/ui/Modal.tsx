@@ -123,10 +123,10 @@ export function Modal({
   // Separate Footer from body children
   const childArray = Array.isArray(children) ? children : [children]
   const footer = childArray.find(
-    (child: any) => child?.type === ModalFooter
+    (child: React.ReactElement) => child?.type === ModalFooter
   )
   const body = childArray.filter(
-    (child: any) => child?.type !== ModalFooter
+    (child: React.ReactElement) => child?.type !== ModalFooter
   )
 
   return (

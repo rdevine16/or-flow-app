@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
@@ -22,7 +22,7 @@ interface ErrorLog {
   category: string
   message: string
   created_at: string
-  context?: any
+  context?: Record<string, unknown>
   facility_id?: string
 }
 
@@ -33,7 +33,12 @@ interface AuditLog {
   target_label: string
   success: boolean
   created_at: string
-  metadata?: any
+  metadata?: {
+    email?: string
+    reason?: string
+    ip_address?: string
+    [key: string]: unknown
+  }
   facility_id?: string
 }
 
@@ -78,36 +83,21 @@ export default function GlobalSecurityDashboard() {
   const supabase = createClient()
 
   useEffect(() => {
-    loadFacilities()
-  }, [])
+    const loadFacilities = async () => {
+      const { data } = await supabase
+        .from('facilities')
+        .select('id, name, city, state')
+        .order('name')
 
-  useEffect(() => {
-    if (facilities.length > 0) {
-      loadDashboardData()
+      setFacilities(data || [])
     }
-  }, [timeRange, selectedFacility, facilities])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (facilities.length > 0) {
-        loadDashboardData()
-      }
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [timeRange, selectedFacility, facilities])
+    loadFacilities()
+  }, [supabase])
 
-  const loadFacilities = async () => {
-    const { data } = await supabase
-      .from('facilities')
-      .select('id, name, city, state')
-      .order('name')
-    
-    setFacilities(data || [])
-  }
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true)
-    
+
     const now = new Date()
     const timeRangeMap = {
       '24h': new Date(now.getTime() - 24 * 60 * 60 * 1000),
@@ -175,7 +165,22 @@ export default function GlobalSecurityDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [timeRange, selectedFacility, facilities, supabase, showToast])
+
+  useEffect(() => {
+    if (facilities.length > 0) {
+      loadDashboardData()
+    }
+  }, [timeRange, selectedFacility, facilities, loadDashboardData])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (facilities.length > 0) {
+        loadDashboardData()
+      }
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [timeRange, selectedFacility, facilities, loadDashboardData])
 
   const aggregateStats = {
     totalErrors: errorLogs.length,
@@ -318,14 +323,14 @@ export default function GlobalSecurityDashboard() {
                   <div className="border-b border-slate-200">
                     <nav className="flex gap-8 px-6" aria-label="Tabs">
                       {[
-                        { id: 'errors', label: 'Error Logs', count: errorLogs.length },
-                        { id: 'audits', label: 'Audit Logs', count: auditLogs.length },
-                        { id: 'sessions', label: 'Active Sessions', count: activeSessions.length },
-                        { id: 'failed-logins', label: 'Failed Logins', count: aggregateStats.failedLogins },
+                        { id: 'errors' as const, label: 'Error Logs', count: errorLogs.length },
+                        { id: 'audits' as const, label: 'Audit Logs', count: auditLogs.length },
+                        { id: 'sessions' as const, label: 'Active Sessions', count: activeSessions.length },
+                        { id: 'failed-logins' as const, label: 'Failed Logins', count: aggregateStats.failedLogins },
                       ].map((tab) => (
                         <button
                           key={tab.id}
-                          onClick={() => setActiveTab(tab.id as any)}
+                          onClick={() => setActiveTab(tab.id)}
                           className={`py-4 px-1 border-b-2 text-sm font-medium transition-colors ${
                             activeTab === tab.id
                               ? 'border-blue-600 text-blue-600'

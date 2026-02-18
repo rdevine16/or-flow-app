@@ -64,7 +64,7 @@ const { showToast } = useToast()
     openingRef.current = true
 
     try {
-      // @ts-ignore
+      // @ts-expect-error - documentPictureInPicture is a browser API not yet in TypeScript types
       const pip = await window.documentPictureInPicture.requestWindow({
         width: 280,
         height: 400,
@@ -102,7 +102,7 @@ const { showToast } = useToast()
       onOpenChange(false)
       openingRef.current = false
     }
-  }, [isSupported, roomName, onOpenChange])
+  }, [isSupported, roomName, onOpenChange, showToast])
 
   const closePiP = useCallback(() => {
     if (pipWindow) {
@@ -116,6 +116,7 @@ const { showToast } = useToast()
 
   useEffect(() => {
     if (isOpen && !pipWindow && isSupported) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       openPiP()
     } else if (!isOpen && pipWindow) {
       closePiP()

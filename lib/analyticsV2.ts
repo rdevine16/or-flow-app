@@ -59,6 +59,7 @@ export interface DailyTrackerData {
   date: string
   color: Color
   tooltip: string
+  numericValue: number  // Raw value for sparkline rendering
 }
 
 export interface KPIResult {
@@ -140,13 +141,123 @@ export interface RoomHoursMap {
   [roomId: string]: number  // room_id → available_hours
 }
 
-// NEW: Same-day cancellation result
+// ============================================
+// FACILITY ANALYTICS CONFIG
+// ============================================
+
+/**
+ * Unified config for all facility-level KPI targets.
+ * Fetched from facility_analytics_settings + facilities.or_hourly_rate.
+ * All analytics consumers should use this instead of hard-coded values.
+ */
+export interface FacilityAnalyticsConfig {
+  // FCOTS
+  fcotsMilestone: 'patient_in' | 'incision'
+  fcotsGraceMinutes: number
+  fcotsTargetPercent: number
+  // Surgical Turnovers
+  sameRoomTurnoverTarget: number       // minutes (default 45)
+  flipRoomTurnoverTarget: number       // minutes (default 15)
+  turnoverThresholdMinutes: number     // room turnover compliance threshold (default 30)
+  turnoverComplianceTarget: number     // percent (default 80)
+  // OR Utilization
+  utilizationTargetPercent: number     // percent (default 75)
+  // Cancellations
+  cancellationTargetPercent: number    // percent (default 5)
+  // Surgeon Idle Time
+  idleCombinedTargetMinutes: number    // minutes (default 10)
+  idleFlipTargetMinutes: number        // minutes (default 5)
+  idleSameRoomTargetMinutes: number    // minutes (default 10)
+  // Tardiness & Non-Operative Time
+  tardinessTargetMinutes: number       // minutes (default 45)
+  nonOpWarnMinutes: number             // minutes (default 20)
+  nonOpBadMinutes: number              // minutes (default 30)
+  // Operational
+  operatingDaysPerYear: number         // days (default 250)
+  // Revenue (from facilities table, not facility_analytics_settings)
+  orHourlyRate: number | null          // $/hr (from facilities.or_hourly_rate)
+}
+
+/** Default values for all analytics config fields */
+export const ANALYTICS_CONFIG_DEFAULTS: FacilityAnalyticsConfig = {
+  fcotsMilestone: 'patient_in',
+  fcotsGraceMinutes: 2,
+  fcotsTargetPercent: 85,
+  sameRoomTurnoverTarget: 45,
+  flipRoomTurnoverTarget: 15,
+  turnoverThresholdMinutes: 30,
+  turnoverComplianceTarget: 80,
+  utilizationTargetPercent: 75,
+  cancellationTargetPercent: 5,
+  idleCombinedTargetMinutes: 10,
+  idleFlipTargetMinutes: 5,
+  idleSameRoomTargetMinutes: 10,
+  tardinessTargetMinutes: 45,
+  nonOpWarnMinutes: 20,
+  nonOpBadMinutes: 30,
+  operatingDaysPerYear: 250,
+  orHourlyRate: null,
+}
+
+// Per-transition detail for room turnovers
+export interface TurnoverDetail {
+  date: string
+  roomName: string
+  fromCaseNumber: string
+  toCaseNumber: string
+  fromSurgeonName: string
+  toSurgeonName: string
+  turnoverMinutes: number
+  isCompliant: boolean // under threshold
+}
+
+// Extended turnover result with detail data
+export interface TurnoverResult extends KPIResult {
+  details: TurnoverDetail[]
+  compliantCount: number
+  nonCompliantCount: number
+  complianceRate: number
+}
+
+// Per-case cancellation detail
+export interface CancellationDetail {
+  caseId: string
+  caseNumber: string
+  date: string
+  roomName: string
+  surgeonName: string
+  scheduledStart: string
+  cancellationType: 'same_day' | 'prior_day' | 'other'
+}
+
+// Same-day cancellation result
 export interface CancellationResult extends KPIResult {
   sameDayCount: number
   sameDayRate: number
   totalCancelledCount: number
+  details: CancellationDetail[]
 }
 
+
+export interface FCOTSDetail {
+  caseId: string
+  caseNumber: string
+  scheduledDate: string
+  roomName: string
+  surgeonName: string
+  scheduledStart: string
+  actualStart: string
+  delayMinutes: number
+  isOnTime: boolean
+}
+
+export interface FCOTSResult extends KPIResult {
+  firstCaseDetails: FCOTSDetail[]
+}
+
+export interface CaseVolumeResult extends KPIResult {
+  weeklyVolume: Array<{ week: string; count: number }>
+}
 
 export interface AnalyticsOverview {
   // Volume
@@ -155,10 +266,10 @@ export interface AnalyticsOverview {
   cancelledCases: number
   
   // KPIs
-  fcots: KPIResult
-  turnoverTime: KPIResult
+  fcots: FCOTSResult
+  turnoverTime: TurnoverResult
   orUtilization: ORUtilizationResult
-  caseVolume: KPIResult
+  caseVolume: CaseVolumeResult
   cancellationRate: CancellationResult
   cumulativeTardiness: KPIResult
   nonOperativeTime: KPIResult
@@ -180,6 +291,51 @@ export interface AnalyticsOverview {
   avgClosingTime: number
   avgEmergenceTime: number
 }
+// ============================================
+// STATUS UTILITY
+// ============================================
+
+/**
+ * 3-tier KPI status based on value vs target.
+ * Returns 'good' if at or above target, 'warn' if ≥70%, 'bad' otherwise.
+ * For inverse metrics (lower is better), pass inverse=true.
+ */
+export function getKPIStatus(
+  value: number,
+  target: number,
+  inverse: boolean = false
+): 'good' | 'warn' | 'bad' {
+  const ratio = inverse
+    ? target / Math.max(value, 0.01)
+    : value / Math.max(target, 0.01)
+  if (ratio >= 1) return 'good'
+  if (ratio >= 0.7) return 'warn'
+  return 'bad'
+}
+
+// ============================================
+// TARGET-RELATIVE COLOR UTILITY
+// ============================================
+
+/**
+ * Target-relative color for daily tracker sparklines.
+ * - "Lower is better" (turnovers, idle, tardiness, non-op):
+ *   green ≤ target, yellow ≤ target × 1.2, red > target × 1.2
+ * - "Higher is better" (FCOTS, utilization):
+ *   green ≥ target, yellow ≥ target × 0.8, red < target × 0.8
+ */
+function getTargetRelativeColor(value: number, target: number, lowerIsBetter: boolean): Color {
+  if (lowerIsBetter) {
+    if (value <= target) return 'green'
+    if (value <= target * 1.2) return 'yellow'
+    return 'red'
+  } else {
+    if (value >= target) return 'green'
+    if (value >= target * 0.8) return 'yellow'
+    return 'red'
+  }
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -397,6 +553,7 @@ export function getSurgicalTime(milestones: MilestoneMap): number | null {
 
 /**
  * Wheels-in to Incision: patient_in -> incision (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getWheelsInToIncision(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.patient_in, milestones.incision)
@@ -404,6 +561,7 @@ export function getWheelsInToIncision(milestones: MilestoneMap): number | null {
 
 /**
  * Incision to Closing: incision -> closing (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getIncisionToClosing(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.incision, milestones.closing)
@@ -411,6 +569,7 @@ export function getIncisionToClosing(milestones: MilestoneMap): number | null {
 
 /**
  * Closing Time: closing -> closing_complete (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getClosingTime(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.closing, milestones.closing_complete)
@@ -418,6 +577,7 @@ export function getClosingTime(milestones: MilestoneMap): number | null {
 
 /**
  * Closed to Wheels-Out: closing_complete -> patient_out (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getClosedToWheelsOut(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.closing_complete, milestones.patient_out)
@@ -461,6 +621,210 @@ export function getMilestoneDuration(
   endMilestone: keyof MilestoneMap
 ): number | null {
   return getTimeDiffSeconds(milestones[startMilestone], milestones[endMilestone])
+}
+
+// ============================================
+// DYNAMIC PHASE DURATION ENGINE
+// ============================================
+
+/** Minimal phase definition shape needed by computePhaseDurations. */
+export interface PhaseDefInput {
+  id: string
+  name: string
+  display_name: string
+  display_order: number
+  color_key: string | null
+  parent_phase_id: string | null
+  start_milestone_id: string
+  end_milestone_id: string
+}
+
+/** Output of computePhaseDurations for a single phase. */
+export interface PhaseDurationResult {
+  phaseId: string
+  name: string
+  displayName: string
+  displayOrder: number
+  colorKey: string | null
+  parentPhaseId: string | null
+  /** Duration in seconds, or null if boundary milestones are missing */
+  durationSeconds: number | null
+}
+
+/** Map of facility_milestone_id → recorded_at ISO timestamp */
+export type MilestoneTimestampMap = Map<string, string>
+
+/**
+ * Build a MilestoneTimestampMap from a case's raw case_milestones array.
+ * This is the bridge between the DB shape and the duration engine.
+ */
+export function buildMilestoneTimestampMap(
+  caseMilestones: Array<{ facility_milestone_id: string; recorded_at: string }>
+): MilestoneTimestampMap {
+  const map = new Map<string, string>()
+  for (const cm of caseMilestones) {
+    if (cm.recorded_at) {
+      map.set(cm.facility_milestone_id, cm.recorded_at)
+    }
+  }
+  return map
+}
+
+/**
+ * Compute durations for each phase definition from actual milestone timestamps.
+ *
+ * Takes phase definitions (from DB) and a milestone timestamp map (from case_milestones),
+ * returns a PhaseDurationResult per phase. Phases where either boundary milestone is
+ * missing get durationSeconds = null (rendered as hatched/missing indicator in Phase 2).
+ *
+ * Results are sorted by display_order. Works for both parent phases and subphases —
+ * subphases have a non-null parentPhaseId.
+ */
+export function computePhaseDurations(
+  phaseDefinitions: PhaseDefInput[],
+  milestoneTimestamps: MilestoneTimestampMap,
+): PhaseDurationResult[] {
+  return phaseDefinitions
+    .slice()
+    .sort((a, b) => a.display_order - b.display_order)
+    .map((phase) => {
+      const startTs = milestoneTimestamps.get(phase.start_milestone_id)
+      const endTs = milestoneTimestamps.get(phase.end_milestone_id)
+
+      let durationSeconds: number | null = null
+      if (startTs && endTs) {
+        const startMs = new Date(startTs).getTime()
+        const endMs = new Date(endTs).getTime()
+        if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
+          durationSeconds = (endMs - startMs) / 1000
+        }
+      }
+
+      return {
+        phaseId: phase.id,
+        name: phase.name,
+        displayName: phase.display_name,
+        displayOrder: phase.display_order,
+        colorKey: phase.color_key,
+        parentPhaseId: phase.parent_phase_id,
+        durationSeconds,
+      }
+    })
+}
+
+// ─── Sub-phase Offset Computation ──────────────────────────────
+
+export interface SubphaseOffset {
+  phaseId: string
+  offsetSeconds: number
+  durationSeconds: number
+  label: string
+  color: string
+}
+
+export interface ParentSubphaseOffsets {
+  phaseId: string
+  subphases: SubphaseOffset[]
+}
+
+/**
+ * Compute sub-phase offsets within their parent phases.
+ *
+ * For each parent phase with children, computes where each sub-phase starts
+ * relative to the parent's start and how long it lasts. This is used for
+ * positioning inset pills inside parent phase segments in the timeline and
+ * case breakdown bars.
+ *
+ * @param phaseDefinitions - All phase definitions (parent + children)
+ * @param phaseDurations - Output of computePhaseDurations for this case
+ * @param milestoneTimestamps - Output of buildMilestoneTimestampMap for this case
+ * @param resolveColor - Function to resolve a color_key to hex (e.g., resolveSubphaseHex)
+ * @returns Array of parent phases with their sub-phase offset data
+ */
+export function computeSubphaseOffsets(
+  phaseDefinitions: PhaseDefInput[],
+  phaseDurations: PhaseDurationResult[],
+  milestoneTimestamps: MilestoneTimestampMap,
+  resolveColor: (colorKey: string | null) => string,
+): ParentSubphaseOffsets[] {
+  // Build lookup maps
+  const durationMap = new Map<string, PhaseDurationResult>()
+  for (const pd of phaseDurations) {
+    durationMap.set(pd.phaseId, pd)
+  }
+
+  const defMap = new Map<string, PhaseDefInput>()
+  for (const pd of phaseDefinitions) {
+    defMap.set(pd.id, pd)
+  }
+
+  // Identify parent phases (those with children)
+  const parents = phaseDefinitions.filter(p => !p.parent_phase_id)
+  const childrenByParent = new Map<string, PhaseDefInput[]>()
+  for (const p of phaseDefinitions) {
+    if (p.parent_phase_id) {
+      const existing = childrenByParent.get(p.parent_phase_id) || []
+      existing.push(p)
+      childrenByParent.set(p.parent_phase_id, existing)
+    }
+  }
+
+  const results: ParentSubphaseOffsets[] = []
+
+  for (const parent of parents) {
+    const children = childrenByParent.get(parent.id)
+    if (!children || children.length === 0) continue
+
+    const parentDuration = durationMap.get(parent.id)
+    if (!parentDuration || parentDuration.durationSeconds === null) continue
+
+    // Get parent's start timestamp
+    const parentStartTs = milestoneTimestamps.get(parent.start_milestone_id)
+    if (!parentStartTs) continue
+    const parentStartMs = new Date(parentStartTs).getTime()
+    if (isNaN(parentStartMs)) continue
+
+    const subphases: SubphaseOffset[] = []
+
+    for (const child of children.sort((a, b) => a.display_order - b.display_order)) {
+      const childDuration = durationMap.get(child.id)
+      if (!childDuration || childDuration.durationSeconds === null) continue
+
+      // Get child's start timestamp
+      const childStartTs = milestoneTimestamps.get(child.start_milestone_id)
+      if (!childStartTs) continue
+      const childStartMs = new Date(childStartTs).getTime()
+      if (isNaN(childStartMs)) continue
+
+      let offsetSeconds = (childStartMs - parentStartMs) / 1000
+      let durationSeconds = childDuration.durationSeconds
+
+      // Clamp: offset can't be negative
+      if (offsetSeconds < 0) offsetSeconds = 0
+
+      // Clamp: sub-phase can't extend beyond parent end
+      if (offsetSeconds + durationSeconds > parentDuration.durationSeconds) {
+        durationSeconds = parentDuration.durationSeconds - offsetSeconds
+      }
+
+      // Skip if clamped to zero or negative
+      if (durationSeconds <= 0) continue
+
+      subphases.push({
+        phaseId: child.id,
+        offsetSeconds,
+        durationSeconds,
+        label: child.display_name,
+        color: resolveColor(child.color_key),
+      })
+    }
+
+    if (subphases.length > 0) {
+      results.push({ phaseId: parent.id, subphases })
+    }
+  }
+
+  return results
 }
 
 /**
@@ -576,7 +940,8 @@ function isSameDayCancellation(c: CaseWithMilestones): boolean {
  */
 export function calculateSurgicalTurnovers(
   cases: CaseWithMilestonesAndSurgeon[],
-  previousPeriodCases?: CaseWithMilestonesAndSurgeon[]
+  previousPeriodCases?: CaseWithMilestonesAndSurgeon[],
+  config?: { sameRoomTurnoverTarget?: number; flipRoomTurnoverTarget?: number }
 ): TurnoverBreakdown {
   const sameRoomTurnovers: number[] = []
   const flipRoomTurnovers: number[] = []
@@ -719,9 +1084,9 @@ export function calculateSurgicalTurnovers(
   const sameRoomDelta = calculateDelta(medianSameRoom, prevMedianSameRoom, true)
   const flipRoomDelta = calculateDelta(medianFlipRoom, prevMedianFlipRoom, true)
 
-  // Target compliance
-  const sameRoomTarget = 45 // Target: 45 minutes for same room
-  const flipRoomTarget = 15 // Target: 15 minutes for flip room
+  // Target compliance (configurable)
+  const sameRoomTarget = config?.sameRoomTurnoverTarget ?? ANALYTICS_CONFIG_DEFAULTS.sameRoomTurnoverTarget
+  const flipRoomTarget = config?.flipRoomTurnoverTarget ?? ANALYTICS_CONFIG_DEFAULTS.flipRoomTurnoverTarget
 
   const sameRoomMetTarget = sameRoomTurnovers.filter(t => t <= sameRoomTarget).length
   const sameRoomCompliance = sameRoomTurnovers.length > 0 
@@ -733,7 +1098,7 @@ export function calculateSurgicalTurnovers(
     ? Math.round((flipRoomMetTarget / flipRoomTurnovers.length) * 100)
     : 0
 
-  // Build daily tracker data for same room
+  // Build daily tracker data for same room (target-relative colors)
   const sameRoomDailyData: DailyTrackerData[] = Array.from(sameRoomDaily.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
@@ -741,12 +1106,13 @@ export function calculateSurgicalTurnovers(
       const dayMedian = calculateMedian(turnovers) ?? 0
       return {
         date,
-        color: (dayMedian <= 40 ? 'green' : dayMedian <= 50 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} turnovers)`
+        color: getTargetRelativeColor(dayMedian, sameRoomTarget, true),
+        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} turnovers)`,
+        numericValue: dayMedian
       }
     })
 
-  // Build daily tracker data for flip room
+  // Build daily tracker data for flip room (target-relative colors)
   const flipRoomDailyData: DailyTrackerData[] = Array.from(flipRoomDaily.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
@@ -754,8 +1120,9 @@ export function calculateSurgicalTurnovers(
       const dayMedian = calculateMedian(turnovers) ?? 0
       return {
         date,
-        color: (dayMedian <= 10 ? 'green' : dayMedian <= 20 ? 'yellow' : 'red') as Color,
-        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} flips)`
+        color: getTargetRelativeColor(dayMedian, flipRoomTarget, true),
+        tooltip: `${date}: ${Math.round(dayMedian)} min median (${turnovers.length} flips)`,
+        numericValue: dayMedian
       }
     })
 
@@ -803,46 +1170,70 @@ export function calculateFCOTS(
   cases: CaseWithMilestones[],
   previousPeriodCases?: CaseWithMilestones[],
   config?: FCOTSConfig
-): KPIResult {
+): FCOTSResult {
   const milestone = config?.milestone || 'patient_in'
   const grace = config?.graceMinutes ?? 2
   const targetPercent = config?.targetPercent ?? 85
-  
+
   const casesByDateRoom = new Map<string, CaseWithMilestones>()
-  
+
   // Find first case per room per day
   cases.forEach(c => {
     if (!c.or_room_id || !c.start_time) return
     const key = `${c.scheduled_date}|${c.or_room_id}`
     const existing = casesByDateRoom.get(key)
-    
+
     if (!existing || (c.start_time < (existing.start_time || ''))) {
       casesByDateRoom.set(key, c)
     }
   })
-  
+
   const firstCases = Array.from(casesByDateRoom.values())
   let onTimeCount = 0
   let lateCount = 0
   const dailyResults = new Map<string, { onTime: number; late: number }>()
-  
+  const firstCaseDetails: FCOTSDetail[] = []
+
   firstCases.forEach(c => {
     const milestones = getMilestoneMap(c)
     const scheduled = parseScheduledDateTime(c.scheduled_date, c.start_time)
     // Use configured milestone for "actual start"
     const actual = milestone === 'incision' ? milestones.incision : milestones.patient_in
-    
+
     if (!scheduled || !actual) return
-    
+
     const delayMinutes = getTimeDiffMinutes(scheduled, actual) || 0
     const isOnTime = delayMinutes <= grace
-    
+
     if (isOnTime) {
       onTimeCount++
     } else {
       lateCount++
     }
-    
+
+    // Collect per-case detail for drill-through
+    const surgeonName = c.surgeon
+      ? `Dr. ${c.surgeon.last_name}`
+      : 'Unknown'
+    const scheduledTime = c.start_time
+      ? c.start_time.substring(0, 5) // "07:30:00" → "07:30"
+      : '--'
+    const actualTime = actual
+      ? `${String(actual.getHours()).padStart(2, '0')}:${String(actual.getMinutes()).padStart(2, '0')}`
+      : '--'
+
+    firstCaseDetails.push({
+      caseId: c.id,
+      caseNumber: c.case_number,
+      scheduledDate: c.scheduled_date,
+      roomName: c.or_rooms?.name || 'Unknown',
+      surgeonName,
+      scheduledStart: scheduledTime,
+      actualStart: actualTime,
+      delayMinutes: Math.max(0, delayMinutes),
+      isOnTime
+    })
+
     // Track daily
     const dayData = dailyResults.get(c.scheduled_date) || { onTime: 0, late: 0 }
     if (isOnTime) dayData.onTime++
@@ -890,13 +1281,14 @@ export function calculateFCOTS(
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30) // Last 30 days
     .map(([date, data]) => {
-      const dayRate = data.onTime + data.late > 0 
-        ? (data.onTime / (data.onTime + data.late)) * 100 
+      const dayRate = data.onTime + data.late > 0
+        ? (data.onTime / (data.onTime + data.late)) * 100
         : 100
       return {
         date,
-        color: dayRate >= 100 ? 'green' : dayRate >= 80 ? 'yellow' : 'red' as Color,
-        tooltip: `${date}: ${data.onTime}/${data.onTime + data.late} on-time`
+        color: getTargetRelativeColor(dayRate, targetPercent, false),
+        tooltip: `${date}: ${data.onTime}/${data.onTime + data.late} on-time`,
+        numericValue: dayRate
       }
     })
   
@@ -910,7 +1302,8 @@ export function calculateFCOTS(
     targetMet: rate >= targetPercent,
     delta,
     deltaType,
-    dailyData
+    dailyData,
+    firstCaseDetails: firstCaseDetails.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
   }
 }
 
@@ -920,11 +1313,15 @@ export function calculateFCOTS(
  */
 export function calculateTurnoverTime(
   cases: CaseWithMilestones[],
-  previousPeriodCases?: CaseWithMilestones[]
-): KPIResult {
+  previousPeriodCases?: CaseWithMilestones[],
+  config?: { turnoverThresholdMinutes?: number; turnoverComplianceTarget?: number }
+): TurnoverResult {
   const turnovers: number[] = []
+  const turnoverDetails: TurnoverDetail[] = []
   const dailyResults = new Map<string, number[]>()
-  
+
+  const thresholdMinutes = config?.turnoverThresholdMinutes ?? ANALYTICS_CONFIG_DEFAULTS.turnoverThresholdMinutes
+
   // Group by room and date, sort by time
   const byRoomDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
@@ -934,31 +1331,47 @@ export function calculateTurnoverTime(
     existing.push(c)
     byRoomDate.set(key, existing)
   })
-  
+
   // Calculate turnovers between consecutive cases
   byRoomDate.forEach((roomCases, key) => {
     const date = key.split('|')[0]
     const sorted = roomCases.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
-    
+
     for (let i = 0; i < sorted.length - 1; i++) {
       const current = getMilestoneMap(sorted[i])
       const next = getMilestoneMap(sorted[i + 1])
-      
+
       if (current.patient_out && next.patient_in) {
         const turnoverMinutes = getTimeDiffMinutes(current.patient_out, next.patient_in)
         if (turnoverMinutes !== null && turnoverMinutes > 0 && turnoverMinutes < 180) {
           turnovers.push(turnoverMinutes)
-          
+
           const dayTurnovers = dailyResults.get(date) || []
           dayTurnovers.push(turnoverMinutes)
           dailyResults.set(date, dayTurnovers)
+
+          // Build per-transition detail
+          const fromSurgeon = sorted[i].surgeon
+          const toSurgeon = sorted[i + 1].surgeon
+          turnoverDetails.push({
+            date,
+            roomName: sorted[i].or_rooms?.name || 'Unknown',
+            fromCaseNumber: sorted[i].case_number,
+            toCaseNumber: sorted[i + 1].case_number,
+            fromSurgeonName: fromSurgeon ? `${fromSurgeon.first_name} ${fromSurgeon.last_name}` : 'Unknown',
+            toSurgeonName: toSurgeon ? `${toSurgeon.first_name} ${toSurgeon.last_name}` : 'Unknown',
+            turnoverMinutes: Math.round(turnoverMinutes),
+            isCompliant: turnoverMinutes <= thresholdMinutes,
+          })
         }
       }
     }
   })
-  
+
+  const complianceTarget = config?.turnoverComplianceTarget ?? ANALYTICS_CONFIG_DEFAULTS.turnoverComplianceTarget
+
   const medianTurnover = calculateMedian(turnovers) ?? 0
-  const metTarget = turnovers.filter(t => t <= 30).length
+  const metTarget = turnovers.filter(t => t <= thresholdMinutes).length
   const complianceRate = turnovers.length > 0 ? Math.round((metTarget / turnovers.length) * 100) : 0
   
   // Calculate previous period median for delta
@@ -1006,20 +1419,26 @@ export function calculateTurnoverTime(
       const dayMedian = calculateMedian(dayTurnovers) ?? 0
       return {
         date,
-        color: dayMedian <= 25 ? 'green' : dayMedian <= 30 ? 'yellow' : 'red' as Color,
-        tooltip: `${date}: ${Math.round(dayMedian)} min median`
+        color: getTargetRelativeColor(dayMedian, thresholdMinutes, true),
+        tooltip: `${date}: ${Math.round(dayMedian)} min median`,
+        numericValue: dayMedian
       }
     })
   
   return {
     value: Math.round(medianTurnover),
     displayValue: `${Math.round(medianTurnover)} min`,
-    subtitle: `${complianceRate}% under 30 min target`,
-    target: 80,
-    targetMet: complianceRate >= 80,
+    subtitle: `${complianceRate}% under ${thresholdMinutes} min target`,
+    target: complianceTarget,
+    targetMet: complianceRate >= complianceTarget,
     delta,
     deltaType,
-    dailyData
+    dailyData,
+    // Detail data for drill-through panel
+    details: turnoverDetails.sort((a, b) => a.date.localeCompare(b.date) || a.roomName.localeCompare(b.roomName)),
+    compliantCount: metTarget,
+    nonCompliantCount: turnovers.length - metTarget,
+    complianceRate,
   }
 }
 
@@ -1034,10 +1453,11 @@ export function calculateTurnoverTime(
  * - Case count and active days per room
  */
 export function calculateORUtilization(
-  cases: CaseWithMilestones[], 
+  cases: CaseWithMilestones[],
   defaultHours: number = 10,
   previousPeriodCases?: CaseWithMilestones[],
-  roomHoursMap?: RoomHoursMap
+  roomHoursMap?: RoomHoursMap,
+  config?: { utilizationTargetPercent?: number }
 ): ORUtilizationResult {
   // Track per room-day: minutes used, room metadata
   const roomDays = new Map<string, { minutes: number; roomId: string; roomName: string; caseCount: number }>()
@@ -1121,10 +1541,12 @@ export function calculateORUtilization(
   const allDailyUtils = Array.from(roomAgg.values()).flatMap(a => a.dailyUtils)
   const avgUtilization = calculateAverage(allDailyUtils)
   
+  const utilizationTarget = config?.utilizationTargetPercent ?? ANALYTICS_CONFIG_DEFAULTS.utilizationTargetPercent
+
   const roomsWithRealHours = roomBreakdown.filter(r => r.usingRealHours).length
   const roomsWithDefaultHours = roomBreakdown.filter(r => !r.usingRealHours).length
   const totalRooms = roomBreakdown.length
-  const roomsAboveTarget = roomBreakdown.filter(r => r.utilization >= 75).length
+  const roomsAboveTarget = roomBreakdown.filter(r => r.utilization >= utilizationTarget).length
   
   // Previous period delta
   let previousAvg: number | undefined
@@ -1164,8 +1586,9 @@ export function calculateORUtilization(
       const dayAvg = calculateAverage(dayUtils)
       return {
         date,
-        color: dayAvg >= 75 ? 'green' : dayAvg >= 60 ? 'yellow' : 'slate' as Color,
-        tooltip: `${date}: ${Math.round(dayAvg)}% utilization`
+        color: getTargetRelativeColor(dayAvg, utilizationTarget, false),
+        tooltip: `${date}: ${Math.round(dayAvg)}% utilization`,
+        numericValue: dayAvg
       }
     })
   
@@ -1179,9 +1602,9 @@ export function calculateORUtilization(
   return {
     value: Math.round(avgUtilization),
     displayValue: `${Math.round(avgUtilization)}%`,
-    subtitle: `${roomsAboveTarget}/${totalRooms} rooms above 75% target${hoursNote}`,
-    target: 75,
-    targetMet: avgUtilization >= 75,
+    subtitle: `${roomsAboveTarget}/${totalRooms} rooms above ${utilizationTarget}% target${hoursNote}`,
+    target: utilizationTarget,
+    targetMet: avgUtilization >= utilizationTarget,
     delta,
     deltaType,
     dailyData,
@@ -1199,7 +1622,7 @@ export function calculateORUtilization(
 export function calculateCaseVolume(
   cases: CaseWithMilestones[],
   previousPeriodCases?: CaseWithMilestones[]
-): KPIResult {
+): CaseVolumeResult {
   const totalCases = cases.length
   const previousTotal = previousPeriodCases?.length || 0
   
@@ -1227,7 +1650,10 @@ export function calculateCaseVolume(
     displayValue: totalCases.toString(),
     subtitle: delta !== undefined ? `${deltaType === 'increase' ? '+' : '-'}${delta}% vs last period` : 'This period',
     delta,
-    deltaType
+    deltaType,
+    weeklyVolume: Array.from(weeklyVolume.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([week, count]) => ({ week, count }))
   }
 }
 
@@ -1240,14 +1666,38 @@ export function calculateCaseVolume(
  */
 export function calculateCancellationRate(
   cases: CaseWithMilestones[],
-  previousPeriodCases?: CaseWithMilestones[]
+  previousPeriodCases?: CaseWithMilestones[],
+  config?: { cancellationTargetPercent?: number }
 ): CancellationResult {
+  const cancellationTarget = config?.cancellationTargetPercent ?? ANALYTICS_CONFIG_DEFAULTS.cancellationTargetPercent
+
   const allCancelled = cases.filter(c => c.case_statuses?.name === 'cancelled')
   const sameDayCancelled = allCancelled.filter(c => isSameDayCancellation(c))
-  
+
   const total = cases.length
   const sameDayRate = total > 0 ? (sameDayCancelled.length / total) * 100 : 0
-  
+
+  // Build per-case cancellation details
+  const cancellationDetails: CancellationDetail[] = allCancelled.map(c => {
+    const surgeon = c.surgeon
+    const isSameDay = isSameDayCancellation(c)
+    let cancellationType: CancellationDetail['cancellationType'] = 'other'
+    if (c.cancelled_at) {
+      cancellationType = isSameDay ? 'same_day' : 'prior_day'
+    } else if (isSameDay) {
+      cancellationType = 'same_day'
+    }
+    return {
+      caseId: c.id,
+      caseNumber: c.case_number,
+      date: c.scheduled_date,
+      roomName: c.or_rooms?.name || 'Unknown',
+      surgeonName: surgeon ? `${surgeon.first_name} ${surgeon.last_name}` : 'Unknown',
+      scheduledStart: c.start_time || '--',
+      cancellationType,
+    }
+  }).sort((a, b) => a.date.localeCompare(b.date))
+
   // Calculate previous period rate for delta
   let previousRate: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
@@ -1255,10 +1705,10 @@ export function calculateCancellationRate(
     const prevSameDay = prevCancelled.filter(c => isSameDayCancellation(c))
     previousRate = (prevSameDay.length / previousPeriodCases.length) * 100
   }
-  
+
   // For cancellation rate, lower is better
   const { delta, deltaType } = calculateDelta(sameDayRate, previousRate, true)
-  
+
   // Daily tracker for zero-cancellation days
   const dailyResults = new Map<string, { total: number; cancelled: number; sameDay: number }>()
   cases.forEach(c => {
@@ -1270,24 +1720,28 @@ export function calculateCancellationRate(
     }
     dailyResults.set(c.scheduled_date, data)
   })
-  
+
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
-    .map(([date, data]) => ({
-      date,
-      color: data.sameDay === 0 ? 'green' : data.sameDay === 1 ? 'yellow' : 'red' as Color,
-      tooltip: data.sameDay === 0 
-        ? `${date}: No same-day cancellations` 
-        : `${date}: ${data.sameDay} same-day, ${data.cancelled} total cancelled`
-    }))
-  
+    .map(([date, data]) => {
+      const dayRate = data.total > 0 ? (data.sameDay / data.total) * 100 : 0
+      return {
+        date,
+        color: getTargetRelativeColor(dayRate, cancellationTarget, true),
+        tooltip: data.sameDay === 0
+          ? `${date}: No same-day cancellations`
+          : `${date}: ${data.sameDay} same-day, ${data.cancelled} total cancelled`,
+        numericValue: data.sameDay
+      }
+    })
+
   return {
     value: Math.round(sameDayRate * 10) / 10,
     displayValue: `${(Math.round(sameDayRate * 10) / 10).toFixed(1)}%`,
     subtitle: `${sameDayCancelled.length} same-day of ${allCancelled.length} total cancellations`,
-    target: 5,
-    targetMet: sameDayRate <= 5,
+    target: cancellationTarget,
+    targetMet: sameDayRate <= cancellationTarget,
     delta,
     deltaType,
     dailyData,
@@ -1295,6 +1749,7 @@ export function calculateCancellationRate(
     sameDayCount: sameDayCancelled.length,
     sameDayRate: Math.round(sameDayRate * 10) / 10,
     totalCancelledCount: allCancelled.length,
+    details: cancellationDetails,
   }
 }
 
@@ -1302,7 +1757,11 @@ export function calculateCancellationRate(
  * 6. Cumulative Tardiness
  * Sum of all late start delays per day (average across days)
  */
-export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIResult {
+export function calculateCumulativeTardiness(
+  cases: CaseWithMilestones[],
+  config?: { tardinessTargetMinutes?: number }
+): KPIResult {
+  const tardinessTarget = config?.tardinessTargetMinutes ?? ANALYTICS_CONFIG_DEFAULTS.tardinessTargetMinutes
   const dailyTardiness = new Map<string, number>()
   
   cases.forEach(c => {
@@ -1329,16 +1788,17 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
     .slice(-30)
     .map(([date, minutes]) => ({
       date,
-      color: minutes <= 30 ? 'green' : minutes <= 45 ? 'yellow' : 'red' as Color,
-      tooltip: `${date}: ${Math.round(minutes)} min total delays`
+      color: getTargetRelativeColor(minutes, tardinessTarget, true),
+      tooltip: `${date}: ${Math.round(minutes)} min total delays`,
+      numericValue: minutes
     }))
   
   return {
     value: Math.round(avgTardiness),
     displayValue: `${Math.round(avgTardiness)} min`,
     subtitle: 'Average daily delay',
-    target: 45,
-    targetMet: avgTardiness <= 45,
+    target: tardinessTarget,
+    targetMet: avgTardiness <= tardinessTarget,
     dailyData
   }
 }
@@ -1352,20 +1812,26 @@ export function calculateCumulativeTardiness(cases: CaseWithMilestones[]): KPIRe
  * Only includes cases with patient_in + incision at minimum.
  * Post-op segment only counted when closing_complete is recorded.
  */
-export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResult {
+export function calculateNonOperativeTime(
+  cases: CaseWithMilestones[],
+  config?: { nonOpWarnMinutes?: number; nonOpBadMinutes?: number }
+): KPIResult {
+  const warnMinutes = config?.nonOpWarnMinutes ?? ANALYTICS_CONFIG_DEFAULTS.nonOpWarnMinutes
+  const badMinutes = config?.nonOpBadMinutes ?? ANALYTICS_CONFIG_DEFAULTS.nonOpBadMinutes
   const notTimes: number[] = []
   const totalTimes: number[] = []
-  
+  const dailyResults = new Map<string, number[]>()
+
   cases.forEach(c => {
     const m = getMilestoneMap(c)
-    
+
     // Must have at least patient_in and incision to calculate any non-operative time
     if (!m.patient_in || !m.incision) return
-    
+
     // Pre-op time: patient_in to incision (always available if we get here)
     const preOp = getTimeDiffMinutes(m.patient_in, m.incision)
     if (preOp === null || preOp < 0) return // Skip invalid data
-    
+
     // Post-closing time: ONLY use closing_complete → patient_out
     // Do NOT fall back to closing — that segment includes active surgical closing work
     let postClose: number | null = null
@@ -1373,27 +1839,49 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
       postClose = getTimeDiffMinutes(m.closing_complete, m.patient_out)
       if (postClose !== null && postClose < 0) postClose = null // Skip invalid
     }
-    
+
     // Total case time
     const total = getTimeDiffMinutes(m.patient_in, m.patient_out)
-    
+
     // Sum non-operative segments (pre-op always, post-op when available)
     const nonOpTime = preOp + (postClose ?? 0)
     notTimes.push(nonOpTime)
-    
+
     if (total !== null && total > 0) {
       totalTimes.push(total)
     }
+
+    // Track daily
+    const dayTimes = dailyResults.get(c.scheduled_date) || []
+    dayTimes.push(nonOpTime)
+    dailyResults.set(c.scheduled_date, dayTimes)
   })
-  
+
   const avgNOT = calculateAverage(notTimes)
   const avgTotal = calculateAverage(totalTimes)
   const notPercent = avgTotal > 0 ? Math.round((avgNOT / avgTotal) * 100) : 0
-  
+
+  // Build daily tracker
+  const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-30)
+    .map(([date, dayTimes]) => {
+      const dayAvg = calculateAverage(dayTimes)
+      return {
+        date,
+        color: (dayAvg <= warnMinutes ? 'green' : dayAvg <= badMinutes ? 'yellow' : 'red') as Color,
+        tooltip: `${date}: ${Math.round(dayAvg)} min avg non-op (${dayTimes.length} cases)`,
+        numericValue: dayAvg
+      }
+    })
+
   return {
     value: Math.round(avgNOT),
     displayValue: formatMinutes(avgNOT),
-    subtitle: `${notPercent}% of total case time · ${notTimes.length} cases`
+    subtitle: `${notPercent}% of total case time · ${notTimes.length} cases`,
+    target: warnMinutes,
+    targetMet: avgNOT <= warnMinutes,
+    dailyData
   }
 }
 
@@ -1407,12 +1895,18 @@ export function calculateNonOperativeTime(cases: CaseWithMilestones[]): KPIResul
  * Returns split KPIs for combined, flip-only, and same-room-only idle time,
  * plus detailed per-surgeon-day analysis for the modal.
  */
-export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]): {
+export function calculateSurgeonIdleTime(
+  cases: CaseWithMilestonesAndSurgeon[],
+  config?: { idleCombinedTargetMinutes?: number; idleFlipTargetMinutes?: number; idleSameRoomTargetMinutes?: number }
+): {
   kpi: KPIResult           // Combined idle
   flipKpi: KPIResult       // Flip room idle only
   sameRoomKpi: KPIResult   // Same room idle only
   details: FlipRoomAnalysis[]
 } {
+  const idleCombinedTarget = config?.idleCombinedTargetMinutes ?? ANALYTICS_CONFIG_DEFAULTS.idleCombinedTargetMinutes
+  const idleFlipTarget = config?.idleFlipTargetMinutes ?? ANALYTICS_CONFIG_DEFAULTS.idleFlipTargetMinutes
+  const idleSameRoomTarget = config?.idleSameRoomTargetMinutes ?? ANALYTICS_CONFIG_DEFAULTS.idleSameRoomTargetMinutes
   const allAnalysis: FlipRoomAnalysis[] = []
   const allIdleTimes: number[] = []
   const flipIdleTimes: number[] = []
@@ -1521,7 +2015,6 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
   // Combined KPI
   const avgIdleTime = calculateAverage(allIdleTimes)
   const flipDays = allAnalysis.filter(a => a.isFlipRoom).length
-  const sameRoomDays = allAnalysis.filter(a => !a.isFlipRoom).length
   const totalSurgeonDays = allAnalysis.length
   
   // Flip KPI
@@ -1544,19 +2037,19 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
       value: Math.round(avgIdleTime),
       displayValue: `${Math.round(avgIdleTime)} min`,
       subtitle: `${totalSurgeonDays} surgeon-days · ${allIdleTimes.length} gaps analyzed`,
-      target: 10,
-      targetMet: avgIdleTime <= 10
+      target: idleCombinedTarget,
+      targetMet: avgIdleTime <= idleCombinedTarget
     },
     flipKpi: {
       value: Math.round(avgFlipIdle),
       displayValue: flipIdleTimes.length > 0 ? `${Math.round(avgFlipIdle)} min` : '—',
       subtitle: avgFlipDelta > 0 && flipIdleTimes.length > 0
         ? `Call patients ${Math.round(avgFlipDelta)} min earlier · ${flipIdleTimes.length} transitions`
-        : flipIdleTimes.length > 0 
+        : flipIdleTimes.length > 0
         ? `${flipIdleTimes.length} transitions · ${flipDays} surgeon-days`
         : 'No flip room transitions found',
-      target: 5,
-      targetMet: avgFlipIdle <= 5 || flipIdleTimes.length === 0
+      target: idleFlipTarget,
+      targetMet: avgFlipIdle <= idleFlipTarget || flipIdleTimes.length === 0
     },
     sameRoomKpi: {
       value: Math.round(avgSameRoomIdle),
@@ -1566,8 +2059,8 @@ export function calculateSurgeonIdleTime(cases: CaseWithMilestonesAndSurgeon[]):
         : sameRoomIdleTimes.length > 0
         ? `${sameRoomIdleTimes.length} same-room gaps analyzed`
         : 'No same-room gaps found',
-      target: 10,
-      targetMet: avgSameRoomIdle <= 10 || sameRoomIdleTimes.length === 0
+      target: idleSameRoomTarget,
+      targetMet: avgSameRoomIdle <= idleSameRoomTarget || sameRoomIdleTimes.length === 0
     },
     details: allAnalysis.sort((a, b) => b.totalIdleTime - a.totalIdleTime) // Worst offenders first
   }
@@ -1842,14 +2335,14 @@ export function calculateAvgCaseTime(
 /**
  * Calculate all analytics for the overview dashboard.
  *
- * NEW parameters:
- * - fcotsConfig: Configurable FCOTS milestone and grace period
- * - roomHoursMap: Per-room available hours for utilization
+ * Accepts a unified FacilityAnalyticsConfig that is forwarded to each
+ * individual calculate* function. Falls back to ANALYTICS_CONFIG_DEFAULTS
+ * for any missing field.
  */
 export function calculateAnalyticsOverview(
   cases: CaseWithMilestonesAndSurgeon[],
   previousPeriodCases?: CaseWithMilestonesAndSurgeon[],
-  fcotsConfig?: FCOTSConfig,
+  config?: Partial<FacilityAnalyticsConfig>,
   roomHoursMap?: RoomHoursMap
 ): AnalyticsOverview {
   // FIX: Filter out excluded cases before any calculations
@@ -1865,37 +2358,63 @@ export function calculateAnalyticsOverview(
   
   const cancelledCases = activeCases.filter(c => c.case_statuses?.name === 'cancelled')
   
-  const surgeonIdleResult = calculateSurgeonIdleTime(activeCases)
+  // Build FCOTS config from unified config (backward-compatible with FCOTSConfig)
+  const fcotsConfig: FCOTSConfig = {
+    milestone: config?.fcotsMilestone ?? ANALYTICS_CONFIG_DEFAULTS.fcotsMilestone,
+    graceMinutes: config?.fcotsGraceMinutes ?? ANALYTICS_CONFIG_DEFAULTS.fcotsGraceMinutes,
+    targetPercent: config?.fcotsTargetPercent ?? ANALYTICS_CONFIG_DEFAULTS.fcotsTargetPercent,
+  }
+
+  const surgeonIdleResult = calculateSurgeonIdleTime(activeCases, {
+    idleCombinedTargetMinutes: config?.idleCombinedTargetMinutes,
+    idleFlipTargetMinutes: config?.idleFlipTargetMinutes,
+    idleSameRoomTargetMinutes: config?.idleSameRoomTargetMinutes,
+  })
   const surgeonIdleSummaries = aggregateSurgeonIdleSummaries(surgeonIdleResult.details, activeCases)
   const timeBreakdown = calculateTimeBreakdown(activeCases)
-  
+
   // Calculate the split turnovers (same room vs flip room)
-  const turnoverBreakdown = calculateSurgicalTurnovers(activeCases, activePrevCases)
-  
+  const turnoverBreakdown = calculateSurgicalTurnovers(activeCases, activePrevCases, {
+    sameRoomTurnoverTarget: config?.sameRoomTurnoverTarget,
+    flipRoomTurnoverTarget: config?.flipRoomTurnoverTarget,
+  })
+
  return {
     // Volume
     totalCases: activeCases.length,
     completedCases: completedCases.length,
     cancelledCases: cancelledCases.length,
-    
+
     // KPIs
     fcots: calculateFCOTS(activeCases, activePrevCases, fcotsConfig),
-    turnoverTime: calculateTurnoverTime(activeCases, activePrevCases),
-    orUtilization: calculateORUtilization(activeCases, 10, activePrevCases, roomHoursMap),
+    turnoverTime: calculateTurnoverTime(activeCases, activePrevCases, {
+      turnoverThresholdMinutes: config?.turnoverThresholdMinutes,
+      turnoverComplianceTarget: config?.turnoverComplianceTarget,
+    }),
+    orUtilization: calculateORUtilization(activeCases, 10, activePrevCases, roomHoursMap, {
+      utilizationTargetPercent: config?.utilizationTargetPercent,
+    }),
     caseVolume: calculateCaseVolume(activeCases, activePrevCases),
-    cancellationRate: calculateCancellationRate(activeCases, activePrevCases),
-    cumulativeTardiness: calculateCumulativeTardiness(activeCases),
-    nonOperativeTime: calculateNonOperativeTime(activeCases),
+    cancellationRate: calculateCancellationRate(activeCases, activePrevCases, {
+      cancellationTargetPercent: config?.cancellationTargetPercent,
+    }),
+    cumulativeTardiness: calculateCumulativeTardiness(activeCases, {
+      tardinessTargetMinutes: config?.tardinessTargetMinutes,
+    }),
+    nonOperativeTime: calculateNonOperativeTime(activeCases, {
+      nonOpWarnMinutes: config?.nonOpWarnMinutes,
+      nonOpBadMinutes: config?.nonOpBadMinutes,
+    }),
     surgeonIdleTime: surgeonIdleResult.kpi,
     surgeonIdleFlip: surgeonIdleResult.flipKpi,
     surgeonIdleSameRoom: surgeonIdleResult.sameRoomKpi,
-    
+
     // Split surgical turnovers
     standardSurgicalTurnover: turnoverBreakdown.standardTurnover,
     flipRoomTime: turnoverBreakdown.flipRoomTime,
     flipRoomAnalysis: surgeonIdleResult.details,
     surgeonIdleSummaries,
-    
+
     // Time breakdown
     avgTotalCaseTime: timeBreakdown.avgTotalTime,
     avgSurgicalTime: timeBreakdown.avgSurgicalTime,

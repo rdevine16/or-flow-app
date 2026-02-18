@@ -196,16 +196,30 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
 
       if (!error && companies) {
         // Transform Supabase response to our cleaner interface
-        const transformed: DeviceCompany[] = companies.map((c: any) => {
+        const transformed: DeviceCompany[] = companies.map((c: {
+          id: string
+          implant_company_id: string
+          tray_status: 'pending' | 'consignment' | 'loaners_confirmed' | 'delivered'
+          loaner_tray_count: number | null
+          delivered_tray_count: number | null
+          rep_notes: string | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          delivered_at: string | null
+          delivered_by: string | null
+          implant_companies: { name: string } | { name: string }[] | null
+          confirmed_by_user: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+          delivered_by_user: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+        }) => {
           // Handle nested objects - Supabase may return single object or array
-          const implantCompany = Array.isArray(c.implant_companies) 
-            ? c.implant_companies[0] 
+          const implantCompany = Array.isArray(c.implant_companies)
+            ? c.implant_companies[0]
             : c.implant_companies
-          const confirmedUser = Array.isArray(c.confirmed_by_user) 
-            ? c.confirmed_by_user[0] 
+          const confirmedUser = Array.isArray(c.confirmed_by_user)
+            ? c.confirmed_by_user[0]
             : c.confirmed_by_user
-          const deliveredUser = Array.isArray(c.delivered_by_user) 
-            ? c.delivered_by_user[0] 
+          const deliveredUser = Array.isArray(c.delivered_by_user)
+            ? c.delivered_by_user[0]
             : c.delivered_by_user
 
           return {
@@ -247,7 +261,13 @@ export default function DeviceRepSection({ caseId, supabase, compact = false }: 
 
       if (activityData) {
         // Transform activity data too
-        const transformedActivities: TrayActivity[] = activityData.map((a: any) => {
+        const transformedActivities: TrayActivity[] = activityData.map((a: {
+          id: string
+          activity_type: string
+          message: string
+          created_at: string
+          users: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null
+        }) => {
           const user = Array.isArray(a.users) ? a.users[0] : a.users
           return {
             id: a.id,

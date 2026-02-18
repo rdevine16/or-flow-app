@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import SurgeonAvatar from '../ui/SurgeonAvatar'
 import { extractName } from '@/lib/formatters'

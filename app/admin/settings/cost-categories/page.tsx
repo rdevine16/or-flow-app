@@ -14,7 +14,6 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { Modal } from '@/components/ui/Modal'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Info, PenLine, Plus } from 'lucide-react'
 
@@ -568,8 +567,8 @@ const toggleActive = async (category: DefaultCostCategory) => {
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">Template System</p>
                 <p>
-                  These cost categories are copied to new facilities during onboarding. Inactive categories 
-                  won't be copied. Existing facilities are not affected by changes here.
+                  These cost categories are copied to new facilities during onboarding. Inactive categories
+                  won&apos;t be copied. Existing facilities are not affected by changes here.
                 </p>
               </div>
             </div>

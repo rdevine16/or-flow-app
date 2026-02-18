@@ -251,21 +251,22 @@ function CheckInDetailModal({
   onGenerateEscortLink,
   onEscortInfoUpdate,
 }: CheckInDetailModalProps) {
-  const [localResponses, setLocalResponses] = useState<Record<string, unknown>>({})
+  const [localResponses, setLocalResponses] = useState<Record<string, unknown>>(checkin?.checklist_responses || {})
   const [escortLink, setEscortLink] = useState<string | null>(null)
   const [generatingLink, setGeneratingLink] = useState(false)
-  const [escortName, setEscortName] = useState('')
-  const [escortPhone, setEscortPhone] = useState('')
+  const [escortName, setEscortName] = useState(checkin?.escort_name || '')
+  const [escortPhone, setEscortPhone] = useState(checkin?.escort_phone || '')
   const [escortRelationship, setEscortRelationship] = useState('')
   const [showCopySuccess, setShowCopySuccess] = useState(false)
+  const [currentCheckinId, setCurrentCheckinId] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (checkin) {
-      setLocalResponses(checkin.checklist_responses || {})
-      setEscortName(checkin.escort_name || '')
-      setEscortPhone(checkin.escort_phone || '')
-    }
-  }, [checkin])
+  // Reset local state when checkin changes (e.g., different patient selected)
+  if (checkin && checkin.id !== currentCheckinId) {
+    setCurrentCheckinId(checkin.id)
+    setLocalResponses(checkin.checklist_responses || {})
+    setEscortName(checkin.escort_name || '')
+    setEscortPhone(checkin.escort_phone || '')
+  }
 
   if (!checkin) return null
 
@@ -509,7 +510,7 @@ function CheckInDetailModal({
 export default function CheckInPage() {
   const router = useRouter()
   const supabase = createClient()
-  const { userData, loading: userLoading, effectiveFacilityId } = useUser()
+  const { loading: userLoading, effectiveFacilityId } = useUser()
   const { isEnabled, isLoading: featureLoading } = useFeature(FEATURES.PATIENT_CHECKIN)
   const { showToast } = useToast()
   const [checkins, setCheckins] = useState<CheckinRecord[]>([])

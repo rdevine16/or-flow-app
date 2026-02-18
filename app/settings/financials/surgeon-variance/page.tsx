@@ -16,7 +16,6 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Calculator, ExternalLink, Info, Pencil, Plus, Trash2, X } from 'lucide-react'
 
@@ -107,6 +106,7 @@ export default function SurgeonVariancePage() {
     } else if (!userLoading && !effectiveFacilityId) {
       setLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLoading, effectiveFacilityId])
 
   const fetchData = async () => {
@@ -284,7 +284,7 @@ export default function SurgeonVariancePage() {
 
       // Step 2: Insert new records with effective_from = today
       const itemsToInsert = Array.from(editingItems.entries())
-        .filter(([_, amount]) => amount > 0)
+        .filter(([, amount]) => amount > 0)
         .map(([categoryId, amount]) => ({
           facility_id: effectiveFacilityId,
           surgeon_id: selectedSurgeonId,

@@ -625,7 +625,7 @@ export const varianceColors = {
 // Raw hex values for inline styles, SVGs, and chart libraries
 // ============================================
 export const chartHex = {
-  /** Surgical phase breakdown colors (surgeon analytics) */
+  /** @deprecated Use resolvePhaseHex(colorKey) from milestone-phase-config.ts instead. Will be removed once surgeon page switches to dynamic phases (Phase 3). */
   phases: {
     preOp: '#2563EB',     // blue-600
     surgical: '#60A5FA',  // blue-400

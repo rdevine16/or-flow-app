@@ -20,7 +20,7 @@ export interface CaseMilestoneState {
 
 export interface UseMilestoneRealtimeOptions {
   supabase: {
-    channel: (name: string) => any
+    channel: (name: string) => RealtimeChannel
     removeChannel: (channel: RealtimeChannel) => void
   }
   caseId: string
@@ -138,15 +138,15 @@ export function useMilestoneRealtime({
 
     const channel = supabase
       .channel(`case-milestones:${caseId}`)
-      .on(
-        'postgres_changes',
+      // @ts-expect-error Supabase Realtime types use a narrow union for the event param; 'postgres_changes' is valid at runtime
+      .on('postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'case_milestones',
           filter: `case_id=eq.${caseId}`,
         },
-        (payload: any) => {
+        (payload: { eventType: string; new?: RealtimeCaseMilestone; old?: { id: string } }) => {
           const eventType = payload.eventType
 
           if (eventType === 'INSERT') {

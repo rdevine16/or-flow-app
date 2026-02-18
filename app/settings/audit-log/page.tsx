@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { ChevronDown, Download, FileText, Info, Loader2, Search } from 'lucide-react'
 
@@ -94,15 +93,7 @@ export default function AuditLogPage() {
   // Available users for filter
   const [users, setUsers] = useState<{ id: string; email: string; name: string }[]>([])
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
-
-  useEffect(() => {
-    fetchLogs()
-  }, [currentPage, dateFrom, dateTo, actionFilter, userFilter])
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
@@ -127,7 +118,12 @@ export default function AuditLogPage() {
         })))
       }
     }
-  }
+  }, [supabase])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchUsers()
+  }, [fetchUsers])
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
@@ -180,6 +176,11 @@ export default function AuditLogPage() {
 
     setLoading(false)
   }, [currentPage, dateFrom, dateTo, actionFilter, userFilter, supabase])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchLogs()
+  }, [fetchLogs])
 
   const exportToCSV = () => {
     const headers = ['Date', 'Time', 'User', 'Action', 'Target', 'Details', 'Success']

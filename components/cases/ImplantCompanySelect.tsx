@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 
 interface ImplantCompany {
@@ -29,9 +29,21 @@ export default function ImplantCompanySelect({
   const [searchQuery, setSearchQuery] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const fetchCompanies = useCallback(async () => {
+    const { data } = await supabase
+      .from('implant_companies')
+      .select('id, name, facility_id')
+      .or(`facility_id.is.null,facility_id.eq.${facilityId}`)
+      .order('name')
+
+    setCompanies(data || [])
+    setLoading(false)
+  }, [facilityId, supabase])
+
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCompanies()
-  }, [facilityId])
+  }, [fetchCompanies])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -44,17 +56,6 @@ export default function ImplantCompanySelect({
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-
-  const fetchCompanies = async () => {
-    const { data } = await supabase
-      .from('implant_companies')
-      .select('id, name, facility_id')
-      .or(`facility_id.is.null,facility_id.eq.${facilityId}`)
-      .order('name')
-
-    setCompanies(data || [])
-    setLoading(false)
-  }
 
   const toggleCompany = (companyId: string) => {
     if (selectedIds.includes(companyId)) {

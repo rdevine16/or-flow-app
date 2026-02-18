@@ -20,7 +20,6 @@ interface DroppableCaseRowProps {
 function DroppableCaseRow({
   caseId,
   caseNumber,
-  isActive,
   isCompleted,
   children
 }: DroppableCaseRowProps) {

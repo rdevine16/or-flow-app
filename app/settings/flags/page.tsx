@@ -13,7 +13,6 @@ import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
-import { Button } from '@/components/ui/Button'
 import { ChevronDown } from 'lucide-react'
 import { severityColors, categoryColors } from '@/lib/design-tokens'
 
@@ -64,11 +63,6 @@ const SCOPE_LABELS: Record<string, string> = {
   facility: 'Facility-wide',
 }
 
-const THRESHOLD_TYPE_LABELS: Record<string, string> = {
-  median_plus_sd: 'Median + Standard Deviations',
-  absolute: 'Absolute Value (minutes)',
-}
-
 // =====================================================
 // COMPONENT
 // =====================================================
@@ -111,7 +105,7 @@ export default function FlagsSettingsPage() {
 
       if (error) throw error
       showToast({ type: 'success', title: `${rule.name} ${newEnabled ? 'enabled' : 'disabled'}` })
-    } catch (err) {
+    } catch {
       setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, is_enabled: !newEnabled } : r))
       showToast({ type: 'error', title: 'Failed to update rule' })
     } finally {
@@ -131,7 +125,7 @@ export default function FlagsSettingsPage() {
 
       if (error) throw error
       showToast({ type: 'success', title: `Severity updated to ${severity}` })
-    } catch (err) {
+    } catch {
       setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, severity: rule.severity } : r))
       showToast({ type: 'error', title: 'Failed to update severity' })
     } finally {
@@ -151,7 +145,7 @@ export default function FlagsSettingsPage() {
 
       if (error) throw error
       showToast({ type: 'success', title: 'Threshold updated' })
-    } catch (err) {
+    } catch {
       setRules(prev => (prev || []).map(r => r.id === rule.id ? { ...r, threshold_type: rule.threshold_type, threshold_value: rule.threshold_value } : r))
       showToast({ type: 'error', title: 'Failed to update threshold' })
     } finally {

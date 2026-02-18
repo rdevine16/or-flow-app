@@ -3,7 +3,7 @@
 
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { metricColors, trendColors } from '@/lib/design-tokens'
 
@@ -36,6 +36,27 @@ export function MetricCard({
   const [hasAnimated, setHasAnimated] = useState(false)
   const cardRef = useRef<HTMLDivElement>(null)
 
+  const animateValue = useCallback(() => {
+    const duration = 1200
+    const steps = 60
+    let current = 0
+    let step = 0
+
+    const timer = setInterval(() => {
+      step++
+      // Ease out cubic
+      const progress = 1 - Math.pow(1 - step / steps, 3)
+      current = value * progress
+
+      if (step >= steps) {
+        setDisplayValue(value)
+        clearInterval(timer)
+      } else {
+        setDisplayValue(current)
+      }
+    }, duration / steps)
+  }, [value])
+
   // Animated count-up effect with intersection observer
   useEffect(() => {
     if (loading || hasAnimated) return
@@ -57,29 +78,7 @@ export function MetricCard({
     }
 
     return () => observer.disconnect()
-  }, [loading, hasAnimated, value])
-
-  const animateValue = () => {
-    const duration = 1200
-    const steps = 60
-    const increment = value / steps
-    let current = 0
-    let step = 0
-
-    const timer = setInterval(() => {
-      step++
-      // Ease out cubic
-      const progress = 1 - Math.pow(1 - step / steps, 3)
-      current = value * progress
-      
-      if (step >= steps) {
-        setDisplayValue(value)
-        clearInterval(timer)
-      } else {
-        setDisplayValue(current)
-      }
-    }, duration / steps)
-  }
+  }, [loading, hasAnimated, animateValue])
 
   const colorClasses = metricColors
 

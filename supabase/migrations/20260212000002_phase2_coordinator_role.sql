@@ -9,4 +9,4 @@
 --   global_admin, facility_admin, user, device_rep, coordinator
 --
 -- The application layer enforces valid values.
--- To verify: SELECT DISTINCT access_level FROM public.users;
+-- To verify: SELECT DISTINCT access_level FROM public.users;;

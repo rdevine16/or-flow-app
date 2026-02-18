@@ -1205,8 +1205,6 @@ export function generateImprovementPlan(
 
       if (worstCohort) {
         const mpmGap = worstCohort.cohortMedian - worstCohort.surgeonMedianMPM
-        const avgCaseMins = 90 // reasonable OR time estimate
-        const potentialPerCase = mpmGap * avgCaseMins
 
         headline = mpmGap > 0
           ? `$${mpmGap.toFixed(0)}/min below peers on ${worstCohort.procedureName}`

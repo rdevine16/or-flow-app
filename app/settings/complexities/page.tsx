@@ -114,7 +114,6 @@ export default function FacilityComplexitiesPage() {
     setSaving(true)
 
     try {
-      const name = formDisplayName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
 
       if (editingComplexity) {
         const { error } = await supabase

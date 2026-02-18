@@ -11,7 +11,6 @@ import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
 import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Modal } from '@/components/ui/Modal'
-import { Button } from '@/components/ui/Button'
 import { Check, Pencil, Plus, Trash2, Zap } from 'lucide-react'
 
 
@@ -48,7 +47,7 @@ export default function SurgeonPreferencesPage() {
   const loading = userLoading || surgeonsLoading || proceduresLoading || companiesLoading
 
   // Preferences for selected surgeon
-  const { data: prefData, loading: prefsLoading, error, setData: setPrefData, refetch: refetchPreferences } = useSupabaseQuery<{
+  const { data: prefData, loading: prefsLoading, error, refetch: refetchPreferences } = useSupabaseQuery<{
     preferences: SurgeonPreference[]
     workflow: string
     handoffMinutes: number
@@ -77,12 +76,12 @@ export default function SurgeonPreferencesPage() {
         .order('created_at')
       if (prefsErr) throw prefsErr
 
-      const transformed: SurgeonPreference[] = (data || []).map((pref: any) => {
-        const procedure = getFirst(pref.procedure_types)
-        const companies = (pref.surgeon_preference_companies || []).map((spc: any) => {
-          const company = getFirst(spc.implant_companies)
+      const transformed: SurgeonPreference[] = (data || []).map((pref: { id: string; surgeon_id: string; procedure_type_id: string; procedure_types: unknown; surgeon_preference_companies: unknown[] }) => {
+        const procedure = getFirst(pref.procedure_types) as { id: string; name: string } | null
+        const companies = ((pref.surgeon_preference_companies || []) as { implant_companies: unknown }[]).map((spc) => {
+          const company = getFirst(spc.implant_companies) as { id: string; name: string } | null
           return company ? { id: company.id, name: company.name } : null
-        }).filter(Boolean)
+        }).filter(Boolean) as { id: string; name: string }[]
         return {
           id: pref.id, surgeon_id: pref.surgeon_id,
           procedure_type_id: pref.procedure_type_id,
@@ -371,7 +370,7 @@ export default function SurgeonPreferencesPage() {
                     {/* Info box */}
                     <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
                       <p className="text-xs text-blue-700">
-                        <strong>Tip:</strong> If staff records a "Surgeon Left" milestone during a case, 
+                        <strong>Tip:</strong> If staff records a &quot;Surgeon Left&quot; milestone during a case,
                         it will override this setting for that specific case.
                       </p>
                     </div>
@@ -396,7 +395,7 @@ export default function SurgeonPreferencesPage() {
                   <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
                     <div>
                       <h3 className="font-medium text-slate-900">
-                        Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}'s Preferences
+                        Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}&apos;s Preferences
                       </h3>
                       <p className="text-sm text-slate-500">
                         {preferences.length} preference{preferences.length !== 1 ? 's' : ''} configured

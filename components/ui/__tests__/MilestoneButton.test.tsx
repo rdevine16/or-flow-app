@@ -128,7 +128,6 @@ describe('MilestoneButton', () => {
     })
 
     it('should disable undo button when loading', async () => {
-      const user = userEvent.setup()
       render(
         <MilestoneButton
           displayName="Patient In"

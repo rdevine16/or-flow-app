@@ -109,7 +109,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
   // Phase 3.3: Room conflict detection state
   const [roomConflicts, setRoomConflicts] = useState<RoomConflict[]>([])
-  const [checkingConflicts, setCheckingConflicts] = useState(false)
   const conflictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Draft state
@@ -189,7 +188,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
         })
       }
     }, 300)
-  }, [userFacilityId, mode, caseId])
+  }, [userFacilityId, mode, caseId, supabase])
 
   // Phase 3.3: Room conflict detection
   const checkRoomConflicts = useCallback((roomId: string, date: string, time: string) => {
@@ -199,11 +198,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
 
     if (!roomId || !date || !time || !userFacilityId) {
       setRoomConflicts([])
-      setCheckingConflicts(false)
       return
     }
-
-    setCheckingConflicts(true)
 
     conflictTimerRef.current = setTimeout(async () => {
       const query = supabase
@@ -222,7 +218,6 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const { data, error: queryError } = await query
 
       if (queryError) {
-        setCheckingConflicts(false)
         setRoomConflicts([])
         return
       }
@@ -237,9 +232,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       })
 
       setRoomConflicts(conflicts)
-      setCheckingConflicts(false)
     }, 300)
-  }, [userFacilityId, mode, caseId])
+  }, [userFacilityId, mode, caseId, supabase])
 
   // Re-check conflicts when room, date, or time changes
   useEffect(() => {
@@ -330,7 +324,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }
 
     fetchUserFacility()
-  }, [])
+  }, [supabase])
 
   // Once we have the facility ID, fetch the dropdown options
   useEffect(() => {
@@ -340,7 +334,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       const [roomsRes, proceduresRes, statusesRes, usersRes, companiesRes, payersRes] = await Promise.all([
         supabase.from('or_rooms').select('id, name').eq('facility_id', userFacilityId).order('name'),
         // UPDATED: Fetch requires_rep along with procedure types
-        supabase.from('procedure_types').select('id, name, requires_rep, requires_operative_side, procedure_category_id') 
+        supabase.from('procedure_types').select('id, name, requires_rep, requires_operative_side, procedure_category_id')
           .or(`facility_id.is.null,facility_id.eq.${userFacilityId}`)
           .order('name'),
         supabase.from('case_statuses').select('id, name').order('display_order'),
@@ -404,7 +398,8 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     }
 
     fetchOptions()
-  }, [userFacilityId, mode])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userFacilityId, mode, supabase])
 
   // Fetch existing case data for edit mode
   useEffect(() => {
@@ -490,7 +485,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
     if (userFacilityId) {
       fetchCase()
     }
-  }, [caseId, mode, userFacilityId])
+  }, [caseId, mode, userFacilityId, supabase])
 
   // Handle surgeon preference selection (quick-fill)
   const handlePreferenceSelect = (preference: { procedureTypeId: string; implantCompanyIds: string[] }) => {
@@ -597,7 +592,7 @@ export default function CaseForm({ caseId, mode }: CaseFormProps) {
       if (scheduledStatus) statusId = scheduledStatus.id
     }
 
-    const { data: rpcCaseId, error: rpcError } = await supabase.rpc('create_case_with_milestones', {
+    const { error: rpcError } = await supabase.rpc('create_case_with_milestones', {
       p_case_number: formData.case_number || `DRAFT-${Date.now()}`,
       p_scheduled_date: formData.scheduled_date,
       p_start_time: formData.start_time || null,

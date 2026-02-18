@@ -40,7 +40,7 @@ interface ErrorContext {
   action?: string
   url?: string
   facilityId?: string | null
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 }
 
 interface ErrorLog {
@@ -292,10 +292,10 @@ class ErrorLogger {
    */
   private sendToSentry(errorLog: ErrorLog, error?: Error): void {
     if (typeof window === 'undefined') return
-    
-    // @ts-ignore - Sentry is loaded globally
+
+    // @ts-expect-error - Sentry is loaded globally
     if (window.Sentry) {
-      // @ts-ignore
+      // @ts-expect-error - Sentry is loaded globally
       window.Sentry.captureException(error || new Error(errorLog.message), {
         level: errorLog.severity,
         tags: {

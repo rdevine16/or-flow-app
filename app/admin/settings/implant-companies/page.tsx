@@ -11,7 +11,6 @@ import { genericAuditLog } from '@/lib/audit-logger'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
 import { useSupabaseQuery, useCurrentUser } from '@/hooks/useSupabaseQuery'
 import { ArchiveConfirm } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { Archive, Building2, Info, Pencil, Plus, Search } from 'lucide-react'
 
@@ -294,7 +293,7 @@ const handleDelete = async (id: string) => {
               </div>
             ) : filteredCompanies.length === 0 ? (
               <div className="text-center py-12 text-slate-500">
-                <p>No companies match "{searchQuery}"</p>
+                <p>No companies match &quot;{searchQuery}&quot;</p>
                 <button
                   onClick={() => setSearchQuery('')}
                   className="mt-2 text-blue-600 hover:text-blue-700 font-medium text-sm"

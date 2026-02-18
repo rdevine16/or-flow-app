@@ -8,7 +8,7 @@ import Container from '@/components/ui/Container'
 import { dataQualityAudit } from '@/lib/audit-logger'
 import { useUser } from '@/lib/UserContext'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, Loader2, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Clock, RefreshCw, X } from 'lucide-react'
 import {
   fetchMetricIssues,
   fetchIssueTypes,
@@ -161,21 +161,6 @@ function formatTimeWithSeconds(isoString: string): string {
   }
 }
 
-function formatFullDateTime(isoString: string): string {
-  try {
-    const date = new Date(isoString)
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    })
-  } catch {
-    return isoString
-  }
-}
 
 // LocalStorage key for last scan time
 const LAST_SCAN_KEY = 'orbit_data_quality_last_scan'
@@ -323,10 +308,7 @@ function DataQualityContent() {
   // ============================================
 
   const loadAllMilestonesForCase = async (
-    caseId: string, 
-    facilityId: string,
-    issueType: string,
-    issueFacilityMilestoneId: string | null
+    caseId: string
   ) => {
     setLoadingMilestones(true)
     
@@ -608,7 +590,7 @@ showToast({
     const canCalculate: string[] = []
     const cannotCalculate: string[] = []
     
-    Object.entries(METRIC_REQUIREMENTS).forEach(([key, config]) => {
+    Object.values(METRIC_REQUIREMENTS).forEach((config) => {
       const hasAll = config.requires.every(req => recordedNames.has(req))
       if (hasAll) {
         canCalculate.push(config.name)
@@ -765,9 +747,9 @@ showToast({
     try {
       const detectedValue = modalState.issue.detected_value
       if (typeof detectedValue === 'string') {
-        return JSON.parse(detectedValue)
+        return JSON.parse(detectedValue) as Record<string, unknown>
       }
-      return detectedValue as any
+      return detectedValue as Record<string, unknown> | null
     } catch {
       return null
     }
@@ -1028,20 +1010,12 @@ showToast({
     setMissingMilestones([])
     setAffectedMetrics([])
     setCaseIssues([])
-    
-    const issueType = (issue.issue_type as IssueType)?.name || ''
-    const issueFacilityMilestoneId = issue.facility_milestone_id || null
-    
+
     // Load all issues for this case
     await loadCaseIssues(issue.case_id)
-    
+
     // Load all milestones - pass the facility_milestone_id for pairing logic
-    await loadAllMilestonesForCase(
-      issue.case_id,
-      issue.facility_id,
-      issueType,
-      issueFacilityMilestoneId
-    )
+    await loadAllMilestonesForCase(issue.case_id)
   }
 
   const openBulkModal = (ids: string[]) => {
@@ -1070,18 +1044,6 @@ showToast({
   // SELECTION
   // ============================================
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
-  }
-
   const toggleSelectAll = () => {
     if (selectedIds.size === issues.filter(i => !i.resolved_at).length) {
       setSelectedIds(new Set())
@@ -1096,33 +1058,6 @@ showToast({
 
   const getIssueMilestoneId = (): string | null => {
     return modalState.issue?.facility_milestone_id || null
-  }
-
-  const getIssueMilestoneName = (): string | null => {
-    return modalState.issue?.facility_milestone?.name || null
-  }
-  
-  // Get paired milestone ID using the loaded milestone data (dynamic from database)
-  const getPairedMilestoneId = (): string | null => {
-    const issueMilestoneId = getIssueMilestoneId()
-    if (!issueMilestoneId) return null
-    
-    // Find the issue milestone in our loaded data
-    const issueMilestone = editableMilestones.find(m => m.id === issueMilestoneId)
-    if (issueMilestone?.pair_with_id) {
-      return issueMilestone.pair_with_id
-    }
-    
-    // Also check if any milestone is paired WITH the issue milestone
-    const pairedWith = editableMilestones.find(m => m.pair_with_id === issueMilestoneId)
-    return pairedWith?.id || null
-  }
-
-  // Check if a milestone is the paired one (for highlighting)
-  const isPairedMilestone = (milestoneId: string | undefined): boolean => {
-    if (!milestoneId) return false
-    const pairedId = getPairedMilestoneId()
-    return milestoneId === pairedId
   }
 
   // Check if issue can be considered "stale" (milestone now exists)
@@ -1391,9 +1326,7 @@ showToast({
                         .filter(i => !i.resolved_at && i.expires_at)
                         .map(i => getDaysUntilExpiration(i.expires_at))
                         .sort((a, b) => a - b)[0]
-                      
-                      // Get all issue IDs for this case (for bulk selection)
-                      const caseIssueIds = caseIssues.map(i => i.id)
+
                       const allSelected = unresolvedIssues.every(i => selectedIds.has(i.id))
                       const someSelected = unresolvedIssues.some(i => selectedIds.has(i.id))
                       

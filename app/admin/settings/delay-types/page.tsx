@@ -10,7 +10,6 @@ import { useUser } from '@/lib/UserContext'
 import { delayTypeAudit } from '@/lib/audit-logger'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 import { DeleteConfirm } from '@/components/ui/ConfirmDialog'
-import { PageLoader } from '@/components/ui/Loading'
 import { ErrorBanner } from '@/components/ui/ErrorBanner'
 import { AlertTriangle, Info, Pencil, Plus, Trash2 } from 'lucide-react'
 
@@ -262,8 +261,8 @@ export default function AdminDelayTypesPage() {
               <div className="text-sm text-slate-600">
                 <p className="font-medium text-slate-700 mb-1">About delay types</p>
                 <p>
-                  These are global templates copied to new facilities. Each facility can customize 
-                  their own delay types. Changes here don't affect existing facilities.
+                  These are global templates copied to new facilities. Each facility can customize
+                  their own delay types. Changes here don&apos;t affect existing facilities.
                 </p>
               </div>
             </div>

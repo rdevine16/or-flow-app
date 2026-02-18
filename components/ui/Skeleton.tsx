@@ -3,6 +3,8 @@
 
 'use client'
 
+import { useState } from 'react'
+
 interface SkeletonProps {
   className?: string
   rounded?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
@@ -141,6 +143,10 @@ export function SkeletonCaseList({ count = 5 }: { count?: number }) {
 }
 
 export function SkeletonChart({ height = 300 }: { height?: number }) {
+  const [barHeights] = useState(() =>
+    Array.from({ length: 12 }, () => Math.random() * 60 + 20)
+  )
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
       <div className="flex items-center justify-between mb-6">
@@ -148,11 +154,11 @@ export function SkeletonChart({ height = 300 }: { height?: number }) {
         <Skeleton className="h-8 w-24 rounded-lg" />
       </div>
       <div style={{ height }} className="flex items-end gap-2">
-        {Array.from({ length: 12 }).map((_, i) => (
+        {barHeights.map((barHeight, i) => (
           <div key={i} className="flex-1 flex flex-col justify-end">
-            <Skeleton 
-              className="w-full" 
-              style={{ height: `${Math.random() * 60 + 20}%` }}
+            <Skeleton
+              className="w-full"
+              style={{ height: `${barHeight}%` }}
             />
           </div>
         ))}
