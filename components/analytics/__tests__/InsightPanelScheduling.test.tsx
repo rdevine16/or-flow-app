@@ -35,6 +35,15 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
     cancelledCases: 6,
     fcots: { ...makeKPI(), firstCaseDetails: [] } as FCOTSResult,
     turnoverTime: { ...makeKPI(), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
+    flipRoomTurnover: {
+      value: 0,
+      displayValue: '--',
+      subtitle: 'No flip-room turnovers',
+      details: [],
+      compliantCount: 0,
+      nonCompliantCount: 0,
+      complianceRate: 0,
+    },
     orUtilization: {
       ...makeKPI({ value: 65, displayValue: '65%', target: 75, targetMet: false, delta: 10, deltaType: 'decrease' }),
       roomBreakdown: [],

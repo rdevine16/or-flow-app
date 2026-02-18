@@ -87,6 +87,15 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       nonCompliantCount: 5,
       complianceRate: 67,
     } as TurnoverResult,
+    flipRoomTurnover: {
+      value: 0,
+      displayValue: '--',
+      subtitle: 'No flip-room turnovers',
+      details: [],
+      compliantCount: 0,
+      nonCompliantCount: 0,
+      complianceRate: 0,
+    },
     orUtilization: {
       ...makeKPI({ value: 75, displayValue: '75%', target: 75, targetMet: true }),
       roomBreakdown: [],

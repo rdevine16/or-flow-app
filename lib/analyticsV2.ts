@@ -268,6 +268,7 @@ export interface AnalyticsOverview {
   // KPIs
   fcots: FCOTSResult
   turnoverTime: TurnoverResult
+  flipRoomTurnover: TurnoverResult   // Flip-room room turnover (facility perspective)
   orUtilization: ORUtilizationResult
   caseVolume: CaseVolumeResult
   cancellationRate: CancellationResult
@@ -1444,9 +1445,179 @@ export function calculateTurnoverTime(
 
 
 /**
+ * 2b. Flip-Room Room Turnover (facility perspective)
+ * When a surgeon flips from Room X to Room Y, how quickly was Room Y prepared?
+ * Measured as: patient_out (predecessor case in Room Y) → patient_in (surgeon's flip case in Room Y)
+ *
+ * Algorithm:
+ * 1. Build room timeline: Map<date|room_id, cases sorted by start_time>
+ * 2. Build surgeon timeline: Map<surgeon_id|date, cases sorted by incision>
+ * 3. For each surgeon day, find flip transitions (consecutive cases where or_room_id differs)
+ * 4. For each flip into Room Y: find the predecessor case in Room Y's timeline
+ * 5. Compute: patient_out(predecessor) → patient_in(flip case)
+ * 6. Filter: > 0 and < 180 minutes
+ */
+export function calculateFlipRoomTurnover(
+  cases: CaseWithMilestones[],
+  previousPeriodCases?: CaseWithMilestones[],
+  config?: { turnoverThresholdMinutes?: number; turnoverComplianceTarget?: number }
+): TurnoverResult {
+  const thresholdMinutes = config?.turnoverThresholdMinutes ?? ANALYTICS_CONFIG_DEFAULTS.turnoverThresholdMinutes
+  const complianceTarget = config?.turnoverComplianceTarget ?? ANALYTICS_CONFIG_DEFAULTS.turnoverComplianceTarget
+
+  function computeFlipRoomTurnovers(inputCases: CaseWithMilestones[]): {
+    values: number[]
+    details: TurnoverDetail[]
+    dailyResults: Map<string, number[]>
+  } {
+    const values: number[] = []
+    const details: TurnoverDetail[] = []
+    const dailyResults = new Map<string, number[]>()
+
+    // Step 1: Build room timeline — Map<date|room_id, cases sorted by start_time>
+    const roomTimeline = new Map<string, CaseWithMilestones[]>()
+    inputCases.forEach(c => {
+      if (!c.or_room_id) return
+      const key = `${c.scheduled_date}|${c.or_room_id}`
+      const existing = roomTimeline.get(key) || []
+      existing.push(c)
+      roomTimeline.set(key, existing)
+    })
+    // Sort each room's cases by start_time
+    roomTimeline.forEach((roomCases) => {
+      roomCases.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+    })
+
+    // Step 2: Build surgeon timeline — Map<surgeon_id|date, cases sorted by incision>
+    const surgeonTimeline = new Map<string, CaseWithMilestones[]>()
+    inputCases.forEach(c => {
+      if (!c.surgeon_id) return
+      const key = `${c.surgeon_id}|${c.scheduled_date}`
+      const existing = surgeonTimeline.get(key) || []
+      existing.push(c)
+      surgeonTimeline.set(key, existing)
+    })
+    // Sort each surgeon day by incision time
+    surgeonTimeline.forEach((surgeonCases) => {
+      surgeonCases.sort((a, b) => {
+        const aInc = getMilestoneMap(a).incision?.getTime() || 0
+        const bInc = getMilestoneMap(b).incision?.getTime() || 0
+        return aInc - bInc
+      })
+    })
+
+    // Step 3: For each surgeon day, find flip transitions
+    surgeonTimeline.forEach((surgeonCases, key) => {
+      const date = key.split('|')[1]
+
+      for (let i = 0; i < surgeonCases.length - 1; i++) {
+        const currentCase = surgeonCases[i]
+        const nextCase = surgeonCases[i + 1]
+
+        // Only interested in flips (different rooms)
+        if (!currentCase.or_room_id || !nextCase.or_room_id) continue
+        if (currentCase.or_room_id === nextCase.or_room_id) continue
+
+        // Step 4: Find predecessor case in the destination room (Room Y)
+        const destRoomKey = `${date}|${nextCase.or_room_id}`
+        const destRoomCases = roomTimeline.get(destRoomKey)
+        if (!destRoomCases) continue
+
+        // Find the case in Room Y that immediately preceded the flip case
+        const flipCaseIndex = destRoomCases.findIndex(c => c.id === nextCase.id)
+        if (flipCaseIndex <= 0) continue // First case in room or not found — no predecessor
+
+        const predecessor = destRoomCases[flipCaseIndex - 1]
+
+        // Step 5: Compute patient_out(predecessor) → patient_in(flip case)
+        const predMilestones = getMilestoneMap(predecessor)
+        const flipMilestones = getMilestoneMap(nextCase)
+
+        if (!predMilestones.patient_out || !flipMilestones.patient_in) continue
+
+        const turnoverMinutes = getTimeDiffMinutes(predMilestones.patient_out, flipMilestones.patient_in)
+
+        // Step 6: Filter > 0 and < 180 minutes
+        if (turnoverMinutes === null || turnoverMinutes <= 0 || turnoverMinutes >= 180) continue
+
+        values.push(turnoverMinutes)
+
+        const dayTurnovers = dailyResults.get(date) || []
+        dayTurnovers.push(turnoverMinutes)
+        dailyResults.set(date, dayTurnovers)
+
+        const predSurgeon = predecessor.surgeon
+        const flipSurgeon = nextCase.surgeon
+        details.push({
+          date,
+          roomName: nextCase.or_rooms?.name || 'Unknown',
+          fromCaseNumber: predecessor.case_number,
+          toCaseNumber: nextCase.case_number,
+          fromSurgeonName: predSurgeon ? `${predSurgeon.first_name} ${predSurgeon.last_name}` : 'Unknown',
+          toSurgeonName: flipSurgeon ? `${flipSurgeon.first_name} ${flipSurgeon.last_name}` : 'Unknown',
+          turnoverMinutes: Math.round(turnoverMinutes),
+          isCompliant: turnoverMinutes <= thresholdMinutes,
+        })
+      }
+    })
+
+    return { values, details, dailyResults }
+  }
+
+  // Current period
+  const current = computeFlipRoomTurnovers(cases)
+  const medianTurnover = calculateMedian(current.values) ?? 0
+  const metTarget = current.values.filter(t => t <= thresholdMinutes).length
+  const complianceRate = current.values.length > 0 ? Math.round((metTarget / current.values.length) * 100) : 0
+
+  // Previous period for delta
+  let previousMedian: number | undefined
+  if (previousPeriodCases && previousPeriodCases.length > 0) {
+    const prev = computeFlipRoomTurnovers(previousPeriodCases)
+    if (prev.values.length > 0) {
+      previousMedian = calculateMedian(prev.values) ?? undefined
+    }
+  }
+
+  const { delta, deltaType } = calculateDelta(medianTurnover, previousMedian, true)
+
+  // Build daily tracker (lower is better)
+  const dailyData: DailyTrackerData[] = Array.from(current.dailyResults.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-30)
+    .map(([date, dayTurnovers]) => {
+      const dayMedian = calculateMedian(dayTurnovers) ?? 0
+      return {
+        date,
+        color: getTargetRelativeColor(dayMedian, thresholdMinutes, true),
+        tooltip: `${date}: ${Math.round(dayMedian)} min median`,
+        numericValue: dayMedian
+      }
+    })
+
+  return {
+    value: Math.round(medianTurnover),
+    displayValue: current.values.length > 0 ? `${Math.round(medianTurnover)} min` : '--',
+    subtitle: current.values.length > 0
+      ? `${complianceRate}% under ${thresholdMinutes} min target`
+      : 'No flip-room turnovers',
+    target: complianceTarget,
+    targetMet: complianceRate >= complianceTarget,
+    delta,
+    deltaType,
+    dailyData,
+    details: current.details.sort((a, b) => a.date.localeCompare(b.date) || a.roomName.localeCompare(b.roomName)),
+    compliantCount: metTarget,
+    nonCompliantCount: current.values.length - metTarget,
+    complianceRate,
+  }
+}
+
+
+/**
  * 3. OR Utilization
  * Patient-in-room time as percentage of available OR hours.
- * 
+ *
  * Returns per-room breakdown with:
  * - Individual room utilization %
  * - Whether each room uses real configured hours or the default
@@ -2388,6 +2559,10 @@ export function calculateAnalyticsOverview(
     // KPIs
     fcots: calculateFCOTS(activeCases, activePrevCases, fcotsConfig),
     turnoverTime: calculateTurnoverTime(activeCases, activePrevCases, {
+      turnoverThresholdMinutes: config?.turnoverThresholdMinutes,
+      turnoverComplianceTarget: config?.turnoverComplianceTarget,
+    }),
+    flipRoomTurnover: calculateFlipRoomTurnover(activeCases, activePrevCases, {
       turnoverThresholdMinutes: config?.turnoverThresholdMinutes,
       turnoverComplianceTarget: config?.turnoverComplianceTarget,
     }),

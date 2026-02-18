@@ -48,6 +48,15 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       firstCaseDetails: [],
     } as FCOTSResult,
     turnoverTime: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
+    flipRoomTurnover: {
+      value: 0,
+      displayValue: '--',
+      subtitle: 'No flip-room turnovers',
+      details: [],
+      compliantCount: 0,
+      nonCompliantCount: 0,
+      complianceRate: 0,
+    },
     orUtilization: {
       ...makeKPI({ value: 75, displayValue: '75%', target: 75, targetMet: true }),
       roomBreakdown: [],
