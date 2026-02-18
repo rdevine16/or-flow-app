@@ -1,6 +1,6 @@
 // app/dashboard/page.tsx
 // Facility admin dashboard — operational command center.
-// Phase 3: LivePulseBanner, DashboardKpiCard with sparklines, FacilityScoreMini.
+// Phase 4: Schedule Adherence Timeline (Gantt) with 60s polling.
 
 'use client'
 
@@ -9,6 +9,7 @@ import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { LivePulseBanner } from '@/components/dashboard/LivePulseBanner'
 import { DashboardKpiCard } from '@/components/dashboard/DashboardKpiCard'
 import { FacilityScoreMini } from '@/components/dashboard/FacilityScoreMini'
+import { ScheduleAdherenceTimeline } from '@/components/dashboard/ScheduleAdherenceTimeline'
 import { NeedsAttention } from '@/components/dashboard/NeedsAttention'
 import { RoomStatusCard, RoomStatusCardSkeleton } from '@/components/dashboard/RoomStatusCard'
 import { TodaysSurgeons } from '@/components/dashboard/TodaysSurgeons'
@@ -17,6 +18,7 @@ import { QuickAccessCards } from '@/components/dashboard/QuickAccessCards'
 import { useDashboardKPIs, type TimeRange } from '@/lib/hooks/useDashboardKPIs'
 import { useDashboardAlerts } from '@/lib/hooks/useDashboardAlerts'
 import { useTodayStatus } from '@/lib/hooks/useTodayStatus'
+import { useScheduleTimeline } from '@/lib/hooks/useScheduleTimeline'
 
 const TIME_RANGE_OPTIONS: { label: string; value: TimeRange }[] = [
   { label: 'Today', value: 'today' },
@@ -48,6 +50,7 @@ export default function DashboardPage() {
   const { data: kpis, loading, error } = useDashboardKPIs(timeRange)
   const { data: alerts, loading: alertsLoading } = useDashboardAlerts()
   const { data: todayStatus, loading: todayStatusLoading } = useTodayStatus()
+  const { data: timeline, loading: timelineLoading } = useScheduleTimeline()
 
   const trendLabel = getTrendLabel(timeRange)
 
@@ -143,6 +146,9 @@ export default function DashboardPage() {
             trendLabel={trendLabel}
           />
         </div>
+
+        {/* Schedule Adherence Timeline (Gantt) — full width, 60s polling */}
+        <ScheduleAdherenceTimeline data={timeline ?? null} loading={timelineLoading} />
 
         {/* Two-column layout: Needs Attention (left) + Room Status & Surgeons (right) */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
