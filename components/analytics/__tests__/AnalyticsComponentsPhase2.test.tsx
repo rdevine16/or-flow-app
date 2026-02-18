@@ -256,6 +256,7 @@ describe('CasePhaseBarNested', () => {
     totalSeconds: 2400,
     maxTotalSeconds: 4000,
     flags: [],
+    isSelected: false,
     onSelect: vi.fn(),
   }
 

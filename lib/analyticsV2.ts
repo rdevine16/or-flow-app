@@ -712,6 +712,121 @@ export function computePhaseDurations(
     })
 }
 
+// ─── Sub-phase Offset Computation ──────────────────────────────
+
+export interface SubphaseOffset {
+  phaseId: string
+  offsetSeconds: number
+  durationSeconds: number
+  label: string
+  color: string
+}
+
+export interface ParentSubphaseOffsets {
+  phaseId: string
+  subphases: SubphaseOffset[]
+}
+
+/**
+ * Compute sub-phase offsets within their parent phases.
+ *
+ * For each parent phase with children, computes where each sub-phase starts
+ * relative to the parent's start and how long it lasts. This is used for
+ * positioning inset pills inside parent phase segments in the timeline and
+ * case breakdown bars.
+ *
+ * @param phaseDefinitions - All phase definitions (parent + children)
+ * @param phaseDurations - Output of computePhaseDurations for this case
+ * @param milestoneTimestamps - Output of buildMilestoneTimestampMap for this case
+ * @param resolveColor - Function to resolve a color_key to hex (e.g., resolveSubphaseHex)
+ * @returns Array of parent phases with their sub-phase offset data
+ */
+export function computeSubphaseOffsets(
+  phaseDefinitions: PhaseDefInput[],
+  phaseDurations: PhaseDurationResult[],
+  milestoneTimestamps: MilestoneTimestampMap,
+  resolveColor: (colorKey: string | null) => string,
+): ParentSubphaseOffsets[] {
+  // Build lookup maps
+  const durationMap = new Map<string, PhaseDurationResult>()
+  for (const pd of phaseDurations) {
+    durationMap.set(pd.phaseId, pd)
+  }
+
+  const defMap = new Map<string, PhaseDefInput>()
+  for (const pd of phaseDefinitions) {
+    defMap.set(pd.id, pd)
+  }
+
+  // Identify parent phases (those with children)
+  const parents = phaseDefinitions.filter(p => !p.parent_phase_id)
+  const childrenByParent = new Map<string, PhaseDefInput[]>()
+  for (const p of phaseDefinitions) {
+    if (p.parent_phase_id) {
+      const existing = childrenByParent.get(p.parent_phase_id) || []
+      existing.push(p)
+      childrenByParent.set(p.parent_phase_id, existing)
+    }
+  }
+
+  const results: ParentSubphaseOffsets[] = []
+
+  for (const parent of parents) {
+    const children = childrenByParent.get(parent.id)
+    if (!children || children.length === 0) continue
+
+    const parentDuration = durationMap.get(parent.id)
+    if (!parentDuration || parentDuration.durationSeconds === null) continue
+
+    // Get parent's start timestamp
+    const parentStartTs = milestoneTimestamps.get(parent.start_milestone_id)
+    if (!parentStartTs) continue
+    const parentStartMs = new Date(parentStartTs).getTime()
+    if (isNaN(parentStartMs)) continue
+
+    const subphases: SubphaseOffset[] = []
+
+    for (const child of children.sort((a, b) => a.display_order - b.display_order)) {
+      const childDuration = durationMap.get(child.id)
+      if (!childDuration || childDuration.durationSeconds === null) continue
+
+      // Get child's start timestamp
+      const childStartTs = milestoneTimestamps.get(child.start_milestone_id)
+      if (!childStartTs) continue
+      const childStartMs = new Date(childStartTs).getTime()
+      if (isNaN(childStartMs)) continue
+
+      let offsetSeconds = (childStartMs - parentStartMs) / 1000
+      let durationSeconds = childDuration.durationSeconds
+
+      // Clamp: offset can't be negative
+      if (offsetSeconds < 0) offsetSeconds = 0
+
+      // Clamp: sub-phase can't extend beyond parent end
+      if (offsetSeconds + durationSeconds > parentDuration.durationSeconds) {
+        durationSeconds = parentDuration.durationSeconds - offsetSeconds
+      }
+
+      // Skip if clamped to zero or negative
+      if (durationSeconds <= 0) continue
+
+      subphases.push({
+        phaseId: child.id,
+        offsetSeconds,
+        durationSeconds,
+        label: child.display_name,
+        color: resolveColor(child.color_key),
+      })
+    }
+
+    if (subphases.length > 0) {
+      results.push({ phaseId: parent.id, subphases })
+    }
+  }
+
+  return results
+}
+
 /**
  * Parse scheduled start time and date into a Date object
  * FIXED: Creates date in local time to avoid timezone issues
