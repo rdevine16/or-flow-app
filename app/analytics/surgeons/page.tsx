@@ -12,6 +12,7 @@ import { formatTimeInTimezone } from '@/lib/date-utils'
 
 import { buildPhaseTree, resolvePhaseHex, resolveSubphaseHex } from '@/lib/milestone-phase-config'
 import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
+import DatePickerCalendar from '@/components/ui/DatePickerCalendar'
 
 
 // Tremor components
@@ -50,7 +51,7 @@ import {
 } from '@/lib/flag-detection'
 
 // Enterprise analytics components
-import { Archive, BarChart3, Building2, Calendar, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
 import {
   SectionHeader,
   EnhancedMetricCard,
@@ -202,8 +203,9 @@ export default function SurgeonPerformancePage() {
   const [dayCases, setDayCases] = useState<CaseWithMilestones[]>([])
   const [last30DaysCases, setLast30DaysCases] = useState<CaseWithMilestones[]>([])
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null)
+  const [surgeonCaseDates, setSurgeonCaseDates] = useState<Set<string>>(new Set())
 
-  
+
   const [loading, setLoading] = useState(true)
   const [initialLoading, setInitialLoading] = useState(true)
 
@@ -271,6 +273,27 @@ export default function SurgeonPerformancePage() {
     }
     fetchData()
   }, [effectiveFacilityId, supabase])
+
+  // Fetch distinct case dates for the selected surgeon (for calendar dot indicators)
+  useEffect(() => {
+    if (!selectedSurgeon || !effectiveFacilityId) {
+      setSurgeonCaseDates(new Set())
+      return
+    }
+
+    async function fetchCaseDates() {
+      const { data } = await supabase
+        .from('cases')
+        .select('scheduled_date')
+        .eq('facility_id', effectiveFacilityId!)
+        .eq('surgeon_id', selectedSurgeon!)
+
+      if (data) {
+        setSurgeonCaseDates(new Set(data.map(r => r.scheduled_date)))
+      }
+    }
+    fetchCaseDates()
+  }, [selectedSurgeon, effectiveFacilityId, supabase])
 
   // Helper to get date range (handles custom dates)
   const getEffectiveDateRange = useCallback(() => {
@@ -969,15 +992,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                         >
                           <ChevronLeft className="w-3.5 h-3.5" />
                         </button>
-                        <div className="h-7 flex items-center gap-1.5 px-2.5 border border-slate-200 rounded-md text-xs text-slate-700">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="bg-transparent border-none p-0 text-xs text-slate-700 focus:outline-none cursor-pointer"
-                          />
-                        </div>
+                        <DatePickerCalendar value={selectedDate} onChange={setSelectedDate} highlightedDates={surgeonCaseDates} />
                         <button
                           onClick={() => {
                             const d = new Date(selectedDate)

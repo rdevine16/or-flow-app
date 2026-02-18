@@ -62,3 +62,6 @@ export { Button, IconButton } from './Button'
 
 // Form elements
 export { Input, Textarea, Select, Label, FormField } from './Input'
+
+// Date picker
+export { default as DatePickerCalendar } from './DatePickerCalendar'
