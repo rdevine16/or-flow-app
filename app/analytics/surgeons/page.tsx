@@ -50,15 +50,13 @@ import {
 } from '@/lib/flag-detection'
 
 // Enterprise analytics components
-import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { Archive, BarChart3, Building2, Calendar, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
 import {
   SectionHeader,
   EnhancedMetricCard,
   SurgeonSelector,
   ConsistencyBadge,
   EmptyState,
-  MetricPillStrip,
-  UptimeRing,
   FlagCountPills,
   DayTimeline,
   CasePhaseBarNested,
@@ -134,21 +132,39 @@ function getConsistencyLevel(avgSeconds: number | null, stddevSeconds: number | 
 }
 
 // ============================================
-// TAB BUTTON COMPONENT
+// CONDENSED HEADER COMPONENTS
 // ============================================
 
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function CompactStat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-        active
-          ? 'bg-white text-slate-900 shadow-sm'
-          : 'text-slate-500 hover:text-slate-700'
-      }`}
-    >
-      {children}
-    </button>
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">{label}</span>
+      <span className="text-[15px] font-bold text-slate-900 tabular-nums">{value}</span>
+      {sub && <span className="text-[11px] text-slate-400">{sub}</span>}
+    </div>
+  )
+}
+
+function StatDivider() {
+  return <div className="w-px h-[18px] bg-slate-200 flex-shrink-0" />
+}
+
+function MiniUptimeRing({ percent }: { percent: number }) {
+  const r = 11
+  const circ = 2 * Math.PI * r
+  const clamped = Math.min(Math.max(percent, 0), 100)
+  const offset = circ - (clamped / 100) * circ
+  return (
+    <div className="relative w-[30px] h-[30px]">
+      <svg width={30} height={30} viewBox="0 0 30 30" className="-rotate-90">
+        <circle cx={15} cy={15} r={r} fill="none" stroke="#e5e7eb" strokeWidth={3} />
+        <circle cx={15} cy={15} r={r} fill="none" stroke="#2563eb" strokeWidth={3}
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[8px] font-bold text-slate-900">{Math.round(clamped)}%</span>
+      </div>
+    </div>
   )
 }
 
@@ -847,9 +863,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
       .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
   }, [periodCases, getCompletedCases])
 
-  const selectedSurgeonData = surgeons.find(s => s.id === selectedSurgeon)
-  const { label: periodLabel } = getEffectiveDateRange()
-
   // ============================================
   // RENDER
   // ============================================
@@ -901,19 +914,128 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
     <DashboardLayout>
       <div className="min-h-screen bg-slate-50/50">
         <Container className="py-8">
-          <AnalyticsPageHeader
-            title="Surgeon Performance"
-            description="Track individual surgeon metrics and trends"
-            icon={UserIcon}
-            actions={
+          {/* Condensed Header */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
+            {/* Row 1: Surgeon selector + View toggle + Date nav */}
+            <div className="flex items-center px-4 py-2.5 gap-3 border-b border-slate-100">
+              {/* Surgeon selector */}
               <SurgeonSelector
                 surgeons={surgeons}
                 selectedId={selectedSurgeon}
                 onChange={setSelectedSurgeon}
                 placeholder="Choose surgeon..."
               />
-            }
-          />
+
+              {selectedSurgeon && (
+                <>
+                  {/* Divider */}
+                  <div className="w-px h-6 bg-slate-200 flex-shrink-0" />
+
+                  {/* View toggle */}
+                  <div className="flex border border-slate-200 rounded-md overflow-hidden">
+                    <button
+                      onClick={() => setActiveTab('overview')}
+                      className={`px-3 py-1 text-xs font-medium transition-colors ${
+                        activeTab === 'overview'
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-500 hover:text-slate-700 bg-white'
+                      }`}
+                    >
+                      Overview
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('day')}
+                      className={`px-3 py-1 text-xs font-medium transition-colors ${
+                        activeTab === 'day'
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-500 hover:text-slate-700 bg-white'
+                      }`}
+                    >
+                      Day Analysis
+                    </button>
+                  </div>
+
+                  {/* Date nav — pushed right */}
+                  <div className="flex items-center gap-2 ml-auto">
+                    {activeTab === 'day' ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            const d = new Date(selectedDate)
+                            d.setDate(d.getDate() - 1)
+                            setSelectedDate(getLocalDateString(d))
+                          }}
+                          className="w-7 h-7 flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500 transition-colors"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="h-7 flex items-center gap-1.5 px-2.5 border border-slate-200 rounded-md text-xs text-slate-700">
+                          <Calendar className="w-3 h-3 text-slate-400" />
+                          <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="bg-transparent border-none p-0 text-xs text-slate-700 focus:outline-none cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            const d = new Date(selectedDate)
+                            d.setDate(d.getDate() + 1)
+                            setSelectedDate(getLocalDateString(d))
+                          }}
+                          className="w-7 h-7 flex items-center justify-center border border-slate-200 rounded-md hover:bg-slate-50 text-slate-500 transition-colors"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setSelectedDate(getLocalDateString())}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 ml-1"
+                        >
+                          Today
+                        </button>
+                      </>
+                    ) : (
+                      <DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Row 2: Compact inline stats (Day Analysis only) */}
+            {selectedSurgeon && activeTab === 'day' && !loading && (
+              <div className="flex items-center px-4 py-2 gap-4">
+                <CompactStat
+                  label="First Case"
+                  value={formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone) || '--'}
+                  sub={dayMetrics.firstCaseScheduledTime
+                    ? `(sched ${(() => {
+                        const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
+                        const h = parseInt(hours)
+                        const suffix = h >= 12 ? 'p' : 'a'
+                        const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
+                        return `${displayHour}:${minutes}${suffix}`
+                      })()})`
+                    : undefined}
+                />
+                <StatDivider />
+                <CompactStat label="Cases" value={dayMetrics.totalCases.toString()} />
+                <StatDivider />
+                <CompactStat label="OR Time" value={formatMinutesToHHMMSS(dayMetrics.totalORTime)} />
+                <StatDivider />
+                <CompactStat label="Surgical" value={formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)} />
+                <StatDivider />
+                <FlagCountPills warningCount={flagCounts.warningCount} positiveCount={flagCounts.positiveCount} />
+
+                {/* Surgical uptime — pushed right */}
+                <div className="ml-auto flex items-center gap-1.5">
+                  <MiniUptimeRing percent={dayMetrics.uptimePercent} />
+                  <span className="text-[11px] text-slate-500 font-medium">Surgical</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {!selectedSurgeon ? (
             <EmptyState
@@ -925,37 +1047,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
             />
           ) : (
             <div className="space-y-6">
-              {/* Surgeon Header + Tabs */}
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                      <span className="text-lg font-bold text-white">
-                        {selectedSurgeonData?.first_name?.charAt(0)}{selectedSurgeonData?.last_name?.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-semibold text-slate-900">
-                        Dr. {selectedSurgeonData?.first_name} {selectedSurgeonData?.last_name}
-                      </h2>
-                      <p className="text-sm text-slate-500">
-                        {activeTab === 'overview' ? periodLabel : formatDateDisplay(selectedDate)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Tabs */}
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-                    <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')}>
-                      Overview
-                    </TabButton>
-                    <TabButton active={activeTab === 'day'} onClick={() => setActiveTab('day')}>
-                      Day Analysis
-                    </TabButton>
-                  </div>
-                </div>
-              </div>
-
               {loading ? (
                 activeTab === 'overview' ? (
                   <div className="space-y-6">
@@ -971,10 +1062,6 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                 /* OVERVIEW TAB */
                 /* ============================================ */
                 <div className="space-y-6">
-                  {/* Period Selector */}
-                  <div className="flex justify-end">
-<DateRangeSelector value={dateRange} onChange={handleDateRangeChange} />
-                  </div>
 
                   {/* KPI Cards */}
                   <div className="grid grid-cols-4 gap-4">
@@ -1154,75 +1241,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                 /* DAY ANALYSIS TAB */
                 /* ============================================ */
                 <div className="space-y-6">
-                  {/* Date Picker */}
-                  <div className="flex justify-end">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          const d = new Date(selectedDate)
-                          d.setDate(d.getDate() - 1)
-                          setSelectedDate(getLocalDateString(d))
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        <ChevronLeft className="w-5 h-5" />
-                      </button>
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-shadow"
-                      />
-                      <button
-                        onClick={() => {
-                          const d = new Date(selectedDate)
-                          d.setDate(d.getDate() + 1)
-                          setSelectedDate(getLocalDateString(d))
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        <ChevronRight className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => setSelectedDate(getLocalDateString())}
-                        className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      >
-                        Today
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 1. Summary Strip */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div className="flex items-center gap-4">
-                        <MetricPillStrip
-                          items={[
-                            {
-                              label: 'First Case',
-                              value: formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone) || '--',
-                              sub: dayMetrics.firstCaseScheduledTime
-                                ? `Sched: ${(() => {
-                                    const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
-                                    const h = parseInt(hours)
-                                    const suffix = h >= 12 ? 'pm' : 'am'
-                                    const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
-                                    return `${displayHour}:${minutes} ${suffix}`
-                                  })()}`
-                                : undefined,
-                            },
-                            { label: 'Cases', value: dayMetrics.totalCases.toString() },
-                            { label: 'OR Time', value: formatMinutesToHHMMSS(dayMetrics.totalORTime) },
-                            { label: 'Surgical Time', value: formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime) },
-                          ]}
-                        />
-                        <FlagCountPills warningCount={flagCounts.warningCount} positiveCount={flagCounts.positiveCount} />
-                      </div>
-                      <UptimeRing percent={dayMetrics.uptimePercent} />
-                    </div>
-                  </div>
-
-                  {/* 2. Timeline Card */}
+                  {/* 1. Timeline Card */}
                   {timelineCases.length > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                       <div className="flex items-center justify-between mb-4">
