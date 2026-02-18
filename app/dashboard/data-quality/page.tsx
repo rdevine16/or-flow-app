@@ -31,7 +31,7 @@ import {
 // ============================================
 
 // What metrics require which milestones
-const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> = {
+export const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> = {
   case_count: {
     name: 'Case Count',
     requires: [] // Always calculable - just counting the case
@@ -51,10 +51,6 @@ const METRIC_REQUIREMENTS: Record<string, { name: string; requires: string[] }> 
   anesthesia_duration: {
     name: 'Anesthesia Duration',
     requires: ['anes_start', 'anes_end']
-  },
-  room_turnover: {
-    name: 'Room Turnover Time',
-    requires: ['patient_out', 'room_cleaned']
   },
   pre_incision_time: {
     name: 'Pre-Incision Time',
@@ -326,13 +322,7 @@ function DataQualityContent() {
           message: cmError.message || 'Error loading case milestones'
         })
       }
-      
-showToast({
-  type: 'info',
-  title: 'Loaded case_milestones:',
-  message: `Loaded case_milestones: ${caseMilestones?.length} ${caseMilestones}`
-})
-      
+
       // 2. Get unique facility_milestone_ids to look up
       const facilityMilestoneIds = [...new Set(
         caseMilestones?.map(cm => cm.facility_milestone_id).filter(Boolean) || []
@@ -362,11 +352,7 @@ showToast({
         } else {
           facilityMilestones = fmData || []
         }
-showToast({
-  type: 'info',
-  title: 'Loaded facility_milestones:',
-  message: `Loaded facility_milestones: ${facilityMilestones?.length} ${facilityMilestones}`
-})      }
+      }
       
       // Create lookup map for facility_milestones
       const fmLookup = new Map(facilityMilestones.map(fm => [fm.id, fm]))
@@ -437,12 +423,7 @@ showToast({
               pair_with_id: fm.pair_with_id || null,
               recorded_at: cm.recorded_at
             })
-          } else {
-showToast({
-  type: 'info',
-  title: 'Missing facility_milestone for id:',
-  message: `Missing facility_milestone for id: ${cm.facility_milestone_id}`
-})          }
+          }
         }
       })
       
