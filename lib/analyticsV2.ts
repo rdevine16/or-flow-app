@@ -141,6 +141,64 @@ export interface RoomHoursMap {
   [roomId: string]: number  // room_id → available_hours
 }
 
+// ============================================
+// FACILITY ANALYTICS CONFIG
+// ============================================
+
+/**
+ * Unified config for all facility-level KPI targets.
+ * Fetched from facility_analytics_settings + facilities.or_hourly_rate.
+ * All analytics consumers should use this instead of hard-coded values.
+ */
+export interface FacilityAnalyticsConfig {
+  // FCOTS
+  fcotsMilestone: 'patient_in' | 'incision'
+  fcotsGraceMinutes: number
+  fcotsTargetPercent: number
+  // Surgical Turnovers
+  sameRoomTurnoverTarget: number       // minutes (default 45)
+  flipRoomTurnoverTarget: number       // minutes (default 15)
+  turnoverThresholdMinutes: number     // room turnover compliance threshold (default 30)
+  turnoverComplianceTarget: number     // percent (default 80)
+  // OR Utilization
+  utilizationTargetPercent: number     // percent (default 75)
+  // Cancellations
+  cancellationTargetPercent: number    // percent (default 5)
+  // Surgeon Idle Time
+  idleCombinedTargetMinutes: number    // minutes (default 10)
+  idleFlipTargetMinutes: number        // minutes (default 5)
+  idleSameRoomTargetMinutes: number    // minutes (default 10)
+  // Tardiness & Non-Operative Time
+  tardinessTargetMinutes: number       // minutes (default 45)
+  nonOpWarnMinutes: number             // minutes (default 20)
+  nonOpBadMinutes: number              // minutes (default 30)
+  // Operational
+  operatingDaysPerYear: number         // days (default 250)
+  // Revenue (from facilities table, not facility_analytics_settings)
+  orHourlyRate: number | null          // $/hr (from facilities.or_hourly_rate)
+}
+
+/** Default values for all analytics config fields */
+export const ANALYTICS_CONFIG_DEFAULTS: FacilityAnalyticsConfig = {
+  fcotsMilestone: 'patient_in',
+  fcotsGraceMinutes: 2,
+  fcotsTargetPercent: 85,
+  sameRoomTurnoverTarget: 45,
+  flipRoomTurnoverTarget: 15,
+  turnoverThresholdMinutes: 30,
+  turnoverComplianceTarget: 80,
+  utilizationTargetPercent: 75,
+  cancellationTargetPercent: 5,
+  idleCombinedTargetMinutes: 10,
+  idleFlipTargetMinutes: 5,
+  idleSameRoomTargetMinutes: 10,
+  tardinessTargetMinutes: 45,
+  nonOpWarnMinutes: 20,
+  nonOpBadMinutes: 30,
+  operatingDaysPerYear: 250,
+  orHourlyRate: null,
+}
+
 // NEW: Same-day cancellation result
 export interface CancellationResult extends KPIResult {
   sameDayCount: number
