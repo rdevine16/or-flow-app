@@ -29,34 +29,47 @@ import {
   getClosingTime,
   getClosedToWheelsOut,
   calculateAverage,
+  calculateMedian,
   calculateSum,
-  calculatePercentageChange,
   formatMinutesToHHMMSS,
   formatSecondsToHHMMSS,
   getAllTurnovers,
   getAllSurgicalTurnovers,
   computePhaseDurations,
   buildMilestoneTimestampMap,
+  computeSubphaseOffsets,
   type CaseWithMilestones,
   type PhaseDefInput,
 } from '@/lib/analyticsV2'
 
+import {
+  detectCaseFlags,
+  computeProcedureMedians,
+  aggregateDayFlags,
+  type CaseFlag,
+} from '@/lib/flag-detection'
+
 // Enterprise analytics components
-import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, Pencil, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
+import { Archive, BarChart3, Building2, ChevronLeft, ChevronRight, ClipboardList, Clock, Info, RefreshCw, TrendingUp, User as UserIcon } from 'lucide-react'
 import {
   SectionHeader,
   EnhancedMetricCard,
-  TrendPill,
   SurgeonSelector,
   ConsistencyBadge,
-  CasePhaseBar,
-  PhaseLegend,
   EmptyState,
   ProcedureComparisonChart,
+  MetricPillStrip,
+  UptimeRing,
+  FlagCountPills,
+  DayTimeline,
+  CasePhaseBarNested,
+  PhaseMedianComparison,
+  CaseDetailPanel,
+  SidebarFlagList,
+  PhaseTreeLegend,
   type ProcedureComparisonData,
-  type CasePhaseBarPhase,
-  type CasePhaseBarSubphase,
-  type PhaseLegendItem,
+  type TimelineCaseData,
+  type TimelineCasePhase,
   SkeletonMetricCards,
   SkeletonTable,
   SkeletonChart,
@@ -173,7 +186,7 @@ export default function SurgeonPerformancePage() {
   const [selectedDate, setSelectedDate] = useState(getLocalDateString())
   const [dayCases, setDayCases] = useState<CaseWithMilestones[]>([])
   const [last30DaysCases, setLast30DaysCases] = useState<CaseWithMilestones[]>([])
-  const [allTimeCases, setAllTimeCases] = useState<CaseWithMilestones[]>([])
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null)
 
   
   const [loading, setLoading] = useState(true)
@@ -376,7 +389,6 @@ const handleDateRangeChange = (range: string, startDate: string, endDate: string
       // eslint-disable-next-line
       setDayCases([])
       setLast30DaysCases([])
-      setAllTimeCases([])
       return
     }
 
@@ -394,7 +406,7 @@ const handleDateRangeChange = (range: string, startDate: string, endDate: string
 case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
       `
 
-      const [dayRes, last30Res, allTimeRes] = await Promise.all([
+      const [dayRes, last30Res] = await Promise.all([
         supabase.from('cases').select(caseSelect)
           .eq('facility_id', effectiveFacilityId)
           .eq('surgeon_id', selectedSurgeon)
@@ -405,14 +417,10 @@ case_milestones (facility_milestone_id, recorded_at, facility_milestones (name))
           .eq('surgeon_id', selectedSurgeon)
           .gte('scheduled_date', getLocalDateString(thirtyDaysAgo))
           .lte('scheduled_date', getLocalDateString(today)),
-        supabase.from('cases').select(caseSelect)
-          .eq('facility_id', effectiveFacilityId)
-          .eq('surgeon_id', selectedSurgeon),
       ])
 
       setDayCases((dayRes.data as unknown as CaseWithMilestones[]) || [])
       setLast30DaysCases((last30Res.data as unknown as CaseWithMilestones[]) || [])
-      setAllTimeCases((allTimeRes.data as unknown as CaseWithMilestones[]) || [])
       setLoading(false)
     }
 
@@ -601,79 +609,163 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
 
   // Day metrics
   const dayMetrics = useMemo(() => calculateDayMetrics(dayCases), [dayCases, calculateDayMetrics])
-  const last30Metrics = useMemo(() => calculateDayMetrics(last30DaysCases), [last30DaysCases, calculateDayMetrics])
-  const allTimeMetrics = useMemo(() => calculateDayMetrics(allTimeCases), [allTimeCases, calculateDayMetrics])
-
-  // Percentage changes for day analysis
-  const turnoverVs30Day = calculatePercentageChange(dayMetrics.avgRoomTurnover, last30Metrics.avgRoomTurnover)
-  const surgicalTurnoverVs30Day = calculatePercentageChange(dayMetrics.avgSurgicalTurnover, last30Metrics.avgSurgicalTurnover)
-  const uptimeImprovement = allTimeMetrics.uptimePercent > 0 ? dayMetrics.uptimePercent - allTimeMetrics.uptimePercent : null
-
   // Case breakdown for day analysis — dynamic phases from phase_definitions
   const phaseTree = useMemo(() => buildPhaseTree(phaseDefinitions), [phaseDefinitions])
 
-  const caseBreakdown = useMemo(() => {
-    const completed = getCompletedCases(dayCases)
-    return completed.map(c => {
+  // Procedure medians from last 30 days (for flag detection)
+  const procedureMedians = useMemo(
+    () => computeProcedureMedians(last30DaysCases, phaseDefinitions),
+    [last30DaysCases, phaseDefinitions],
+  )
+
+  // Flag detection per case
+  const caseFlagsMap = useMemo(() => {
+    const completedCases = getCompletedCases(dayCases)
+    const map: Record<string, CaseFlag[]> = {}
+    completedCases.forEach((c, idx) => {
+      map[c.id] = detectCaseFlags(c, idx, completedCases, procedureMedians, phaseDefinitions)
+    })
+    return map
+  }, [dayCases, getCompletedCases, procedureMedians, phaseDefinitions])
+
+  // Aggregated day flags for sidebar
+  const allDayFlags = useMemo(
+    () => aggregateDayFlags(getCompletedCases(dayCases), caseFlagsMap),
+    [dayCases, getCompletedCases, caseFlagsMap],
+  )
+
+  // Flag counts for summary strip
+  const flagCounts = useMemo(() => {
+    let warningCount = 0
+    let positiveCount = 0
+    for (const flags of Object.values(caseFlagsMap)) {
+      for (const f of flags) {
+        if (f.severity === 'warning' || f.severity === 'caution') warningCount++
+        if (f.severity === 'positive') positiveCount++
+      }
+    }
+    return { warningCount, positiveCount }
+  }, [caseFlagsMap])
+
+  // Day medians — median per phase/sub-phase from today's cases
+  const dayMedians = useMemo(() => {
+    const completedCases = getCompletedCases(dayCases)
+    const buckets = new Map<string, number[]>()
+
+    for (const c of completedCases) {
+      const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
+      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
+      for (const phase of durations) {
+        if (phase.durationSeconds === null || phase.durationSeconds <= 0) continue
+        const existing = buckets.get(phase.phaseId) || []
+        existing.push(phase.durationSeconds)
+        buckets.set(phase.phaseId, existing)
+      }
+    }
+
+    const result: Record<string, number> = {}
+    for (const [key, values] of buckets) {
+      const median = calculateMedian(values)
+      if (median !== null) result[key] = median
+    }
+    return result
+  }, [dayCases, getCompletedCases, phaseDefinitions])
+
+  // Historical medians for phase comparison sidebar (keyed by phaseId, not procedureId:phaseId)
+  const historicalPhaseMedians = useMemo(() => {
+    const buckets = new Map<string, number[]>()
+
+    for (const c of last30DaysCases) {
+      const completedCheck = getMilestoneMap(c)
+      if (!completedCheck.patient_in || !completedCheck.patient_out) continue
+      const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
+      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
+      for (const phase of durations) {
+        if (phase.durationSeconds === null || phase.durationSeconds <= 0) continue
+        const existing = buckets.get(phase.phaseId) || []
+        existing.push(phase.durationSeconds)
+        buckets.set(phase.phaseId, existing)
+      }
+    }
+
+    const result: Record<string, number> = {}
+    for (const [key, values] of buckets) {
+      const median = calculateMedian(values)
+      if (median !== null) result[key] = median
+    }
+    return result
+  }, [last30DaysCases, phaseDefinitions])
+
+  // Timeline case data — transforms caseBreakdown into TimelineCaseData[] with sub-phase offsets
+  const timelineCases = useMemo((): TimelineCaseData[] => {
+    const completedCases = getCompletedCases(dayCases)
+
+    return completedCases.map(c => {
       const m = getMilestoneMap(c)
       const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
       const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
       const durations = computePhaseDurations(phaseDefinitions, timestampMap)
-      const durationMap = new Map(durations.map(d => [d.phaseId, d]))
+      const subphaseOffsets = computeSubphaseOffsets(phaseDefinitions, durations, timestampMap, resolveSubphaseHex)
 
-      const phases: CasePhaseBarPhase[] = phaseTree.map(node => {
-        const parentDuration = durationMap.get(node.phase.id)
-        const subphases: CasePhaseBarSubphase[] = node.children
-          .map(child => {
-            const childDuration = durationMap.get(child.phase.id)
-            if (!childDuration || childDuration.durationSeconds === null) return null
-            return {
-              label: childDuration.displayName,
-              value: childDuration.durationSeconds,
-              color: resolveSubphaseHex(childDuration.colorKey),
-            }
-          })
-          .filter((s): s is CasePhaseBarSubphase => s !== null)
+      // Build a lookup of subphase offsets by parent phase ID
+      const subphaseByParent = new Map(subphaseOffsets.map(p => [p.phaseId, p.subphases]))
+
+      const phases: TimelineCasePhase[] = phaseTree.map(node => {
+        const dur = durations.find(d => d.phaseId === node.phase.id)
+        const subs = subphaseByParent.get(node.phase.id) || []
 
         return {
-          label: parentDuration?.displayName ?? node.phase.display_name,
-          value: parentDuration?.durationSeconds ?? 0,
-          color: resolvePhaseHex(parentDuration?.colorKey ?? node.phase.color_key),
-          isMissing: parentDuration?.durationSeconds === null,
-          subphases: subphases.length > 0 ? subphases : undefined,
+          phaseId: node.phase.id,
+          label: dur?.displayName ?? node.phase.display_name,
+          color: resolvePhaseHex(dur?.colorKey ?? node.phase.color_key),
+          durationSeconds: dur?.durationSeconds ?? 0,
+          subphases: subs.map(sub => ({
+            label: sub.label,
+            color: sub.color,
+            durationSeconds: sub.durationSeconds,
+            offsetSeconds: sub.offsetSeconds,
+          })),
         }
-      })
+      }).filter(p => p.durationSeconds > 0)
+
+      const startTime = m.patient_in ?? new Date()
+      const endTime = m.patient_out ?? new Date()
 
       return {
         id: c.id,
         caseNumber: c.case_number,
-        procedureName: proc?.name || 'Unknown',
-        totalORTime: getTotalORTime(m) || 0,
+        procedure: proc?.name || 'Unknown',
+        room: c.or_rooms?.name || 'Unknown',
+        startTime,
+        endTime,
         phases,
       }
     })
   }, [dayCases, getCompletedCases, phaseDefinitions, phaseTree])
 
-  const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
+  // Max total seconds for the case breakdown bar scaling
+  const maxTimelineCaseSeconds = useMemo(() => {
+    return Math.max(...timelineCases.map(c => c.phases.reduce((s, p) => s + p.durationSeconds, 0)), 1)
+  }, [timelineCases])
 
-  // Dynamic phase legend from phase_definitions
-  const dynamicLegendItems = useMemo((): PhaseLegendItem[] => {
-    const items: PhaseLegendItem[] = []
-    phaseTree.forEach(node => {
-      items.push({
-        label: node.phase.display_name,
-        color: resolvePhaseHex(node.phase.color_key),
-      })
-      node.children.forEach(child => {
-        items.push({
-          label: child.phase.display_name,
-          color: resolveSubphaseHex(child.phase.color_key),
-          isSubphase: true,
-        })
-      })
-    })
-    return items
-  }, [phaseTree])
+  // Convert procedureMedians to Record<string, number> keyed by phaseId for CaseDetailPanel
+  const selectedCaseMedians = useMemo((): Record<string, number> => {
+    if (!selectedCaseId) return {}
+    const selectedCase = getCompletedCases(dayCases).find(c => c.id === selectedCaseId)
+    if (!selectedCase) return {}
+    const proc = Array.isArray(selectedCase.procedure_types) ? selectedCase.procedure_types[0] : selectedCase.procedure_types
+    if (!proc) return {}
+
+    const result: Record<string, number> = {}
+    for (const [key, value] of procedureMedians) {
+      // Keys are `procedureId:phaseId` — only include matching procedure
+      if (key.startsWith(`${proc.id}:`)) {
+        const phaseId = key.slice(proc.id.length + 1)
+        result[phaseId] = value
+      }
+    }
+    return result
+  }, [selectedCaseId, dayCases, getCompletedCases, procedureMedians])
 
   // Procedure performance for day analysis
   const getProcedurePerformance = useCallback((): ProcedureComparisonData[] => {
@@ -1086,226 +1178,150 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                     </div>
                   </div>
 
-                  {/* Day Overview Section */}
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                    <SectionHeader
-                      title="Day Overview"
-                      subtitle="Track efficiency by measuring key time metrics"
-                      accentColor="blue"
-                      icon={
-                        <Pencil className="w-4 h-4" />
-                      }
-                    />
-
-                    {/* Top Metrics Row */}
-                    <div className="grid grid-cols-4 gap-4 mt-6">
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                          First Case Start
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">
-                          {formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone)}
-                        </div>
-                        {dayMetrics.firstCaseScheduledTime && (
-                          <div className="text-xs text-slate-500 mt-1">
-                            Scheduled: {(() => {
-                              const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
-                              const h = parseInt(hours)
-                              const suffix = h >= 12 ? 'pm' : 'am'
-                              const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
-                              return `${displayHour}:${minutes} ${suffix}`
-                            })()}
-                          </div>
-                        )}
+                  {/* 1. Summary Strip */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <MetricPillStrip
+                          items={[
+                            {
+                              label: 'First Case',
+                              value: formatTimeInTimezone(dayMetrics.firstCaseStartTime?.toISOString() ?? null, facilityTimezone) || '--',
+                              sub: dayMetrics.firstCaseScheduledTime
+                                ? `Sched: ${(() => {
+                                    const [hours, minutes] = dayMetrics.firstCaseScheduledTime.split(':')
+                                    const h = parseInt(hours)
+                                    const suffix = h >= 12 ? 'pm' : 'am'
+                                    const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h)
+                                    return `${displayHour}:${minutes} ${suffix}`
+                                  })()}`
+                                : undefined,
+                            },
+                            { label: 'Cases', value: dayMetrics.totalCases.toString() },
+                            { label: 'OR Time', value: formatMinutesToHHMMSS(dayMetrics.totalORTime) },
+                            { label: 'Surgical Time', value: formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime) },
+                          ]}
+                        />
+                        <FlagCountPills warningCount={flagCounts.warningCount} positiveCount={flagCounts.positiveCount} />
                       </div>
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <ClipboardList className="w-4 h-4 text-blue-600" />
-                          Cases
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.totalCases}</div>
-                      </div>
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-green-500" />
-                          Total OR Time
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalORTime)}</div>
-                      </div>
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <Clock className="w-4 h-4 text-violet-500" />
-                          Total Surgical Time
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)}</div>
-                      </div>
-                    </div>
-
-                    {/* Second Row - Turnovers and Uptime */}
-                    <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-100">
-                      {/* Surgical Turnover */}
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <RefreshCw className="w-4 h-4 text-amber-500" />
-                          Surgical Turnover
-                        </div>
-                        {dayMetrics.surgicalTurnoverCount > 0 ? (
-                          <>
-                            <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.avgSurgicalTurnover)}</div>
-                            <div className="flex items-center gap-3 mt-2 text-sm">
-                              {surgicalTurnoverVs30Day !== null && (
-                                <TrendPill value={Math.abs(surgicalTurnoverVs30Day)} improved={surgicalTurnoverVs30Day >= 0} />
-                              )}
-                              <span className="text-slate-400 text-xs">avg. {formatMinutesToHHMMSS(last30Metrics.avgSurgicalTurnover)}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-xl font-bold text-slate-400 tabular-nums">N/A</div>
-                            <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Room Turnover */}
-                      <div className="bg-slate-50/80 rounded-lg p-4">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <RefreshCw className="w-4 h-4 text-amber-500" />
-                          Room Turnover
-                        </div>
-                        {dayMetrics.roomTurnoverCount > 0 ? (
-                          <>
-                            <div className="text-2xl font-bold text-slate-900 tabular-nums">{formatMinutesToHHMMSS(dayMetrics.avgRoomTurnover)}</div>
-                            <div className="flex items-center gap-3 mt-2 text-sm">
-                              {turnoverVs30Day !== null && (
-                                <TrendPill value={Math.abs(turnoverVs30Day)} improved={turnoverVs30Day >= 0} />
-                              )}
-                              <span className="text-slate-400 text-xs">avg. {formatMinutesToHHMMSS(last30Metrics.avgRoomTurnover)}</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-xl font-bold text-slate-400 tabular-nums">N/A</div>
-                            <div className="text-xs text-slate-400 mt-1">Requires 2+ cases in same room</div>
-                          </>
-                        )}
-                      </div>
-                      
-                      {/* Uptime vs Downtime */}
-                      <div className="bg-slate-50/80 rounded-lg p-4 col-span-2">
-                        <div className="flex items-center gap-2 text-slate-500 text-sm mb-1.5">
-                          <BarChart3 className="w-4 h-4 text-blue-600" />
-                          Uptime vs Downtime
-                        </div>
-                        
-                        {dayMetrics.totalORTime > 0 ? (
-                          <>
-                            <div className="flex items-baseline gap-2 mb-3">
-                              <span className="text-2xl font-bold text-slate-900 tabular-nums">{dayMetrics.uptimePercent}%</span>
-                              <span className="text-slate-300">·</span>
-                              <span className="text-lg font-semibold text-slate-500 tabular-nums">{100 - dayMetrics.uptimePercent}%</span>
-                              {uptimeImprovement !== null && (
-                                <div className="ml-2">
-                                  <TrendPill value={Math.abs(parseFloat(uptimeImprovement.toFixed(1)))} improved={uptimeImprovement >= 0} />
-                                </div>
-                              )}
-                            </div>
-                            <div className="h-3 w-full rounded-full overflow-hidden flex bg-slate-100">
-                              <div className="h-full bg-blue-600 rounded-l-full transition-all duration-500" style={{ width: `${dayMetrics.uptimePercent}%` }} />
-                              <div className="h-full bg-red-400 rounded-r-full transition-all duration-500" style={{ width: `${100 - dayMetrics.uptimePercent}%` }} />
-                            </div>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                                <span>Surgical ({formatMinutesToHHMMSS(dayMetrics.totalSurgicalTime)})</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                                <span>Other ({formatMinutesToHHMMSS(dayMetrics.totalORTime - dayMetrics.totalSurgicalTime)})</span>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-xl font-bold text-slate-400 tabular-nums">--</div>
-                        )}
-                      </div>
+                      <UptimeRing percent={dayMetrics.uptimePercent} />
                     </div>
                   </div>
 
-                  {/* Cases and Procedure Performance */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Cases List with Enhanced Stacked Bars */}
+                  {/* 2. Timeline Card */}
+                  {timelineCases.length > 0 && (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-slate-900">OR Timeline</h3>
+                        <PhaseTreeLegend
+                          phaseTree={phaseTree}
+                          resolveHex={resolvePhaseHex}
+                          resolveSubHex={resolveSubphaseHex}
+                        />
+                      </div>
+                      <DayTimeline
+                        cases={timelineCases}
+                        caseFlags={caseFlagsMap}
+                      />
+                    </div>
+                  )}
+
+                  {/* 3. Bottom Split — Case Breakdown + Sidebar */}
+                  <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Case Breakdown (flex-1) */}
+                    <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
                       <SectionHeader
                         title="Case Breakdown"
                         subtitle={`${dayMetrics.totalCases} case${dayMetrics.totalCases !== 1 ? 's' : ''} completed`}
                         accentColor="blue"
-                        icon={
-                          <ClipboardList className="w-4 h-4" />
-                        }
+                        icon={<ClipboardList className="w-4 h-4" />}
                       />
 
                       {phaseDefinitions.length === 0 ? (
                         <div className="mt-4">
                           <EmptyState
-                            icon={
-                              <Info className="w-6 h-6 text-slate-400" />
-                            }
+                            icon={<Info className="w-6 h-6 text-slate-400" />}
                             title="No Phases Configured"
                             description="This facility has no phase definitions configured. Set up phases in Settings to see case breakdowns."
                           />
                         </div>
-                      ) : caseBreakdown.length === 0 ? (
+                      ) : timelineCases.length === 0 ? (
                         <div className="mt-4">
                           <EmptyState
-                            icon={
-                              <ClipboardList className="w-6 h-6 text-slate-400" />
-                            }
+                            icon={<ClipboardList className="w-6 h-6 text-slate-400" />}
                             title="No Cases"
                             description="No completed cases for this date."
                           />
                         </div>
                       ) : (
-                        <>
-                          <div className="mt-3 mb-3">
-                            <PhaseLegend items={dynamicLegendItems} />
-                          </div>
-                          <div className="space-y-2">
-                            {caseBreakdown.map(c => (
-                              <CasePhaseBar
+                        <div className="space-y-1 mt-3">
+                          {timelineCases.map(c => {
+                            const totalSeconds = c.phases.reduce((s, p) => s + p.durationSeconds, 0)
+                            return (
+                              <CasePhaseBarNested
                                 key={c.id}
                                 caseNumber={c.caseNumber}
-                                procedureName={c.procedureName}
-                                totalValue={c.totalORTime}
-                                maxValue={maxCaseTime}
-                                caseId={c.id}
-                                formatValue={formatSecondsToHHMMSS}
+                                procedureName={c.procedure}
                                 phases={c.phases}
+                                totalSeconds={totalSeconds}
+                                maxTotalSeconds={maxTimelineCaseSeconds}
+                                isSelected={selectedCaseId === c.id}
+                                onSelect={() => setSelectedCaseId(prev => prev === c.id ? null : c.id)}
+                                flags={caseFlagsMap[c.id] || []}
                               />
-                            ))}
-                          </div>
-                        </>
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
 
-                    {/* Procedure Performance */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                      <SectionHeader
-                        title="Procedure Performance"
-                        subtitle="Today vs 30-day average by procedure"
-                        accentColor="green"
-                        icon={
-                          <BarChart3 className="w-4 h-4" />
-                        }
-                      />
-
-                      <div className="mt-4">
-                        <ProcedureComparisonChart 
-                          data={procedurePerformance} 
-                          formatValue={formatSecondsToHHMMSS}
+                    {/* Sidebar (280px) */}
+                    <div className="lg:w-[280px] w-full space-y-4">
+                      {/* Phase Medians Card (always visible) */}
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                        <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Phase Medians</h4>
+                        <PhaseMedianComparison
+                          dayMedians={dayMedians}
+                          historicalMedians={historicalPhaseMedians}
+                          phaseTree={phaseTree}
+                          resolveHex={resolvePhaseHex}
                         />
                       </div>
+
+                      {/* Contextual Card — case detail or flag list */}
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                        {selectedCaseId && timelineCases.find(c => c.id === selectedCaseId) ? (
+                          <>
+                            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Case Detail</h4>
+                            <CaseDetailPanel
+                              caseData={timelineCases.find(c => c.id === selectedCaseId)!}
+                              flags={caseFlagsMap[selectedCaseId] || []}
+                              procedureMedians={selectedCaseMedians}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Day Flags</h4>
+                            <SidebarFlagList flags={allDayFlags} />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Procedure Performance (full width, below the bottom split) */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                    <SectionHeader
+                      title="Procedure Performance"
+                      subtitle="Today vs 30-day average by procedure"
+                      accentColor="green"
+                      icon={<BarChart3 className="w-4 h-4" />}
+                    />
+                    <div className="mt-4">
+                      <ProcedureComparisonChart
+                        data={procedurePerformance}
+                        formatValue={formatSecondsToHHMMSS}
+                      />
                     </div>
                   </div>
                 </div>
