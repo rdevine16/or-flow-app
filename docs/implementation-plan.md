@@ -201,6 +201,6 @@ Remove all per-page breadcrumbs (now redundant since the Header handles everythi
 
 | Phase | Description | Status | Commit |
 |-------|-------------|--------|--------|
-| 1 | Route map, resolver, and BreadcrumbContext | Pending | — |
-| 2 | Header dynamic breadcrumb trail + BreadcrumbProvider | Pending | — |
-| 3 | Remove duplicate breadcrumbs + dynamic labels | Pending | — |
+| 1 | Route map, resolver, and BreadcrumbContext | Done | a934114 |
+| 2 | Header dynamic breadcrumb trail + BreadcrumbProvider | Done | 6d31800 |
+| 3 | Remove duplicate breadcrumbs + dynamic labels | Done | c365520 |

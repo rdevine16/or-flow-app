@@ -1,7 +1,7 @@
 // components/settings/phases/PhaseCard.tsx
 'use client'
 
-import { useState, useEffect, useRef, forwardRef } from 'react'
+import { useState, useRef, forwardRef } from 'react'
 import { Archive, GripVertical, ArrowRight, CornerDownRight } from 'lucide-react'
 import { resolveColorKey, COLOR_KEY_PALETTE } from '@/lib/milestone-phase-config'
 import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core'
@@ -77,13 +77,14 @@ export const PhaseCard = forwardRef<HTMLDivElement, PhaseCardProps>(function Pha
   })
 
   // Local state for name editing (blur-commit pattern)
+  // Sync local state when parent prop changes (e.g., after reorder)
   const [localName, setLocalName] = useState(phase.display_name)
-  const nameRef = useRef<HTMLInputElement>(null)
-
-  // Sync local state when parent state changes (e.g., after reorder)
-  useEffect(() => {
+  const [prevDisplayName, setPrevDisplayName] = useState(phase.display_name)
+  if (prevDisplayName !== phase.display_name) {
+    setPrevDisplayName(phase.display_name)
     setLocalName(phase.display_name)
-  }, [phase.display_name])
+  }
+  const nameRef = useRef<HTMLInputElement>(null)
 
   const commitName = () => {
     const trimmed = localName.trim()

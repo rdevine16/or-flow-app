@@ -1,1 +1,1 @@
-../../../../.claude/commands/web-review.md
+../../../../../.claude/commands/web-review.md

@@ -1,1 +1,1 @@
-../../../../.claude/commands/web-fix.md
+../../../../../.claude/commands/web-fix.md

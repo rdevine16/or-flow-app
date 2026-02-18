@@ -1,1 +1,1 @@
-../../../../.claude/commands/web-audit.md
+../../../../../.claude/commands/web-audit.md

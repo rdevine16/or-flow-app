@@ -1,1 +1,1 @@
-../../../../.claude/commands/web-migrate.md
+../../../../../.claude/commands/web-migrate.md
