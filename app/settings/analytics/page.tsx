@@ -9,13 +9,29 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
 interface AnalyticsSettings {
   id: string
   facility_id: string
+  // FCOTS
   fcots_milestone: 'patient_in' | 'incision'
   fcots_grace_minutes: number
   fcots_target_percent: number
+  // Surgical Turnovers
   turnover_target_same_surgeon: number
   turnover_target_flip_room: number
+  turnover_threshold_minutes: number
+  turnover_compliance_target_percent: number
+  // OR Utilization
   utilization_target_percent: number
+  // Cancellations
   cancellation_target_percent: number
+  // Surgeon Idle Time
+  idle_combined_target_minutes: number
+  idle_flip_target_minutes: number
+  idle_same_room_target_minutes: number
+  // Tardiness & Non-Operative Time
+  tardiness_target_minutes: number
+  non_op_warn_minutes: number
+  non_op_bad_minutes: number
+  // Operational
+  operating_days_per_year: number
   // ORbit Score v2
   start_time_milestone: 'patient_in' | 'incision'
   start_time_grace_minutes: number
@@ -26,13 +42,29 @@ interface AnalyticsSettings {
 }
 
 const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
+  // FCOTS
   fcots_milestone: 'patient_in',
   fcots_grace_minutes: 2,
   fcots_target_percent: 85,
-  turnover_target_same_surgeon: 30,
-  turnover_target_flip_room: 45,
-  utilization_target_percent: 80,
+  // Surgical Turnovers (corrected defaults)
+  turnover_target_same_surgeon: 45,
+  turnover_target_flip_room: 15,
+  turnover_threshold_minutes: 30,
+  turnover_compliance_target_percent: 80,
+  // OR Utilization (corrected default)
+  utilization_target_percent: 75,
+  // Cancellations
   cancellation_target_percent: 5,
+  // Surgeon Idle Time
+  idle_combined_target_minutes: 10,
+  idle_flip_target_minutes: 5,
+  idle_same_room_target_minutes: 10,
+  // Tardiness & Non-Operative Time
+  tardiness_target_minutes: 45,
+  non_op_warn_minutes: 20,
+  non_op_bad_minutes: 30,
+  // Operational
+  operating_days_per_year: 250,
   // ORbit Score v2
   start_time_milestone: 'patient_in',
   start_time_grace_minutes: 3,
@@ -40,6 +72,53 @@ const DEFAULT_SETTINGS: Omit<AnalyticsSettings, 'id' | 'facility_id'> = {
   waiting_on_surgeon_minutes: 3,
   waiting_on_surgeon_floor_minutes: 10,
   min_procedure_cases: 3,
+}
+
+// Helper component for number input fields
+function SettingsNumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = '1',
+  helpText,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  min: string
+  max: string
+  step?: string
+  helpText: string
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-700 mb-1.5">
+        {label}
+      </label>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        min={min}
+        max={max}
+        step={step}
+        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+      />
+      <p className="mt-1 text-xs text-slate-500">{helpText}</p>
+    </div>
+  )
+}
+
+// Helper component for section headers
+function SectionHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+    </div>
+  )
 }
 
 export default function AnalyticsSettingsPage() {
@@ -65,13 +144,29 @@ export default function AnalyticsSettingsPage() {
 
   // Form state (strings for controlled inputs)
   const [form, setForm] = useState({
+    // FCOTS
     fcots_milestone: 'patient_in' as 'patient_in' | 'incision',
     fcots_grace_minutes: '2',
     fcots_target_percent: '85',
-    turnover_target_same_surgeon: '30',
-    turnover_target_flip_room: '45',
-    utilization_target_percent: '80',
+    // Surgical Turnovers
+    turnover_target_same_surgeon: '45',
+    turnover_target_flip_room: '15',
+    turnover_threshold_minutes: '30',
+    turnover_compliance_target_percent: '80',
+    // OR Utilization
+    utilization_target_percent: '75',
+    // Cancellations
     cancellation_target_percent: '5',
+    // Surgeon Idle Time
+    idle_combined_target_minutes: '10',
+    idle_flip_target_minutes: '5',
+    idle_same_room_target_minutes: '10',
+    // Tardiness & Non-Operative Time
+    tardiness_target_minutes: '45',
+    non_op_warn_minutes: '20',
+    non_op_bad_minutes: '30',
+    // Operational
+    operating_days_per_year: '250',
     // ORbit Score v2
     start_time_milestone: 'patient_in' as 'patient_in' | 'incision',
     start_time_grace_minutes: '3',
@@ -86,13 +181,30 @@ export default function AnalyticsSettingsPage() {
     if (!settings) return
 
     setForm({
+      // FCOTS
       fcots_milestone: settings.fcots_milestone || 'patient_in',
       fcots_grace_minutes: String(settings.fcots_grace_minutes ?? 2),
       fcots_target_percent: String(settings.fcots_target_percent ?? 85),
-      turnover_target_same_surgeon: String(settings.turnover_target_same_surgeon ?? 30),
-      turnover_target_flip_room: String(settings.turnover_target_flip_room ?? 45),
-      utilization_target_percent: String(settings.utilization_target_percent ?? 80),
+      // Surgical Turnovers
+      turnover_target_same_surgeon: String(settings.turnover_target_same_surgeon ?? 45),
+      turnover_target_flip_room: String(settings.turnover_target_flip_room ?? 15),
+      turnover_threshold_minutes: String(settings.turnover_threshold_minutes ?? 30),
+      turnover_compliance_target_percent: String(settings.turnover_compliance_target_percent ?? 80),
+      // OR Utilization
+      utilization_target_percent: String(settings.utilization_target_percent ?? 75),
+      // Cancellations
       cancellation_target_percent: String(settings.cancellation_target_percent ?? 5),
+      // Surgeon Idle Time
+      idle_combined_target_minutes: String(settings.idle_combined_target_minutes ?? 10),
+      idle_flip_target_minutes: String(settings.idle_flip_target_minutes ?? 5),
+      idle_same_room_target_minutes: String(settings.idle_same_room_target_minutes ?? 10),
+      // Tardiness & Non-Operative Time
+      tardiness_target_minutes: String(settings.tardiness_target_minutes ?? 45),
+      non_op_warn_minutes: String(settings.non_op_warn_minutes ?? 20),
+      non_op_bad_minutes: String(settings.non_op_bad_minutes ?? 30),
+      // Operational
+      operating_days_per_year: String(settings.operating_days_per_year ?? 250),
+      // ORbit Score v2
       start_time_milestone: settings.start_time_milestone || settings.fcots_milestone || 'patient_in',
       start_time_grace_minutes: String(settings.start_time_grace_minutes ?? settings.fcots_grace_minutes ?? 3),
       start_time_floor_minutes: String(settings.start_time_floor_minutes ?? 20),
@@ -113,13 +225,29 @@ export default function AnalyticsSettingsPage() {
 
     const payload = {
       facility_id: effectiveFacilityId,
+      // FCOTS
       fcots_milestone: form.fcots_milestone,
       fcots_grace_minutes: parseFloat(form.fcots_grace_minutes) || 2,
       fcots_target_percent: parseFloat(form.fcots_target_percent) || 85,
-      turnover_target_same_surgeon: parseFloat(form.turnover_target_same_surgeon) || 30,
-      turnover_target_flip_room: parseFloat(form.turnover_target_flip_room) || 45,
-      utilization_target_percent: parseFloat(form.utilization_target_percent) || 80,
+      // Surgical Turnovers
+      turnover_target_same_surgeon: parseFloat(form.turnover_target_same_surgeon) || 45,
+      turnover_target_flip_room: parseFloat(form.turnover_target_flip_room) || 15,
+      turnover_threshold_minutes: parseFloat(form.turnover_threshold_minutes) || 30,
+      turnover_compliance_target_percent: parseFloat(form.turnover_compliance_target_percent) || 80,
+      // OR Utilization
+      utilization_target_percent: parseFloat(form.utilization_target_percent) || 75,
+      // Cancellations
       cancellation_target_percent: parseFloat(form.cancellation_target_percent) || 5,
+      // Surgeon Idle Time
+      idle_combined_target_minutes: parseFloat(form.idle_combined_target_minutes) || 10,
+      idle_flip_target_minutes: parseFloat(form.idle_flip_target_minutes) || 5,
+      idle_same_room_target_minutes: parseFloat(form.idle_same_room_target_minutes) || 10,
+      // Tardiness & Non-Operative Time
+      tardiness_target_minutes: parseFloat(form.tardiness_target_minutes) || 45,
+      non_op_warn_minutes: parseFloat(form.non_op_warn_minutes) || 20,
+      non_op_bad_minutes: parseFloat(form.non_op_bad_minutes) || 30,
+      // Operational
+      operating_days_per_year: parseInt(form.operating_days_per_year) || 250,
       // ORbit Score v2
       start_time_milestone: form.start_time_milestone,
       start_time_grace_minutes: parseInt(form.start_time_grace_minutes) || 3,
@@ -155,13 +283,29 @@ export default function AnalyticsSettingsPage() {
 
   const handleReset = () => {
     setForm({
+      // FCOTS
       fcots_milestone: DEFAULT_SETTINGS.fcots_milestone,
       fcots_grace_minutes: String(DEFAULT_SETTINGS.fcots_grace_minutes),
       fcots_target_percent: String(DEFAULT_SETTINGS.fcots_target_percent),
+      // Surgical Turnovers
       turnover_target_same_surgeon: String(DEFAULT_SETTINGS.turnover_target_same_surgeon),
       turnover_target_flip_room: String(DEFAULT_SETTINGS.turnover_target_flip_room),
+      turnover_threshold_minutes: String(DEFAULT_SETTINGS.turnover_threshold_minutes),
+      turnover_compliance_target_percent: String(DEFAULT_SETTINGS.turnover_compliance_target_percent),
+      // OR Utilization
       utilization_target_percent: String(DEFAULT_SETTINGS.utilization_target_percent),
+      // Cancellations
       cancellation_target_percent: String(DEFAULT_SETTINGS.cancellation_target_percent),
+      // Surgeon Idle Time
+      idle_combined_target_minutes: String(DEFAULT_SETTINGS.idle_combined_target_minutes),
+      idle_flip_target_minutes: String(DEFAULT_SETTINGS.idle_flip_target_minutes),
+      idle_same_room_target_minutes: String(DEFAULT_SETTINGS.idle_same_room_target_minutes),
+      // Tardiness & Non-Operative Time
+      tardiness_target_minutes: String(DEFAULT_SETTINGS.tardiness_target_minutes),
+      non_op_warn_minutes: String(DEFAULT_SETTINGS.non_op_warn_minutes),
+      non_op_bad_minutes: String(DEFAULT_SETTINGS.non_op_bad_minutes),
+      // Operational
+      operating_days_per_year: String(DEFAULT_SETTINGS.operating_days_per_year),
       // ORbit Score v2
       start_time_milestone: DEFAULT_SETTINGS.start_time_milestone,
       start_time_grace_minutes: String(DEFAULT_SETTINGS.start_time_grace_minutes),
@@ -202,12 +346,13 @@ export default function AnalyticsSettingsPage() {
       <p className="text-slate-500 mb-6">Configure how your facility&apos;s OR metrics are calculated and what targets to measure against.</p>
 
       <div className="space-y-8">
-            {/* FCOTS Configuration */}
+
+            {/* Section 1: FCOTS Configuration */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-                <h3 className="text-sm font-semibold text-slate-900">First Case On-Time Start (FCOTS)</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Define what &quot;on-time&quot; means for your facility</p>
-              </div>
+              <SectionHeader
+                title="First Case On-Time Start (FCOTS)"
+                description="Define what &quot;on-time&quot; means for your facility"
+              />
               <div className="p-6 space-y-4">
                 {/* Milestone Selection */}
                 <div>
@@ -219,8 +364,8 @@ export default function AnalyticsSettingsPage() {
                   </p>
                   <div className="flex gap-3">
                     <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                      form.fcots_milestone === 'patient_in' 
-                        ? 'border-blue-500 bg-blue-50' 
+                      form.fcots_milestone === 'patient_in'
+                        ? 'border-blue-500 bg-blue-50'
                         : 'border-slate-200 hover:border-slate-300'
                     }`}>
                       <input
@@ -237,8 +382,8 @@ export default function AnalyticsSettingsPage() {
                       </div>
                     </label>
                     <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                      form.fcots_milestone === 'incision' 
-                        ? 'border-blue-500 bg-blue-50' 
+                      form.fcots_milestone === 'incision'
+                        ? 'border-blue-500 bg-blue-50'
                         : 'border-slate-200 hover:border-slate-300'
                     }`}>
                       <input
@@ -259,137 +404,209 @@ export default function AnalyticsSettingsPage() {
 
                 {/* Grace Period + Target */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Grace Period (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      value={form.fcots_grace_minutes}
-                      onChange={(e) => setForm({ ...form, fcots_grace_minutes: e.target.value })}
-                      min="0"
-                      max="30"
-                      step="1"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Minutes after scheduled time still considered &quot;on-time&quot;
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Target (%)
-                    </label>
-                    <input
-                      type="number"
-                      value={form.fcots_target_percent}
-                      onChange={(e) => setForm({ ...form, fcots_target_percent: e.target.value })}
-                      min="0"
-                      max="100"
-                      step="1"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Industry benchmark: 85%
-                    </p>
-                  </div>
+                  <SettingsNumberField
+                    label="Grace Period (minutes)"
+                    value={form.fcots_grace_minutes}
+                    onChange={(v) => setForm({ ...form, fcots_grace_minutes: v })}
+                    min="0"
+                    max="30"
+                    helpText="Minutes after scheduled time still considered &quot;on-time&quot;"
+                  />
+                  <SettingsNumberField
+                    label="Target (%)"
+                    value={form.fcots_target_percent}
+                    onChange={(v) => setForm({ ...form, fcots_target_percent: v })}
+                    min="0"
+                    max="100"
+                    helpText="Industry benchmark: 85%"
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Turnover Targets */}
+            {/* Section 2: Surgical Turnovers */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-                <h3 className="text-sm font-semibold text-slate-900">Turnover Targets</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Target times for room turnovers (minutes)</p>
-              </div>
-              <div className="p-6">
+              <SectionHeader
+                title="Surgical Turnovers"
+                description="Target times and compliance thresholds for room turnovers"
+              />
+              <div className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Same Surgeon (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      value={form.turnover_target_same_surgeon}
-                      onChange={(e) => setForm({ ...form, turnover_target_same_surgeon: e.target.value })}
-                      min="5"
-                      max="120"
-                      step="5"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Same surgeon, same room. Benchmark: 25–30 min
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Flip Room (minutes)
-                    </label>
-                    <input
-                      type="number"
-                      value={form.turnover_target_flip_room}
-                      onChange={(e) => setForm({ ...form, turnover_target_flip_room: e.target.value })}
-                      min="5"
-                      max="120"
-                      step="5"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Surgeon switches rooms. Benchmark: 40–45 min
-                    </p>
-                  </div>
+                  <SettingsNumberField
+                    label="Same-Room Target (min)"
+                    value={form.turnover_target_same_surgeon}
+                    onChange={(v) => setForm({ ...form, turnover_target_same_surgeon: v })}
+                    min="5"
+                    max="120"
+                    step="5"
+                    helpText="Same surgeon, same OR. Benchmark: 45 min"
+                  />
+                  <SettingsNumberField
+                    label="Flip-Room Target (min)"
+                    value={form.turnover_target_flip_room}
+                    onChange={(v) => setForm({ ...form, turnover_target_flip_room: v })}
+                    min="5"
+                    max="120"
+                    step="5"
+                    helpText="Surgeon moves to different OR. Benchmark: 15 min"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <SettingsNumberField
+                    label="Room Turnover Threshold (min)"
+                    value={form.turnover_threshold_minutes}
+                    onChange={(v) => setForm({ ...form, turnover_threshold_minutes: v })}
+                    min="5"
+                    max="120"
+                    step="5"
+                    helpText='A turnover is "compliant" if under this'
+                  />
+                  <SettingsNumberField
+                    label="Compliance Target (%)"
+                    value={form.turnover_compliance_target_percent}
+                    onChange={(v) => setForm({ ...form, turnover_compliance_target_percent: v })}
+                    min="0"
+                    max="100"
+                    helpText="Target % of turnovers under threshold"
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Other Targets */}
+            {/* Section 3: OR Utilization */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
-                <h3 className="text-sm font-semibold text-slate-900">Other Targets</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Performance thresholds for dashboard KPIs</p>
-              </div>
+              <SectionHeader
+                title="OR Utilization"
+                description="Operating room utilization targets"
+              />
               <div className="p-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      OR Utilization Target (%)
-                    </label>
-                    <input
-                      type="number"
-                      value={form.utilization_target_percent}
-                      onChange={(e) => setForm({ ...form, utilization_target_percent: e.target.value })}
-                      min="0"
-                      max="100"
-                      step="5"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Patient-in-room time as % of available hours. Benchmark: 75–85%
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Same-Day Cancellation Target (%)
-                    </label>
-                    <input
-                      type="number"
-                      value={form.cancellation_target_percent}
-                      onChange={(e) => setForm({ ...form, cancellation_target_percent: e.target.value })}
-                      min="0"
-                      max="100"
-                      step="1"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Maximum acceptable same-day cancellation rate. Benchmark: &lt;5%
-                    </p>
-                  </div>
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Utilization Target (%)"
+                    value={form.utilization_target_percent}
+                    onChange={(v) => setForm({ ...form, utilization_target_percent: v })}
+                    min="0"
+                    max="100"
+                    step="5"
+                    helpText="Patient-in-room time as % of available hours. Benchmark: 75%"
+                  />
                 </div>
               </div>
             </div>
 
-            {/* ORbit Score Configuration */}
+            {/* Section 4: Cancellations */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Cancellations"
+                description="Same-day cancellation rate targets"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Same-Day Cancellation Target (%)"
+                    value={form.cancellation_target_percent}
+                    onChange={(v) => setForm({ ...form, cancellation_target_percent: v })}
+                    min="0"
+                    max="100"
+                    helpText="Max acceptable same-day cancellation rate. Benchmark: <5%"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 5: Surgeon Idle Time */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Surgeon Idle Time"
+                description="Acceptable idle time between cases for surgeons"
+              />
+              <div className="p-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <SettingsNumberField
+                    label="Combined Idle Target (min)"
+                    value={form.idle_combined_target_minutes}
+                    onChange={(v) => setForm({ ...form, idle_combined_target_minutes: v })}
+                    min="1"
+                    max="60"
+                    helpText="Total acceptable idle time between cases"
+                  />
+                  <SettingsNumberField
+                    label="Flip-Room Idle Target (min)"
+                    value={form.idle_flip_target_minutes}
+                    onChange={(v) => setForm({ ...form, idle_flip_target_minutes: v })}
+                    min="1"
+                    max="60"
+                    helpText="Idle time when surgeon moves to another OR"
+                  />
+                  <SettingsNumberField
+                    label="Same-Room Idle Target (min)"
+                    value={form.idle_same_room_target_minutes}
+                    onChange={(v) => setForm({ ...form, idle_same_room_target_minutes: v })}
+                    min="1"
+                    max="60"
+                    helpText="Idle time when surgeon stays in same OR"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 6: Tardiness & Non-Operative Time */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Tardiness & Non-Operative Time"
+                description="Thresholds for cumulative tardiness and non-operative time warnings"
+              />
+              <div className="p-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <SettingsNumberField
+                    label="Cumulative Tardiness Target (min)"
+                    value={form.tardiness_target_minutes}
+                    onChange={(v) => setForm({ ...form, tardiness_target_minutes: v })}
+                    min="5"
+                    max="120"
+                    helpText="Max cumulative tardiness per day"
+                  />
+                  <SettingsNumberField
+                    label="Non-Op Time Warning (min)"
+                    value={form.non_op_warn_minutes}
+                    onChange={(v) => setForm({ ...form, non_op_warn_minutes: v })}
+                    min="5"
+                    max="120"
+                    helpText="Avg non-operative time that triggers warning"
+                  />
+                  <SettingsNumberField
+                    label="Non-Op Time Alert (min)"
+                    value={form.non_op_bad_minutes}
+                    onChange={(v) => setForm({ ...form, non_op_bad_minutes: v })}
+                    min="5"
+                    max="120"
+                    helpText="Avg non-operative time that triggers alert"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 7: Operational */}
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <SectionHeader
+                title="Operational"
+                description="General operational parameters for projections and reporting"
+              />
+              <div className="p-6">
+                <div className="max-w-xs">
+                  <SettingsNumberField
+                    label="Operating Days per Year"
+                    value={form.operating_days_per_year}
+                    onChange={(v) => setForm({ ...form, operating_days_per_year: v })}
+                    min="1"
+                    max="365"
+                    helpText="Used for annualized projections in AI Insights"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 8: ORbit Score Configuration */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50">
                 <div className="flex items-center gap-2">
@@ -459,23 +676,14 @@ export default function AnalyticsSettingsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        Grace Period (minutes)
-                      </label>
-                      <input
-                        type="number"
-                        value={form.start_time_grace_minutes}
-                        onChange={(e) => setForm({ ...form, start_time_grace_minutes: e.target.value })}
-                        min="0"
-                        max="15"
-                        step="1"
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-slate-500">
-                        Minutes after scheduled start before score begins to decay
-                      </p>
-                    </div>
+                    <SettingsNumberField
+                      label="Grace Period (minutes)"
+                      value={form.start_time_grace_minutes}
+                      onChange={(v) => setForm({ ...form, start_time_grace_minutes: v })}
+                      min="0"
+                      max="15"
+                      helpText="Minutes after scheduled start before score begins to decay"
+                    />
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">
                         Decay Floor (minutes)
@@ -523,23 +731,14 @@ export default function AnalyticsSettingsPage() {
                   </p>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        Expected Gap (minutes)
-                      </label>
-                      <input
-                        type="number"
-                        value={form.waiting_on_surgeon_minutes}
-                        onChange={(e) => setForm({ ...form, waiting_on_surgeon_minutes: e.target.value })}
-                        min="0"
-                        max="15"
-                        step="1"
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                      <p className="mt-1 text-xs text-slate-500">
-                        Normal prep-to-incision gap (scrub + site marking)
-                      </p>
-                    </div>
+                    <SettingsNumberField
+                      label="Expected Gap (minutes)"
+                      value={form.waiting_on_surgeon_minutes}
+                      onChange={(v) => setForm({ ...form, waiting_on_surgeon_minutes: v })}
+                      min="0"
+                      max="15"
+                      helpText="Normal prep-to-incision gap (scrub + site marking)"
+                    />
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">
                         Decay Floor (minutes)
@@ -582,21 +781,14 @@ export default function AnalyticsSettingsPage() {
                     <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Scoring Thresholds</h4>
                   </div>
                   <div className="max-w-xs">
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                      Min Cases per Procedure Type
-                    </label>
-                    <input
-                      type="number"
+                    <SettingsNumberField
+                      label="Min Cases per Procedure Type"
                       value={form.min_procedure_cases}
-                      onChange={(e) => setForm({ ...form, min_procedure_cases: e.target.value })}
+                      onChange={(v) => setForm({ ...form, min_procedure_cases: v })}
                       min="1"
                       max="10"
-                      step="1"
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      helpText="Minimum cases of a procedure type to include in peer comparison cohort"
                     />
-                    <p className="mt-1 text-xs text-slate-500">
-                      Minimum cases of a procedure type to include in peer comparison cohort
-                    </p>
                   </div>
                 </div>
 
