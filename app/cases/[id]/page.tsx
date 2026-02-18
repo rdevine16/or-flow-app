@@ -10,6 +10,7 @@ import { useState, useEffect, use, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { useBreadcrumbLabel } from '@/lib/BreadcrumbContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { milestoneAudit, staffAudit } from '@/lib/audit-logger'
 import CaseActivitySummary from '@/components/cases/CaseActivitySummary'
@@ -168,6 +169,9 @@ export default function CasePage({ params }: { params: Promise<{ id: string }> }
   const [allProcedures, setAllProcedures] = useState<{ id: string; label: string }[]>([])
   const [allRooms, setAllRooms] = useState<{ id: string; label: string }[]>([])
   const [showIncompleteModal, setShowIncompleteModal] = useState(false)
+
+  // Register dynamic breadcrumb label — "Case #1042"
+  useBreadcrumbLabel('/cases/[id]', caseData?.case_number ? `Case #${caseData.case_number}` : undefined)
 
   // Live clock — only tick for active (non-completed) cases
   const isCompleted = caseData ? getJoinedValue(caseData.case_statuses)?.name === 'completed' : false

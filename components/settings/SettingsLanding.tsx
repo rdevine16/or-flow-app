@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/lib/UserContext'
 import { Card } from '@/components/ui/CardEnhanced'
-import Breadcrumb from '@/components/ui/Breadcrumb'
 import { ChevronRight } from 'lucide-react'
 import { getVisibleCategories, type BadgeType } from '@/lib/settings-nav-config'
 
@@ -36,21 +35,12 @@ function ItemBadge({ type }: { type: BadgeType }) {
 
 export default function SettingsLanding() {
   const router = useRouter()
-  const { userData, can } = useUser()
+  const { can } = useUser()
 
   const visibleCategories = getVisibleCategories(can)
 
-  const breadcrumbItems = [
-    { label: userData.facilityName || 'Facility', href: '/' },
-  ]
-
   return (
     <div className="animate-fade-in">
-      {/* Breadcrumb */}
-      <div className="px-6 py-3">
-        <Breadcrumb items={breadcrumbItems} currentPage="Settings" />
-      </div>
-
       {/* Header */}
       <div className="px-6 pb-6">
         <h1 className="text-2xl font-semibold text-slate-900">Settings</h1>

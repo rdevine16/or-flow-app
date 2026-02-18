@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
+import { useBreadcrumbLabel } from '@/lib/BreadcrumbContext'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import Container from '@/components/ui/Container'
 import { caseAudit } from '@/lib/audit-logger'
@@ -97,6 +98,9 @@ export default function CancelCasePage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Register dynamic breadcrumb label — "Case #1042"
+  useBreadcrumbLabel('/cases/[id]', caseData?.case_number ? `Case #${caseData.case_number}` : undefined)
   
   // Form state
   const [selectedReasonId, setSelectedReasonId] = useState('')

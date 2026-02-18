@@ -5,10 +5,8 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { useUser } from '@/lib/UserContext'
 import { useSupabaseQuery } from '@/hooks/useSupabaseQuery'
-import Breadcrumb from '@/components/ui/Breadcrumb'
 import {
   getCategoryForPath,
-  getNavItemForPath,
   getVisibleCategories,
   type SettingsCategory,
   type BadgeType,
@@ -138,13 +136,11 @@ interface SettingsTabLayoutProps {
 
 export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) {
   const pathname = usePathname()
-  const { userData, can, effectiveFacilityId } = useUser()
+  const { can, effectiveFacilityId } = useUser()
 
   const visibleCategories = getVisibleCategories(can)
   const activeCategoryId = getCategoryForPath(pathname)
   const activeCategory = visibleCategories.find(c => c.id === activeCategoryId)
-  const activeItem = getNavItemForPath(pathname)
-
   // Query for surgeon override existence (lightweight: only checks if any rows exist)
   const isCaseMgmtTab = activeCategoryId === 'case-management'
   const { data: surgeonOverrideExists } = useSupabaseQuery<boolean>(
@@ -168,19 +164,8 @@ export default function SettingsTabLayout({ children }: SettingsTabLayoutProps) 
     return { 'surgeon-milestones': true } as Record<string, boolean>
   }, [surgeonOverrideExists])
 
-  // Breadcrumb: Facility Name > Settings > Page Name
-  const breadcrumbItems = [
-    { label: userData.facilityName || 'Facility', href: '/' },
-    { label: 'Settings', href: '/settings' },
-  ]
-
   return (
     <div className="flex flex-col min-h-0">
-      {/* Breadcrumb */}
-      <div className="px-6 py-3">
-        <Breadcrumb items={breadcrumbItems} currentPage={activeItem?.label} />
-      </div>
-
       {/* Tab Bar */}
       <TabBar categories={visibleCategories} activeCategoryId={activeCategoryId} />
 

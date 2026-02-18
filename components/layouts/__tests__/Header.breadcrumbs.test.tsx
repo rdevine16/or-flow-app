@@ -434,3 +434,146 @@ describe('Header breadcrumb: settings routes via getNavItemForPath', () => {
     expect(link).toBeNull()
   })
 })
+
+// ============================================
+// STAGE 3 — PHASE 3 INTEGRATION: analytics and
+// settings pages rely on Header breadcrumb only
+// (no inline <nav> after Phase 3 removal)
+// ============================================
+
+describe('Phase 3: Header breadcrumb is the sole breadcrumb for analytics and settings routes', () => {
+  it('renders the Analytics > Surgeon Performance trail from Header for /analytics/surgeons', () => {
+    // AnalyticsPageHeader no longer renders its own <nav>; Header must supply breadcrumbs.
+    renderHeader(baseProps({ pathname: '/analytics/surgeons' }))
+    const texts = getBreadcrumbTexts()
+    expect(texts).toContain('General Hospital')
+    expect(texts).toContain('Analytics')
+    expect(texts).toContain('Surgeon Performance')
+    // Confirm "Analytics" is a clickable link (intermediate segment)
+    const analyticsLink = getLinkByLabel('Analytics')
+    expect(analyticsLink).not.toBeNull()
+    expect(analyticsLink?.getAttribute('href')).toBe('/analytics')
+    // Confirm "Surgeon Performance" is the non-clickable current page
+    const span = getNonLinkSpanByLabel('Surgeon Performance')
+    expect(span).not.toBeNull()
+  })
+
+  it('renders the Analytics > Financial Analytics trail for /analytics/financials', () => {
+    renderHeader(baseProps({ pathname: '/analytics/financials' }))
+    const texts = getBreadcrumbTexts()
+    expect(texts).toContain('Analytics')
+    expect(texts).toContain('Financial Analytics')
+    const span = getNonLinkSpanByLabel('Financial Analytics')
+    expect(span).not.toBeNull()
+  })
+
+  it('renders the Settings trail from Header for /settings', () => {
+    // SettingsLanding no longer renders its own breadcrumb; Header must supply it.
+    renderHeader(baseProps({ pathname: '/settings' }))
+    const texts = getBreadcrumbTexts()
+    expect(texts).toContain('General Hospital')
+    expect(texts).toContain('Settings')
+    const span = getNonLinkSpanByLabel('Settings')
+    expect(span).not.toBeNull()
+  })
+
+  it('cancel sub-route shows case label as a linked intermediate segment', async () => {
+    // Both /cases/[id] and /cases/[id]/cancel call useBreadcrumbLabel with the same
+    // key '/cases/[id]'. The cancel page's breadcrumb must show the case label as a
+    // link (not the terminal segment) so the user can navigate back to the case.
+    const uuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+
+    function LabelInjector() {
+      useBreadcrumbLabel('/cases/[id]', 'Case #1042')
+      return null
+    }
+
+    await act(async () => {
+      render(
+        <BreadcrumbProvider>
+          <LabelInjector />
+          <Header {...baseProps({ pathname: `/cases/${uuid}/cancel` })} />
+        </BreadcrumbProvider>
+      )
+    })
+
+    const texts = getBreadcrumbTexts()
+    // Trail: General Hospital > Cases > Case #1042 > Cancel
+    expect(texts).toContain('Cases')
+    expect(texts).toContain('Case #1042')
+    expect(texts).toContain('Cancel')
+
+    // "Case #1042" must be a link (intermediate) not the terminal span
+    const caseLink = getLinkByLabel('Case #1042')
+    expect(caseLink).not.toBeNull()
+    expect(caseLink?.getAttribute('href')).toBe(`/cases/${uuid}`)
+
+    // "Cancel" must be the non-clickable terminal span
+    const cancelSpan = getNonLinkSpanByLabel('Cancel')
+    expect(cancelSpan).not.toBeNull()
+    const cancelLink = getLinkByLabel('Cancel')
+    expect(cancelLink).toBeNull()
+  })
+
+  it('admin facility detail shows facility name as terminal breadcrumb segment', async () => {
+    // app/admin/facilities/[id]/page.tsx calls useBreadcrumbLabel('/admin/facilities/[id]', facility?.name).
+    // Verify the Header renders: Admin > Facilities > St. Mary Hospital (non-clickable).
+    const uuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+
+    function FacilityLabelInjector() {
+      useBreadcrumbLabel('/admin/facilities/[id]', 'St. Mary Hospital')
+      return null
+    }
+
+    const adminProps = baseProps({
+      isAdmin: true,
+      pathname: `/admin/facilities/${uuid}`,
+      userData: baseUserData({ accessLevel: 'global_admin', facilityName: null }),
+    })
+
+    await act(async () => {
+      render(
+        <BreadcrumbProvider>
+          <FacilityLabelInjector />
+          <Header {...adminProps} />
+        </BreadcrumbProvider>
+      )
+    })
+
+    const texts = getBreadcrumbTexts()
+    expect(texts).toContain('Admin')
+    expect(texts).toContain('Facilities')
+    expect(texts).toContain('St. Mary Hospital')
+
+    // "Facilities" is a link
+    const facilitiesLink = getLinkByLabel('Facilities')
+    expect(facilitiesLink).not.toBeNull()
+    expect(facilitiesLink?.getAttribute('href')).toBe('/admin/facilities')
+
+    // "St. Mary Hospital" is the terminal non-clickable span
+    const facilitySpan = getNonLinkSpanByLabel('St. Mary Hospital')
+    expect(facilitySpan).not.toBeNull()
+    const facilityLink = getLinkByLabel('St. Mary Hospital')
+    expect(facilityLink).toBeNull()
+
+    // Facility name is NOT prepended (admin route)
+    expect(texts).not.toContain('General Hospital')
+  })
+
+  it('admin facility detail shows Loading... before facility name is available', () => {
+    const uuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+
+    const adminProps = baseProps({
+      isAdmin: true,
+      pathname: `/admin/facilities/${uuid}`,
+      userData: baseUserData({ accessLevel: 'global_admin', facilityName: null }),
+    })
+
+    renderHeader(adminProps)
+    // No label registered yet (facility data still loading)
+    const texts = getBreadcrumbTexts()
+    expect(texts).toContain('Loading...')
+    expect(texts).toContain('Admin')
+    expect(texts).toContain('Facilities')
+  })
+})
