@@ -3,13 +3,16 @@
 
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import GlobalSearch from '../GlobalSearch'
-import { NavItem, isNavItemActive } from './navigation-config'
+import { NavItem } from './navigation-config'
 import { NotificationBell } from '../global/NotificationBell'
 import { ChevronDown, ChevronRight, Clock, Eye, FlaskConical, LogOut, Settings, User, X } from 'lucide-react'
+import { resolveBreadcrumbs } from '@/lib/breadcrumbs'
+import { useBreadcrumbContext } from '@/lib/BreadcrumbContext'
+import { getNavItemForPath } from '@/lib/settings-nav-config'
 
 interface UserData {
   firstName: string
@@ -46,7 +49,6 @@ interface HeaderProps {
 
 export default function Header({
   pathname,
-  navigation,
   userData,
   impersonation,
   facilityStatus,
@@ -90,10 +92,23 @@ export default function Header({
     ? impersonation.facilityName
     : userData.facilityName
 
-  const currentPageName =
-    navigation.find((n) => isNavItemActive(n.href, pathname))?.name || 'Dashboard'
-
   const facilityLogo = impersonation?.facilityLogo || facilityStatus?.facilityLogo
+
+  // Dynamic breadcrumb resolution
+  const dynamicLabels = useBreadcrumbContext()
+  const getSettingsLabel = useMemo(
+    () => (path: string) => getNavItemForPath(path)?.label,
+    []
+  )
+  const breadcrumbs = useMemo(
+    () =>
+      resolveBreadcrumbs(pathname, dynamicLabels, {
+        isAdmin: isAdmin && !impersonation,
+        facilityName: displayFacilityName,
+        getSettingsLabel,
+      }),
+    [pathname, dynamicLabels, isAdmin, impersonation, displayFacilityName, getSettingsLabel]
+  )
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0">
@@ -110,19 +125,30 @@ export default function Header({
             />
           </div>
         )}
-        <div className="flex items-center gap-2 text-sm min-w-0">
-          {displayFacilityName && (
-            <>
-              <span className="text-slate-500 truncate">
-                {displayFacilityName}
+        <nav className="flex items-center gap-2 text-sm min-w-0">
+          {breadcrumbs.map((segment, idx) => {
+            const isLast = idx === breadcrumbs.length - 1
+            return (
+              <span key={`${segment.label}-${idx}`} className="flex items-center gap-2 min-w-0">
+                {idx > 0 && (
+                  <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                )}
+                {isLast || !segment.href ? (
+                  <span className="font-semibold text-slate-900 truncate">
+                    {segment.label}
+                  </span>
+                ) : (
+                  <Link
+                    href={segment.href}
+                    className="text-slate-500 hover:text-slate-700 truncate transition-colors"
+                  >
+                    {segment.label}
+                  </Link>
+                )}
               </span>
-              <ChevronRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
-            </>
-          )}
-          <span className="font-semibold text-slate-900 truncate">
-            {currentPageName}
-          </span>
-        </div>
+            )
+          })}
+        </nav>
       </div>
 
       {/* Right: Search, notifications, user menu */}

@@ -13,7 +13,7 @@ import { getImpersonationState, endImpersonation } from '@/lib/impersonation'
 import { authAudit, adminAudit } from '@/lib/audit-logger'
 import ErrorBoundary from '../ErrorBoundary'
 import { useToast } from '@/components/ui/Toast/ToastProvider'
-
+import { BreadcrumbProvider } from '@/lib/BreadcrumbContext'
 
 // Layout components
 import Sidebar from './Sidebar'
@@ -220,60 +220,62 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   // ============================================
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Panel 1: Sidebar */}
-      <Sidebar
-        pathname={pathname}
-        isAdminMode={isAdminMode}
-        navigation={navigation}
-        onExpandChange={setSidebarExpanded}
-      />
-
-      {/* Panel 2: Sub-Navigation (if visible) */}
-      {hasSubNav && (
-        <SubNavigation
-          items={subNavItems}
-          title={subNavTitle}
+    <BreadcrumbProvider>
+      <div className="min-h-screen bg-slate-50">
+        {/* Panel 1: Sidebar */}
+        <Sidebar
           pathname={pathname}
-          sidebarWidth={sidebarWidth}
+          isAdminMode={isAdminMode}
+          navigation={navigation}
+          onExpandChange={setSidebarExpanded}
         />
-      )}
 
-      {/* Panel 3: Main Content */}
-      <div
-        style={{ marginLeft: contentMarginLeft }}
-        className="min-h-screen flex flex-col transition-all duration-300 ease-out"
-      >
-        {/* Banners */}
-        <BranchBanner />
-        {showTrialWarning && <TrialBanner daysRemaining={trialDaysRemaining!} />}
-        {impersonation && effectiveIsGlobalAdmin && (
-          <ImpersonationBanner
-            facilityName={impersonation.facilityName}
-            onEndImpersonation={handleEndImpersonation}
+        {/* Panel 2: Sub-Navigation (if visible) */}
+        {hasSubNav && (
+          <SubNavigation
+            items={subNavItems}
+            title={subNavTitle}
+            pathname={pathname}
+            sidebarWidth={sidebarWidth}
           />
         )}
 
-        {/* Header */}
-        <Header
-          pathname={pathname}
-          navigation={navigation}
-          userData={userData}
-          impersonation={impersonation}
-          facilityStatus={facilityStatus}
-          isAdmin={isAdmin}
-          onEndImpersonation={handleEndImpersonation}
-          onLogout={handleLogout}
-        />
+        {/* Panel 3: Main Content */}
+        <div
+          style={{ marginLeft: contentMarginLeft }}
+          className="min-h-screen flex flex-col transition-all duration-300 ease-out"
+        >
+          {/* Banners */}
+          <BranchBanner />
+          {showTrialWarning && <TrialBanner daysRemaining={trialDaysRemaining!} />}
+          {impersonation && effectiveIsGlobalAdmin && (
+            <ImpersonationBanner
+              facilityName={impersonation.facilityName}
+              onEndImpersonation={handleEndImpersonation}
+            />
+          )}
 
-        {/* Page Content */}
-        <main className="flex-1 p-6">
-          <ErrorBoundary>
-            {children}
-          </ErrorBoundary>
-        </main>
+          {/* Header */}
+          <Header
+            pathname={pathname}
+            navigation={navigation}
+            userData={userData}
+            impersonation={impersonation}
+            facilityStatus={facilityStatus}
+            isAdmin={isAdmin}
+            onEndImpersonation={handleEndImpersonation}
+            onLogout={handleLogout}
+          />
+
+          {/* Page Content */}
+          <main className="flex-1 p-6">
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
+          </main>
+        </div>
       </div>
-    </div>
+    </BreadcrumbProvider>
   )
 }
 
