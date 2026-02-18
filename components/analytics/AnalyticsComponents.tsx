@@ -712,31 +712,54 @@ export function SkeletonChart({ height = 200 }: { height?: number }) {
 export function SkeletonDayAnalysis() {
   return (
     <div className="space-y-6">
-      {/* Day overview */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i}>
-              <SkeletonPulse className="h-3 w-24 mb-2" />
-              <SkeletonPulse className="h-8 w-20" />
-            </div>
-          ))}
+      {/* Summary strip skeleton */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-6 flex-wrap">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i}>
+                <SkeletonPulse className="h-2.5 w-16 mb-2" />
+                <SkeletonPulse className="h-6 w-14" />
+              </div>
+            ))}
+          </div>
+          <SkeletonPulse className="w-16 h-16 rounded-full" />
         </div>
       </div>
-      {/* Cases */}
-      <div className="grid grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <SkeletonPulse className="h-4 w-24 mb-4" />
+      {/* Timeline skeleton */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <SkeletonPulse className="h-4 w-24" />
+          <SkeletonPulse className="h-3 w-48" />
+        </div>
+        <SkeletonPulse className="h-12 w-full rounded mb-2" />
+        <SkeletonPulse className="h-12 w-full rounded" />
+      </div>
+      {/* Bottom split skeleton */}
+      <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 p-6">
+          <SkeletonPulse className="h-4 w-32 mb-4" />
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="mb-3">
-              <SkeletonPulse className="h-3 w-32 mb-1" />
-              <SkeletonPulse className="h-6 w-full rounded" />
+              <SkeletonPulse className="h-3 w-40 mb-1.5" />
+              <SkeletonPulse className="h-7 w-full rounded" />
             </div>
           ))}
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <SkeletonPulse className="h-4 w-32 mb-4" />
-          <SkeletonPulse className="h-40 w-full rounded" />
+        <div className="lg:w-[280px] w-full space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <SkeletonPulse className="h-3 w-24 mb-3" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="mb-2">
+                <SkeletonPulse className="h-3 w-20 mb-1" />
+                <SkeletonPulse className="h-3 w-full rounded" />
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <SkeletonPulse className="h-3 w-20 mb-3" />
+            <SkeletonPulse className="h-20 w-full rounded" />
+          </div>
         </div>
       </div>
     </div>
@@ -1243,6 +1266,8 @@ interface DayTimelineProps {
 }
 
 export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps) {
+  const [hoveredCaseId, setHoveredCaseId] = useState<string | null>(null)
+
   // Group cases by room
   const roomGroups = useMemo(() => {
     const groups = new Map<string, TimelineCaseData[]>()
@@ -1381,13 +1406,13 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                 return (
                   <div
                     key={c.id}
-                    className="absolute top-0.5 bottom-0.5 rounded overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                    className="absolute top-0.5 bottom-0.5 rounded overflow-visible cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                     style={{ left: `${leftPct}%`, width: `${Math.max(widthPct, 0.5)}%` }}
-                    onMouseEnter={() => onHoverCase?.(c.id)}
-                    onMouseLeave={() => onHoverCase?.(null)}
+                    onMouseEnter={() => { setHoveredCaseId(c.id); onHoverCase?.(c.id) }}
+                    onMouseLeave={() => { setHoveredCaseId(null); onHoverCase?.(null) }}
                   >
                     {/* Phase segments */}
-                    <div className="flex h-full">
+                    <div className="flex h-full overflow-hidden rounded">
                       {c.phases.map((phase, pIdx) => {
                         const phasePct = totalPhaseSeconds > 0 ? (phase.durationSeconds / totalPhaseSeconds) * 100 : 0
                         if (phasePct < 0.5) return null
@@ -1432,6 +1457,20 @@ export function DayTimeline({ cases, caseFlags, onHoverCase }: DayTimelineProps)
                       <div className="absolute top-0.5 right-0.5 flex gap-0.5">
                         {hasWarningFlags && <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
                         {hasPositiveFlags && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                      </div>
+                    )}
+
+                    {/* Hover tooltip */}
+                    {hoveredCaseId === c.id && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-20 pointer-events-none">
+                        <div className="bg-slate-900 text-white text-[10px] leading-tight rounded-md px-2.5 py-1.5 whitespace-nowrap shadow-lg">
+                          <p className="font-semibold">{c.caseNumber} · {c.procedure}</p>
+                          <p className="text-slate-300 mt-0.5">
+                            {Math.round(totalPhaseSeconds / 60)}m total
+                            {flags.length > 0 && ` · ${flags.map(f => f.icon).join(' ')}`}
+                          </p>
+                        </div>
+                        <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1" />
                       </div>
                     )}
                   </div>
@@ -1506,7 +1545,7 @@ export function CasePhaseBarNested({
       </div>
 
       {/* Stacked bar */}
-      <div className="relative" style={{ width: `${Math.max(barWidthPct, 8)}%` }}>
+      <div className="relative transition-all duration-300" style={{ width: `${Math.max(barWidthPct, 8)}%` }}>
         <div className="h-7 rounded-md overflow-hidden flex">
           {phases.map((phase, idx) => {
             const phasePct = totalSeconds > 0 ? (phase.durationSeconds / totalSeconds) * 100 : 0

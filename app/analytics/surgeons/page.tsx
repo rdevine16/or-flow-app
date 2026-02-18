@@ -1180,7 +1180,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
 
                   {/* 1. Summary Strip */}
                   <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
                         <MetricPillStrip
                           items={[
@@ -1289,7 +1289,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       </div>
 
                       {/* Contextual Card — case detail or flag list */}
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 transition-all duration-200">
                         {selectedCaseId && timelineCases.find(c => c.id === selectedCaseId) ? (
                           <>
                             <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-3">Case Detail</h4>
