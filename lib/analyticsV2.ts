@@ -199,11 +199,43 @@ export const ANALYTICS_CONFIG_DEFAULTS: FacilityAnalyticsConfig = {
   orHourlyRate: null,
 }
 
-// NEW: Same-day cancellation result
+// Per-transition detail for room turnovers
+export interface TurnoverDetail {
+  date: string
+  roomName: string
+  fromCaseNumber: string
+  toCaseNumber: string
+  fromSurgeonName: string
+  toSurgeonName: string
+  turnoverMinutes: number
+  isCompliant: boolean // under threshold
+}
+
+// Extended turnover result with detail data
+export interface TurnoverResult extends KPIResult {
+  details: TurnoverDetail[]
+  compliantCount: number
+  nonCompliantCount: number
+  complianceRate: number
+}
+
+// Per-case cancellation detail
+export interface CancellationDetail {
+  caseId: string
+  caseNumber: string
+  date: string
+  roomName: string
+  surgeonName: string
+  scheduledStart: string
+  cancellationType: 'same_day' | 'prior_day' | 'other'
+}
+
+// Same-day cancellation result
 export interface CancellationResult extends KPIResult {
   sameDayCount: number
   sameDayRate: number
   totalCancelledCount: number
+  details: CancellationDetail[]
 }
 
 
@@ -235,7 +267,7 @@ export interface AnalyticsOverview {
   
   // KPIs
   fcots: FCOTSResult
-  turnoverTime: KPIResult
+  turnoverTime: TurnoverResult
   orUtilization: ORUtilizationResult
   caseVolume: CaseVolumeResult
   cancellationRate: CancellationResult
@@ -1075,10 +1107,13 @@ export function calculateTurnoverTime(
   cases: CaseWithMilestones[],
   previousPeriodCases?: CaseWithMilestones[],
   config?: { turnoverThresholdMinutes?: number; turnoverComplianceTarget?: number }
-): KPIResult {
+): TurnoverResult {
   const turnovers: number[] = []
+  const turnoverDetails: TurnoverDetail[] = []
   const dailyResults = new Map<string, number[]>()
-  
+
+  const thresholdMinutes = config?.turnoverThresholdMinutes ?? ANALYTICS_CONFIG_DEFAULTS.turnoverThresholdMinutes
+
   // Group by room and date, sort by time
   const byRoomDate = new Map<string, CaseWithMilestones[]>()
   cases.forEach(c => {
@@ -1088,30 +1123,43 @@ export function calculateTurnoverTime(
     existing.push(c)
     byRoomDate.set(key, existing)
   })
-  
+
   // Calculate turnovers between consecutive cases
   byRoomDate.forEach((roomCases, key) => {
     const date = key.split('|')[0]
     const sorted = roomCases.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
-    
+
     for (let i = 0; i < sorted.length - 1; i++) {
       const current = getMilestoneMap(sorted[i])
       const next = getMilestoneMap(sorted[i + 1])
-      
+
       if (current.patient_out && next.patient_in) {
         const turnoverMinutes = getTimeDiffMinutes(current.patient_out, next.patient_in)
         if (turnoverMinutes !== null && turnoverMinutes > 0 && turnoverMinutes < 180) {
           turnovers.push(turnoverMinutes)
-          
+
           const dayTurnovers = dailyResults.get(date) || []
           dayTurnovers.push(turnoverMinutes)
           dailyResults.set(date, dayTurnovers)
+
+          // Build per-transition detail
+          const fromSurgeon = sorted[i].surgeon
+          const toSurgeon = sorted[i + 1].surgeon
+          turnoverDetails.push({
+            date,
+            roomName: sorted[i].or_rooms?.name || 'Unknown',
+            fromCaseNumber: sorted[i].case_number,
+            toCaseNumber: sorted[i + 1].case_number,
+            fromSurgeonName: fromSurgeon ? `${fromSurgeon.first_name} ${fromSurgeon.last_name}` : 'Unknown',
+            toSurgeonName: toSurgeon ? `${toSurgeon.first_name} ${toSurgeon.last_name}` : 'Unknown',
+            turnoverMinutes: Math.round(turnoverMinutes),
+            isCompliant: turnoverMinutes <= thresholdMinutes,
+          })
         }
       }
     }
   })
-  
-  const thresholdMinutes = config?.turnoverThresholdMinutes ?? ANALYTICS_CONFIG_DEFAULTS.turnoverThresholdMinutes
+
   const complianceTarget = config?.turnoverComplianceTarget ?? ANALYTICS_CONFIG_DEFAULTS.turnoverComplianceTarget
 
   const medianTurnover = calculateMedian(turnovers) ?? 0
@@ -1177,7 +1225,12 @@ export function calculateTurnoverTime(
     targetMet: complianceRate >= complianceTarget,
     delta,
     deltaType,
-    dailyData
+    dailyData,
+    // Detail data for drill-through panel
+    details: turnoverDetails.sort((a, b) => a.date.localeCompare(b.date) || a.roomName.localeCompare(b.roomName)),
+    compliantCount: metTarget,
+    nonCompliantCount: turnovers.length - metTarget,
+    complianceRate,
   }
 }
 
@@ -1415,7 +1468,28 @@ export function calculateCancellationRate(
 
   const total = cases.length
   const sameDayRate = total > 0 ? (sameDayCancelled.length / total) * 100 : 0
-  
+
+  // Build per-case cancellation details
+  const cancellationDetails: CancellationDetail[] = allCancelled.map(c => {
+    const surgeon = c.surgeon
+    const isSameDay = isSameDayCancellation(c)
+    let cancellationType: CancellationDetail['cancellationType'] = 'other'
+    if (c.cancelled_at) {
+      cancellationType = isSameDay ? 'same_day' : 'prior_day'
+    } else if (isSameDay) {
+      cancellationType = 'same_day'
+    }
+    return {
+      caseId: c.id,
+      caseNumber: c.case_number,
+      date: c.scheduled_date,
+      roomName: c.or_rooms?.name || 'Unknown',
+      surgeonName: surgeon ? `${surgeon.first_name} ${surgeon.last_name}` : 'Unknown',
+      scheduledStart: c.start_time || '--',
+      cancellationType,
+    }
+  }).sort((a, b) => a.date.localeCompare(b.date))
+
   // Calculate previous period rate for delta
   let previousRate: number | undefined
   if (previousPeriodCases && previousPeriodCases.length > 0) {
@@ -1423,10 +1497,10 @@ export function calculateCancellationRate(
     const prevSameDay = prevCancelled.filter(c => isSameDayCancellation(c))
     previousRate = (prevSameDay.length / previousPeriodCases.length) * 100
   }
-  
+
   // For cancellation rate, lower is better
   const { delta, deltaType } = calculateDelta(sameDayRate, previousRate, true)
-  
+
   // Daily tracker for zero-cancellation days
   const dailyResults = new Map<string, { total: number; cancelled: number; sameDay: number }>()
   cases.forEach(c => {
@@ -1438,7 +1512,7 @@ export function calculateCancellationRate(
     }
     dailyResults.set(c.scheduled_date, data)
   })
-  
+
   const dailyData: DailyTrackerData[] = Array.from(dailyResults.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-30)
@@ -1453,7 +1527,7 @@ export function calculateCancellationRate(
         numericValue: data.sameDay
       }
     })
-  
+
   return {
     value: Math.round(sameDayRate * 10) / 10,
     displayValue: `${(Math.round(sameDayRate * 10) / 10).toFixed(1)}%`,
@@ -1467,6 +1541,7 @@ export function calculateCancellationRate(
     sameDayCount: sameDayCancelled.length,
     sameDayRate: Math.round(sameDayRate * 10) / 10,
     totalCancelledCount: allCancelled.length,
+    details: cancellationDetails,
   }
 }
 

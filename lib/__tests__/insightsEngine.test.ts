@@ -42,7 +42,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       ...makeKPI({ value: 85, displayValue: '85%', target: 85, targetMet: true }),
       firstCaseDetails: [],
     } as FCOTSResult,
-    turnoverTime: makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }),
+    turnoverTime: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     orUtilization: {
       ...makeKPI({ value: 75, displayValue: '75%', target: 75, targetMet: true }),
       roomBreakdown: [],
@@ -58,6 +58,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       sameDayCount: 0,
       sameDayRate: 0,
       totalCancelledCount: 0,
+      details: [],
     } as CancellationResult,
     cumulativeTardiness: makeKPI(),
     nonOperativeTime: makeKPI({ value: 0, displayValue: '0 min', subtitle: '0% of total case time · 0 cases' }),
@@ -318,13 +319,13 @@ describe('Target-relative insight body text', () => {
     // Target compliance is 80%, threshold is 20 min (custom tight target)
     // Subtitle format matches calculateTurnoverTime: "X% under Y min target"
     const analytics = makeAnalytics({
-      turnoverTime: makeKPI({
+      turnoverTime: { ...makeKPI({
         value: 40,
         displayValue: '40 min',
         target: 80,
         targetMet: false,
         subtitle: '60% under 20 min target',
-      }),
+      }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     })
 
     const insights = generateInsights(analytics)
@@ -378,6 +379,7 @@ describe('Target-relative insight body text', () => {
         sameDayCount: 4,
         sameDayRate: 8,
         totalCancelledCount: 4,
+        details: [],
       } as CancellationResult,
     })
 
@@ -557,13 +559,13 @@ describe('Insight.drillThroughType field', () => {
 
   it('turnover-room insight has drillThroughType = "turnover"', () => {
     const analytics = makeAnalytics({
-      turnoverTime: makeKPI({
+      turnoverTime: { ...makeKPI({
         value: 40,
         displayValue: '40 min',
         target: 80,
         targetMet: false,
         subtitle: '60% under 30 min target',
-      }),
+      }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     })
     const insights = generateInsights(analytics)
     const insight = insights.find(i => i.id === 'turnover-room')
@@ -731,6 +733,7 @@ describe('Insight.drillThroughType field', () => {
         sameDayCount: 4,
         sameDayRate: 8,
         totalCancelledCount: 4,
+        details: [],
       } as CancellationResult,
     })
     const insights = generateInsights(analytics)
@@ -753,6 +756,7 @@ describe('Insight.drillThroughType field', () => {
         sameDayCount: 0,
         sameDayRate: 0,
         totalCancelledCount: 0,
+        details: [],
       } as CancellationResult,
     })
     const insights = generateInsights(analytics)
@@ -815,7 +819,7 @@ describe('Insight.drillThroughType field', () => {
         ...makeKPI({ value: 31, displayValue: '31%', target: 85, targetMet: false, subtitle: '11 late of 16 first cases' }),
         firstCaseDetails: [],
       } as FCOTSResult,
-      turnoverTime: makeKPI({ value: 40, displayValue: '40 min', target: 80, targetMet: false, subtitle: '60% under 30 min target' }),
+      turnoverTime: { ...makeKPI({ value: 40, displayValue: '40 min', target: 80, targetMet: false, subtitle: '60% under 30 min target' }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
       orUtilization: {
         ...makeKPI({ value: 42, displayValue: '42%', target: 75, targetMet: false }),
         roomBreakdown: [{ roomId: 'r1', roomName: 'OR-1', utilization: 42, usedMinutes: 2520, availableHours: 10, caseCount: 20, daysActive: 21, usingRealHours: true }],

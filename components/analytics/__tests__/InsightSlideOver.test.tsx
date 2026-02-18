@@ -59,7 +59,7 @@ const mockAnalytics: AnalyticsOverview = {
     ...makeKPI({ value: 85, displayValue: '85%', target: 85, targetMet: true }),
     firstCaseDetails: [],
   } as FCOTSResult,
-  turnoverTime: makeKPI(),
+  turnoverTime: { ...makeKPI(), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
   orUtilization: {
     ...makeKPI({ value: 75, displayValue: '75%', target: 75, targetMet: true }),
     roomBreakdown: [],
@@ -75,6 +75,7 @@ const mockAnalytics: AnalyticsOverview = {
     sameDayCount: 0,
     sameDayRate: 0,
     totalCancelledCount: 0,
+    details: [],
   } as CancellationResult,
   cumulativeTardiness: makeKPI(),
   nonOperativeTime: makeKPI(),

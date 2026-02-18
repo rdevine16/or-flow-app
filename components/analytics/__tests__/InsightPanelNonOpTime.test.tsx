@@ -34,7 +34,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
     completedCases: 49,
     cancelledCases: 1,
     fcots: { ...makeKPI(), firstCaseDetails: [] } as FCOTSResult,
-    turnoverTime: makeKPI(),
+    turnoverTime: { ...makeKPI(), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     orUtilization: {
       ...makeKPI(),
       roomBreakdown: [],
@@ -47,6 +47,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       sameDayCount: 0,
       sameDayRate: 0,
       totalCancelledCount: 0,
+      details: [],
     } as CancellationResult,
     cumulativeTardiness: makeKPI(),
     nonOperativeTime: makeKPI({ value: 32, displayValue: '32 min', subtitle: '38% of total case time · 49 cases' }),

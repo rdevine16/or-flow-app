@@ -14,6 +14,8 @@ import InsightPanelFCOTS from '@/components/analytics/InsightPanelFCOTS'
 import InsightPanelUtilization from '@/components/analytics/InsightPanelUtilization'
 import InsightPanelNonOpTime from '@/components/analytics/InsightPanelNonOpTime'
 import InsightPanelScheduling from '@/components/analytics/InsightPanelScheduling'
+import InsightPanelTurnover from '@/components/analytics/InsightPanelTurnover'
+import InsightPanelCancellation from '@/components/analytics/InsightPanelCancellation'
 
 // ============================================
 // SEVERITY CONFIG
@@ -121,6 +123,16 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
               <InsightPanelScheduling
                 analytics={analytics}
               />
+            ) : insight?.drillThroughType === 'turnover' ? (
+              <InsightPanelTurnover
+                turnoverTime={analytics.turnoverTime}
+                config={config}
+              />
+            ) : insight?.drillThroughType === 'cancellation' ? (
+              <InsightPanelCancellation
+                cancellationRate={analytics.cancellationRate}
+                config={config}
+              />
             ) : insight?.drillThroughType ? (
               <PanelPlaceholder type={insight.drillThroughType} />
             ) : null}
@@ -136,23 +148,16 @@ export default function InsightSlideOver({ insight, onClose, analytics, config }
 // ============================================
 
 function PanelPlaceholder({ type }: { type: string }) {
-  const phaseMap: Record<string, string> = {
-    turnover: 'Phase 6',
-    cancellation: 'Phase 6',
-  }
-
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
-        <span className="text-2xl text-indigo-400">
-          {type === 'callback' ? '↔' : type === 'fcots' ? '⏱' : type === 'utilization' ? '◧' : type === 'turnover' ? '⟳' : type === 'cancellation' ? '✕' : type === 'non_op_time' ? '⏳' : '📊'}
-        </span>
+        <span className="text-2xl text-indigo-400">&#x1F4CA;</span>
       </div>
       <h3 className="text-sm font-semibold text-slate-900 mb-1">
         {PANEL_TITLES[type] ?? type}
       </h3>
       <p className="text-sm text-slate-400">
-        Panel content coming in {phaseMap[type] ?? 'a future phase'}
+        Panel content coming in a future phase
       </p>
     </div>
   )

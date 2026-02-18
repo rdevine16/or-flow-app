@@ -58,7 +58,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       ...makeKPIResult({ value: 85, displayValue: '85%', target: 85, targetMet: true }),
       firstCaseDetails: [],
     } as FCOTSResult,
-    turnoverTime: makeKPIResult({ value: 25, displayValue: '25 min', target: 30, targetMet: true }),
+    turnoverTime: { ...makeKPIResult({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     orUtilization: {
       ...makeKPIResult({ value: 75, displayValue: '75%', target: 75, targetMet: true }),
       roomBreakdown: [],
@@ -74,6 +74,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       sameDayCount: 0,
       sameDayRate: 0,
       totalCancelledCount: 0,
+      details: [],
     } as CancellationResult,
     cumulativeTardiness: makeKPIResult(),
     nonOperativeTime: makeKPIResult({ value: 20, displayValue: '20 min' }),
@@ -153,6 +154,7 @@ describe('Action Items', () => {
         sameDayCount: 1,
         sameDayRate: 2,
         totalCancelledCount: 1,
+        details: [],
       } as CancellationResult,
     })
     const items = computeActionItems(analytics)
@@ -367,6 +369,7 @@ describe('Insights Integration', () => {
         sameDayCount: 0,
         sameDayRate: 0,
         totalCancelledCount: 0,
+        details: [],
       } as CancellationResult,
     })
     const insights = generateInsights(analytics)

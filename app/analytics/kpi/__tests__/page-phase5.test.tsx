@@ -47,7 +47,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       ...makeKPI({ value: 85, displayValue: '85%', target: 85, targetMet: true }),
       firstCaseDetails: [],
     } as FCOTSResult,
-    turnoverTime: makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }),
+    turnoverTime: { ...makeKPI({ value: 25, displayValue: '25 min', target: 30, targetMet: true }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     orUtilization: {
       ...makeKPI({ value: 75, displayValue: '75%', target: 75, targetMet: true }),
       roomBreakdown: [],
@@ -63,6 +63,7 @@ function makeAnalytics(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOve
       sameDayCount: 0,
       sameDayRate: 0,
       totalCancelledCount: 0,
+      details: [],
     } as CancellationResult,
     cumulativeTardiness: makeKPI(),
     nonOperativeTime: makeKPI({ value: 0, displayValue: '0 min', subtitle: '0% of total case time · 0 cases' }),
@@ -227,13 +228,13 @@ describe('InsightSlideOver integration — rendering real insights', () => {
 
   it('opens with a warning turnover insight from generateInsights', () => {
     const analytics = makeAnalytics({
-      turnoverTime: makeKPI({
+      turnoverTime: { ...makeKPI({
         value: 40,
         displayValue: '40 min',
         target: 80,
         targetMet: false,
         subtitle: '60% under 30 min target',
-      }),
+      }), details: [], compliantCount: 0, nonCompliantCount: 0, complianceRate: 0 },
     })
     const insights = generateInsights(analytics)
     const turnoverInsight = insights.find(i => i.id === 'turnover-room')
