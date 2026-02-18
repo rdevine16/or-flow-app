@@ -553,6 +553,7 @@ export function getSurgicalTime(milestones: MilestoneMap): number | null {
 
 /**
  * Wheels-in to Incision: patient_in -> incision (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getWheelsInToIncision(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.patient_in, milestones.incision)
@@ -560,6 +561,7 @@ export function getWheelsInToIncision(milestones: MilestoneMap): number | null {
 
 /**
  * Incision to Closing: incision -> closing (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getIncisionToClosing(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.incision, milestones.closing)
@@ -567,6 +569,7 @@ export function getIncisionToClosing(milestones: MilestoneMap): number | null {
 
 /**
  * Closing Time: closing -> closing_complete (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getClosingTime(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.closing, milestones.closing_complete)
@@ -574,6 +577,7 @@ export function getClosingTime(milestones: MilestoneMap): number | null {
 
 /**
  * Closed to Wheels-Out: closing_complete -> patient_out (returns seconds)
+ * @deprecated Use computePhaseDurations() with phase_definitions instead.
  */
 export function getClosedToWheelsOut(milestones: MilestoneMap): number | null {
   return getTimeDiffSeconds(milestones.closing_complete, milestones.patient_out)

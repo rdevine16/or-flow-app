@@ -10,7 +10,7 @@ import AccessDenied from '@/components/ui/AccessDenied'
 import { AnalyticsPageHeader } from '@/components/analytics/AnalyticsBreadcrumb'
 import { formatTimeInTimezone } from '@/lib/date-utils'
 
-import { chartHex } from '@/lib/design-tokens'
+import { buildPhaseTree, resolvePhaseHex, resolveSubphaseHex } from '@/lib/milestone-phase-config'
 import DateRangeSelector, { getPresetDates, getPrevPeriodDates } from '@/components/ui/DateRangeSelector'
 
 
@@ -35,7 +35,10 @@ import {
   formatSecondsToHHMMSS,
   getAllTurnovers,
   getAllSurgicalTurnovers,
+  computePhaseDurations,
+  buildMilestoneTimestampMap,
   type CaseWithMilestones,
+  type PhaseDefInput,
 } from '@/lib/analyticsV2'
 
 // Enterprise analytics components
@@ -51,6 +54,9 @@ import {
   EmptyState,
   ProcedureComparisonChart,
   type ProcedureComparisonData,
+  type CasePhaseBarPhase,
+  type CasePhaseBarSubphase,
+  type PhaseLegendItem,
   SkeletonMetricCards,
   SkeletonTable,
   SkeletonChart,
@@ -135,19 +141,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 // ============================================
-// PHASE COLORS (shared constants)
-// ============================================
-
-const PHASE_COLORS = chartHex.phases
-
-const PHASE_LEGEND_ITEMS = [
-  { label: 'Pre-Op', color: PHASE_COLORS.preOp },
-  { label: 'Surgical', color: PHASE_COLORS.surgical },
-  { label: 'Closing', color: PHASE_COLORS.closing },
-  { label: 'Emergence', color: PHASE_COLORS.emergence },
-]
-
-// ============================================
 // MAIN PAGE COMPONENT
 // ============================================
 
@@ -162,6 +155,7 @@ export default function SurgeonPerformancePage() {
   const [procedureTechniques, setProcedureTechniques] = useState<ProcedureTechnique[]>([])
   const [selectedSurgeon, setSelectedSurgeon] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'day'>('overview')
+  const [phaseDefinitions, setPhaseDefinitions] = useState<PhaseDefInput[]>([])
   
   // Overview tab state
   const [dateRange, setDateRange] = useState('mtd')
@@ -224,7 +218,7 @@ export default function SurgeonPerformancePage() {
         .eq('name', 'surgeon')
         .single()
 
-      const [surgeonsRes, techniquesRes] = await Promise.all([
+      const [surgeonsRes, techniquesRes, phaseDefsRes] = await Promise.all([
         supabase
           .from('users')
           .select('id, first_name, last_name, role_id')
@@ -234,10 +228,17 @@ export default function SurgeonPerformancePage() {
           .from('procedure_techniques')
           .select('id, name, display_name')
           .order('display_order'),
+        supabase
+          .from('phase_definitions')
+          .select('id, name, display_name, display_order, color_key, parent_phase_id, start_milestone_id, end_milestone_id')
+          .eq('facility_id', effectiveFacilityId)
+          .eq('is_active', true)
+          .order('display_order'),
       ])
 
       setSurgeons((surgeonsRes.data?.filter(u => u.role_id === surgeonRole?.id) as Surgeon[]) || [])
       setProcedureTechniques(techniquesRes.data || [])
+      setPhaseDefinitions((phaseDefsRes.data as PhaseDefInput[]) || [])
       setInitialLoading(false)
     }
     fetchData()
@@ -608,26 +609,71 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
   const surgicalTurnoverVs30Day = calculatePercentageChange(dayMetrics.avgSurgicalTurnover, last30Metrics.avgSurgicalTurnover)
   const uptimeImprovement = allTimeMetrics.uptimePercent > 0 ? dayMetrics.uptimePercent - allTimeMetrics.uptimePercent : null
 
-  // Case breakdown for day analysis
+  // Case breakdown for day analysis — dynamic phases from phase_definitions
+  const phaseTree = useMemo(() => buildPhaseTree(phaseDefinitions), [phaseDefinitions])
+
   const caseBreakdown = useMemo(() => {
     const completed = getCompletedCases(dayCases)
     return completed.map(c => {
       const m = getMilestoneMap(c)
       const proc = Array.isArray(c.procedure_types) ? c.procedure_types[0] : c.procedure_types
+      const timestampMap = buildMilestoneTimestampMap(c.case_milestones || [])
+      const durations = computePhaseDurations(phaseDefinitions, timestampMap)
+      const durationMap = new Map(durations.map(d => [d.phaseId, d]))
+
+      const phases: CasePhaseBarPhase[] = phaseTree.map(node => {
+        const parentDuration = durationMap.get(node.phase.id)
+        const subphases: CasePhaseBarSubphase[] = node.children
+          .map(child => {
+            const childDuration = durationMap.get(child.phase.id)
+            if (!childDuration || childDuration.durationSeconds === null) return null
+            return {
+              label: childDuration.displayName,
+              value: childDuration.durationSeconds,
+              color: resolveSubphaseHex(childDuration.colorKey),
+            }
+          })
+          .filter((s): s is CasePhaseBarSubphase => s !== null)
+
+        return {
+          label: parentDuration?.displayName ?? node.phase.display_name,
+          value: parentDuration?.durationSeconds ?? 0,
+          color: resolvePhaseHex(parentDuration?.colorKey ?? node.phase.color_key),
+          isMissing: parentDuration?.durationSeconds === null,
+          subphases: subphases.length > 0 ? subphases : undefined,
+        }
+      })
+
       return {
         id: c.id,
         caseNumber: c.case_number,
         procedureName: proc?.name || 'Unknown',
         totalORTime: getTotalORTime(m) || 0,
-        wheelsInToIncision: getWheelsInToIncision(m) || 0,
-        incisionToClosing: getIncisionToClosing(m) || 0,
-        closingTime: getClosingTime(m) || 0,
-        closedToWheelsOut: getClosedToWheelsOut(m) || 0,
+        phases,
       }
     })
-  }, [dayCases, getCompletedCases])
+  }, [dayCases, getCompletedCases, phaseDefinitions, phaseTree])
 
   const maxCaseTime = Math.max(...caseBreakdown.map(c => c.totalORTime), 1)
+
+  // Dynamic phase legend from phase_definitions
+  const dynamicLegendItems = useMemo((): PhaseLegendItem[] => {
+    const items: PhaseLegendItem[] = []
+    phaseTree.forEach(node => {
+      items.push({
+        label: node.phase.display_name,
+        color: resolvePhaseHex(node.phase.color_key),
+      })
+      node.children.forEach(child => {
+        items.push({
+          label: child.phase.display_name,
+          color: resolveSubphaseHex(child.phase.color_key),
+          isSubphase: true,
+        })
+      })
+    })
+    return items
+  }, [phaseTree])
 
   // Procedure performance for day analysis
   const getProcedurePerformance = useCallback((): ProcedureComparisonData[] => {
@@ -1213,7 +1259,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                       ) : (
                         <>
                           <div className="mt-3 mb-3">
-                            <PhaseLegend items={PHASE_LEGEND_ITEMS} />
+                            <PhaseLegend items={dynamicLegendItems} />
                           </div>
                           <div className="space-y-2">
                             {caseBreakdown.map(c => (
@@ -1225,12 +1271,7 @@ const mType = Array.isArray(m.facility_milestones) ? m.facility_milestones[0] : 
                                 maxValue={maxCaseTime}
                                 caseId={c.id}
                                 formatValue={formatSecondsToHHMMSS}
-                                phases={[
-                                  { label: 'Pre-Op', value: c.wheelsInToIncision, color: PHASE_COLORS.preOp },
-                                  { label: 'Surgical', value: c.incisionToClosing, color: PHASE_COLORS.surgical },
-                                  { label: 'Closing', value: c.closingTime, color: PHASE_COLORS.closing },
-                                  { label: 'Emergence', value: c.closedToWheelsOut, color: PHASE_COLORS.emergence },
-                                ]}
+                                phases={c.phases}
                               />
                             ))}
                           </div>
